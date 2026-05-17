@@ -1,103 +1,158 @@
 # MangaManagementSystem
-1. Project Overview
+> Distributed monolith platform for manga/webtoon production, AI-assisted segmentation, editorial review, and ranking management.
 
-Mangaka Platform is a multi-module software engineering project designed to support the full production pipeline of manga/webtoon creation, review, publishing, and analytics.
+## 1. Project Overview
 
-The system focuses on:
+Manga Management System is a student software engineering project designed to support the full lifecycle of manga creation and publication.
 
-collaborative studio workflows,
-AI-assisted automation,
-editorial quality control,
-production task orchestration,
-real-time notifications,
-analytics and ranking systems.
-2. Current Repository Status
+The system is built as a **Distributed Monolith**, where the core business system remains unified while the AI-heavy processing is separated into a local microservice.
 
-PRIVATE DEVELOPMENT REPOSITORY
+The project covers:
 
-This repository is currently under active development and intended only for internal team collaboration.
+- identity and governance,
+- studio production workflow,
+- AI-assisted segmentation,
+- editorial and publishing workflow,
+- business analytics and ranking,
+- audit and transparency.
+
+---
+
+## 2. Current Repository Status
+
+**PRIVATE DEVELOPMENT REPOSITORY**
+
+This repository is currently used for internal team collaboration only.
 
 The codebase may contain:
 
-unfinished features,
-unstable APIs,
-experimental implementations,
-incomplete documentation.
-3. System Modules
-3.1 Identity & Governance Module
+- unfinished features,
+- experimental implementations,
+- incomplete documentation,
+- temporary test data,
+- unstable APIs.
 
+Do not treat this repository as production-ready.
+
+---
+
+## 3. System Architecture
+
+### 3.1 Overall Architecture
+
+The system follows a **Distributed Monolith** architecture:
+
+- **Frontend**: Blazor Server
+- **Backend**: ASP.NET Core Web API (.NET 8/9)
+- **AI Microservice**: Python FastAPI + YOLOv8
+- **Database**: SQL Server with Entity Framework Core
+- **Storage**: Cloudinary
+- **Real-time communication**: SignalR
+
+### 3.2 Frontend
+
+The frontend uses:
+
+- **Blazor Server** for interactive server-rendered UI
+- **MudBlazor** for admin and management pages
+- **Fabric.js** for canvas-based manga page interaction
+- **Webtoon-style vertical scrolling** for reader/editor views
+
+### 3.3 Backend
+
+The backend uses:
+
+- **ASP.NET Core Web API**
+- **Clean Architecture**
+  - Domain
+  - Application
+  - Infrastructure
+  - API
+
+This keeps business logic separated from database access and UI.
+
+### 3.4 AI Microservice
+
+The AI service runs locally using:
+
+- **Python**
+- **FastAPI**
+- **YOLOv8**
+
+Its role is to detect manga panels and return coordinates in JSON format for the main system.
+
+### 3.5 Database & Storage
+
+- **SQL Server** stores core business data
+- **Cloudinary** stores and delivers large manga image assets
+
+---
+
+## 4. System Modules
+
+### 4.1 Identity & Governance Module
 Handles:
 
-authentication,
-authorization,
-role management,
-user profiles,
-governance and system settings.
-Roles
-Administrator
-Mangaka
-Assistant
-Editor
-3.2 Studio Production Module
+- authentication,
+- authorization,
+- user profiles,
+- portfolios,
+- income wallet/data,
+- system settings.
 
-Core production workspace for manga creation.
+Core purpose: ensure data is only accessible to the correct user and role.
 
-Features:
+### 4.2 Studio Production Module
+Handles:
 
-page upload,
-interactive Fabric.js canvas,
-panel region selection,
-task orchestration,
-asset versioning.
-3.3 AI Intelligence Hub
+- interactive canvas,
+- task orchestration,
+- page segmentation,
+- asset versioning.
 
-AI-assisted automation services.
+Core purpose: turn static manga pages into an interactive production workspace.
 
-Features:
+### 4.3 AI Intelligence Hub
+Handles:
 
-YOLOv8 panel detection,
-FastAPI inference service,
-JSON API bridge for .NET integration.
-3.4 Publishing & Editorial Module
+- object detection,
+- panel segmentation,
+- AI-to-.NET JSON bridge.
 
-Editorial review and publishing workflow.
+Core purpose: reduce manual work through AI assistance.
 
-Features:
+### 4.4 Publishing & Editorial Module
+Handles:
 
-annotation markers,
-review workflow,
-approval states,
-webtoon-style reader.
-3.5 Business Analytics & Ranking Module
+- annotations and markers,
+- review workflow,
+- publishing states,
+- webtoon-style reader/editor view.
 
-Business intelligence and monitoring layer.
+Core purpose: ensure quality before publication.
 
-Features:
+### 4.5 Business Analytics & Ranking Module
+Handles:
 
-vote collection,
-ranking algorithms,
-analytics dashboard,
-monitoring alerts.
-3.6 Infrastructure & QA Module
+- vote collection,
+- ranking computation,
+- monitoring and alerts.
 
-Shared infrastructure and quality assurance systems.
+Core purpose: support editorial and business decisions.
 
-Features:
-
-Cloudinary integration,
-SignalR notifications,
-automated testing,
-CI/CD support.
-4. Technology Stack
+## 5. Technology Stack
 Layer	Technology
-Backend	ASP.NET Core (.NET)
-Frontend	JavaScript / HTML / CSS
-Canvas Engine	Fabric.js
-AI Service	Python + FastAPI + YOLOv8
-Real-time	SignalR
+Frontend	Blazor Server
+Admin UI	MudBlazor
+Canvas	Fabric.js
+Backend	ASP.NET Core Web API
+Architecture	Clean Architecture
+AI Microservice	Python FastAPI
+AI Model	YOLOv8
 Database	SQL Server
-Charts	Chart.js
-Image Storage	Cloudinary
+ORM	Entity Framework Core
+Storage	Cloudinary
+Real-time	SignalR
 Version Control	GitHub
-Project Management	Jira
+Project Tracking	Jira
 Documentation	Confluence
