@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="MangaManagementSystem.API/MangaManagementSystem.API.csproj" Id="83c7ec56-fcee-4639-9aed-e52c1739da98" />
+  <Project Path="MangaManagementSystem.Application/MangaManagementSystem.Application.csproj" Id="e246f0e5-8930-48b8-b51d-88b7e1f679ed" />
+  <Project Path="MangaManagementSystem.Domain/MangaManagementSystem.Domain.csproj" Id="2bed6fa1-5266-42ec-9ede-0c625e6a27e6" />
+  <Project Path="MangaManagementSystem.Infrastructure/MangaManagementSystem.Infrastructure.csproj" Id="510082da-0b87-404b-ba22-75fc700b8936" />
+  <Project Path="MangaManagementSystem.Web/MangaManagementSystem.Web.csproj" Id="62cde0dc-ffe5-4c63-be3b-f850219456a1" />
+</Solution>
