@@ -7,37 +7,63 @@ Manga Creation Workflow and Publishing Management System
 SQL Server schema script
 */
 SET NOCOUNT ON;
-GO
 
 IF SCHEMA_ID(N'manga') IS NULL
     EXEC(N'CREATE SCHEMA manga');
-GO
+
 IF SCHEMA_ID(N'auth') IS NULL
     EXEC(N'CREATE SCHEMA auth');
-GO
+
 IF SCHEMA_ID(N'audit') IS NULL
     EXEC(N'CREATE SCHEMA audit');
-GO
+
 CREATE TABLE auth.Users (
     user_id INT IDENTITY(1,1) PRIMARY KEY,
     username NVARCHAR(50) NOT NULL,
     password_hash NVARCHAR(255) NOT NULL,
-    status NVARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
-    created_at DATETIME2(7) CONSTRAINT df_users_created_at DEFAULT SYSUTCDATETIME(),
+
+    status NVARCHAR(20) NOT NULL
+        CONSTRAINT df_users_status DEFAULT 'ACTIVE',
+
+    password_changed_at DATETIME2(7) NOT NULL
+        CONSTRAINT df_users_password_changed_at DEFAULT SYSUTCDATETIME(),
+
+    password_last_set_by_user_id INT NULL,
+
+    failed_login_attempts INT NOT NULL
+        CONSTRAINT df_users_failed_login_attempts DEFAULT (0),
+
+    last_failed_login_at DATETIME2(7) NULL,
+
+    locked_until DATETIME2(7) NULL,
+
+    last_login_at DATETIME2(7) NULL,
+
+    created_at DATETIME2(7) NOT NULL
+        CONSTRAINT df_users_created_at DEFAULT SYSUTCDATETIME(),
+
+    updated_at DATETIME2(7) NULL,
+
+    updated_by_user_id INT NULL,
+
     CONSTRAINT uq_users_username UNIQUE (username),
-    CONSTRAINT ck_users_status_values 
-        CHECK (status IN ('ACTIVE', 'DISABLED', 'LOCKED'))
+
+    CONSTRAINT ck_users_status_values
+        CHECK (status IN ('ACTIVE', 'DISABLED', 'LOCKED')),
+
+    CONSTRAINT ck_users_failed_login_attempts
+        CHECK (failed_login_attempts >= 0)
 );
 
 CREATE TABLE auth.Roles (
-    role_id INT IDENTITY PRIMARY KEY,
+    role_id SMALLINT IDENTITY PRIMARY KEY,
     role_name NVARCHAR(30)  NOT NULL,
     CONSTRAINT uq_roles_role_name UNIQUE (role_name)
 );
 
 CREATE TABLE auth.UserRole (
     user_id INT NOT NULL,
-    role_id INT NOT NULL,
+    role_id SMALLINT NOT NULL,
 
     assigned_at DATETIME2(7) NOT NULL CONSTRAINT df_user_role_assigned_at DEFAULT SYSUTCDATETIME(),
     assigned_by_user_id INT NOT NULL,
@@ -64,7 +90,7 @@ ON auth.UserRole (user_id, role_id)
 WHERE revoked_at IS NULL;
 
 CREATE TABLE auth.Permissions (
-    permission_id INT IDENTITY(1,1) PRIMARY KEY,
+    permission_id SMALLINT IDENTITY(1,1) PRIMARY KEY,
     
     module NVARCHAR(50) NOT NULL,
     
@@ -76,8 +102,8 @@ CREATE TABLE auth.Permissions (
         UNIQUE (module, action)
 );
 CREATE TABLE auth.RolePerm (
-    role_id INT NOT NULL,
-    permission_id INT NOT NULL,
+    role_id SMALLINT NOT NULL,
+    permission_id SMALLINT NOT NULL,
     granted_at DATETIME2(7) NOT NULL CONSTRAINT df_rp_granted_at DEFAULT SYSUTCDATETIME(),
     granted_by_user_id INT NOT NULL,
 
@@ -127,776 +153,871 @@ CREATE TABLE audit.HashChain (
         FOREIGN KEY (audit_id) REFERENCES audit.AuditLog(audit_id)
 );
 
-
 CREATE TABLE manga.SeriesStatusLookup (
-    SeriesStatusLookupId SMALLINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_SeriesStatusLookup PRIMARY KEY,
-Code VARCHAR(50) NOT NULL CONSTRAINT UQ_SeriesStatusLookup_Code UNIQUE,
-Name NVARCHAR(100) NOT NULL,
-SortOrder SMALLINT NOT NULL,
-IsActive BIT NOT NULL CONSTRAINT DF_SeriesStatusLookup_IsActive DEFAULT (1)
+    id SMALLINT IDENTITY(1,1) PRIMARY KEY,
+
+    code NVARCHAR(50) NOT NULL,
+    name NVARCHAR(100) NOT NULL,
+
+    sort_order SMALLINT NOT NULL,
+
+    CONSTRAINT uq_series_status_lookup_code
+        UNIQUE (code)
 );
-GO
-INSERT INTO manga.SeriesStatusLookup (Code, Name, SortOrder) VALUES (N'ProposalDraft', N'Proposal Draft', 1);
-INSERT INTO manga.SeriesStatusLookup (Code, Name, SortOrder) VALUES (N'UnderEditorialReview', N'Under Editorial Review', 2);
-INSERT INTO manga.SeriesStatusLookup (Code, Name, SortOrder) VALUES (N'BoardReview', N'Board Review', 3);
-INSERT INTO manga.SeriesStatusLookup (Code, Name, SortOrder) VALUES (N'Serialized', N'Serialized', 4);
-INSERT INTO manga.SeriesStatusLookup (Code, Name, SortOrder) VALUES (N'Active', N'Active', 5);
-INSERT INTO manga.SeriesStatusLookup (Code, Name, SortOrder) VALUES (N'AtRisk', N'At Risk', 6);
-INSERT INTO manga.SeriesStatusLookup (Code, Name, SortOrder) VALUES (N'Hiatus', N'Hiatus', 7);
-INSERT INTO manga.SeriesStatusLookup (Code, Name, SortOrder) VALUES (N'Cancelled', N'Cancelled', 8);
-INSERT INTO manga.SeriesStatusLookup (Code, Name, SortOrder) VALUES (N'Completed', N'Completed', 9);
-GO
+
+
+INSERT INTO manga.SeriesStatusLookup (code, name, sort_order)
+VALUES
+(N'PROPOSAL_DRAFT', N'Proposal Draft', 1),
+(N'UNDER_EDITORIAL_REVIEW', N'Under Editorial Review', 2),
+(N'BOARD_REVIEW', N'Board Review', 3),
+(N'SERIALIZED', N'Serialized', 4),
+(N'ACTIVE', N'Active', 5),
+(N'HIATUS', N'Hiatus', 6),
+(N'CANCELLED', N'Cancelled', 7),
+(N'COMPLETED', N'Completed', 8);
+
+
+
 CREATE TABLE manga.ProposalStatusLookup (
-    ProposalStatusLookupId SMALLINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ProposalStatusLookup PRIMARY KEY,
-Code VARCHAR(50) NOT NULL CONSTRAINT UQ_ProposalStatusLookup_Code UNIQUE,
-Name NVARCHAR(100) NOT NULL,
-SortOrder SMALLINT NOT NULL,
-IsActive BIT NOT NULL CONSTRAINT DF_ProposalStatusLookup_IsActive DEFAULT (1)
+    id SMALLINT IDENTITY(1,1) PRIMARY KEY,
+
+    code NVARCHAR(50) NOT NULL,
+    name NVARCHAR(100) NOT NULL,
+
+    sort_order SMALLINT NOT NULL,
+
+    CONSTRAINT uq_proposal_status_lookup_code
+        UNIQUE (code)
 );
-GO
-INSERT INTO manga.ProposalStatusLookup (Code, Name, SortOrder) VALUES (N'Draft', N'Draft', 1);
-INSERT INTO manga.ProposalStatusLookup (Code, Name, SortOrder) VALUES (N'UnderEditorialReview', N'Under Editorial Review', 2);
-INSERT INTO manga.ProposalStatusLookup (Code, Name, SortOrder) VALUES (N'UnderBoardReview', N'Under Board Review', 3);
-INSERT INTO manga.ProposalStatusLookup (Code, Name, SortOrder) VALUES (N'RevisionRequired', N'Revision Required', 4);
-INSERT INTO manga.ProposalStatusLookup (Code, Name, SortOrder) VALUES (N'Approved', N'Approved', 5);
-INSERT INTO manga.ProposalStatusLookup (Code, Name, SortOrder) VALUES (N'Rejected', N'Rejected', 6);
-INSERT INTO manga.ProposalStatusLookup (Code, Name, SortOrder) VALUES (N'Withdrawn', N'Withdrawn', 7);
-GO
+
+
+INSERT INTO manga.ProposalStatusLookup (code, name, sort_order)
+VALUES
+(N'DRAFT', N'Draft', 1),
+(N'UNDER_EDITORIAL_REVIEW', N'Under Editorial Review', 2),
+(N'UNDER_BOARD_REVIEW', N'Under Board Review', 3),
+(N'REVISION_REQUIRED', N'Revision Required', 4),
+(N'APPROVED', N'Approved', 5),
+(N'REJECTED', N'Rejected', 6),
+(N'WITHDRAWN', N'Withdrawn', 7);
+
+
 CREATE TABLE manga.ChapterStatusLookup (
-    ChapterStatusLookupId SMALLINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ChapterStatusLookup PRIMARY KEY,
-Code VARCHAR(50) NOT NULL CONSTRAINT UQ_ChapterStatusLookup_Code UNIQUE,
-Name NVARCHAR(100) NOT NULL,
-SortOrder SMALLINT NOT NULL,
-IsActive BIT NOT NULL CONSTRAINT DF_ChapterStatusLookup_IsActive DEFAULT (1)
+    id SMALLINT IDENTITY(1,1) PRIMARY KEY,
+
+    code NVARCHAR(50) NOT NULL,
+    name NVARCHAR(100) NOT NULL,
+
+    sort_order SMALLINT NOT NULL,
+
+    CONSTRAINT uq_chapter_status_lookup_code
+        UNIQUE (code)
 );
-GO
-INSERT INTO manga.ChapterStatusLookup (Code, Name, SortOrder) VALUES (N'Draft', N'Draft', 1);
-INSERT INTO manga.ChapterStatusLookup (Code, Name, SortOrder) VALUES (N'UnderReview', N'Under Review', 2);
-INSERT INTO manga.ChapterStatusLookup (Code, Name, SortOrder) VALUES (N'RevisionRequested', N'Revision Requested', 3);
-INSERT INTO manga.ChapterStatusLookup (Code, Name, SortOrder) VALUES (N'Approved', N'Approved', 4);
-INSERT INTO manga.ChapterStatusLookup (Code, Name, SortOrder) VALUES (N'Released', N'Released', 5);
-INSERT INTO manga.ChapterStatusLookup (Code, Name, SortOrder) VALUES (N'OnHold', N'On Hold', 6);
-INSERT INTO manga.ChapterStatusLookup (Code, Name, SortOrder) VALUES (N'Cancelled', N'Cancelled', 7);
-GO
+
+INSERT INTO manga.ChapterStatusLookup (code, name, sort_order)
+VALUES
+(N'DRAFT', N'Draft', 1),
+(N'UNDER_REVIEW', N'Under Review', 2),
+(N'REVISION_REQUESTED', N'Revision Requested', 3),
+(N'APPROVED', N'Approved', 4),
+(N'RELEASED', N'Released', 5),
+(N'ON_HOLD', N'On Hold', 6),
+(N'CANCELLED', N'Cancelled', 7);
+
+
 CREATE TABLE manga.PageStatusLookup (
-    PageStatusLookupId SMALLINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_PageStatusLookup PRIMARY KEY,
-Code VARCHAR(50) NOT NULL CONSTRAINT UQ_PageStatusLookup_Code UNIQUE,
-Name NVARCHAR(100) NOT NULL,
-SortOrder SMALLINT NOT NULL,
-IsActive BIT NOT NULL CONSTRAINT DF_PageStatusLookup_IsActive DEFAULT (1)
+    id SMALLINT IDENTITY(1,1) PRIMARY KEY,
+
+    code NVARCHAR(50) NOT NULL,
+    name NVARCHAR(100) NOT NULL,
+
+    sort_order SMALLINT NOT NULL,
+
+    is_active BIT NOT NULL
+        CONSTRAINT df_page_status_lookup_is_active DEFAULT (1),
+
+    CONSTRAINT uq_page_status_lookup_code
+        UNIQUE (code)
 );
-GO
-INSERT INTO manga.PageStatusLookup (Code, Name, SortOrder) VALUES (N'Draft', N'Draft', 1);
-INSERT INTO manga.PageStatusLookup (Code, Name, SortOrder) VALUES (N'InProgress', N'In Progress', 2);
-INSERT INTO manga.PageStatusLookup (Code, Name, SortOrder) VALUES (N'UnderReview', N'Under Review', 3);
-INSERT INTO manga.PageStatusLookup (Code, Name, SortOrder) VALUES (N'Approved', N'Approved', 4);
-INSERT INTO manga.PageStatusLookup (Code, Name, SortOrder) VALUES (N'Released', N'Released', 5);
-INSERT INTO manga.PageStatusLookup (Code, Name, SortOrder) VALUES (N'Archived', N'Archived', 6);
-GO
+
+INSERT INTO manga.PageStatusLookup (code, name, sort_order)
+VALUES
+(N'DRAFT', N'Draft', 1),
+(N'IN_PROGRESS', N'In Progress', 2),
+(N'UNDER_REVIEW', N'Under Review', 3),
+(N'APPROVED', N'Approved', 4),
+(N'RELEASED', N'Released', 5),
+(N'ARCHIVED', N'Archived', 6);
+
 CREATE TABLE manga.TaskStatusLookup (
-    TaskStatusLookupId SMALLINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_TaskStatusLookup PRIMARY KEY,
-Code VARCHAR(50) NOT NULL CONSTRAINT UQ_TaskStatusLookup_Code UNIQUE,
-Name NVARCHAR(100) NOT NULL,
-SortOrder SMALLINT NOT NULL,
-IsActive BIT NOT NULL CONSTRAINT DF_TaskStatusLookup_IsActive DEFAULT (1)
+    id SMALLINT IDENTITY(1,1) PRIMARY KEY,
+
+    code NVARCHAR(50) NOT NULL,
+    name NVARCHAR(100) NOT NULL,
+
+    sort_order SMALLINT NOT NULL,
+
+    CONSTRAINT uq_task_status_lookup_code
+        UNIQUE (code)
 );
-GO
-INSERT INTO manga.TaskStatusLookup (Code, Name, SortOrder) VALUES (N'Draft', N'Draft', 1);
-INSERT INTO manga.TaskStatusLookup (Code, Name, SortOrder) VALUES (N'Assigned', N'Assigned', 2);
-INSERT INTO manga.TaskStatusLookup (Code, Name, SortOrder) VALUES (N'InProgress', N'In Progress', 3);
-INSERT INTO manga.TaskStatusLookup (Code, Name, SortOrder) VALUES (N'Submitted', N'Submitted', 4);
-INSERT INTO manga.TaskStatusLookup (Code, Name, SortOrder) VALUES (N'UnderReview', N'Under Review', 5);
-INSERT INTO manga.TaskStatusLookup (Code, Name, SortOrder) VALUES (N'RevisionRequested', N'Revision Requested', 6);
-INSERT INTO manga.TaskStatusLookup (Code, Name, SortOrder) VALUES (N'Approved', N'Approved', 7);
-INSERT INTO manga.TaskStatusLookup (Code, Name, SortOrder) VALUES (N'Completed', N'Completed', 8);
-INSERT INTO manga.TaskStatusLookup (Code, Name, SortOrder) VALUES (N'Cancelled', N'Cancelled', 9);
-GO
+
+INSERT INTO manga.TaskStatusLookup (code, name, sort_order)
+VALUES
+(N'DRAFT', N'Draft', 1),
+(N'ASSIGNED', N'Assigned', 2),
+(N'IN_PROGRESS', N'In Progress', 3),
+(N'SUBMITTED', N'Submitted', 4),
+(N'UNDER_REVIEW', N'Under Review', 5),
+(N'REVISION_REQUESTED', N'Revision Requested', 6),
+(N'APPROVED', N'Approved', 7),
+(N'COMPLETED', N'Completed', 8),
+(N'CANCELLED', N'Cancelled', 9);
+
 CREATE TABLE manga.SubmissionStatusLookup (
-    SubmissionStatusLookupId SMALLINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_SubmissionStatusLookup PRIMARY KEY,
-Code VARCHAR(50) NOT NULL CONSTRAINT UQ_SubmissionStatusLookup_Code UNIQUE,
-Name NVARCHAR(100) NOT NULL,
-SortOrder SMALLINT NOT NULL,
-IsActive BIT NOT NULL CONSTRAINT DF_SubmissionStatusLookup_IsActive DEFAULT (1)
+    id SMALLINT IDENTITY(1,1) PRIMARY KEY,
+
+    code NVARCHAR(50) NOT NULL,
+    name NVARCHAR(100) NOT NULL,
+
+    sort_order SMALLINT NOT NULL,
+
+    CONSTRAINT uq_submission_status_lookup_code
+        UNIQUE (code)
 );
-GO
-INSERT INTO manga.SubmissionStatusLookup (Code, Name, SortOrder) VALUES (N'Draft', N'Draft', 1);
-INSERT INTO manga.SubmissionStatusLookup (Code, Name, SortOrder) VALUES (N'Submitted', N'Submitted', 2);
-INSERT INTO manga.SubmissionStatusLookup (Code, Name, SortOrder) VALUES (N'UnderReview', N'Under Review', 3);
-INSERT INTO manga.SubmissionStatusLookup (Code, Name, SortOrder) VALUES (N'RevisionRequested', N'Revision Requested', 4);
-INSERT INTO manga.SubmissionStatusLookup (Code, Name, SortOrder) VALUES (N'Approved', N'Approved', 5);
-INSERT INTO manga.SubmissionStatusLookup (Code, Name, SortOrder) VALUES (N'Rejected', N'Rejected', 6);
-INSERT INTO manga.SubmissionStatusLookup (Code, Name, SortOrder) VALUES (N'Withdrawn', N'Withdrawn', 7);
-GO
+
+INSERT INTO manga.SubmissionStatusLookup (code, name, sort_order)
+VALUES
+(N'DRAFT', N'Draft', 1),
+(N'SUBMITTED', N'Submitted', 2),
+(N'UNDER_REVIEW', N'Under Review', 3),
+(N'REVISION_REQUESTED', N'Revision Requested', 4),
+(N'APPROVED', N'Approved', 5),
+(N'REJECTED', N'Rejected', 6),
+(N'WITHDRAWN', N'Withdrawn', 7);
+
+
 CREATE TABLE manga.ReviewDecisionLookup (
-    ReviewDecisionLookupId SMALLINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ReviewDecisionLookup PRIMARY KEY,
-Code VARCHAR(50) NOT NULL CONSTRAINT UQ_ReviewDecisionLookup_Code UNIQUE,
-Name NVARCHAR(100) NOT NULL,
-SortOrder SMALLINT NOT NULL,
-IsActive BIT NOT NULL CONSTRAINT DF_ReviewDecisionLookup_IsActive DEFAULT (1)
+    id SMALLINT IDENTITY(1,1) PRIMARY KEY,
+
+    code NVARCHAR(50) NOT NULL,
+    name NVARCHAR(100) NOT NULL,
+
+    sort_order SMALLINT NOT NULL,
+
+    CONSTRAINT uq_review_decision_lookup_code
+        UNIQUE (code)
 );
-GO
-INSERT INTO manga.ReviewDecisionLookup (Code, Name, SortOrder) VALUES (N'Approved', N'Approved', 1);
-INSERT INTO manga.ReviewDecisionLookup (Code, Name, SortOrder) VALUES (N'RevisionRequested', N'Revision Requested', 2);
-INSERT INTO manga.ReviewDecisionLookup (Code, Name, SortOrder) VALUES (N'Rejected', N'Rejected', 3);
-GO
+
+
+INSERT INTO manga.ReviewDecisionLookup (code, name, sort_order)
+VALUES
+(N'APPROVED', N'Approved', 1),
+(N'REVISION_REQUESTED', N'Revision Requested', 2),
+(N'REJECTED', N'Rejected', 3);
+
+
 CREATE TABLE manga.VoteChoiceLookup (
-    VoteChoiceLookupId SMALLINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_VoteChoiceLookup PRIMARY KEY,
-Code VARCHAR(50) NOT NULL CONSTRAINT UQ_VoteChoiceLookup_Code UNIQUE,
-Name NVARCHAR(100) NOT NULL,
-SortOrder SMALLINT NOT NULL,
-IsActive BIT NOT NULL CONSTRAINT DF_VoteChoiceLookup_IsActive DEFAULT (1)
+    id SMALLINT IDENTITY(1,1) PRIMARY KEY,
+
+    code NVARCHAR(50) NOT NULL,
+    name NVARCHAR(100) NOT NULL,
+
+
+
+    CONSTRAINT uq_vote_choice_lookup_code
+        UNIQUE (code)
 );
-GO
-INSERT INTO manga.VoteChoiceLookup (Code, Name, SortOrder) VALUES (N'Approve', N'Approve', 1);
-INSERT INTO manga.VoteChoiceLookup (Code, Name, SortOrder) VALUES (N'Reject', N'Reject', 2);
-INSERT INTO manga.VoteChoiceLookup (Code, Name, SortOrder) VALUES (N'Abstain', N'Abstain', 3);
-GO
-CREATE TABLE manga.ContributorRoleLookup (
-    ContributorRoleLookupId SMALLINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ContributorRoleLookup PRIMARY KEY,
-Code VARCHAR(50) NOT NULL CONSTRAINT UQ_ContributorRoleLookup_Code UNIQUE,
-Name NVARCHAR(100) NOT NULL,
-SortOrder SMALLINT NOT NULL,
-IsActive BIT NOT NULL CONSTRAINT DF_ContributorRoleLookup_IsActive DEFAULT (1)
-);
-GO
-INSERT INTO manga.ContributorRoleLookup (Code, Name, SortOrder) VALUES (N'LeadMangaka', N'Lead Mangaka', 1);
-INSERT INTO manga.ContributorRoleLookup (Code, Name, SortOrder) VALUES (N'Assistant', N'Assistant', 2);
-INSERT INTO manga.ContributorRoleLookup (Code, Name, SortOrder) VALUES (N'TantouEditor', N'Tantou Editor', 3);
-GO
+
+INSERT INTO manga.VoteChoiceLookup (code, name)
+VALUES
+(N'APPROVE', N'Approve'),
+(N'REJECT', N'Reject'),
+(N'ABSTAIN', N'Abstain');
+
+INSERT INTO auth.Roles(role_name)
+VALUES
+(N'Mangaka'),
+(N'Assistant'),
+(N'Tantou Editor'),
+(N'Editorial Board Member');
+
 CREATE TABLE manga.TaskTypeLookup (
-    TaskTypeLookupId SMALLINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_TaskTypeLookup PRIMARY KEY,
-Code VARCHAR(50) NOT NULL CONSTRAINT UQ_TaskTypeLookup_Code UNIQUE,
-Name NVARCHAR(100) NOT NULL,
-SortOrder SMALLINT NOT NULL,
-IsActive BIT NOT NULL CONSTRAINT DF_TaskTypeLookup_IsActive DEFAULT (1)
+    id SMALLINT IDENTITY(1,1) PRIMARY KEY,
+
+    code NVARCHAR(50) NOT NULL,
+    name NVARCHAR(100) NOT NULL,
+
+    CONSTRAINT uq_task_type_lookup_code
+        UNIQUE (code)
 );
-GO
-INSERT INTO manga.TaskTypeLookup (Code, Name, SortOrder) VALUES (N'Background', N'Background', 1);
-INSERT INTO manga.TaskTypeLookup (Code, Name, SortOrder) VALUES (N'Shading', N'Shading', 2);
-INSERT INTO manga.TaskTypeLookup (Code, Name, SortOrder) VALUES (N'Effects', N'Effects', 3);
-INSERT INTO manga.TaskTypeLookup (Code, Name, SortOrder) VALUES (N'Cleanup', N'Cleanup', 4);
-INSERT INTO manga.TaskTypeLookup (Code, Name, SortOrder) VALUES (N'Dialogue', N'Dialogue', 5);
-INSERT INTO manga.TaskTypeLookup (Code, Name, SortOrder) VALUES (N'Typesetting', N'Typesetting', 6);
-INSERT INTO manga.TaskTypeLookup (Code, Name, SortOrder) VALUES (N'Review', N'Review', 7);
-INSERT INTO manga.TaskTypeLookup (Code, Name, SortOrder) VALUES (N'Other', N'Other', 8);
-GO
+
+INSERT INTO manga.TaskTypeLookup (code, name)
+VALUES
+(N'BACKGROUND', N'Background'),
+(N'SHADING', N'Shading'),
+(N'EFFECTS', N'Effects'),
+(N'CLEANUP', N'Cleanup'),
+(N'DIALOGUE', N'Dialogue'),
+(N'TYPESETTING', N'Typesetting'),
+(N'REVIEW', N'Review'),
+(N'OTHER', N'Other');
+
+
 CREATE TABLE manga.AssignmentStatusLookup (
-    AssignmentStatusLookupId SMALLINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_AssignmentStatusLookup PRIMARY KEY,
-Code VARCHAR(50) NOT NULL CONSTRAINT UQ_AssignmentStatusLookup_Code UNIQUE,
-Name NVARCHAR(100) NOT NULL,
-SortOrder SMALLINT NOT NULL,
-IsActive BIT NOT NULL CONSTRAINT DF_AssignmentStatusLookup_IsActive DEFAULT (1)
+    id SMALLINT IDENTITY(1,1) PRIMARY KEY,
+
+    code NVARCHAR(50) NOT NULL,
+    name NVARCHAR(100) NOT NULL,
+
+    sort_order SMALLINT NOT NULL,
+
+    CONSTRAINT uq_assignment_status_lookup_code
+        UNIQUE (code)
 );
-GO
-INSERT INTO manga.AssignmentStatusLookup (Code, Name, SortOrder) VALUES (N'Assigned', N'Assigned', 1);
-INSERT INTO manga.AssignmentStatusLookup (Code, Name, SortOrder) VALUES (N'Accepted', N'Accepted', 2);
-INSERT INTO manga.AssignmentStatusLookup (Code, Name, SortOrder) VALUES (N'Rejected', N'Rejected', 3);
-INSERT INTO manga.AssignmentStatusLookup (Code, Name, SortOrder) VALUES (N'InProgress', N'In Progress', 4);
-INSERT INTO manga.AssignmentStatusLookup (Code, Name, SortOrder) VALUES (N'Completed', N'Completed', 5);
-INSERT INTO manga.AssignmentStatusLookup (Code, Name, SortOrder) VALUES (N'Cancelled', N'Cancelled', 6);
-INSERT INTO manga.AssignmentStatusLookup (Code, Name, SortOrder) VALUES (N'Reassigned', N'Reassigned', 7);
-GO
+
+INSERT INTO manga.AssignmentStatusLookup (code, name, sort_order)
+VALUES
+(N'ASSIGNED', N'Assigned', 1),
+(N'ACCEPTED', N'Accepted', 2),
+(N'REJECTED', N'Rejected', 3),
+(N'IN_PROGRESS', N'In Progress', 4),
+(N'COMPLETED', N'Completed', 5),
+(N'CANCELLED', N'Cancelled', 6),
+(N'REASSIGNED', N'Reassigned', 7);
+
+
 CREATE TABLE manga.PublicationFrequencyLookup (
-    PublicationFrequencyLookupId SMALLINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_PublicationFrequencyLookup PRIMARY KEY,
-Code VARCHAR(50) NOT NULL CONSTRAINT UQ_PublicationFrequencyLookup_Code UNIQUE,
-Name NVARCHAR(100) NOT NULL,
-SortOrder SMALLINT NOT NULL,
-IsActive BIT NOT NULL CONSTRAINT DF_PublicationFrequencyLookup_IsActive DEFAULT (1)
+    id SMALLINT IDENTITY(1,1) PRIMARY KEY,
+
+    code NVARCHAR(50) NOT NULL,
+    name NVARCHAR(100) NOT NULL,
+
+    CONSTRAINT uq_publication_frequency_lookup_code
+        UNIQUE (code)
 );
-GO
-INSERT INTO manga.PublicationFrequencyLookup (Code, Name, SortOrder) VALUES (N'Weekly', N'Weekly', 1);
-INSERT INTO manga.PublicationFrequencyLookup (Code, Name, SortOrder) VALUES (N'Monthly', N'Monthly', 2);
-INSERT INTO manga.PublicationFrequencyLookup (Code, Name, SortOrder) VALUES (N'Irregular', N'Irregular', 3);
-GO
+
+INSERT INTO manga.PublicationFrequencyLookup (code, name)
+VALUES
+(N'WEEKLY', N'Weekly'),
+(N'MONTHLY', N'Monthly'),
+(N'IRREGULAR', N'Irregular');
+
+
 CREATE TABLE manga.PublicationStatusLookup (
-    PublicationStatusLookupId SMALLINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_PublicationStatusLookup PRIMARY KEY,
-Code VARCHAR(50) NOT NULL CONSTRAINT UQ_PublicationStatusLookup_Code UNIQUE,
-Name NVARCHAR(100) NOT NULL,
-SortOrder SMALLINT NOT NULL,
-IsActive BIT NOT NULL CONSTRAINT DF_PublicationStatusLookup_IsActive DEFAULT (1)
+    id SMALLINT IDENTITY(1,1) PRIMARY KEY,
+
+    code NVARCHAR(50) NOT NULL,
+    name NVARCHAR(100) NOT NULL,
+
+    CONSTRAINT uq_publication_status_lookup_code
+        UNIQUE (code)
 );
-GO
-INSERT INTO manga.PublicationStatusLookup (Code, Name, SortOrder) VALUES (N'Scheduled', N'Scheduled', 1);
-INSERT INTO manga.PublicationStatusLookup (Code, Name, SortOrder) VALUES (N'Released', N'Released', 2);
-INSERT INTO manga.PublicationStatusLookup (Code, Name, SortOrder) VALUES (N'Delayed', N'Delayed', 3);
-INSERT INTO manga.PublicationStatusLookup (Code, Name, SortOrder) VALUES (N'Cancelled', N'Cancelled', 4);
-GO
+
+INSERT INTO manga.PublicationStatusLookup (code, name)
+VALUES
+(N'SCHEDULED', N'Scheduled'),
+(N'RELEASED', N'Released'),
+(N'DELAYED', N'Delayed'),
+(N'CANCELLED', N'Cancelled');
+
+
 CREATE TABLE manga.RankingPeriodTypeLookup (
-    RankingPeriodTypeLookupId SMALLINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_RankingPeriodTypeLookup PRIMARY KEY,
-Code VARCHAR(50) NOT NULL CONSTRAINT UQ_RankingPeriodTypeLookup_Code UNIQUE,
-Name NVARCHAR(100) NOT NULL,
-SortOrder SMALLINT NOT NULL,
-IsActive BIT NOT NULL CONSTRAINT DF_RankingPeriodTypeLookup_IsActive DEFAULT (1)
+    id SMALLINT IDENTITY(1,1) PRIMARY KEY,
+
+    code NVARCHAR(50) NOT NULL,
+    name NVARCHAR(100) NOT NULL,
+
+    CONSTRAINT uq_ranking_period_type_lookup_code
+        UNIQUE (code)
 );
-GO
-INSERT INTO manga.RankingPeriodTypeLookup (Code, Name, SortOrder) VALUES (N'Weekly', N'Weekly', 1);
-INSERT INTO manga.RankingPeriodTypeLookup (Code, Name, SortOrder) VALUES (N'Monthly', N'Monthly', 2);
-INSERT INTO manga.RankingPeriodTypeLookup (Code, Name, SortOrder) VALUES (N'Seasonal', N'Seasonal', 3);
-GO
+
+INSERT INTO manga.RankingPeriodTypeLookup (code, name)
+VALUES
+(N'WEEKLY', N'Weekly'),
+(N'MONTHLY', N'Monthly'),
+(N'SEASONAL', N'Seasonal');
+
+
 CREATE TABLE manga.NotificationTypeLookup (
-    NotificationTypeLookupId SMALLINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_NotificationTypeLookup PRIMARY KEY,
-Code VARCHAR(50) NOT NULL CONSTRAINT UQ_NotificationTypeLookup_Code UNIQUE,
-Name NVARCHAR(100) NOT NULL,
-SortOrder SMALLINT NOT NULL,
-IsActive BIT NOT NULL CONSTRAINT DF_NotificationTypeLookup_IsActive DEFAULT (1)
+    id SMALLINT IDENTITY(1,1) PRIMARY KEY,
+
+    code NVARCHAR(50) NOT NULL,
+    name NVARCHAR(100) NOT NULL,
+
+    CONSTRAINT uq_notification_type_lookup_code
+        UNIQUE (code)
 );
-GO
-INSERT INTO manga.NotificationTypeLookup (Code, Name, SortOrder) VALUES (N'ProposalReview', N'Proposal Review', 1);
-INSERT INTO manga.NotificationTypeLookup (Code, Name, SortOrder) VALUES (N'ProposalDecision', N'Proposal Decision', 2);
-INSERT INTO manga.NotificationTypeLookup (Code, Name, SortOrder) VALUES (N'TaskAssignment', N'Task Assignment', 3);
-INSERT INTO manga.NotificationTypeLookup (Code, Name, SortOrder) VALUES (N'TaskReview', N'Task Review', 4);
-INSERT INTO manga.NotificationTypeLookup (Code, Name, SortOrder) VALUES (N'ChapterReview', N'Chapter Review', 5);
-INSERT INTO manga.NotificationTypeLookup (Code, Name, SortOrder) VALUES (N'RankingWarning', N'Ranking Warning', 6);
-INSERT INTO manga.NotificationTypeLookup (Code, Name, SortOrder) VALUES (N'PublicationSchedule', N'Publication Schedule', 7);
-INSERT INTO manga.NotificationTypeLookup (Code, Name, SortOrder) VALUES (N'SystemMessage', N'System Message', 8);
-GO
+
+INSERT INTO manga.NotificationTypeLookup (code, name)
+VALUES
+(N'PROPOSAL_REVIEW', N'Proposal Review'),
+(N'PROPOSAL_DECISION', N'Proposal Decision'),
+(N'TASK_ASSIGNMENT', N'Task Assignment'),
+(N'TASK_REVIEW', N'Task Review'),
+(N'CHAPTER_REVIEW', N'Chapter Review'),
+(N'RANKING_WARNING', N'Ranking Warning'),
+(N'PUBLICATION_SCHEDULE', N'Publication Schedule'),
+(N'SYSTEM_MESSAGE', N'System Message');
+
+
 CREATE TABLE manga.FilePurposeLookup (
-    FilePurposeLookupId SMALLINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_FilePurposeLookup PRIMARY KEY,
-Code VARCHAR(50) NOT NULL CONSTRAINT UQ_FilePurposeLookup_Code UNIQUE,
-Name NVARCHAR(100) NOT NULL,
-SortOrder SMALLINT NOT NULL,
-IsActive BIT NOT NULL CONSTRAINT DF_FilePurposeLookup_IsActive DEFAULT (1)
+    id SMALLINT IDENTITY(1,1) PRIMARY KEY,
+
+    code NVARCHAR(50) NOT NULL,
+    name NVARCHAR(100) NOT NULL,
+
+    CONSTRAINT uq_file_purpose_lookup_code
+        UNIQUE (code)
 );
-GO
-INSERT INTO manga.FilePurposeLookup (Code, Name, SortOrder) VALUES (N'SeriesProposal', N'Series Proposal', 1);
-INSERT INTO manga.FilePurposeLookup (Code, Name, SortOrder) VALUES (N'ChapterDraft', N'Chapter Draft', 2);
-INSERT INTO manga.FilePurposeLookup (Code, Name, SortOrder) VALUES (N'ChapterAsset', N'Chapter Asset', 3);
-INSERT INTO manga.FilePurposeLookup (Code, Name, SortOrder) VALUES (N'TaskReference', N'Task Reference', 4);
-INSERT INTO manga.FilePurposeLookup (Code, Name, SortOrder) VALUES (N'TaskSubmission', N'Task Submission', 5);
-INSERT INTO manga.FilePurposeLookup (Code, Name, SortOrder) VALUES (N'ChapterSubmission', N'Chapter Submission', 6);
-INSERT INTO manga.FilePurposeLookup (Code, Name, SortOrder) VALUES (N'EditorialAttachment', N'Editorial Attachment', 7);
-INSERT INTO manga.FilePurposeLookup (Code, Name, SortOrder) VALUES (N'PageAnnotationExport', N'Page Annotation Export', 8);
-GO
+
+INSERT INTO manga.FilePurposeLookup (code, name)
+VALUES
+(N'SERIES_PROPOSAL', N'Series Proposal'),
+(N'CHAPTER_DRAFT', N'Chapter Draft'),
+(N'CHAPTER_ASSET', N'Chapter Asset'),
+(N'TASK_REFERENCE', N'Task Reference'),
+(N'TASK_SUBMISSION', N'Task Submission'),
+(N'CHAPTER_SUBMISSION', N'Chapter Submission'),
+(N'EDITORIAL_ATTACHMENT', N'Editorial Attachment'),
+(N'PAGE_ANNOTATION_EXPORT', N'Page Annotation Export');
+
 CREATE TABLE manga.FileResource (
-    FileResourceId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_FileResource PRIMARY KEY,
-    FilePurposeId SMALLINT NOT NULL,
-    OriginalFileName NVARCHAR(260) NOT NULL,
-    StoredFileName NVARCHAR(260) NOT NULL,
-    StoragePath NVARCHAR(500) NOT NULL,
-    ContentType NVARCHAR(100) NOT NULL,
-    FileSizeBytes BIGINT NOT NULL,
-    Sha256Hash CHAR(64) NULL,
-    UploadedByUserId INT NULL,
-    UploadedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_FileResource_UploadedAtUtc DEFAULT (SYSUTCDATETIME()),
-    IsDeleted BIT NOT NULL CONSTRAINT DF_FileResource_IsDeleted DEFAULT (0),
-    CONSTRAINT FK_FileResource_FilePurpose FOREIGN KEY (FilePurposeId) REFERENCES manga.FilePurposeLookup(FilePurposeLookupId),
-    CONSTRAINT FK_FileResource_UploadedByUser FOREIGN KEY (UploadedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT UQ_FileResource_StoredFileName UNIQUE (StoredFileName)
+    file_resource_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_file_resource PRIMARY KEY,
+    file_purpose_id SMALLINT NOT NULL,
+    original_file_name NVARCHAR(260) NOT NULL,
+    stored_file_name NVARCHAR(260) NOT NULL,
+    storage_path NVARCHAR(500) NOT NULL,
+    content_type NVARCHAR(100) NOT NULL,
+    file_size_bytes BIGINT NOT NULL,
+    sha256_hash CHAR(64) NULL,
+    uploaded_by_user_id INT NULL,
+    uploaded_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_file_resource_uploaded_at_utc DEFAULT (SYSUTCDATETIME()),
+    is_deleted BIT NOT NULL CONSTRAINT df_file_resource_is_deleted DEFAULT (0),
+    CONSTRAINT fk_file_resource_file_purpose FOREIGN KEY (file_purpose_id) REFERENCES manga.FilePurposeLookup(id),
+    CONSTRAINT fk_file_resource_uploaded_by_user FOREIGN KEY (uploaded_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT uq_file_resource_stored_file_name UNIQUE (stored_file_name)
 );
-GO
-CREATE INDEX IX_FileResource_FilePurposeId ON manga.FileResource (FilePurposeId);
-GO
+
+CREATE INDEX ix_file_resource_file_purpose_id ON manga.FileResource (file_purpose_id);
+
 CREATE TABLE manga.Series (
-    SeriesId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_Series PRIMARY KEY,
-    SeriesCode NVARCHAR(50) NOT NULL,
-    Title NVARCHAR(200) NOT NULL,
-    Slug NVARCHAR(220) NOT NULL,
-    Synopsis NVARCHAR(MAX) NOT NULL,
-    CharacterOverview NVARCHAR(MAX) NULL,
-    Genre NVARCHAR(100) NOT NULL,
-    TargetAudience NVARCHAR(100) NULL,
-    CoverFileId BIGINT NULL,
-    LeadMangakaUserId INT NOT NULL,
-    CurrentStatusId SMALLINT NOT NULL,
-    CurrentRankingScore DECIMAL(10,2) NULL,
-    CurrentRankPosition INT NULL,
-    IsArchived BIT NOT NULL CONSTRAINT DF_Series_IsArchived DEFAULT (0),
-    CreatedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_Series_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
-    CreatedByUserId INT NULL,
-    UpdatedAtUtc DATETIME2(0) NULL,
-    UpdatedByUserId INT NULL,
-    CONSTRAINT UQ_Series_SeriesCode UNIQUE (SeriesCode),
-    CONSTRAINT UQ_Series_Slug UNIQUE (Slug),
-    CONSTRAINT FK_Series_CoverFile FOREIGN KEY (CoverFileId) REFERENCES manga.FileResource(FileResourceId),
-    CONSTRAINT FK_Series_LeadMangaka FOREIGN KEY (LeadMangakaUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT FK_Series_Status FOREIGN KEY (CurrentStatusId) REFERENCES manga.SeriesStatusLookup(SeriesStatusLookupId),
-    CONSTRAINT FK_Series_CreatedBy FOREIGN KEY (CreatedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT FK_Series_UpdatedBy FOREIGN KEY (UpdatedByUserId) REFERENCES auth.Users(user_id)
+    series_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_series PRIMARY KEY,
+    series_code NVARCHAR(50) NOT NULL,
+    title NVARCHAR(200) NOT NULL,
+    slug NVARCHAR(220) NOT NULL,
+    synopsis NVARCHAR(MAX) NOT NULL,
+    character_overview NVARCHAR(MAX) NULL,
+    genre NVARCHAR(100) NOT NULL,
+    target_audience NVARCHAR(100) NULL,
+    cover_file_id BIGINT NULL,
+    lead_mangaka_user_id INT NOT NULL,
+    current_status_id SMALLINT NOT NULL,
+    current_ranking_score DECIMAL(10,2) NULL,
+    current_rank_position INT NULL,
+    created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_created_at_utc DEFAULT (SYSUTCDATETIME()),
+    created_by_user_id INT NULL,
+    updated_at_utc DATETIME2(0) NULL,
+    updated_by_user_id INT NULL,
+    CONSTRAINT uq_series_series_code UNIQUE (series_code),
+    CONSTRAINT uq_series_slug UNIQUE (slug),
+    CONSTRAINT fk_series_cover_file FOREIGN KEY (cover_file_id) REFERENCES manga.FileResource(file_resource_id),
+    CONSTRAINT fk_series_lead_mangaka FOREIGN KEY (lead_mangaka_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT fk_series_status FOREIGN KEY (current_status_id) REFERENCES manga.SeriesStatusLookup(id),
+    CONSTRAINT fk_series_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT fk_series_updated_by FOREIGN KEY (updated_by_user_id) REFERENCES auth.Users(user_id)
 );
-GO
-CREATE INDEX IX_Series_CurrentStatusId ON manga.Series (CurrentStatusId);
-CREATE INDEX IX_Series_LeadMangakaUserId ON manga.Series (LeadMangakaUserId);
-GO
-CREATE TABLE manga.SeriesStatusHistory (
-    SeriesStatusHistoryId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_SeriesStatusHistory PRIMARY KEY,
-    SeriesId BIGINT NOT NULL,
-    FromStatusId SMALLINT NULL,
-    ToStatusId SMALLINT NOT NULL,
-    ChangedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_SeriesStatusHistory_ChangedAtUtc DEFAULT (SYSUTCDATETIME()),
-    ChangedByUserId INT NULL,
-    ChangeReason NVARCHAR(500) NULL,
-    RelatedProposalId BIGINT NULL,
-    RelatedChapterId BIGINT NULL,
-    CONSTRAINT FK_SeriesStatusHistory_Series FOREIGN KEY (SeriesId) REFERENCES manga.Series(SeriesId),
-    CONSTRAINT FK_SeriesStatusHistory_FromStatus FOREIGN KEY (FromStatusId) REFERENCES manga.SeriesStatusLookup(SeriesStatusLookupId),
-    CONSTRAINT FK_SeriesStatusHistory_ToStatus FOREIGN KEY (ToStatusId) REFERENCES manga.SeriesStatusLookup(SeriesStatusLookupId),
-    CONSTRAINT FK_SeriesStatusHistory_ChangedBy FOREIGN KEY (ChangedByUserId) REFERENCES auth.Users(user_id)
-);
-GO
+
+CREATE INDEX ix_series_current_status_id ON manga.Series (current_status_id);
+CREATE INDEX ix_series_lead_mangaka_user_id ON manga.Series (lead_mangaka_user_id);
+
+
 CREATE TABLE manga.SeriesContributor (
-    SeriesContributorId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_SeriesContributor PRIMARY KEY,
-    SeriesId BIGINT NOT NULL,
-    UserId INT NOT NULL,
-    ContributorRoleId SMALLINT NOT NULL,
-    StartDate DATE NOT NULL CONSTRAINT DF_SeriesContributor_StartDate DEFAULT (CONVERT(date, SYSUTCDATETIME())),
-    EndDate DATE NULL,
-    IsActive BIT NOT NULL CONSTRAINT DF_SeriesContributor_IsActive DEFAULT (1),
-    Notes NVARCHAR(500) NULL,
-    CreatedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_SeriesContributor_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
-    CreatedByUserId INT NULL,
-    CONSTRAINT FK_SeriesContributor_Series FOREIGN KEY (SeriesId) REFERENCES manga.Series(SeriesId),
-    CONSTRAINT FK_SeriesContributor_User FOREIGN KEY (UserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT FK_SeriesContributor_Role FOREIGN KEY (ContributorRoleId) REFERENCES manga.ContributorRoleLookup(ContributorRoleLookupId),
-    CONSTRAINT FK_SeriesContributor_CreatedBy FOREIGN KEY (CreatedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT UQ_SeriesContributor_Series_User_Role UNIQUE (SeriesId, UserId, ContributorRoleId, StartDate)
+    series_contributor_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_series_contributor PRIMARY KEY,
+    series_id BIGINT NOT NULL,
+    user_id INT NOT NULL,
+    contributor_role_id SMALLINT NOT NULL,
+    start_date DATE NOT NULL CONSTRAINT df_series_contributor_start_date DEFAULT (CONVERT(date, SYSUTCDATETIME())),
+    end_date DATE NULL,
+    notes NVARCHAR(500) NULL,
+    created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_contributor_created_at_utc DEFAULT (SYSUTCDATETIME()),
+    created_by_user_id INT NULL,
+    CONSTRAINT fk_series_contributor_series FOREIGN KEY (series_id) REFERENCES manga.Series(series_id),
+    CONSTRAINT fk_series_contributor_user FOREIGN KEY (user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT fk_series_contributor_role FOREIGN KEY (contributor_role_id) REFERENCES auth.Roles(role_id),
+    CONSTRAINT fk_series_contributor_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT uq_series_contributor_series_user_role UNIQUE (series_id, user_id, contributor_role_id, start_date)
 );
-GO
-CREATE INDEX IX_SeriesContributor_UserId ON manga.SeriesContributor (UserId);
-GO
+
+CREATE INDEX ix_series_contributor_user_id ON manga.SeriesContributor (user_id);
+
+
 CREATE TABLE manga.SeriesProposal (
-    SeriesProposalId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_SeriesProposal PRIMARY KEY,
-    SeriesId BIGINT NOT NULL,
-    ProposalVersionNo SMALLINT NOT NULL,
-    ProposalTitle NVARCHAR(200) NULL,
-    SynopsisSnapshot NVARCHAR(MAX) NOT NULL,
-    CharacterOverviewSnapshot NVARCHAR(MAX) NULL,
-    ProposalFileId BIGINT NOT NULL,
-    ProposalStatusId SMALLINT NOT NULL,
-    SubmittedByUserId INT NOT NULL,
-    SubmittedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_SeriesProposal_SubmittedAtUtc DEFAULT (SYSUTCDATETIME()),
-    LastSubmittedAtUtc DATETIME2(0) NULL,
-    RevisionRequestedReason NVARCHAR(500) NULL,
-    WithdrawnAtUtc DATETIME2(0) NULL,
-    IsCurrentVersion BIT NOT NULL CONSTRAINT DF_SeriesProposal_IsCurrentVersion DEFAULT (1),
-    CreatedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_SeriesProposal_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
-    CreatedByUserId INT NULL,
-    UpdatedAtUtc DATETIME2(0) NULL,
-    UpdatedByUserId INT NULL,
-    CONSTRAINT FK_SeriesProposal_Series FOREIGN KEY (SeriesId) REFERENCES manga.Series(SeriesId),
-    CONSTRAINT FK_SeriesProposal_File FOREIGN KEY (ProposalFileId) REFERENCES manga.FileResource(FileResourceId),
-    CONSTRAINT FK_SeriesProposal_Status FOREIGN KEY (ProposalStatusId) REFERENCES manga.ProposalStatusLookup(ProposalStatusLookupId),
-    CONSTRAINT FK_SeriesProposal_SubmittedBy FOREIGN KEY (SubmittedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT FK_SeriesProposal_CreatedBy FOREIGN KEY (CreatedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT FK_SeriesProposal_UpdatedBy FOREIGN KEY (UpdatedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT UQ_SeriesProposal_Series_Version UNIQUE (SeriesId, ProposalVersionNo)
+    series_proposal_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_series_proposal PRIMARY KEY,
+    series_id BIGINT NOT NULL,
+    proposal_version_no SMALLINT NOT NULL,
+    proposal_title NVARCHAR(200) NULL,
+    synopsis_snapshot NVARCHAR(MAX) NOT NULL,
+    character_overview_snapshot NVARCHAR(MAX) NULL,
+    proposal_file_id BIGINT NOT NULL,
+    proposal_status_id SMALLINT NOT NULL,
+    submitted_by_user_id INT NOT NULL,
+    submitted_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_proposal_submitted_at_utc DEFAULT (SYSUTCDATETIME()),
+    last_submitted_at_utc DATETIME2(0) NULL,
+    revision_requested_reason NVARCHAR(500) NULL,
+    withdrawn_at_utc DATETIME2(0) NULL,
+    is_current_version BIT NOT NULL CONSTRAINT df_series_proposal_is_current_version DEFAULT (1),
+    created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_proposal_created_at_utc DEFAULT (SYSUTCDATETIME()),
+    created_by_user_id INT NULL,
+    updated_at_utc DATETIME2(0) NULL,
+    updated_by_user_id INT NULL,
+    CONSTRAINT fk_series_proposal_series FOREIGN KEY (series_id) REFERENCES manga.Series(series_id),
+    CONSTRAINT fk_series_proposal_file FOREIGN KEY (proposal_file_id) REFERENCES manga.FileResource(file_resource_id),
+    CONSTRAINT fk_series_proposal_status FOREIGN KEY (proposal_status_id) REFERENCES manga.ProposalStatusLookup(id),
+    CONSTRAINT fk_series_proposal_submitted_by FOREIGN KEY (submitted_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT fk_series_proposal_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT fk_series_proposal_updated_by FOREIGN KEY (updated_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT uq_series_proposal_series_version UNIQUE (series_id, proposal_version_no)
 );
-GO
-CREATE INDEX IX_SeriesProposal_StatusId ON manga.SeriesProposal (ProposalStatusId);
-GO
-CREATE TABLE manga.SeriesProposalStatusHistory (
-    SeriesProposalStatusHistoryId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_SeriesProposalStatusHistory PRIMARY KEY,
-    SeriesProposalId BIGINT NOT NULL,
-    FromStatusId SMALLINT NULL,
-    ToStatusId SMALLINT NOT NULL,
-    ChangedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_SeriesProposalStatusHistory_ChangedAtUtc DEFAULT (SYSUTCDATETIME()),
-    ChangedByUserId INT NULL,
-    ChangeReason NVARCHAR(500) NULL,
-    RelatedReviewId BIGINT NULL,
-    RelatedBoardDecisionId BIGINT NULL,
-    CONSTRAINT FK_SeriesProposalStatusHistory_Proposal FOREIGN KEY (SeriesProposalId) REFERENCES manga.SeriesProposal(SeriesProposalId),
-    CONSTRAINT FK_SeriesProposalStatusHistory_FromStatus FOREIGN KEY (FromStatusId) REFERENCES manga.ProposalStatusLookup(ProposalStatusLookupId),
-    CONSTRAINT FK_SeriesProposalStatusHistory_ToStatus FOREIGN KEY (ToStatusId) REFERENCES manga.ProposalStatusLookup(ProposalStatusLookupId),
-    CONSTRAINT FK_SeriesProposalStatusHistory_ChangedBy FOREIGN KEY (ChangedByUserId) REFERENCES auth.Users(user_id)
-);
-GO
+
+CREATE INDEX ix_series_proposal_status_id ON manga.SeriesProposal (proposal_status_id);
+
+
 CREATE TABLE manga.SeriesEditorialReview (
-    SeriesEditorialReviewId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_SeriesEditorialReview PRIMARY KEY,
-    SeriesProposalId BIGINT NOT NULL,
-    ReviewRoundNo SMALLINT NOT NULL,
-    ReviewerUserId INT NOT NULL,
-    ReviewDecisionId SMALLINT NOT NULL,
-    Comments NVARCHAR(MAX) NULL,
-    MarkupFileId BIGINT NULL,
-    ReviewedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_SeriesEditorialReview_ReviewedAtUtc DEFAULT (SYSUTCDATETIME()),
-    CreatedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_SeriesEditorialReview_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
-    CreatedByUserId INT NULL,
-    CONSTRAINT FK_SeriesEditorialReview_Proposal FOREIGN KEY (SeriesProposalId) REFERENCES manga.SeriesProposal(SeriesProposalId),
-    CONSTRAINT FK_SeriesEditorialReview_Reviewer FOREIGN KEY (ReviewerUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT FK_SeriesEditorialReview_Decision FOREIGN KEY (ReviewDecisionId) REFERENCES manga.ReviewDecisionLookup(ReviewDecisionLookupId),
-    CONSTRAINT FK_SeriesEditorialReview_MarkupFile FOREIGN KEY (MarkupFileId) REFERENCES manga.FileResource(FileResourceId),
-    CONSTRAINT FK_SeriesEditorialReview_CreatedBy FOREIGN KEY (CreatedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT UQ_SeriesEditorialReview_Proposal_Round UNIQUE (SeriesProposalId, ReviewRoundNo)
+    series_editorial_review_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_series_editorial_review PRIMARY KEY,
+    series_proposal_id BIGINT NOT NULL,
+    review_round_no SMALLINT NOT NULL,
+    reviewer_user_id INT NOT NULL,
+    review_decision_id SMALLINT NOT NULL,
+    comments NVARCHAR(MAX) NULL,
+    markup_file_id BIGINT NULL,
+    reviewed_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_editorial_review_reviewed_at_utc DEFAULT (SYSUTCDATETIME()),
+    created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_editorial_review_created_at_utc DEFAULT (SYSUTCDATETIME()),
+    created_by_user_id INT NULL,
+    CONSTRAINT fk_series_editorial_review_proposal FOREIGN KEY (series_proposal_id) REFERENCES manga.SeriesProposal(series_proposal_id),
+    CONSTRAINT fk_series_editorial_review_reviewer FOREIGN KEY (reviewer_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT fk_series_editorial_review_decision FOREIGN KEY (review_decision_id) REFERENCES manga.ReviewDecisionLookup(id),
+    CONSTRAINT fk_series_editorial_review_markup_file FOREIGN KEY (markup_file_id) REFERENCES manga.FileResource(file_resource_id),
+    CONSTRAINT fk_series_editorial_review_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT uq_series_editorial_review_proposal_round UNIQUE (series_proposal_id, review_round_no)
 );
-GO
-CREATE INDEX IX_SeriesEditorialReview_ProposalId ON manga.SeriesEditorialReview (SeriesProposalId);
-GO
+
+CREATE INDEX ix_series_editorial_review_proposal_id ON manga.SeriesEditorialReview (series_proposal_id);
+
+
 CREATE TABLE manga.SeriesBoardVote (
-    SeriesBoardVoteId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_SeriesBoardVote PRIMARY KEY,
-    SeriesProposalId BIGINT NOT NULL,
-    BoardMemberUserId INT NOT NULL,
-    VoteChoiceId SMALLINT NOT NULL,
-    VoteReason NVARCHAR(500) NULL,
-    VotedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_SeriesBoardVote_VotedAtUtc DEFAULT (SYSUTCDATETIME()),
-    CreatedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_SeriesBoardVote_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
-    CreatedByUserId INT NULL,
-    CONSTRAINT FK_SeriesBoardVote_Proposal FOREIGN KEY (SeriesProposalId) REFERENCES manga.SeriesProposal(SeriesProposalId),
-    CONSTRAINT FK_SeriesBoardVote_BoardMember FOREIGN KEY (BoardMemberUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT FK_SeriesBoardVote_VoteChoice FOREIGN KEY (VoteChoiceId) REFERENCES manga.VoteChoiceLookup(VoteChoiceLookupId),
-    CONSTRAINT FK_SeriesBoardVote_CreatedBy FOREIGN KEY (CreatedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT UQ_SeriesBoardVote_Proposal_BoardMember UNIQUE (SeriesProposalId, BoardMemberUserId)
+    series_board_vote_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_series_board_vote PRIMARY KEY,
+    series_proposal_id BIGINT NOT NULL,
+    board_member_user_id INT NOT NULL,
+    vote_choice_id SMALLINT NOT NULL,
+    vote_reason NVARCHAR(500) NULL,
+    voted_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_board_vote_voted_at_utc DEFAULT (SYSUTCDATETIME()),
+    created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_board_vote_created_at_utc DEFAULT (SYSUTCDATETIME()),
+    created_by_user_id INT NULL,
+    CONSTRAINT fk_series_board_vote_proposal FOREIGN KEY (series_proposal_id) REFERENCES manga.SeriesProposal(series_proposal_id),
+    CONSTRAINT fk_series_board_vote_board_member FOREIGN KEY (board_member_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT fk_series_board_vote_vote_choice FOREIGN KEY (vote_choice_id) REFERENCES manga.VoteChoiceLookup(id),
+    CONSTRAINT fk_series_board_vote_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT uq_series_board_vote_proposal_board_member UNIQUE (series_proposal_id, board_member_user_id)
 );
-GO
-CREATE INDEX IX_SeriesBoardVote_ProposalId ON manga.SeriesBoardVote (SeriesProposalId);
-GO
+
+CREATE INDEX ix_series_board_vote_proposal_id ON manga.SeriesBoardVote (series_proposal_id);
+
+
 CREATE TABLE manga.SeriesBoardDecision (
-    SeriesBoardDecisionId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_SeriesBoardDecision PRIMARY KEY,
-    SeriesProposalId BIGINT NOT NULL,
-    DecisionTypeId SMALLINT NOT NULL,
-    AggregateApproveCount INT NOT NULL CONSTRAINT DF_SeriesBoardDecision_AggregateApproveCount DEFAULT (0),
-    AggregateRejectCount INT NOT NULL CONSTRAINT DF_SeriesBoardDecision_AggregateRejectCount DEFAULT (0),
-    AggregateAbstainCount INT NOT NULL CONSTRAINT DF_SeriesBoardDecision_AggregateAbstainCount DEFAULT (0),
-    DecisionSummary NVARCHAR(MAX) NULL,
-    DecidedByUserId INT NULL,
-    DecidedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_SeriesBoardDecision_DecidedAtUtc DEFAULT (SYSUTCDATETIME()),
-    CreatedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_SeriesBoardDecision_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
-    CreatedByUserId INT NULL,
-    CONSTRAINT FK_SeriesBoardDecision_Proposal FOREIGN KEY (SeriesProposalId) REFERENCES manga.SeriesProposal(SeriesProposalId),
-    CONSTRAINT FK_SeriesBoardDecision_DecisionType FOREIGN KEY (DecisionTypeId) REFERENCES manga.ReviewDecisionLookup(ReviewDecisionLookupId),
-    CONSTRAINT FK_SeriesBoardDecision_DecidedBy FOREIGN KEY (DecidedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT FK_SeriesBoardDecision_CreatedBy FOREIGN KEY (CreatedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT UQ_SeriesBoardDecision_Proposal UNIQUE (SeriesProposalId)
+    series_board_decision_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_series_board_decision PRIMARY KEY,
+    series_proposal_id BIGINT NOT NULL,
+    decision_type_id SMALLINT NOT NULL,
+    aggregate_approve_count INT NOT NULL CONSTRAINT df_series_board_decision_aggregate_approve_count DEFAULT (0),
+    aggregate_reject_count INT NOT NULL CONSTRAINT df_series_board_decision_aggregate_reject_count DEFAULT (0),
+    aggregate_abstain_count INT NOT NULL CONSTRAINT df_series_board_decision_aggregate_abstain_count DEFAULT (0),
+    decision_summary NVARCHAR(MAX) NULL,
+    decided_by_user_id INT NULL,
+    decided_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_board_decision_decided_at_utc DEFAULT (SYSUTCDATETIME()),
+    created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_board_decision_created_at_utc DEFAULT (SYSUTCDATETIME()),
+    created_by_user_id INT NULL,
+    CONSTRAINT fk_series_board_decision_proposal FOREIGN KEY (series_proposal_id) REFERENCES manga.SeriesProposal(series_proposal_id),
+    CONSTRAINT fk_series_board_decision_decision_type FOREIGN KEY (decision_type_id) REFERENCES manga.ReviewDecisionLookup(id),
+    CONSTRAINT fk_series_board_decision_decided_by FOREIGN KEY (decided_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT fk_series_board_decision_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT uq_series_board_decision_proposal UNIQUE (series_proposal_id)
 );
-GO
-CREATE INDEX IX_SeriesBoardDecision_DecisionTypeId ON manga.SeriesBoardDecision (DecisionTypeId);
-GO
+
+CREATE INDEX ix_series_board_decision_decision_type_id ON manga.SeriesBoardDecision (decision_type_id);
+
+
 CREATE TABLE manga.SeriesPublicationPolicy (
-    SeriesPublicationPolicyId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_SeriesPublicationPolicy PRIMARY KEY,
-    SeriesId BIGINT NOT NULL,
-    PublicationFrequencyId SMALLINT NOT NULL,
-    EffectiveFromDate DATE NOT NULL,
-    EffectiveToDate DATE NULL,
-    PolicyNotes NVARCHAR(MAX) NULL,
-    ApprovedByUserId INT NULL,
-    ApprovedAtUtc DATETIME2(0) NULL,
-    CreatedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_SeriesPublicationPolicy_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
-    CreatedByUserId INT NULL,
-    CONSTRAINT FK_SeriesPublicationPolicy_Series FOREIGN KEY (SeriesId) REFERENCES manga.Series(SeriesId),
-    CONSTRAINT FK_SeriesPublicationPolicy_Frequency FOREIGN KEY (PublicationFrequencyId) REFERENCES manga.PublicationFrequencyLookup(PublicationFrequencyLookupId),
-    CONSTRAINT FK_SeriesPublicationPolicy_ApprovedBy FOREIGN KEY (ApprovedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT FK_SeriesPublicationPolicy_CreatedBy FOREIGN KEY (CreatedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT UQ_SeriesPublicationPolicy_Series_EffectiveFrom UNIQUE (SeriesId, EffectiveFromDate)
+    series_publication_policy_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_series_publication_policy PRIMARY KEY,
+    series_id BIGINT NOT NULL,
+    publication_frequency_id SMALLINT NOT NULL,
+    effective_from_date DATE NOT NULL,
+    effective_to_date DATE NULL,
+    policy_notes NVARCHAR(MAX) NULL,
+    approved_by_user_id INT NULL,
+    approved_at_utc DATETIME2(0) NULL,
+    created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_publication_policy_created_at_utc DEFAULT (SYSUTCDATETIME()),
+    created_by_user_id INT NULL,
+    CONSTRAINT fk_series_publication_policy_series FOREIGN KEY (series_id) REFERENCES manga.Series(series_id),
+    CONSTRAINT fk_series_publication_policy_frequency FOREIGN KEY (publication_frequency_id) REFERENCES manga.PublicationFrequencyLookup(id),
+    CONSTRAINT fk_series_publication_policy_approved_by FOREIGN KEY (approved_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT fk_series_publication_policy_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT uq_series_publication_policy_series_effective_from UNIQUE (series_id, effective_from_date)
 );
-GO
-CREATE INDEX IX_SeriesPublicationPolicy_SeriesId ON manga.SeriesPublicationPolicy (SeriesId);
-GO
+
+CREATE INDEX ix_series_publication_policy_series_id ON manga.SeriesPublicationPolicy (series_id);
+
+
 CREATE TABLE manga.Chapter (
-    ChapterId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_Chapter PRIMARY KEY,
-    SeriesId BIGINT NOT NULL,
-    ChapterNumberLabel NVARCHAR(20) NOT NULL,
-    ChapterTitle NVARCHAR(200) NULL,
-    CurrentStatusId SMALLINT NOT NULL,
-    IsFinalChapter BIT NOT NULL CONSTRAINT DF_Chapter_IsFinalChapter DEFAULT (0),
-    PlannedReleaseDate DATE NULL,
-    ReleasedAtUtc DATETIME2(0) NULL,
-    CreatedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_Chapter_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
-    CreatedByUserId INT NULL,
-    UpdatedAtUtc DATETIME2(0) NULL,
-    UpdatedByUserId INT NULL,
-    CONSTRAINT FK_Chapter_Series FOREIGN KEY (SeriesId) REFERENCES manga.Series(SeriesId),
-    CONSTRAINT FK_Chapter_Status FOREIGN KEY (CurrentStatusId) REFERENCES manga.ChapterStatusLookup(ChapterStatusLookupId),
-    CONSTRAINT FK_Chapter_CreatedBy FOREIGN KEY (CreatedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT FK_Chapter_UpdatedBy FOREIGN KEY (UpdatedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT UQ_Chapter_Series_ChapterNumber UNIQUE (SeriesId, ChapterNumberLabel)
+    chapter_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_chapter PRIMARY KEY,
+    series_id BIGINT NOT NULL,
+    chapter_number_label NVARCHAR(20) NOT NULL,
+    chapter_title NVARCHAR(200) NULL,
+    current_status_id SMALLINT NOT NULL,
+    planned_release_date DATE NULL,
+    released_at_utc DATETIME2(0) NULL,
+    created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_created_at_utc DEFAULT (SYSUTCDATETIME()),
+    created_by_user_id INT NULL,
+    updated_at_utc DATETIME2(0) NULL,
+    updated_by_user_id INT NULL,
+    CONSTRAINT fk_chapter_series FOREIGN KEY (series_id) REFERENCES manga.Series(series_id),
+    CONSTRAINT fk_chapter_status FOREIGN KEY (current_status_id) REFERENCES manga.ChapterStatusLookup(id),
+    CONSTRAINT fk_chapter_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT fk_chapter_updated_by FOREIGN KEY (updated_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT uq_chapter_series_chapter_number UNIQUE (series_id, chapter_number_label)
 );
-GO
-CREATE INDEX IX_Chapter_SeriesId ON manga.Chapter (SeriesId);
-CREATE INDEX IX_Chapter_CurrentStatusId ON manga.Chapter (CurrentStatusId);
-GO
-CREATE TABLE manga.ChapterStatusHistory (
-    ChapterStatusHistoryId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ChapterStatusHistory PRIMARY KEY,
-    ChapterId BIGINT NOT NULL,
-    FromStatusId SMALLINT NULL,
-    ToStatusId SMALLINT NOT NULL,
-    ChangedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_ChapterStatusHistory_ChangedAtUtc DEFAULT (SYSUTCDATETIME()),
-    ChangedByUserId INT NULL,
-    ChangeReason NVARCHAR(500) NULL,
-    RelatedSubmissionId BIGINT NULL,
-    RelatedReleaseId BIGINT NULL,
-    CONSTRAINT FK_ChapterStatusHistory_Chapter FOREIGN KEY (ChapterId) REFERENCES manga.Chapter(ChapterId),
-    CONSTRAINT FK_ChapterStatusHistory_FromStatus FOREIGN KEY (FromStatusId) REFERENCES manga.ChapterStatusLookup(ChapterStatusLookupId),
-    CONSTRAINT FK_ChapterStatusHistory_ToStatus FOREIGN KEY (ToStatusId) REFERENCES manga.ChapterStatusLookup(ChapterStatusLookupId),
-    CONSTRAINT FK_ChapterStatusHistory_ChangedBy FOREIGN KEY (ChangedByUserId) REFERENCES auth.Users(user_id)
-);
-GO
+
+CREATE INDEX ix_chapter_series_id ON manga.Chapter (series_id);
+CREATE INDEX ix_chapter_current_status_id ON manga.Chapter (current_status_id);
+
+
 CREATE TABLE manga.ChapterPage (
-    ChapterPageId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ChapterPage PRIMARY KEY,
-    ChapterId BIGINT NOT NULL,
-    PageNo INT NOT NULL,
-    CurrentStatusId SMALLINT NOT NULL,
-    PageFileId BIGINT NULL,
-    PageNotes NVARCHAR(MAX) NULL,
-    CreatedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_ChapterPage_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
-    CreatedByUserId INT NULL,
-    UpdatedAtUtc DATETIME2(0) NULL,
-    UpdatedByUserId INT NULL,
-    CONSTRAINT FK_ChapterPage_Chapter FOREIGN KEY (ChapterId) REFERENCES manga.Chapter(ChapterId),
-    CONSTRAINT FK_ChapterPage_Status FOREIGN KEY (CurrentStatusId) REFERENCES manga.PageStatusLookup(PageStatusLookupId),
-    CONSTRAINT FK_ChapterPage_File FOREIGN KEY (PageFileId) REFERENCES manga.FileResource(FileResourceId),
-    CONSTRAINT FK_ChapterPage_CreatedBy FOREIGN KEY (CreatedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT FK_ChapterPage_UpdatedBy FOREIGN KEY (UpdatedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT UQ_ChapterPage_Chapter_PageNo UNIQUE (ChapterId, PageNo)
+    chapter_page_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_chapter_page PRIMARY KEY,
+    chapter_id BIGINT NOT NULL,
+    page_no INT NOT NULL,
+    current_status_id SMALLINT NOT NULL,
+    page_file_id BIGINT NULL,
+    page_notes NVARCHAR(MAX) NULL,
+    created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_page_created_at_utc DEFAULT (SYSUTCDATETIME()),
+    created_by_user_id INT NULL,
+    updated_at_utc DATETIME2(0) NULL,
+    updated_by_user_id INT NULL,
+    CONSTRAINT fk_chapter_page_chapter FOREIGN KEY (chapter_id) REFERENCES manga.Chapter(chapter_id),
+    CONSTRAINT fk_chapter_page_status FOREIGN KEY (current_status_id) REFERENCES manga.PageStatusLookup(id),
+    CONSTRAINT fk_chapter_page_file FOREIGN KEY (page_file_id) REFERENCES manga.FileResource(file_resource_id),
+    CONSTRAINT fk_chapter_page_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT fk_chapter_page_updated_by FOREIGN KEY (updated_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT uq_chapter_page_chapter_page_no UNIQUE (chapter_id, page_no)
 );
-GO
-CREATE INDEX IX_ChapterPage_ChapterId ON manga.ChapterPage (ChapterId);
-CREATE INDEX IX_ChapterPage_CurrentStatusId ON manga.ChapterPage (CurrentStatusId);
-GO
-CREATE TABLE manga.ChapterPageStatusHistory (
-    ChapterPageStatusHistoryId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ChapterPageStatusHistory PRIMARY KEY,
-    ChapterPageId BIGINT NOT NULL,
-    FromStatusId SMALLINT NULL,
-    ToStatusId SMALLINT NOT NULL,
-    ChangedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_ChapterPageStatusHistory_ChangedAtUtc DEFAULT (SYSUTCDATETIME()),
-    ChangedByUserId INT NULL,
-    ChangeReason NVARCHAR(500) NULL,
-    CONSTRAINT FK_ChapterPageStatusHistory_Page FOREIGN KEY (ChapterPageId) REFERENCES manga.ChapterPage(ChapterPageId),
-    CONSTRAINT FK_ChapterPageStatusHistory_FromStatus FOREIGN KEY (FromStatusId) REFERENCES manga.PageStatusLookup(PageStatusLookupId),
-    CONSTRAINT FK_ChapterPageStatusHistory_ToStatus FOREIGN KEY (ToStatusId) REFERENCES manga.PageStatusLookup(PageStatusLookupId),
-    CONSTRAINT FK_ChapterPageStatusHistory_ChangedBy FOREIGN KEY (ChangedByUserId) REFERENCES auth.Users(user_id)
-);
-GO
+
+CREATE INDEX ix_chapter_page_chapter_id ON manga.ChapterPage (chapter_id);
+CREATE INDEX ix_chapter_page_current_status_id ON manga.ChapterPage (current_status_id);
+
+
 CREATE TABLE manga.ChapterPageAnnotation (
-    ChapterPageAnnotationId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ChapterPageAnnotation PRIMARY KEY,
-    ChapterPageId BIGINT NOT NULL,
-    AnnotatedByUserId INT NOT NULL,
-    AnnotationText NVARCHAR(MAX) NOT NULL,
-    X DECIMAL(10,2) NULL,
-    Y DECIMAL(10,2) NULL,
-    Width DECIMAL(10,2) NULL,
-    Height DECIMAL(10,2) NULL,
-    IsResolved BIT NOT NULL CONSTRAINT DF_ChapterPageAnnotation_IsResolved DEFAULT (0),
-    ResolvedAtUtc DATETIME2(0) NULL,
-    CreatedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_ChapterPageAnnotation_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
-    CONSTRAINT FK_ChapterPageAnnotation_Page FOREIGN KEY (ChapterPageId) REFERENCES manga.ChapterPage(ChapterPageId),
-    CONSTRAINT FK_ChapterPageAnnotation_AnnotatedBy FOREIGN KEY (AnnotatedByUserId) REFERENCES auth.Users(user_id)
+    chapter_page_annotation_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_chapter_page_annotation PRIMARY KEY,
+    chapter_page_id BIGINT NOT NULL,
+    annotated_by_user_id INT NOT NULL,
+    annotation_text NVARCHAR(MAX) NOT NULL,
+    x DECIMAL(10,2) NULL,
+    y DECIMAL(10,2) NULL,
+    width DECIMAL(10,2) NULL,
+    height DECIMAL(10,2) NULL,
+    is_resolved BIT NOT NULL CONSTRAINT df_chapter_page_annotation_is_resolved DEFAULT (0),
+    resolved_at_utc DATETIME2(0) NULL,
+    created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_page_annotation_created_at_utc DEFAULT (SYSUTCDATETIME()),
+    CONSTRAINT fk_chapter_page_annotation_page FOREIGN KEY (chapter_page_id) REFERENCES manga.ChapterPage(chapter_page_id),
+    CONSTRAINT fk_chapter_page_annotation_annotated_by FOREIGN KEY (annotated_by_user_id) REFERENCES auth.Users(user_id)
 );
-GO
-CREATE INDEX IX_ChapterPageAnnotation_PageId ON manga.ChapterPageAnnotation (ChapterPageId);
-GO
+
+CREATE INDEX ix_chapter_page_annotation_page_id ON manga.ChapterPageAnnotation (chapter_page_id);
+
+
 CREATE TABLE manga.ChapterTask (
-    ChapterTaskId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ChapterTask PRIMARY KEY,
-    ChapterId BIGINT NOT NULL,
-    TaskTypeId SMALLINT NOT NULL,
-    TaskTitle NVARCHAR(200) NOT NULL,
-    TaskDescription NVARCHAR(MAX) NOT NULL,
-    TargetPageId BIGINT NULL,
-    TargetRegionDescription NVARCHAR(250) NULL,
-    PriorityLevel TINYINT NOT NULL CONSTRAINT DF_ChapterTask_PriorityLevel DEFAULT (3),
-    CurrentStatusId SMALLINT NOT NULL,
-    DueAtUtc DATETIME2(0) NULL,
-    CompensationAmount DECIMAL(12,2) NULL,
-    CreatedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_ChapterTask_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
-    CreatedByUserId INT NOT NULL,
-    UpdatedAtUtc DATETIME2(0) NULL,
-    UpdatedByUserId INT NULL,
-    IsDeleted BIT NOT NULL CONSTRAINT DF_ChapterTask_IsDeleted DEFAULT (0),
-    CONSTRAINT FK_ChapterTask_Chapter FOREIGN KEY (ChapterId) REFERENCES manga.Chapter(ChapterId),
-    CONSTRAINT FK_ChapterTask_Type FOREIGN KEY (TaskTypeId) REFERENCES manga.TaskTypeLookup(TaskTypeLookupId),
-    CONSTRAINT FK_ChapterTask_TargetPage FOREIGN KEY (TargetPageId) REFERENCES manga.ChapterPage(ChapterPageId),
-    CONSTRAINT FK_ChapterTask_Status FOREIGN KEY (CurrentStatusId) REFERENCES manga.TaskStatusLookup(TaskStatusLookupId),
-    CONSTRAINT FK_ChapterTask_CreatedBy FOREIGN KEY (CreatedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT FK_ChapterTask_UpdatedBy FOREIGN KEY (UpdatedByUserId) REFERENCES auth.Users(user_id)
+    chapter_task_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_chapter_task PRIMARY KEY,
+    chapter_id BIGINT NOT NULL,
+    task_type_id SMALLINT NOT NULL,
+    task_title NVARCHAR(200) NOT NULL,
+    task_description NVARCHAR(MAX) NOT NULL,
+    target_page_id BIGINT NULL,
+    target_region_description NVARCHAR(250) NULL,
+    priority_level TINYINT NOT NULL CONSTRAINT df_chapter_task_priority_level DEFAULT (3),
+    current_status_id SMALLINT NOT NULL,
+    due_at_utc DATETIME2(0) NULL,
+    compensation_amount DECIMAL(12,2) NULL,
+    created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_task_created_at_utc DEFAULT (SYSUTCDATETIME()),
+    created_by_user_id INT NOT NULL,
+    updated_at_utc DATETIME2(0) NULL,
+    updated_by_user_id INT NULL,
+    CONSTRAINT fk_chapter_task_chapter FOREIGN KEY (chapter_id) REFERENCES manga.Chapter(chapter_id),
+    CONSTRAINT fk_chapter_task_type FOREIGN KEY (task_type_id) REFERENCES manga.TaskTypeLookup(id),
+    CONSTRAINT fk_chapter_task_target_page FOREIGN KEY (target_page_id) REFERENCES manga.ChapterPage(chapter_page_id),
+    CONSTRAINT fk_chapter_task_status FOREIGN KEY (current_status_id) REFERENCES manga.TaskStatusLookup(id),
+    CONSTRAINT fk_chapter_task_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT fk_chapter_task_updated_by FOREIGN KEY (updated_by_user_id) REFERENCES auth.Users(user_id)
 );
-GO
-CREATE INDEX IX_ChapterTask_ChapterId_StatusId ON manga.ChapterTask (ChapterId, CurrentStatusId);
-CREATE INDEX IX_ChapterTask_TargetPageId ON manga.ChapterTask (TargetPageId);
-GO
-CREATE TABLE manga.ChapterTaskStatusHistory (
-    ChapterTaskStatusHistoryId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ChapterTaskStatusHistory PRIMARY KEY,
-    ChapterTaskId BIGINT NOT NULL,
-    FromStatusId SMALLINT NULL,
-    ToStatusId SMALLINT NOT NULL,
-    ChangedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_ChapterTaskStatusHistory_ChangedAtUtc DEFAULT (SYSUTCDATETIME()),
-    ChangedByUserId INT NULL,
-    ChangeReason NVARCHAR(500) NULL,
-    CONSTRAINT FK_ChapterTaskStatusHistory_Task FOREIGN KEY (ChapterTaskId) REFERENCES manga.ChapterTask(ChapterTaskId),
-    CONSTRAINT FK_ChapterTaskStatusHistory_FromStatus FOREIGN KEY (FromStatusId) REFERENCES manga.TaskStatusLookup(TaskStatusLookupId),
-    CONSTRAINT FK_ChapterTaskStatusHistory_ToStatus FOREIGN KEY (ToStatusId) REFERENCES manga.TaskStatusLookup(TaskStatusLookupId),
-    CONSTRAINT FK_ChapterTaskStatusHistory_ChangedBy FOREIGN KEY (ChangedByUserId) REFERENCES auth.Users(user_id)
-);
-GO
+
+CREATE INDEX ix_chapter_task_chapter_id_status_id ON manga.ChapterTask (chapter_id, current_status_id);
+CREATE INDEX ix_chapter_task_target_page_id ON manga.ChapterTask (target_page_id);
+
+
 CREATE TABLE manga.ChapterTaskAssignment (
-    ChapterTaskAssignmentId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ChapterTaskAssignment PRIMARY KEY,
-    ChapterTaskId BIGINT NOT NULL,
-    AssignedToUserId INT NOT NULL,
-    AssignedByUserId INT NOT NULL,
-    AssignmentStatusId SMALLINT NOT NULL,
-    AssignedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_ChapterTaskAssignment_AssignedAtUtc DEFAULT (SYSUTCDATETIME()),
-    AcceptedAtUtc DATETIME2(0) NULL,
-    CompletedAtUtc DATETIME2(0) NULL,
-    UnassignedAtUtc DATETIME2(0) NULL,
-    Remarks NVARCHAR(500) NULL,
-    CreatedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_ChapterTaskAssignment_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
-    CreatedByUserId INT NULL,
-    CONSTRAINT FK_ChapterTaskAssignment_Task FOREIGN KEY (ChapterTaskId) REFERENCES manga.ChapterTask(ChapterTaskId),
-    CONSTRAINT FK_ChapterTaskAssignment_AssignedTo FOREIGN KEY (AssignedToUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT FK_ChapterTaskAssignment_AssignedBy FOREIGN KEY (AssignedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT FK_ChapterTaskAssignment_Status FOREIGN KEY (AssignmentStatusId) REFERENCES manga.AssignmentStatusLookup(AssignmentStatusLookupId),
-    CONSTRAINT FK_ChapterTaskAssignment_CreatedBy FOREIGN KEY (CreatedByUserId) REFERENCES auth.Users(user_id)
+    chapter_task_assignment_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_chapter_task_assignment PRIMARY KEY,
+    chapter_task_id BIGINT NOT NULL,
+    assigned_to_user_id INT NOT NULL,
+    assigned_by_user_id INT NOT NULL,
+    assignment_status_id SMALLINT NOT NULL,
+    assigned_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_task_assignment_assigned_at_utc DEFAULT (SYSUTCDATETIME()),
+    accepted_at_utc DATETIME2(0) NULL,
+    completed_at_utc DATETIME2(0) NULL,
+    unassigned_at_utc DATETIME2(0) NULL,
+    remarks NVARCHAR(500) NULL,
+    created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_task_assignment_created_at_utc DEFAULT (SYSUTCDATETIME()),
+    created_by_user_id INT NULL,
+    CONSTRAINT fk_chapter_task_assignment_task FOREIGN KEY (chapter_task_id) REFERENCES manga.ChapterTask(chapter_task_id),
+    CONSTRAINT fk_chapter_task_assignment_assigned_to FOREIGN KEY (assigned_to_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT fk_chapter_task_assignment_assigned_by FOREIGN KEY (assigned_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT fk_chapter_task_assignment_status FOREIGN KEY (assignment_status_id) REFERENCES manga.AssignmentStatusLookup(id),
+    CONSTRAINT fk_chapter_task_assignment_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id)
 );
-GO
-CREATE INDEX IX_ChapterTaskAssignment_AssignedToUserId ON manga.ChapterTaskAssignment (AssignedToUserId, AssignmentStatusId);
-GO
+
+CREATE INDEX ix_chapter_task_assignment_assigned_to_user_id ON manga.ChapterTaskAssignment (assigned_to_user_id, assignment_status_id);
+
+
 CREATE TABLE manga.ChapterTaskSubmission (
-    ChapterTaskSubmissionId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ChapterTaskSubmission PRIMARY KEY,
-    ChapterTaskAssignmentId BIGINT NOT NULL,
-    SubmissionVersionNo SMALLINT NOT NULL,
-    SubmittedByUserId INT NOT NULL,
-    SubmissionFileId BIGINT NOT NULL,
-    SubmissionStatusId SMALLINT NOT NULL,
-    SubmittedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_ChapterTaskSubmission_SubmittedAtUtc DEFAULT (SYSUTCDATETIME()),
-    Remarks NVARCHAR(MAX) NULL,
-    CreatedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_ChapterTaskSubmission_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
-    CreatedByUserId INT NULL,
-    CONSTRAINT FK_ChapterTaskSubmission_Assignment FOREIGN KEY (ChapterTaskAssignmentId) REFERENCES manga.ChapterTaskAssignment(ChapterTaskAssignmentId),
-    CONSTRAINT FK_ChapterTaskSubmission_SubmittedBy FOREIGN KEY (SubmittedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT FK_ChapterTaskSubmission_File FOREIGN KEY (SubmissionFileId) REFERENCES manga.FileResource(FileResourceId),
-    CONSTRAINT FK_ChapterTaskSubmission_Status FOREIGN KEY (SubmissionStatusId) REFERENCES manga.SubmissionStatusLookup(SubmissionStatusLookupId),
-    CONSTRAINT FK_ChapterTaskSubmission_CreatedBy FOREIGN KEY (CreatedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT UQ_ChapterTaskSubmission_Assignment_Version UNIQUE (ChapterTaskAssignmentId, SubmissionVersionNo)
+    chapter_task_submission_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_chapter_task_submission PRIMARY KEY,
+    chapter_task_assignment_id BIGINT NOT NULL,
+    submission_version_no SMALLINT NOT NULL,
+    submitted_by_user_id INT NOT NULL,
+    submission_file_id BIGINT NOT NULL,
+    submission_status_id SMALLINT NOT NULL,
+    submitted_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_task_submission_submitted_at_utc DEFAULT (SYSUTCDATETIME()),
+    remarks NVARCHAR(MAX) NULL,
+    created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_task_submission_created_at_utc DEFAULT (SYSUTCDATETIME()),
+    created_by_user_id INT NULL,
+    CONSTRAINT fk_chapter_task_submission_assignment FOREIGN KEY (chapter_task_assignment_id) REFERENCES manga.ChapterTaskAssignment(chapter_task_assignment_id),
+    CONSTRAINT fk_chapter_task_submission_submitted_by FOREIGN KEY (submitted_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT fk_chapter_task_submission_file FOREIGN KEY (submission_file_id) REFERENCES manga.FileResource(file_resource_id),
+    CONSTRAINT fk_chapter_task_submission_status FOREIGN KEY (submission_status_id) REFERENCES manga.SubmissionStatusLookup(id),
+    CONSTRAINT fk_chapter_task_submission_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT uq_chapter_task_submission_assignment_version UNIQUE (chapter_task_assignment_id, submission_version_no)
 );
-GO
-CREATE INDEX IX_ChapterTaskSubmission_AssignmentId ON manga.ChapterTaskSubmission (ChapterTaskAssignmentId);
-GO
+
+CREATE INDEX ix_chapter_task_submission_assignment_id ON manga.ChapterTaskSubmission (chapter_task_assignment_id);
+
+
 CREATE TABLE manga.ChapterTaskReview (
-    ChapterTaskReviewId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ChapterTaskReview PRIMARY KEY,
-    ChapterTaskSubmissionId BIGINT NOT NULL,
-    ReviewerUserId INT NOT NULL,
-    ReviewDecisionId SMALLINT NOT NULL,
-    Comments NVARCHAR(MAX) NULL,
-    ReviewedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_ChapterTaskReview_ReviewedAtUtc DEFAULT (SYSUTCDATETIME()),
-    CreatedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_ChapterTaskReview_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
-    CreatedByUserId INT NULL,
-    CONSTRAINT FK_ChapterTaskReview_Submission FOREIGN KEY (ChapterTaskSubmissionId) REFERENCES manga.ChapterTaskSubmission(ChapterTaskSubmissionId),
-    CONSTRAINT FK_ChapterTaskReview_Reviewer FOREIGN KEY (ReviewerUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT FK_ChapterTaskReview_Decision FOREIGN KEY (ReviewDecisionId) REFERENCES manga.ReviewDecisionLookup(ReviewDecisionLookupId),
-    CONSTRAINT FK_ChapterTaskReview_CreatedBy FOREIGN KEY (CreatedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT UQ_ChapterTaskReview_Submission UNIQUE (ChapterTaskSubmissionId)
+    chapter_task_review_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_chapter_task_review PRIMARY KEY,
+    chapter_task_submission_id BIGINT NOT NULL,
+    reviewer_user_id INT NOT NULL,
+    review_decision_id SMALLINT NOT NULL,
+    comments NVARCHAR(MAX) NULL,
+    reviewed_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_task_review_reviewed_at_utc DEFAULT (SYSUTCDATETIME()),
+    created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_task_review_created_at_utc DEFAULT (SYSUTCDATETIME()),
+    created_by_user_id INT NULL,
+    CONSTRAINT fk_chapter_task_review_submission FOREIGN KEY (chapter_task_submission_id) REFERENCES manga.ChapterTaskSubmission(chapter_task_submission_id),
+    CONSTRAINT fk_chapter_task_review_reviewer FOREIGN KEY (reviewer_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT fk_chapter_task_review_decision FOREIGN KEY (review_decision_id) REFERENCES manga.ReviewDecisionLookup(id),
+    CONSTRAINT fk_chapter_task_review_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT uq_chapter_task_review_submission UNIQUE (chapter_task_submission_id)
 );
-GO
+
+
 CREATE TABLE manga.ChapterSubmission (
-    ChapterSubmissionId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ChapterSubmission PRIMARY KEY,
-    ChapterId BIGINT NOT NULL,
-    SubmissionVersionNo SMALLINT NOT NULL,
-    SubmittedByUserId INT NOT NULL,
-    SubmissionFileId BIGINT NOT NULL,
-    SubmissionStatusId SMALLINT NOT NULL,
-    SubmittedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_ChapterSubmission_SubmittedAtUtc DEFAULT (SYSUTCDATETIME()),
-    Remarks NVARCHAR(MAX) NULL,
-    CreatedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_ChapterSubmission_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
-    CreatedByUserId INT NULL,
-    CONSTRAINT FK_ChapterSubmission_Chapter FOREIGN KEY (ChapterId) REFERENCES manga.Chapter(ChapterId),
-    CONSTRAINT FK_ChapterSubmission_SubmittedBy FOREIGN KEY (SubmittedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT FK_ChapterSubmission_File FOREIGN KEY (SubmissionFileId) REFERENCES manga.FileResource(FileResourceId),
-    CONSTRAINT FK_ChapterSubmission_Status FOREIGN KEY (SubmissionStatusId) REFERENCES manga.SubmissionStatusLookup(SubmissionStatusLookupId),
-    CONSTRAINT FK_ChapterSubmission_CreatedBy FOREIGN KEY (CreatedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT UQ_ChapterSubmission_Chapter_Version UNIQUE (ChapterId, SubmissionVersionNo)
+    chapter_submission_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_chapter_submission PRIMARY KEY,
+    chapter_id BIGINT NOT NULL,
+    submission_version_no SMALLINT NOT NULL,
+    submitted_by_user_id INT NOT NULL,
+    submission_file_id BIGINT NOT NULL,
+    submission_status_id SMALLINT NOT NULL,
+    submitted_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_submission_submitted_at_utc DEFAULT (SYSUTCDATETIME()),
+    remarks NVARCHAR(MAX) NULL,
+    created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_submission_created_at_utc DEFAULT (SYSUTCDATETIME()),
+    created_by_user_id INT NULL,
+    CONSTRAINT fk_chapter_submission_chapter FOREIGN KEY (chapter_id) REFERENCES manga.Chapter(chapter_id),
+    CONSTRAINT fk_chapter_submission_submitted_by FOREIGN KEY (submitted_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT fk_chapter_submission_file FOREIGN KEY (submission_file_id) REFERENCES manga.FileResource(file_resource_id),
+    CONSTRAINT fk_chapter_submission_status FOREIGN KEY (submission_status_id) REFERENCES manga.SubmissionStatusLookup(id),
+    CONSTRAINT fk_chapter_submission_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT uq_chapter_submission_chapter_version UNIQUE (chapter_id, submission_version_no)
 );
-GO
-CREATE INDEX IX_ChapterSubmission_ChapterId ON manga.ChapterSubmission (ChapterId);
-GO
+
+CREATE INDEX ix_chapter_submission_chapter_id ON manga.ChapterSubmission (chapter_id);
+
+
 CREATE TABLE manga.ChapterEditorialReview (
-    ChapterEditorialReviewId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ChapterEditorialReview PRIMARY KEY,
-    ChapterSubmissionId BIGINT NOT NULL,
-    ReviewRoundNo SMALLINT NOT NULL,
-    ReviewerUserId INT NOT NULL,
-    ReviewDecisionId SMALLINT NOT NULL,
-    Comments NVARCHAR(MAX) NULL,
-    MarkupFileId BIGINT NULL,
-    ReviewedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_ChapterEditorialReview_ReviewedAtUtc DEFAULT (SYSUTCDATETIME()),
-    CreatedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_ChapterEditorialReview_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
-    CreatedByUserId INT NULL,
-    CONSTRAINT FK_ChapterEditorialReview_Submission FOREIGN KEY (ChapterSubmissionId) REFERENCES manga.ChapterSubmission(ChapterSubmissionId),
-    CONSTRAINT FK_ChapterEditorialReview_Reviewer FOREIGN KEY (ReviewerUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT FK_ChapterEditorialReview_Decision FOREIGN KEY (ReviewDecisionId) REFERENCES manga.ReviewDecisionLookup(ReviewDecisionLookupId),
-    CONSTRAINT FK_ChapterEditorialReview_MarkupFile FOREIGN KEY (MarkupFileId) REFERENCES manga.FileResource(FileResourceId),
-    CONSTRAINT FK_ChapterEditorialReview_CreatedBy FOREIGN KEY (CreatedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT UQ_ChapterEditorialReview_Submission_Round UNIQUE (ChapterSubmissionId, ReviewRoundNo)
+    chapter_editorial_review_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_chapter_editorial_review PRIMARY KEY,
+    chapter_submission_id BIGINT NOT NULL,
+    review_round_no SMALLINT NOT NULL,
+    reviewer_user_id INT NOT NULL,
+    review_decision_id SMALLINT NOT NULL,
+    comments NVARCHAR(MAX) NULL,
+    markup_file_id BIGINT NULL,
+    reviewed_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_editorial_review_reviewed_at_utc DEFAULT (SYSUTCDATETIME()),
+    created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_editorial_review_created_at_utc DEFAULT (SYSUTCDATETIME()),
+    created_by_user_id INT NULL,
+    CONSTRAINT fk_chapter_editorial_review_submission FOREIGN KEY (chapter_submission_id) REFERENCES manga.ChapterSubmission(chapter_submission_id),
+    CONSTRAINT fk_chapter_editorial_review_reviewer FOREIGN KEY (reviewer_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT fk_chapter_editorial_review_decision FOREIGN KEY (review_decision_id) REFERENCES manga.ReviewDecisionLookup(id),
+    CONSTRAINT fk_chapter_editorial_review_markup_file FOREIGN KEY (markup_file_id) REFERENCES manga.FileResource(file_resource_id),
+    CONSTRAINT fk_chapter_editorial_review_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT uq_chapter_editorial_review_submission_round UNIQUE (chapter_submission_id, review_round_no)
 );
-GO
-CREATE INDEX IX_ChapterEditorialReview_SubmissionId ON manga.ChapterEditorialReview (ChapterSubmissionId);
-GO
+
+CREATE INDEX ix_chapter_editorial_review_submission_id ON manga.ChapterEditorialReview (chapter_submission_id);
+
+
 CREATE TABLE manga.ChapterRelease (
-    ChapterReleaseId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ChapterRelease PRIMARY KEY,
-    ChapterId BIGINT NOT NULL,
-    ReleaseVersionNo SMALLINT NOT NULL,
-    ScheduledReleaseAtUtc DATETIME2(0) NULL,
-    ReleasedAtUtc DATETIME2(0) NULL,
-    ReleaseStatusId SMALLINT NOT NULL,
-    ReleaseNotes NVARCHAR(MAX) NULL,
-    ApprovedByUserId INT NULL,
-    CreatedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_ChapterRelease_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
-    CreatedByUserId INT NULL,
-    CONSTRAINT FK_ChapterRelease_Chapter FOREIGN KEY (ChapterId) REFERENCES manga.Chapter(ChapterId),
-    CONSTRAINT FK_ChapterRelease_Status FOREIGN KEY (ReleaseStatusId) REFERENCES manga.PublicationStatusLookup(PublicationStatusLookupId),
-    CONSTRAINT FK_ChapterRelease_ApprovedBy FOREIGN KEY (ApprovedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT FK_ChapterRelease_CreatedBy FOREIGN KEY (CreatedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT UQ_ChapterRelease_Chapter_Version UNIQUE (ChapterId, ReleaseVersionNo)
+    chapter_release_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_chapter_release PRIMARY KEY,
+    chapter_id BIGINT NOT NULL,
+    release_version_no SMALLINT NOT NULL,
+    scheduled_release_at_utc DATETIME2(0) NULL,
+    released_at_utc DATETIME2(0) NULL,
+    release_status_id SMALLINT NOT NULL,
+    release_notes NVARCHAR(MAX) NULL,
+    approved_by_user_id INT NULL,
+    created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_release_created_at_utc DEFAULT (SYSUTCDATETIME()),
+    created_by_user_id INT NULL,
+    CONSTRAINT fk_chapter_release_chapter FOREIGN KEY (chapter_id) REFERENCES manga.Chapter(chapter_id),
+    CONSTRAINT fk_chapter_release_status FOREIGN KEY (release_status_id) REFERENCES manga.PublicationStatusLookup(id),
+    CONSTRAINT fk_chapter_release_approved_by FOREIGN KEY (approved_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT fk_chapter_release_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT uq_chapter_release_chapter_version UNIQUE (chapter_id, release_version_no)
 );
-GO
-CREATE INDEX IX_ChapterRelease_ChapterId ON manga.ChapterRelease (ChapterId);
-GO
+
+CREATE INDEX ix_chapter_release_chapter_id ON manga.ChapterRelease (chapter_id);
+
+
 CREATE TABLE manga.SeriesRankingSnapshot (
-    SeriesRankingSnapshotId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_SeriesRankingSnapshot PRIMARY KEY,
-    SeriesId BIGINT NOT NULL,
-    RankingPeriodTypeId SMALLINT NOT NULL,
-    PeriodStartDate DATE NOT NULL,
-    PeriodEndDate DATE NOT NULL,
-    RankPosition INT NOT NULL,
-    RankingScore DECIMAL(10,2) NOT NULL,
-    ReaderVoteCount INT NOT NULL CONSTRAINT DF_SeriesRankingSnapshot_ReaderVoteCount DEFAULT (0),
-    CancellationRiskScore DECIMAL(10,2) NULL,
-    IsAtRisk BIT NOT NULL CONSTRAINT DF_SeriesRankingSnapshot_IsAtRisk DEFAULT (0),
-    GeneratedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_SeriesRankingSnapshot_GeneratedAtUtc DEFAULT (SYSUTCDATETIME()),
-    GeneratedByUserId INT NULL,
-    CreatedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_SeriesRankingSnapshot_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
-    CONSTRAINT FK_SeriesRankingSnapshot_Series FOREIGN KEY (SeriesId) REFERENCES manga.Series(SeriesId),
-    CONSTRAINT FK_SeriesRankingSnapshot_PeriodType FOREIGN KEY (RankingPeriodTypeId) REFERENCES manga.RankingPeriodTypeLookup(RankingPeriodTypeLookupId),
-    CONSTRAINT FK_SeriesRankingSnapshot_GeneratedBy FOREIGN KEY (GeneratedByUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT UQ_SeriesRankingSnapshot_Series_Period UNIQUE (SeriesId, RankingPeriodTypeId, PeriodStartDate, PeriodEndDate),
-    CONSTRAINT CK_SeriesRankingSnapshot_RankPosition CHECK (RankPosition >= 1),
-    CONSTRAINT CK_SeriesRankingSnapshot_Period CHECK (PeriodEndDate >= PeriodStartDate)
+    series_ranking_snapshot_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_series_ranking_snapshot PRIMARY KEY,
+    series_id BIGINT NOT NULL,
+    ranking_period_type_id SMALLINT NOT NULL,
+    period_start_date DATE NOT NULL,
+    period_end_date DATE NOT NULL,
+    rank_position INT NOT NULL,
+    ranking_score DECIMAL(10,2) NOT NULL,
+    reader_vote_count INT NOT NULL CONSTRAINT df_series_ranking_snapshot_reader_vote_count DEFAULT (0),
+    cancellation_risk_score DECIMAL(10,2) NULL,
+    generated_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_ranking_snapshot_generated_at_utc DEFAULT (SYSUTCDATETIME()),
+    generated_by_user_id INT NULL,
+    created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_ranking_snapshot_created_at_utc DEFAULT (SYSUTCDATETIME()),
+    CONSTRAINT fk_series_ranking_snapshot_series FOREIGN KEY (series_id) REFERENCES manga.Series(series_id),
+    CONSTRAINT fk_series_ranking_snapshot_period_type FOREIGN KEY (ranking_period_type_id) REFERENCES manga.RankingPeriodTypeLookup(id),
+    CONSTRAINT fk_series_ranking_snapshot_generated_by FOREIGN KEY (generated_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT uq_series_ranking_snapshot_series_period UNIQUE (series_id, ranking_period_type_id, period_start_date, period_end_date),
+    CONSTRAINT ck_series_ranking_snapshot_rank_position CHECK (rank_position >= 1),
+    CONSTRAINT ck_series_ranking_snapshot_period CHECK (period_end_date >= period_start_date)
 );
-GO
-CREATE INDEX IX_SeriesRankingSnapshot_SeriesId_Period ON manga.SeriesRankingSnapshot (SeriesId, RankingPeriodTypeId, PeriodStartDate DESC);
-GO
+
+CREATE INDEX ix_series_ranking_snapshot_series_id_period ON manga.SeriesRankingSnapshot (series_id, ranking_period_type_id, period_start_date DESC);
+
+
 CREATE TABLE manga.Notification (
-    NotificationId BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_Notification PRIMARY KEY,
-    RecipientUserId INT NOT NULL,
-    NotificationTypeId SMALLINT NOT NULL,
-    Title NVARCHAR(200) NOT NULL,
-    Message NVARCHAR(MAX) NOT NULL,
-    RelatedEntityType NVARCHAR(50) NULL,
-    RelatedEntityId BIGINT NULL,
-    IsRead BIT NOT NULL CONSTRAINT DF_Notification_IsRead DEFAULT (0),
-    ReadAtUtc DATETIME2(0) NULL,
-    SentAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_Notification_SentAtUtc DEFAULT (SYSUTCDATETIME()),
-    CreatedAtUtc DATETIME2(0) NOT NULL CONSTRAINT DF_Notification_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
-    CONSTRAINT FK_Notification_Recipient FOREIGN KEY (RecipientUserId) REFERENCES auth.Users(user_id),
-    CONSTRAINT FK_Notification_Type FOREIGN KEY (NotificationTypeId) REFERENCES manga.NotificationTypeLookup(NotificationTypeLookupId)
+    notification_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_notification PRIMARY KEY,
+    recipient_user_id INT NOT NULL,
+    notification_type_id SMALLINT NOT NULL,
+    title NVARCHAR(200) NOT NULL,
+    message NVARCHAR(MAX) NOT NULL,
+    related_entity_type NVARCHAR(50) NULL,
+    related_entity_id BIGINT NULL,
+    read_at_utc DATETIME2(0) NULL,
+    sent_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_notification_sent_at_utc DEFAULT (SYSUTCDATETIME()),
+    created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_notification_created_at_utc DEFAULT (SYSUTCDATETIME()),
+    CONSTRAINT fk_notification_recipient FOREIGN KEY (recipient_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT fk_notification_type FOREIGN KEY (notification_type_id) REFERENCES manga.NotificationTypeLookup(id)
 );
-GO
-CREATE INDEX IX_Notification_Recipient_IsRead ON manga.Notification (RecipientUserId, IsRead, SentAtUtc DESC);
-GO
--- End of schema
--- Add late-bound foreign keys for history references
-ALTER TABLE manga.SeriesStatusHistory
-    ADD CONSTRAINT FK_SeriesStatusHistory_RelatedProposal FOREIGN KEY (RelatedProposalId) REFERENCES manga.SeriesProposal(SeriesProposalId);
-GO
-ALTER TABLE manga.SeriesStatusHistory
-    ADD CONSTRAINT FK_SeriesStatusHistory_RelatedChapter FOREIGN KEY (RelatedChapterId) REFERENCES manga.Chapter(ChapterId);
-GO
-ALTER TABLE manga.SeriesProposalStatusHistory
-    ADD CONSTRAINT FK_SeriesProposalStatusHistory_RelatedReview FOREIGN KEY (RelatedReviewId) REFERENCES manga.SeriesEditorialReview(SeriesEditorialReviewId);
-GO
-ALTER TABLE manga.SeriesProposalStatusHistory
-    ADD CONSTRAINT FK_SeriesProposalStatusHistory_RelatedBoardDecision FOREIGN KEY (RelatedBoardDecisionId) REFERENCES manga.SeriesBoardDecision(SeriesBoardDecisionId);
-GO
-ALTER TABLE manga.ChapterStatusHistory
-    ADD CONSTRAINT FK_ChapterStatusHistory_RelatedSubmission FOREIGN KEY (RelatedSubmissionId) REFERENCES manga.ChapterSubmission(ChapterSubmissionId);
-GO
-ALTER TABLE manga.ChapterStatusHistory
-    ADD CONSTRAINT FK_ChapterStatusHistory_RelatedRelease FOREIGN KEY (RelatedReleaseId) REFERENCES manga.ChapterRelease(ChapterReleaseId);
-GO
+
+CREATE INDEX ix_notification_unread_by_recipient
+ON manga.Notification (recipient_user_id, sent_at_utc DESC)
+WHERE read_at_utc IS NULL;
+
+CREATE TABLE manga.SeriesStatusHistory (
+    series_status_history_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_series_status_history PRIMARY KEY,
+    series_id BIGINT NOT NULL,
+    from_status_id SMALLINT NULL,
+    to_status_id SMALLINT NOT NULL,
+    changed_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_status_history_changed_at_utc DEFAULT (SYSUTCDATETIME()),
+    changed_by_user_id INT NULL,
+    change_reason NVARCHAR(500) NULL,
+    related_proposal_id BIGINT NULL,
+    related_chapter_id BIGINT NULL,
+    CONSTRAINT fk_series_status_history_series FOREIGN KEY (series_id) REFERENCES manga.Series(series_id),
+    CONSTRAINT fk_series_status_history_from_status FOREIGN KEY (from_status_id) REFERENCES manga.SeriesStatusLookup(id),
+    CONSTRAINT fk_series_status_history_to_status FOREIGN KEY (to_status_id) REFERENCES manga.SeriesStatusLookup(id),
+    CONSTRAINT fk_series_status_history_changed_by FOREIGN KEY (changed_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT fk_series_status_history_related_proposal FOREIGN KEY (related_proposal_id) REFERENCES manga.SeriesProposal(series_proposal_id),
+    CONSTRAINT fk_series_status_history_related_chapter FOREIGN KEY (related_chapter_id) REFERENCES manga.Chapter(chapter_id)
+);
+
+
+CREATE TABLE manga.SeriesProposalStatusHistory (
+    series_proposal_status_history_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_series_proposal_status_history PRIMARY KEY,
+    series_proposal_id BIGINT NOT NULL,
+    from_status_id SMALLINT NULL,
+    to_status_id SMALLINT NOT NULL,
+    changed_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_proposal_status_history_changed_at_utc DEFAULT (SYSUTCDATETIME()),
+    changed_by_user_id INT NULL,
+    change_reason NVARCHAR(500) NULL,
+    related_review_id BIGINT NULL,
+    related_board_decision_id BIGINT NULL,
+    CONSTRAINT fk_series_proposal_status_history_proposal FOREIGN KEY (series_proposal_id) REFERENCES manga.SeriesProposal(series_proposal_id),
+    CONSTRAINT fk_series_proposal_status_history_from_status FOREIGN KEY (from_status_id) REFERENCES manga.ProposalStatusLookup(id),
+    CONSTRAINT fk_series_proposal_status_history_to_status FOREIGN KEY (to_status_id) REFERENCES manga.ProposalStatusLookup(id),
+    CONSTRAINT fk_series_proposal_status_history_changed_by FOREIGN KEY (changed_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT fk_series_proposal_status_history_related_review FOREIGN KEY (related_review_id) REFERENCES manga.SeriesEditorialReview(series_editorial_review_id),
+    CONSTRAINT fk_series_proposal_status_history_related_board_decision FOREIGN KEY (related_board_decision_id) REFERENCES manga.SeriesBoardDecision(series_board_decision_id)
+);
+
+
+CREATE TABLE manga.ChapterStatusHistory (
+    chapter_status_history_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_chapter_status_history PRIMARY KEY,
+    chapter_id BIGINT NOT NULL,
+    from_status_id SMALLINT NULL,
+    to_status_id SMALLINT NOT NULL,
+    changed_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_status_history_changed_at_utc DEFAULT (SYSUTCDATETIME()),
+    changed_by_user_id INT NULL,
+    change_reason NVARCHAR(500) NULL,
+    related_submission_id BIGINT NULL,
+    related_release_id BIGINT NULL,
+    CONSTRAINT fk_chapter_status_history_chapter FOREIGN KEY (chapter_id) REFERENCES manga.Chapter(chapter_id),
+    CONSTRAINT fk_chapter_status_history_from_status FOREIGN KEY (from_status_id) REFERENCES manga.ChapterStatusLookup(id),
+    CONSTRAINT fk_chapter_status_history_to_status FOREIGN KEY (to_status_id) REFERENCES manga.ChapterStatusLookup(id),
+    CONSTRAINT fk_chapter_status_history_changed_by FOREIGN KEY (changed_by_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT fk_chapter_status_history_related_submission FOREIGN KEY (related_submission_id) REFERENCES manga.ChapterSubmission(chapter_submission_id),
+    CONSTRAINT fk_chapter_status_history_related_release FOREIGN KEY (related_release_id) REFERENCES manga.ChapterRelease(chapter_release_id)
+);
+
+
+CREATE TABLE manga.ChapterPageStatusHistory (
+    chapter_page_status_history_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_chapter_page_status_history PRIMARY KEY,
+    chapter_page_id BIGINT NOT NULL,
+    from_status_id SMALLINT NULL,
+    to_status_id SMALLINT NOT NULL,
+    changed_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_page_status_history_changed_at_utc DEFAULT (SYSUTCDATETIME()),
+    changed_by_user_id INT NULL,
+    change_reason NVARCHAR(500) NULL,
+    CONSTRAINT fk_chapter_page_status_history_page FOREIGN KEY (chapter_page_id) REFERENCES manga.ChapterPage(chapter_page_id),
+    CONSTRAINT fk_chapter_page_status_history_from_status FOREIGN KEY (from_status_id) REFERENCES manga.PageStatusLookup(id),
+    CONSTRAINT fk_chapter_page_status_history_to_status FOREIGN KEY (to_status_id) REFERENCES manga.PageStatusLookup(id),
+    CONSTRAINT fk_chapter_page_status_history_changed_by FOREIGN KEY (changed_by_user_id) REFERENCES auth.Users(user_id)
+);
+
+
+CREATE TABLE manga.ChapterTaskStatusHistory (
+    chapter_task_status_history_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_chapter_task_status_history PRIMARY KEY,
+    chapter_task_id BIGINT NOT NULL,
+    from_status_id SMALLINT NULL,
+    to_status_id SMALLINT NOT NULL,
+    changed_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_task_status_history_changed_at_utc DEFAULT (SYSUTCDATETIME()),
+    changed_by_user_id INT NULL,
+    change_reason NVARCHAR(500) NULL,
+    CONSTRAINT fk_chapter_task_status_history_task FOREIGN KEY (chapter_task_id) REFERENCES manga.ChapterTask(chapter_task_id),
+    CONSTRAINT fk_chapter_task_status_history_from_status FOREIGN KEY (from_status_id) REFERENCES manga.TaskStatusLookup(id),
+    CONSTRAINT fk_chapter_task_status_history_to_status FOREIGN KEY (to_status_id) REFERENCES manga.TaskStatusLookup(id),
+    CONSTRAINT fk_chapter_task_status_history_changed_by FOREIGN KEY (changed_by_user_id) REFERENCES auth.Users(user_id)
+);
+
+
+
 
 
 
