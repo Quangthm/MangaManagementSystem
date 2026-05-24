@@ -783,8 +783,6 @@ CREATE TABLE manga.PageRegion (
         )
 );
 
-CREATE INDEX ix_page_region_page_id
-ON manga.PageRegion (chapter_page_id);
 CREATE INDEX ix_page_region_type_code
 ON manga.PageRegion(type_code);
 CREATE INDEX ix_page_region_ai_job
@@ -835,7 +833,7 @@ CREATE TABLE manga.ChapterPageAnnotation (
         REFERENCES auth.Users(user_id)
 );
 
-CREATE INDEX ix_chapter_page_annotation_page_id ON manga.ChapterPageAnnotation (chapter_page_id);
+CREATE INDEX ix_chapter_page_annotation_page_id ON manga.ChapterPageAnnotation (chapter_page_version_id);
 CREATE INDEX ix_chapter_page_annotation_region
 ON manga.ChapterPageAnnotation(page_region_id)
 WHERE page_region_id IS NOT NULL;
