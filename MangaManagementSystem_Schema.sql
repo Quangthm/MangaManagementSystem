@@ -390,7 +390,6 @@ CREATE TABLE manga.Series (
 
 CREATE INDEX ix_series_current_status_code
 ON manga.Series(status_code);
-CREATE INDEX ix_series_lead_mangaka_user_id ON manga.Series (lead_mangaka_user_id);
 
 CREATE TABLE manga.SeriesContributor (
     series_contributor_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_series_contributor PRIMARY KEY,
