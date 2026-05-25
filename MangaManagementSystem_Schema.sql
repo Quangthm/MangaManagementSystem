@@ -106,7 +106,7 @@ CREATE TABLE auth.Users (
     email NVARCHAR(254) NOT NULL,
 
     password_hash NVARCHAR(255) NOT NULL,
-    avatar_url NVARCHAR(500) NULL,
+    avatar_file_id BIGINT NULL,
     status NVARCHAR(30) NOT NULL
         CONSTRAINT df_users_status DEFAULT 'PENDING_APPROVAL',
 
@@ -165,7 +165,8 @@ CREATE TABLE manga.FileResource (
          N'CHAPTER_SUBMISSION',
          N'EDITORIAL_ATTACHMENT',
          N'PAGE_ANNOTATION_EXPORT',
-         N'REGISTRATION_PORTFOLIO'
+         N'REGISTRATION_PORTFOLIO',
+         N'USER_AVATAR'
         )),
     CONSTRAINT ck_file_resource_deleted_pair
         CHECK (
@@ -187,6 +188,11 @@ ON manga.FileResource(uploaded_by_user_id);
 CREATE INDEX ix_file_resource_active_by_purpose
 ON manga.FileResource (file_purpose_code, uploaded_at_utc DESC)
 WHERE deleted_at_utc IS NULL;
+
+ALTER TABLE auth.Users
+ADD CONSTRAINT fk_users_avatar_file
+FOREIGN KEY (avatar_file_id)
+REFERENCES manga.FileResource(file_resource_id);
 
 CREATE TABLE auth.Roles (
     role_id SMALLINT IDENTITY PRIMARY KEY,
@@ -340,14 +346,12 @@ CREATE TABLE manga.Series (
     genre NVARCHAR(100) NOT NULL,
     target_audience NVARCHAR(100) NULL,
     cover_file_id BIGINT NULL,
-    lead_mangaka_user_id INT NOT NULL,
     status_code NVARCHAR(50) NOT NULL
         CONSTRAINT df_series_current_status_code DEFAULT (N'PROPOSAL_DRAFT'),
     content_language_code NVARCHAR(10) NOT NULL
         CONSTRAINT df_series_content_language_code DEFAULT (N'ja'),
     source_series_id BIGINT NULL,
     created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_created_at_utc DEFAULT (SYSUTCDATETIME()),
-    created_by_user_id INT NULL,
     updated_at_utc DATETIME2(0) NULL,
     updated_by_user_id INT NULL,
     CONSTRAINT ck_series_current_status_code
@@ -356,7 +360,6 @@ CREATE TABLE manga.Series (
         N'UNDER_EDITORIAL_REVIEW',
         N'BOARD_REVIEW',
         N'SERIALIZED',
-        N'ACTIVE',
         N'HIATUS',
         N'CANCELLED',
         N'COMPLETED'
@@ -367,15 +370,22 @@ CREATE TABLE manga.Series (
             N'en',
             N'vi'
     )),
+    CONSTRAINT ck_series_source_not_self
+        CHECK (
+            source_series_id IS NULL
+            OR source_series_id <> series_id
+    ),
+    CONSTRAINT ck_series_updated_pair
+        CHECK (
+            (updated_at_utc IS NULL AND updated_by_user_id IS NULL)
+            OR
+            (updated_at_utc IS NOT NULL AND updated_by_user_id IS NOT NULL)
+        ),
     CONSTRAINT uq_series_series_code UNIQUE (series_code),
     CONSTRAINT uq_series_slug UNIQUE (slug),
     CONSTRAINT fk_series_cover_file FOREIGN KEY (cover_file_id) REFERENCES manga.FileResource(file_resource_id),
-    CONSTRAINT fk_series_lead_mangaka FOREIGN KEY (lead_mangaka_user_id) REFERENCES auth.Users(user_id),
-    CONSTRAINT fk_series_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id),
-    CONSTRAINT fk_series_updated_by FOREIGN KEY (updated_by_user_id) REFERENCES auth.Users(user_id),
-    CONSTRAINT fk_series_source_series
-        FOREIGN KEY (source_series_id)
-        REFERENCES manga.Series(series_id)
+    CONSTRAINT fk_series_source_series FOREIGN KEY (source_series_id) REFERENCES manga.Series(series_id),
+    CONSTRAINT fk_series_updated_by FOREIGN KEY (updated_by_user_id) REFERENCES auth.Users(user_id)
 );
 
 CREATE INDEX ix_series_current_status_code
@@ -390,17 +400,21 @@ CREATE TABLE manga.SeriesContributor (
     start_date DATE NOT NULL CONSTRAINT df_series_contributor_start_date DEFAULT (CONVERT(date, SYSUTCDATETIME())),
     end_date DATE NULL,
     notes NVARCHAR(500) NULL,
-    created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_contributor_created_at_utc DEFAULT (SYSUTCDATETIME()),
-    created_by_user_id INT NULL,
+    CONSTRAINT ck_series_contributor_date_range
+    CHECK (
+        end_date IS NULL
+        OR end_date >= start_date
+        ),
     CONSTRAINT fk_series_contributor_series FOREIGN KEY (series_id) REFERENCES manga.Series(series_id),
     CONSTRAINT fk_series_contributor_user FOREIGN KEY (user_id) REFERENCES auth.Users(user_id),
     CONSTRAINT fk_series_contributor_role FOREIGN KEY (contributor_role_id) REFERENCES auth.Roles(role_id),
-    CONSTRAINT fk_series_contributor_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id),
     CONSTRAINT uq_series_contributor_series_user_role UNIQUE (series_id, user_id, contributor_role_id, start_date)
 );
 
 CREATE INDEX ix_series_contributor_user_id ON manga.SeriesContributor (user_id);
-
+CREATE UNIQUE INDEX ux_series_contributor_active_role
+ON manga.SeriesContributor (series_id, user_id, contributor_role_id)
+WHERE end_date IS NULL;
 CREATE TABLE manga.SeriesProposal (
     series_proposal_id BIGINT IDENTITY(1,1) NOT NULL
         CONSTRAINT pk_series_proposal PRIMARY KEY,
@@ -409,7 +423,7 @@ CREATE TABLE manga.SeriesProposal (
 
     proposal_version_no SMALLINT NOT NULL,
 
-    proposal_title NVARCHAR(200) NULL,
+    proposal_title NVARCHAR(200) NOT NULL,
 
     synopsis_snapshot NVARCHAR(MAX) NOT NULL,
     character_overview_snapshot NVARCHAR(MAX) NULL,
@@ -417,17 +431,7 @@ CREATE TABLE manga.SeriesProposal (
     proposal_file_id BIGINT NOT NULL,
 
     status_code NVARCHAR(50) NOT NULL
-        CONSTRAINT df_series_proposal_status_code DEFAULT (N'DRAFT'),
-        
-    created_by_user_id INT NOT NULL,
-
-    created_at_utc DATETIME2(0) NOT NULL
-        CONSTRAINT df_series_proposal_created_at_utc
-        DEFAULT SYSUTCDATETIME(),
-
-    updated_by_user_id INT NULL,
-
-    updated_at_utc DATETIME2(0) NULL,
+        CONSTRAINT df_series_proposal_status_code DEFAULT (N'UNDER_EDITORIAL_REVIEW'),
 
     submitted_by_user_id INT NOT NULL,
 
@@ -438,14 +442,23 @@ CREATE TABLE manga.SeriesProposal (
     withdrawn_at_utc DATETIME2(0) NULL,
     CONSTRAINT ck_series_proposal_status_code
     CHECK (status_code IN (
-        N'DRAFT',
         N'UNDER_EDITORIAL_REVIEW',
         N'UNDER_BOARD_REVIEW',
         N'REVISION_REQUIRED',
         N'APPROVED',
-        N'REJECTED',
+        N'CANCELLED',
         N'WITHDRAWN'
     )),
+    CONSTRAINT ck_series_proposal_version_positive
+        CHECK (proposal_version_no > 0),
+
+    CONSTRAINT ck_series_proposal_withdrawn_at_matches_status
+        CHECK (
+            (status_code = N'WITHDRAWN' AND withdrawn_at_utc IS NOT NULL)
+            OR
+            (status_code <> N'WITHDRAWN' AND withdrawn_at_utc IS NULL)
+        ),
+
     CONSTRAINT fk_series_proposal_series
         FOREIGN KEY (series_id)
         REFERENCES manga.Series(series_id),
@@ -471,7 +484,17 @@ ON manga.SeriesProposal(status_code);
 
 CREATE INDEX ix_series_proposal_submitted_by
 ON manga.SeriesProposal(submitted_by_user_id);
-GO
+CREATE INDEX ix_series_proposal_series_version
+ON manga.SeriesProposal (
+    series_id,
+    proposal_version_no DESC
+)
+INCLUDE (
+    status_code,
+    submitted_at_utc,
+    submitted_by_user_id,
+    proposal_title
+);
 CREATE TABLE manga.SeriesEditorialReview (
     series_editorial_review_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_series_editorial_review PRIMARY KEY,
     series_proposal_id BIGINT NOT NULL,
@@ -484,11 +507,19 @@ CREATE TABLE manga.SeriesEditorialReview (
         CHECK (decision_code IN (
             N'APPROVED',
             N'REVISION_REQUESTED',
-            N'REJECTED'
+            N'CANCELLED'
     )),
+    CONSTRAINT ck_series_editorial_review_feedback_required
+        CHECK (
+            decision_code = N'APPROVED'
+            OR comments IS NOT NULL
+            OR markup_file_id IS NOT NULL
+        ),
     CONSTRAINT fk_series_editorial_review_proposal FOREIGN KEY (series_proposal_id) REFERENCES manga.SeriesProposal(series_proposal_id),
     CONSTRAINT fk_series_editorial_review_reviewer FOREIGN KEY (reviewer_user_id) REFERENCES auth.Users(user_id),
-    CONSTRAINT fk_series_editorial_review_markup_file FOREIGN KEY (markup_file_id) REFERENCES manga.FileResource(file_resource_id)
+    CONSTRAINT fk_series_editorial_review_markup_file FOREIGN KEY (markup_file_id) REFERENCES manga.FileResource(file_resource_id),
+    CONSTRAINT uq_series_editorial_review_proposal
+    UNIQUE (series_proposal_id)
 );
 
 CREATE INDEX ix_series_editorial_review_proposal_id ON manga.SeriesEditorialReview (series_proposal_id);
@@ -512,6 +543,11 @@ CREATE TABLE manga.SeriesBoardVote (
         N'REJECT',
         N'ABSTAIN'
     )),
+    CONSTRAINT ck_series_board_vote_reject_reason
+    CHECK (
+        choice_code <> N'REJECT'
+        OR vote_reason IS NOT NULL
+    ),
     CONSTRAINT fk_series_board_vote_proposal FOREIGN KEY (series_proposal_id) REFERENCES manga.SeriesProposal(series_proposal_id),
     CONSTRAINT fk_series_board_vote_board_member FOREIGN KEY (board_member_user_id) REFERENCES auth.Users(user_id),
     CONSTRAINT uq_series_board_vote_proposal_board_member UNIQUE (series_proposal_id, board_member_user_id)
@@ -529,7 +565,6 @@ CREATE TABLE manga.SeriesBoardDecision (
     aggregate_approve_count INT NOT NULL CONSTRAINT df_series_board_decision_aggregate_approve_count DEFAULT (0),
     aggregate_reject_count INT NOT NULL CONSTRAINT df_series_board_decision_aggregate_reject_count DEFAULT (0),
     aggregate_abstain_count INT NOT NULL CONSTRAINT df_series_board_decision_aggregate_abstain_count DEFAULT (0),
-    decision_summary NVARCHAR(MAX) NULL,
     decided_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_board_decision_decided_at_utc DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT ck_series_board_decision_code
         CHECK (decision_code IN (
@@ -537,38 +572,18 @@ CREATE TABLE manga.SeriesBoardDecision (
             N'REVISION_REQUESTED',
             N'REJECTED'
     )),
+    CONSTRAINT ck_series_board_decision_counts_nonnegative
+        CHECK (
+            aggregate_approve_count >= 0
+            AND aggregate_reject_count >= 0
+            AND aggregate_abstain_count >= 0
+        ),
     CONSTRAINT fk_series_board_decision_proposal FOREIGN KEY (series_proposal_id) REFERENCES manga.SeriesProposal(series_proposal_id),
     CONSTRAINT uq_series_board_decision_proposal UNIQUE (series_proposal_id)
 );
 
 CREATE INDEX ix_series_board_decision_decision_type_id ON manga.SeriesBoardDecision (decision_code);
 CREATE INDEX ix_series_board_decision_proposal ON manga.SeriesBoardDecision(series_proposal_id);
-
-CREATE TABLE manga.SeriesPublicationPolicy (
-    series_publication_policy_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_series_publication_policy PRIMARY KEY,
-    series_id BIGINT NOT NULL,
-    frequency_code NVARCHAR(50) NOT NULL,
-    effective_from_date DATE NOT NULL,
-    effective_to_date DATE NULL,
-    policy_notes NVARCHAR(MAX) NULL,
-    approved_by_user_id INT NULL,
-    approved_at_utc DATETIME2(0) NULL,
-    created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_publication_policy_created_at_utc DEFAULT (SYSUTCDATETIME()),
-    created_by_user_id INT NULL,
-    CONSTRAINT ck_series_publication_policy_frequency_code
-    CHECK (frequency_code IN (
-        N'WEEKLY',
-        N'MONTHLY',
-        N'IRREGULAR'
-    )),
-    CONSTRAINT fk_series_publication_policy_series FOREIGN KEY (series_id) REFERENCES manga.Series(series_id),
-    CONSTRAINT fk_series_publication_policy_approved_by FOREIGN KEY (approved_by_user_id) REFERENCES auth.Users(user_id),
-    CONSTRAINT fk_series_publication_policy_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id),
-    CONSTRAINT uq_series_publication_policy_series_effective_from UNIQUE (series_id, effective_from_date)
-);
-
-CREATE INDEX ix_series_publication_policy_series_id ON manga.SeriesPublicationPolicy (series_id);
-CREATE INDEX ix_series_publication_policy_frequency_code ON manga.SeriesPublicationPolicy(frequency_code);
 
 CREATE TABLE manga.Chapter (
     chapter_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_chapter PRIMARY KEY,
@@ -617,11 +632,22 @@ CREATE TABLE manga.ChapterPage (
     chapter_id BIGINT NOT NULL,
     page_no INT NOT NULL,
     page_notes NVARCHAR(MAX) NULL,
-    CONSTRAINT fk_chapter_page_chapter FOREIGN KEY (chapter_id) REFERENCES manga.Chapter(chapter_id),
-    CONSTRAINT uq_chapter_page_chapter_page_no UNIQUE (chapter_id, page_no)
+    deleted_at_utc DATETIME2(0) NULL,
+    deleted_by_user_id INT NULL,
+    CONSTRAINT ck_chapter_page_page_no_positive
+        CHECK (page_no > 0),
+    CONSTRAINT ck_chapter_page_deleted_pair
+        CHECK (
+            (deleted_at_utc IS NULL AND deleted_by_user_id IS NULL)
+            OR
+            (deleted_at_utc IS NOT NULL AND deleted_by_user_id IS NOT NULL)
+        ),
+    CONSTRAINT fk_chapter_page_chapter FOREIGN KEY (chapter_id) REFERENCES manga.Chapter(chapter_id)
 );
 CREATE INDEX ix_chapter_page_chapter_id ON manga.ChapterPage (chapter_id);
-
+CREATE UNIQUE INDEX ux_chapter_page_active_page_no
+ON manga.ChapterPage (chapter_id, page_no)
+WHERE deleted_at_utc IS NULL;
 CREATE TABLE manga.ChapterPageVersion (
     chapter_page_version_id BIGINT IDENTITY(1,1)
         CONSTRAINT pk_chapter_page_version PRIMARY KEY,
@@ -631,18 +657,12 @@ CREATE TABLE manga.ChapterPageVersion (
     version_note NVARCHAR(500) NULL,
     is_current_version BIT NOT NULL
         CONSTRAINT df_chapter_page_version_is_current DEFAULT (0),
-    created_at_utc DATETIME2(0) NOT NULL
-        CONSTRAINT df_chapter_page_version_created_at_utc DEFAULT SYSUTCDATETIME(),
-    created_by_user_id INT NULL,
     CONSTRAINT fk_chapter_page_version_page
         FOREIGN KEY (chapter_page_id)
         REFERENCES manga.ChapterPage(chapter_page_id),
     CONSTRAINT fk_chapter_page_version_file
         FOREIGN KEY (page_file_id)
         REFERENCES manga.FileResource(file_resource_id),
-    CONSTRAINT fk_chapter_page_version_created_by
-        FOREIGN KEY (created_by_user_id)
-        REFERENCES auth.Users(user_id),
     CONSTRAINT uq_chapter_page_version_no
         UNIQUE (chapter_page_id, version_no),
     CONSTRAINT uq_chapter_page_version_id_page
@@ -922,44 +942,9 @@ INCLUDE (
     task_title
 );
 
-CREATE TABLE manga.ChapterSubmission (
-    chapter_submission_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_chapter_submission PRIMARY KEY,
-    chapter_id BIGINT NOT NULL,
-    submission_version_no SMALLINT NOT NULL,
-    submitted_by_user_id INT NOT NULL,
-    submission_file_id BIGINT NOT NULL,
-    status_code NVARCHAR(50) NOT NULL
-        CONSTRAINT df_chapter_submission_status_code DEFAULT (N'SUBMITTED'),
-    submitted_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_submission_submitted_at_utc DEFAULT (SYSUTCDATETIME()),
-    remarks NVARCHAR(MAX) NULL,
-    created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_submission_created_at_utc DEFAULT (SYSUTCDATETIME()),
-    created_by_user_id INT NULL,
-    CONSTRAINT ck_chapter_submission_status_code
-    CHECK (status_code IN (
-        N'DRAFT',
-        N'SUBMITTED',
-        N'UNDER_REVIEW',
-        N'REVISION_REQUESTED',
-        N'APPROVED',
-        N'REJECTED',
-        N'WITHDRAWN'
-    )),
-    CONSTRAINT fk_chapter_submission_chapter FOREIGN KEY (chapter_id) REFERENCES manga.Chapter(chapter_id),
-    CONSTRAINT fk_chapter_submission_submitted_by FOREIGN KEY (submitted_by_user_id) REFERENCES auth.Users(user_id),
-    CONSTRAINT fk_chapter_submission_file FOREIGN KEY (submission_file_id) REFERENCES manga.FileResource(file_resource_id),
-    CONSTRAINT fk_chapter_submission_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id),
-    CONSTRAINT uq_chapter_submission_chapter_version UNIQUE (chapter_id, submission_version_no)
-);
-
-CREATE INDEX ix_chapter_submission_chapter_id ON manga.ChapterSubmission (chapter_id);
-CREATE INDEX ix_chapter_submission_submitted_by
-ON manga.ChapterSubmission(submitted_by_user_id);
-CREATE INDEX ix_chapter_submission_status_code
-ON manga.ChapterSubmission(status_code);
-
 CREATE TABLE manga.ChapterEditorialReview (
     chapter_editorial_review_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_chapter_editorial_review PRIMARY KEY,
-    chapter_submission_id BIGINT NOT NULL,
+    chapter_id BIGINT NOT NULL,
     reviewer_user_id INT NOT NULL,
     decision_code NVARCHAR(50) NOT NULL,
     comments NVARCHAR(MAX) NULL,
@@ -969,15 +954,20 @@ CREATE TABLE manga.ChapterEditorialReview (
         CHECK (decision_code IN (
             N'APPROVED',
             N'REVISION_REQUESTED',
-            N'REJECTED'
+            N'CANCELLED'
     )),
-    CONSTRAINT fk_chapter_editorial_review_submission FOREIGN KEY (chapter_submission_id) REFERENCES manga.ChapterSubmission(chapter_submission_id),
+     CONSTRAINT ck_chapter_editorial_review_feedback_required
+        CHECK (
+            decision_code = N'APPROVED'
+            OR comments IS NOT NULL
+            OR markup_file_id IS NOT NULL
+        ),
+    CONSTRAINT fk_chapter_editorial_review_chapter FOREIGN KEY (chapter_id) REFERENCES manga.Chapter(chapter_id),
     CONSTRAINT fk_chapter_editorial_review_reviewer FOREIGN KEY (reviewer_user_id) REFERENCES auth.Users(user_id),
-    CONSTRAINT fk_chapter_editorial_review_markup_file FOREIGN KEY (markup_file_id) REFERENCES manga.FileResource(file_resource_id),
-    CONSTRAINT uq_chapter_editorial_review_submission UNIQUE (chapter_submission_id)
+    CONSTRAINT fk_chapter_editorial_review_markup_file FOREIGN KEY (markup_file_id) REFERENCES manga.FileResource(file_resource_id)
 );
 
-CREATE INDEX ix_chapter_editorial_review_submission_id ON manga.ChapterEditorialReview (chapter_submission_id);
+CREATE INDEX ix_chapter_editorial_review_chapter_id ON manga.ChapterEditorialReview (chapter_id);
 CREATE INDEX ix_chapter_editorial_review_reviewer
 ON manga.ChapterEditorialReview(reviewer_user_id);
 CREATE INDEX ix_chapter_editorial_review_decision_code
@@ -1045,8 +1035,75 @@ INCLUDE (
     generated_at_utc
 );
 
+CREATE TABLE manga.ChapterReaderVoteSnapshot (
+    chapter_reader_vote_snapshot_id BIGINT IDENTITY(1,1) NOT NULL
+        CONSTRAINT pk_chapter_reader_vote_snapshot PRIMARY KEY,
+
+    chapter_id BIGINT NOT NULL,
+
+    reader_vote_count INT NOT NULL
+        CONSTRAINT df_chapter_reader_vote_snapshot_reader_vote_count DEFAULT (0),
+
+    average_rating DECIMAL(4,2) NULL,
+
+    positive_feedback_count INT NULL,
+    negative_feedback_count INT NULL,
+
+    data_source_note NVARCHAR(500) NULL,
+
+    entered_by_user_id INT NOT NULL,
+
+    voted_at_utc DATETIME2(0) NOT NULL
+        CONSTRAINT df_chapter_reader_vote_snapshot_voted_at_utc
+        DEFAULT (SYSUTCDATETIME()),
+
+    CONSTRAINT ck_chapter_reader_vote_snapshot_counts
+    CHECK (
+        reader_vote_count >= 0
+        AND (positive_feedback_count IS NULL OR positive_feedback_count >= 0)
+        AND (negative_feedback_count IS NULL OR negative_feedback_count >= 0)
+    ),
+
+    CONSTRAINT ck_chapter_reader_vote_snapshot_rating
+    CHECK (
+        average_rating IS NULL
+        OR average_rating BETWEEN 0 AND 10
+    ),
+
+    CONSTRAINT fk_chapter_reader_vote_snapshot_chapter
+        FOREIGN KEY (chapter_id)
+        REFERENCES manga.Chapter(chapter_id),
+
+    CONSTRAINT fk_chapter_reader_vote_snapshot_entered_by
+        FOREIGN KEY (entered_by_user_id)
+        REFERENCES auth.Users(user_id),
+    CONSTRAINT uq_chapter_reader_vote_snapshot_chapter
+        UNIQUE (chapter_id)
+);
+
+CREATE INDEX ix_chapter_reader_vote_snapshot_voted_at
+ON manga.ChapterReaderVoteSnapshot (voted_at_utc)
+INCLUDE (
+    chapter_id,
+    reader_vote_count,
+    average_rating,
+    positive_feedback_count,
+    negative_feedback_count
+);
+CREATE INDEX ix_chapter_reader_vote_snapshot_entered_by
+ON manga.ChapterReaderVoteSnapshot (
+    entered_by_user_id,
+    voted_at_utc DESC
+)
+INCLUDE (
+    chapter_id,
+    reader_vote_count,
+    average_rating
+);
+
 CREATE TABLE manga.Notification (
-    notification_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_notification PRIMARY KEY,
+    notification_id BIGINT IDENTITY(1,1) NOT NULL
+        CONSTRAINT pk_notification PRIMARY KEY,
     recipient_user_id INT NOT NULL,
     notification_type_code NVARCHAR(50) NOT NULL
         CONSTRAINT df_notification_type_code DEFAULT (N'SYSTEM_MESSAGE'),
@@ -1055,8 +1112,8 @@ CREATE TABLE manga.Notification (
     related_entity_type NVARCHAR(50) NULL,
     related_entity_id BIGINT NULL,
     read_at_utc DATETIME2(0) NULL,
-    sent_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_notification_sent_at_utc DEFAULT (SYSUTCDATETIME()),
-    created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_notification_created_at_utc DEFAULT (SYSUTCDATETIME()),
+    created_at_utc DATETIME2(0) NOT NULL
+        CONSTRAINT df_notification_created_at_utc DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT ck_notification_type_code
     CHECK (notification_type_code IN (
         N'PROPOSAL_REVIEW',
@@ -1068,21 +1125,45 @@ CREATE TABLE manga.Notification (
         N'PUBLICATION_SCHEDULE',
         N'SYSTEM_MESSAGE'
     )),
-    CONSTRAINT fk_notification_recipient FOREIGN KEY (recipient_user_id) REFERENCES auth.Users(user_id),
+    CONSTRAINT ck_notification_related_entity_pair
+    CHECK (
+        (related_entity_type IS NULL AND related_entity_id IS NULL)
+        OR
+        (related_entity_type IS NOT NULL AND related_entity_id IS NOT NULL)
+    ),
+    CONSTRAINT fk_notification_recipient
+        FOREIGN KEY (recipient_user_id)
+        REFERENCES auth.Users(user_id)
 );
 
-CREATE INDEX ix_notification_recipient
-ON manga.Notification(recipient_user_id);
+CREATE INDEX ix_notification_recipient_read_created
+ON manga.Notification (
+    recipient_user_id,
+    read_at_utc,
+    created_at_utc DESC
+)
+INCLUDE (
+    notification_type_code,
+    title,
+    related_entity_type,
+    related_entity_id
+);
 
-CREATE INDEX ix_notification_unread_by_recipient
-ON manga.Notification (recipient_user_id, sent_at_utc DESC)
+CREATE INDEX ix_notification_unread_recipient
+ON manga.Notification (
+    recipient_user_id,
+    created_at_utc DESC
+)
 WHERE read_at_utc IS NULL;
 
-CREATE INDEX ix_notification_type_code
-ON manga.Notification(notification_type_code);
+CREATE INDEX ix_notification_related_entity
+ON manga.Notification (
+    related_entity_type,
+    related_entity_id
+)
+WHERE related_entity_type IS NOT NULL
+  AND related_entity_id IS NOT NULL;
 
-CREATE INDEX ix_notification_recipient_created_at
-ON manga.Notification(recipient_user_id, created_at_utc DESC);
 
 --CREATE TABLE manga.SeriesStatusHistory (
 --    series_status_history_id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT pk_series_status_history PRIMARY KEY,
