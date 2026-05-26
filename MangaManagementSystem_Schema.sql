@@ -258,7 +258,6 @@ CREATE TABLE manga.SeriesContributor (
 	series_contributor_id BIGINT IDENTITY(1, 1) NOT NULL CONSTRAINT pk_series_contributor PRIMARY KEY,
 	series_id BIGINT NOT NULL,
 	user_id INT NOT NULL,
-	contributor_role_id SMALLINT NOT NULL,
 	start_date DATE NOT NULL CONSTRAINT df_series_contributor_start_date DEFAULT(CONVERT(DATE, SYSUTCDATETIME())),
 	end_date DATE NULL,
 	notes NVARCHAR(500) NULL,
@@ -268,21 +267,34 @@ CREATE TABLE manga.SeriesContributor (
 		),
 	CONSTRAINT fk_series_contributor_series FOREIGN KEY (series_id) REFERENCES manga.Series(series_id),
 	CONSTRAINT fk_series_contributor_user FOREIGN KEY (user_id) REFERENCES auth.Users(user_id),
-	CONSTRAINT fk_series_contributor_role FOREIGN KEY (contributor_role_id) REFERENCES auth.Roles(role_id),
 	CONSTRAINT uq_series_contributor_series_user_role UNIQUE (
 		series_id,
 		user_id,
-		contributor_role_id,
 		start_date
 		)
 	);
 
-CREATE INDEX ix_series_contributor_user_id ON manga.SeriesContributor (user_id);
-
+CREATE INDEX ix_series_contributor_series_active
+ON manga.SeriesContributor (
+    series_id,
+    end_date
+)
+INCLUDE (
+    user_id,
+    start_date
+);
+CREATE INDEX ix_series_contributor_user_active
+ON manga.SeriesContributor (
+    user_id,
+    end_date
+)
+INCLUDE (
+    series_id,
+    start_date
+);
 CREATE UNIQUE INDEX ux_series_contributor_active_role ON manga.SeriesContributor (
 	series_id,
-	user_id,
-	contributor_role_id
+	user_id
 	)
 WHERE end_date IS NULL;
 
