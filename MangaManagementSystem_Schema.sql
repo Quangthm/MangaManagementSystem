@@ -97,7 +97,6 @@ CREATE TABLE manga.FileResource (
 			N'TASK_SUBMISSION',
 			N'CHAPTER_SUBMISSION',
 			N'EDITORIAL_ATTACHMENT',
-			N'PAGE_ANNOTATION_EXPORT',
 			N'REGISTRATION_PORTFOLIO',
 			N'USER_AVATAR'
 			)
@@ -209,7 +208,7 @@ CREATE TABLE manga.Series (
 		status_code IN (
 			N'PROPOSAL_DRAFT',
 			N'UNDER_EDITORIAL_REVIEW',
-			N'BOARD_REVIEW',
+			N'UNDER_BOARD_REVIEW',
 			N'SERIALIZED',
 			N'HIATUS',
 			N'CANCELLED',
@@ -267,7 +266,7 @@ CREATE TABLE manga.SeriesContributor (
 		),
 	CONSTRAINT fk_series_contributor_series FOREIGN KEY (series_id) REFERENCES manga.Series(series_id),
 	CONSTRAINT fk_series_contributor_user FOREIGN KEY (user_id) REFERENCES auth.Users(user_id),
-	CONSTRAINT uq_series_contributor_series_user_role UNIQUE (
+	CONSTRAINT uq_series_contributor_series_user_start UNIQUE (
 		series_id,
 		user_id,
 		start_date
@@ -304,6 +303,7 @@ CREATE TABLE manga.SeriesProposal (
 	proposal_version_no SMALLINT NOT NULL,
 	proposal_title NVARCHAR(200) NOT NULL,
 	synopsis_snapshot NVARCHAR(MAX) NOT NULL,
+	genre_snapshot NVARCHAR(100) NOT NULL,
 	proposal_file_id BIGINT NOT NULL,
 	status_code NVARCHAR(50) NOT NULL CONSTRAINT df_series_proposal_status_code DEFAULT(N'UNDER_EDITORIAL_REVIEW'),
 	submitted_by_user_id INT NOT NULL,
