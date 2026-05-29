@@ -752,15 +752,6 @@ CREATE TABLE manga.ChapterPageAnnotation (
 		)
 	);
 
-CREATE INDEX ix_chapter_page_annotation_version_created ON manga.ChapterPageAnnotation (
-	chapter_page_version_id,
-	created_at_utc DESC
-	) INCLUDE (
-	page_region_id,
-	issue_type_code,
-	annotated_by_user_id,
-	resolved_at_utc
-	);
 
 CREATE INDEX ix_chapter_page_annotation_region ON manga.ChapterPageAnnotation (
 	page_region_id,
@@ -768,11 +759,6 @@ CREATE INDEX ix_chapter_page_annotation_region ON manga.ChapterPageAnnotation (
 	)
 WHERE page_region_id IS NOT NULL;
 
-CREATE INDEX ix_chapter_page_annotation_unresolved ON manga.ChapterPageAnnotation (
-	chapter_page_version_id,
-	created_at_utc DESC
-	)
-WHERE resolved_at_utc IS NULL;
 
 CREATE TABLE manga.ChapterPageTask (
 	chapter_page_task_id BIGINT IDENTITY(1, 1) NOT NULL CONSTRAINT pk_chapter_page_task PRIMARY KEY,
