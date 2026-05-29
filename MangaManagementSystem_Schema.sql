@@ -448,7 +448,7 @@ CREATE TABLE manga.SeriesBoardVote (
 		),
 	CONSTRAINT ck_series_board_vote_reject_reason CHECK (
 		choice_code <> N'REJECT'
-		OR vote_reason IS NOT NULL
+		OR NULLIF(LTRIM(RTRIM(vote_reason)), N'') IS NOT NULL
 		),
 	CONSTRAINT fk_series_board_vote_poll FOREIGN KEY (series_board_poll_id) REFERENCES manga.SeriesBoardPoll(series_board_poll_id),
 	CONSTRAINT fk_series_board_vote_board_member FOREIGN KEY (user_id) REFERENCES auth.Users(user_id),
@@ -714,9 +714,8 @@ CREATE INDEX ix_page_region_type ON manga.PageRegion (type_code) INCLUDE (
 
 CREATE TABLE manga.ChapterPageAnnotation (
 	chapter_page_annotation_id BIGINT IDENTITY(1, 1) NOT NULL CONSTRAINT pk_chapter_page_annotation PRIMARY KEY,
-	chapter_page_version_id BIGINT NOT NULL,
-	page_region_id BIGINT NULL,
-	issue_type_code NVARCHAR(80) NULL,
+	page_region_id BIGINT NOT NULL,
+	issue_type_code NVARCHAR(80) NOT NULL,
 	annotated_by_user_id INT NOT NULL,
 	annotation_text NVARCHAR(MAX) NOT NULL,
 	resolved_at_utc DATETIME2(0) NULL,
@@ -738,7 +737,6 @@ CREATE TABLE manga.ChapterPageAnnotation (
 			N'OTHER'
 			)
 		),
-	CONSTRAINT fk_chapter_page_annotation_version FOREIGN KEY (chapter_page_version_id) REFERENCES manga.ChapterPageVersion(chapter_page_version_id),
 	CONSTRAINT fk_chapter_page_annotation_region FOREIGN KEY (page_region_id) REFERENCES manga.PageRegion(page_region_id),
 	CONSTRAINT fk_chapter_page_annotation_annotated_by FOREIGN KEY (annotated_by_user_id) REFERENCES auth.Users(user_id),
 	CONSTRAINT fk_chapter_page_annotation_resolved_by FOREIGN KEY (resolved_by_user_id) REFERENCES auth.Users(user_id),
@@ -777,22 +775,21 @@ CREATE INDEX ix_chapter_page_annotation_unresolved ON manga.ChapterPageAnnotatio
 WHERE resolved_at_utc IS NULL;
 
 CREATE TABLE manga.ChapterPageTask (
-	chapter_page_task_id BIGINT IDENTITY(1, 1) NOT NULL CONSTRAINT pk_chapter_task PRIMARY KEY,
+	chapter_page_task_id BIGINT IDENTITY(1, 1) NOT NULL CONSTRAINT pk_chapter_page_task PRIMARY KEY,
 	chapter_page_id BIGINT NOT NULL,
 	assigned_to_user_id INT NOT NULL,
 	type_code NVARCHAR(50) NOT NULL,
-	status_code NVARCHAR(50) NOT NULL CONSTRAINT df_chapter_task_status_code DEFAULT(N'ASSIGNED'),
+	status_code NVARCHAR(50) NOT NULL CONSTRAINT df_chapter_page_task_status_code DEFAULT(N'ASSIGNED'),
 	task_title NVARCHAR(200) NOT NULL,
 	task_description NVARCHAR(MAX) NOT NULL,
-	target_region_description NVARCHAR(250) NULL,
-	priority_level TINYINT NOT NULL CONSTRAINT df_chapter_task_priority_level DEFAULT(3),
-	due_at_utc DATETIME2(0) NULL,
+	priority_level TINYINT NOT NULL CONSTRAINT df_chapter_page_task_priority_level DEFAULT(3),
+	due_at_utc DATETIME2(0) NOT NULL,
 	compensation_amount DECIMAL(12, 2) NULL,
 	completed_page_version_id BIGINT NULL,
-	created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_task_created_at_utc DEFAULT(SYSUTCDATETIME()),
+	created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_page_task_created_at_utc DEFAULT(SYSUTCDATETIME()),
 	created_by_user_id INT NOT NULL,
 	updated_at_utc DATETIME2(0) NULL,
-	CONSTRAINT ck_chapter_task_status_code CHECK (
+	CONSTRAINT ck_chapter_page_task_status_code CHECK (
 		status_code IN (
 			N'ASSIGNED',
 			N'UNDER_REVIEW',
@@ -800,7 +797,7 @@ CREATE TABLE manga.ChapterPageTask (
 			N'CANCELLED'
 			)
 		),
-	CONSTRAINT ck_chapter_task_compensation_amount CHECK (
+	CONSTRAINT ck_chapter_page_task_compensation_amount CHECK (
 		compensation_amount IS NULL
 		OR compensation_amount >= 0
 		),
@@ -833,7 +830,7 @@ CREATE TABLE manga.ChapterPageTask (
 		completed_page_version_id,
 		chapter_page_id
 		) REFERENCES manga.ChapterPageVersion(chapter_page_version_id, chapter_page_id),
-	CONSTRAINT fk_chapter_task_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id)
+	CONSTRAINT fk_chapter_page_task_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id)
 	);
 
 CREATE INDEX ix_chapter_page_task_assignee_status_due ON manga.ChapterPageTask (
@@ -866,6 +863,17 @@ CREATE INDEX ix_chapter_page_task_status_due ON manga.ChapterPageTask (
 	chapter_page_id,
 	priority_level,
 	task_title
+	);
+
+CREATE TABLE manga.ChapterPageTaskRegion (
+	chapter_page_task_id BIGINT NOT NULL,
+	page_region_id BIGINT NOT NULL,
+	CONSTRAINT pk_chapter_page_task_region PRIMARY KEY (
+		chapter_page_task_id,
+		page_region_id
+		),
+	CONSTRAINT fk_chapter_page_task_region_task FOREIGN KEY (chapter_page_task_id) REFERENCES manga.ChapterPageTask(chapter_page_task_id),
+	CONSTRAINT fk_chapter_page_task_region_region FOREIGN KEY (page_region_id) REFERENCES manga.PageRegion(page_region_id)
 	);
 
 CREATE TABLE manga.ChapterEditorialReview (
