@@ -1,0 +1,46 @@
+@page "/admin/settings"
+@inject NavigationManager Nav
+
+<AdminLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">System Settings</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Configure platform-wide settings and preferences</MudText>
+        </div>
+
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-5 mf-card" Elevation="0">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-4">General Settings</MudText>
+                    <MudTextField Label="Platform Name" @bind-Value="PlatformName" Variant="Variant.Outlined" />
+                    <MudTextField Label="Platform Description" @bind-Value="Description" Variant="Variant.Outlined" Lines="3" Class="mt-3" />
+                    <MudTextField Label="Session Timeout (minutes)" @bind-Value="SessionTimeout" Variant="Variant.Outlined" InputType="InputType.Number" Class="mt-3" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-5 mf-card" Elevation="0">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-4">Security Settings</MudText>
+                    <MudSwitch T="bool" @bind-Checked="RegistrationNotifications" Label="Registration Notifications" Color="Color.Primary" />
+                    <MudSwitch T="bool" @bind-Checked="AccountStatusChanges" Label="Account Status Changes" Color="Color.Primary" />
+                    <MudSwitch T="bool" @bind-Checked="RequireEmailVerification" Label="Require Email Verification" Color="Color.Primary" />
+                </MudPaper>
+                <MudPaper Class="pa-5 mf-card mt-4" Elevation="0">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Future Extension Areas</MudText>
+                    <MudChip T="string" Color="Color.Primary" Class="mr-2 mb-2">Theme Customization</MudChip><MudChip T="string" Color="Color.Secondary" Class="mr-2 mb-2">AI Service Integration</MudChip><MudChip T="string" Color="Color.Info" Class="mr-2 mb-2">Backup & Archive</MudChip>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+    </div>
+</AdminLayout>
+
+@code {
+
+    private string PlatformName { get; set; } = "MangaFlow";
+    private string Description { get; set; } = "Manga creation workflow and publishing management system";
+    private int SessionTimeout { get; set; } = 30;
+    private bool RegistrationNotifications { get; set; } = true;
+    private bool AccountStatusChanges { get; set; } = true;
+    private bool RequireEmailVerification { get; set; }
+
+}

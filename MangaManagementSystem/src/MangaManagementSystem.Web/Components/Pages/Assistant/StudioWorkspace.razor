@@ -1,0 +1,33 @@
+@page "/assistant/studio/{TaskId}"
+@inject NavigationManager Nav
+
+<AssistantLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Studio Workspace</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Work on assigned page regions and submit task output</MudText>
+        </div>
+
+        <MudGrid>
+            <MudItem xs="12" md="8">
+                <MudPaper Class="pa-5 mf-card" Elevation="0">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mb-3"><div><MudText Typo="Typo.h6">Page Review Canvas</MudText><MudText class="mf-muted">Shadow Blade Chronicles · Chapter 12 · Page 8</MudText></div><MudChip T="string" Color="Color.Info">@Zoom%</MudChip></MudStack>
+                    <div class="mf-canvas">Canvas area for tone shading / background character task</div>
+                    <MudStack Row="true" Class="mt-4"><MudButton Variant="Variant.Outlined" OnClick="@(() => Zoom = Math.Max(50, Zoom - 10))">- Zoom</MudButton><MudButton Variant="Variant.Outlined" OnClick="@(() => Zoom = Math.Min(200, Zoom + 10))">+ Zoom</MudButton></MudStack>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudPaper Class="pa-5 mf-card mb-4" Elevation="0"><MudText Typo="Typo.h6">Current Task</MudText><MudText>Tone Shading</MudText><MudText class="mf-muted">Panel 3 - Background Character</MudText><MudText>Deadline: May 22, 2026 — 6:00 PM JST</MudText></MudPaper>
+                <MudPaper Class="pa-5 mf-card" Elevation="0"><MudText Typo="Typo.h6">Submit Task</MudText><MudText class="mf-muted mb-3">Are you ready to submit this task? Once submitted, it will be sent to the mangaka for review.</MudText><MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"/assistant/task/{TaskId}/submit")">Submit Task</MudButton></MudPaper>
+            </MudItem>
+        </MudGrid>
+
+    </div>
+</AssistantLayout>
+
+@code {
+
+    [Parameter] public string? TaskId { get; set; }
+    private int Zoom { get; set; } = 100;
+
+}

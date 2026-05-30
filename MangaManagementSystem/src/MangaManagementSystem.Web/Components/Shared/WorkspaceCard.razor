@@ -1,0 +1,14 @@
+@namespace MangaManagementSystem.Web.Components.Shared
+<MudPaper Class="pa-5 mf-card h-100" Elevation="0">
+    <MudStack Spacing="2">
+        <MudText Typo="Typo.h6" Class="font-weight-bold">@Title</MudText>
+        <MudText Typo="Typo.body2" Class="mf-muted">@Description</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@Href">Open</MudButton>
+    </MudStack>
+</MudPaper>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string Description { get; set; } = "";
+    [Parameter] public string Href { get; set; } = "#";
+}

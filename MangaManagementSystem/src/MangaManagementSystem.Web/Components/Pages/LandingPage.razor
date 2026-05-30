@@ -1,0 +1,106 @@
+@page "/"
+@inject NavigationManager Nav
+
+<PageTitle>MangaFlow</PageTitle>
+
+<div class="mf-hero-bg">
+    <MudContainer MaxWidth="MaxWidth.Large" Class="py-4">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="py-3">
+            <MudText Typo="Typo.h5" Class="font-weight-bold mf-gradient-text">MangaFlow</MudText>
+            <MudStack Row="true" Spacing="2" Class="d-none d-md-flex">
+                <MudButton Href="#features" Variant="Variant.Text">Features</MudButton>
+                <MudButton Href="#workflow" Variant="Variant.Text">Workflow</MudButton>
+                <MudButton Href="#about" Variant="Variant.Text">About</MudButton>
+            </MudStack>
+            <MudStack Row="true" Spacing="2">
+                <MudButton Href="/login" Variant="Variant.Text">Login</MudButton>
+                <MudButton Href="/register" Variant="Variant.Filled" Color="Color.Primary">Get Started</MudButton>
+            </MudStack>
+        </MudStack>
+
+        <MudGrid Class="py-16" AlignItems="Center">
+            <MudItem xs="12" md="6">
+                <MudText Typo="Typo.h2" Class="font-weight-bold mb-4">Manage Manga Production from Draft to Publication</MudText>
+                <MudText Typo="Typo.h6" Class="mf-muted mb-6">
+                    A workflow platform for manga teams: chapter/page management, task assignment, editorial review,
+                    board approval, publishing tracking, RBAC, and audit control.
+                </MudText>
+                <MudStack Row="true" Spacing="2">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Href="/register">Create Account</MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large" Href="/login">Login</MudButton>
+                </MudStack>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-6 mf-card" Elevation="0">
+                    <MudText Typo="Typo.h5" Class="font-weight-bold mb-2">Production Snapshot</MudText>
+                    <MudText Class="mf-muted mb-4">18 of 24 pages completed</MudText>
+                    <MudProgressLinear Value="75" Color="Color.Primary" Rounded="true" Size="Size.Large" Class="mb-6" />
+                    <MudGrid>
+                        <MudItem xs="6"><StatCard Label="Active Reviews" Value="12" Description="Editorial queue" /></MudItem>
+                        <MudItem xs="6"><StatCard Label="Pending Tasks" Value="6" Description="Need action" /></MudItem>
+                    </MudGrid>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    </MudContainer>
+</div>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="py-12" id="features">
+    <MudText Typo="Typo.h3" Align="Align.Center" Class="font-weight-bold mb-8">Everything You Need for Manga Production</MudText>
+    <MudGrid>
+        @foreach (var feature in Features)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Class="pa-5 mf-card h-100" Elevation="0">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">@feature.Title</MudText>
+                    <MudText Typo="Typo.body2" Class="mf-muted">@feature.Description</MudText>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+</MudContainer>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="py-12" id="workflow">
+    <MudText Typo="Typo.h3" Align="Align.Center" Class="font-weight-bold mb-8">Streamlined Production Workflow</MudText>
+    <MudGrid>
+        @foreach (var step in Workflow)
+        {
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-5 mf-card text-center h-100" Elevation="0">
+                    <MudAvatar Color="Color.Primary" Class="mx-auto mb-3">@step.No</MudAvatar>
+                    <MudText Typo="Typo.h6" Class="font-weight-bold">@step.Title</MudText>
+                    <MudText Typo="Typo.body2" Class="mf-muted">@step.Description</MudText>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+</MudContainer>
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="py-16 text-center" id="about">
+    <MudText Typo="Typo.h3" Class="font-weight-bold mb-3">Ready to streamline your manga production workflow?</MudText>
+    <MudText Class="mf-muted mb-6">Create, review, approve, and publish with a role-based manga production platform.</MudText>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Href="/register">Start Prototype</MudButton>
+</MudContainer>
+
+@code {
+    private readonly List<FeatureItem> Features = new()
+    {
+        new("Chapter & Page Management", "Organize chapters, track page progress, manage revisions, and maintain version history for manuscripts."),
+        new("Task Assignment", "Assign tasks to mangaka and assistants, set deadlines, and coordinate team workflows."),
+        new("Editorial Review", "Review dialogue, layout, annotations, and editorial feedback before publication."),
+        new("Board Approval", "Editorial board reviews approved manuscripts and makes publication decisions."),
+        new("Publishing Tracking", "Track manuscripts through the publishing pipeline and release schedule."),
+        new("Audit & Permission Control", "Use role-based access and audit logs for accountable workflow management.")
+    };
+
+    private readonly List<StepItem> Workflow = new()
+    {
+        new("1", "Create", "Mangaka creates series, chapters, and pages."),
+        new("2", "Review", "Editors annotate and review production material."),
+        new("3", "Approve", "Board members vote and make decisions."),
+        new("4", "Publish", "Approved work moves into release tracking.")
+    };
+
+    private record FeatureItem(string Title, string Description);
+    private record StepItem(string No, string Title, string Description);
+}

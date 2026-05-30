@@ -1,0 +1,39 @@
+@page "/dashboard"
+@inject NavigationManager Nav
+
+<DashboardLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Demo Workspace Overview</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Here's a summary of your editorial platform activity.</MudText>
+        </div>
+
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-6">
+            Prototype demo view. In the real system, users are redirected based on their assigned role.
+        </MudAlert>
+        <MudGrid Class="mb-6">
+            <MudItem xs="12" sm="6" md="3"><StatCard Label="Active Reviews" Value="1" Description="Updated recently" /></MudItem>
+            <MudItem xs="12" sm="6" md="3"><StatCard Label="Total Annotations" Value="23" Description="+5 this week" /></MudItem>
+            <MudItem xs="12" sm="6" md="3"><StatCard Label="Pending Documents" Value="2" Description="Needs review" /></MudItem>
+            <MudItem xs="12" sm="6" md="3"><StatCard Label="Delayed Tasks" Value="1" Description="Due today" /></MudItem>
+        </MudGrid>
+        <MudText Typo="Typo.overline" Class="mf-muted">EDITORIAL MODULES</MudText>
+        <MudGrid Class="mb-8">
+            <MudItem xs="12" md="4"><WorkspaceCard Title="Manga Editorial Review" Description="Annotate chapters, review dialogue and layouts." Href="/dashboard/workspace" /></MudItem>
+            <MudItem xs="12" md="4"><WorkspaceCard Title="Editorial Records" Description="Manage series defense documents and production files." Href="/dashboard/records" /></MudItem>
+            <MudItem xs="12" md="4"><WorkspaceCard Title="Studio Progress" Description="Monitor production tasks and deadlines." Href="/dashboard/studio" /></MudItem>
+        </MudGrid>
+        <MudText Typo="Typo.overline" Class="mf-muted">ALL WORKSPACES</MudText>
+        <MudGrid>
+            <MudItem xs="12" md="3"><WorkspaceCard Title="Mangaka Workspace" Description="Series, chapters, assistants and submissions." Href="/mangaka" /></MudItem>
+            <MudItem xs="12" md="3"><WorkspaceCard Title="Assistant Workspace" Description="Assigned tasks and submission flow." Href="/assistant" /></MudItem>
+            <MudItem xs="12" md="3"><WorkspaceCard Title="System Admin Workspace" Description="Users, registrations, audit logs and settings." Href="/admin" /></MudItem>
+            <MudItem xs="12" md="3"><WorkspaceCard Title="Board & Ranking" Description="Series ranking and board decision support." Href="/ranking" /></MudItem>
+        </MudGrid>
+
+    </div>
+</DashboardLayout>
+
+@code {
+
+}

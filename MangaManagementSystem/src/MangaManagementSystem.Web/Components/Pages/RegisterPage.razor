@@ -1,0 +1,45 @@
+@page "/register"
+@inject NavigationManager Nav
+
+<PageTitle>Register - MangaFlow</PageTitle>
+
+<div class="mf-gradient-bg d-flex align-center justify-center pa-4">
+    <MudContainer MaxWidth="MaxWidth.Small">
+        <div class="text-center mb-6">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mf-gradient-text">MangaFlow</MudText>
+            <MudText Typo="Typo.h6" Class="mf-muted mt-2">Start your manga production journey</MudText>
+        </div>
+        <MudPaper Class="pa-8 mf-card" Elevation="8">
+            <MudText Typo="Typo.h4" Class="font-weight-bold mb-2">Create Your Account</MudText>
+            <MudAlert Severity="Severity.Info" Class="mb-4">
+                Your account request will be reviewed by the System Administrator. Your role will be assigned after approval.
+            </MudAlert>
+            <MudStack Spacing="3">
+                <MudTextField Label="Full Name" @bind-Value="FullName" Variant="Variant.Outlined" Required="true" />
+                <MudTextField Label="Username" @bind-Value="Username" Variant="Variant.Outlined" Required="true" />
+                <MudTextField Label="Email" @bind-Value="Email" Variant="Variant.Outlined" InputType="InputType.Email" Required="true" />
+                <MudTextField Label="Password" @bind-Value="Password" Variant="Variant.Outlined" InputType="InputType.Password" Required="true" />
+                <MudTextField Label="Confirm Password" @bind-Value="ConfirmPassword" Variant="Variant.Outlined" InputType="InputType.Password" Required="true" />
+                <MudCheckBox T="bool" @bind-Checked="Agree" Label="I agree to the Terms and Conditions and Privacy Policy" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large" Disabled="@(!Agree)" OnClick="SubmitAsync">Create Account</MudButton>
+                <MudDivider />
+                <MudText Align="Align.Center">Already have an account? <MudLink Href="/login">Login to Your Account</MudLink></MudText>
+            </MudStack>
+        </MudPaper>
+    </MudContainer>
+</div>
+
+@code {
+    private string FullName { get; set; } = string.Empty;
+    private string Username { get; set; } = string.Empty;
+    private string Email { get; set; } = string.Empty;
+    private string Password { get; set; } = string.Empty;
+    private string ConfirmPassword { get; set; } = string.Empty;
+    private bool Agree { get; set; }
+
+    private Task SubmitAsync()
+    {
+        Nav.NavigateTo("/pending-approval");
+        return Task.CompletedTask;
+    }
+}

@@ -1,0 +1,20 @@
+@page "/pending-approval"
+
+<PageTitle>Pending Approval - MangaFlow</PageTitle>
+
+<div class="mf-gradient-bg d-flex align-center justify-center pa-4">
+    <MudContainer MaxWidth="MaxWidth.Small">
+        <MudPaper Class="pa-8 mf-card text-center" Elevation="8">
+            <MudAvatar Color="Color.Primary" Size="Size.Large" Class="mx-auto mb-4">✓</MudAvatar>
+            <MudText Typo="Typo.h4" Class="font-weight-bold mb-2">Pending Approval</MudText>
+            <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-4">Account Request Submitted</MudText>
+            <MudText Class="mf-muted mb-6">Your account request has been submitted to the system administrator.</MudText>
+            <MudStack Spacing="3" Class="text-left mb-6">
+                <MudAlert Severity="Severity.Info">Account Review: The System Administrator will review your request and verify your information.</MudAlert>
+                <MudAlert Severity="Severity.Info">Role Assignment: Your role will be assigned based on your intended function in the platform.</MudAlert>
+                <MudAlert Severity="Severity.Success">Login Access: You will be able to login after your account has been approved.</MudAlert>
+            </MudStack>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/login">Back to Login</MudButton>
+        </MudPaper>
+    </MudContainer>
+</div>

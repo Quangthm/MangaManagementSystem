@@ -1,0 +1,40 @@
+@page "/admin/users"
+@inject NavigationManager Nav
+
+<AdminLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">User Account Management</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Manage user access, roles, and account status</MudText>
+        </div>
+
+        <MudGrid Class="mb-6">
+            <MudItem xs="12" md="2"><StatCard Label="Active Users" Value="236" /></MudItem>
+            <MudItem xs="12" md="2"><StatCard Label="Locked Users" Value="3" /></MudItem>
+            <MudItem xs="12" md="2"><StatCard Label="Disabled Users" Value="8" /></MudItem>
+            <MudItem xs="12" md="2"><StatCard Label="Pending Requests" Value="12" /></MudItem>
+            <MudItem xs="12" md="2"><StatCard Label="Admin Accounts" Value="4" /></MudItem>
+        </MudGrid>
+        <MudPaper Class="pa-5 mf-card" Elevation="0">
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4"><MudText Typo="Typo.h6">Accounts</MudText><MudStack Row="true"><MudButton Variant="Variant.Outlined">Export</MudButton><MudButton Variant="Variant.Filled" Color="Color.Primary">Create User</MudButton></MudStack></MudStack>
+            <MudTable Items="Users" Hover="true">
+                <HeaderContent><MudTh>User</MudTh><MudTh>Role</MudTh><MudTh>Status</MudTh><MudTh>Last Login</MudTh></HeaderContent>
+                <RowTemplate><MudTd>@context.Name</MudTd><MudTd>@context.Role</MudTd><MudTd><MudChip T="string" Color="@context.Color" Size="Size.Small">@context.Status</MudChip></MudTd><MudTd>@context.LastLogin</MudTd></RowTemplate>
+            </MudTable>
+        </MudPaper>
+
+    </div>
+</AdminLayout>
+
+@code {
+
+    private readonly List<UserRow> Users = new()
+    {
+        new("Yuki Tanaka", "Tantou Editor", "ACTIVE", "Today", Color.Success),
+        new("Aiko Mori", "Mangaka", "ACTIVE", "Yesterday", Color.Success),
+        new("Ken Sato", "Assistant", "LOCKED", "2 days ago", Color.Warning),
+        new("System Bot", "System Administrator", "DISABLED", "Never", Color.Error)
+    };
+    private record UserRow(string Name, string Role, string Status, string LastLogin, Color Color);
+
+}

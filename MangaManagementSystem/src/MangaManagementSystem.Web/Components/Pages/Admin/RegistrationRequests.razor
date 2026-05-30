@@ -1,0 +1,38 @@
+@page "/admin/registration-requests"
+@inject NavigationManager Nav
+
+<AdminLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Registration Request Management</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Review and approve pending account registration requests</MudText>
+        </div>
+
+        <MudGrid Class="mb-6"><MudItem xs="12" md="4"><StatCard Label="Pending Requests" Value="12" /></MudItem><MudItem xs="12" md="4"><StatCard Label="Approved This Month" Value="45" /></MudItem><MudItem xs="12" md="4"><StatCard Label="Rejected This Month" Value="8" /></MudItem></MudGrid>
+        <MudPaper Class="pa-5 mf-card" Elevation="0">
+            <MudTable Items="Requests" Hover="true">
+                <HeaderContent><MudTh>Name</MudTh><MudTh>Email</MudTh><MudTh>Requested Role</MudTh><MudTh>Request Date</MudTh><MudTh>Actions</MudTh></HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.Name</MudTd><MudTd>@context.Email</MudTd><MudTd>@context.Role</MudTd><MudTd>@context.Date</MudTd>
+                    <MudTd><MudButton Size="Size.Small" Color="Color.Success" Variant="Variant.Filled" OnClick="@(()=>Approve(context.Name))">Approve</MudButton><MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined" Class="ml-2" OnClick="@(()=>Reject(context.Name))">Reject</MudButton></MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+
+    </div>
+</AdminLayout>
+
+@code {
+
+    [Inject] private ToastService Toast { get; set; } = default!;
+    private readonly List<RequestRow> Requests = new()
+    {
+        new("Hana Lee", "hana@example.com", "Mangaka", "May 21, 2026"),
+        new("Minh Tran", "minh@example.com", "Assistant", "May 22, 2026"),
+        new("Sora Kim", "sora@example.com", "Tantou Editor", "May 23, 2026")
+    };
+    private void Approve(string name) => Toast.Show($"Approved registration for {name}", ToastType.Success);
+    private void Reject(string name) => Toast.Show($"Rejected registration for {name}", ToastType.Warning);
+    private record RequestRow(string Name, string Email, string Role, string Date);
+
+}

@@ -1,0 +1,33 @@
+using MangaManagementSystem.Domain.Entities;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace MangaManagementSystem.Domain.Interfaces
+{
+    public interface IUnitOfWork : IDisposable
+    {
+        ISeriesRepository Series { get; }
+        IChapterRepository Chapters { get; }
+        IUserRepository Users { get; }
+        IGenericRepository<ChapterPage> ChapterPages { get; }
+        IGenericRepository<FileResource> FileResources { get; }
+        IGenericRepository<SeriesProposal> SeriesProposals { get; }
+        IGenericRepository<ChapterPageVersion> ChapterPageVersions { get; }
+        IGenericRepository<PageRegion> PageRegions { get; }
+        IGenericRepository<ChapterPageTask> ChapterPageTasks { get; }
+        IGenericRepository<ChapterPageTaskRegion> ChapterPageTaskRegions { get; }
+        IGenericRepository<ChapterPageAnnotation> ChapterPageAnnotations { get; }
+        IGenericRepository<ChapterEditorialReview> ChapterEditorialReviews { get; }
+        IGenericRepository<Role> Roles { get; }
+        IGenericRepository<UserRegistrationRequest> UserRegistrationRequests { get; }
+        IGenericRepository<SeriesContributor> SeriesContributors { get; }
+        IGenericRepository<SeriesBoardPoll> SeriesBoardPolls { get; }
+        IGenericRepository<ChapterReaderVoteSnapshot> ChapterReaderVoteSnapshots { get; }
+        IGenericRepository<SeriesRankingSnapshot> SeriesRankingSnapshots { get; }
+        IGenericRepository<Notification> Notifications { get; }
+        IGenericRepository<AuditEvent> AuditEvents { get; }
+        IGenericRepository<SeriesBoardVote> SeriesBoardVotes { get; }
+        Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
+    }
+}

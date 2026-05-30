@@ -1,0 +1,31 @@
+@page "/admin"
+@inject NavigationManager Nav
+
+<AdminLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">System Administration Dashboard</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Monitor and manage MangaFlow platform operations</MudText>
+        </div>
+
+        <MudGrid Class="mb-6">
+            <MudItem xs="12" sm="6" md="2"><StatCard Label="Active Users" Value="236" /></MudItem>
+            <MudItem xs="12" sm="6" md="2"><StatCard Label="Pending Requests" Value="12" /></MudItem>
+            <MudItem xs="12" sm="6" md="2"><StatCard Label="Locked Accounts" Value="3" /></MudItem>
+            <MudItem xs="12" sm="6" md="2"><StatCard Label="Disabled Accounts" Value="8" /></MudItem>
+            <MudItem xs="12" sm="6" md="2"><StatCard Label="Audit Events Today" Value="147" /></MudItem>
+            <MudItem xs="12" sm="6" md="2"><StatCard Label="Critical Actions Logged" Value="23" /></MudItem>
+        </MudGrid>
+        <MudText Typo="Typo.overline" Class="mf-muted">QUICK ACTIONS</MudText>
+        <MudGrid>
+            <MudItem xs="12" md="4"><WorkspaceCard Title="View Audit Log" Description="Review system actions, account changes, and workflow decisions." Href="/admin/audit-logs" /></MudItem>
+            <MudItem xs="12" md="4"><WorkspaceCard Title="Manage User Accounts" Description="Lock, unlock, disable, and manage user access." Href="/admin/users" /></MudItem>
+            <MudItem xs="12" md="4"><WorkspaceCard Title="Registration Requests" Description="Review and approve pending account requests." Href="/admin/registration-requests" /></MudItem>
+        </MudGrid>
+
+    </div>
+</AdminLayout>
+
+@code {
+
+}

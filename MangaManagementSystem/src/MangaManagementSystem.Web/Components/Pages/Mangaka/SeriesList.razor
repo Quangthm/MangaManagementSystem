@@ -1,0 +1,32 @@
+@page "/mangaka/series"
+@inject NavigationManager Nav
+
+<MangakaLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Current Series</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Active projects in your catalog</MudText>
+        </div>
+
+        <MudGrid>
+            @foreach (var item in Series)
+            {
+                <MudItem xs="12" md="4"><MudPaper Class="pa-5 mf-card h-100" Elevation="0"><MudText Typo="Typo.h6" Class="font-weight-bold">@item.Title</MudText><MudText class="mf-muted">@item.Subtitle</MudText><MudChip T="string" Color="Color.Success" Size="Size.Small" Class="my-3">@item.Status</MudChip><MudText>Chapters: @item.Chapters</MudText><MudText>Pages: @item.Pages</MudText><MudText Typo="Typo.caption" class="mf-muted">Updated @item.Updated</MudText><MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"/mangaka/workspace/{item.Id}")" Class="mt-3">Open Workspace</MudButton></MudPaper></MudItem>
+            }
+            <MudItem xs="12" md="4"><MudPaper Class="pa-5 mf-card h-100 text-center" Elevation="0"><MudText Typo="Typo.h6">New Series</MudText><MudText class="mf-muted">Submit a new manga proposal</MudText><MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mt-4">Create Proposal</MudButton></MudPaper></MudItem>
+        </MudGrid>
+
+    </div>
+</MangakaLayout>
+
+@code {
+
+    private readonly List<SeriesCard> Series = new()
+    {
+        new(1, "Crimson Moon Academy", "紅月学院", "Active", 44, 528, "2 hours ago"),
+        new(2, "Neon Samurai Path", "ネオンサムライ", "Active", 18, 216, "1 day ago"),
+        new(3, "Lunar Eclipse Academy", "月食学院", "Active", 12, 144, "3 days ago")
+    };
+    private record SeriesCard(int Id, string Title, string Subtitle, string Status, int Chapters, int Pages, string Updated);
+
+}

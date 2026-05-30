@@ -1,0 +1,50 @@
+@namespace MangaManagementSystem.Web.Components.Shared
+@implements IDisposable
+@inject ToastService ToastService
+
+<div style="position:fixed; right:24px; top:24px; z-index:2000; width:min(420px, calc(100vw - 48px));">
+    @foreach (var toast in _toasts)
+    {
+        <MudAlert Severity="@GetSeverity(toast.Type)" Variant="Variant.Filled" Dense="true" Class="mb-2" CloseIconClicked="@(()=>Close(toast.Id))">
+            @toast.Message
+        </MudAlert>
+    }
+</div>
+
+@code {
+    private readonly List<ToastMessage> _toasts = new();
+
+    protected override void OnInitialized()
+    {
+        ToastService.OnShow += Show;
+        ToastService.OnClose += Close;
+    }
+
+    private async void Show(ToastMessage toast)
+    {
+        _toasts.Add(toast);
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(3000);
+        Close(toast.Id);
+    }
+
+    private void Close(int id)
+    {
+        _toasts.RemoveAll(t => t.Id == id);
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private static Severity GetSeverity(ToastType type) => type switch
+    {
+        ToastType.Error => Severity.Error,
+        ToastType.Warning => Severity.Warning,
+        ToastType.Info => Severity.Info,
+        _ => Severity.Success
+    };
+
+    public void Dispose()
+    {
+        ToastService.OnShow -= Show;
+        ToastService.OnClose -= Close;
+    }
+}

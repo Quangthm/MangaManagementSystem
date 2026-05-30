@@ -1,0 +1,57 @@
+@page "/login"
+@inject NavigationManager Nav
+
+<PageTitle>Login - MangaFlow</PageTitle>
+
+<div class="mf-gradient-bg d-flex align-center justify-center pa-4">
+    <MudContainer MaxWidth="MaxWidth.Small">
+        <div class="text-center mb-6">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mf-gradient-text">MangaFlow</MudText>
+            <MudText Typo="Typo.h6" Class="mf-muted mt-2">Welcome back to your workspace</MudText>
+        </div>
+
+        <MudPaper Class="mf-card" Elevation="8">
+            <div style="background:linear-gradient(90deg,#4f46e5,#9333ea); border-radius:22px 22px 0 0" class="pa-6 text-center">
+                <MudText Typo="Typo.h5" Class="font-weight-bold text-white">Login to Your Account</MudText>
+            </div>
+            <div class="pa-8">
+                @if (IsLoading)
+                {
+                    <div class="text-center py-8">
+                        <MudProgressCircular Indeterminate="true" Color="Color.Primary" Size="Size.Large" Class="mb-4" />
+                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">Redirecting to your assigned workspace...</MudText>
+                        <MudText Typo="Typo.body2" Class="mf-muted">Prototype demo route. In the real system, users are redirected based on their assigned role.</MudText>
+                    </div>
+                }
+                else
+                {
+                    <MudStack Spacing="3">
+                        <MudTextField Label="Username or Email" @bind-Value="UsernameOrEmail" Variant="Variant.Outlined" Required="true" />
+                        <MudTextField Label="Password" @bind-Value="Password" Variant="Variant.Outlined" InputType="InputType.Password" Required="true" />
+                        <MudText Align="Align.Right"><MudLink Href="#">Forgot Password?</MudLink></MudText>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" OnClick="LoginAsync" FullWidth="true">Login</MudButton>
+                        <MudDivider />
+                        <MudText Align="Align.Center">Don't have an account? <MudLink Href="/register">Create Account</MudLink></MudText>
+                    </MudStack>
+                }
+            </div>
+        </MudPaper>
+        @if (!IsLoading)
+        {
+            <MudText Align="Align.Center" Class="mt-4"><MudLink Href="/">← Back to Home</MudLink></MudText>
+        }
+    </MudContainer>
+</div>
+
+@code {
+    private string UsernameOrEmail { get; set; } = string.Empty;
+    private string Password { get; set; } = string.Empty;
+    private bool IsLoading { get; set; }
+
+    private async Task LoginAsync()
+    {
+        IsLoading = true;
+        await Task.Delay(800);
+        Nav.NavigateTo("/dashboard");
+    }
+}

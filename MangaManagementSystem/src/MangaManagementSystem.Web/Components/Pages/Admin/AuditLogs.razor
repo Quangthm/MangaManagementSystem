@@ -1,0 +1,32 @@
+@page "/admin/audit-logs"
+@inject NavigationManager Nav
+
+<AdminLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">System Audit Logs</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Review system actions, account changes, and workflow decisions</MudText>
+        </div>
+
+        <MudGrid Class="mb-6"><MudItem xs="12" md="4"><StatCard Label="Events Today" Value="147" /></MudItem><MudItem xs="12" md="4"><StatCard Label="Critical Actions" Value="23" /></MudItem><MudItem xs="12" md="4"><StatCard Label="Integrity Status" Value="100%" /></MudItem></MudGrid>
+        <MudPaper Class="pa-5 mf-card" Elevation="0">
+            <MudTable Items="Logs" Hover="true">
+                <HeaderContent><MudTh>Timestamp</MudTh><MudTh>Actor</MudTh><MudTh>Action</MudTh><MudTh>Object</MudTh><MudTh>Integrity</MudTh></HeaderContent>
+                <RowTemplate><MudTd>@context.Time</MudTd><MudTd>@context.Actor</MudTd><MudTd>@context.Action</MudTd><MudTd>@context.Object</MudTd><MudTd><MudChip T="string" Color="Color.Success" Size="Size.Small">Valid</MudChip></MudTd></RowTemplate>
+            </MudTable>
+        </MudPaper>
+
+    </div>
+</AdminLayout>
+
+@code {
+
+    private readonly List<AuditRow> Logs = new()
+    {
+        new("2026-05-21 09:15", "admin@mangaflow.jp", "USER_APPROVED", "auth.Users:42"),
+        new("2026-05-21 10:20", "Yuki Tanaka", "REVIEW_SUBMITTED", "ChapterSubmission:18"),
+        new("2026-05-21 11:45", "Board Member", "BOARD_VOTE_CAST", "SeriesBoardVote:7")
+    };
+    private record AuditRow(string Time, string Actor, string Action, string Object);
+
+}
