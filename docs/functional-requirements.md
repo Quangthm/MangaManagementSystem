@@ -1,0 +1,477 @@
+# Manga Creation Workflow and Publishing Management System — Revised Functional Requirements
+
+**Document purpose:** Cleaned and revised functional requirements based on the verified business rules Markdown file.  
+**Writing standard:** Requirements use the technical requirement style: **“The system shall…”**  
+**MVP alignment note:** These requirements remove earlier conflicting assumptions such as `SeriesStatusHistory`, `ChapterSubmission`, `SeriesBoardDecision`, `RegionTranslation`, persistent AI job history, and direct annotation coordinates.
+
+---
+
+## 3. Functional Requirements
+
+---
+
+## 3.1 AI-Assisted Translation
+
+| ID | Functional Requirement | Source Business Rules |
+|---|---|---|
+| FR-TRANS-001 | The system shall provide AI-assisted translation as an editing aid, not as a separate persistent translation workflow. | BR-TRANS-001 |
+| FR-TRANS-002 | The system shall allow AI-assisted translation suggestions for detected text regions on manga page versions. | BR-TRANS-008 |
+| FR-TRANS-003 | The system shall allow users to review, edit, override, and approve AI/OCR translation suggestions before saving the final translated page. | BR-TRANS-006, BR-TRANS-009 |
+| FR-TRANS-004 | The system shall save the final translated page as a new `ChapterPageVersion`. | BR-TRANS-002 |
+| FR-TRANS-005 | The system shall upload translated or edited page files as new page versions instead of overwriting previous page files. | BR-TRANS-004 |
+| FR-TRANS-006 | The system shall preserve old page versions after a translated or edited page version is created. | BR-TRANS-005 |
+| FR-TRANS-007 | The system shall treat the saved translated page file as the authoritative result of the translation/editing process. | BR-TRANS-007 |
+| FR-TRANS-008 | The system shall not require structured rows for every OCR text value, AI translation suggestion, or manually edited translation in MVP. | BR-TRANS-003 |
+| FR-TRANS-009 | The system shall not guarantee fully automatic manga localization in MVP. | BR-TRANS-008 |
+
+---
+
+## 3.2 Page Region and AI Detection
+
+| ID | Functional Requirement | Source Business Rules |
+|---|---|---|
+| FR-REG-001 | The system shall allow page regions to be created manually or suggested by AI. | BR-REG-006 |
+| FR-REG-002 | The system shall require each `PageRegion` to belong to exactly one `ChapterPageVersion`. | BR-REG-001 |
+| FR-REG-003 | The system shall restrict `PageRegion.region_type_code` to `PANEL`, `SPEECH_BUBBLE`, `CHARACTER`, `SFX_TEXT`, `BACKGROUND`, or `OTHER`. | BR-REG-002 |
+| FR-REG-004 | The system shall store page region coordinates as rectangular bounding boxes using `x`, `y`, `width`, and `height`. | BR-REG-003 |
+| FR-REG-005 | The system shall require each page region width and height to be positive. | BR-REG-004 |
+| FR-REG-006 | The system shall store page region coordinates relative to the original uploaded page image dimensions. | BR-REG-010 |
+| FR-REG-007 | The system shall restrict `PageRegion.source_type` to `AI` or `MANUAL`. | BR-REG-005 |
+| FR-REG-008 | The system shall change an AI-generated page region to `MANUAL` when a user adjusts the region. | BR-REG-007 |
+| FR-REG-009 | The system shall clear or prevent AI confidence scores for manual page regions. | BR-REG-008 |
+| FR-REG-010 | The system shall require stored AI confidence scores to be between 0 and 1. | BR-REG-009 |
+| FR-REG-011 | The system shall represent character regions as bounding boxes in MVP, not exact outlines or masks. | BR-REG-011 |
+| FR-REG-012 | The system shall keep page regions linked to the page version where they were created. | BR-REG-012 |
+| FR-REG-013 | The system shall not automatically move page regions to newer page versions. | BR-REG-012 |
+| FR-REG-014 | The system shall store accepted AI detection output directly as `PageRegion` records. | BR-REG-013 |
+| FR-REG-015 | The system shall not require persistent AI job execution history for MVP. | BR-REG-013 |
+| FR-REG-016 | The system shall prevent AI detection results from automatically approving or rejecting manga pages or chapters. | BR-REG-014 |
+| FR-REG-017 | The system shall require human review before AI detection results are used in workflow decisions. | BR-REG-015 |
+| FR-REG-018 | The system shall allow text-related page regions to store optional OCR-detected original text. | BR-REG-016 |
+| FR-REG-019 | The system shall treat `PageRegion.original_text` as text detected from the original page image, not final translated text. | BR-REG-017 |
+| FR-REG-020 | The system shall use `PageRegion` for translation/OCR support without storing final translated content as region translation rows. | BR-REG-018 |
+| FR-REG-021 | The system shall load existing saved `PageRegion` records when a user opens the segmentation tool for a page version. | BR-REG-019 |
+| FR-REG-022 | The system shall allow authorized users to run AI-assisted segmentation even when saved `PageRegion` records already exist for the same page version. | BR-REG-020 |
+| FR-REG-023 | The system shall show newly AI-detected regions as temporary suggestions until the user chooses which regions to save. | BR-REG-021 |
+| FR-REG-024 | The system shall compare newly AI-detected regions against existing saved `PageRegion` records for the same page version before saving new regions. | BR-REG-022 |
+| FR-REG-025 | The system shall prevent or warn against saving duplicate AI-detected regions that substantially overlap an existing saved region of the same type. | BR-REG-023 |
+| FR-REG-026 | The system shall allow users to save non-duplicate AI-detected regions as `PageRegion` records. | BR-REG-024 |
+| FR-REG-027 | The system shall allow saved `PageRegion` records to be reused for annotation, task assignment, translation/OCR review, and segmentation display. | BR-REG-025 |
+| FR-REG-028 | The system shall allow authorized users to adjust saved page region coordinates, labels, types, and original text when region editing is permitted. | BR-REG-026 |
+| FR-REG-029 | The system shall record `updated_at_utc` and `updated_by_user_id` when a saved `PageRegion` is modified. | BR-REG-027 |
+
+---
+
+## 3.3 File Resource and Cloudinary
+
+| ID | Functional Requirement | Source Business Rules |
+|---|---|---|
+| FR-FILE-001 | The system shall store actual uploaded media files in Cloudinary. | BR-FILE-001 |
+| FR-FILE-002 | The system shall store file metadata and file relationships in SQL Server through `manga.FileResource`. | BR-FILE-001, BR-FILE-002 |
+| FR-FILE-003 | The system shall require uploaded or generated business files to be referenced through `manga.FileResource` instead of raw Cloudinary URLs. | BR-FILE-002, BR-FILE-007 |
+| FR-FILE-004 | The system shall reference page images, proposal files, series cover images, user avatars, user portfolios, markup files, task outputs, and annotation exports through `FileResource`. | BR-FILE-002, BR-FILE-007 |
+| FR-FILE-005 | The system shall treat a file resource as active only when `deleted_at_utc IS NULL`. | BR-FILE-004 |
+| FR-FILE-006 | The system shall exclude deleted file resources from normal application queries unless the user is viewing historical or audit data. | BR-FILE-004 |
+| FR-FILE-007 | The system shall delete Cloudinary assets through the application workflow instead of requiring manual deletion from the Cloudinary console. | BR-FILE-003 |
+| FR-FILE-008 | The system shall allow a user avatar file to be uploaded as a `FileResource`. | BR-FILE-005 |
+| FR-FILE-009 | The system shall require user avatar files to use `file_purpose_code = USER_AVATAR`. | BR-FILE-006 |
+| FR-FILE-010 | The system shall display a safe placeholder when a referenced file is unavailable or deleted in a normal UI context. | BR-FILE-008 |
+
+---
+
+## 3.4 Users and Accounts
+
+| ID | Functional Requirement | Source Business Rules |
+|---|---|---|
+| FR-USER-001 | The system shall assign exactly one MVP system role to each user account. | BR-USER-001 |
+| FR-USER-002 | The system shall create new registered users with `PENDING_APPROVAL` status by default. | BR-USER-002 |
+| FR-USER-003 | The system shall prevent `PENDING_APPROVAL` users from accessing protected workspace functions. | BR-USER-003 |
+| FR-USER-004 | The system shall allow Admin users to activate pending users by changing their status to `ACTIVE`. | BR-USER-004 |
+| FR-USER-005 | The system shall allow Admin users to disable accounts by changing their status to `DISABLED`. | BR-USER-005 |
+| FR-USER-006 | The system shall prevent disabled accounts from logging in. | BR-USER-006 |
+| FR-USER-007 | The system shall allow a user account to reference an optional avatar file through `FileResource`. | BR-USER-007, BR-USER-009 |
+| FR-USER-008 | The system shall allow a user account or registration profile to reference an optional portfolio file through `FileResource`. | BR-USER-008, BR-USER-009 |
+| FR-USER-009 | The system shall record registration approval history through current user status and audit logs instead of a separate registration request table. | BR-USER-010 |
+
+---
+
+## 3.5 Series
+
+| ID | Functional Requirement | Source Business Rules |
+|---|---|---|
+| FR-SERIES-001 | The system shall allow authorized users to create series profiles. | BR-SERIES-001, BR-SERIES-002, BR-SERIES-003 |
+| FR-SERIES-002 | The system shall require each series to have a unique system code. | BR-SERIES-001 |
+| FR-SERIES-003 | The system shall require each series to have a unique URL slug. | BR-SERIES-002 |
+| FR-SERIES-004 | The system shall restrict each series to one approved lifecycle status value. | BR-SERIES-003 |
+| FR-SERIES-005 | The system shall update a series to `SERIALIZED` after the proposal, editorial, and board approval workflow accepts the series into production/publication. | BR-SERIES-004 |
+| FR-SERIES-006 | The system shall require each series to declare one primary content language. | BR-SERIES-005 |
+| FR-SERIES-007 | The system shall store genre as simple text metadata for MVP. | BR-SERIES-006 |
+| FR-SERIES-008 | The system shall allow a series to reference an optional cover image through `FileResource`. | BR-SERIES-007 |
+| FR-SERIES-009 | The system shall require series cover images to use the `SERIES_COVER` file purpose when provided. | BR-SERIES-007 |
+| FR-SERIES-010 | The system shall allow a series to optionally reference another series as its source version. | BR-SERIES-008 |
+| FR-SERIES-011 | The system shall prevent a series from referencing itself as its source series. | BR-SERIES-009 |
+| FR-SERIES-012 | The system shall manage series ownership and contributor membership through `SeriesContributor` instead of `lead_mangaka_user_id` on `Series`. | BR-SERIES-010 |
+| FR-SERIES-013 | The system shall allow a series to have multiple contributors who can participate in managing or editing series information. | BR-SERIES-011 |
+| FR-SERIES-014 | The system shall record both `updated_at_utc` and `updated_by_user_id` when editable series profile metadata is changed. | BR-SERIES-012 |
+| FR-SERIES-015 | The system shall use `Series.updated_at_utc` and `Series.updated_by_user_id` for profile metadata edits, not as full status transition history. | BR-SERIES-013 |
+| FR-SERIES-016 | The system shall prevent incomplete update metadata where only `updated_at_utc` or only `updated_by_user_id` is provided. | BR-SERIES-014 |
+
+---
+
+## 3.6 Series Contributors
+
+| ID | Functional Requirement | Source Business Rules |
+|---|---|---|
+| FR-SC-001 | The system shall allow authorized users to add contributors to a series. | BR-SC-001, BR-SC-003 |
+| FR-SC-002 | The system shall require each `SeriesContributor` record to link exactly one user to exactly one series. | BR-SC-001 |
+| FR-SC-003 | The system shall determine a contributor’s broad role from `auth.Users.role_id`. | BR-SC-002 |
+| FR-SC-004 | The system shall not require contributor specialization records for MVP. | BR-SC-002 |
+| FR-SC-005 | The system shall prevent a user from being an active contributor to the same series more than once at the same time. | BR-SC-004 |
+| FR-SC-006 | The system shall treat a contributor as active when `end_date IS NULL`. | BR-SC-005 |
+| FR-SC-007 | The system shall preserve historical contributor rows after a contributor leaves a series. | BR-SC-006 |
+| FR-SC-008 | The system shall prevent a contributor `end_date` from being earlier than the contributor `start_date`. | BR-SC-007 |
+| FR-SC-009 | The system shall require at least one active Mangaka contributor and one active Editor contributor before a series proceeds beyond proposal draft into formal review or production workflow. | BR-SC-008 |
+
+---
+
+## 3.7 Series Proposal
+
+| ID | Functional Requirement | Source Business Rules |
+|---|---|---|
+| FR-PROP-001 | The system shall create a `SeriesProposal` row only when a proposal is formally submitted for editorial review. | BR-PROP-001, BR-PROP-006 |
+| FR-PROP-002 | The system shall represent each formal proposal submission version as one `SeriesProposal` row. | BR-PROP-001 |
+| FR-PROP-003 | The system shall allow a series to have multiple proposal versions over time. | BR-PROP-002 |
+| FR-PROP-004 | The system shall require proposal version numbers to be positive and unique within the same series. | BR-PROP-003 |
+| FR-PROP-005 | The system shall preserve submission-time snapshots of proposal title, synopsis, genre, and proposal file. | BR-PROP-004 |
+| FR-PROP-006 | The system shall require each submitted proposal to include a proposal file stored as a `FileResource` with purpose `SERIES_PROPOSAL`. | BR-PROP-005 |
+| FR-PROP-007 | The system shall prevent direct editing of submitted proposal snapshot fields after the `SeriesProposal` row is created. | BR-PROP-007 |
+| FR-PROP-008 | The system shall require corrected proposal content to be submitted as a new proposal version when revision is requested. | BR-PROP-008 |
+| FR-PROP-009 | The system shall store proposal status to reflect the current review stage of the submitted proposal package. | BR-PROP-009 |
+| FR-PROP-010 | The system shall allow a proposal to store a withdrawal timestamp only when its status is `WITHDRAWN`. | BR-PROP-010 |
+| FR-PROP-011 | The system shall allow a withdrawn proposal to exist without editorial review metadata if it was withdrawn before editorial review completion. | BR-PROP-011 |
+| FR-PROP-012 | The system shall store editorial review information directly in `SeriesProposal` for MVP. | BR-PROP-012 |
+| FR-PROP-013 | The system shall prevent more than one editorial review decision from being recorded for the same submitted proposal version. | BR-PROP-012 |
+| FR-PROP-014 | The system shall use `UNDER_BOARD_REVIEW` to indicate that a proposal passed editorial review and is waiting for board voting/decision. | BR-PROP-013 |
+| FR-PROP-015 | The system shall mark a proposal as `APPROVED` only after board approval. | BR-PROP-014 |
+| FR-PROP-016 | The system shall require comments or a markup file when an editor requests revision or cancels a proposal. | BR-PROP-015 |
+| FR-PROP-017 | The system shall handle board rejection or board cancellation reasons through board poll and board vote records instead of editorial review comments. | BR-PROP-016 |
+| FR-PROP-018 | The system shall allow proposal lists to be retrieved by series, status, submitter, and reviewer. | BR-PROP-017 |
+| FR-PROP-019 | The system shall allow the latest proposal version for a series to be retrieved. | BR-PROP-018 |
+| FR-PROP-020 | The system shall allow editorial and board queues to be filtered by proposal status. | BR-PROP-019 |
+| FR-PROP-021 | The system shall allow reviewed proposal records to be searched by reviewer for admin/editor tracking. | BR-PROP-020 |
+| FR-PROP-022 | The system shall treat the proposal file as supporting material for editor and board evaluation. | BR-PROP-021 |
+| FR-PROP-023 | The system shall not require a fixed minimum number of completed manga pages for proposal submission in MVP. | BR-PROP-022 |
+| FR-PROP-024 | The system shall treat any minimum page/sample requirement as editorial policy outside MVP database constraints. | BR-PROP-023 |
+
+---
+
+## 3.8 Board Poll
+
+| ID | Functional Requirement | Source Business Rules |
+|---|---|---|
+| FR-BOARD-POLL-001 | The system shall allow Admin users to create board polls for `START_SERIALIZATION` and `CANCEL_SERIALIZATION`. | BR-BOARD-POLL-001 |
+| FR-BOARD-POLL-002 | The system shall allow a `START_SERIALIZATION` poll only when `Series.status_code = UNDER_BOARD_REVIEW`. | BR-BOARD-POLL-002 |
+| FR-BOARD-POLL-003 | The system shall allow a `START_SERIALIZATION` poll only when the selected series has exactly one active proposal with `SeriesProposal.status_code = UNDER_BOARD_REVIEW`. | BR-BOARD-POLL-003 |
+| FR-BOARD-POLL-004 | The system shall treat a `START_SERIALIZATION` poll as voting on the active under-board-review proposal for the selected series even though the poll stores only `series_id`. | BR-BOARD-POLL-004 |
+| FR-BOARD-POLL-005 | The system shall allow a `CANCEL_SERIALIZATION` poll for a serialized or paused series only when the admin provides a reason. | BR-BOARD-POLL-005 |
+| FR-BOARD-POLL-006 | The system shall display low ranking or high cancellation risk as supporting evidence for cancellation polls when available. | BR-BOARD-POLL-006 |
+| FR-BOARD-POLL-007 | The system shall not require low ranking or high cancellation risk to be the only reason for opening a cancellation poll. | BR-BOARD-POLL-006 |
+| FR-BOARD-POLL-008 | The system shall require each board poll to have a non-empty reason. | BR-BOARD-POLL-007 |
+| FR-BOARD-POLL-009 | The system shall allow a board poll to have a scheduled end time or be closed manually by an Admin. | BR-BOARD-POLL-008 |
+| FR-BOARD-POLL-010 | The system shall prevent a series from having more than one open poll of the same type at the same time. | BR-BOARD-POLL-009 |
+| FR-BOARD-POLL-011 | The system shall store `poll_status_code` to distinguish `OPEN`, `CLOSED`, and `CANCELLED` polls. | BR-BOARD-POLL-010 |
+| FR-BOARD-POLL-012 | The system shall prevent votes from an `OPEN` poll from updating series or proposal status. | BR-BOARD-POLL-011 |
+| FR-BOARD-POLL-013 | The system shall allow votes from a `CLOSED` poll to be used by Board Result requirements for applying series or proposal status changes. | BR-BOARD-POLL-012 |
+| FR-BOARD-POLL-014 | The system shall preserve votes from a `CANCELLED` poll for traceability. | BR-BOARD-POLL-013, BR-BOARD-POLL-015 |
+| FR-BOARD-POLL-015 | The system shall prevent votes from a `CANCELLED` poll from affecting series or proposal status. | BR-BOARD-POLL-013 |
+| FR-BOARD-POLL-016 | The system shall allow Admin users to cancel a poll when the voting setup or process must be invalidated. | BR-BOARD-POLL-014 |
+| FR-BOARD-POLL-017 | The system shall require poll results to be computed from board votes and handled by Board Result requirements instead of storing final result codes directly on `SeriesBoardPoll`. | BR-BOARD-POLL-016 |
+| FR-BOARD-POLL-018 | The system shall record poll creation, cancellation, closure, and status application in the audit log. | BR-BOARD-POLL-017 |
+
+---
+
+## 3.9 Board Vote
+
+| ID | Functional Requirement | Source Business Rules |
+|---|---|---|
+| FR-BOARD-VOTE-001 | The system shall allow board members to vote only in an open `SeriesBoardPoll`. | BR-BOARD-VOTE-001 |
+| FR-BOARD-VOTE-002 | The system shall restrict board voting to users with the Editorial Board Member role. | BR-BOARD-VOTE-002 |
+| FR-BOARD-VOTE-003 | The system shall restrict board vote choices to `APPROVE`, `REJECT`, or `ABSTAIN`. | BR-BOARD-VOTE-003 |
+| FR-BOARD-VOTE-004 | The system shall require a non-empty reason when a board member votes `REJECT`. | BR-BOARD-VOTE-004 |
+| FR-BOARD-VOTE-005 | The system shall prevent each board member from casting more than one vote per board poll. | BR-BOARD-VOTE-005 |
+| FR-BOARD-VOTE-006 | The system shall tie each board vote to one `SeriesBoardPoll`. | BR-BOARD-VOTE-006 |
+| FR-BOARD-VOTE-007 | The system shall ensure the related series has exactly one proposal in `UNDER_BOARD_REVIEW` before allowing votes for a `START_SERIALIZATION` poll. | BR-BOARD-VOTE-007 |
+| FR-BOARD-VOTE-008 | The system shall preserve board votes after a poll is closed or cancelled. | BR-BOARD-VOTE-008 |
+| FR-BOARD-VOTE-009 | The system shall use votes from a `CLOSED` poll to determine the applicable poll result. | BR-BOARD-VOTE-009 |
+| FR-BOARD-VOTE-010 | The system shall preserve votes from a `CANCELLED` poll but prevent them from being applied to status changes. | BR-BOARD-VOTE-010 |
+| FR-BOARD-VOTE-011 | The system shall prevent a board vote alone from updating series or proposal status. | BR-BOARD-VOTE-011 |
+| FR-BOARD-VOTE-012 | The system shall apply status changes only when an Admin or system process closes the poll and applies the computed result. | BR-BOARD-VOTE-011 |
+
+---
+
+## 3.10 Board Result
+
+| ID | Functional Requirement | Source Business Rules |
+|---|---|---|
+| FR-BOARD-RESULT-001 | The system shall compute board results from `SeriesBoardVote` records tied to a `SeriesBoardPoll`. | BR-BOARD-RESULT-001 |
+| FR-BOARD-RESULT-002 | The system shall not store MVP board results in a separate `SeriesBoardDecision` table. | BR-BOARD-RESULT-001 |
+| FR-BOARD-RESULT-003 | The system shall calculate aggregate approve, reject, abstain, and total vote counts from `SeriesBoardVote` records. | BR-BOARD-RESULT-002, BR-BOARD-POLL-016 |
+| FR-BOARD-RESULT-004 | The system shall derive the computed poll result from approve and reject vote counts. | BR-BOARD-RESULT-003 |
+| FR-BOARD-RESULT-005 | The system shall compute `APPROVED` when approve votes exceed reject votes. | BR-BOARD-RESULT-004 |
+| FR-BOARD-RESULT-006 | The system shall compute `REJECTED` when reject votes exceed approve votes. | BR-BOARD-RESULT-005 |
+| FR-BOARD-RESULT-007 | The system shall compute `NO_DECISION` when approve and reject votes are tied. | BR-BOARD-RESULT-006 |
+| FR-BOARD-RESULT-008 | The system shall count abstain votes separately without using them to directly determine approval or rejection. | BR-BOARD-RESULT-007 |
+| FR-BOARD-RESULT-009 | The system shall treat an `OPEN` poll result as `PENDING` and prevent it from being applied. | BR-BOARD-RESULT-008 |
+| FR-BOARD-RESULT-010 | The system shall treat a `CANCELLED` poll result as `INVALIDATED` and prevent it from being applied. | BR-BOARD-RESULT-009 |
+| FR-BOARD-RESULT-011 | The system shall produce an applicable board result only for a `CLOSED` poll. | BR-BOARD-RESULT-010 |
+| FR-BOARD-RESULT-012 | The system shall apply `START_SERIALIZATION` poll results to the active proposal and series according to the computed result. | BR-BOARD-RESULT-011, BR-BOARD-RESULT-012, BR-BOARD-RESULT-013 |
+| FR-BOARD-RESULT-013 | The system shall apply `CANCEL_SERIALIZATION` poll results to the series according to the computed result. | BR-BOARD-RESULT-014, BR-BOARD-RESULT-015 |
+| FR-BOARD-RESULT-014 | The system shall not require a final board decision explanation in MVP. | BR-BOARD-RESULT-016 |
+| FR-BOARD-RESULT-015 | The system shall retain poll reasons and individual rejection reasons separately. | BR-BOARD-RESULT-016 |
+| FR-BOARD-RESULT-016 | The system shall record board result application to proposal or series status in the audit log. | BR-BOARD-RESULT-017 |
+
+---
+
+## 3.11 Chapter
+
+| ID | Functional Requirement | Source Business Rules |
+|---|---|---|
+| FR-CH-001 | The system shall require each chapter to belong to exactly one series. | BR-CH-001 |
+| FR-CH-002 | The system shall require chapter number labels to be unique within the same series. | BR-CH-002 |
+| FR-CH-003 | The system shall create each new chapter with `DRAFT` status by default. | BR-CH-003 |
+| FR-CH-004 | The system shall store the current chapter workflow state in `Chapter.status_code`. | BR-CH-004 |
+| FR-CH-005 | The system shall restrict chapter status to `DRAFT`, `UNDER_REVIEW`, `REVISION_REQUESTED`, `APPROVED`, `SCHEDULED`, `RELEASED`, `ON_HOLD`, or `CANCELLED`. | BR-CH-005 |
+| FR-CH-006 | The system shall allow `planned_release_date` to remain empty before the chapter is scheduled. | BR-CH-006 |
+| FR-CH-007 | The system shall allow a chapter to become `SCHEDULED` only when `planned_release_date` is provided. | BR-CH-007 |
+| FR-CH-008 | The system shall require `released_at_utc` when a chapter is marked `RELEASED`. | BR-CH-008 |
+| FR-CH-009 | The system shall populate `released_at_utc` only when the chapter is actually released. | BR-CH-009 |
+| FR-CH-010 | The system shall allow an editor to place a chapter `ON_HOLD` when a valid operational or editorial reason is provided. | BR-CH-010 |
+| FR-CH-011 | The system shall store the user who created the chapter in `created_by_user_id`. | BR-CH-011 |
+| FR-CH-012 | The system shall update `Chapter.updated_at_utc` when the chapter row is modified for operational display. | BR-CH-012 |
+
+---
+
+## 3.12 Chapter Page and Page Version
+
+| ID | Functional Requirement | Source Business Rules |
+|---|---|---|
+| FR-CP-001 | The system shall allow a chapter to contain many logical pages. | BR-CP-001 |
+| FR-CP-002 | The system shall require each `ChapterPage` to belong to exactly one chapter. | BR-CP-002 |
+| FR-CP-003 | The system shall require page numbers to be unique within the same chapter. | BR-CP-003 |
+| FR-CP-004 | The system shall treat `ChapterPage` as a logical page slot, not a specific uploaded image file. | BR-CP-004 |
+| FR-CP-005 | The system shall allow a `ChapterPage` to have multiple `ChapterPageVersion` records over time. | BR-CP-005 |
+| FR-CP-006 | The system shall require each `ChapterPageVersion` to belong to exactly one logical `ChapterPage`. | BR-CP-006 |
+| FR-CP-007 | The system shall require each `ChapterPageVersion` to reference exactly one uploaded file through `FileResource`. | BR-CP-007 |
+| FR-CP-008 | The system shall derive page version upload time and uploader from the related `FileResource`. | BR-CP-008 |
+| FR-CP-009 | The system shall require page version numbers to be positive. | BR-CP-009 |
+| FR-CP-010 | The system shall require page version numbers to be unique within the same `ChapterPage`. | BR-CP-010 |
+| FR-CP-011 | The system shall treat a higher `version_no` as a newer uploaded version of the same logical page. | BR-CP-011 |
+| FR-CP-012 | The system shall allow only one page version to be marked as current for a logical page at a time. | BR-CP-012 |
+| FR-CP-013 | The system shall preserve old page versions for traceability and comparison instead of overwriting them. | BR-CP-013 |
+| FR-CP-014 | The system shall create a new `ChapterPageVersion` when a page is replaced or revised. | BR-CP-014, BR-CP-021 |
+| FR-CP-015 | The system shall prevent replacing or revising a page by creating a new `ChapterPage` for the same logical page. | BR-CP-014 |
+| FR-CP-016 | The system shall require a page task output to reference a `ChapterPageVersion` for the same logical `ChapterPage`. | BR-CP-015 |
+| FR-CP-017 | The system shall allow page annotations to identify their page-version context through linked `PageRegion` records. | BR-CP-016 |
+| FR-CP-018 | The system shall store page-specific feedback through annotations linked to `PageRegion` records. | BR-CP-017 |
+| FR-CP-019 | The system shall perform formal editorial review at chapter level while using page annotations as supporting feedback. | BR-CP-018 |
+| FR-CP-020 | The system shall allow a `ChapterPage` to be soft-deleted when it is no longer part of the active chapter draft. | BR-CP-019 |
+| FR-CP-021 | The system shall preserve historical `ChapterPageVersion` records when a `ChapterPage` is soft-deleted. | BR-CP-020 |
+| FR-CP-022 | The system shall allow a page task that produces a new page version to remain under review until the Mangaka accepts the submitted version. | BR-CP-022 |
+
+---
+
+## 3.13 Chapter Page Annotation
+
+| ID | Functional Requirement | Source Business Rules |
+|---|---|---|
+| FR-ANN-001 | The system shall require each page annotation to reference exactly one `PageRegion`. | BR-ANN-001 |
+| FR-ANN-002 | The system shall represent annotation location through the linked `PageRegion`. | BR-ANN-002 |
+| FR-ANN-003 | The system shall not store direct coordinates in `ChapterPageAnnotation`. | BR-ANN-002 |
+| FR-ANN-004 | The system shall derive the annotation page version from `PageRegion.chapter_page_version_id`. | BR-ANN-003 |
+| FR-ANN-005 | The system shall represent whole-page feedback through a manually created `PageRegion` covering the full page. | BR-ANN-004 |
+| FR-ANN-006 | The system shall require each annotation to have one issue type. | BR-ANN-005 |
+| FR-ANN-007 | The system shall restrict `issue_type_code` to the approved annotation issue code list. | BR-ANN-006 |
+| FR-ANN-008 | The system shall show only valid annotation issue types in the UI. | BR-ANN-007 |
+| FR-ANN-009 | The system shall require non-empty annotation text. | BR-ANN-008 |
+| FR-ANN-010 | The system shall record the user who created each annotation. | BR-ANN-009 |
+| FR-ANN-011 | The system shall record the creation time of each annotation. | BR-ANN-010 |
+| FR-ANN-012 | The system shall restrict annotation creation to authorized users according to workflow permissions. | BR-ANN-011 |
+| FR-ANN-013 | The system shall require both resolver user and resolved timestamp when an annotation is resolved. | BR-ANN-012 |
+| FR-ANN-014 | The system shall require both `resolved_by_user_id` and `resolved_at_utc` to be `NULL` when an annotation is unresolved. | BR-ANN-013 |
+| FR-ANN-015 | The system shall keep annotations associated with the page version of their linked `PageRegion`. | BR-ANN-014 |
+| FR-ANN-016 | The system shall preserve old annotations through their linked regions after a new page version is uploaded. | BR-ANN-015 |
+| FR-ANN-017 | The system shall enforce fixed MVP annotation issue types by database constraint instead of a separate lookup table. | BR-ANN-016 |
+
+---
+
+## 3.14 Page Task
+
+| ID | Functional Requirement | Source Business Rules |
+|---|---|---|
+| FR-PGTASK-001 | The system shall require each page task to target exactly one logical `ChapterPage`. | BR-PGTASK-001 |
+| FR-PGTASK-002 | The system shall allow a chapter page to have many tasks over time. | BR-PGTASK-002 |
+| FR-PGTASK-003 | The system shall represent one page task as one assignment of work to one assistant or authorized user. | BR-PGTASK-003 |
+| FR-PGTASK-004 | The system shall require each page task to be assigned to exactly one assistant or authorized user. | BR-PGTASK-004 |
+| FR-PGTASK-005 | The system shall record the user who created each page task. | BR-PGTASK-005 |
+| FR-PGTASK-006 | The system shall support page-based task assignment in MVP. | BR-PGTASK-006 |
+| FR-PGTASK-007 | The system shall not require whole-chapter task assignment in MVP. | BR-PGTASK-006 |
+| FR-PGTASK-008 | The system shall allow a page task to target one or more `PageRegion` records through `ChapterPageTaskRegion`. | BR-PGTASK-007 |
+| FR-PGTASK-009 | The system shall represent task target regions through linked `PageRegion` records instead of free-text target region descriptions. | BR-PGTASK-008 |
+| FR-PGTASK-010 | The system shall prevent duplicate task-region pairs in `ChapterPageTaskRegion`. | BR-PGTASK-009 |
+| FR-PGTASK-011 | The system shall allow a `PageRegion` to be referenced by multiple tasks when different work is needed for the same area. | BR-PGTASK-010 |
+| FR-PGTASK-012 | The system shall require each task-region link to connect a task to a region belonging to the same logical `ChapterPage` as the task. | BR-PGTASK-011 |
+| FR-PGTASK-013 | The system shall allow region-based annotations to be used as the basis for creating page tasks. | BR-PGTASK-012 |
+| FR-PGTASK-014 | The system shall highlight linked page regions in the assistant task UI. | BR-PGTASK-013 |
+| FR-PGTASK-015 | The system shall require every page task to have a due date. | BR-PGTASK-014 |
+| FR-PGTASK-016 | The system shall restrict task status to `ASSIGNED`, `UNDER_REVIEW`, `COMPLETED`, or `CANCELLED`. | BR-PGTASK-015 |
+| FR-PGTASK-017 | The system shall keep a task in `ASSIGNED` status until the assistant submits a completed page version for review. | BR-PGTASK-016 |
+| FR-PGTASK-018 | The system shall not require assistants to manually start a task before submitting work. | BR-PGTASK-016 |
+| FR-PGTASK-019 | The system shall require an uploaded page version before a task can enter `UNDER_REVIEW` or `COMPLETED` status. | BR-PGTASK-017 |
+| FR-PGTASK-020 | The system shall require a completed page task to reference the `ChapterPageVersion` produced by the assigned user. | BR-PGTASK-018 |
+| FR-PGTASK-021 | The system shall require the completed page version to belong to the same logical `ChapterPage` as the task. | BR-PGTASK-019 |
+| FR-PGTASK-022 | The system shall prevent assistants from approving their own task output. | BR-PGTASK-020 |
+| FR-PGTASK-023 | The system shall allow Mangaka users or authorized reviewers to review submitted page task output. | BR-PGTASK-020, BR-PGTASK-021 |
+| FR-PGTASK-024 | The system shall allow a task to remain `UNDER_REVIEW` until the submitted page version is accepted. | BR-PGTASK-021 |
+| FR-PGTASK-025 | The system shall allow a task to be marked `COMPLETED` when the submitted page version is accepted. | BR-PGTASK-022 |
+| FR-PGTASK-026 | The system shall use task status for production tracking while formal editorial approval remains chapter-level. | BR-PGTASK-023 |
+| FR-PGTASK-027 | The system shall prevent normal reassignment of `assigned_to_user_id` after a task is created. | BR-PGTASK-024 |
+| FR-PGTASK-028 | The system shall require reassignment to be handled by completing or cancelling the old task and creating a new task. | BR-PGTASK-025 |
+| FR-PGTASK-029 | The system shall allow multiple tasks for the same chapter page when different assistants, regions, task types, or work rounds are involved. | BR-PGTASK-026 |
+| FR-PGTASK-030 | The system shall preserve task history by keeping old task rows. | BR-PGTASK-027 |
+| FR-PGTASK-031 | The system shall require the task description to include a cancellation reason when a page task is cancelled. | BR-PGTASK-028 |
+| FR-PGTASK-032 | The system shall preserve the original task record after cancellation. | BR-PGTASK-029 |
+| FR-PGTASK-033 | The system shall require cancelled work to be reassigned through a new task instead of changing the original assignee. | BR-PGTASK-030 |
+| FR-PGTASK-034 | The system shall record task creation, cancellation, completion, and status changes in the audit log. | BR-PGTASK-031 |
+
+---
+
+## 3.15 Chapter Editorial Review and Submission
+
+| ID | Functional Requirement | Source Business Rules |
+|---|---|---|
+| FR-CH-SUB-001 | The system shall represent chapter submission by changing `Chapter.status_code` to `UNDER_REVIEW`. | BR-CH-SUB-001 |
+| FR-CH-SUB-002 | The system shall not require a separate `ChapterSubmission` row in MVP. | BR-CH-SUB-001 |
+| FR-CH-SUB-003 | The system shall define a submitted chapter as the current active page versions of all non-deleted chapter pages at submission time. | BR-CH-SUB-002 |
+| FR-CH-SUB-004 | The system shall prevent page creation, page deletion, and page version upload while a chapter is `UNDER_REVIEW`, `APPROVED`, `SCHEDULED`, or `RELEASED`. | BR-CH-SUB-003 |
+| FR-CH-SUB-005 | The system shall allow chapter pages and page versions to become editable again when the chapter status becomes `REVISION_REQUESTED`. | BR-CH-SUB-004 |
+| FR-CH-SUB-006 | The system shall store chapter content as page-level assets through `ChapterPageVersion`. | BR-CH-SUB-005 |
+| FR-CH-SUB-007 | The system shall not require one chapter-level submission file or generated PDF for MVP. | BR-CH-SUB-006 |
+| FR-CH-REV-001 | The system shall record editorial reviews directly against `Chapter`. | BR-CH-REV-001 |
+| FR-CH-REV-002 | The system shall require each `ChapterEditorialReview` record to belong to exactly one chapter. | BR-CH-REV-002 |
+| FR-CH-REV-003 | The system shall allow a chapter to have multiple editorial review records over time across revision cycles. | BR-CH-REV-003 |
+| FR-CH-REV-004 | The system shall require each editorial review to be performed by one valid reviewer user. | BR-CH-REV-004 |
+| FR-CH-REV-005 | The system shall restrict chapter editorial review creation to authorized Tantou Editors or approved review roles. | BR-CH-REV-005 |
+| FR-CH-REV-006 | The system shall restrict chapter editorial review decisions to `APPROVED`, `REVISION_REQUESTED`, or `CANCELLED`. | BR-CH-REV-006 |
+| FR-CH-REV-007 | The system shall require meaningful comments or a markup file when the review decision is `REVISION_REQUESTED` or `CANCELLED`. | BR-CH-REV-007 |
+| FR-CH-REV-008 | The system shall allow an optional markup file to support chapter editorial feedback. | BR-CH-REV-008 |
+| FR-CH-REV-009 | The system shall require any provided markup file to reference an existing `FileResource`. | BR-CH-REV-008 |
+| FR-CH-REV-010 | The system shall store page-specific annotations separately from the chapter-level editorial review decision. | BR-CH-REV-009 |
+| FR-CH-REV-011 | The system shall update chapter status when an editorial review is created. | BR-CH-REV-010 |
+| FR-CH-REV-012 | The system shall change chapter status to `APPROVED` when the review decision is `APPROVED`. | BR-CH-REV-011 |
+| FR-CH-REV-013 | The system shall change chapter status to `REVISION_REQUESTED` and allow editing when the review decision is `REVISION_REQUESTED`. | BR-CH-REV-012 |
+| FR-CH-REV-014 | The system shall change chapter status to `CANCELLED` when the review decision is `CANCELLED`. | BR-CH-REV-013 |
+| FR-CH-REV-015 | The system shall record chapter editorial review creation in the audit log. | BR-CH-REV-014 |
+
+---
+
+## 3.16 Chapter Cancellation
+
+| ID | Functional Requirement | Source Business Rules |
+|---|---|---|
+| FR-CH-CANCEL-001 | The system shall allow a chapter to be cancelled through an editorial review decision when the editor determines that the chapter should not proceed. | BR-CH-CANCEL-001 |
+| FR-CH-CANCEL-002 | The system shall prevent cancelled chapters from proceeding to `SCHEDULED` or `RELEASED`. | BR-CH-CANCEL-002 |
+| FR-CH-CANCEL-003 | The system shall preserve pages, page versions, page regions, annotations, files, and review history when a chapter is cancelled. | BR-CH-CANCEL-003 |
+| FR-CH-CANCEL-004 | The system shall allow editors to use `REVISION_REQUESTED` instead of `CANCELLED` when the chapter can still be fixed and resubmitted. | BR-CH-CANCEL-004 |
+| FR-CH-CANCEL-005 | The system shall allow Admin chapter cancellation without editorial review only as an audit-logged administrative override. | BR-CH-CANCEL-005 |
+
+---
+
+## 3.17 Publication Planning
+
+| ID | Functional Requirement | Source Business Rules |
+|---|---|---|
+| FR-PUB-001 | The system shall handle detailed publication planning at chapter level using `Chapter.planned_release_date` and `Chapter.status_code`. | BR-PUB-001 |
+| FR-PUB-002 | The system shall store only the current publication frequency on `Series` for MVP. | BR-PUB-002 |
+| FR-PUB-003 | The system shall not require formal series-level publication policy history for MVP. | BR-PUB-002, BR-PUB-007 |
+| FR-PUB-004 | The system shall allow a serialized series to have a publication frequency of `WEEKLY`, `MONTHLY`, or `IRREGULAR`. | BR-PUB-003 |
+| FR-PUB-005 | The system shall treat `IRREGULAR` publication frequency as chapters being released when ready without a fixed weekly or monthly schedule. | BR-PUB-004 |
+| FR-PUB-006 | The system shall allow `publication_frequency_code` to be `NULL` before the series is serialized or before the release approach is decided. | BR-PUB-005 |
+| FR-PUB-007 | The system shall control actual chapter release timing through chapter-level release dates. | BR-PUB-006 |
+| FR-PUB-008 | The system shall require chapter scheduling and release status to follow the Chapter status rules. | BR-PUB-008 |
+| FR-PUB-009 | The system shall identify delayed chapters by comparing `planned_release_date` with the current date instead of storing a separate delay status. | BR-PUB-009 |
+
+---
+
+## 3.18 Ranking and Reader Vote Input
+
+### 3.18.1 Ranking Snapshot
+
+| ID | Functional Requirement | Source Business Rules |
+|---|---|---|
+| FR-RANK-001 | The system shall store series ranking data as time-based `SeriesRankingSnapshot` records. | BR-RANK-001 |
+| FR-RANK-002 | The system shall not store ranking data as permanent duplicated attributes on `Series` unless caching is required for performance. | BR-RANK-001, BR-RANK-006 |
+| FR-RANK-003 | The system shall store rank, score, and performance data for one series and one ranking period in each ranking snapshot. | BR-RANK-002 |
+| FR-RANK-004 | The system shall allow a series to have many ranking snapshots over time. | BR-RANK-003 |
+| FR-RANK-005 | The system shall prevent duplicate ranking snapshots for the same series, ranking period type, and period start date. | BR-RANK-004 |
+| FR-RANK-006 | The system shall derive the current rank of a series from the latest relevant ranking snapshot. | BR-RANK-005 |
+| FR-RANK-007 | The system shall indicate that a series has no current ranking when no ranking snapshot exists for that series. | BR-RANK-007 |
+| FR-RANK-008 | The system shall preserve ranking snapshots for trend analysis and board decision support. | BR-RANK-008 |
+| FR-RANK-009 | The system shall generate ranking snapshots by aggregating chapter reader vote snapshots within a selected ranking period. | BR-RANK-009 |
+| FR-RANK-010 | The system shall determine weekly, monthly, and seasonal ranking periods by filtering reader vote records using `voted_at_utc`. | BR-RANK-010 |
+| FR-RANK-011 | The system shall accumulate monthly and seasonal ranking snapshots from vote records within the selected calendar period. | BR-RANK-011 |
+| FR-RANK-012 | The system shall allow ranking snapshots to support cancellation-risk evaluation for board review. | BR-RANK-012 |
+| FR-RANK-013 | The system shall prevent a ranking snapshot from automatically cancelling a series. | BR-RANK-012 |
+
+### 3.18.2 Reader Vote Input
+
+| ID | Functional Requirement | Source Business Rules |
+|---|---|---|
+| FR-VOTE-INPUT-001 | The system shall treat reader vote input as simulated or manually aggregated data in MVP. | BR-VOTE-INPUT-001 |
+| FR-VOTE-INPUT-002 | The system shall not require direct real-reader voting in MVP. | BR-VOTE-INPUT-001 |
+| FR-VOTE-INPUT-003 | The system shall record reader vote input only for released chapters. | BR-VOTE-INPUT-002, BR-VOTE-INPUT-008 |
+| FR-VOTE-INPUT-004 | The system shall store the vote input time or validity time in `voted_at_utc`. | BR-VOTE-INPUT-003 |
+| FR-VOTE-INPUT-005 | The system shall use reader vote records as input evidence for ranking snapshot generation. | BR-VOTE-INPUT-004 |
+| FR-VOTE-INPUT-006 | The system shall prevent negative reader vote counts and feedback counts. | BR-VOTE-INPUT-005 |
+| FR-VOTE-INPUT-007 | The system shall require average rating values to stay within the allowed rating range when provided. | BR-VOTE-INPUT-006 |
+| FR-VOTE-INPUT-008 | The system shall prevent more than one aggregated reader vote snapshot for the same chapter in MVP. | BR-VOTE-INPUT-007 |
+| FR-VOTE-INPUT-009 | The system shall record the authorized user who entered simulated or aggregated reader vote data. | BR-VOTE-INPUT-009 |
+
+---
+
+## 3.19 Notifications
+
+| ID | Functional Requirement | Source Business Rules |
+|---|---|---|
+| FR-NOTIF-001 | The system shall address each notification to exactly one recipient user. | BR-NOTIF-001 |
+| FR-NOTIF-002 | The system shall provide notifications as in-app MVP messages. | BR-NOTIF-002 |
+| FR-NOTIF-003 | The system shall not require email or push notifications in MVP. | BR-NOTIF-002 |
+| FR-NOTIF-004 | The system shall allow a notification to optionally reference a related business entity such as a series, chapter, page task, proposal, board poll, or ranking snapshot. | BR-NOTIF-003 |
+| FR-NOTIF-005 | The system shall require `related_entity_type` and `related_entity_id` to both be present or both be null. | BR-NOTIF-004 |
+| FR-NOTIF-006 | The system shall treat a notification as unread when `read_at_utc IS NULL`. | BR-NOTIF-005 |
+| FR-NOTIF-007 | The system shall record `read_at_utc` when a user reads a notification. | BR-NOTIF-006 |
+| FR-NOTIF-008 | The system shall create ranking warning notifications when a ranking snapshot shows high cancellation risk for a series. | BR-NOTIF-007 |
+| FR-NOTIF-009 | The system shall send ranking warning notifications to active Mangaka contributors of the affected series. | BR-NOTIF-008 |
+| FR-NOTIF-010 | The system shall send task assignment notifications to assigned users when page tasks are created. | BR-NOTIF-009 |
+| FR-NOTIF-011 | The system shall send review result notifications to relevant contributors when proposal or chapter review decisions are recorded. | BR-NOTIF-010 |
+| FR-NOTIF-012 | The system shall allow board poll notifications to be sent to Editorial Board Members when a new board poll is opened. | BR-NOTIF-011 |
+| FR-NOTIF-013 | The system shall not treat notifications as the authoritative audit trail. | BR-NOTIF-012 |
+| FR-NOTIF-014 | The system shall audit-log important workflow actions that also create notifications when auditability is required. | BR-NOTIF-013 |
+
+---
+
+## 3.20 Status History and Auditability
+
+| ID | Functional Requirement | Source Business Rules |
+|---|---|---|
+| FR-HIST-001 | The system shall not require separate status-history tables for every workflow entity in MVP. | BR-HIST-001 |
+| FR-HIST-002 | The system shall store the current workflow state of an entity directly on the main entity using `status_code`. | BR-HIST-002 |
+| FR-HIST-003 | The system shall represent important workflow events through existing domain records when applicable. | BR-HIST-003 |
+| FR-HIST-004 | The system shall use proposal records, board polls, board votes, chapter reviews, page versions, task records, ranking snapshots, and notifications as workflow evidence where applicable. | BR-HIST-003 |
+| FR-HIST-005 | The system shall record traceability-sensitive workflow actions in audit logs, including approvals, cancellations, status changes, task changes, board poll actions, and account actions. | BR-HIST-004 |
+| FR-HIST-006 | The system shall use notifications to inform actors of important events, not as authoritative status history. | BR-HIST-005 |
+| FR-HIST-007 | The system shall treat `updated_at_utc` as the latest operational update time, not as a complete status transition timeline. | BR-HIST-006 |
+| FR-HIST-008 | The system shall use event-specific timestamps such as `submitted_at_utc`, `reviewed_at_utc`, `voted_at_utc`, `created_at_utc`, and `released_at_utc` for meaningful business events. | BR-HIST-007 |
+| FR-HIST-009 | The system shall treat detailed status transition history tables as future scope unless required for audit demonstration or advanced workflow analytics. | BR-HIST-008 |
+
+---
+

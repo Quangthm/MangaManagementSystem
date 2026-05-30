@@ -1,0 +1,462 @@
+# Manga Creation Workflow and Publishing Management System — Business Rules
+
+**Document purpose:** Cleaned business rules for the MVP database/workflow design.  
+**Scope:** Manga workflow management, proposal review, board polling, page versioning, annotations, page tasks, ranking simulation, notifications, and auditability.  
+**Important MVP design direction:** Avoid unnecessary history/submission/policy tables unless the business event is important enough to store directly.
+
+---
+
+## 1. AI-Assisted Translation
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-TRANS-001 | AI-assisted translation is treated as an editing aid, not as a separate persistent translation workflow. | Active draft |
+| BR-TRANS-002 | The final translated page is stored as a new `ChapterPageVersion`. | Active draft |
+| BR-TRANS-003 | The system does not need to store every OCR text, AI translation suggestion, or manually edited translation in structured translation rows for MVP. | Active draft |
+| BR-TRANS-004 | If a translated page replaces or improves the previous page image, it must be uploaded as a new page version rather than overwriting the previous file. | Active draft |
+| BR-TRANS-005 | Old page versions remain available for traceability and comparison. | Active draft |
+| BR-TRANS-006 | AI translation suggestions require human review before becoming part of the final page file. | Active draft |
+| BR-TRANS-007 | The saved translated page file is the authoritative result of the translation/editing process. | Active draft |
+| BR-TRANS-008 | The system provides AI-assisted translation suggestions for detected text regions, but it does not guarantee fully automatic manga localization in the MVP. | Active draft |
+| BR-TRANS-009 | Users may review, edit, override, and approve AI/OCR translation suggestions before saving the final translated page version. | Active draft |
+
+---
+
+## 2. Page Region and AI Detection
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-REG-001 | Each `PageRegion` belongs to exactly one `ChapterPageVersion`. | Active draft |
+| BR-REG-002 | A page region must have one valid region type: `PANEL`, `SPEECH_BUBBLE`, `CHARACTER`, `SFX_TEXT`, `BACKGROUND`, or `OTHER`. | Active draft |
+| BR-REG-003 | Page regions are stored as rectangular bounding boxes using `x`, `y`, `width`, and `height`. | Active draft |
+| BR-REG-004 | Region width and height must be positive. | Active draft |
+| BR-REG-005 | A region source must be either `AI` or `MANUAL`. | Active draft |
+| BR-REG-006 | A page region may be created manually or suggested by AI. | Active draft |
+| BR-REG-007 | If an AI-generated region is adjusted by a user, it becomes a manual region. | Active draft |
+| BR-REG-008 | Manual regions should not keep an AI confidence score. | Active draft |
+| BR-REG-009 | AI confidence scores, when stored, must be between 0 and 1. | Active draft |
+| BR-REG-010 | Page region coordinates are stored relative to the original uploaded page image dimensions. | Active draft |
+| BR-REG-011 | Character regions are represented by bounding boxes in MVP, not exact body outlines or masks. | Active draft |
+| BR-REG-012 | Page regions remain linked to the page version where they were created and should not automatically move to newer page versions. | Active draft |
+| BR-REG-013 | AI job execution history is not stored in MVP; accepted AI output is stored directly as page regions. | Active draft |
+| BR-REG-014 | AI results should not automatically approve or reject manga pages or chapters. | Active draft |
+| BR-REG-015 | AI detection is advisory and requires human review before being used in workflow decisions. | Active draft |
+| BR-REG-016 | Original OCR text may be stored on text-related regions when available. | Active draft |
+| BR-REG-017 | `PageRegion.original_text` represents text detected from the original page image, not final translated text. | Active draft |
+| BR-REG-018 | `PageRegion` may support translation/OCR review, but final translated content is not stored as region translation rows. | Active draft |
+| BR-REG-019 | When a user opens the segmentation tool for a page version, the system should load existing saved `PageRegion` records for that page version when available. | Active draft |
+| BR-REG-020 | The system may allow AI-assisted segmentation to run even when saved `PageRegion` records already exist for the same page version. | Active draft |
+| BR-REG-021 | AI-detected regions may be shown as temporary suggestions before the user chooses which ones to save. | Active draft |
+| BR-REG-022 | The system should compare newly detected AI regions against existing saved `PageRegion` records for the same page version to reduce duplicate saved regions. | Active draft |
+| BR-REG-023 | The system should not automatically save duplicate AI-detected regions that substantially overlap an existing saved region of the same type. | Active draft |
+| BR-REG-024 | Users may save non-duplicate AI-detected regions as new `PageRegion` records when they are useful for annotation, task assignment, translation, OCR review, or segmentation display. | Active draft |
+| BR-REG-025 | Saved `PageRegion` records may be reused later for annotation, task assignment, translation/OCR review, or page segmentation display. | Active draft |
+| BR-REG-026 | A saved `PageRegion` may be adjusted by authorized users when region editing is permitted. | Active draft |
+| BR-REG-027 | When a saved `PageRegion` is adjusted, the system should record the last update time and the user who made the update. | Active draft |
+
+---
+
+## 3. File Resource and Cloudinary
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-FILE-001 | Cloudinary stores the actual media files, while SQL Server stores file metadata and references. | Active draft |
+| BR-FILE-002 | All uploaded or generated files used by business records must be referenced through `manga.FileResource`. Tables such as `ChapterPageVersion`, `SeriesProposal`, `Series`, `Users`, and editorial review/markup records should store `file_resource_id` references instead of raw Cloudinary URLs. | Active draft |
+| BR-FILE-003 | Cloudinary assets used by the system should be deleted through the application workflow, not manually from the Cloudinary console. | Active draft |
+| BR-FILE-004 | A file resource is considered active when `deleted_at_utc IS NULL`. Application queries must exclude deleted file resources unless the user is viewing historical or audit data. | Active draft |
+| BR-FILE-005 | A user avatar, when uploaded, is stored as a `FileResource` and referenced from the user account. | Active draft |
+| BR-FILE-006 | A user avatar file must use `file_purpose_code = USER_AVATAR`. | Active draft |
+| BR-FILE-007 | Series cover images, proposal files, page images, markup files, portfolios, task outputs, and annotation exports should all use `FileResource` instead of storing Cloudinary fields directly in business tables. | Active draft |
+| BR-FILE-008 | In normal UI contexts, when a referenced file is deleted or unavailable, the system should display a safe placeholder instead of exposing a broken file reference. | Active draft |
+
+---
+
+## 4. Users and Accounts
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-USER-001 | Each user account has exactly one MVP system role. | Active draft |
+| BR-USER-002 | New registered users are created with `PENDING_APPROVAL` status by default. | Active draft |
+| BR-USER-003 | A `PENDING_APPROVAL` user cannot access protected workspace functions until approved. | Active draft |
+| BR-USER-004 | Admin can activate a pending user by changing status to `ACTIVE`. | Active draft |
+| BR-USER-005 | Admin can disable an account by changing status to `DISABLED`. | Active draft |
+| BR-USER-006 | A disabled account cannot log in. | Active draft |
+| BR-USER-007 | A user may optionally have an avatar file. | Active draft |
+| BR-USER-008 | A user may optionally have a portfolio file for admin review. | Active draft |
+| BR-USER-009 | Avatar and portfolio files are stored through `FileResource`; Cloudinary details stay inside `FileResource`. | Active draft |
+| BR-USER-010 | Registration approval history is handled through current user status and audit log in MVP, not a separate registration request table. | Active draft |
+
+---
+
+## 5. Series
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-SERIES-001 | Each series must have a unique system code. | Active draft |
+| BR-SERIES-002 | Each series must have a unique URL slug. | Active draft |
+| BR-SERIES-003 | Each series must have one lifecycle status from the approved status list. | Active draft |
+| BR-SERIES-004 | A series becomes `SERIALIZED` after it has passed proposal, editorial, and board approval and is accepted into the production/publication workflow. | Active draft |
+| BR-SERIES-005 | Each series must declare one primary content language. | Active draft |
+| BR-SERIES-006 | In MVP, genre is stored as simple text metadata for display. | Active draft |
+| BR-SERIES-007 | A series cover image must be stored as a `FileResource` and should have the file purpose `SERIES_COVER`. | Active draft |
+| BR-SERIES-008 | A series may optionally reference another series as its source version. | Active draft |
+| BR-SERIES-009 | A series cannot reference itself as its own source series. | Active draft |
+| BR-SERIES-010 | Series ownership and contributor membership are managed through `SeriesContributor` instead of storing a lead Mangaka directly in `Series`. | Active draft |
+| BR-SERIES-011 | A series may have multiple contributors who can participate in managing or editing series information. | Active draft |
+| BR-SERIES-012 | When editable series profile metadata is changed, the system must record both the update time and the user who made the change. | Active draft |
+| BR-SERIES-013 | `Series.updated_at_utc` and `Series.updated_by_user_id` are used for profile metadata edits, not as the main history mechanism for status transitions. | Active draft |
+| BR-SERIES-014 | If `updated_by_user_id` is provided, `updated_at_utc` must also be provided, and vice versa. | Active draft |
+
+### Future Information
+
+| Rule ID | Future Information | Review Status |
+|---|---|---|
+| FI-SERIES-001 | Genre may later be normalized into lookup/junction tables for cleaner filtering and reporting. | Future information |
+
+---
+
+## 6. Series Contributors
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-SC-001 | A `SeriesContributor` record links one user to one series. | Active draft |
+| BR-SC-002 | Contributor specialization is outside MVP scope; the contributor’s broad role is determined by `auth.Users.role_id`. | Active draft |
+| BR-SC-003 | A user may be added as a contributor to a series based on their single system role in `auth.Users`. | Active draft |
+| BR-SC-004 | A user cannot be an active contributor to the same series more than once at the same time. | Active draft |
+| BR-SC-005 | A contributor with `end_date IS NULL` is considered an active contributor. | Active draft |
+| BR-SC-006 | Historical contributor rows should be preserved after a contributor leaves a series. | Active draft |
+| BR-SC-007 | A contributor’s `end_date` cannot be earlier than their `start_date`. | Active draft |
+| BR-SC-008 | Before a series can proceed beyond proposal draft into formal review or production workflow, it should have at least one active Mangaka contributor and one active Editor contributor, determined from the contributors’ `auth.Users.role_id`. | Active draft |
+
+---
+
+## 7. Series Proposal
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-PROP-001 | A `SeriesProposal` row represents one formal submitted proposal version for a series. | Active draft |
+| BR-PROP-002 | A series may have multiple proposal versions over time. | Active draft |
+| BR-PROP-003 | Proposal version numbers must be positive and unique within the same series. | Active draft |
+| BR-PROP-004 | A submitted proposal must preserve submission-time snapshots of review-relevant series information, including proposal title, synopsis, genre, and proposal file. | Active draft |
+| BR-PROP-005 | A submitted series proposal must include a proposal file stored as a `FileResource` with purpose `SERIES_PROPOSAL`. | Active draft |
+| BR-PROP-006 | `SeriesProposal` does not store draft proposal editing; a row is created only when the proposal is formally submitted for editorial review. | Active draft |
+| BR-PROP-007 | Once a `SeriesProposal` row is created, its submitted snapshot fields should remain locked. | Active draft |
+| BR-PROP-008 | If revision is requested, the corrected proposal must be submitted as a new proposal version. | Active draft |
+| BR-PROP-009 | Proposal status should reflect the current review stage of the submitted proposal package. | Active draft |
+| BR-PROP-010 | A proposal may only have a withdrawal timestamp when its status is `WITHDRAWN`. | Active draft |
+| BR-PROP-011 | A withdrawn proposal may exist without editorial review metadata if it was withdrawn before editorial review was completed. | Active draft |
+| BR-PROP-012 | Editorial review information may be stored directly in `SeriesProposal` because each proposal version receives at most one editorial review. | Active draft |
+| BR-PROP-013 | `UNDER_BOARD_REVIEW` means the proposal passed editorial review and is waiting for board voting/decision. | Active draft |
+| BR-PROP-014 | `APPROVED` means the proposal was approved by the board, not merely by the editor. | Active draft |
+| BR-PROP-015 | Editorial revision or editorial cancellation requires comments or a markup file, enforced by the application workflow. | Active draft |
+| BR-PROP-016 | Board rejection or board cancellation reasons are handled by board poll/vote records, not by editorial review comments. | Active draft |
+| BR-PROP-017 | Proposal lists should support retrieval by series, status, submitter, and reviewer. | Active draft |
+| BR-PROP-018 | The latest proposal version for a series should be quickly retrievable. | Active draft |
+| BR-PROP-019 | Editorial and board queues should be filterable by proposal status. | Active draft |
+| BR-PROP-020 | Reviewed proposal records should be searchable by reviewer for admin/editor tracking. | Active draft |
+| BR-PROP-021 | The proposal file represents the supporting material used by editors and board members to evaluate the series concept. | Active draft |
+| BR-PROP-022 | The system does not require a fixed minimum number of completed manga pages for proposal submission in MVP. | Active draft |
+| BR-PROP-023 | Any minimum page/sample requirement is treated as an editorial policy outside the MVP database constraints. | Active draft |
+
+---
+
+## 8. Board Poll
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-BOARD-POLL-001 | Admin may create board polls for `START_SERIALIZATION` or `CANCEL_SERIALIZATION`. | Active draft |
+| BR-BOARD-POLL-002 | A `START_SERIALIZATION` poll may only be opened for a series with `Series.status_code = UNDER_BOARD_REVIEW`. | Active draft |
+| BR-BOARD-POLL-003 | A `START_SERIALIZATION` poll may only be opened when the selected series has exactly one active proposal with `SeriesProposal.status_code = UNDER_BOARD_REVIEW`. | Active draft |
+| BR-BOARD-POLL-004 | A `START_SERIALIZATION` poll represents board voting on the active under-board-review proposal for the selected series, even though the poll stores only `series_id`. | Active draft |
+| BR-BOARD-POLL-005 | A `CANCEL_SERIALIZATION` poll may be opened for a serialized or paused series when the admin provides a reason. | Active draft |
+| BR-BOARD-POLL-006 | Low ranking or high cancellation risk should be displayed as supporting evidence for cancellation polls when available, but it should not be the only allowed reason. | Active draft |
+| BR-BOARD-POLL-007 | A poll must have a non-empty reason explaining why the poll was opened. | Active draft |
+| BR-BOARD-POLL-008 | A poll may have a scheduled end time or may be closed manually by an admin. | Active draft |
+| BR-BOARD-POLL-009 | A series cannot have more than one open poll of the same type at the same time. | Active draft |
+| BR-BOARD-POLL-010 | `poll_status_code` exists to distinguish open polls, valid closed polls, and cancelled/invalidated polls. | Active draft |
+| BR-BOARD-POLL-011 | Votes from an `OPEN` poll are stored but are not final and must not update series or proposal status. | Active draft |
+| BR-BOARD-POLL-012 | Votes from a `CLOSED` poll are valid and may be used by the Board Result rules to apply series or proposal status changes. | Active draft |
+| BR-BOARD-POLL-013 | Votes from a `CANCELLED` poll remain stored for traceability but must not affect series or proposal status. | Active draft |
+| BR-BOARD-POLL-014 | Admin may cancel a poll when the voting process should be invalidated, such as wrong series, incorrect poll type, administrative mistake, or invalid voting setup. | Active draft |
+| BR-BOARD-POLL-015 | Cancelling a poll does not delete votes; it marks the poll result as invalid. | Active draft |
+| BR-BOARD-POLL-016 | Poll results are computed from board votes and handled by the Board Result rules, not stored directly on the poll table. | Active draft |
+| BR-BOARD-POLL-017 | Poll creation, cancellation, and closure should be recorded in the audit log. | Active draft |
+
+---
+
+## 9. Board Vote
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-BOARD-VOTE-001 | Board members may vote only in an open `SeriesBoardPoll`. | Active draft |
+| BR-BOARD-VOTE-002 | Only users with the Editorial Board Member role may cast board votes. | Active draft |
+| BR-BOARD-VOTE-003 | A board vote choice must be `APPROVE`, `REJECT`, or `ABSTAIN`. | Active draft |
+| BR-BOARD-VOTE-004 | A rejection vote must include a non-empty reason. | Active draft |
+| BR-BOARD-VOTE-005 | Each board member may cast at most one vote per board poll. | Active draft |
+| BR-BOARD-VOTE-006 | Board votes are tied to a `SeriesBoardPoll`, and each poll is tied to a specific series. | Active draft |
+| BR-BOARD-VOTE-007 | For a `START_SERIALIZATION` poll, the related series must have exactly one proposal currently in `UNDER_BOARD_REVIEW`. | Active draft |
+| BR-BOARD-VOTE-008 | Board votes should be preserved for traceability even after the poll is closed or cancelled. | Active draft |
+| BR-BOARD-VOTE-009 | Votes from a `CLOSED` poll may be used to determine the applicable poll result. | Active draft |
+| BR-BOARD-VOTE-010 | Votes from a `CANCELLED` poll are preserved but must not be applied to series or proposal status changes. | Active draft |
+| BR-BOARD-VOTE-011 | A board vote alone does not update series or proposal status; status changes occur only when an admin/system closes the poll and applies the computed result. | Active draft |
+
+---
+
+## 10. Board Result
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-BOARD-RESULT-001 | In MVP, board results are computed from `SeriesBoardVote` records tied to a `SeriesBoardPoll`, not stored in a separate `SeriesBoardDecision` table. | Active draft |
+| BR-BOARD-RESULT-002 | Aggregate vote counts must be calculated from `SeriesBoardVote` records. | Active draft |
+| BR-BOARD-RESULT-003 | The computed result of a board poll is derived from approve and reject vote counts. | Active draft |
+| BR-BOARD-RESULT-004 | If approve votes exceed reject votes, the computed poll result is `APPROVED`. | Active draft |
+| BR-BOARD-RESULT-005 | If reject votes exceed approve votes, the computed poll result is `REJECTED`. | Active draft |
+| BR-BOARD-RESULT-006 | If approve and reject votes are tied, the computed poll result is `NO_DECISION`. | Active draft |
+| BR-BOARD-RESULT-007 | Abstain votes are preserved and counted separately, but they do not directly determine approval or rejection in MVP. | Active draft |
+| BR-BOARD-RESULT-008 | If a poll is `OPEN`, the computed result is treated as `PENDING` and must not be applied. | Active draft |
+| BR-BOARD-RESULT-009 | If a poll is `CANCELLED`, the computed result is treated as `INVALIDATED` and must not be applied. | Active draft |
+| BR-BOARD-RESULT-010 | Only a `CLOSED` poll can produce an applicable board result. | Active draft |
+| BR-BOARD-RESULT-011 | A `START_SERIALIZATION` poll with an applicable `APPROVED` result changes the series to `SERIALIZED` and changes the active under-board-review proposal to `APPROVED`. | Active draft |
+| BR-BOARD-RESULT-012 | A `START_SERIALIZATION` poll with an applicable `REJECTED` result prevents the proposal from proceeding to serialization and should cancel the active proposal and series according to MVP workflow policy. | Active draft |
+| BR-BOARD-RESULT-013 | A `START_SERIALIZATION` poll with `NO_DECISION` leaves the series in `UNDER_BOARD_REVIEW` and the active proposal in `UNDER_BOARD_REVIEW`. | Active draft |
+| BR-BOARD-RESULT-014 | A `CANCEL_SERIALIZATION` poll with an applicable `APPROVED` result changes the series status to `CANCELLED`. | Active draft |
+| BR-BOARD-RESULT-015 | A `CANCEL_SERIALIZATION` poll with `REJECTED` or `NO_DECISION` leaves the series status unchanged. | Active draft |
+| BR-BOARD-RESULT-016 | The system does not store a final board decision explanation in MVP; poll reason and individual rejection reasons are kept separately. | Active draft |
+| BR-BOARD-RESULT-017 | Applying a board poll result to proposal or series status must be recorded in the audit log. | Active draft |
+
+---
+
+## 11. Chapter
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-CH-001 | Each chapter belongs to exactly one series. | Active draft |
+| BR-CH-002 | Chapter number labels must be unique within the same series. | Active draft |
+| BR-CH-003 | A chapter starts with `DRAFT` status when it is created. | Active draft |
+| BR-CH-004 | `Chapter.status_code` stores only the current workflow status of the chapter. | Active draft |
+| BR-CH-005 | A chapter may move through statuses such as `DRAFT`, `UNDER_REVIEW`, `REVISION_REQUESTED`, `APPROVED`, `SCHEDULED`, `RELEASED`, `ON_HOLD`, and `CANCELLED`. | Active draft |
+| BR-CH-006 | `planned_release_date` is optional because a chapter may be created before it is scheduled for release. | Active draft |
+| BR-CH-007 | A chapter can only be marked as `SCHEDULED` if it has a planned release date. | Active draft |
+| BR-CH-008 | A chapter marked `RELEASED` must have `released_at_utc` populated. | Active draft |
+| BR-CH-009 | `released_at_utc` should only be filled when the chapter is actually released. | Active draft |
+| BR-CH-010 | An editor may manually place a chapter `ON_HOLD` when there is a valid operational or editorial reason. | Active draft |
+| BR-CH-011 | `created_by_user_id` should identify the user who created the chapter record, usually a Mangaka or authorized contributor. | Active draft |
+| BR-CH-012 | `updated_at_utc` records the last time the chapter row was modified for operational display. | Active draft |
+
+---
+
+## 12. Chapter Page and Page Version
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-CP-001 | A chapter may contain many logical pages. | Active draft |
+| BR-CP-002 | Each `ChapterPage` belongs to exactly one chapter. | Active draft |
+| BR-CP-003 | Page numbers must be unique within the same chapter. | Active draft |
+| BR-CP-004 | `ChapterPage` represents a logical page slot, not a specific uploaded image file. | Active draft |
+| BR-CP-005 | A `ChapterPage` may have multiple `ChapterPageVersion` records over time. | Active draft |
+| BR-CP-006 | Each `ChapterPageVersion` belongs to exactly one logical `ChapterPage`. | Active draft |
+| BR-CP-007 | Each `ChapterPageVersion` must reference exactly one uploaded file through `FileResource`. | Active draft |
+| BR-CP-008 | The upload time and uploader of a page version are derived from the related `FileResource`. | Active draft |
+| BR-CP-009 | Version numbers must be positive. | Active draft |
+| BR-CP-010 | Version numbers must be unique within the same `ChapterPage`. | Active draft |
+| BR-CP-011 | A higher `version_no` represents a newer uploaded version of the same logical page. | Active draft |
+| BR-CP-012 | Only one version of a page should be marked as the current version at a time. | Active draft |
+| BR-CP-013 | Old page versions are kept for traceability and comparison, not overwritten. | Active draft |
+| BR-CP-014 | Replacing or revising a page means creating a new `ChapterPageVersion`, not creating a new `ChapterPage`. | Active draft |
+| BR-CP-015 | A page task output should reference the specific `ChapterPageVersion` produced for the same logical page. | Active draft |
+| BR-CP-016 | Page annotations should remain linked to the exact `ChapterPageVersion` where they were created, derived through their linked `PageRegion`. | Active draft |
+| BR-CP-017 | Page-specific feedback is stored through annotations linked to `PageRegion` records. | Active draft |
+| BR-CP-018 | Formal editorial review is performed at chapter level, while page-level annotations provide supporting feedback on specific page versions or regions. | Active draft |
+| BR-CP-019 | A `ChapterPage` can be soft-deleted when it is no longer part of the active chapter draft. | Active draft |
+| BR-CP-020 | Soft-deleting a `ChapterPage` should not delete its historical `ChapterPageVersion` records. | Active draft |
+| BR-CP-021 | Each revision upload creates a new `ChapterPageVersion`. | Active draft |
+| BR-CP-022 | If a page task produces a new page version, the task may remain under review until the Mangaka accepts the submitted version. | Active draft |
+
+---
+
+## 13. Chapter Page Annotation
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-ANN-001 | Each page annotation must reference exactly one `PageRegion`. | Active draft |
+| BR-ANN-002 | Annotation location is represented through the linked `PageRegion`; coordinates are not stored directly in `ChapterPageAnnotation`. | Active draft |
+| BR-ANN-003 | The page version of an annotation is derived from `PageRegion.chapter_page_version_id`. | Active draft |
+| BR-ANN-004 | Whole-page feedback must be represented by a manually created `PageRegion` covering the full page. | Active draft |
+| BR-ANN-005 | Each annotation must have one issue type. | Active draft |
+| BR-ANN-006 | `issue_type_code` must be selected from the approved annotation issue code list. | Active draft |
+| BR-ANN-007 | The UI must only allow users to select issue types that are defined as valid annotation issue codes. | Active draft |
+| BR-ANN-008 | An annotation must contain non-empty annotation text. | Active draft |
+| BR-ANN-009 | Each annotation must record the user who created it. | Active draft |
+| BR-ANN-010 | Each annotation must record the time it was created. | Active draft |
+| BR-ANN-011 | Only authorized users, such as Tantou Editors, Mangaka reviewers, or assigned users, may create annotations according to workflow permissions. | Active draft |
+| BR-ANN-012 | If an annotation is resolved, both resolver and resolved timestamp must be recorded. | Active draft |
+| BR-ANN-013 | If an annotation is unresolved, both `resolved_by_user_id` and `resolved_at_utc` must be NULL. | Active draft |
+| BR-ANN-014 | Because annotations reference `PageRegion`, annotations remain associated with the page version of their linked region. | Active draft |
+| BR-ANN-015 | When a new page version is uploaded, old annotations remain available through their linked regions for traceability and comparison. | Active draft |
+| BR-ANN-016 | Annotation issue types are fixed for MVP and are enforced by database constraint rather than a separate lookup table. | Active draft |
+
+---
+
+## 14. Page Task
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-PGTASK-001 | Each page task must target exactly one logical `ChapterPage`. | Active draft |
+| BR-PGTASK-002 | A chapter page may have many tasks over time. | Active draft |
+| BR-PGTASK-003 | A page task represents one assignment of work to one assistant or authorized user. | Active draft |
+| BR-PGTASK-004 | Each page task must be assigned to exactly one assistant or authorized user. | Active draft |
+| BR-PGTASK-005 | Each page task must record the user who created it. | Active draft |
+| BR-PGTASK-006 | Task assignment is page-based in the MVP; whole-chapter task assignment is future scope. | Active draft |
+| BR-PGTASK-007 | A page task may target one or more `PageRegion` records through the `ChapterPageTaskRegion` junction table. | Active draft |
+| BR-PGTASK-008 | Task target regions are not stored as free-text descriptions; they are represented through linked `PageRegion` records. | Active draft |
+| BR-PGTASK-009 | The same task-region pair cannot be inserted more than once. | Active draft |
+| BR-PGTASK-010 | A `PageRegion` may be referenced by multiple tasks when different work is needed for the same area. | Active draft |
+| BR-PGTASK-011 | A task-region link must connect a task to a `PageRegion` belonging to the same logical `ChapterPage` as the task. | Active draft |
+| BR-PGTASK-012 | Region-based annotations can be used as the basis for creating page tasks. | Active draft |
+| BR-PGTASK-013 | Assistant task UI should highlight linked page regions so the assistant knows exactly what areas to fix. | Active draft |
+| BR-PGTASK-014 | Every page task must have a due date so the team can track production deadlines. | Active draft |
+| BR-PGTASK-015 | Task status must be one of `ASSIGNED`, `UNDER_REVIEW`, `COMPLETED`, or `CANCELLED`. | Active draft |
+| BR-PGTASK-016 | The system does not track whether an assistant has started working on a page task; a task remains `ASSIGNED` until the assistant submits a completed page version for review. | Active draft |
+| BR-PGTASK-017 | A page task must have an uploaded page version before it can enter `UNDER_REVIEW` or `COMPLETED` status. | Active draft |
+| BR-PGTASK-018 | A completed page task must reference the `ChapterPageVersion` produced by the assigned user. | Active draft |
+| BR-PGTASK-019 | The completed page version must belong to the same logical `ChapterPage` as the task. | Active draft |
+| BR-PGTASK-020 | Assistants do not directly approve their own task output; the Mangaka or authorized reviewer reviews the submitted page version. | Active draft |
+| BR-PGTASK-021 | A task may remain `UNDER_REVIEW` until the Mangaka or authorized reviewer accepts the submitted page version. | Active draft |
+| BR-PGTASK-022 | When the submitted page version is accepted, the task may be marked `COMPLETED`. | Active draft |
+| BR-PGTASK-023 | Task status is used for production tracking, while formal editorial approval remains chapter-level. | Active draft |
+| BR-PGTASK-024 | The assigned user of a page task should not be changed after the task is created. | Active draft |
+| BR-PGTASK-025 | If work must be reassigned to another assistant, the existing task should be completed or cancelled, and a new task should be created for the new assistant. | Active draft |
+| BR-PGTASK-026 | Multiple tasks may exist for the same chapter page when different assistants, target regions, task types, or work rounds are involved. | Active draft |
+| BR-PGTASK-027 | Task history is preserved by keeping old task rows rather than overwriting assignment ownership. | Active draft |
+| BR-PGTASK-028 | If a page task is cancelled, the task description must be updated to include the cancellation reason. | Active draft |
+| BR-PGTASK-029 | The system should preserve the original task record after cancellation for traceability. | Active draft |
+| BR-PGTASK-030 | If cancelled work needs to be reassigned, the Mangaka should create a new task for the same page instead of changing the original assignee. | Active draft |
+| BR-PGTASK-031 | Audit logging should record task creation, cancellation, completion, and status changes. | Active draft |
+
+---
+
+## 15. Chapter Editorial Review
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-CH-SUB-001 | In the MVP, a chapter submission is represented by changing `Chapter.status_code` to `UNDER_REVIEW`, not by creating a separate `ChapterSubmission` row. | Active draft |
+| BR-CH-SUB-002 | A submitted chapter consists of the current active page versions of all non-deleted chapter pages at the time it is submitted for review. | Active draft |
+| BR-CH-SUB-003 | The system must prevent page creation, page deletion, and page version upload while the chapter is `UNDER_REVIEW`, `APPROVED`, `SCHEDULED`, or `RELEASED`. | Active draft |
+| BR-CH-SUB-004 | When revision is requested, the chapter becomes editable again and new page versions may be uploaded. | Active draft |
+| BR-CH-SUB-005 | Chapter content is stored as page-level assets through `ChapterPageVersion`, not as one required chapter-level submission file. | Active draft |
+| BR-CH-SUB-006 | A chapter-level submission file or generated PDF is a future enhancement, not required for MVP. | Active draft |
+| BR-CH-REV-001 | Editorial reviews are recorded directly against `Chapter` in the MVP. | Active draft |
+| BR-CH-REV-002 | Each `ChapterEditorialReview` record must belong to exactly one chapter. | Active draft |
+| BR-CH-REV-003 | A chapter may have multiple editorial review records over time, especially across revision cycles. | Active draft |
+| BR-CH-REV-004 | Each editorial review must be performed by one valid reviewer user. | Active draft |
+| BR-CH-REV-005 | Only authorized Tantou Editors or approved review roles may create chapter editorial reviews. | Active draft |
+| BR-CH-REV-006 | An editorial review decision must be one of `APPROVED`, `REVISION_REQUESTED`, or `CANCELLED`. | Active draft |
+| BR-CH-REV-007 | If the review decision is `REVISION_REQUESTED` or `CANCELLED`, the review must include meaningful comments or a markup file. | Active draft |
+| BR-CH-REV-008 | A markup file is optional supporting feedback and must reference an existing `FileResource` when provided. | Active draft |
+| BR-CH-REV-009 | Page-specific annotations are stored separately on page regions/page versions, while `ChapterEditorialReview` stores the final chapter-level review decision. | Active draft |
+| BR-CH-REV-010 | Creating an editorial review should trigger a chapter status update according to the decision. | Active draft |
+| BR-CH-REV-011 | If the decision is `APPROVED`, the chapter status should become `APPROVED`. | Active draft |
+| BR-CH-REV-012 | If the decision is `REVISION_REQUESTED`, the chapter status should become `REVISION_REQUESTED` and editing should be allowed again. | Active draft |
+| BR-CH-REV-013 | If the decision is `CANCELLED`, the chapter status should become `CANCELLED`, and cancellation-specific consequences are handled by the Chapter Cancellation rules. | Active draft |
+| BR-CH-REV-014 | Creating an editorial review should be recorded in the audit log. | Active draft |
+
+---
+
+## 16. Chapter Cancellation
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-CH-CANCEL-001 | A chapter can be cancelled through an editorial review decision when the editor determines that the chapter should not proceed. | Active draft |
+| BR-CH-CANCEL-002 | A cancelled chapter must not proceed to `SCHEDULED` or `RELEASED` status. | Active draft |
+| BR-CH-CANCEL-003 | Cancelling a chapter must not automatically delete its pages, page versions, page regions, annotations, files, or review history. | Active draft |
+| BR-CH-CANCEL-004 | If the chapter can still be fixed and resubmitted, the editor should use `REVISION_REQUESTED`, not `CANCELLED`. | Active draft |
+| BR-CH-CANCEL-005 | Admin cancellation without editorial review is allowed only as an administrative override and must be audit-logged. | Active draft |
+
+---
+
+## 17. Publication Planning
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-PUB-001 | In MVP, detailed publication planning is handled at chapter level using `Chapter.planned_release_date` and `Chapter.status_code`. | Active draft |
+| BR-PUB-002 | Formal series-level publication policy history is outside MVP scope; the system only stores the current publication frequency on `Series`. | Active draft |
+| BR-PUB-003 | A serialized series may have a current publication frequency of `WEEKLY`, `MONTHLY`, or `IRREGULAR`. | Active draft |
+| BR-PUB-004 | `IRREGULAR` means chapters are released when ready and do not follow a fixed weekly or monthly schedule. | Active draft |
+| BR-PUB-005 | `publication_frequency_code` may be `NULL` before the series is serialized or before the release approach has been decided. | Active draft |
+| BR-PUB-006 | `publication_frequency_code` is a high-level planning label; actual release timing is still controlled through chapter-level release dates. | Active draft |
+| BR-PUB-007 | The MVP does not keep publication frequency history; only the current frequency is stored on `Series`. | Active draft |
+| BR-PUB-008 | Chapter scheduling and release status must follow the Chapter status rules. | Active draft |
+| BR-PUB-009 | Delayed chapters can be derived from `planned_release_date` instead of storing a separate delay status. | Active draft |
+
+---
+
+## 18. Ranking and Reader Vote Input
+
+### 18.1 Ranking Snapshot
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-RANK-001 | Series ranking data is stored as time-based `SeriesRankingSnapshot` records, not directly as permanent attributes of the `Series` record. | Active draft |
+| BR-RANK-002 | Each ranking snapshot represents the rank, score, and performance data of one series for one ranking period. | Active draft |
+| BR-RANK-003 | A series may have many ranking snapshots over time. | Active draft |
+| BR-RANK-004 | One series may only have one ranking snapshot for the same ranking period type and period start date. | Active draft |
+| BR-RANK-005 | The current rank of a series is derived from the latest relevant ranking snapshot. | Active draft |
+| BR-RANK-006 | The system should not duplicate `ranking_score` and `rank_position` in `Series` unless caching is required for performance. | Active draft |
+| BR-RANK-007 | If no ranking snapshot exists for a series, the series has no current ranking yet. | Active draft |
+| BR-RANK-008 | Ranking snapshots should be preserved for trend analysis and board decision support. | Active draft |
+| BR-RANK-009 | Ranking snapshots are generated by aggregating chapter reader vote snapshots within a selected ranking period. | Active draft |
+| BR-RANK-010 | Weekly, monthly, and seasonal ranking periods are determined by filtering reader vote records using `voted_at_utc`. | Active draft |
+| BR-RANK-011 | Monthly and seasonal ranking snapshots are accumulated from vote records within the selected calendar period, not manually entered as separate vote data. | Active draft |
+| BR-RANK-012 | Ranking snapshots may support cancellation-risk evaluation for board review, but the ranking snapshot itself does not automatically cancel a series. | Active draft |
+
+### 18.2 Reader Vote Input
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-VOTE-INPUT-001 | Reader vote input in MVP is simulated/manual aggregated data, not direct real-reader voting. | Active draft |
+| BR-VOTE-INPUT-002 | Reader vote input is recorded for a released chapter. | Active draft |
+| BR-VOTE-INPUT-003 | Each vote input record stores the time the vote data was entered or considered valid through `voted_at_utc`. | Active draft |
+| BR-VOTE-INPUT-004 | Reader vote records are used as input evidence for ranking snapshot generation. | Active draft |
+| BR-VOTE-INPUT-005 | Reader vote counts and feedback counts cannot be negative. | Active draft |
+| BR-VOTE-INPUT-006 | Average rating, if provided, must be within the allowed rating range. | Active draft |
+| BR-VOTE-INPUT-007 | For MVP, each chapter should have at most one aggregated reader vote snapshot. | Active draft |
+| BR-VOTE-INPUT-008 | A reader vote snapshot should be entered only after the related chapter has been released. | Active draft |
+| BR-VOTE-INPUT-009 | Reader vote input should record the authorized user who entered the simulated/aggregated vote data. | Active draft |
+
+---
+
+## 19. Notifications
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-NOTIF-001 | A notification must be addressed to exactly one recipient user. | Active draft |
+| BR-NOTIF-002 | Notifications are used for in-app MVP messages, not email or push notifications. | Active draft |
+| BR-NOTIF-003 | A notification may optionally reference a related business entity such as a series, chapter, page task, proposal, board poll, or ranking snapshot. | Active draft |
+| BR-NOTIF-004 | If `related_entity_type` is provided, `related_entity_id` must also be provided, and vice versa. | Active draft |
+| BR-NOTIF-005 | A notification is considered unread when `read_at_utc IS NULL`. | Active draft |
+| BR-NOTIF-006 | When a user reads a notification, the system records `read_at_utc`. | Active draft |
+| BR-NOTIF-007 | Ranking warning notifications should be created when a ranking snapshot shows high cancellation risk for a series. | Active draft |
+| BR-NOTIF-008 | Ranking warning notifications should be sent to active Mangaka contributors of the affected series. | Active draft |
+| BR-NOTIF-009 | Task assignment notifications should be sent to the assigned user when a page task is created. | Active draft |
+| BR-NOTIF-010 | Review result notifications should be sent to relevant contributors when a proposal or chapter review decision is recorded. | Active draft |
+| BR-NOTIF-011 | Board poll notifications may be sent to Editorial Board Members when a new board poll is opened. | Active draft |
+| BR-NOTIF-012 | Notifications are user-facing awareness records and should not be treated as the authoritative audit trail. | Active draft |
+| BR-NOTIF-013 | Important workflow actions that create notifications should still be recorded in the audit log when auditability is required. | Active draft |
+
+---
+
+## 20. Status History and Auditability
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-HIST-001 | MVP does not use separate status-history tables for every workflow entity. | Active draft |
+| BR-HIST-002 | The current workflow state of an entity is stored directly on the main entity using `status_code`. | Active draft |
+| BR-HIST-003 | Important workflow events should be represented through existing domain records where applicable, such as proposal records, board polls, board votes, chapter reviews, page versions, task records, ranking snapshots, and notifications. | Active draft |
+| BR-HIST-004 | Audit logs should record important workflow actions that require traceability, such as approvals, cancellations, status changes, task changes, board poll actions, and account actions. | Active draft |
+| BR-HIST-005 | Notifications are used to inform actors of important events, not as the authoritative status history. | Active draft |
+| BR-HIST-006 | `updated_at_utc` represents the latest update time for operational display and should not be treated as a complete status transition timeline. | Active draft |
+| BR-HIST-007 | Specific workflow timestamps, such as `submitted_at_utc`, `reviewed_at_utc`, `voted_at_utc`, `created_at_utc`, and `released_at_utc`, should be used where they describe meaningful business events. | Active draft |
+| BR-HIST-008 | Detailed status transition history tables are future scope unless specifically required for audit demonstration or advanced workflow analytics. | Active draft |
+
+---
+---
