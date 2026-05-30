@@ -1,0 +1,16 @@
+﻿<Router AppAssembly="typeof(Program).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="routeData" />
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <PageTitle>Page not found - MangaFlow</PageTitle>
+        <MudContainer MaxWidth="MaxWidth.Medium" Class="py-16">
+            <MudPaper Class="pa-8 text-center mf-card" Elevation="0">
+                <MudText Typo="Typo.h3" Class="mb-2">Page not found</MudText>
+                <MudText Color="Color.Secondary" Class="mb-6">The requested MangaFlow page does not exist.</MudText>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/">Back to Home</MudButton>
+            </MudPaper>
+        </MudContainer>
+    </NotFound>
+</Router>

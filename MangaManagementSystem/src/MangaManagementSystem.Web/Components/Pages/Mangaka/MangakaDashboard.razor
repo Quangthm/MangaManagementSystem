@@ -1,0 +1,31 @@
+@page "/mangaka"
+@page "/mangaka/settings"
+@inject NavigationManager Nav
+
+<MangakaLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Mangaka Dashboard</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Manage your series, chapters, and production tasks</MudText>
+        </div>
+
+        <MudGrid Class="mb-6"><MudItem xs="12" md="3"><StatCard Label="Active Series" Value="3" /></MudItem><MudItem xs="12" md="3"><StatCard Label="Chapter Drafts" Value="7" /></MudItem><MudItem xs="12" md="3"><StatCard Label="Pending Review" Value="2" /></MudItem><MudItem xs="12" md="3"><StatCard Label="Tasks Assigned" Value="5" /></MudItem></MudGrid>
+        <MudGrid>
+            <MudItem xs="12" md="7"><MudPaper Class="pa-5 mf-card" Elevation="0"><MudText Typo="Typo.h6" Class="font-weight-bold mb-4">My Series</MudText><MudTable Items="Series" Hover="true"><HeaderContent><MudTh>Title</MudTh><MudTh>Chapters</MudTh><MudTh>Status</MudTh><MudTh></MudTh></HeaderContent><RowTemplate><MudTd>@context.Title</MudTd><MudTd>@context.Chapters</MudTd><MudTd><MudChip T="string" Color="Color.Success" Size="Size.Small">Active</MudChip></MudTd><MudTd><MudButton Size="Size.Small" Href="@($"/mangaka/workspace/{context.Id}")">Open</MudButton></MudTd></RowTemplate></MudTable></MudPaper></MudItem>
+            <MudItem xs="12" md="5"><MudPaper Class="pa-5 mf-card mb-4" Elevation="0"><MudText Typo="Typo.h6">Pending Submissions</MudText><MudText class="mf-muted">Review assistant work before sending chapters forward.</MudText><MudButton Href="/mangaka/review-submissions" Variant="Variant.Filled" Color="Color.Primary" Class="mt-3">Review Submissions</MudButton></MudPaper><MudPaper Class="pa-5 mf-card" Elevation="0"><MudText Typo="Typo.h6">Recent Chapter Drafts</MudText><MudButton Variant="Variant.Outlined" Class="mt-3">Submit to Editor</MudButton></MudPaper></MudItem>
+        </MudGrid>
+
+    </div>
+</MangakaLayout>
+
+@code {
+
+    private readonly List<SeriesRow> Series = new()
+    {
+        new(1, "Crimson Moon Academy", 44),
+        new(2, "Neon Samurai Path", 18),
+        new(3, "Lunar Eclipse Academy", 12)
+    };
+    private record SeriesRow(int Id, string Title, int Chapters);
+
+}

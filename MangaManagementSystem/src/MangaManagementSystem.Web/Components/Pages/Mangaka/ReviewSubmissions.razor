@@ -1,0 +1,31 @@
+@page "/mangaka/review-submissions"
+@inject NavigationManager Nav
+
+<MangakaLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Review Assistant Submissions</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Review and approve completed tasks from your assistants</MudText>
+        </div>
+
+        @if (!Submissions.Any())
+        {
+            <MudPaper Class="pa-8 mf-card text-center" Elevation="0"><MudText Typo="Typo.h5">All Caught Up!</MudText><MudText class="mf-muted">No pending submissions to review at the moment.</MudText></MudPaper>
+        }
+        else
+        {
+            <MudGrid>@foreach (var item in Submissions){<MudItem xs="12" md="6"><MudPaper Class="pa-5 mf-card" Elevation="0"><MudStack Row="true" Justify="Justify.SpaceBetween"><MudText Typo="Typo.h6">@item.Task</MudText><MudChip T="string" Color="Color.Warning">Pending Review</MudChip></MudStack><MudText class="mf-muted">By @item.Assistant • @item.Series</MudText><MudText Class="mt-3">Assistant Comment: @item.Comment</MudText><div class="mf-canvas my-3" style="min-height:160px">File Preview Would appear here</div><MudStack Row="true"><MudButton Color="Color.Success" Variant="Variant.Filled">Approve</MudButton><MudButton Color="Color.Error" Variant="Variant.Outlined">Request Changes</MudButton></MudStack></MudPaper></MudItem>}</MudGrid>
+        }
+
+    </div>
+</MangakaLayout>
+
+@code {
+
+    private readonly List<SubmissionRow> Submissions = new()
+    {
+        new("Tone Shading", "Ken Sato", "Crimson Moon Academy", "Completed shading based on selected panel regions.")
+    };
+    private record SubmissionRow(string Task, string Assistant, string Series, string Comment);
+
+}

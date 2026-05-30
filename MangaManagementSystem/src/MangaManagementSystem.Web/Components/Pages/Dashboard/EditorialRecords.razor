@@ -1,0 +1,42 @@
+@page "/dashboard/records"
+@inject NavigationManager Nav
+
+<DashboardLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Editorial Records</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Manage series defense documents and production files</MudText>
+        </div>
+
+        <MudGrid Class="mb-6">
+            <MudItem xs="12" md="4"><StatCard Label="Approved Documents" Value="4" Description="Ready for archive" /></MudItem>
+            <MudItem xs="12" md="4"><StatCard Label="Under Review" Value="2" Description="Editor queue" /></MudItem>
+            <MudItem xs="12" md="4"><StatCard Label="Pending" Value="1" Description="Needs attention" /></MudItem>
+        </MudGrid>
+        <MudPaper Class="pa-5 mf-card" Elevation="0">
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+                <MudText Typo="Typo.h6" Class="font-weight-bold">Documents</MudText>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary">Filter</MudButton>
+            </MudStack>
+            <MudTable Items="Records" Hover="true">
+                <HeaderContent><MudTh>Series</MudTh><MudTh>Document</MudTh><MudTh>Status</MudTh><MudTh>Owner</MudTh></HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.Series</MudTd><MudTd>@context.Document</MudTd><MudTd><MudChip T="string" Color="@context.Color" Size="Size.Small">@context.Status</MudChip></MudTd><MudTd>@context.Owner</MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+
+    </div>
+</DashboardLayout>
+
+@code {
+
+    private readonly List<RecordRow> Records = new()
+    {
+        new("Shadow Warrior Chronicles", "Series defense document", "Under Review", "Yuki Tanaka", Color.Warning),
+        new("Mystic Academy", "Production file", "Approved", "Aiko Mori", Color.Success),
+        new("Lunar Eclipse Academy", "Revision package", "Pending", "Ken Sato", Color.Info)
+    };
+    private record RecordRow(string Series, string Document, string Status, string Owner, Color Color);
+
+}

@@ -1,0 +1,29 @@
+@page "/mangaka/assign-task"
+@inject NavigationManager Nav
+
+<MangakaLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Assign Task to Assistant</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Delegate production tasks to your assistant team</MudText>
+        </div>
+
+        <MudPaper Class="pa-6 mf-card" Elevation="0">
+            <MudGrid><MudItem xs="12" md="6"><MudSelect T="string" Label="Series" @bind-Value="Series" Variant="Variant.Outlined"><MudSelectItem Value="@("Crimson Moon Academy")">Crimson Moon Academy</MudSelectItem></MudSelect></MudItem><MudItem xs="12" md="3"><MudTextField Label="Chapter" @bind-Value="Chapter" Variant="Variant.Outlined" /></MudItem><MudItem xs="12" md="3"><MudTextField Label="Page Range" @bind-Value="PageRange" Variant="Variant.Outlined" /></MudItem><MudItem xs="12" md="6"><MudSelect T="string" Label="Task Type" @bind-Value="TaskType" Variant="Variant.Outlined"><MudSelectItem Value="@("Tone Shading")">Tone Shading</MudSelectItem><MudSelectItem Value="@("Background Drawing")">Background Drawing</MudSelectItem></MudSelect></MudItem><MudItem xs="12" md="6"><MudTextField Label="Assign to Assistant" @bind-Value="Assistant" Variant="Variant.Outlined" /></MudItem><MudItem xs="12"><MudTextField Label="Task Description" Lines="5" @bind-Value="Description" Variant="Variant.Outlined" /></MudItem></MudGrid>
+            <MudAlert Severity="Severity.Info" Class="my-4">Attach Reference File: Future Extension - File upload capability will be added in the full implementation.</MudAlert>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary">Assign Task</MudButton>
+        </MudPaper>
+
+    </div>
+</MangakaLayout>
+
+@code {
+
+    private string Series { get; set; } = "Crimson Moon Academy";
+    private string Chapter { get; set; } = "12";
+    private string PageRange { get; set; } = "8-10";
+    private string TaskType { get; set; } = "Tone Shading";
+    private string Assistant { get; set; } = string.Empty;
+    private string Description { get; set; } = string.Empty;
+
+}

@@ -1,0 +1,29 @@
+using MangaManagementSystem.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
+{
+    public class UserConfiguration : IEntityTypeConfiguration<User>
+    {
+        public void Configure(EntityTypeBuilder<User> builder)
+        {
+            builder.ToTable("Users", "auth");
+            builder.HasKey(u => u.UserId);
+            builder.Property(u => u.UserId).ValueGeneratedOnAdd();
+            builder.Property(u => u.Username).IsRequired().HasMaxLength(50);
+            builder.Property(u => u.Email).IsRequired().HasMaxLength(254);
+            builder.Property(u => u.PasswordHash).IsRequired().HasMaxLength(255);
+            builder.Property(u => u.Status).IsRequired().HasMaxLength(30).HasDefaultValue("PENDING_APPROVAL");
+            builder.Property(u => u.CreatedAt).IsRequired();
+            builder.HasIndex(u => u.Username).IsUnique();
+            builder.HasIndex(u => u.Email).IsUnique();
+            builder.HasIndex(u => new { u.Status, u.CreatedAt }).HasDatabaseName("ix_users_status_created").IncludeProperties(u => new { u.Username, u.Email, u.RoleId });
+            builder.HasIndex(u => new { u.RoleId, u.Status }).HasDatabaseName("ix_users_role_status").IncludeProperties(u => new { u.Username, u.Email });
+            builder.HasCheckConstraint("CK_Users_Status", "[Status] IN ('PENDING_APPROVAL','ACTIVE','DISABLED')");
+            builder.HasOne(u => u.Role).WithMany(r => r.Users).HasForeignKey(u => u.RoleId);
+            builder.HasOne(u => u.AvatarFile).WithMany().HasForeignKey(u => u.AvatarFileId);
+            builder.HasOne(u => u.PortfolioFile).WithMany().HasForeignKey(u => u.PortfolioFileId);
+        }
+    }
+}

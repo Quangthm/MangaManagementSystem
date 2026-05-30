@@ -1,0 +1,28 @@
+using MangaManagementSystem.Domain.Common;
+using System;
+using System.Collections.Generic;
+
+namespace MangaManagementSystem.Domain.Entities
+{
+    public class Series : BaseEntity
+    {
+        public long SeriesId { get; set; }
+        public string SeriesCode { get; set; } = null!;
+        public string? Title { get; set; }
+        public string? Slug { get; set; }
+        public string? Synopsis { get; set; }
+        public string? Genre { get; set; }
+        public long? CoverFileId { get; set; }
+        public FileResource? CoverFile { get; set; }
+        public string StatusCode { get; set; } = "PROPOSAL_DRAFT";
+        public string ContentLanguageCode { get; set; } = "ja";
+        public long? SourceSeriesId { get; set; }
+        public Series? SourceSeries { get; set; }
+        public DateTime CreatedAtUtc { get; set; }
+        public DateTime? UpdatedAtUtc { get; set; }
+        public int? UpdatedByUserId { get; set; }
+        public User? UpdatedByUser { get; set; }
+        public string? PublicationFrequencyCode { get; set; }
+        public virtual ICollection<Chapter> Chapters { get; set; } = new List<Chapter>();
+    }
+}

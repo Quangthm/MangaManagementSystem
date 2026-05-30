@@ -1,0 +1,40 @@
+@namespace MangaManagementSystem.Web.Components.Layouts
+@inject NavigationManager Nav
+
+<div class="mf-shell">
+    <aside class="mf-sidebar">
+        <div class="mf-sidebar-header">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <span class="mf-logo-box">MF</span>
+                <div>
+                    <MudText Typo="Typo.subtitle1" Class="font-weight-bold text-white">MangaFlow</MudText>
+                    <MudText Typo="Typo.caption" Style="color:#94a3b8">System Administrator</MudText>
+                </div>
+            </MudStack>
+        </div>
+        <nav class="mf-nav-section">
+            <div class="mf-nav-title">Main Navigation</div>
+            <NavLink href="/admin" class="mf-nav-link" Match="NavLinkMatch.Prefix">Dashboard</NavLink>
+            <NavLink href="/admin/users" class="mf-nav-link" Match="NavLinkMatch.Prefix">User Accounts</NavLink>
+            <NavLink href="/admin/registration-requests" class="mf-nav-link" Match="NavLinkMatch.Prefix">Registration Requests</NavLink>
+            <NavLink href="/admin/audit-logs" class="mf-nav-link" Match="NavLinkMatch.Prefix">Audit Logs</NavLink>
+            <NavLink href="/admin/roles" class="mf-nav-link" Match="NavLinkMatch.Prefix">Role & Permissions</NavLink>
+            <NavLink href="/admin/settings" class="mf-nav-link" Match="NavLinkMatch.Prefix">System Settings</NavLink>
+
+        </nav>
+        <MudSpacer />
+        <div class="pa-4">
+            <MudButton FullWidth="true" Variant="Variant.Outlined" Color="Color.Default" OnClick="BackToOverview">
+                Back to Overview
+            </MudButton>
+        </div>
+    </aside>
+    <main class="mf-main">
+        @ChildContent
+    </main>
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    private void BackToOverview() => Nav.NavigateTo("/dashboard");
+}

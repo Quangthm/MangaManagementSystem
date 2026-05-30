@@ -1,0 +1,32 @@
+@page "/board-decision"
+@inject NavigationManager Nav
+
+<RankingLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Board Decision Workspace</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Review series requiring board decision and submit votes</MudText>
+        </div>
+
+        <MudAlert Severity="Severity.Warning" Class="mb-6">Series Requiring Board Review: series are in the Danger Zone and require editorial board decisions.</MudAlert>
+        <MudGrid>
+            @foreach (var item in Reviews)
+            {
+                <MudItem xs="12" md="6"><MudPaper Class="pa-5 mf-card" Elevation="0"><MudStack Row="true" Justify="Justify.SpaceBetween"><MudText Typo="Typo.h6">@item.Series</MudText><MudChip T="string" Color="Color.Error">@item.RiskLevel</MudChip></MudStack><MudText>Current Rank: #@item.Rank</MudText><MudText>Total Votes: @item.Votes</MudText><MudText>Declining for @item.Weeks weeks</MudText><MudStack Spacing="2" Class="mt-4"><MudButton Variant="Variant.Filled" Color="Color.Success">Continue Serialization</MudButton><MudButton Variant="Variant.Outlined" Color="Color.Warning">Request Revision</MudButton><MudButton Variant="Variant.Outlined" Color="Color.Secondary">Place on Hiatus</MudButton><MudButton Variant="Variant.Outlined" Color="Color.Error">Drop Series</MudButton></MudStack></MudPaper></MudItem>
+            }
+        </MudGrid>
+        <MudPaper Class="pa-5 mf-card mt-6" Elevation="0"><MudText Typo="Typo.h6">Latest Board Decisions</MudText><MudText>Moonlit Blade Academy — Decision: Request Revision • 2 days ago</MudText><MudText>Crystal Heart Journey — Decision: Continue • 5 days ago</MudText></MudPaper>
+
+    </div>
+</RankingLayout>
+
+@code {
+
+    private readonly List<BoardReview> Reviews = new()
+    {
+        new("Shadow Garden Tales", 9, 4123, 3, "Danger Zone"),
+        new("Phoenix Rising Team", 10, 3867, 4, "Danger Zone")
+    };
+    private record BoardReview(string Series, int Rank, int Votes, int Weeks, string RiskLevel);
+
+}

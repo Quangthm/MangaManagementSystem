@@ -1,0 +1,39 @@
+@namespace MangaManagementSystem.Web.Components.Layouts
+@inject NavigationManager Nav
+
+<div class="mf-shell">
+    <aside class="mf-sidebar">
+        <div class="mf-sidebar-header">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <span class="mf-logo-box">MF</span>
+                <div>
+                    <MudText Typo="Typo.subtitle1" Class="font-weight-bold text-white">MangaFlow</MudText>
+                    <MudText Typo="Typo.caption" Style="color:#94a3b8">Mangaka Workspace</MudText>
+                </div>
+            </MudStack>
+        </div>
+        <nav class="mf-nav-section">
+            <div class="mf-nav-title">Main Menu</div>
+            <NavLink href="/mangaka" class="mf-nav-link" Match="NavLinkMatch.Prefix">Dashboard</NavLink>
+            <NavLink href="/mangaka/series" class="mf-nav-link" Match="NavLinkMatch.Prefix">My Series & Chapters</NavLink>
+            <NavLink href="/mangaka/assign-task" class="mf-nav-link" Match="NavLinkMatch.Prefix">Assign Task</NavLink>
+            <NavLink href="/mangaka/review-submissions" class="mf-nav-link" Match="NavLinkMatch.Prefix">Review Submissions</NavLink>
+            <NavLink href="/mangaka/settings" class="mf-nav-link" Match="NavLinkMatch.Prefix">Settings</NavLink>
+
+        </nav>
+        <MudSpacer />
+        <div class="pa-4">
+            <MudButton FullWidth="true" Variant="Variant.Outlined" Color="Color.Default" OnClick="BackToOverview">
+                Back to Overview
+            </MudButton>
+        </div>
+    </aside>
+    <main class="mf-main">
+        @ChildContent
+    </main>
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    private void BackToOverview() => Nav.NavigateTo("/dashboard");
+}

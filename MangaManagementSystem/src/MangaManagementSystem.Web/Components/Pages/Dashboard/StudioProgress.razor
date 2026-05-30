@@ -1,0 +1,50 @@
+@page "/dashboard/studio"
+@inject NavigationManager Nav
+
+<DashboardLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Studio Progress</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Monitor production tasks and deadlines</MudText>
+        </div>
+
+        <MudGrid Class="mb-6">
+            <MudItem xs="12" md="3"><StatCard Label="Active Tasks" Value="12" /></MudItem>
+            <MudItem xs="12" md="3"><StatCard Label="Completed This Week" Value="8" /></MudItem>
+            <MudItem xs="12" md="3"><StatCard Label="Due This Week" Value="3" /></MudItem>
+            <MudItem xs="12" md="3"><StatCard Label="Average Progress" Value="67%" /></MudItem>
+        </MudGrid>
+        <MudGrid>
+            <MudItem xs="12" md="8">
+                <MudPaper Class="pa-5 mf-card" Elevation="0">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-4">Production Timeline</MudText>
+                    @foreach (var task in Tasks)
+                    {
+                        <div class="mb-5">
+                            <MudStack Row="true" Justify="Justify.SpaceBetween"><MudText>@task.Title</MudText><MudText>@task.Progress%</MudText></MudStack>
+                            <MudProgressLinear Value="@task.Progress" Color="Color.Primary" Rounded="true" />
+                            <MudText Typo="Typo.caption" Class="mf-muted">Due @task.Due</MudText>
+                        </div>
+                    }
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudPaper Class="pa-5 mf-card mb-4" Elevation="0"><MudText Typo="Typo.h6">This Week's Focus</MudText><MudText class="mf-muted">3 tasks due this week with an average completion rate of 73%.</MudText></MudPaper>
+                <MudPaper Class="pa-5 mf-card" Elevation="0"><MudText Typo="Typo.h6">Recent Milestones</MudText><MudText class="mf-muted">Completed 8 tasks this week, exceeding the target by 20%.</MudText></MudPaper>
+            </MudItem>
+        </MudGrid>
+
+    </div>
+</DashboardLayout>
+
+@code {
+
+    private readonly List<TaskProgress> Tasks = new()
+    {
+        new("Shadow Warrior Chronicles - Ch. 5", 73, "May 22"),
+        new("Mystic Academy - Ch. 3", 61, "May 24"),
+        new("Lunar Eclipse Academy - Ch. 12", 84, "May 25")
+    };
+    private record TaskProgress(string Title, int Progress, string Due);
+
+}

@@ -1,0 +1,29 @@
+@page "/assistant/task/{TaskId}/submit"
+@inject NavigationManager Nav
+
+<AssistantLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Submit Work</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Upload final files and send work for review</MudText>
+        </div>
+
+        @if (Submitted)
+        {
+            <MudPaper Class="pa-8 mf-card text-center" Elevation="0"><MudAvatar Color="Color.Success" Size="Size.Large" Class="mx-auto mb-4">✓</MudAvatar><MudText Typo="Typo.h5" Class="font-weight-bold">Work Submitted Successfully!</MudText><MudText class="mf-muted mb-4">Your work has been submitted for review. The lead artist will review your submission and provide feedback.</MudText><MudButton Href="/assistant" Color="Color.Primary" Variant="Variant.Filled">Back to Dashboard</MudButton></MudPaper>
+        }
+        else
+        {
+            <MudGrid><MudItem xs="12" md="8"><MudPaper Class="pa-5 mf-card" Elevation="0"><MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Upload Your Work</MudText><div class="mf-canvas" style="min-height:260px">Drag files here or browse files<br/>Supported formats: PSD, PNG, JPG, TIFF (Max 100MB per file)</div><MudButton Variant="Variant.Outlined" Class="mt-4">Browse Files</MudButton></MudPaper></MudItem><MudItem xs="12" md="4"><MudPaper Class="pa-5 mf-card" Elevation="0"><MudText Typo="Typo.h6">Submission Notes</MudText><MudTextField Lines="6" Label="Notes" @bind-Value="Notes" Variant="Variant.Outlined" /><MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="mt-3" OnClick="@(() => Submitted = true)">Submit Final Work</MudButton><MudButton Variant="Variant.Text" FullWidth="true" Class="mt-2">Save Draft</MudButton></MudPaper></MudItem></MudGrid>
+        }
+
+    </div>
+</AssistantLayout>
+
+@code {
+
+    [Parameter] public string? TaskId { get; set; }
+    private string Notes { get; set; } = string.Empty;
+    private bool Submitted { get; set; }
+
+}

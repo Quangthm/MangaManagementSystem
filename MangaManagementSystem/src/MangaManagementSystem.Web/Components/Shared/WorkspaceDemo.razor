@@ -1,0 +1,19 @@
+@namespace MangaManagementSystem.Web.Components.Shared
+@inject NavigationManager Nav
+
+<div class="mf-gradient-bg d-flex align-center justify-center pa-4">
+    <MudContainer MaxWidth="MaxWidth.Medium">
+        <MudPaper Class="pa-10 mf-card text-center" Elevation="8">
+            <MudAvatar Color="Color.Primary" Size="Size.Large" Class="mx-auto mb-6">MF</MudAvatar>
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-4">@Title</MudText>
+            <MudText Typo="Typo.h6" Class="mf-muted mb-8">@Description</MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Default" OnClick="Logout">Logout</MudButton>
+        </MudPaper>
+    </MudContainer>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string Description { get; set; } = string.Empty;
+    private void Logout() => Nav.NavigateTo("/login");
+}

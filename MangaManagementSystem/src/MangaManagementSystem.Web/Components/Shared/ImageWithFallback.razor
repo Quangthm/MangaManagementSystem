@@ -1,0 +1,22 @@
+@namespace MangaManagementSystem.Web.Components.Shared
+@if (_failed)
+{
+    <div class="mf-card pa-4 text-center" style="@Style">
+        <MudText Typo="Typo.caption" Color="Color.Secondary">Image could not be loaded</MudText>
+    </div>
+}
+else
+{
+    <img src="@Src" alt="@Alt" class="@Class" style="@Style" @onerror="HandleError" />
+}
+
+@code {
+    private bool _failed;
+
+    [Parameter] public string? Src { get; set; }
+    [Parameter] public string Alt { get; set; } = "";
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? Style { get; set; }
+
+    private void HandleError() => _failed = true;
+}

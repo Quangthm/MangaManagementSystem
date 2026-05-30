@@ -1,0 +1,54 @@
+@page "/dashboard/workspace"
+@inject NavigationManager Nav
+
+<DashboardLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Review Workspace</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Annotate chapters, review dialogue and layouts</MudText>
+        </div>
+
+        <MudGrid>
+            <MudItem xs="12" md="8">
+                <MudPaper Class="pa-5 mf-card" Elevation="0">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+                        <div><MudText Typo="Typo.h5" Class="font-weight-bold">Shadow Warrior Chronicles</MudText><MudText class="mf-muted">Chapter 5 • 24 Pages</MudText></div>
+                        <MudChip T="string" Color="Color.Warning">In Review</MudChip>
+                    </MudStack>
+                    <div class="mf-canvas">Page @CurrentPage of 24 - review canvas placeholder</div>
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mt-4">
+                        <MudButton Variant="Variant.Outlined" Disabled="@(CurrentPage == 1)" OnClick="PreviousPage">Previous Page</MudButton>
+                        <MudButton Variant="Variant.Outlined" Disabled="@(CurrentPage == 24)" OnClick="NextPage">Next Page</MudButton>
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Quick Actions</MudText>
+                    <MudStack Row="true"><MudButton Color="Color.Success" Variant="Variant.Filled">Approve</MudButton><MudButton Color="Color.Error" Variant="Variant.Outlined">Reject</MudButton></MudStack>
+                </MudPaper>
+                <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Review Summary</MudText>
+                    <MudText>Total Annotations: 23</MudText><MudText>High Priority: 4</MudText><MudText>Progress: 67%</MudText>
+                </MudPaper>
+                <MudPaper Class="pa-5 mf-card" Elevation="0">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Add Annotation Note</MudText>
+                    <MudSelect T="string" Label="Issue Type" @bind-Value="IssueType" Variant="Variant.Outlined"><MudSelectItem Value="@("Dialogue")">Dialogue</MudSelectItem><MudSelectItem Value="@("Layout")">Layout</MudSelectItem><MudSelectItem Value="@("Art")">Art</MudSelectItem></MudSelect>
+                    <MudTextField Label="Comment" Lines="4" @bind-Value="Comment" Variant="Variant.Outlined" Class="mt-3" />
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3">Save Note</MudButton>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+    </div>
+</DashboardLayout>
+
+@code {
+
+    private int CurrentPage { get; set; } = 1;
+    private string IssueType { get; set; } = "Dialogue";
+    private string Comment { get; set; } = string.Empty;
+    private void PreviousPage() => CurrentPage = Math.Max(1, CurrentPage - 1);
+    private void NextPage() => CurrentPage = Math.Min(24, CurrentPage + 1);
+
+}

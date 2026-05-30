@@ -1,0 +1,48 @@
+@page "/ranking"
+@page "/ranking/series"
+@page "/ranking/performance"
+@page "/ranking/risk"
+@page "/ranking/decisions"
+@page "/ranking/settings"
+@inject NavigationManager Nav
+
+<RankingLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Series Ranking & Performance Dashboard</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Decision support tool for Editorial Board and Tantou Editors</MudText>
+        </div>
+
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-6">Decision Support Alert: low-performing series may require board review.</MudAlert>
+        <MudGrid Class="mb-6"><MudItem xs="12" md="3"><StatCard Label="Total Serialized" Value="24" /></MudItem><MudItem xs="12" md="3"><StatCard Label="Series at Risk" Value="3" /></MudItem><MudItem xs="12" md="3"><StatCard Label="Avg Performance" Value="87.2%" /></MudItem><MudItem xs="12" md="3"><StatCard Label="Total Poll Votes" Value="156.2K" /></MudItem></MudGrid>
+        <MudPaper Class="pa-5 mf-card" Elevation="0">
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4"><div><MudText Typo="Typo.h6">Weekly reader poll results and status tracking</MudText><MudText class="mf-muted">@SelectedWeek</MudText></div><MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ShowUpdate = true)">Update Weekly Poll Results</MudButton></MudStack>
+            <MudTable Items="SeriesData" Hover="true"><HeaderContent><MudTh>#</MudTh><MudTh>Series</MudTh><MudTh>Total Votes</MudTh><MudTh>Performance</MudTh><MudTh>Risk</MudTh><MudTh>Action</MudTh></HeaderContent><RowTemplate><MudTd>@context.Rank</MudTd><MudTd>@context.Series</MudTd><MudTd>@context.Votes</MudTd><MudTd>@context.Performance%</MudTd><MudTd><MudChip T="string" Color="@context.Color" Size="Size.Small">@context.Risk</MudChip></MudTd><MudTd>@if(context.Risk=="Danger Zone"){<MudButton Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled" Href="/board-decision">Prepare Board Review</MudButton>}</MudTd></RowTemplate></MudTable>
+        </MudPaper>
+        @if (ShowUpdate)
+        {
+            <MudPaper Class="pa-5 mf-card mt-6" Elevation="0"><MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Update Weekly Poll Results</MudText><MudGrid><MudItem xs="12" md="6"><MudTextField Label="Week" @bind-Value="PollWeek" Variant="Variant.Outlined" /></MudItem><MudItem xs="12" md="6"><MudTextField Label="Series" @bind-Value="PollSeries" Variant="Variant.Outlined" /></MudItem><MudItem xs="12" md="6"><MudTextField Label="Total Votes" @bind-Value="PollVotes" Variant="Variant.Outlined" /></MudItem><MudItem xs="12" md="6"><MudTextField Label="Rank" @bind-Value="PollRank" Variant="Variant.Outlined" /></MudItem><MudItem xs="12"><MudTextField Label="Notes" @bind-Value="PollNotes" Variant="Variant.Outlined" Lines="3" /></MudItem></MudGrid><MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="@(() => ShowUpdate = false)">Save Update</MudButton></MudPaper>
+        }
+
+    </div>
+</RankingLayout>
+
+@code {
+
+    private string SelectedWeek { get; set; } = "Week 21 - May 2026";
+    private bool ShowUpdate { get; set; }
+    private string PollWeek { get; set; } = "Week 21 - May 2026";
+    private string PollSeries { get; set; } = string.Empty;
+    private string PollVotes { get; set; } = string.Empty;
+    private string PollRank { get; set; } = string.Empty;
+    private string PollNotes { get; set; } = string.Empty;
+    private readonly List<RankingRow> SeriesData = new()
+    {
+        new(1, "Crimson Moon Academy", "23,450", 98, "Stable", Color.Success),
+        new(2, "Neon Samurai Path", "21,900", 94, "Stable", Color.Success),
+        new(9, "Shadow Garden Tales", "4,123", 42, "Danger Zone", Color.Error),
+        new(10, "Phoenix Rising Team", "3,867", 39, "Danger Zone", Color.Error)
+    };
+    private record RankingRow(int Rank, string Series, string Votes, int Performance, string Risk, Color Color);
+
+}
