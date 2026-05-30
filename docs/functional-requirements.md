@@ -186,8 +186,7 @@
 | FR-BOARD-POLL-015 | The system shall prevent votes from a `CANCELLED` poll from affecting series or proposal status. | BR-BOARD-POLL-013 |
 | FR-BOARD-POLL-016 | The system shall allow Admin users to cancel a poll when the voting setup or process must be invalidated. | BR-BOARD-POLL-014 |
 | FR-BOARD-POLL-017 | The system shall require poll results to be computed from board votes and handled by Board Result requirements instead of storing final result codes directly on `SeriesBoardPoll`. | BR-BOARD-POLL-016 |
-| FR-BOARD-POLL-018 | The system shall record poll creation, cancellation, closure, and status application in the audit log. | BR-BOARD-POLL-017 |
-
+| FR-BOARD-POLL-018 | The system shall record poll creation, cancellation, and closure in the audit log. | BR-BOARD-POLL-017 |
 ---
 
 ## 3.9 Board Vote

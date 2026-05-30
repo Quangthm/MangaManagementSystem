@@ -1,158 +1,373 @@
-# MangaManagementSystem
-> Distributed monolith platform for manga/webtoon production, AI-assisted segmentation, editorial review, and ranking management.
+# Manga Creation Workflow and Publishing Management System
+
+> A university MVP project for manga production workflow management, proposal review, chapter/page versioning, assistant task coordination, editorial review, board polling, publication planning, simulated ranking, notifications, and auditability.
+
+---
 
 ## 1. Project Overview
 
-Manga Management System is a student software engineering project designed to support the full lifecycle of manga creation and publication.
+**Manga Creation Workflow and Publishing Management System** is a web-based workflow platform for managing manga production from early series proposal to chapter/page production, editorial review, board decision-making, and release planning.
 
-The system is built as a **Distributed Monolith**, where the core business system remains unified while the AI-heavy processing is separated into a local microservice.
+The system is designed to support human manga production teams. It does **not** replace professional drawing tools such as Clip Studio Paint, Photoshop, Krita, or other illustration workspaces.
 
-The project covers:
+The MVP focuses on:
 
-- identity and governance,
-- studio production workflow,
-- AI-assisted segmentation,
-- editorial and publishing workflow,
-- business analytics and ranking,
-- audit and transparency.
-
----
-
-## 2. Current Repository Status
-
-**PRIVATE DEVELOPMENT REPOSITORY**
-
-This repository is currently used for internal team collaboration only.
-
-The codebase may contain:
-
-- unfinished features,
-- experimental implementations,
-- incomplete documentation,
-- temporary test data,
-- unstable APIs.
-
-Do not treat this repository as production-ready.
+- user accounts and role-based access,
+- series and contributor management,
+- formal proposal submission and review,
+- chapter, page, and page-version management,
+- page regions, annotations, and assistant tasks,
+- chapter-level editorial review,
+- board poll and vote workflow,
+- chapter release planning,
+- simulated reader vote input and ranking snapshots,
+- in-app notifications,
+- audit logs and workflow traceability,
+- optional AI-assisted segmentation/OCR/translation suggestions.
 
 ---
 
-## 3. System Architecture
+## 2. Repository Status
 
-### 3.1 Overall Architecture
+**Private development repository**
 
-The system follows a **Distributed Monolith** architecture:
+This repository is used for internal team collaboration and MVP development. It may contain unfinished features, temporary data, incomplete documentation, experimental screens, and unstable APIs.
 
-- **Frontend**: Blazor Server
-- **Backend**: ASP.NET Core Web API (.NET 8/9)
-- **AI Microservice**: Python FastAPI + YOLOv8
-- **Database**: SQL Server with Entity Framework Core
-- **Storage**: Cloudinary
-- **Real-time communication**: SignalR
-
-### 3.2 Frontend
-
-The frontend uses:
-
-- **Blazor Server** for interactive server-rendered UI
-- **MudBlazor** for admin and management pages
-- **Fabric.js** for canvas-based manga page interaction
-- **Webtoon-style vertical scrolling** for reader/editor views
-
-### 3.3 Backend
-
-The backend uses:
-
-- **ASP.NET Core Web API**
-- **Clean Architecture**
-  - Domain
-  - Application
-  - Infrastructure
-  - API
-
-This keeps business logic separated from database access and UI.
-
-### 3.4 AI Microservice
-
-The AI service runs locally using:
-
-- **Python**
-- **FastAPI**
-- **YOLOv8**
-
-Its role is to detect manga panels and return coordinates in JSON format for the main system.
-
-### 3.5 Database & Storage
-
-- **SQL Server** stores core business data
-- **Cloudinary** stores and delivers large manga image assets
+Do **not** treat this repository as production-ready.
 
 ---
 
-## 4. System Modules
+## 3. MVP Scope
 
-### 4.1 Identity & Governance Module
-Handles:
+### 3.1 Included in MVP
 
-- authentication,
-- authorization,
-- user profiles,
-- portfolios,
-- income wallet/data,
-- system settings.
+| Area | MVP Direction |
+|---|---|
+| Users and accounts | One MVP role per account. New users start as `PENDING_APPROVAL`. Admin can activate or disable accounts. |
+| File management | Store actual media in Cloudinary; store file metadata and references in `manga.FileResource`. |
+| Series management | Manage series profile, unique code, unique slug, lifecycle status, primary language, genre text, cover image, and optional source series reference. |
+| Series contributors | Manage team membership through `SeriesContributor`, not a direct lead Mangaka field on `Series`. |
+| Series proposals | Store formal submitted proposal versions in `SeriesProposal`. Revisions create new proposal rows. |
+| Board workflow | Use `SeriesBoardPoll` and `SeriesBoardVote`. Board results are computed from votes. |
+| Chapters and pages | Use `Chapter`, `ChapterPage`, and `ChapterPageVersion`. |
+| Chapter submission | Submit chapters by changing `Chapter.status_code` to `UNDER_REVIEW`; do not create a separate `ChapterSubmission` table. |
+| Page regions | Store accepted AI/manual regions as `PageRegion` records linked to `ChapterPageVersion`. |
+| Annotations | Store annotations through linked `PageRegion` records, not direct annotation coordinates. |
+| Page tasks | Use page-based `ChapterPageTask` and optional `ChapterPageTaskRegion` links. |
+| Editorial review | Store final chapter-level review decisions in `ChapterEditorialReview`. |
+| Publication planning | Use chapter-level planned release dates and release timestamps. |
+| Ranking | Use simulated/manual reader vote input and time-based `SeriesRankingSnapshot`. |
+| Notifications | Use in-app notifications only. Notifications are not the audit trail. |
+| Auditability | Use current status on main records plus domain records and audit logs. Avoid generic status-history tables. |
+| AI support | AI suggestions are advisory and human-reviewed. Accepted regions are saved as `PageRegion`; final translated pages are saved as `ChapterPageVersion`. |
 
-Core purpose: ensure data is only accessible to the correct user and role.
+### 3.2 Out of Scope for MVP
 
-### 4.2 Studio Production Module
-Handles:
+Do **not** implement these unless the team leader explicitly changes the scope:
 
-- interactive canvas,
-- task orchestration,
-- page segmentation,
-- asset versioning.
+- full drawing, inking, brush, or layer editor,
+- public manga reader portal,
+- public reader accounts,
+- e-commerce, subscription, payment, payroll, or salary modules,
+- full automatic manga localization workflow,
+- `ChapterTranslation`, `PageRegionTranslation`, or localized asset tables,
+- persistent AI job execution history if accepted AI output is enough,
+- `ChapterSubmission`,
+- `SeriesBoardDecision`,
+- generic status-history tables for every workflow entity,
+- full AI model comparison dashboard,
+- automatic AI approval/rejection of pages, chapters, proposals, or board decisions.
 
-Core purpose: turn static manga pages into an interactive production workspace.
+---
 
-### 4.3 AI Intelligence Hub
-Handles:
+## 4. Main Actor Model
 
-- object detection,
-- panel segmentation,
-- AI-to-.NET JSON bridge.
+The project uses both role-based actors and shared permission-based actor groups.
 
-Core purpose: reduce manual work through AI assistance.
+| Actor / Group | Responsibility |
+|---|---|
+| New User | Registers an account and waits for approval before accessing protected workspace functions. |
+| General System User | Uses shared authenticated features such as file display, status visibility, timestamps, and notifications. |
+| Authorized Workflow Participant | Views workflow lists, queues, dashboards, or records allowed for their role. |
+| Authorized Page Workspace User | Accesses page-level editing, annotation, segmentation, translation-support, or page-version feedback tools when permitted. |
+| Mangaka | Creates and manages series, proposals, chapters, pages, page versions, production regions, assistant tasks, task review, chapter submission, ranking monitoring, and responses to editorial feedback. |
+| Assistant | Views assigned page tasks, sees linked regions, uploads completed output as a new page version, and tracks assigned task history. |
+| Tantou Editor | Reviews proposals and chapters, creates page-region annotations, records chapter-level editorial decisions, reviews translation-related issues, and monitors publication/ranking context. |
+| Editorial Board Member | Views board polls, votes `APPROVE`, `REJECT`, or `ABSTAIN`, provides rejection reasons, and reviews ranking/cancellation-risk evidence. |
+| Admin | Manages accounts, file deletion workflow, board polls, publication scheduling, simulated reader vote input, ranking snapshots, audit visibility, traceability, and exceptional administrative overrides. |
 
-### 4.4 Publishing & Editorial Module
-Handles:
+### Actor consolidation decisions
 
-- annotations and markers,
-- review workflow,
-- publishing states,
-- webtoon-style reader/editor view.
+| Older actor term | Current MVP handling |
+|---|---|
+| Authorized Contributor | Merged into Mangaka. |
+| Reviewer / Authorized Reviewer | Merged into Tantou Editor. |
+| Auditor | Merged into Admin for MVP audit visibility. |
+| System Admin | Merged into Admin for MVP account, audit, and traceability responsibilities. |
 
-Core purpose: ensure quality before publication.
+---
 
-### 4.5 Business Analytics & Ranking Module
-Handles:
+## 5. Core Workflow Summary
 
-- vote collection,
-- ranking computation,
-- monitoring and alerts.
+### 5.1 Series and Proposal Workflow
 
-Core purpose: support editorial and business decisions.
+1. Mangaka creates or maintains a series profile.
+2. The series team is managed through `SeriesContributor`.
+3. Mangaka submits a formal proposal version through `SeriesProposal`.
+4. Tantou Editor reviews the submitted proposal directly on the proposal record.
+5. If the proposal passes editorial review, it moves to board review.
+6. Admin opens a valid `START_SERIALIZATION` board poll.
+7. Editorial Board Members vote through `SeriesBoardVote`.
+8. When the poll closes, the system computes the result from vote counts.
+9. The computed result updates the series/proposal status only when applicable.
 
-## 5. Technology Stack
-Layer	Technology
-Frontend	Blazor Server
-Admin UI	MudBlazor
-Canvas	Fabric.js
-Backend	ASP.NET Core Web API
-Architecture	Clean Architecture
-AI Microservice	Python FastAPI
-AI Model	YOLOv8
-Database	SQL Server
-ORM	Entity Framework Core
-Storage	Cloudinary
-Real-time	SignalR
-Version Control	GitHub
-Project Tracking	Jira
-Documentation	Confluence
+### 5.2 Chapter and Page Workflow
+
+1. Mangaka creates chapters under a series.
+2. Mangaka creates logical pages under chapters.
+3. Each page file upload or revision creates a `ChapterPageVersion`.
+4. Only one page version should be current per logical page.
+5. Old page versions remain available for traceability and comparison.
+6. A chapter is submitted for review by changing `Chapter.status_code` to `UNDER_REVIEW` after required active page versions exist.
+7. Page creation, page deletion, and page-version upload are locked while the chapter is under review, approved, scheduled, or released.
+8. If revision is requested, the chapter becomes editable again.
+
+### 5.3 Page Region, Annotation, and Task Workflow
+
+1. Authorized page workspace users can create page regions manually or use AI-assisted segmentation suggestions.
+2. Saved regions are stored as `PageRegion` records linked to a specific `ChapterPageVersion`.
+3. AI suggestions are temporary until a user chooses which regions to save.
+4. New AI regions should be compared against existing saved regions to reduce duplicates.
+5. Annotations are linked to `PageRegion`, not stored as direct annotation coordinates.
+6. Whole-page feedback is represented by a manually created full-page region.
+7. Page tasks are created through `ChapterPageTask` and may target one or more regions through `ChapterPageTaskRegion`.
+8. Assistants submit task output as a new page version.
+9. Mangaka or a Tantou Editor, when permitted by workflow rules, reviews the submitted page version before the task is completed.
+
+### 5.4 Editorial Review Workflow
+
+1. Tantou Editor reviews submitted chapters page by page.
+2. Page-level annotations support review but do not replace the final chapter-level decision.
+3. Final chapter review decisions are stored in `ChapterEditorialReview`.
+4. Allowed decisions are `APPROVED`, `REVISION_REQUESTED`, and `CANCELLED`.
+5. Revision and cancellation decisions require meaningful comments or a markup file.
+6. Creating a chapter editorial review updates `Chapter.status_code` according to the decision.
+
+### 5.5 Board Poll and Ranking Workflow
+
+1. Admin may open board polls for `START_SERIALIZATION` or `CANCEL_SERIALIZATION`.
+2. Polls require a non-empty reason and may have an optional end time.
+3. Board members vote only while the poll is open.
+4. Votes are preserved after the poll closes or is cancelled.
+5. Board results are computed from approve/reject vote counts.
+6. Abstain votes are counted separately but do not directly determine approval or rejection in MVP.
+7. Simulated reader vote input supports ranking demonstration without a public reader module.
+8. Ranking snapshots are stored over time and can support editorial/board decisions.
+
+---
+
+## 6. System Architecture
+
+The intended architecture is a **Distributed Monolith with an optional local AI advisory service**.
+
+- The main application handles business workflow, access control, auditability, files, and UI.
+- The AI service is separated because segmentation/OCR/translation support is easier to run in Python.
+- The backend communicates with the AI service through JSON APIs.
+- SQL Server stores workflow metadata and audit records.
+- Cloudinary stores actual media files.
+
+### 6.1 Planned Technology Stack
+
+| Layer | Technology |
+|---|---|
+| Main application | C# / .NET 8 |
+| Frontend | Blazor Web App / Blazor Server |
+| UI library | MudBlazor |
+| Canvas / page interaction | Fabric.js over HTML5 Canvas |
+| Backend | ASP.NET Core Web API |
+| Architecture style | Clean Architecture-style layers |
+| Database | SQL Server |
+| ORM | Entity Framework Core |
+| Schemas | `auth`, `manga`, `audit` |
+| File storage | Cloudinary + `manga.FileResource` metadata |
+| AI service | Optional Python FastAPI local/internal service |
+| AI communication | JSON API bridge |
+| Real-time updates | Optional SignalR for notifications/status updates |
+| Version control | GitHub |
+
+---
+
+## 7. Main System Modules
+
+### 7.1 Users and Access Control
+
+Handles registration, account status, role-based access, login restrictions, profile files, and admin account management.
+
+Key rules:
+
+- Each account has exactly one MVP system role.
+- New accounts start as `PENDING_APPROVAL`.
+- Pending users cannot access protected workspace functions.
+- Admin can activate or disable accounts.
+- Disabled accounts cannot log in.
+- Avatar and portfolio files are stored through `FileResource`.
+
+### 7.2 File Resource and Cloudinary
+
+Handles file metadata and media storage references.
+
+Key rules:
+
+- Actual media files are stored in Cloudinary.
+- SQL Server stores file metadata and references in `manga.FileResource`.
+- Business tables should reference `file_resource_id`, not raw Cloudinary URLs.
+- Deleted file resources are excluded from normal UI queries unless viewing historical/audit data.
+- Normal UI should show a safe placeholder when a referenced file is unavailable or deleted.
+
+### 7.3 Series, Contributors, and Proposals
+
+Handles series profile records, contributor membership, and formal proposal submission versions.
+
+Key rules:
+
+- Series must have unique system codes and slugs.
+- Series ownership is handled through `SeriesContributor`.
+- Proposal revisions create new `SeriesProposal` rows.
+- Submitted proposal snapshot fields should not be edited directly.
+- Editorial review information may be stored directly in `SeriesProposal` for MVP.
+
+### 7.4 Page Versioning and Page Workspace
+
+Handles logical pages, page uploads, page revisions, segmentation regions, annotations, translation support, and task outputs.
+
+Key rules:
+
+- `ChapterPage` is a logical page slot.
+- `ChapterPageVersion` stores uploaded/revised page files.
+- `PageRegion` belongs to exactly one `ChapterPageVersion`.
+- Annotations reference `PageRegion`.
+- Final translated or edited pages are saved as new `ChapterPageVersion` records.
+
+### 7.5 Page Tasks
+
+Handles page-based work assignments and assistant submissions.
+
+Key rules:
+
+- Each task targets one logical page.
+- Each task is assigned to one assistant or authorized user.
+- A task may target multiple page regions through `ChapterPageTaskRegion`.
+- Task status values are `ASSIGNED`, `UNDER_REVIEW`, `COMPLETED`, and `CANCELLED`.
+- Reassignment should create a new task instead of changing the original assignee.
+
+### 7.6 Editorial Review
+
+Handles proposal review, chapter review, markup files, comments, and final chapter decisions.
+
+Key rules:
+
+- Chapter editorial reviews are stored directly against `Chapter`.
+- Page-specific annotations support chapter review.
+- Final decisions are stored at chapter level.
+- Revision and cancellation require meaningful comments or markup.
+
+### 7.7 Board Polling and Voting
+
+Handles board decisions through polls and votes.
+
+Key rules:
+
+- Admin creates board polls.
+- Board members vote only in open polls.
+- Each board member can vote once per poll.
+- Rejection votes require a reason.
+- Results are computed from votes.
+- No separate `SeriesBoardDecision` table is required for MVP.
+
+### 7.8 Ranking, Notifications, and Auditability
+
+Handles simulated reader vote input, ranking snapshots, in-app notifications, and audit evidence.
+
+Key rules:
+
+- Ranking uses simulated/manual aggregated reader vote input.
+- Ranking snapshots are stored by period.
+- Notifications help users notice workflow events but are not the audit trail.
+- Important workflow actions are audit-logged.
+- Avoid separate status-history tables unless a future requirement needs them.
+
+---
+
+## 8. AI Assistance Scope
+
+AI features are optional/advisory support tools. They must remain human-reviewed.
+
+AI may support:
+
+- panel detection,
+- speech bubble detection,
+- character region detection,
+- SFX/background region suggestions,
+- OCR extraction,
+- translation suggestions,
+- coordinate/bounding-box suggestions,
+- JSON output to the .NET backend,
+- displaying detected regions on the Fabric.js canvas.
+
+AI must **not**:
+
+- automatically approve pages or chapters,
+- automatically reject pages or chapters,
+- automatically make board decisions,
+- replace editors, mangaka, assistants, or board members,
+- claim perfect segmentation,
+- claim fully automatic professional manga localization.
+
+---
+
+## 9. Important Data Design Decisions
+
+| Decision | MVP Direction |
+|---|---|
+| Status history | Store current status on main records and use audit/domain records for important events. Do not create generic status-history tables for every entity. |
+| Chapter submission | Use `Chapter.status_code = UNDER_REVIEW`; do not create `ChapterSubmission`. |
+| Board decision | Compute result from `SeriesBoardPoll` and `SeriesBoardVote`; do not create `SeriesBoardDecision`. |
+| Translation | Do not create structured translation tables for MVP; save final edited/translated page as `ChapterPageVersion`. |
+| AI history | Do not store persistent AI job history if accepted AI output as `PageRegion` is enough. |
+| Annotation coordinates | Do not store direct annotation coordinates; derive location from linked `PageRegion`. |
+| File references | Business tables reference `FileResource`; Cloudinary details stay inside file metadata. |
+| Contributor ownership | Use `SeriesContributor`; do not store direct lead Mangaka ownership on `Series`. |
+| Reader module | No public reader module in MVP; ranking uses simulated/manual aggregated input. |
+| Admin scope | Admin includes account, audit, traceability, and system-level management responsibilities for MVP. |
+
+---
+
+## 10. Documentation References
+
+For detailed traceability, `business-rules.md`, `functional-requirements.md`, and `user-stories.md` are the authoritative planning documents; this README is a high-level project summary.
+The repository should keep these planning documents aligned:
+
+- `Context.md` — teammate and AI-assistant handoff context.
+- `business-rules.md` — MVP business rules and constraints.
+- `functional-requirements.md` — technical “The system shall...” requirements.
+- `user-stories.md` — actor-based user stories.
+
+When one of these files changes, update the others if the change affects scope, actors, requirements, or implementation boundaries.
+
+---
+
+## 11. Development Notes
+
+- Keep the MVP practical for a university software engineering project.
+- Prefer clear workflow records over unnecessary extra tables.
+- Avoid adding payroll, salary, payment, public reader, or full drawing-editor features.
+- Keep AI optional and advisory.
+- Enforce access control in the backend, not only by hiding frontend buttons.
+- Preserve workflow history through domain records and audit logs.
+- Do not delete important workflow evidence when status changes or revisions occur.
+
+---
+
+## 12. Project Status
+
+This README describes the intended MVP direction and architecture. Implementation details may change as the team finalizes database schema, API endpoints, UI screens, and GitHub issues.

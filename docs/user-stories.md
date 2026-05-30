@@ -9,7 +9,7 @@ Basis: Verified MVP business rules, updated PageRegion segmentation rules, and p
 |---|---|---|
 | Authorized Contributor | Mangaka | Merged into Mangaka; duplicate series/chapter/page stories removed. |
 | Reviewer / Authorized Reviewer | Tantou Editor | Merged into Tantou Editor; duplicate annotation and task-review stories removed. |
-| Auditor | System Admin | Merged into System Admin; duplicate audit/traceability stories removed. |
+| Auditor / System Admin | Admin | Merged into Admin; duplicate audit/traceability stories removed. |
 | Broad `System User` for page tools | Authorized Page Workspace User | Page segmentation, region editing, OCR/translation assistance, and page-version feedback are moved out of `System User` so Editorial Board Members are not accidentally included. |
 | Shared workflow list/filtering behavior | Authorized Workflow Participant | Generic workflow-list filtering applies only to users who have permission to view a workflow queue/list for their role. |
 | Duplicated Mangaka/Editor AI segmentation stories | Authorized Page Workspace User + role-specific stories | Shared segmentation mechanics are grouped, while Mangaka and Tantou Editor keep separate purpose/value stories. |
@@ -150,34 +150,25 @@ Basis: Verified MVP business rules, updated PageRegion segmentation rules, and p
 
 | Story ID | Source Rule(s) | User Story |
 |---|---|---|
-| US-ADMIN-001 | BR-USER-004, BR-USER-005, BR-USER-006, BR-USER-010 | As an Admin, I want to view, activate, and disable user accounts through current account status, so that account access is controlled without a separate registration request table. |
-| US-ADMIN-002 | BR-FILE-003, BR-FILE-004 | As an Admin, I want file deletion to happen through the application workflow, so that Cloudinary assets and SQL metadata remain consistent. |
+| US-ADMIN-001 | BR-USER-004, BR-USER-005, BR-USER-006, BR-USER-010, BR-HIST-004 | As an Admin, I want to view, activate, disable, and audit user account actions through current account status, so that account access is controlled and account management remains traceable without a separate registration request table. |
+| US-ADMIN-002 | BR-FILE-003, BR-FILE-004, BR-FILE-007 | As an Admin, I want file deletion to happen through the application workflow while historical records retain file references when needed, so that Cloudinary assets, SQL metadata, and past workflow evidence remain consistent. |
 | US-ADMIN-003 | BR-SERIES-001, BR-SERIES-002 | As an Admin, I want series codes and URL slugs to remain unique, so that series records can be identified reliably. |
-| US-ADMIN-004 | BR-BOARD-POLL-001, BR-BOARD-POLL-002, BR-BOARD-POLL-003, BR-BOARD-POLL-004, BR-BOARD-POLL-005, BR-BOARD-POLL-007, BR-BOARD-POLL-008, BR-BOARD-POLL-009 | As an Admin, I want to open valid START_SERIALIZATION or CANCEL_SERIALIZATION board polls with reasons and optional end times, so that board voting starts from a correct workflow state. |
-| US-ADMIN-005 | BR-BOARD-POLL-014, BR-BOARD-POLL-015, BR-BOARD-POLL-017 | As an Admin, I want to cancel invalid board polls without deleting votes, so that incorrect poll setups are invalidated but remain traceable. |
-| US-ADMIN-006 | BR-BOARD-POLL-016, BR-BOARD-POLL-017, BR-BOARD-RESULT-001, BR-BOARD-RESULT-002, BR-BOARD-RESULT-003, BR-BOARD-RESULT-004, BR-BOARD-RESULT-005, BR-BOARD-RESULT-006, BR-BOARD-RESULT-007, BR-BOARD-RESULT-010 | As an Admin, I want to close a valid poll and view computed vote totals, so that the applicable board result can be determined without a separate decision table. |
-| US-ADMIN-007 | BR-BOARD-RESULT-011, BR-BOARD-RESULT-012, BR-BOARD-RESULT-013, BR-BOARD-RESULT-014, BR-BOARD-RESULT-015, BR-BOARD-RESULT-017 | As an Admin, I want applicable closed poll results to update proposal or series status according to the board rules, so that board decisions affect workflow only at the correct time. |
-| US-ADMIN-008 | BR-CH-CANCEL-005 | As an Admin, I want to perform administrative chapter cancellation overrides only when audit-logged, so that exceptional cancellations remain traceable. |
-| US-ADMIN-009 | BR-PUB-001, BR-PUB-008, BR-PUB-009, BR-CH-007, BR-CH-008, BR-CH-009 | As an Admin, I want to set planned release dates, schedule approved chapters, and record released timestamps according to Chapter status rules, so that publication planning is complete and delays can be derived. |
-| US-ADMIN-010 | BR-VOTE-INPUT-001, BR-VOTE-INPUT-002, BR-VOTE-INPUT-003, BR-VOTE-INPUT-005, BR-VOTE-INPUT-006, BR-VOTE-INPUT-007, BR-VOTE-INPUT-008, BR-VOTE-INPUT-009 | As an Admin, I want to enter one simulated or aggregated reader vote snapshot for a released chapter with valid counts, rating, timestamp, and entered-by user, so that ranking can be demonstrated without a public reader module. |
-| US-ADMIN-011 | BR-RANK-001, BR-RANK-002, BR-RANK-003, BR-RANK-004, BR-RANK-009, BR-RANK-010, BR-RANK-011 | As an Admin, I want ranking snapshots to be generated and stored by ranking period from reader vote input, so that series performance can be reviewed over time. |
-| US-ADMIN-012 | BR-NOTIF-013, BR-HIST-004 | As an Admin, I want important notification-triggering workflow actions to also be audit-logged when required, so that user awareness does not replace traceability. |
-
----
-
-## 10. System Admin
-
-| Story ID | Source Rule(s) | User Story |
-|---|---|---|
-| US-SYSADMIN-001 | BR-HIST-004, BR-USER-010 | As a System Admin, I want account approvals and disable actions to be audit-logged, so that account management remains traceable. |
-| US-SYSADMIN-002 | BR-FILE-004, BR-FILE-007 | As a System Admin, I want historical records to retain file references even when files are inactive, so that past workflow actions remain traceable. |
-| US-SYSADMIN-003 | BR-SC-006, BR-SC-007 | As a System Admin, I want contributor history to remain available after contributors leave a series, so that past participation can be audited. |
-| US-SYSADMIN-004 | BR-PROP-007, BR-PROP-012, BR-PROP-017, BR-PROP-020 | As a System Admin, I want proposal versions and review metadata to remain searchable and traceable, so that proposal decisions can be audited. |
-| US-SYSADMIN-005 | BR-BOARD-POLL-013, BR-BOARD-POLL-015, BR-BOARD-POLL-017, BR-BOARD-RESULT-017 | As a System Admin, I want board polls, cancelled polls, votes, and result applications to remain audit-visible, so that board-driven status changes are traceable. |
-| US-SYSADMIN-006 | BR-CH-004, BR-CH-012, BR-CH-REV-014, BR-CH-CANCEL-003, BR-CH-CANCEL-005 | As a System Admin, I want chapter status changes, editorial decisions, cancellation decisions, and preserved chapter materials to remain traceable, so that important workflow decisions can be reviewed later. |
-| US-SYSADMIN-007 | BR-REG-012, BR-ANN-014, BR-ANN-015, BR-CP-016 | As a System Admin, I want page regions to preserve their page-version ownership and annotations to derive page-version context through linked regions, so that review history remains accurate after new uploads. |
-| US-SYSADMIN-008 | BR-PGTASK-027, BR-PGTASK-029, BR-PGTASK-031 | As a System Admin, I want page task creation, cancellation, completion, status changes, and preserved old task records to be audit-visible, so that task workflow remains traceable. |
-| US-SYSADMIN-009 | BR-VOTE-INPUT-004, BR-VOTE-INPUT-009, BR-RANK-008 | As a System Admin, I want reader vote input and ranking snapshots to record evidence and entered-by information, so that simulated ranking data can be audited. |
-| US-SYSADMIN-010 | BR-HIST-001, BR-HIST-002, BR-HIST-003, BR-HIST-005, BR-HIST-006, BR-HIST-008 | As a System Admin, I want domain records and audit logs to serve as workflow evidence instead of separate status-history tables, so that the MVP stays simple while preserving traceability. |
+| US-ADMIN-004 | BR-SC-006, BR-SC-007 | As an Admin, I want contributor history to remain available after contributors leave a series, so that past participation can be reviewed and audited. |
+| US-ADMIN-005 | BR-PROP-007, BR-PROP-012, BR-PROP-017, BR-PROP-020 | As an Admin, I want proposal versions and review metadata to remain searchable and traceable, so that proposal decisions can be reviewed later. |
+| US-ADMIN-006 | BR-BOARD-POLL-001, BR-BOARD-POLL-002, BR-BOARD-POLL-003, BR-BOARD-POLL-004, BR-BOARD-POLL-005, BR-BOARD-POLL-007, BR-BOARD-POLL-008, BR-BOARD-POLL-009 | As an Admin, I want to open valid START_SERIALIZATION or CANCEL_SERIALIZATION board polls with reasons and optional end times, so that board voting starts from a correct workflow state. |
+| US-ADMIN-007 | BR-BOARD-POLL-014, BR-BOARD-POLL-015, BR-BOARD-POLL-017 | As an Admin, I want to cancel invalid board polls without deleting votes, so that incorrect poll setups are invalidated but remain traceable. |
+| US-ADMIN-008 | BR-BOARD-POLL-016, BR-BOARD-POLL-017, BR-BOARD-RESULT-001, BR-BOARD-RESULT-002, BR-BOARD-RESULT-003, BR-BOARD-RESULT-004, BR-BOARD-RESULT-005, BR-BOARD-RESULT-006, BR-BOARD-RESULT-007, BR-BOARD-RESULT-010 | As an Admin, I want to close a valid poll and view computed vote totals, so that the applicable board result can be determined without a separate decision table. |
+| US-ADMIN-009 | BR-BOARD-RESULT-011, BR-BOARD-RESULT-012, BR-BOARD-RESULT-013, BR-BOARD-RESULT-014, BR-BOARD-RESULT-015, BR-BOARD-RESULT-017 | As an Admin, I want applicable closed poll results to update proposal or series status according to the board rules, so that board decisions affect workflow only at the correct time. |
+| US-ADMIN-010 | BR-BOARD-POLL-013, BR-BOARD-POLL-015, BR-BOARD-POLL-017, BR-BOARD-RESULT-017 | As an Admin, I want board polls, cancelled polls, votes, and result applications to remain audit-visible, so that board-driven status changes are traceable. |
+| US-ADMIN-011 | BR-CH-CANCEL-005 | As an Admin, I want to perform administrative chapter cancellation overrides only when audit-logged, so that exceptional cancellations remain traceable. |
+| US-ADMIN-012 | BR-CH-004, BR-CH-012, BR-CH-REV-014, BR-CH-CANCEL-003, BR-CH-CANCEL-005 | As an Admin, I want chapter status changes, editorial decisions, cancellation decisions, and preserved chapter materials to remain traceable, so that important workflow decisions can be reviewed later. |
+| US-ADMIN-013 | BR-REG-012, BR-ANN-014, BR-ANN-015, BR-CP-016 | As an Admin, I want page regions to preserve their page-version ownership and annotations to derive page-version context through linked regions, so that review history remains accurate after new uploads. |
+| US-ADMIN-014 | BR-PGTASK-027, BR-PGTASK-029, BR-PGTASK-031 | As an Admin, I want page task creation, cancellation, completion, status changes, and preserved old task records to be audit-visible, so that task workflow remains traceable. |
+| US-ADMIN-015 | BR-PUB-001, BR-PUB-008, BR-PUB-009, BR-CH-007, BR-CH-008, BR-CH-009 | As an Admin, I want to set planned release dates, schedule approved chapters, and record released timestamps according to Chapter status rules, so that publication planning is complete and delays can be derived. |
+| US-ADMIN-016 | BR-VOTE-INPUT-001, BR-VOTE-INPUT-002, BR-VOTE-INPUT-003, BR-VOTE-INPUT-005, BR-VOTE-INPUT-006, BR-VOTE-INPUT-007, BR-VOTE-INPUT-008, BR-VOTE-INPUT-009 | As an Admin, I want to enter one simulated or aggregated reader vote snapshot for a released chapter with valid counts, rating, timestamp, and entered-by user, so that ranking can be demonstrated without a public reader module. |
+| US-ADMIN-017 | BR-VOTE-INPUT-004, BR-VOTE-INPUT-009, BR-RANK-008 | As an Admin, I want reader vote input and ranking snapshots to record evidence and entered-by information, so that simulated ranking data can be audited. |
+| US-ADMIN-018 | BR-RANK-001, BR-RANK-002, BR-RANK-003, BR-RANK-004, BR-RANK-009, BR-RANK-010, BR-RANK-011 | As an Admin, I want ranking snapshots to be generated and stored by ranking period from reader vote input, so that series performance can be reviewed over time. |
+| US-ADMIN-019 | BR-NOTIF-013, BR-HIST-004 | As an Admin, I want important notification-triggering workflow actions to also be audit-logged when required, so that user awareness does not replace traceability. |
+| US-ADMIN-020 | BR-HIST-001, BR-HIST-002, BR-HIST-003, BR-HIST-005, BR-HIST-006, BR-HIST-008 | As an Admin, I want domain records and audit logs to serve as workflow evidence instead of separate status-history tables, so that the MVP stays simple while preserving traceability. |
 
 ---
