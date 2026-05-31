@@ -2,6 +2,7 @@ using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Common;
 using Microsoft.EntityFrameworkCore;
 using System.Reflection;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace MangaManagementSystem.Infrastructure.Persistence
 {
@@ -80,5 +81,20 @@ namespace MangaManagementSystem.Infrastructure.Persistence
         DbSet<ChapterReaderVoteSnapshot> ChapterReaderVoteSnapshots { get; }
         DbSet<Notification> Notifications { get; }
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
+    }
+
+    public class ChapterConfiguration : IEntityTypeConfiguration<Chapter>
+    {
+        public void Configure(EntityTypeBuilder<Chapter> builder)
+        {
+            builder.HasKey(c => c.ChapterId);
+
+            builder.HasOne(c => c.Series)
+                .WithMany(s => s.Chapters)
+                .HasForeignKey(c => c.SeriesId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Other property configurations...
+        }
     }
 }

@@ -2,16 +2,28 @@ using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace MangaManagementSystem.Application.Services
 {
     public class UserService : IUserService
     {
+        private const string StatusPendingApproval = "PENDING_APPROVAL";
+        private const string StatusActive = "ACTIVE";
+        private const string StatusDisabled = "DISABLED";
+        private const short MinRoleId = 1;
+        private const short MaxRoleId = 5;
+
         private readonly IUnitOfWork _unitOfWork;
-        public UserService(IUnitOfWork unitOfWork)
+        private readonly IPasswordHasher _passwordHasher;
+
+        public UserService(IUnitOfWork unitOfWork, IPasswordHasher passwordHasher)
         {
             _unitOfWork = unitOfWork;
+            _passwordHasher = passwordHasher;
         }
 
         public async Task<UserDto> CreateUserAsync(CreateUserDto dto)
@@ -21,7 +33,7 @@ namespace MangaManagementSystem.Application.Services
                 RoleId = dto.RoleId,
                 Username = dto.Username,
                 Email = dto.Email,
-                PasswordHash = dto.Password, // TODO: Hash password in future
+                PasswordHash = _passwordHasher.HashPassword(dto.Password),
                 AvatarFileId = dto.AvatarFileId,
                 PortfolioFileId = dto.PortfolioFileId,
                 Status = "PENDING_APPROVAL",
@@ -42,6 +54,64 @@ namespace MangaManagementSystem.Application.Services
         {
             var entity = await _unitOfWork.Users.GetByEmailAsync(email);
             return entity == null ? null : MapToDto(entity);
+        }
+
+        public async Task<IEnumerable<UserDto>> GetUsersByStatusAsync(string status)
+        {
+            var entities = await _unitOfWork.Users.GetByStatusAsync(status);
+            return entities.Select(MapToDto);
+        }
+
+        public async Task<UserDto> ApproveUserAsync(int userId, short assignedRoleId)
+        {
+            var user = await RequirePendingUserAsync(userId);
+            await EnsureValidRoleIdAsync(assignedRoleId);
+
+            user.Status = StatusActive;
+            user.RoleId = assignedRoleId;
+            _unitOfWork.Users.Update(user);
+            await _unitOfWork.SaveChangesAsync();
+            return MapToDto(user);
+        }
+
+        public async Task RejectUserAsync(int userId)
+        {
+            var user = await RequirePendingUserAsync(userId);
+
+            user.Status = StatusDisabled;
+            _unitOfWork.Users.Update(user);
+            await _unitOfWork.SaveChangesAsync();
+        }
+
+        private async Task<User> RequirePendingUserAsync(int userId)
+        {
+            var user = await _unitOfWork.Users.GetByIdAsync(userId);
+            if (user == null)
+            {
+                throw new InvalidOperationException($"User {userId} was not found.");
+            }
+
+            if (user.Status != StatusPendingApproval)
+            {
+                throw new InvalidOperationException(
+                    $"User {userId} cannot be processed because their status is '{user.Status}', not '{StatusPendingApproval}'.");
+            }
+
+            return user;
+        }
+
+        private async Task EnsureValidRoleIdAsync(short roleId)
+        {
+            if (roleId < MinRoleId || roleId > MaxRoleId)
+            {
+                throw new InvalidOperationException(
+                    $"Role id {roleId} is invalid. Allowed roles are {MinRoleId} through {MaxRoleId}.");
+            }
+
+            if (await _unitOfWork.Roles.GetByIdAsync(roleId) == null)
+            {
+                throw new InvalidOperationException($"Role id {roleId} does not exist.");
+            }
         }
 
         private static UserDto MapToDto(User u) => new(

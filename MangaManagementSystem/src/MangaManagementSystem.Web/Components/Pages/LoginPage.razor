@@ -1,5 +1,7 @@
 @page "/login"
-@inject NavigationManager Nav
+@using Microsoft.AspNetCore.WebUtilities
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
 
 <PageTitle>Login - MangaFlow</PageTitle>
 
@@ -15,43 +17,157 @@
                 <MudText Typo="Typo.h5" Class="font-weight-bold text-white">Login to Your Account</MudText>
             </div>
             <div class="pa-8">
-                @if (IsLoading)
-                {
-                    <div class="text-center py-8">
-                        <MudProgressCircular Indeterminate="true" Color="Color.Primary" Size="Size.Large" Class="mb-4" />
-                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">Redirecting to your assigned workspace...</MudText>
-                        <MudText Typo="Typo.body2" Class="mf-muted">Prototype demo route. In the real system, users are redirected based on their assigned role.</MudText>
-                    </div>
-                }
-                else
-                {
+                <form action="/api/auth/login" method="post" data-enhance="false" class="login-form">
+                    <AntiforgeryToken />
                     <MudStack Spacing="3">
-                        <MudTextField Label="Username or Email" @bind-Value="UsernameOrEmail" Variant="Variant.Outlined" Required="true" />
-                        <MudTextField Label="Password" @bind-Value="Password" Variant="Variant.Outlined" InputType="InputType.Password" Required="true" />
+                        <div class="login-form__field">
+                            <label class="login-form__label" for="username">Username or Email</label>
+                            <input id="username"
+                                   name="username"
+                                   type="text"
+                                   class="login-form__input"
+                                   required
+                                   autocomplete="username" />
+                        </div>
+                        <div class="login-form__field">
+                            <label class="login-form__label" for="password">Password</label>
+                            <input id="password"
+                                   name="password"
+                                   type="password"
+                                   class="login-form__input"
+                                   required
+                                   autocomplete="current-password" />
+                        </div>
                         <MudText Align="Align.Right"><MudLink Href="#">Forgot Password?</MudLink></MudText>
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" OnClick="LoginAsync" FullWidth="true">Login</MudButton>
-                        <MudDivider />
-                        <MudText Align="Align.Center">Don't have an account? <MudLink Href="/register">Create Account</MudLink></MudText>
+                        <button type="submit" class="login-form__submit">
+                            Login
+                        </button>
                     </MudStack>
-                }
+                </form>
+
+                <MudDivider Class="my-4" />
+
+                <form action="/api/auth/google-login" method="post" data-enhance="false">
+                    <AntiforgeryToken />
+                    <button type="submit" class="google-auth-button">
+                        <span class="google-auth-button__content">
+                            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+                                 alt=""
+                                 width="18"
+                                 height="18"
+                                 class="google-auth-button__icon" />
+                            <span>Login with Google</span>
+                        </span>
+                    </button>
+                </form>
+
+                <MudDivider Class="my-4" />
+                <MudText Align="Align.Center">
+                    Don't have an account? <MudLink Href="/register">Create Account</MudLink>
+                </MudText>
             </div>
         </MudPaper>
-        @if (!IsLoading)
-        {
-            <MudText Align="Align.Center" Class="mt-4"><MudLink Href="/">← Back to Home</MudLink></MudText>
-        }
+
+        <MudText Align="Align.Center" Class="mt-4"><MudLink Href="/">← Back to Home</MudLink></MudText>
     </MudContainer>
 </div>
 
-@code {
-    private string UsernameOrEmail { get; set; } = string.Empty;
-    private string Password { get; set; } = string.Empty;
-    private bool IsLoading { get; set; }
+<style>
+    .login-form__field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
 
-    private async Task LoginAsync()
+    .login-form__label {
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: rgba(0, 0, 0, 0.6);
+    }
+
+    .login-form__input {
+        width: 100%;
+        padding: 16px 14px;
+        border: 1px solid rgba(0, 0, 0, 0.23);
+        border-radius: 4px;
+        font-size: 1rem;
+        font-family: inherit;
+        box-sizing: border-box;
+    }
+
+    .login-form__input:focus {
+        outline: 2px solid #594ae2;
+        border-color: #594ae2;
+    }
+
+    .login-form__submit {
+        width: 100%;
+        padding: 14px 16px;
+        border: none;
+        border-radius: 4px;
+        background: #594ae2;
+        color: #fff;
+        font-size: 0.875rem;
+        font-weight: 500;
+        letter-spacing: 0.0892857143em;
+        text-transform: uppercase;
+        cursor: pointer;
+        margin-top: 8px;
+    }
+
+    .login-form__submit:hover {
+        background: #4a3ec9;
+    }
+
+    .google-auth-button {
+        display: block;
+        width: 100%;
+        padding: 10px 16px;
+        border: 1px solid #dadce0;
+        border-radius: 4px;
+        background: #fff;
+        color: #3c4043;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        text-transform: none;
+    }
+
+    .google-auth-button:hover {
+        background: #f8f9fa;
+    }
+
+    .google-auth-button__content {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        width: 100%;
+        font-weight: 500;
+    }
+
+    .google-auth-button__icon {
+        display: block;
+    }
+</style>
+
+@code {
+    protected override void OnInitialized()
     {
-        IsLoading = true;
-        await Task.Delay(800);
-        Nav.NavigateTo("/dashboard");
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        if (query.TryGetValue("error", out var error))
+        {
+            var message = error.ToString() switch
+            {
+                "GoogleAuthFailed" => "Google sign-in failed. Please try again or use email login.",
+                "GoogleEmailMissing" => "Google did not return an email address for this account. Try another Google account or use email login.",
+                "UserNotInDatabase" or "UserNotFoundOrInactive" => "No active account found for this Google email. Register first or contact an administrator.",
+                "InvalidCredentials" or "invalid" => "Invalid credentials. Please check your username and password.",
+                _ => "Unable to sign in. Please try again."
+            };
+            Snackbar.Add(message, Severity.Error);
+        }
     }
 }

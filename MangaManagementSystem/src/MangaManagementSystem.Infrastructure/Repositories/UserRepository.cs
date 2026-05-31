@@ -2,6 +2,8 @@ using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace MangaManagementSystem.Infrastructure.Repositories
@@ -17,6 +19,25 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         public async Task<User?> GetByEmailAsync(string email)
         {
             return await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+        }
+
+        public async Task<User?> GetByUsernameAsync(string username)
+        {
+            return await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+        }
+
+        public async Task<User?> GetByUsernameOrEmailAsync(string usernameOrEmail)
+        {
+            return await _context.Users.FirstOrDefaultAsync(u =>
+                u.Email == usernameOrEmail || u.Username == usernameOrEmail);
+        }
+
+        public async Task<IReadOnlyList<User>> GetByStatusAsync(string status)
+        {
+            return await _context.Users
+                .Where(u => u.Status == status)
+                .OrderBy(u => u.CreatedAt)
+                .ToListAsync();
         }
     }
 }

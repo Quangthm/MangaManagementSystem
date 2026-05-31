@@ -24,8 +24,8 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
             builder.HasCheckConstraint("CK_PageRegion_SourceType", "[SourceType] IN ('AI','MANUAL')");
             builder.HasCheckConstraint("CK_PageRegion_Width_Height", "[Width] > 0 AND [Height] > 0");
             builder.HasOne(r => r.ChapterPageVersion).WithMany().HasForeignKey(r => r.ChapterPageVersionId);
-            builder.HasOne(r => r.CreatedByUser).WithMany().HasForeignKey(r => r.CreatedByUserId);
-            builder.HasOne(r => r.UpdatedByUser).WithMany().HasForeignKey(r => r.UpdatedByUserId);
+            builder.HasOne(r => r.CreatedByUser).WithMany().HasForeignKey(r => r.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
+            builder.HasOne(r => r.DeletedByUser).WithMany().HasForeignKey(r => r.DeletedByUserId).OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

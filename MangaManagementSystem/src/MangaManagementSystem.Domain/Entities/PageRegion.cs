@@ -23,5 +23,7 @@ namespace MangaManagementSystem.Domain.Entities
         public DateTime? UpdatedAtUtc { get; set; }
         public int? UpdatedByUserId { get; set; }
         public User? UpdatedByUser { get; set; }
+        public User? DeletedByUser { get; set; }
+        public int? DeletedByUserId { get; set; }
     }
 }
