@@ -27,7 +27,7 @@ The MVP should stay focused and avoid unnecessary tables unless a table represen
 
 | Area | MVP Decision |
 |---|---|
-| Users and accounts | Use one MVP role per account. New users start as `PENDING_APPROVAL`. Admin activates or disables accounts. |
+| Users and accounts | Use one MVP role per account. New users start as `PENDING_APPROVAL`. Admin activates, rejects, or disables accounts. |
 | File management | Store actual media in Cloudinary; store metadata and references in `manga.FileResource`. |
 | Series management | Manage series profile, unique code, unique slug, lifecycle status, language, genre text, cover image, and optional source series reference. |
 | Series contributors | Manage team membership through `SeriesContributor`, not a direct lead Mangaka column on `Series`. |
@@ -148,10 +148,12 @@ The project uses **permission-based actor grouping** for shared features and rol
 - New registered users are created with `PENDING_APPROVAL` by default.
 - Pending users cannot access protected workspace functions.
 - Admin activates pending users by changing status to `ACTIVE`.
+- Admin rejects pending users by changing status to `REJECTED`.
 - Admin disables accounts by changing status to `DISABLED`.
-- Disabled accounts cannot log in.
+- Rejected and disabled accounts cannot log in.
+- A rejected user account keeps its email and username reserved in MVP.
 - Users may optionally have avatar and portfolio files stored through `FileResource`.
-- Registration approval history is handled through current user status and audit logs, not a separate registration request table.
+- Registration approval/rejection history is handled through current user status and audit logs, not a separate registration request table.
 
 ## 4.5 Series and Contributors
 

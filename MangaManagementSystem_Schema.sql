@@ -44,23 +44,24 @@ CREATE TABLE auth.Users (
 	password_hash NVARCHAR(255) NOT NULL,
 	avatar_file_id BIGINT NULL,
 	portfolio_file_id BIGINT NULL,
-	STATUS NVARCHAR(30) NOT NULL CONSTRAINT df_users_status DEFAULT 'PENDING_APPROVAL',
-	created_at DATETIME2(7) NOT NULL CONSTRAINT df_users_created_at DEFAULT SYSUTCDATETIME(),
+	status_code NVARCHAR(30) NOT NULL CONSTRAINT df_users_status DEFAULT N'PENDING_APPROVAL',
+	created_at_utc DATETIME2(7) NOT NULL CONSTRAINT df_users_created_at_utc DEFAULT SYSUTCDATETIME(),
 	CONSTRAINT uq_users_username UNIQUE (username),
 	CONSTRAINT uq_users_email UNIQUE (email),
-	CONSTRAINT ck_users_status_values CHECK (
-		STATUS IN (
-			'PENDING_APPROVAL',
-			'ACTIVE',
-			'DISABLED'
+	CONSTRAINT ck_users_status_code CHECK (
+		status_code IN (
+			N'PENDING_APPROVAL',
+			N'REJECTED',
+			N'ACTIVE',
+			N'DISABLED'
 			)
 		),
 	CONSTRAINT fk_userrole_role FOREIGN KEY (role_id) REFERENCES auth.Roles(role_id)
 	);
 
 CREATE INDEX ix_users_status_created ON auth.Users (
-	STATUS,
-	created_at DESC
+	status_code,
+	created_at_utc DESC
 	) INCLUDE (
 	username,
 	email,
@@ -69,7 +70,7 @@ CREATE INDEX ix_users_status_created ON auth.Users (
 
 CREATE INDEX ix_users_role_status ON auth.Users (
 	role_id,
-	STATUS
+	status_code
 	) INCLUDE (
 	username,
 	email
@@ -91,11 +92,11 @@ CREATE TABLE manga.FileResource (
 	CONSTRAINT ck_file_resource_file_purpose_code CHECK (
 		file_purpose_code IN (
 			N'SERIES_PROPOSAL',
+			N'SERIES_COVER',
 			N'CHAPTER_DRAFT',
 			N'CHAPTER_ASSET',
 			N'TASK_REFERENCE',
 			N'TASK_SUBMISSION',
-			N'CHAPTER_SUBMISSION',
 			N'EDITORIAL_ATTACHMENT',
 			N'REGISTRATION_PORTFOLIO',
 			N'USER_AVATAR'
@@ -129,39 +130,6 @@ WHERE deleted_at_utc IS NULL;
 ALTER TABLE auth.Users ADD CONSTRAINT fk_users_avatar_file FOREIGN KEY (avatar_file_id) REFERENCES manga.FileResource(file_resource_id);
 
 ALTER TABLE auth.Users ADD CONSTRAINT fk_users_portfolio_file FOREIGN KEY (portfolio_file_id) REFERENCES manga.FileResource(file_resource_id);
-
-CREATE TABLE auth.UserRegistrationRequest (
-	registration_request_id BIGINT IDENTITY(1, 1) PRIMARY KEY,
-	user_id INT NOT NULL,
-	requested_role_id SMALLINT NULL,
-	portfolio_file_id BIGINT NULL,
-	STATUS NVARCHAR(30) NOT NULL CONSTRAINT df_user_registration_request_status DEFAULT 'PENDING',
-	request_note NVARCHAR(500) NULL,
-	reviewed_by_user_id INT NULL,
-	reviewed_at DATETIME2(7) NULL,
-	review_note NVARCHAR(500) NULL,
-	created_at DATETIME2(7) NOT NULL CONSTRAINT df_user_registration_request_created_at DEFAULT SYSUTCDATETIME(),
-	CONSTRAINT fk_user_registration_request_user FOREIGN KEY (user_id) REFERENCES auth.Users(user_id),
-	CONSTRAINT fk_user_registration_request_requested_role FOREIGN KEY (requested_role_id) REFERENCES auth.Roles(role_id),
-	CONSTRAINT fk_user_registration_request_portfolio_file FOREIGN KEY (portfolio_file_id) REFERENCES manga.FileResource(file_resource_id),
-	CONSTRAINT fk_user_registration_request_reviewed_by FOREIGN KEY (reviewed_by_user_id) REFERENCES auth.Users(user_id),
-	CONSTRAINT ck_user_registration_request_status CHECK (
-		STATUS IN (
-			'PENDING',
-			'APPROVED',
-			'REJECTED',
-			'CANCELLED'
-			)
-		)
-	);
-
-CREATE INDEX ix_user_registration_status ON auth.UserRegistrationRequest (
-	STATUS,
-	created_at
-	);
-
-CREATE UNIQUE INDEX ux_user_registration_request_pending ON auth.UserRegistrationRequest (user_id)
-WHERE STATUS = 'PENDING';
 
 CREATE TABLE audit.AuditEvent (
 	audit_event_id BIGINT IDENTITY(1, 1) NOT NULL CONSTRAINT pk_audit_event PRIMARY KEY,

@@ -91,7 +91,10 @@
 | FR-USER-006 | The system shall prevent disabled accounts from logging in. | BR-USER-006 |
 | FR-USER-007 | The system shall allow a user account to reference an optional avatar file through `FileResource`. | BR-USER-007, BR-USER-009 |
 | FR-USER-008 | The system shall allow a user account or registration profile to reference an optional portfolio file through `FileResource`. | BR-USER-008, BR-USER-009 |
-| FR-USER-009 | The system shall record registration approval history through current user status and audit logs instead of a separate registration request table. | BR-USER-010 |
+| FR-USER-009 | The system shall record registration approval/rejection history through current user status and audit logs instead of a separate registration request table. | BR-USER-010 |
+| FR-USER-010 | The system shall allow Admin users to reject pending users by changing their status to `REJECTED`. | BR-USER-011 |
+| FR-USER-011 | The system shall prevent rejected accounts from logging in. | BR-USER-012 |
+| FR-USER-012 | The system shall keep rejected users' email and username reserved in MVP. | BR-USER-012 |
 
 ---
 

@@ -84,7 +84,9 @@
 | BR-USER-007 | A user may optionally have an avatar file. | Active draft |
 | BR-USER-008 | A user may optionally have a portfolio file for admin review. | Active draft |
 | BR-USER-009 | Avatar and portfolio files are stored through `FileResource`; Cloudinary details stay inside `FileResource`. | Active draft |
-| BR-USER-010 | Registration approval history is handled through current user status and audit log in MVP, not a separate registration request table. | Active draft |
+| BR-USER-010 | Registration approval/rejection history is handled through current user status and audit log in MVP, not a separate registration request table. | Active draft |
+| BR-USER-011 | Admin can reject a pending user by changing status to `REJECTED`. | Active draft |
+| BR-USER-012 | A rejected account cannot log in, and its email and username remain reserved in MVP. | Active draft |
 
 ---
 

@@ -43,7 +43,7 @@ Do **not** treat this repository as production-ready.
 
 | Area | MVP Direction |
 |---|---|
-| Users and accounts | One MVP role per account. New users start as `PENDING_APPROVAL`. Admin can activate or disable accounts. |
+| Users and accounts | One MVP role per account. New users start as `PENDING_APPROVAL`. Admin can activate, reject, or disable accounts. Rejected accounts cannot log in and keep their email/username reserved in MVP. |
 | File management | Store actual media in Cloudinary; store file metadata and references in `manga.FileResource`. |
 | Series management | Manage series profile, unique code, unique slug, lifecycle status, primary language, genre text, cover image, and optional source series reference. |
 | Series contributors | Manage team membership through `SeriesContributor`, not a direct lead Mangaka field on `Series`. |
@@ -86,7 +86,7 @@ The project uses both role-based actors and shared permission-based actor groups
 
 | Actor / Group | Responsibility |
 |---|---|
-| New User | Registers an account and waits for approval before accessing protected workspace functions. |
+| New User | Registers an account and waits for approval or rejection before accessing protected workspace functions. Rejected users cannot log in or reuse the same reserved email/username in MVP. |
 | General System User | Uses shared authenticated features such as file display, status visibility, timestamps, and notifications. |
 | Authorized Workflow Participant | Views workflow lists, queues, dashboards, or records allowed for their role. |
 | Authorized Page Workspace User | Accesses page-level editing, annotation, segmentation, translation-support, or page-version feedback tools when permitted. |
@@ -94,7 +94,7 @@ The project uses both role-based actors and shared permission-based actor groups
 | Assistant | Views assigned page tasks, sees linked regions, uploads completed output as a new page version, and tracks assigned task history. |
 | Tantou Editor | Reviews proposals and chapters, creates page-region annotations, records chapter-level editorial decisions, reviews translation-related issues, and monitors publication/ranking context. |
 | Editorial Board Member | Views board polls, votes `APPROVE`, `REJECT`, or `ABSTAIN`, provides rejection reasons, and reviews ranking/cancellation-risk evidence. |
-| Admin | Manages accounts, file deletion workflow, board polls, publication scheduling, simulated reader vote input, ranking snapshots, audit visibility, traceability, and exceptional administrative overrides. |
+| Admin | Manages accounts, including activation, rejection, and disabling; also manages file deletion workflow, board polls, publication scheduling, simulated reader vote input, ranking snapshots, audit visibility, traceability, and exceptional administrative overrides. |
 
 ### Actor consolidation decisions
 
@@ -208,8 +208,10 @@ Key rules:
 - Each account has exactly one MVP system role.
 - New accounts start as `PENDING_APPROVAL`.
 - Pending users cannot access protected workspace functions.
-- Admin can activate or disable accounts.
-- Disabled accounts cannot log in.
+- Admin can activate, reject, or disable accounts.
+- Rejected and disabled accounts cannot log in.
+- Rejected accounts keep their email and username reserved in MVP.
+- Registration approval/rejection history is represented through current user status and audit logs, not a separate registration request table.
 - Avatar and portfolio files are stored through `FileResource`.
 
 ### 7.2 File Resource and Cloudinary
@@ -330,6 +332,7 @@ AI must **not**:
 | Decision | MVP Direction |
 |---|---|
 | Status history | Store current status on main records and use audit/domain records for important events. Do not create generic status-history tables for every entity. |
+| User account decision | New accounts start as `PENDING_APPROVAL`; Admin may change them to `ACTIVE`, `REJECTED`, or `DISABLED`. `REJECTED` and `DISABLED` accounts cannot log in; rejected accounts keep email/username reserved in MVP. |
 | Chapter submission | Use `Chapter.status_code = UNDER_REVIEW`; do not create `ChapterSubmission`. |
 | Board decision | Compute result from `SeriesBoardPoll` and `SeriesBoardVote`; do not create `SeriesBoardDecision`. |
 | Translation | Do not create structured translation tables for MVP; save final edited/translated page as `ChapterPageVersion`. |

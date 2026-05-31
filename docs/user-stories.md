@@ -29,7 +29,7 @@ Basis: Verified MVP business rules, updated PageRegion segmentation rules, and p
 
 | Story ID | Source Rule(s) | User Story |
 |---|---|---|
-| US-NEW-001 | BR-USER-002, BR-USER-003 | As a New User, I want to register an account and receive pending approval status, so that I understand why I cannot access protected workspace functions immediately. |
+| US-NEW-001 | BR-USER-002, BR-USER-003, BR-USER-011, BR-USER-012 | As a New User, I want to register an account and receive pending approval or rejection status, so that I understand why I cannot access protected workspace functions immediately or create another account with the same email/username after rejection. |
 | US-NEW-002 | BR-USER-007, BR-USER-008, BR-USER-009 | As a New User, I want to optionally attach an avatar or portfolio file during account setup, so that my profile can support identity display and admin review. |
 
 ---
@@ -150,7 +150,7 @@ Basis: Verified MVP business rules, updated PageRegion segmentation rules, and p
 
 | Story ID | Source Rule(s) | User Story |
 |---|---|---|
-| US-ADMIN-001 | BR-USER-004, BR-USER-005, BR-USER-006, BR-USER-010, BR-HIST-004 | As an Admin, I want to view, activate, disable, and audit user account actions through current account status, so that account access is controlled and account management remains traceable without a separate registration request table. |
+| US-ADMIN-001 | BR-USER-004, BR-USER-005, BR-USER-006, BR-USER-010, BR-USER-011, BR-USER-012, BR-HIST-004 | As an Admin, I want to view, activate, reject, disable, and audit user account actions through current account status, so that account access is controlled and account management remains traceable without a separate registration request table. |
 | US-ADMIN-002 | BR-FILE-003, BR-FILE-004, BR-FILE-007 | As an Admin, I want file deletion to happen through the application workflow while historical records retain file references when needed, so that Cloudinary assets, SQL metadata, and past workflow evidence remain consistent. |
 | US-ADMIN-003 | BR-SERIES-001, BR-SERIES-002 | As an Admin, I want series codes and URL slugs to remain unique, so that series records can be identified reliably. |
 | US-ADMIN-004 | BR-SC-006, BR-SC-007 | As an Admin, I want contributor history to remain available after contributors leave a series, so that past participation can be reviewed and audited. |
