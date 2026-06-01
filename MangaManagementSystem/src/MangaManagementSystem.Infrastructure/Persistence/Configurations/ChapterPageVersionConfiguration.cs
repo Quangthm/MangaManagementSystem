@@ -15,7 +15,7 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
             builder.Property(v => v.IsCurrentVersion).HasDefaultValue(false);
             builder.HasIndex(v => new { v.ChapterPageId, v.VersionNo }).IsUnique();
             builder.HasIndex(v => v.ChapterPageId).HasDatabaseName("ix_chapter_page_chapter_id");
-            builder.HasIndex(v => v.IsCurrentVersion).HasDatabaseName("ux_chapter_page_version_current").IsUnique().HasFilter("[IsCurrentVersion] = 1");
+            builder.HasIndex(v => v.IsCurrentVersion).HasDatabaseName("ux_chapter_page_version_current").IsUnique().HasFilter("is_current_version = 1");
             builder.HasOne(v => v.ChapterPage).WithMany().HasForeignKey(v => v.ChapterPageId);
             builder.HasOne(v => v.PageFile).WithMany().HasForeignKey(v => v.PageFileId);
         }

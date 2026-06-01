@@ -12,7 +12,7 @@ namespace MangaManagementSystem.Domain.Entities
         public string? ActorRoleName { get; set; }
         public string ActionCode { get; set; } = null!;
         public string EntityType { get; set; } = null!;
-        public string EntityId { get; set; } = null!;
+        public string? EntityId { get; set; }
         public string? DetailJson { get; set; }
     }
 }

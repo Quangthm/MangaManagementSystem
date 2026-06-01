@@ -260,7 +260,8 @@ namespace MangaManagementSystem.Web
             2 => "/assistant",
             3 => "/dashboard",
             4 => "/ranking",
-            5 => "/admin/user-approval",
+            5 => "/board-decision",
+            6 => "/admin/user-approval",
             _ => "/login?error=InvalidCredentials"
         };
 

@@ -8,9 +8,9 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         int RecipientUserId,
         string NotificationTypeCode,
         string? Title,
-        string? Message,
+        string Message,
         string? RelatedEntityType,
-        string? RelatedEntityId,
+        long? RelatedEntityId,
         DateTime? ReadAtUtc,
         DateTime CreatedAtUtc
     );
@@ -19,8 +19,8 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         [Required] int RecipientUserId,
         [Required][MaxLength(50)] string NotificationTypeCode,
         [MaxLength(200)] string? Title,
-        [MaxLength(1000)] string? Message,
+        string Message,
         string? RelatedEntityType,
-        string? RelatedEntityId
+        long? RelatedEntityId
     );
 }

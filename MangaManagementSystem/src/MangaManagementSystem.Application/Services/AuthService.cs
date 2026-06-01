@@ -86,8 +86,8 @@ namespace MangaManagementSystem.Application.Services
                 Username = pendingRegistration.Username,
                 Email = normalizedEmail,
                 PasswordHash = _passwordHasher.HashPassword(pendingRegistration.Password),
-                Status = "PENDING_APPROVAL",
-                CreatedAt = DateTime.UtcNow
+                StatusCode = "PENDING_APPROVAL",
+                CreatedAtUtc = DateTime.UtcNow
             };
 
             await _unitOfWork.Users.AddAsync(user);
@@ -115,7 +115,7 @@ namespace MangaManagementSystem.Application.Services
                 return new AuthResultDto(false, null, null, "Invalid credentials");
             }
 
-            if (user.Status == "PENDING_APPROVAL")
+            if (user.StatusCode == "PENDING_APPROVAL")
             {
                 _logger.LogWarning(
                     "Login failed: Account pending admin approval for user {UserId} ({Username})",
@@ -124,7 +124,7 @@ namespace MangaManagementSystem.Application.Services
                 return new AuthResultDto(false, null, null, "Account pending admin approval.");
             }
 
-            if (user.Status == "DISABLED")
+            if (user.StatusCode == "DISABLED")
             {
                 _logger.LogWarning(
                     "Login failed: Account disabled for user {UserId} ({Username})",
@@ -170,13 +170,13 @@ namespace MangaManagementSystem.Application.Services
                 return new AuthResultDto(false, null, null, "User not found.");
             }
 
-            if (!string.Equals(user.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(user.StatusCode, "ACTIVE", StringComparison.OrdinalIgnoreCase))
             {
                 _logger.LogWarning(
-                    "Google login failed: User {UserId} ({Email}) is not ACTIVE (status: {Status})",
+                    "Google login failed: User {UserId} ({Email}) is not ACTIVE (status: {StatusCode})",
                     user.UserId,
                     normalizedEmail,
-                    user.Status);
+                    user.StatusCode);
                 return new AuthResultDto(false, null, null, "User is not active.");
             }
 
@@ -213,8 +213,8 @@ namespace MangaManagementSystem.Application.Services
                     Username = username,
                     Email = normalizedEmail,
                     PasswordHash = _passwordHasher.HashPassword(Guid.NewGuid().ToString("N") + "!Aa1"),
-                    Status = "PENDING_APPROVAL",
-                    CreatedAt = DateTime.UtcNow
+                    StatusCode = "PENDING_APPROVAL",
+                    CreatedAtUtc = DateTime.UtcNow
                 };
 
                 await _unitOfWork.Users.AddAsync(user);
@@ -231,7 +231,7 @@ namespace MangaManagementSystem.Application.Services
                 return new GoogleSignupCallbackResult(GoogleSignupFlow.NewUserVerifyOtp, normalizedEmail);
             }
 
-            if (string.Equals(existingUser.Status, "PENDING_APPROVAL", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(existingUser.StatusCode, "PENDING_APPROVAL", StringComparison.OrdinalIgnoreCase))
             {
                 await SendEmailVerificationOtpAsync(normalizedEmail);
 
@@ -243,7 +243,7 @@ namespace MangaManagementSystem.Application.Services
                 return new GoogleSignupCallbackResult(GoogleSignupFlow.PendingApprovalVerifyOtp, normalizedEmail);
             }
 
-            if (string.Equals(existingUser.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(existingUser.StatusCode, "ACTIVE", StringComparison.OrdinalIgnoreCase))
             {
                 var role = await _unitOfWork.Roles.GetByIdAsync(existingUser.RoleId);
                 if (role == null || string.IsNullOrWhiteSpace(role.RoleName))
@@ -265,7 +265,7 @@ namespace MangaManagementSystem.Application.Services
                 "Google sign-up rejected for user {UserId} ({Email}) with status {Status}",
                 existingUser.UserId,
                 normalizedEmail,
-                existingUser.Status);
+                existingUser.StatusCode);
 
             return new GoogleSignupCallbackResult(
                 GoogleSignupFlow.Rejected,
@@ -282,7 +282,7 @@ namespace MangaManagementSystem.Application.Services
                 throw new InvalidOperationException("No account found for this email.");
             }
 
-            if (!string.Equals(user.Status, "PENDING_APPROVAL", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(user.StatusCode, "PENDING_APPROVAL", StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException("Email verification is only available for pending accounts.");
             }
@@ -307,7 +307,7 @@ namespace MangaManagementSystem.Application.Services
                 throw new InvalidOperationException("No account found for this email.");
             }
 
-            if (!string.Equals(user.Status, "PENDING_APPROVAL", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(user.StatusCode, "PENDING_APPROVAL", StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException("This account is not awaiting email verification.");
             }
@@ -375,8 +375,8 @@ namespace MangaManagementSystem.Application.Services
             user.Email,
             user.AvatarFileId,
             user.PortfolioFileId,
-            user.Status,
-            user.CreatedAt
+            user.StatusCode,
+            user.CreatedAtUtc
         );
     }
 }

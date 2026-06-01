@@ -18,7 +18,16 @@ namespace MangaManagementSystem.Infrastructure.Repositories
     }
 
         public virtual async Task<T?> GetByIdAsync(object id)
-            => await _dbSet.FindAsync(id);
+        {
+            if (id is object[] keys)
+            {
+                var entry = await _dbSet.FindAsync(keys);
+                return entry;
+            }
+
+            var single = await _dbSet.FindAsync(id);
+            return single;
+        }
 
         public virtual async Task<IReadOnlyList<T>> GetAllAsync()
             => await _dbSet.ToListAsync();

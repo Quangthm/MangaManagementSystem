@@ -8,10 +8,10 @@ namespace MangaManagementSystem.Domain.Entities
     {
         public long SeriesId { get; set; }
         public string SeriesCode { get; set; } = null!;
-        public string? Title { get; set; }
-        public string? Slug { get; set; }
-        public string? Synopsis { get; set; }
-        public string? Genre { get; set; }
+        public string Title { get; set; } = null!;
+        public string Slug { get; set; } = null!;
+        public string Synopsis { get; set; } = null!;
+        public string Genre { get; set; } = null!;
         public long? CoverFileId { get; set; }
         public FileResource? CoverFile { get; set; }
         public string StatusCode { get; set; } = "PROPOSAL_DRAFT";

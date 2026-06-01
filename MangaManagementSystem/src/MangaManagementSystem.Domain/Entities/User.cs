@@ -15,7 +15,7 @@ namespace MangaManagementSystem.Domain.Entities
         public FileResource? AvatarFile { get; set; }
         public long? PortfolioFileId { get; set; }
         public FileResource? PortfolioFile { get; set; }
-        public string Status { get; set; } = "PENDING_APPROVAL";
-        public DateTime CreatedAt { get; set; }
+        public string StatusCode { get; set; } = "PENDING_APPROVAL";
+        public DateTime CreatedAtUtc { get; set; }
     }
 }

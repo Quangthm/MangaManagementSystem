@@ -16,10 +16,10 @@ namespace MangaManagementSystem.Domain.Entities
         public int CreatedByUserId { get; set; }
         public DateTime StartedAtUtc { get; set; }
         public DateTime? EndsAtUtc { get; set; }
-        public int? ApproveCount { get; set; }
-        public int? RejectCount { get; set; }
-        public int? AbstainCount { get; set; }
-        public int? TotalVoteCount { get; set; }
+        public int ApproveCount { get; set; }
+        public int RejectCount { get; set; }
+        public int AbstainCount { get; set; }
+        public int TotalVoteCount { get; set; }
         public string? ComputedResultCode { get; set; }
         public bool IsApplicable { get; set; }
     }

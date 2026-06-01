@@ -36,8 +36,8 @@ namespace MangaManagementSystem.Application.Services
                 PasswordHash = _passwordHasher.HashPassword(dto.Password),
                 AvatarFileId = dto.AvatarFileId,
                 PortfolioFileId = dto.PortfolioFileId,
-                Status = "PENDING_APPROVAL",
-                CreatedAt = DateTime.UtcNow
+                StatusCode = "PENDING_APPROVAL",
+                CreatedAtUtc = DateTime.UtcNow
             };
             await _unitOfWork.Users.AddAsync(entity);
             await _unitOfWork.SaveChangesAsync();
@@ -67,7 +67,7 @@ namespace MangaManagementSystem.Application.Services
             var user = await RequirePendingUserAsync(userId);
             await EnsureValidRoleIdAsync(assignedRoleId);
 
-            user.Status = StatusActive;
+            user.StatusCode = StatusActive;
             user.RoleId = assignedRoleId;
             _unitOfWork.Users.Update(user);
             await _unitOfWork.SaveChangesAsync();
@@ -78,7 +78,7 @@ namespace MangaManagementSystem.Application.Services
         {
             var user = await RequirePendingUserAsync(userId);
 
-            user.Status = "REJECTED";
+            user.StatusCode = "REJECTED";
             _unitOfWork.Users.Update(user);
             await _unitOfWork.SaveChangesAsync();
         }
@@ -91,10 +91,10 @@ namespace MangaManagementSystem.Application.Services
                 throw new InvalidOperationException($"User {userId} was not found.");
             }
 
-            if (user.Status != StatusPendingApproval)
+            if (user.StatusCode != StatusPendingApproval)
             {
                 throw new InvalidOperationException(
-                    $"User {userId} cannot be processed because their status is '{user.Status}', not '{StatusPendingApproval}'.");
+                    $"User {userId} cannot be processed because their status is '{user.StatusCode}', not '{StatusPendingApproval}'.");
             }
 
             return user;
@@ -121,8 +121,8 @@ namespace MangaManagementSystem.Application.Services
             u.Email,
             u.AvatarFileId,
             u.PortfolioFileId,
-            u.Status,
-            u.CreatedAt
+            u.StatusCode,
+            u.CreatedAtUtc
         );
     }
 }

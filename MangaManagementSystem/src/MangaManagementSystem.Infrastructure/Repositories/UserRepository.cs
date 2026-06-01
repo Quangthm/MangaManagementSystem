@@ -35,8 +35,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         public async Task<IReadOnlyList<User>> GetByStatusAsync(string status)
         {
             return await _context.Users
-                .Where(u => u.Status == status)
-                .OrderBy(u => u.CreatedAt)
+                .Where(u => u.StatusCode == status)
+                .OrderBy(u => u.CreatedAtUtc)
                 .ToListAsync();
         }
     }

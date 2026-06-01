@@ -3,7 +3,6 @@ using System.ComponentModel.DataAnnotations;
 namespace MangaManagementSystem.Application.DTOs.Manga
 {
     public record ChapterPageTaskRegionDto(
-        long ChapterPageTaskRegionId,
         long ChapterPageTaskId,
         long PageRegionId
     );
@@ -14,7 +13,7 @@ namespace MangaManagementSystem.Application.DTOs.Manga
     );
 
     public record UpdateChapterPageTaskRegionDto(
-        [Required] long ChapterPageTaskRegionId,
+        [Required] long KeyId,
         [Required] long ChapterPageTaskId,
         [Required] long PageRegionId
     );
