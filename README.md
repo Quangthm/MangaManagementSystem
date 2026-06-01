@@ -43,20 +43,20 @@ Do **not** treat this repository as production-ready.
 
 | Area | MVP Direction |
 |---|---|
-| Users and accounts | One MVP role per account. New users start as `PENDING_APPROVAL`. Admin can activate or disable accounts. |
+| Users and accounts | One MVP role per account. New users start as `PENDING_APPROVAL`. Admin can activate, reject, or disable accounts. Rejected accounts cannot log in and keep their email/username reserved in MVP. |
 | File management | Store actual media in Cloudinary; store file metadata and references in `manga.FileResource`. |
 | Series management | Manage series profile, unique code, unique slug, lifecycle status, primary language, genre text, cover image, and optional source series reference. |
 | Series contributors | Manage team membership through `SeriesContributor`, not a direct lead Mangaka field on `Series`. |
 | Series proposals | Store formal submitted proposal versions in `SeriesProposal`. Revisions create new proposal rows. |
-| Board workflow | Use `SeriesBoardPoll` and `SeriesBoardVote`. Board results are computed from votes. |
+| Board workflow | Use `SeriesBoardPoll` and `SeriesBoardVote`. Editorial Board Chief opens, closes, and cancels board polls, specifies publication frequency when opening `START_SERIALIZATION` polls, can also vote, and board results are computed from votes. |
 | Chapters and pages | Use `Chapter`, `ChapterPage`, and `ChapterPageVersion`. |
 | Chapter submission | Submit chapters by changing `Chapter.status_code` to `UNDER_REVIEW`; do not create a separate `ChapterSubmission` table. |
 | Page regions | Store accepted AI/manual regions as `PageRegion` records linked to `ChapterPageVersion`. |
 | Annotations | Store annotations through linked `PageRegion` records, not direct annotation coordinates. |
 | Page tasks | Use page-based `ChapterPageTask` and optional `ChapterPageTaskRegion` links. |
 | Editorial review | Store final chapter-level review decisions in `ChapterEditorialReview`. |
-| Publication planning | Use chapter-level planned release dates and release timestamps. |
-| Ranking | Use simulated/manual reader vote input and time-based `SeriesRankingSnapshot`. |
+| Publication planning | Use chapter-level planned release dates and release timestamps. Mangaka may provide/update preferred publication frequency only while the series is in `PROPOSAL_DRAFT`; Editorial Board Chief specifies official frequency in a `START_SERIALIZATION` poll, and an approved poll applies that frequency to `Series.publication_frequency_code`. After board decision, Mangaka may request a change through in-app notification, but only Editorial Board Chief may directly change the official frequency with a required audit reason. |
+| Ranking | Use simulated/manual reader vote input entered by Editorial Board Members and time-based `SeriesRankingSnapshot`. |
 | Notifications | Use in-app notifications only. Notifications are not the audit trail. |
 | Auditability | Use current status on main records plus domain records and audit logs. Avoid generic status-history tables. |
 | AI support | AI suggestions are advisory and human-reviewed. Accepted regions are saved as `PageRegion`; final translated pages are saved as `ChapterPageVersion`. |
@@ -86,15 +86,16 @@ The project uses both role-based actors and shared permission-based actor groups
 
 | Actor / Group | Responsibility |
 |---|---|
-| New User | Registers an account and waits for approval before accessing protected workspace functions. |
+| New User | Registers an account and waits for approval or rejection before accessing protected workspace functions. Rejected users cannot log in or reuse the same reserved email/username in MVP. |
 | General System User | Uses shared authenticated features such as file display, status visibility, timestamps, and notifications. |
 | Authorized Workflow Participant | Views workflow lists, queues, dashboards, or records allowed for their role. |
 | Authorized Page Workspace User | Accesses page-level editing, annotation, segmentation, translation-support, or page-version feedback tools when permitted. |
 | Mangaka | Creates and manages series, proposals, chapters, pages, page versions, production regions, assistant tasks, task review, chapter submission, ranking monitoring, and responses to editorial feedback. |
 | Assistant | Views assigned page tasks, sees linked regions, uploads completed output as a new page version, and tracks assigned task history. |
 | Tantou Editor | Reviews proposals and chapters, creates page-region annotations, records chapter-level editorial decisions, reviews translation-related issues, and monitors publication/ranking context. |
-| Editorial Board Member | Views board polls, votes `APPROVE`, `REJECT`, or `ABSTAIN`, provides rejection reasons, and reviews ranking/cancellation-risk evidence. |
-| Admin | Manages accounts, file deletion workflow, board polls, publication scheduling, simulated reader vote input, ranking snapshots, audit visibility, traceability, and exceptional administrative overrides. |
+| Editorial Board Member | Views board polls, votes `APPROVE`, `REJECT`, or `ABSTAIN`, provides rejection reasons, enters simulated/aggregated reader vote input, and reviews ranking/cancellation-risk evidence. |
+| Editorial Board Chief | Opens, closes, and cancels board polls; specifies publication frequency when opening `START_SERIALIZATION` polls; may directly change official series publication frequency with a required audit reason; may also vote `APPROVE`, `REJECT`, or `ABSTAIN`; provides rejection reasons when voting `REJECT`; and reviews ranking/cancellation-risk evidence. |
+| Admin | Manages accounts, including activation, rejection, and disabling; also manages file deletion workflow, audit visibility, traceability, and system-level management. Admin does not own chapter cancellation overrides, publication scheduling, or simulated reader vote input in MVP. |
 
 ### Actor consolidation decisions
 
@@ -116,10 +117,10 @@ The project uses both role-based actors and shared permission-based actor groups
 3. Mangaka submits a formal proposal version through `SeriesProposal`.
 4. Tantou Editor reviews the submitted proposal directly on the proposal record.
 5. If the proposal passes editorial review, it moves to board review.
-6. Admin opens a valid `START_SERIALIZATION` board poll.
-7. Editorial Board Members vote through `SeriesBoardVote`.
+6. Editorial Board Chief opens a valid `START_SERIALIZATION` board poll and specifies the publication frequency to apply if the poll is approved.
+7. Editorial Board Chief and Editorial Board Members vote through `SeriesBoardVote`.
 8. When the poll closes, the system computes the result from vote counts.
-9. The computed result updates the series/proposal status only when applicable.
+9. If approved, the computed result updates the series/proposal status and applies the board-specified publication frequency as the official `Series.publication_frequency_code`.
 
 ### 5.2 Chapter and Page Workflow
 
@@ -153,16 +154,20 @@ The project uses both role-based actors and shared permission-based actor groups
 5. Revision and cancellation decisions require meaningful comments or a markup file.
 6. Creating a chapter editorial review updates `Chapter.status_code` according to the decision.
 
-### 5.5 Board Poll and Ranking Workflow
+### 5.5 Board Poll, Publication Frequency, and Ranking Workflow
 
-1. Admin may open board polls for `START_SERIALIZATION` or `CANCEL_SERIALIZATION`.
-2. Polls require a non-empty reason and may have an optional end time.
-3. Board members vote only while the poll is open.
-4. Votes are preserved after the poll closes or is cancelled.
-5. Board results are computed from approve/reject vote counts.
-6. Abstain votes are counted separately but do not directly determine approval or rejection in MVP.
-7. Simulated reader vote input supports ranking demonstration without a public reader module.
-8. Ranking snapshots are stored over time and can support editorial/board decisions.
+1. Editorial Board Chief may open board polls for `START_SERIALIZATION` or `CANCEL_SERIALIZATION`.
+2. `START_SERIALIZATION` polls require the Editorial Board Chief to specify the publication frequency to apply if approved.
+3. Polls require a non-empty reason and may have an optional end time.
+4. Editorial Board Chief and Editorial Board Members vote only while the poll is open.
+5. Votes are preserved after the poll closes or is cancelled.
+6. Board results are computed from approve/reject vote counts.
+7. Abstain votes are counted separately but do not directly determine approval or rejection in MVP.
+8. Approved `START_SERIALIZATION` poll results apply the board-specified publication frequency to `Series.publication_frequency_code`.
+9. After board decision, Mangaka may request a publication frequency change through in-app notification to the Editorial Board Chief.
+10. Editorial Board Chief may directly change official publication frequency only with a required audit reason.
+11. Editorial Board Members enter simulated reader vote input to support ranking demonstration without a public reader module.
+12. Ranking snapshots are stored over time and can support editorial/board decisions.
 
 ---
 
@@ -208,8 +213,10 @@ Key rules:
 - Each account has exactly one MVP system role.
 - New accounts start as `PENDING_APPROVAL`.
 - Pending users cannot access protected workspace functions.
-- Admin can activate or disable accounts.
-- Disabled accounts cannot log in.
+- Admin can activate, reject, or disable accounts.
+- Rejected and disabled accounts cannot log in.
+- Rejected accounts keep their email and username reserved in MVP.
+- Registration approval/rejection history is represented through current user status and audit logs, not a separate registration request table.
 - Avatar and portfolio files are stored through `FileResource`.
 
 ### 7.2 File Resource and Cloudinary
@@ -277,22 +284,25 @@ Handles board decisions through polls and votes.
 
 Key rules:
 
-- Admin creates board polls.
-- Board members vote only in open polls.
-- Each board member can vote once per poll.
+- Editorial Board Chief creates, closes, and cancels board polls.
+- Editorial Board Chief must specify publication frequency when opening a `START_SERIALIZATION` poll.
+- Editorial Board Chief and Editorial Board Members vote only in open polls.
+- Each voting board participant can vote once per poll.
 - Rejection votes require a reason.
 - Results are computed from votes.
+- Approved `START_SERIALIZATION` results apply the board-specified frequency as the official `Series.publication_frequency_code`.
+- Editorial Board Chief may directly change official publication frequency only with a required audit reason.
 - No separate `SeriesBoardDecision` table is required for MVP.
 
 ### 7.8 Ranking, Notifications, and Auditability
 
-Handles simulated reader vote input, ranking snapshots, in-app notifications, and audit evidence.
+Handles Editorial Board Member-entered simulated reader vote input, ranking snapshots, in-app notifications, and audit evidence.
 
 Key rules:
 
-- Ranking uses simulated/manual aggregated reader vote input.
+- Ranking uses simulated/manual aggregated reader vote input entered by Editorial Board Members.
 - Ranking snapshots are stored by period.
-- Notifications help users notice workflow events but are not the audit trail.
+- Notifications help users notice workflow events, including publication-frequency change requests, but are not the audit trail.
 - Important workflow actions are audit-logged.
 - Avoid separate status-history tables unless a future requirement needs them.
 
@@ -330,15 +340,16 @@ AI must **not**:
 | Decision | MVP Direction |
 |---|---|
 | Status history | Store current status on main records and use audit/domain records for important events. Do not create generic status-history tables for every entity. |
+| User account decision | New accounts start as `PENDING_APPROVAL`; Admin may change them to `ACTIVE`, `REJECTED`, or `DISABLED`. `REJECTED` and `DISABLED` accounts cannot log in; rejected accounts keep email/username reserved in MVP. |
 | Chapter submission | Use `Chapter.status_code = UNDER_REVIEW`; do not create `ChapterSubmission`. |
-| Board decision | Compute result from `SeriesBoardPoll` and `SeriesBoardVote`; do not create `SeriesBoardDecision`. |
+| Board decision and publication frequency | Editorial Board Chief owns normal board poll opening, closing, and cancellation; must specify publication frequency for `START_SERIALIZATION`; approved `START_SERIALIZATION` results apply that frequency to `Series.publication_frequency_code`; compute result from `SeriesBoardPoll` and `SeriesBoardVote`; do not create `SeriesBoardDecision`. |
 | Translation | Do not create structured translation tables for MVP; save final edited/translated page as `ChapterPageVersion`. |
 | AI history | Do not store persistent AI job history if accepted AI output as `PageRegion` is enough. |
 | Annotation coordinates | Do not store direct annotation coordinates; derive location from linked `PageRegion`. |
 | File references | Business tables reference `FileResource`; Cloudinary details stay inside file metadata. |
 | Contributor ownership | Use `SeriesContributor`; do not store direct lead Mangaka ownership on `Series`. |
 | Reader module | No public reader module in MVP; ranking uses simulated/manual aggregated input. |
-| Admin scope | Admin includes account, audit, traceability, and system-level management responsibilities for MVP. |
+| Admin scope | Admin includes account, audit, traceability, and system-level management responsibilities for MVP, but not chapter cancellation overrides, board poll control, official publication frequency changes, publication scheduling, or simulated reader vote input. |
 
 ---
 

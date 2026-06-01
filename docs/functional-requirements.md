@@ -91,7 +91,10 @@
 | FR-USER-006 | The system shall prevent disabled accounts from logging in. | BR-USER-006 |
 | FR-USER-007 | The system shall allow a user account to reference an optional avatar file through `FileResource`. | BR-USER-007, BR-USER-009 |
 | FR-USER-008 | The system shall allow a user account or registration profile to reference an optional portfolio file through `FileResource`. | BR-USER-008, BR-USER-009 |
-| FR-USER-009 | The system shall record registration approval history through current user status and audit logs instead of a separate registration request table. | BR-USER-010 |
+| FR-USER-009 | The system shall record registration approval/rejection history through current user status and audit logs instead of a separate registration request table. | BR-USER-010 |
+| FR-USER-010 | The system shall allow Admin users to reject pending users by changing their status to `REJECTED`. | BR-USER-011 |
+| FR-USER-011 | The system shall prevent rejected accounts from logging in. | BR-USER-012 |
+| FR-USER-012 | The system shall keep rejected users' email and username reserved in MVP. | BR-USER-012 |
 
 ---
 
@@ -169,42 +172,43 @@
 
 | ID | Functional Requirement | Source Business Rules |
 |---|---|---|
-| FR-BOARD-POLL-001 | The system shall allow Admin users to create board polls for `START_SERIALIZATION` and `CANCEL_SERIALIZATION`. | BR-BOARD-POLL-001 |
+| FR-BOARD-POLL-001 | The system shall allow Editorial Board Chief users to create board polls for `START_SERIALIZATION` and `CANCEL_SERIALIZATION`. | BR-BOARD-POLL-001 |
 | FR-BOARD-POLL-002 | The system shall allow a `START_SERIALIZATION` poll only when `Series.status_code = UNDER_BOARD_REVIEW`. | BR-BOARD-POLL-002 |
 | FR-BOARD-POLL-003 | The system shall allow a `START_SERIALIZATION` poll only when the selected series has exactly one active proposal with `SeriesProposal.status_code = UNDER_BOARD_REVIEW`. | BR-BOARD-POLL-003 |
 | FR-BOARD-POLL-004 | The system shall treat a `START_SERIALIZATION` poll as voting on the active under-board-review proposal for the selected series even though the poll stores only `series_id`. | BR-BOARD-POLL-004 |
-| FR-BOARD-POLL-005 | The system shall allow a `CANCEL_SERIALIZATION` poll for a serialized or paused series only when the admin provides a reason. | BR-BOARD-POLL-005 |
+| FR-BOARD-POLL-005 | The system shall allow a `CANCEL_SERIALIZATION` poll for a serialized or paused series only when the Editorial Board Chief provides a reason. | BR-BOARD-POLL-005 |
 | FR-BOARD-POLL-006 | The system shall display low ranking or high cancellation risk as supporting evidence for cancellation polls when available. | BR-BOARD-POLL-006 |
 | FR-BOARD-POLL-007 | The system shall not require low ranking or high cancellation risk to be the only reason for opening a cancellation poll. | BR-BOARD-POLL-006 |
 | FR-BOARD-POLL-008 | The system shall require each board poll to have a non-empty reason. | BR-BOARD-POLL-007 |
-| FR-BOARD-POLL-009 | The system shall allow a board poll to have a scheduled end time or be closed manually by an Admin. | BR-BOARD-POLL-008 |
+| FR-BOARD-POLL-009 | The system shall allow a board poll to have a scheduled end time or be closed manually by an Editorial Board Chief. | BR-BOARD-POLL-008 |
 | FR-BOARD-POLL-010 | The system shall prevent a series from having more than one open poll of the same type at the same time. | BR-BOARD-POLL-009 |
 | FR-BOARD-POLL-011 | The system shall store `poll_status_code` to distinguish `OPEN`, `CLOSED`, and `CANCELLED` polls. | BR-BOARD-POLL-010 |
 | FR-BOARD-POLL-012 | The system shall prevent votes from an `OPEN` poll from updating series or proposal status. | BR-BOARD-POLL-011 |
 | FR-BOARD-POLL-013 | The system shall allow votes from a `CLOSED` poll to be used by Board Result requirements for applying series or proposal status changes. | BR-BOARD-POLL-012 |
 | FR-BOARD-POLL-014 | The system shall preserve votes from a `CANCELLED` poll for traceability. | BR-BOARD-POLL-013, BR-BOARD-POLL-015 |
 | FR-BOARD-POLL-015 | The system shall prevent votes from a `CANCELLED` poll from affecting series or proposal status. | BR-BOARD-POLL-013 |
-| FR-BOARD-POLL-016 | The system shall allow Admin users to cancel a poll when the voting setup or process must be invalidated. | BR-BOARD-POLL-014 |
+| FR-BOARD-POLL-016 | The system shall allow Editorial Board Chief users to cancel a poll when the voting setup or process must be invalidated. | BR-BOARD-POLL-014 |
 | FR-BOARD-POLL-017 | The system shall require poll results to be computed from board votes and handled by Board Result requirements instead of storing final result codes directly on `SeriesBoardPoll`. | BR-BOARD-POLL-016 |
 | FR-BOARD-POLL-018 | The system shall record poll creation, cancellation, and closure in the audit log. | BR-BOARD-POLL-017 |
+| FR-BOARD-POLL-019 | The system shall require a `START_SERIALIZATION` poll opened by an Editorial Board Chief to include the publication frequency to be applied if the poll is approved. | BR-BOARD-POLL-018, BR-PUB-010 |
 ---
 
 ## 3.9 Board Vote
 
 | ID | Functional Requirement | Source Business Rules |
 |---|---|---|
-| FR-BOARD-VOTE-001 | The system shall allow board members to vote only in an open `SeriesBoardPoll`. | BR-BOARD-VOTE-001 |
-| FR-BOARD-VOTE-002 | The system shall restrict board voting to users with the Editorial Board Member role. | BR-BOARD-VOTE-002 |
+| FR-BOARD-VOTE-001 | The system shall allow Editorial Board Members and Editorial Board Chiefs to vote only in an open `SeriesBoardPoll`. | BR-BOARD-VOTE-001 |
+| FR-BOARD-VOTE-002 | The system shall restrict board voting to users with the Editorial Board Member or Editorial Board Chief role. | BR-BOARD-VOTE-002 |
 | FR-BOARD-VOTE-003 | The system shall restrict board vote choices to `APPROVE`, `REJECT`, or `ABSTAIN`. | BR-BOARD-VOTE-003 |
 | FR-BOARD-VOTE-004 | The system shall require a non-empty reason when a board member votes `REJECT`. | BR-BOARD-VOTE-004 |
-| FR-BOARD-VOTE-005 | The system shall prevent each board member from casting more than one vote per board poll. | BR-BOARD-VOTE-005 |
+| FR-BOARD-VOTE-005 | The system shall prevent each Editorial Board Member or Editorial Board Chief from casting more than one vote per board poll. | BR-BOARD-VOTE-005 |
 | FR-BOARD-VOTE-006 | The system shall tie each board vote to one `SeriesBoardPoll`. | BR-BOARD-VOTE-006 |
 | FR-BOARD-VOTE-007 | The system shall ensure the related series has exactly one proposal in `UNDER_BOARD_REVIEW` before allowing votes for a `START_SERIALIZATION` poll. | BR-BOARD-VOTE-007 |
 | FR-BOARD-VOTE-008 | The system shall preserve board votes after a poll is closed or cancelled. | BR-BOARD-VOTE-008 |
 | FR-BOARD-VOTE-009 | The system shall use votes from a `CLOSED` poll to determine the applicable poll result. | BR-BOARD-VOTE-009 |
 | FR-BOARD-VOTE-010 | The system shall preserve votes from a `CANCELLED` poll but prevent them from being applied to status changes. | BR-BOARD-VOTE-010 |
 | FR-BOARD-VOTE-011 | The system shall prevent a board vote alone from updating series or proposal status. | BR-BOARD-VOTE-011 |
-| FR-BOARD-VOTE-012 | The system shall apply status changes only when an Admin or system process closes the poll and applies the computed result. | BR-BOARD-VOTE-011 |
+| FR-BOARD-VOTE-012 | The system shall apply status changes only when an Editorial Board Chief or system process closes the poll and applies the computed result. | BR-BOARD-VOTE-011 |
 
 ---
 
@@ -223,7 +227,7 @@
 | FR-BOARD-RESULT-009 | The system shall treat an `OPEN` poll result as `PENDING` and prevent it from being applied. | BR-BOARD-RESULT-008 |
 | FR-BOARD-RESULT-010 | The system shall treat a `CANCELLED` poll result as `INVALIDATED` and prevent it from being applied. | BR-BOARD-RESULT-009 |
 | FR-BOARD-RESULT-011 | The system shall produce an applicable board result only for a `CLOSED` poll. | BR-BOARD-RESULT-010 |
-| FR-BOARD-RESULT-012 | The system shall apply `START_SERIALIZATION` poll results to the active proposal and series according to the computed result. | BR-BOARD-RESULT-011, BR-BOARD-RESULT-012, BR-BOARD-RESULT-013 |
+| FR-BOARD-RESULT-012 | The system shall apply `START_SERIALIZATION` poll results to the active proposal and series according to the computed result, including applying the board-specified publication frequency when the result is approved. | BR-BOARD-RESULT-011, BR-BOARD-RESULT-012, BR-BOARD-RESULT-013, BR-PUB-013 |
 | FR-BOARD-RESULT-013 | The system shall apply `CANCEL_SERIALIZATION` poll results to the series according to the computed result. | BR-BOARD-RESULT-014, BR-BOARD-RESULT-015 |
 | FR-BOARD-RESULT-014 | The system shall not require a final board decision explanation in MVP. | BR-BOARD-RESULT-016 |
 | FR-BOARD-RESULT-015 | The system shall retain poll reasons and individual rejection reasons separately. | BR-BOARD-RESULT-016 |
@@ -381,7 +385,7 @@
 | FR-CH-CANCEL-002 | The system shall prevent cancelled chapters from proceeding to `SCHEDULED` or `RELEASED`. | BR-CH-CANCEL-002 |
 | FR-CH-CANCEL-003 | The system shall preserve pages, page versions, page regions, annotations, files, and review history when a chapter is cancelled. | BR-CH-CANCEL-003 |
 | FR-CH-CANCEL-004 | The system shall allow editors to use `REVISION_REQUESTED` instead of `CANCELLED` when the chapter can still be fixed and resubmitted. | BR-CH-CANCEL-004 |
-| FR-CH-CANCEL-005 | The system shall allow Admin chapter cancellation without editorial review only as an audit-logged administrative override. | BR-CH-CANCEL-005 |
+| FR-CH-CANCEL-005 | The system shall prevent chapter cancellation without a chapter editorial review decision in MVP. | BR-CH-CANCEL-005 |
 
 ---
 
@@ -398,6 +402,13 @@
 | FR-PUB-007 | The system shall control actual chapter release timing through chapter-level release dates. | BR-PUB-006 |
 | FR-PUB-008 | The system shall require chapter scheduling and release status to follow the Chapter status rules. | BR-PUB-008 |
 | FR-PUB-009 | The system shall identify delayed chapters by comparing `planned_release_date` with the current date instead of storing a separate delay status. | BR-PUB-009 |
+| FR-PUB-010 | The system shall require an Editorial Board Chief to specify publication frequency when opening a `START_SERIALIZATION` poll. | BR-PUB-010 |
+| FR-PUB-011 | The system shall allow Mangaka users to provide or update their preferred publication frequency only while the series is in `PROPOSAL_DRAFT`, without requiring a separate desired publication frequency column on `Series`. | BR-PUB-011 |
+| FR-PUB-012 | The system shall prevent Mangaka users from directly changing the official `Series.publication_frequency_code` after the series leaves `PROPOSAL_DRAFT`. | BR-PUB-012 |
+| FR-PUB-013 | The system shall apply the board-specified publication frequency as the official `Series.publication_frequency_code` when a `START_SERIALIZATION` poll is approved, overriding the Mangaka's preference. | BR-PUB-013 |
+| FR-PUB-014 | The system shall allow Mangaka users to request a publication frequency change after the board decision by sending an in-app notification to the Editorial Board Chief. | BR-PUB-014, BR-NOTIF-012 |
+| FR-PUB-015 | The system shall not require a separate official publication-frequency change request table for MVP. | BR-PUB-014, BR-NOTIF-013 |
+| FR-PUB-016 | The system shall allow Editorial Board Chief users to directly change `Series.publication_frequency_code` only when they provide a required audit reason. | BR-PUB-015 |
 
 ---
 
@@ -433,7 +444,8 @@
 | FR-VOTE-INPUT-006 | The system shall prevent negative reader vote counts and feedback counts. | BR-VOTE-INPUT-005 |
 | FR-VOTE-INPUT-007 | The system shall require average rating values to stay within the allowed rating range when provided. | BR-VOTE-INPUT-006 |
 | FR-VOTE-INPUT-008 | The system shall prevent more than one aggregated reader vote snapshot for the same chapter in MVP. | BR-VOTE-INPUT-007 |
-| FR-VOTE-INPUT-009 | The system shall record the authorized user who entered simulated or aggregated reader vote data. | BR-VOTE-INPUT-009 |
+| FR-VOTE-INPUT-009 | The system shall record the Editorial Board Member who entered simulated or aggregated reader vote data. | BR-VOTE-INPUT-009 |
+| FR-VOTE-INPUT-010 | The system shall restrict simulated or aggregated reader vote input to Editorial Board Members in MVP. | BR-VOTE-INPUT-010 |
 
 ---
 
@@ -453,8 +465,10 @@
 | FR-NOTIF-010 | The system shall send task assignment notifications to assigned users when page tasks are created. | BR-NOTIF-009 |
 | FR-NOTIF-011 | The system shall send review result notifications to relevant contributors when proposal or chapter review decisions are recorded. | BR-NOTIF-010 |
 | FR-NOTIF-012 | The system shall allow board poll notifications to be sent to Editorial Board Members when a new board poll is opened. | BR-NOTIF-011 |
-| FR-NOTIF-013 | The system shall not treat notifications as the authoritative audit trail. | BR-NOTIF-012 |
-| FR-NOTIF-014 | The system shall audit-log important workflow actions that also create notifications when auditability is required. | BR-NOTIF-013 |
+| FR-NOTIF-013 | The system shall allow Mangaka users to send an in-app publication frequency change request notification to the Editorial Board Chief after the official frequency has been set by board decision. | BR-NOTIF-012, BR-PUB-014 |
+| FR-NOTIF-014 | The system shall treat publication frequency change request notifications as communication records, not as an official request table or authoritative approval record. | BR-NOTIF-013 |
+| FR-NOTIF-015 | The system shall not treat notifications as the authoritative audit trail. | BR-NOTIF-014 |
+| FR-NOTIF-016 | The system shall audit-log important workflow actions that also create notifications when auditability is required. | BR-NOTIF-015 |
 
 ---
 

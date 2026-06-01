@@ -29,7 +29,7 @@ Basis: Verified MVP business rules, updated PageRegion segmentation rules, and p
 
 | Story ID | Source Rule(s) | User Story |
 |---|---|---|
-| US-NEW-001 | BR-USER-002, BR-USER-003 | As a New User, I want to register an account and receive pending approval status, so that I understand why I cannot access protected workspace functions immediately. |
+| US-NEW-001 | BR-USER-002, BR-USER-003, BR-USER-011, BR-USER-012 | As a New User, I want to register an account and receive pending approval or rejection status, so that I understand why I cannot access protected workspace functions immediately or create another account with the same email/username after rejection. |
 | US-NEW-002 | BR-USER-007, BR-USER-008, BR-USER-009 | As a New User, I want to optionally attach an avatar or portfolio file during account setup, so that my profile can support identity display and admin review. |
 
 ---
@@ -93,7 +93,8 @@ Basis: Verified MVP business rules, updated PageRegion segmentation rules, and p
 | US-MANGAKA-021 | BR-CH-REV-007, BR-CH-CANCEL-003, BR-CH-CANCEL-004 | As a Mangaka, I want cancellation feedback and preserved chapter materials to remain available, so that I understand the decision and previous work is not lost. |
 | US-MANGAKA-022 | BR-RANK-005, BR-RANK-008, BR-RANK-012, BR-NOTIF-007, BR-NOTIF-008 | As a Mangaka, I want to track ranking trends and receive cancellation-risk notifications, so that I can respond to series performance issues. |
 | US-MANGAKA-023 | BR-PUB-001, BR-PUB-006, BR-PUB-009 | As a Mangaka, I want to view chapter-level release planning and derived delays, so that I understand the publication schedule for my series. |
-
+| US-MANGAKA-024 | BR-PUB-011, BR-PUB-012, BR-PUB-013 | As a Mangaka, I want to provide or update my desired publication frequency while my series is still in `PROPOSAL_DRAFT`, so that the board can consider my preference before the official board-approved frequency overrides it. |
+| US-MANGAKA-025 | BR-PUB-014, BR-NOTIF-012, BR-NOTIF-013 | As a Mangaka, I want to request a publication frequency change after the board decision by sending an in-app notification to the Editorial Board Chief, so that I can communicate scheduling concerns without requiring an official request table in MVP. |
 ---
 
 ## 6. Assistant
@@ -126,8 +127,7 @@ Basis: Verified MVP business rules, updated PageRegion segmentation rules, and p
 | US-EDITOR-011 | BR-CH-CANCEL-001, BR-CH-CANCEL-002, BR-CH-CANCEL-003, BR-CH-CANCEL-004, BR-CH-REV-006, BR-CH-REV-007, BR-CH-REV-013 | As a Tantou Editor, I want to cancel a chapter through an editorial review decision only when it should not proceed, so that serious rejection decisions are formally recorded and preserved without deleting chapter materials. |
 | US-EDITOR-012 | BR-CH-010 | As a Tantou Editor, I want to place a chapter ON_HOLD when there is a valid editorial or operational reason, so that work can pause without being cancelled. |
 | US-EDITOR-013 | BR-PGTASK-020, BR-PGTASK-021, BR-PGTASK-022 | As a Tantou Editor, I want to review submitted task page versions when acting as an authorized reviewer, so that task outputs are accepted before completion. |
-| US-EDITOR-014 | BR-PUB-002, BR-PUB-003, BR-PUB-004, BR-PUB-005, BR-PUB-006 | As a Tantou Editor, I want to view the series publication frequency and chapter release plan, so that editorial review considers the high-level publishing schedule. |
-| US-EDITOR-015 | BR-RANK-005, BR-RANK-008, BR-RANK-012 | As a Tantou Editor, I want to view ranking history and cancellation-risk evidence, so that editorial decisions can consider series performance without automatic cancellation. |
+| US-EDITOR-016 | BR-RANK-005, BR-RANK-008, BR-RANK-012 | As a Tantou Editor, I want to view ranking history and cancellation-risk evidence, so that editorial decisions can consider series performance without automatic cancellation. |
 
 ---
 
@@ -136,38 +136,45 @@ Basis: Verified MVP business rules, updated PageRegion segmentation rules, and p
 | Story ID | Source Rule(s) | User Story |
 |---|---|---|
 | US-BOARD-001 | BR-PROP-013, BR-PROP-014, BR-PROP-016, BR-PROP-021 | As an Editorial Board Member, I want to view proposals under board review with supporting proposal material, so that I can participate in serialization decisions. |
-| US-BOARD-002 | BR-BOARD-POLL-001, BR-BOARD-POLL-010, BR-BOARD-VOTE-001 | As an Editorial Board Member, I want to view open board polls, so that I can vote only while a poll is active. |
+| US-BOARD-002 | BR-BOARD-POLL-010, BR-BOARD-VOTE-001 | As an Editorial Board Member, I want to view open board polls, so that I can vote only while a poll is active. |
 | US-BOARD-003 | BR-BOARD-VOTE-002, BR-BOARD-VOTE-003, BR-BOARD-VOTE-005 | As an Editorial Board Member, I want to vote APPROVE, REJECT, or ABSTAIN at most once per poll, so that the voting process is fair. |
 | US-BOARD-004 | BR-BOARD-VOTE-004 | As an Editorial Board Member, I want to provide a non-empty reason when voting REJECT, so that my objection is clear. |
 | US-BOARD-005 | BR-BOARD-VOTE-008, BR-BOARD-VOTE-009, BR-BOARD-VOTE-010, BR-BOARD-VOTE-011 | As an Editorial Board Member, I want my votes to remain visible after a poll is closed or cancelled, so that my participation is traceable but does not directly change status by itself. |
 | US-BOARD-006 | BR-BOARD-POLL-006, BR-RANK-005, BR-RANK-008, BR-RANK-012 | As an Editorial Board Member, I want to view ranking and cancellation-risk evidence for relevant series, so that board decisions are supported by performance context. |
 | US-BOARD-007 | BR-PUB-002, BR-PUB-003, BR-PUB-004, BR-PUB-006 | As an Editorial Board Member, I want to view the current publication frequency of serialized series, so that I understand the high-level release plan. |
 | US-BOARD-008 | BR-NOTIF-011 | As an Editorial Board Member, I want to receive an in-app notification when a new board poll opens, so that I can vote on time. |
+| US-BOARD-009 | BR-VOTE-INPUT-001, BR-VOTE-INPUT-002, BR-VOTE-INPUT-003, BR-VOTE-INPUT-005, BR-VOTE-INPUT-006, BR-VOTE-INPUT-007, BR-VOTE-INPUT-008, BR-VOTE-INPUT-009, BR-VOTE-INPUT-010 | As an Editorial Board Member, I want to enter one simulated or aggregated reader vote snapshot for a released chapter with valid counts, rating, timestamp, and entered-by user, so that ranking can be demonstrated without a public reader module. |
 
 ---
 
-## 9. Admin
+## 9. Editorial Board Chief
 
 | Story ID | Source Rule(s) | User Story |
 |---|---|---|
-| US-ADMIN-001 | BR-USER-004, BR-USER-005, BR-USER-006, BR-USER-010, BR-HIST-004 | As an Admin, I want to view, activate, disable, and audit user account actions through current account status, so that account access is controlled and account management remains traceable without a separate registration request table. |
+| US-BOARDCHIEF-001 | BR-BOARD-POLL-001, BR-BOARD-POLL-002, BR-BOARD-POLL-003, BR-BOARD-POLL-004, BR-BOARD-POLL-005, BR-BOARD-POLL-007, BR-BOARD-POLL-008, BR-BOARD-POLL-009, BR-BOARD-POLL-018, BR-PUB-010 | As an Editorial Board Chief, I want to open valid `START_SERIALIZATION` or `CANCEL_SERIALIZATION` board polls with reasons, optional end times, and a required publication frequency for `START_SERIALIZATION`, so that board voting starts from a correct workflow state. |
+| US-BOARDCHIEF-002 | BR-BOARD-VOTE-001, BR-BOARD-VOTE-002, BR-BOARD-VOTE-003, BR-BOARD-VOTE-004, BR-BOARD-VOTE-005 | As an Editorial Board Chief, I want to vote `APPROVE`, `REJECT`, or `ABSTAIN` at most once per poll, so that I can participate in board decisions while still following the same voting rules as other board voters. |
+| US-BOARDCHIEF-003 | BR-BOARD-POLL-014, BR-BOARD-POLL-015, BR-BOARD-POLL-017 | As an Editorial Board Chief, I want to cancel invalid board polls without deleting votes, so that incorrect poll setups are invalidated but remain traceable. |
+| US-BOARDCHIEF-004 | BR-BOARD-POLL-016, BR-BOARD-POLL-017, BR-BOARD-RESULT-001, BR-BOARD-RESULT-002, BR-BOARD-RESULT-003, BR-BOARD-RESULT-004, BR-BOARD-RESULT-005, BR-BOARD-RESULT-006, BR-BOARD-RESULT-007, BR-BOARD-RESULT-010 | As an Editorial Board Chief, I want to close a valid poll and view computed vote totals, so that the applicable board result can be determined without a separate decision table. |
+| US-BOARDCHIEF-005 | BR-BOARD-RESULT-011, BR-BOARD-RESULT-012, BR-BOARD-RESULT-013, BR-BOARD-RESULT-014, BR-BOARD-RESULT-015, BR-BOARD-RESULT-017 | As an Editorial Board Chief, I want applicable closed poll results to update proposal or series status according to the board rules, so that board decisions affect workflow only at the correct time. |
+| US-BOARDCHIEF-006 | BR-BOARD-POLL-013, BR-BOARD-POLL-015, BR-BOARD-POLL-017, BR-BOARD-RESULT-017 | As an Editorial Board Chief, I want board polls, cancelled polls, votes, and result applications to remain audit-visible, so that board-driven status changes are traceable. |
+| US-BOARDCHIEF-007 | BR-PUB-015 | As an Editorial Board Chief, I want to directly change a series publication frequency only with a required audit reason, so that frequency changes remain controlled and traceable. |
+
+---
+
+## 10. Admin
+
+| Story ID | Source Rule(s) | User Story |
+|---|---|---|
+| US-ADMIN-001 | BR-USER-004, BR-USER-005, BR-USER-006, BR-USER-010, BR-USER-011, BR-USER-012, BR-HIST-004 | As an Admin, I want to view, activate, reject, disable, and audit user account actions through current account status, so that account access is controlled and account management remains traceable without a separate registration request table. |
 | US-ADMIN-002 | BR-FILE-003, BR-FILE-004, BR-FILE-007 | As an Admin, I want file deletion to happen through the application workflow while historical records retain file references when needed, so that Cloudinary assets, SQL metadata, and past workflow evidence remain consistent. |
 | US-ADMIN-003 | BR-SERIES-001, BR-SERIES-002 | As an Admin, I want series codes and URL slugs to remain unique, so that series records can be identified reliably. |
 | US-ADMIN-004 | BR-SC-006, BR-SC-007 | As an Admin, I want contributor history to remain available after contributors leave a series, so that past participation can be reviewed and audited. |
 | US-ADMIN-005 | BR-PROP-007, BR-PROP-012, BR-PROP-017, BR-PROP-020 | As an Admin, I want proposal versions and review metadata to remain searchable and traceable, so that proposal decisions can be reviewed later. |
-| US-ADMIN-006 | BR-BOARD-POLL-001, BR-BOARD-POLL-002, BR-BOARD-POLL-003, BR-BOARD-POLL-004, BR-BOARD-POLL-005, BR-BOARD-POLL-007, BR-BOARD-POLL-008, BR-BOARD-POLL-009 | As an Admin, I want to open valid START_SERIALIZATION or CANCEL_SERIALIZATION board polls with reasons and optional end times, so that board voting starts from a correct workflow state. |
-| US-ADMIN-007 | BR-BOARD-POLL-014, BR-BOARD-POLL-015, BR-BOARD-POLL-017 | As an Admin, I want to cancel invalid board polls without deleting votes, so that incorrect poll setups are invalidated but remain traceable. |
-| US-ADMIN-008 | BR-BOARD-POLL-016, BR-BOARD-POLL-017, BR-BOARD-RESULT-001, BR-BOARD-RESULT-002, BR-BOARD-RESULT-003, BR-BOARD-RESULT-004, BR-BOARD-RESULT-005, BR-BOARD-RESULT-006, BR-BOARD-RESULT-007, BR-BOARD-RESULT-010 | As an Admin, I want to close a valid poll and view computed vote totals, so that the applicable board result can be determined without a separate decision table. |
-| US-ADMIN-009 | BR-BOARD-RESULT-011, BR-BOARD-RESULT-012, BR-BOARD-RESULT-013, BR-BOARD-RESULT-014, BR-BOARD-RESULT-015, BR-BOARD-RESULT-017 | As an Admin, I want applicable closed poll results to update proposal or series status according to the board rules, so that board decisions affect workflow only at the correct time. |
-| US-ADMIN-010 | BR-BOARD-POLL-013, BR-BOARD-POLL-015, BR-BOARD-POLL-017, BR-BOARD-RESULT-017 | As an Admin, I want board polls, cancelled polls, votes, and result applications to remain audit-visible, so that board-driven status changes are traceable. |
-| US-ADMIN-011 | BR-CH-CANCEL-005 | As an Admin, I want to perform administrative chapter cancellation overrides only when audit-logged, so that exceptional cancellations remain traceable. |
-| US-ADMIN-012 | BR-CH-004, BR-CH-012, BR-CH-REV-014, BR-CH-CANCEL-003, BR-CH-CANCEL-005 | As an Admin, I want chapter status changes, editorial decisions, cancellation decisions, and preserved chapter materials to remain traceable, so that important workflow decisions can be reviewed later. |
+| US-ADMIN-012 | BR-CH-004, BR-CH-012, BR-CH-REV-014, BR-CH-CANCEL-003 | As an Admin, I want chapter status changes, editorial decisions, cancellation decisions, and preserved chapter materials to remain traceable, so that important workflow decisions can be reviewed later. |
 | US-ADMIN-013 | BR-REG-012, BR-ANN-014, BR-ANN-015, BR-CP-016 | As an Admin, I want page regions to preserve their page-version ownership and annotations to derive page-version context through linked regions, so that review history remains accurate after new uploads. |
 | US-ADMIN-014 | BR-PGTASK-027, BR-PGTASK-029, BR-PGTASK-031 | As an Admin, I want page task creation, cancellation, completion, status changes, and preserved old task records to be audit-visible, so that task workflow remains traceable. |
-| US-ADMIN-015 | BR-PUB-001, BR-PUB-008, BR-PUB-009, BR-CH-007, BR-CH-008, BR-CH-009 | As an Admin, I want to set planned release dates, schedule approved chapters, and record released timestamps according to Chapter status rules, so that publication planning is complete and delays can be derived. |
-| US-ADMIN-016 | BR-VOTE-INPUT-001, BR-VOTE-INPUT-002, BR-VOTE-INPUT-003, BR-VOTE-INPUT-005, BR-VOTE-INPUT-006, BR-VOTE-INPUT-007, BR-VOTE-INPUT-008, BR-VOTE-INPUT-009 | As an Admin, I want to enter one simulated or aggregated reader vote snapshot for a released chapter with valid counts, rating, timestamp, and entered-by user, so that ranking can be demonstrated without a public reader module. |
-| US-ADMIN-017 | BR-VOTE-INPUT-004, BR-VOTE-INPUT-009, BR-RANK-008 | As an Admin, I want reader vote input and ranking snapshots to record evidence and entered-by information, so that simulated ranking data can be audited. |
-| US-ADMIN-018 | BR-RANK-001, BR-RANK-002, BR-RANK-003, BR-RANK-004, BR-RANK-009, BR-RANK-010, BR-RANK-011 | As an Admin, I want ranking snapshots to be generated and stored by ranking period from reader vote input, so that series performance can be reviewed over time. |
+| US-ADMIN-017 | BR-VOTE-INPUT-004, BR-VOTE-INPUT-009, BR-RANK-008 | As an Admin, I want reader vote input and ranking snapshots to remain audit-visible with evidence and entered-by information, so that simulated ranking data can be reviewed without Admin entering the vote data. |
+| US-ADMIN-018 | BR-RANK-001, BR-RANK-002, BR-RANK-003, BR-RANK-004, BR-RANK-009, BR-RANK-010, BR-RANK-011 | As an Admin, I want generated ranking snapshots to remain visible for audit and traceability, so that series performance can be reviewed over time without Admin owning reader vote input. |
 | US-ADMIN-019 | BR-NOTIF-013, BR-HIST-004 | As an Admin, I want important notification-triggering workflow actions to also be audit-logged when required, so that user awareness does not replace traceability. |
 | US-ADMIN-020 | BR-HIST-001, BR-HIST-002, BR-HIST-003, BR-HIST-005, BR-HIST-006, BR-HIST-008 | As an Admin, I want domain records and audit logs to serve as workflow evidence instead of separate status-history tables, so that the MVP stays simple while preserving traceability. |
 
