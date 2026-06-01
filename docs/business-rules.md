@@ -166,23 +166,24 @@
 
 | Rule ID | Business Rule | Review Status |
 |---|---|---|
-| BR-BOARD-POLL-001 | Admin may create board polls for `START_SERIALIZATION` or `CANCEL_SERIALIZATION`. | Active draft |
+| BR-BOARD-POLL-001 | Editorial Board Chief may create board polls for `START_SERIALIZATION` or `CANCEL_SERIALIZATION`. | Active draft |
 | BR-BOARD-POLL-002 | A `START_SERIALIZATION` poll may only be opened for a series with `Series.status_code = UNDER_BOARD_REVIEW`. | Active draft |
 | BR-BOARD-POLL-003 | A `START_SERIALIZATION` poll may only be opened when the selected series has exactly one active proposal with `SeriesProposal.status_code = UNDER_BOARD_REVIEW`. | Active draft |
 | BR-BOARD-POLL-004 | A `START_SERIALIZATION` poll represents board voting on the active under-board-review proposal for the selected series, even though the poll stores only `series_id`. | Active draft |
-| BR-BOARD-POLL-005 | A `CANCEL_SERIALIZATION` poll may be opened for a serialized or paused series when the admin provides a reason. | Active draft |
+| BR-BOARD-POLL-005 | A `CANCEL_SERIALIZATION` poll may be opened for a serialized or paused series when the Editorial Board Chief provides a reason. | Active draft |
 | BR-BOARD-POLL-006 | Low ranking or high cancellation risk should be displayed as supporting evidence for cancellation polls when available, but it should not be the only allowed reason. | Active draft |
 | BR-BOARD-POLL-007 | A poll must have a non-empty reason explaining why the poll was opened. | Active draft |
-| BR-BOARD-POLL-008 | A poll may have a scheduled end time or may be closed manually by an admin. | Active draft |
+| BR-BOARD-POLL-008 | A poll may have a scheduled end time or may be closed manually by the Editorial Board Chief. | Active draft |
 | BR-BOARD-POLL-009 | A series cannot have more than one open poll of the same type at the same time. | Active draft |
 | BR-BOARD-POLL-010 | `poll_status_code` exists to distinguish open polls, valid closed polls, and cancelled/invalidated polls. | Active draft |
 | BR-BOARD-POLL-011 | Votes from an `OPEN` poll are stored but are not final and must not update series or proposal status. | Active draft |
 | BR-BOARD-POLL-012 | Votes from a `CLOSED` poll are valid and may be used by the Board Result rules to apply series or proposal status changes. | Active draft |
 | BR-BOARD-POLL-013 | Votes from a `CANCELLED` poll remain stored for traceability but must not affect series or proposal status. | Active draft |
-| BR-BOARD-POLL-014 | Admin may cancel a poll when the voting process should be invalidated, such as wrong series, incorrect poll type, administrative mistake, or invalid voting setup. | Active draft |
+| BR-BOARD-POLL-014 | Editorial Board Chief may cancel a poll when the voting process should be invalidated, such as wrong series, incorrect poll type, administrative mistake, or invalid voting setup. | Active draft |
 | BR-BOARD-POLL-015 | Cancelling a poll does not delete votes; it marks the poll result as invalid. | Active draft |
 | BR-BOARD-POLL-016 | Poll results are computed from board votes and handled by the Board Result rules, not stored directly on the poll table. | Active draft |
 | BR-BOARD-POLL-017 | Poll creation, cancellation, and closure should be recorded in the audit log. | Active draft |
+| BR-BOARD-POLL-018 | When opening a `START_SERIALIZATION` poll, the Editorial Board Chief must specify the publication frequency to be applied if the poll is approved. | Active draft |
 
 ---
 
@@ -190,17 +191,17 @@
 
 | Rule ID | Business Rule | Review Status |
 |---|---|---|
-| BR-BOARD-VOTE-001 | Board members may vote only in an open `SeriesBoardPoll`. | Active draft |
-| BR-BOARD-VOTE-002 | Only users with the Editorial Board Member role may cast board votes. | Active draft |
+| BR-BOARD-VOTE-001 | Editorial Board Members and Editorial Board Chiefs may vote only in an open `SeriesBoardPoll`. | Active draft |
+| BR-BOARD-VOTE-002 | Only users with the Editorial Board Member or Editorial Board Chief role may cast board votes. | Active draft |
 | BR-BOARD-VOTE-003 | A board vote choice must be `APPROVE`, `REJECT`, or `ABSTAIN`. | Active draft |
 | BR-BOARD-VOTE-004 | A rejection vote must include a non-empty reason. | Active draft |
-| BR-BOARD-VOTE-005 | Each board member may cast at most one vote per board poll. | Active draft |
+| BR-BOARD-VOTE-005 | Each Editorial Board Member or Editorial Board Chief may cast at most one vote per board poll. | Active draft |
 | BR-BOARD-VOTE-006 | Board votes are tied to a `SeriesBoardPoll`, and each poll is tied to a specific series. | Active draft |
 | BR-BOARD-VOTE-007 | For a `START_SERIALIZATION` poll, the related series must have exactly one proposal currently in `UNDER_BOARD_REVIEW`. | Active draft |
 | BR-BOARD-VOTE-008 | Board votes should be preserved for traceability even after the poll is closed or cancelled. | Active draft |
 | BR-BOARD-VOTE-009 | Votes from a `CLOSED` poll may be used to determine the applicable poll result. | Active draft |
 | BR-BOARD-VOTE-010 | Votes from a `CANCELLED` poll are preserved but must not be applied to series or proposal status changes. | Active draft |
-| BR-BOARD-VOTE-011 | A board vote alone does not update series or proposal status; status changes occur only when an admin/system closes the poll and applies the computed result. | Active draft |
+| BR-BOARD-VOTE-011 | A board vote alone does not update series or proposal status; status changes occur only when an Editorial Board Chief or system process closes the poll and applies the computed result. | Active draft |
 
 ---
 
@@ -218,7 +219,7 @@
 | BR-BOARD-RESULT-008 | If a poll is `OPEN`, the computed result is treated as `PENDING` and must not be applied. | Active draft |
 | BR-BOARD-RESULT-009 | If a poll is `CANCELLED`, the computed result is treated as `INVALIDATED` and must not be applied. | Active draft |
 | BR-BOARD-RESULT-010 | Only a `CLOSED` poll can produce an applicable board result. | Active draft |
-| BR-BOARD-RESULT-011 | A `START_SERIALIZATION` poll with an applicable `APPROVED` result changes the series to `SERIALIZED` and changes the active under-board-review proposal to `APPROVED`. | Active draft |
+| BR-BOARD-RESULT-011 | A `START_SERIALIZATION` poll with an applicable `APPROVED` result changes the series to `SERIALIZED`, changes the active under-board-review proposal to `APPROVED`, and applies the publication frequency specified by the Editorial Board Chief. | Active draft |
 | BR-BOARD-RESULT-012 | A `START_SERIALIZATION` poll with an applicable `REJECTED` result prevents the proposal from proceeding to serialization and should cancel the active proposal and series according to MVP workflow policy. | Active draft |
 | BR-BOARD-RESULT-013 | A `START_SERIALIZATION` poll with `NO_DECISION` leaves the series in `UNDER_BOARD_REVIEW` and the active proposal in `UNDER_BOARD_REVIEW`. | Active draft |
 | BR-BOARD-RESULT-014 | A `CANCEL_SERIALIZATION` poll with an applicable `APPROVED` result changes the series status to `CANCELLED`. | Active draft |
@@ -372,7 +373,7 @@
 | BR-CH-CANCEL-002 | A cancelled chapter must not proceed to `SCHEDULED` or `RELEASED` status. | Active draft |
 | BR-CH-CANCEL-003 | Cancelling a chapter must not automatically delete its pages, page versions, page regions, annotations, files, or review history. | Active draft |
 | BR-CH-CANCEL-004 | If the chapter can still be fixed and resubmitted, the editor should use `REVISION_REQUESTED`, not `CANCELLED`. | Active draft |
-| BR-CH-CANCEL-005 | Admin cancellation without editorial review is allowed only as an administrative override and must be audit-logged. | Active draft |
+| BR-CH-CANCEL-005 | Chapter cancellation without editorial review is not allowed in MVP; chapter cancellation must be recorded through a chapter editorial review decision. | Active draft |
 
 ---
 
@@ -389,6 +390,12 @@
 | BR-PUB-007 | The MVP does not keep publication frequency history; only the current frequency is stored on `Series`. | Active draft |
 | BR-PUB-008 | Chapter scheduling and release status must follow the Chapter status rules. | Active draft |
 | BR-PUB-009 | Delayed chapters can be derived from `planned_release_date` instead of storing a separate delay status. | Active draft |
+| BR-PUB-010 | When an Editorial Board Chief opens a `START_SERIALIZATION` poll, they must specify the publication frequency for the series as part of the poll setup. | Active draft |
+| BR-PUB-011 | Mangaka may provide or update their preferred publication frequency only while the series is in `PROPOSAL_DRAFT`, but MVP does not require a separate desired publication frequency column on `Series`. | Active draft |
+| BR-PUB-012 | After the series leaves `PROPOSAL_DRAFT`, Mangaka cannot directly change the official `Series.publication_frequency_code`. | Active draft |
+| BR-PUB-013 | The publication frequency specified through the valid board serialization decision overrides the Mangaka's preference and becomes the official `Series.publication_frequency_code`. | Active draft |
+| BR-PUB-014 | After a board decision has set the official publication frequency, Mangaka may request a publication frequency change by sending an in-app notification to the Editorial Board Chief; MVP does not require a separate official frequency-change request table. | Active draft |
+| BR-PUB-015 | Editorial Board Chief may directly change `Series.publication_frequency_code` for a series after providing a required reason that must be written to the audit log. | Active draft |
 
 ---
 
@@ -423,7 +430,8 @@
 | BR-VOTE-INPUT-006 | Average rating, if provided, must be within the allowed rating range. | Active draft |
 | BR-VOTE-INPUT-007 | For MVP, each chapter should have at most one aggregated reader vote snapshot. | Active draft |
 | BR-VOTE-INPUT-008 | A reader vote snapshot should be entered only after the related chapter has been released. | Active draft |
-| BR-VOTE-INPUT-009 | Reader vote input should record the authorized user who entered the simulated/aggregated vote data. | Active draft |
+| BR-VOTE-INPUT-009 | Reader vote input should record the Editorial Board Member who entered the simulated/aggregated vote data. | Active draft |
+| BR-VOTE-INPUT-010 | Only Editorial Board Members may enter simulated or aggregated reader vote input in MVP. | Active draft |
 
 ---
 
@@ -442,8 +450,10 @@
 | BR-NOTIF-009 | Task assignment notifications should be sent to the assigned user when a page task is created. | Active draft |
 | BR-NOTIF-010 | Review result notifications should be sent to relevant contributors when a proposal or chapter review decision is recorded. | Active draft |
 | BR-NOTIF-011 | Board poll notifications may be sent to Editorial Board Members when a new board poll is opened. | Active draft |
-| BR-NOTIF-012 | Notifications are user-facing awareness records and should not be treated as the authoritative audit trail. | Active draft |
-| BR-NOTIF-013 | Important workflow actions that create notifications should still be recorded in the audit log when auditability is required. | Active draft |
+| BR-NOTIF-012 | Mangaka may use an in-app notification to request a publication frequency change from the Editorial Board Chief after the board decision has set the official frequency. | Active draft |
+| BR-NOTIF-013 | A publication frequency change request notification is an MVP communication mechanism, not an official request table or authoritative approval record. | Active draft |
+| BR-NOTIF-014 | Notifications are user-facing awareness records and should not be treated as the authoritative audit trail. | Active draft |
+| BR-NOTIF-015 | Important workflow actions that create notifications should still be recorded in the audit log when auditability is required. | Active draft |
 
 ---
 

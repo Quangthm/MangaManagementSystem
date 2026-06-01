@@ -32,15 +32,15 @@ The MVP should stay focused and avoid unnecessary tables unless a table represen
 | Series management | Manage series profile, unique code, unique slug, lifecycle status, language, genre text, cover image, and optional source series reference. |
 | Series contributors | Manage team membership through `SeriesContributor`, not a direct lead Mangaka column on `Series`. |
 | Series proposals | Store formal submitted proposal versions in `SeriesProposal`; revisions create new proposal rows. |
-| Board workflow | Use `SeriesBoardPoll` and `SeriesBoardVote`; compute board result from votes. Do **not** use a separate `SeriesBoardDecision` table. |
+| Board workflow | Use `SeriesBoardPoll` and `SeriesBoardVote`; Editorial Board Chief opens, closes, and cancels board polls, specifies publication frequency when opening `START_SERIALIZATION` polls, may also vote, and board results are computed from votes. Do **not** use a separate `SeriesBoardDecision` table. |
 | Chapters and pages | Use `Chapter`, `ChapterPage`, and `ChapterPageVersion`. `ChapterPage` is a logical page slot; `ChapterPageVersion` stores uploaded/revised files. |
 | Chapter submission | Submit a chapter by changing `Chapter.status_code` to `UNDER_REVIEW`; do **not** create a `ChapterSubmission` table. |
 | Page regions | Store accepted AI/manual regions directly as `PageRegion` records linked to `ChapterPageVersion`. |
 | Page annotations | Store annotations linked to `PageRegion`, not direct annotation coordinates. |
 | Page tasks | Use page-based `ChapterPageTask` and optional `ChapterPageTaskRegion` links. |
 | Editorial review | Store final chapter-level review decisions in `ChapterEditorialReview`. Page annotations support the review but do not replace chapter-level decisions. |
-| Publication planning | Use chapter-level planned release dates and release timestamps. Series publication frequency is only a current high-level label. |
-| Ranking | Use simulated/manual reader vote input and time-based `SeriesRankingSnapshot`. No public reader module in MVP. |
+| Publication planning | Use chapter-level planned release dates and release timestamps. Mangaka may provide/update preferred publication frequency only while the series is in `PROPOSAL_DRAFT`; Editorial Board Chief specifies the official frequency in a `START_SERIALIZATION` poll, and an approved poll applies that frequency to `Series.publication_frequency_code`. After board decision, Mangaka may request a frequency change through in-app notification, but only Editorial Board Chief may directly change the official frequency with a required audit reason. |
+| Ranking | Use simulated/manual reader vote input entered by Editorial Board Members and time-based `SeriesRankingSnapshot`. No public reader module in MVP. |
 | Notifications | Use in-app notifications only. Notifications are not the audit trail. |
 | Auditability | Use current status on main records plus domain records and audit logs. Avoid separate status-history tables. |
 | AI support | AI suggestions are advisory and human-reviewed. Accepted region output is saved as `PageRegion`; final translated pages are saved as `ChapterPageVersion`. |
@@ -80,8 +80,9 @@ The project uses **permission-based actor grouping** for shared features and rol
 | Mangaka | Creates and manages series, proposals, chapters, pages, page versions, regions for production, task assignments, assistant task review, chapter submission, ranking monitoring, and response to editorial feedback. |
 | Assistant | Views assigned page tasks, sees linked regions, uploads completed output as a new page version, and tracks task history. |
 | Tantou Editor | Reviews proposals and chapters, uses page regions and annotations for feedback, records chapter-level editorial decisions, may review translation-related issues, and monitors publication/ranking context. |
-| Editorial Board Member | Views board polls, votes approve/reject/abstain, provides rejection reasons, and views ranking/cancellation-risk evidence. |
-| Admin | Manages accounts, file deletion workflow, board polls, publication scheduling, simulated reader vote input, ranking snapshots, audit visibility, traceability, and exceptional administrative overrides. |
+| Editorial Board Member | Views board polls, votes approve/reject/abstain, provides rejection reasons, enters simulated/aggregated reader vote input, and views ranking/cancellation-risk evidence. |
+| Editorial Board Chief | Opens, closes, and cancels board polls; specifies publication frequency when opening `START_SERIALIZATION` polls; may directly change official series publication frequency with a required audit reason; may also vote approve/reject/abstain; provides rejection reasons when voting reject; and views ranking/cancellation-risk evidence. |
+| Admin | Manages accounts, file deletion workflow, audit visibility, traceability, and system-level management. Admin does not own chapter cancellation overrides, publication scheduling, or simulated reader vote input in MVP. |
 
 ### 3.2 Actor Consolidation Decisions
 
@@ -198,14 +199,15 @@ The project uses **permission-based actor grouping** for shared features and rol
 
 ### Board Poll
 
-- Admin may create board polls for `START_SERIALIZATION` or `CANCEL_SERIALIZATION`.
+- Editorial Board Chief may create board polls for `START_SERIALIZATION` or `CANCEL_SERIALIZATION`.
+- When opening a `START_SERIALIZATION` poll, the Editorial Board Chief must specify the publication frequency to apply if the poll is approved.
 - A `START_SERIALIZATION` poll may open only when `Series.status_code = UNDER_BOARD_REVIEW`.
 - A `START_SERIALIZATION` poll may open only when the series has exactly one active proposal with `SeriesProposal.status_code = UNDER_BOARD_REVIEW`.
 - A `START_SERIALIZATION` poll represents voting on the active under-board-review proposal even though the poll stores only `series_id`.
-- A `CANCEL_SERIALIZATION` poll may open for serialized or paused series when Admin provides a reason.
+- A `CANCEL_SERIALIZATION` poll may open for serialized or paused series when Editorial Board Chief provides a reason.
 - Low ranking or high cancellation risk may support cancellation polls but cannot be the only allowed reason.
 - Each poll must have a non-empty reason.
-- A poll may have an end time or be closed manually.
+- A poll may have an end time or be closed manually by the Editorial Board Chief.
 - A series cannot have more than one open poll of the same type at the same time.
 - `poll_status_code` distinguishes `OPEN`, `CLOSED`, and `CANCELLED`.
 - Votes from `OPEN` polls are stored but do not update status.
@@ -215,11 +217,11 @@ The project uses **permission-based actor grouping** for shared features and rol
 
 ### Board Vote
 
-- Board members may vote only in open polls.
-- Only Editorial Board Members may cast board votes.
+- Editorial Board Members and Editorial Board Chiefs may vote only in open polls.
+- Only Editorial Board Members and Editorial Board Chiefs may cast board votes.
 - Vote choices are `APPROVE`, `REJECT`, or `ABSTAIN`.
 - A `REJECT` vote requires a non-empty reason.
-- Each board member may vote at most once per poll.
+- Each Editorial Board Member or Editorial Board Chief may vote at most once per poll.
 - Votes remain preserved after closure or cancellation.
 - A board vote alone does not update series/proposal status.
 
@@ -234,7 +236,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 - `OPEN` poll result is treated as `PENDING`.
 - `CANCELLED` poll result is treated as `INVALIDATED`.
 - Only a `CLOSED` poll can produce an applicable board result.
-- `START_SERIALIZATION` + `APPROVED` changes series to `SERIALIZED` and active proposal to `APPROVED`.
+- `START_SERIALIZATION` + `APPROVED` changes series to `SERIALIZED`, changes the active proposal to `APPROVED`, and applies the board-specified publication frequency as the official `Series.publication_frequency_code`.
 - `START_SERIALIZATION` + `REJECTED` cancels the active proposal and series according to MVP workflow policy.
 - `START_SERIALIZATION` + `NO_DECISION` leaves series/proposal under board review.
 - `CANCEL_SERIALIZATION` + `APPROVED` changes series to `CANCELLED`.
@@ -343,15 +345,21 @@ The project uses **permission-based actor grouping** for shared features and rol
 - Cancelled chapters cannot proceed to `SCHEDULED` or `RELEASED`.
 - Cancellation does not delete pages, versions, regions, annotations, files, or review history.
 - If fixable, use `REVISION_REQUESTED` instead of `CANCELLED`.
-- Admin cancellation without editorial review is allowed only as an audit-logged override.
+- Admin cancellation without editorial review is not allowed in MVP.
 
 ## 4.12 Publication Planning
 
 - Detailed publication planning is chapter-level through `Chapter.planned_release_date` and `Chapter.status_code`.
-- Series-level publication frequency is only the current high-level label.
+- Series-level publication frequency is only the current high-level label stored as `Series.publication_frequency_code`.
 - Frequency values may be `WEEKLY`, `MONTHLY`, `IRREGULAR`, or `NULL`.
-- `IRREGULAR` means chapters are released when ready.
-- Frequency may be `NULL` before serialization or before planning is decided.
+- `IRREGULAR` means chapters are released when ready and do not follow a fixed weekly or monthly schedule.
+- Frequency may be `NULL` before serialization or before the release approach has been decided.
+- Mangaka may provide or update their preferred publication frequency only while the series is in `PROPOSAL_DRAFT`; MVP does not require a separate desired publication frequency column on `Series`.
+- After the series leaves `PROPOSAL_DRAFT`, Mangaka cannot directly change the official `Series.publication_frequency_code`.
+- When opening a `START_SERIALIZATION` poll, the Editorial Board Chief must specify the publication frequency for the series as part of the poll setup.
+- If the `START_SERIALIZATION` poll is approved, the board-specified frequency overrides the Mangaka preference and becomes the official `Series.publication_frequency_code`.
+- After a board decision has set the official frequency, Mangaka may request a publication frequency change by sending an in-app notification to the Editorial Board Chief; MVP does not require a separate official frequency-change request table.
+- Editorial Board Chief may directly change `Series.publication_frequency_code` only after providing a required reason that must be written to the audit log.
 - The MVP does not store publication frequency history.
 - Delayed chapters can be derived from planned release date rather than a separate delay status.
 
@@ -372,7 +380,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 ### Reader Vote Input
 
 - There is no public reader voting module in MVP.
-- Admin or authorized board/admin users may enter simulated or aggregated reader vote input for demo purposes.
+- Editorial Board Members may enter simulated or aggregated reader vote input for demo purposes.
 - Reader vote input is recorded for released chapters.
 - A released chapter should have at most one aggregated reader vote input record in MVP.
 - Vote count and feedback count cannot be negative.
@@ -386,7 +394,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 - Notifications may reference related entity type and ID.
 - If `related_entity_type` is set, `related_entity_id` must also be set, and vice versa.
 - Unread notification means `read_at_utc IS NULL`.
-- Notifications may be sent for ranking warnings, task assignments, review results, board polls, and other workflow events.
+- Notifications may be sent for ranking warnings, task assignments, review results, board polls, publication-frequency change requests, and other workflow events.
 - Notifications are not the authoritative audit trail.
 - Important notification-triggering workflow actions should also be audit-logged when auditability is required.
 
@@ -607,13 +615,20 @@ Use direct `status_code` or fixed code columns with database constraints where a
 - Ranking/cancellation-risk evidence view
 - Historical poll/vote visibility
 
-### 8.7 Admin UI
+### 8.7 Editorial Board Chief UI
+
+- Board poll open/cancel/close actions
+- Required publication frequency selection when opening `START_SERIALIZATION` polls
+- Official publication frequency change form with required audit reason
+- Board poll detail
+- Vote form
+- Ranking/cancellation-risk evidence view
+- Historical poll/vote visibility
+
+### 8.8 Admin UI
 
 - Account approval/activation/disable management
 - File deletion workflow where permitted
-- Board poll open/cancel/close actions
-- Publication schedule/release management
-- Reader vote input entry
 - Ranking snapshot view
 - Audit log / traceability view
 - Admin dashboard for workflow health
