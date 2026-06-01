@@ -1,3 +1,4 @@
+using System;
 using System.ComponentModel.DataAnnotations;
 
 namespace MangaManagementSystem.Application.DTOs.Manga
@@ -6,26 +7,30 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         long SeriesProposalId,
         long SeriesId,
         short ProposalVersionNo,
-        string? ProposalTitle,
-        string? SynopsisSnapshot,
-        string? GenreSnapshot,
-        long? ProposalFileId,
+        string ProposalTitle,
+        string SynopsisSnapshot,
+        string GenreSnapshot,
+        long ProposalFileId,
         string StatusCode,
-        int? SubmittedByUserId,
+        int SubmittedByUserId,
+        DateTime SubmittedAtUtc,
+        DateTime? WithdrawnAtUtc,
         int? ReviewedByUserId,
+        DateTime? ReviewedAtUtc,
+        string? Comments,
         long? MarkupFileId
     );
 
     public record CreateSeriesProposalDto(
         [Required] long SeriesId,
         [Required] short ProposalVersionNo,
-        string? ProposalTitle,
-        string? SynopsisSnapshot,
-        string? GenreSnapshot,
-        long? ProposalFileId,
+        [Required][MaxLength(200)] string ProposalTitle,
+        [Required] string SynopsisSnapshot,
+        [Required][MaxLength(100)] string GenreSnapshot,
+        [Required] long ProposalFileId,
         [Required][MaxLength(50)] string StatusCode,
-        int? SubmittedByUserId,
-        int? ReviewedByUserId,
+        [Required] int SubmittedByUserId,
+        string? Comments,
         long? MarkupFileId
     );
 
@@ -33,13 +38,15 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         [Required] long SeriesProposalId,
         [Required] long SeriesId,
         [Required] short ProposalVersionNo,
-        string? ProposalTitle,
-        string? SynopsisSnapshot,
-        string? GenreSnapshot,
-        long? ProposalFileId,
+        [Required][MaxLength(200)] string ProposalTitle,
+        [Required] string SynopsisSnapshot,
+        [Required][MaxLength(100)] string GenreSnapshot,
+        [Required] long ProposalFileId,
         [Required][MaxLength(50)] string StatusCode,
-        int? SubmittedByUserId,
+        [Required] int SubmittedByUserId,
         int? ReviewedByUserId,
+        DateTime? ReviewedAtUtc,
+        string? Comments,
         long? MarkupFileId
     );
 }

@@ -37,7 +37,7 @@ namespace MangaManagementSystem.Application.Services
                 AvatarFileId = dto.AvatarFileId,
                 PortfolioFileId = dto.PortfolioFileId,
                 Status = "PENDING_APPROVAL",
-                CreatedAt = System.DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow
             };
             await _unitOfWork.Users.AddAsync(entity);
             await _unitOfWork.SaveChangesAsync();
@@ -78,7 +78,7 @@ namespace MangaManagementSystem.Application.Services
         {
             var user = await RequirePendingUserAsync(userId);
 
-            user.Status = StatusDisabled;
+            user.Status = "REJECTED";
             _unitOfWork.Users.Update(user);
             await _unitOfWork.SaveChangesAsync();
         }

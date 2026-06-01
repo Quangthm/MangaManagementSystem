@@ -1,10 +1,9 @@
-using MangaManagementSystem.Domain.Common;
 using System;
 using System.Collections.Generic;
 
 namespace MangaManagementSystem.Domain.Entities
 {
-    public class User : BaseEntity
+    public class User
     {
         public int UserId { get; set; }
         public short RoleId { get; set; }
@@ -18,6 +17,5 @@ namespace MangaManagementSystem.Domain.Entities
         public FileResource? PortfolioFile { get; set; }
         public string Status { get; set; } = "PENDING_APPROVAL";
         public DateTime CreatedAt { get; set; }
-        public ICollection<UserRegistrationRequest> RegistrationRequests { get; set; } = new List<UserRegistrationRequest>();
     }
 }

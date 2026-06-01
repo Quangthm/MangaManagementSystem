@@ -7,17 +7,23 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         long SeriesBoardPollId,
         long SeriesId,
         string PollTypeCode,
+        string PollReason,
         string PollStatusCode,
-        DateTime CreatedAtUtc
+        int CreatedByUserId,
+        DateTime StartedAtUtc,
+        DateTime? EndsAtUtc
     );
 
     public record CreateSeriesBoardPollDto(
         [Required] long SeriesId,
-        [Required][MaxLength(50)] string PollTypeCode
+        [Required][MaxLength(50)] string PollTypeCode,
+        [Required] string PollReason,
+        [Required] int CreatedByUserId,
+        DateTime? EndsAtUtc
     );
 
     public record UpdateSeriesBoardPollDto(
         [Required] long SeriesBoardPollId,
-        [Required][MaxLength(20)] string PollStatusCode
+        [Required][MaxLength(50)] string PollStatusCode
     );
 }

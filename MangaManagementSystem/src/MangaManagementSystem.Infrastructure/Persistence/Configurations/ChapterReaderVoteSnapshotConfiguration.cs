@@ -12,9 +12,11 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
             builder.HasKey(v => v.ChapterReaderVoteSnapshotId);
             builder.Property(v => v.ChapterReaderVoteSnapshotId).ValueGeneratedOnAdd();
             builder.Property(v => v.ReaderVoteCount).IsRequired();
-            builder.Property(v => v.AverageRating).IsRequired().HasPrecision(10, 2);
+            builder.Property(v => v.AverageRating).HasPrecision(4, 2);
+            builder.Property(v => v.DataSourceNote).HasMaxLength(500);
+            builder.Property(v => v.EnteredByUserId).IsRequired();
+            builder.Property(v => v.VotedAtUtc).IsRequired();
             builder.HasIndex(v => v.ChapterId).IsUnique();
-            builder.HasCheckConstraint("CK_ChapterReaderVoteSnapshot_AverageRating", "[AverageRating] BETWEEN 0 AND 10");
             builder.HasOne(v => v.Chapter).WithMany().HasForeignKey(v => v.ChapterId);
             builder.HasOne(v => v.EnteredByUser).WithMany().HasForeignKey(v => v.EnteredByUserId);
         }

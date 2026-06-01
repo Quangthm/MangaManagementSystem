@@ -1,4 +1,5 @@
 @page "/register"
+@using Microsoft.AspNetCore.WebUtilities
 @inject IAuthService AuthService
 @inject ISnackbar Snackbar
 @inject NavigationManager NavigationManager
@@ -86,7 +87,7 @@
             }
 
             <MudDivider Class="my-4" />
-            <form action="/api/auth/google-login" method="post" data-enhance="false">
+            <form action="/api/auth/google-signup" method="post" data-enhance="false">
                 <button type="submit" class="google-auth-button">
                     <span class="google-auth-button__content">
                         <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
@@ -94,7 +95,7 @@
                              width="18"
                              height="18"
                              class="google-auth-button__icon" />
-                        <span>Sign in with Google</span>
+                        <span>Sign up with Google</span>
                     </span>
                 </button>
             </form>
@@ -148,6 +149,24 @@
     private bool _isOtpSent;
     private bool _isSendingOtp;
     private bool _isVerifyingOtp;
+
+    protected override void OnInitialized()
+    {
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        if (query.TryGetValue("error", out var error))
+        {
+            var message = error.ToString() switch
+            {
+                "GoogleEmailMissing" => "Google did not return an email address. Try another account or use email registration.",
+                "account_pending" => "An account with this email is pending approval. Check your email for a verification code or complete verification below.",
+                "account_disabled" => "This account cannot be used for sign-up. Contact support.",
+                _ => Uri.UnescapeDataString(error.ToString())
+            };
+            Snackbar.Add(message, Severity.Error);
+        }
+    }
 
     private async Task HandleSendOtp()
     {

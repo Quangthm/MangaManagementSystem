@@ -24,8 +24,11 @@ namespace MangaManagementSystem.Application.Services
             {
                 SeriesId = dto.SeriesId,
                 PollTypeCode = dto.PollTypeCode,
+                PollReason = dto.PollReason,
                 PollStatusCode = "OPEN",
-                CreatedAtUtc = DateTime.UtcNow
+                CreatedByUserId = dto.CreatedByUserId,
+                StartedAtUtc = DateTime.UtcNow,
+                EndsAtUtc = dto.EndsAtUtc
             };
             await _unitOfWork.SeriesBoardPolls.AddAsync(entity);
             await _unitOfWork.SaveChangesAsync();
@@ -62,8 +65,11 @@ namespace MangaManagementSystem.Application.Services
             p.SeriesBoardPollId,
             p.SeriesId,
             p.PollTypeCode,
+            p.PollReason,
             p.PollStatusCode,
-            p.CreatedAtUtc
+            p.CreatedByUserId,
+            p.StartedAtUtc,
+            p.EndsAtUtc
         );
     }
 }

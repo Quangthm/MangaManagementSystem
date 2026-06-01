@@ -157,6 +157,11 @@
         var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
         var query = QueryHelpers.ParseQuery(uri.Query);
 
+        if (query.TryGetValue("verified", out _))
+        {
+            Snackbar.Add("Email verified successfully. You can sign in once an administrator approves your account.", Severity.Success);
+        }
+
         if (query.TryGetValue("error", out var error))
         {
             var message = error.ToString() switch
@@ -164,6 +169,7 @@
                 "GoogleAuthFailed" => "Google sign-in failed. Please try again or use email login.",
                 "GoogleEmailMissing" => "Google did not return an email address for this account. Try another Google account or use email login.",
                 "UserNotInDatabase" or "UserNotFoundOrInactive" => "No active account found for this Google email. Register first or contact an administrator.",
+                "account_pending" => "Your account is pending email verification or admin approval. Complete verification or wait for approval.",
                 "InvalidCredentials" or "invalid" => "Invalid credentials. Please check your username and password.",
                 _ => "Unable to sign in. Please try again."
             };

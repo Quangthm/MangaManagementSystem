@@ -3,7 +3,9 @@ using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Infrastructure;
 using MangaManagementSystem.Web.Components;
+using MangaManagementSystem.Web.Helpers;
 using MangaManagementSystem.Web.Services;
+using MangaManagementSystem.Application.DTOs.Auth;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
@@ -119,29 +121,7 @@ namespace MangaManagementSystem.Web
 
             app.MapGet("/api/auth/google-callback", async (HttpContext context, IAuthService authService) =>
             {
-                var googleResult = await context.AuthenticateAsync(GoogleDefaults.AuthenticationScheme);
-                var cookieResult = await context.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-
-                if (!googleResult.Succeeded && !cookieResult.Succeeded && context.User.Identity?.IsAuthenticated != true)
-                {
-                    return Results.Json(new
-                    {
-                        Message = "Authentication failed at callback. Diagnostic Info:",
-                        GoogleSucceeded = googleResult.Succeeded,
-                        GoogleFailureMessage = googleResult.Failure?.Message,
-                        CookieSucceeded = cookieResult.Succeeded,
-                        CookieFailureMessage = cookieResult.Failure?.Message,
-                        IsAuthenticated = context.User.Identity?.IsAuthenticated,
-                        RequestUrl = context.Request.Path + context.Request.QueryString,
-                        QueryParams = context.Request.Query.ToDictionary(q => q.Key, q => q.Value.ToString())
-                    });
-                }
-
-                var principal = googleResult.Principal ?? cookieResult.Principal ?? context.User;
-
-                var email = principal.FindFirst(ClaimTypes.Email)?.Value
-                    ?? principal.FindFirst("email")?.Value
-                    ?? principal.Claims.FirstOrDefault(c => c.Type.Contains("emailaddress", StringComparison.OrdinalIgnoreCase))?.Value;
+                var (_, email, _) = await GoogleAuthHelper.ResolveGoogleIdentityAsync(context);
 
                 if (string.IsNullOrWhiteSpace(email))
                 {
@@ -154,11 +134,83 @@ namespace MangaManagementSystem.Web
                     return Results.Redirect("/login?error=UserNotInDatabase");
                 }
 
-                //await context.SignOutAsync(GoogleDefaults.AuthenticationScheme);
                 await SignInApplicationUserAsync(context, authResult.User, authResult.RoleName);
-
                 return Results.Redirect(GetDashboardRedirectUrl(authResult.User.RoleId));
             });
+
+            app.MapPost("/api/auth/google-signup", () =>
+            {
+                var properties = new AuthenticationProperties { RedirectUri = "/api/auth/google-signup-callback" };
+                return Results.Challenge(properties, [GoogleDefaults.AuthenticationScheme]);
+            }).DisableAntiforgery();
+
+            app.MapGet("/api/auth/google-signup-callback", async (HttpContext context, IAuthService authService) =>
+            {
+                var (_, email, displayName) = await GoogleAuthHelper.ResolveGoogleIdentityAsync(context);
+
+                if (string.IsNullOrWhiteSpace(email))
+                {
+                    return Results.Redirect("/register?error=GoogleEmailMissing");
+                }
+
+                var signupResult = await authService.ProcessGoogleSignupCallbackAsync(email, displayName);
+
+                return signupResult.Flow switch
+                {
+                    GoogleSignupFlow.NewUserVerifyOtp or GoogleSignupFlow.PendingApprovalVerifyOtp
+                        => Results.Redirect($"/verify-otp?email={Uri.EscapeDataString(signupResult.Email)}"),
+                    GoogleSignupFlow.ActiveUserLogin when signupResult.User is not null && signupResult.RoleName is not null
+                        => await SignInAndRedirectAsync(context, signupResult.User, signupResult.RoleName),
+                    GoogleSignupFlow.Rejected when signupResult.ErrorMessage?.Contains("pending", StringComparison.OrdinalIgnoreCase) == true
+                        => Results.Redirect($"/login?error=account_pending"),
+                    GoogleSignupFlow.Rejected
+                        => Results.Redirect($"/register?error=account_disabled"),
+                    _
+                        => Results.Redirect("/register?error=GoogleSignupFailed")
+                };
+            });
+
+            app.MapPost("/api/auth/verify-email-otp", async (
+                HttpContext context,
+                IAuthService authService,
+                [FromForm] string email,
+                [FromForm] string otp) =>
+            {
+                if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(otp))
+                {
+                    return Results.Redirect($"/verify-otp?email={Uri.EscapeDataString(email ?? string.Empty)}&error=InvalidOtp");
+                }
+
+                try
+                {
+                    await authService.CompleteEmailVerificationOtpAsync(email, otp);
+                    return Results.Redirect("/login?verified=1");
+                }
+                catch (InvalidOperationException)
+                {
+                    return Results.Redirect($"/verify-otp?email={Uri.EscapeDataString(email)}&error=InvalidOtp");
+                }
+            }).DisableAntiforgery();
+
+            app.MapPost("/api/auth/resend-email-otp", async (
+                IAuthService authService,
+                [FromForm] string email) =>
+            {
+                if (string.IsNullOrWhiteSpace(email))
+                {
+                    return Results.Redirect("/register?error=EmailRequired");
+                }
+
+                try
+                {
+                    await authService.SendEmailVerificationOtpAsync(email);
+                    return Results.Redirect($"/verify-otp?email={Uri.EscapeDataString(email)}&resent=1");
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return Results.Redirect($"/verify-otp?email={Uri.EscapeDataString(email)}&error={Uri.EscapeDataString(ex.Message)}");
+                }
+            }).DisableAntiforgery();
 
             app.MapPost("/api/auth/logout", async (HttpContext context, ILogger<Program> logger) =>
             {
@@ -211,5 +263,14 @@ namespace MangaManagementSystem.Web
             5 => "/admin/user-approval",
             _ => "/login?error=InvalidCredentials"
         };
+
+        private static async Task<IResult> SignInAndRedirectAsync(
+            HttpContext context,
+            UserDto user,
+            string roleName)
+        {
+            await SignInApplicationUserAsync(context, user, roleName);
+            return Results.Redirect(GetDashboardRedirectUrl(user.RoleId));
+        }
     }
 }

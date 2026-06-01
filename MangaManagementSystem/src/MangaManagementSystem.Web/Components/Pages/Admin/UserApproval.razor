@@ -31,7 +31,7 @@
                 <RowTemplate>
                     <MudTd DataLabel="Username">@context.Username</MudTd>
                     <MudTd DataLabel="Email">@context.Email</MudTd>
-                    <MudTd DataLabel="Created At">@context.CreatedAt.ToLocalTime().ToString("g")</MudTd>
+                    <MudTd DataLabel="Created At">@context.CreatedAtUtc.ToLocalTime().ToString("g")</MudTd>
                     <MudTd DataLabel="Actions">
                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                             <MudSelect T="short"

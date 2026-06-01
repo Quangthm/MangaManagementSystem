@@ -6,7 +6,8 @@ namespace MangaManagementSystem.Web.Services
 {
     public class OtpCacheService : IOtpCacheService
     {
-        private const string KeyPrefix = "registration-otp:";
+        private const string RegistrationKeyPrefix = "registration-otp:";
+        private const string EmailVerificationKeyPrefix = "email-verification-otp:";
         private static readonly TimeSpan OtpTtl = TimeSpan.FromMinutes(5);
 
         private readonly IMemoryCache _memoryCache;
@@ -18,13 +19,13 @@ namespace MangaManagementSystem.Web.Services
 
         public void StoreRegistrationOtp(string email, string otp, RegisterDto request)
         {
-            var key = BuildKey(email);
+            var key = RegistrationKeyPrefix + NormalizeEmail(email);
             _memoryCache.Set(key, new CachedRegistrationOtp(otp, request), OtpTtl);
         }
 
         public RegisterDto? TryValidateAndRemoveRegistrationOtp(string email, string otp)
         {
-            var key = BuildKey(email);
+            var key = RegistrationKeyPrefix + NormalizeEmail(email);
 
             if (!_memoryCache.TryGetValue<CachedRegistrationOtp>(key, out var cached) ||
                 cached is null ||
@@ -37,8 +38,28 @@ namespace MangaManagementSystem.Web.Services
             return cached.Request;
         }
 
-        private static string BuildKey(string email)
-            => KeyPrefix + email.Trim().ToLowerInvariant();
+        public void StoreEmailVerificationOtp(string email, string otp)
+        {
+            var key = EmailVerificationKeyPrefix + NormalizeEmail(email);
+            _memoryCache.Set(key, otp, OtpTtl);
+        }
+
+        public bool TryValidateAndRemoveEmailVerificationOtp(string email, string otp)
+        {
+            var key = EmailVerificationKeyPrefix + NormalizeEmail(email);
+
+            if (!_memoryCache.TryGetValue<string>(key, out var cachedOtp) ||
+                !string.Equals(cachedOtp, otp, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            _memoryCache.Remove(key);
+            return true;
+        }
+
+        private static string NormalizeEmail(string email)
+            => email.Trim().ToLowerInvariant();
 
         private sealed record CachedRegistrationOtp(string Otp, RegisterDto Request);
     }

@@ -22,7 +22,6 @@ namespace MangaManagementSystem.Application
             services.AddScoped<IChapterPageAnnotationService, ChapterPageAnnotationService>();
             services.AddScoped<IChapterEditorialReviewService, ChapterEditorialReviewService>();
             services.AddScoped<IRoleService, RoleService>();
-            services.AddScoped<IUserRegistrationRequestService, UserRegistrationRequestService>();
             services.AddScoped<ISeriesContributorService, SeriesContributorService>();
             services.AddScoped<ISeriesBoardPollService, SeriesBoardPollService>();
             services.AddScoped<IChapterReaderVoteSnapshotService, ChapterReaderVoteSnapshotService>();

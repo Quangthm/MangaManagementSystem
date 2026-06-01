@@ -6,5 +6,8 @@ namespace MangaManagementSystem.Application.Interfaces
     {
         void StoreRegistrationOtp(string email, string otp, RegisterDto request);
         RegisterDto? TryValidateAndRemoveRegistrationOtp(string email, string otp);
+
+        void StoreEmailVerificationOtp(string email, string otp);
+        bool TryValidateAndRemoveEmailVerificationOtp(string email, string otp);
     }
 }

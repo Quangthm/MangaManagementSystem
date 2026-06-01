@@ -1,37 +1,27 @@
 ﻿USE MangaManagementDB;
 GO
 CREATE OR ALTER PROCEDURE audit.usp_AuditEvent_Append
-    @actor_user_id             INT = NULL,
-    @actor_role_name  NVARCHAR(128) = NULL,
-    @action_code               NVARCHAR(64),
-    @entity_type               NVARCHAR(128),
-    @entity_id                 NVARCHAR(100) = NULL,
-    @detail_json               NVARCHAR(MAX) = NULL,
-
-    @audit_event_id            BIGINT OUTPUT,
-    @chain_hash                CHAR(64) OUTPUT
+    @actor_user_id      INT = NULL,
+    @actor_role_name    NVARCHAR(128) = NULL,
+    @action_code        NVARCHAR(64),
+    @entity_type        NVARCHAR(128),
+    @entity_id          NVARCHAR(100) = NULL,
+    @detail_json        NVARCHAR(MAX) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
 
     DECLARE @started_tran BIT = 0;
-
-    DECLARE @occurred_at_utc DATETIME2(7);
-    DECLARE @prev_chain_hash CHAR(64);
-    DECLARE @row_hash CHAR(64);
-    DECLARE @row_text NVARCHAR(MAX);
-    DECLARE @chain_input NVARCHAR(MAX);
-    DECLARE @zero_hash CHAR(64) = REPLICATE('0', 64);
     DECLARE @lock_result INT;
 
-    DECLARE @inserted_event TABLE
-    (
-        audit_event_id BIGINT NOT NULL,
-        occurred_at_utc DATETIME2(7) NOT NULL
-    );
-
     BEGIN TRY
+        /*
+            Keep JSON validation because detail_json is optional,
+            but when provided it should be valid JSON.
+            Required fields such as action_code and entity_type are
+            handled by database constraints and application logic.
+        */
         IF @detail_json IS NOT NULL AND ISJSON(@detail_json) <> 1
         BEGIN
             THROW 50001, 'detail_json must be valid JSON.', 1;
@@ -44,26 +34,21 @@ BEGIN
         END;
 
         /*
-            Serialize custom hash-chain appends.
-
-            This prevents two concurrent sessions from both reading the same
-            latest chain_hash and creating two separate "next" chain links.
+            Serialize audit appends under high concurrency.
+            With @LockOwner = 'Transaction', SQL Server releases the
+            application lock when the transaction commits or rolls back.
         */
         EXEC @lock_result = sys.sp_getapplock
-            @Resource = N'audit_hash_chain_append',
+            @Resource = N'audit_event_append',
             @LockMode = 'Exclusive',
             @LockOwner = 'Transaction',
             @LockTimeout = 10000;
 
         IF @lock_result < 0
         BEGIN
-            THROW 50002, 'Could not acquire audit hash-chain append lock.', 1;
+            THROW 50002, 'Could not acquire audit event append lock.', 1;
         END;
 
-        /*
-            1) Insert the audit event and capture the exact database-generated
-               identity + timestamp used for hashing.
-        */
         INSERT INTO audit.AuditEvent
         (
             actor_user_id,
@@ -72,14 +57,6 @@ BEGIN
             entity_type,
             entity_id,
             detail_json
-        )
-        OUTPUT
-            inserted.audit_event_id,
-            inserted.occurred_at_utc
-        INTO @inserted_event
-        (
-            audit_event_id,
-            occurred_at_utc
         )
         VALUES
         (
@@ -91,249 +68,17 @@ BEGIN
             @detail_json
         );
 
-        SELECT
-            @audit_event_id = audit_event_id,
-            @occurred_at_utc = occurred_at_utc
-        FROM @inserted_event;
-
-        /*
-            2) Read previous chain tip.
-
-            sp_getapplock already serializes this section, but UPDLOCK/HOLDLOCK
-            still documents the intent that this read participates in the chain
-            append critical section.
-        */
-        SELECT TOP (1)
-            @prev_chain_hash = chain_hash
-        FROM audit.AuditHashChain WITH (UPDLOCK, HOLDLOCK)
-        ORDER BY audit_hash_chain_id DESC;
-
-        /*
-            3) Canonical row representation.
-
-            Keep this format stable. If you change it later, old hashes will no
-            longer recompute unless your verifier supports multiple versions.
-        */
-        SET @row_text = CONCAT(
-            N'audit_event_id=', CONVERT(NVARCHAR(20), @audit_event_id), N'|',
-            N'occurred_at_utc=', CONVERT(NVARCHAR(33), @occurred_at_utc, 126), N'|',
-            N'actor_user_id=', COALESCE(CONVERT(NVARCHAR(20), @actor_user_id), N'<NULL>'), N'|',
-            N'actor_role_name=', COALESCE(@actor_role_name, N'<NULL>'), N'|',
-            N'action_code=', @action_code, N'|',
-            N'entity_type=', @entity_type, N'|',
-            N'entity_id=', COALESCE(@entity_id, N'<NULL>'), N'|',
-            N'detail_json=', COALESCE(@detail_json, N'<NULL>')
-        );
-
-        /*
-            4) row_hash = SHA256(canonical audit event row)
-        */
-        SET @row_hash = CONVERT
-        (
-            CHAR(64),
-            HASHBYTES('SHA2_256', CONVERT(VARBINARY(MAX), @row_text)),
-            2
-        );
-
-        /*
-            5) chain_hash = SHA256(previous chain hash + current row hash)
-        */
-        SET @chain_input = CONCAT(
-            COALESCE(@prev_chain_hash, @zero_hash),
-            N'|',
-            @row_hash
-        );
-
-        SET @chain_hash = CONVERT
-        (
-            CHAR(64),
-            HASHBYTES('SHA2_256', CONVERT(VARBINARY(MAX), @chain_input)),
-            2
-        );
-
-        /*
-            6) Insert hash-chain link.
-        */
-        INSERT INTO audit.AuditHashChain
-        (
-            audit_event_id,
-            prev_chain_hash,
-            row_hash,
-            chain_hash
-        )
-        VALUES
-        (
-            @audit_event_id,
-            @prev_chain_hash,
-            @row_hash,
-            @chain_hash
-        );
-
         IF @started_tran = 1
-            COMMIT;
-    END TRY
-    BEGIN CATCH
-        IF @started_tran = 1 AND XACT_STATE() <> 0
-            ROLLBACK;
-
-        THROW;
-    END CATCH
-END;
-GO
-CREATE OR ALTER PROCEDURE dbo.Role_Assign
-    @target_user_id          INT,
-    @role_name               NVARCHAR(30),
-    @assigned_by_user_id     INT,
-    @assigned_by_role_name   NVARCHAR(30),
-    @audit_action NVARCHAR(80) = N'ASSIGN_ROLE'
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-    DECLARE @started_tran BIT = 0;
-
-    DECLARE @role_id     INT;
-    DECLARE @audit_id    INT;
-    DECLARE @chain_hash  CHAR(64);
-    DECLARE @diff        NVARCHAR(MAX);
-    DECLARE @rn NVARCHAR(30) = UPPER(LTRIM(RTRIM(@role_name)));
-
-    BEGIN TRY
-        IF @@TRANCOUNT = 0
         BEGIN
-            SET @started_tran = 1;
-            BEGIN TRAN;
-        END
-        SELECT @role_id = r.role_id
-        FROM dbo.Roles r
-        WHERE r.role_name = @rn;
-
-        IF @role_id IS NULL
-            THROW 50001, 'Role not found.', 1;
-
-        -- Ensure not already active
-        IF EXISTS (
-            SELECT 1
-            FROM dbo.UserRole ur
-            WHERE ur.user_id = @target_user_id
-              AND ur.role_id = @role_id
-              AND ur.revoked_at IS NULL
-        )
-            THROW 50005, 'Role already assigned (active).', 1;
-
-        INSERT INTO dbo.UserRole (user_id, role_id, assigned_by_user_id)
-        VALUES (@target_user_id, @role_id, @assigned_by_user_id);
-
-        SELECT @diff =
-        (
-            SELECT
-                @target_user_id AS target_user_id,
-                @rn      AS role
-            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
-        );
-
-        EXEC dbo.Audit_Append
-            @actor_user_id   = @assigned_by_user_id,
-            @actor_role_name = @assigned_by_role_name,
-            @action          = @audit_action,
-            @object_type     = N'UserRole',
-            @object_id       = @target_user_id,
-            @diff_json       = @diff,
-            @audit_id        = @audit_id OUTPUT,
-            @chain_hash      = @chain_hash OUTPUT;
-
-        IF @started_tran = 1
-        COMMIT;    
+            COMMIT;
+        END;
     END TRY
     BEGIN CATCH
         IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
             ROLLBACK;
-        THROW;
-    END CATCH
-END;
-GO
-CREATE OR ALTER PROCEDURE dbo.Role_Revoke
-    @target_user_id          INT,
-    @role_name               NVARCHAR(30),
-    @revoked_by_user_id      INT,
-    @revoked_by_role_name    NVARCHAR(30)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
+        END;
 
-    DECLARE @role_id INT;
-    DECLARE @audit_id INT;
-    DECLARE @chain_hash CHAR(64);
-    DECLARE @diff NVARCHAR(MAX);
-    DECLARE @normalized_role NVARCHAR(30);
-
-    BEGIN TRY
-        BEGIN TRAN;
-
-        /* 0) Normalize inputs */
-        SET @normalized_role = UPPER(LTRIM(RTRIM(@role_name)));
-
-        /* 1) Policy guard: prevent ADMIN role revocation (simple governance rule) */
-        IF @normalized_role = N'ADMIN'
-            THROW 54001, 'Revoking ADMIN role is not permitted by policy.', 1;
-
-        /* 2) Resolve role */
-        SELECT @role_id = r.role_id
-        FROM dbo.Roles AS r
-        WHERE r.role_name = @normalized_role;
-
-        IF @role_id IS NULL
-            THROW 50002, 'Role not found.', 1;
-
-        /* 3) Identify the latest active assignment row */
-        DECLARE @assigned_at DATETIME2(7);
-
-        SELECT TOP (1) @assigned_at = ur.assigned_at
-        FROM dbo.UserRole AS ur
-        WHERE ur.user_id = @target_user_id
-          AND ur.role_id = @role_id
-          AND ur.revoked_at IS NULL
-        ORDER BY ur.assigned_at DESC;
-
-        IF @assigned_at IS NULL
-            THROW 50003, 'Active role assignment not found.', 1;
-
-        /* 4) Revoke that exact row (race-safe) */
-        UPDATE dbo.UserRole
-        SET revoked_at = SYSUTCDATETIME()
-        WHERE user_id = @target_user_id
-          AND role_id = @role_id
-          AND assigned_at = @assigned_at
-          AND revoked_at IS NULL;
-
-        IF @@ROWCOUNT = 0
-            THROW 50003, 'Active role assignment not found.', 1;
-
-        /* 5) Build diff_json safely */
-        SELECT @diff =
-        (
-            SELECT
-                @target_user_id     AS target_user_id,
-                @normalized_role    AS role
-            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
-        );
-
-        /* 6) Append audit */
-        EXEC dbo.Audit_Append
-            @actor_user_id   = @revoked_by_user_id,
-            @actor_role_name = @revoked_by_role_name,
-            @action          = N'REVOKE_ROLE',
-            @object_type     = N'UserRole',
-            @object_id       = @target_user_id,
-            @diff_json       = @diff,
-            @audit_id        = @audit_id OUTPUT,
-            @chain_hash      = @chain_hash OUTPUT;
-
-        COMMIT;
-    END TRY
-    BEGIN CATCH
-        IF XACT_STATE() <> 0 ROLLBACK;
         THROW;
     END CATCH
 END;
@@ -432,87 +177,233 @@ BEGIN
     END CATCH
 END;
 GO
-CREATE OR ALTER PROCEDURE dbo.User_Create
-    @username             NVARCHAR(50),
-    @password_hash        NVARCHAR(255),
-    @status               NVARCHAR(20) = NULL,     -- NULL => let DB default apply
-    @created_by_user_id   INT,
-    @created_by_role_name NVARCHAR(30),
-    @new_user_id          INT OUTPUT,
-    @audit_action NVARCHAR(80) = N'CREATE_USER'
+CREATE OR ALTER PROCEDURE auth.usp_User_Create
+    @role_id                 SMALLINT,
+    @username                NVARCHAR(50),
+    @email                   NVARCHAR(254),
+    @password_hash           NVARCHAR(255),
+    @avatar_file_id          BIGINT = NULL,
+    @portfolio_file_id       BIGINT = NULL,
+
+    @created_by_user_id      INT = NULL,
+    @created_by_role_name    NVARCHAR(128) = NULL,
+
+    @new_user_id             INT OUTPUT
 AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
-    DECLARE @started_tran BIT = 0;
-    DECLARE @audit_id   INT;
-    DECLARE @chain_hash CHAR(64);
-    DECLARE @diff_json  NVARCHAR(MAX);
 
-    DECLARE @u NVARCHAR(50) = LTRIM(RTRIM(@username));
+    DECLARE @started_tran BIT = 0;
+    DECLARE @detail_json NVARCHAR(MAX);
+
+    DECLARE @created_user TABLE
+    (
+        user_id     INT NOT NULL,
+        status_code NVARCHAR(30) NOT NULL
+    );
 
     BEGIN TRY
         IF @@TRANCOUNT = 0
         BEGIN
             SET @started_tran = 1;
             BEGIN TRAN;
-        END
-        -- Insert + capture identity and effective status
-        DECLARE @ins TABLE (user_id INT, status NVARCHAR(20));
+        END;
 
-        IF @status IS NULL
-        BEGIN
-            INSERT INTO dbo.Users (username, password_hash)
-            OUTPUT inserted.user_id, inserted.status INTO @ins(user_id, status)
-            VALUES (@u, @password_hash);
-        END
-        ELSE
-        BEGIN
-            INSERT INTO dbo.Users (username, password_hash, status)
-            OUTPUT inserted.user_id, inserted.status INTO @ins(user_id, status)
-            VALUES (@u, @password_hash, @status);
-        END
+        INSERT INTO auth.Users
+        (
+            role_id,
+            username,
+            email,
+            password_hash,
+            avatar_file_id,
+            portfolio_file_id,
+            status_code
+        )
+        OUTPUT
+            inserted.user_id,
+            inserted.status_code
+        INTO @created_user
+        (
+            user_id,
+            status_code
+        )
+        VALUES
+        (
+            @role_id,
+            LTRIM(RTRIM(@username)),
+            LTRIM(RTRIM(@email)),
+            @password_hash,
+            @avatar_file_id,
+            @portfolio_file_id,
+            N'PENDING_APPROVAL'
+        );
 
-        DECLARE @effective_status NVARCHAR(20);
+        SELECT
+            @new_user_id = user_id
+        FROM @created_user;
 
-        SELECT TOP (1)
-            @new_user_id = user_id,
-            @effective_status = status
-        FROM @ins;
-
-        -- Build audit diff (do NOT include password_hash)
-        SELECT @diff_json =
+        SELECT @detail_json =
         (
             SELECT
-                @new_user_id        AS new_user_id,
-                @u                  AS username,
-                @effective_status   AS status
+                @new_user_id AS user_id,
+                @role_id AS role_id,
+                LTRIM(RTRIM(@username)) AS username,
+                LTRIM(RTRIM(@email)) AS email,
+                N'PENDING_APPROVAL' AS status_code
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
         );
 
-        -- Audit append in the same transaction (atomic with user creation)
-        EXEC dbo.Audit_Append
-            @actor_user_id   = @created_by_user_id,
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @created_by_user_id,
             @actor_role_name = @created_by_role_name,
-            @action          = @audit_action,
-            @object_type     = N'Users',
-            @object_id       = @new_user_id,
-            @diff_json       = @diff_json,
-            @audit_id        = @audit_id OUTPUT,
-            @chain_hash      = @chain_hash OUTPUT;
+            @action_code = N'USER_REGISTERED',
+            @entity_type = N'Users',
+            @entity_id = @new_user_id,
+            @detail_json = @detail_json;
 
         IF @started_tran = 1
-        COMMIT;
+        BEGIN
+            COMMIT;
+        END;
     END TRY
     BEGIN CATCH
-        DECLARE @err INT = ERROR_NUMBER();
+        DECLARE @error_number INT = ERROR_NUMBER();
 
         IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
             ROLLBACK;
+        END;
 
-        -- Unique username violation
-        IF @err IN (2601, 2627)
-            THROW 50011, 'Username already exists.', 1;
+        IF @error_number IN (2601, 2627)
+        BEGIN
+            THROW 50011, 'Username or email already exists.', 1;
+        END;
+
+        THROW;
+    END CATCH
+END;
+GO
+CREATE OR ALTER PROCEDURE auth.usp_Admin_ChangeUserStatus
+    @admin_user_id              INT,
+    @admin_role_name_snapshot   NVARCHAR(128),
+
+    @target_user_id             INT,
+    @new_status_code            NVARCHAR(30),
+    @reason                     NVARCHAR(500) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+    DECLARE @lock_result INT;
+
+    DECLARE @old_status_code NVARCHAR(30);
+    DECLARE @detail_json NVARCHAR(MAX);
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        /*
+            Serialize status changes for the same target user.
+            This avoids two admin actions changing the same account at the same time.
+        */
+        EXEC @lock_result = sys.sp_getapplock
+            @Resource = CONCAT(N'auth_user_status_change_', @target_user_id),
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 10000;
+
+        IF @lock_result < 0
+        BEGIN
+            THROW 53101, 'Could not acquire user status change lock.', 1;
+        END;
+
+        /*
+            Optional DB-side safety check.
+            The UI should already restrict this to Admin users,
+            but this prevents direct procedure misuse.
+        */
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM auth.Users u
+            INNER JOIN auth.Roles r
+                ON r.role_id = u.role_id
+            WHERE u.user_id = @admin_user_id
+              AND u.status_code = N'ACTIVE'
+              AND r.role_name = N'Admin'
+        )
+        BEGIN
+            THROW 53102, 'Admin user is not active or does not have permission.', 1;
+        END;
+
+        /*
+            Read current status with update lock before changing it.
+        */
+        SELECT
+            @old_status_code = status_code
+        FROM auth.Users WITH (UPDLOCK, HOLDLOCK)
+        WHERE user_id = @target_user_id;
+
+        IF @old_status_code IS NULL
+        BEGIN
+            THROW 53103, 'Target user does not exist.', 1;
+        END;
+
+        /*
+            Do nothing if the requested status is already current.
+            This keeps the procedure idempotent for repeated UI clicks.
+        */
+        IF @old_status_code = @new_status_code
+        BEGIN
+            IF @started_tran = 1
+            BEGIN
+                COMMIT;
+            END;
+
+            RETURN;
+        END;
+
+        UPDATE auth.Users
+        SET
+            status_code = @new_status_code,
+            updated_at_utc = SYSUTCDATETIME()
+        WHERE user_id = @target_user_id;
+
+        SELECT @detail_json =
+        (
+            SELECT
+                @target_user_id AS user_id,
+                @old_status_code AS old_status_code,
+                @new_status_code AS new_status_code,
+                @reason AS reason
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @admin_user_id,
+            @actor_role_name = @admin_role_name_snapshot,
+            @action_code = N'USER_STATUS_CHANGED',
+            @entity_type = N'Users',
+            @entity_id = @target_user_id,
+            @detail_json = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
 
         THROW;
     END CATCH
@@ -616,339 +507,6 @@ BEGIN
     END CATCH
 END;
 GO
-CREATE OR ALTER PROCEDURE auth.Login_GetAccount
-    @login_identifier NVARCHAR(254)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-
-    DECLARE @now DATETIME2(7) = SYSUTCDATETIME();
-
-    /*
-        Auto-unlock expired temporary locks before returning account state.
-        This keeps temporary lockout simple:
-        - LOCKED + locked_until in the future = still locked
-        - LOCKED + locked_until expired = reset to ACTIVE
-    */
-    UPDATE auth.Users
-    SET
-        status = 'ACTIVE',
-        failed_login_attempts = 0,
-        last_failed_login_at = NULL,
-        locked_until = NULL,
-        updated_at = @now
-    WHERE
-        (username = @login_identifier OR email = @login_identifier)
-        AND status = 'LOCKED'
-        AND locked_until IS NOT NULL
-        AND locked_until <= @now;
-
-    SELECT TOP (1)
-        user_id,
-        username,
-        email,
-        password_hash,
-        status,
-        failed_login_attempts,
-        locked_until,
-        last_login_at
-    FROM auth.Users
-    WHERE username = @login_identifier
-       OR email = @login_identifier
-    ORDER BY
-        CASE
-            WHEN username = @login_identifier THEN 0
-            ELSE 1
-        END;
-END;
-GO
-CREATE OR ALTER PROCEDURE auth.Login_RecordSuccess
-    @user_id INT,
-    @actor_role_name NVARCHAR(128) = NULL,
-    @result_code NVARCHAR(50) OUTPUT
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-
-    DECLARE @now DATETIME2(7) = SYSUTCDATETIME();
-    DECLARE @status NVARCHAR(30);
-    DECLARE @locked_until DATETIME2(7);
-
-    DECLARE @audit_event_id BIGINT;
-    DECLARE @chain_hash CHAR(64);
-
-    BEGIN TRY
-        BEGIN TRAN;
-
-        SELECT
-            @status = status,
-            @locked_until = locked_until
-        FROM auth.Users WITH (UPDLOCK, HOLDLOCK)
-        WHERE user_id = @user_id;
-
-        IF @status IS NULL
-        BEGIN
-            THROW 51001, 'User account does not exist.', 1;
-        END;
-
-        IF @status = 'DISABLED'
-        BEGIN
-            SET @result_code = N'ACCOUNT_DISABLED';
-
-            EXEC audit.usp_AuditEvent_Append
-                @actor_user_id = @user_id,
-                @actor_role_name = @actor_role_name,
-                @action_code = N'LOGIN_BLOCKED_DISABLED',
-                @entity_type = N'User',
-                @entity_id = @user_id,
-                @detail_json = N'{"reason":"Account is disabled."}',
-                @audit_event_id = @audit_event_id OUTPUT,
-                @chain_hash = @chain_hash OUTPUT;
-
-            COMMIT;
-            RETURN;
-        END;
-
-        IF @status = 'PENDING_APPROVAL'
-        BEGIN
-            SET @result_code = N'ACCOUNT_PENDING_APPROVAL';
-
-            EXEC audit.usp_AuditEvent_Append
-                @actor_user_id = @user_id,
-                @actor_role_name = @actor_role_name,
-                @action_code = N'LOGIN_BLOCKED_PENDING_APPROVAL',
-                @entity_type = N'User',
-                @entity_id = @user_id,
-                @detail_json = N'{"reason":"Account is pending admin approval."}',
-                @audit_event_id = @audit_event_id OUTPUT,
-                @chain_hash = @chain_hash OUTPUT;
-
-            COMMIT;
-            RETURN;
-        END;
-
-        IF @status = 'LOCKED' AND @locked_until IS NOT NULL AND @locked_until > @now
-        BEGIN
-            SET @result_code = N'ACCOUNT_LOCKED';
-
-            EXEC audit.usp_AuditEvent_Append
-                @actor_user_id = @user_id,
-                @actor_role_name = @actor_role_name,
-                @action_code = N'LOGIN_BLOCKED_LOCKED',
-                @entity_type = N'User',
-                @entity_id = @user_id,
-                @detail_json = N'{"reason":"Account is temporarily locked."}',
-                @audit_event_id = @audit_event_id OUTPUT,
-                @chain_hash = @chain_hash OUTPUT;
-
-            COMMIT;
-            RETURN;
-        END;
-
-        /*
-            Successful login resets failed login state.
-        */
-        UPDATE auth.Users
-        SET
-            status = 'ACTIVE',
-            failed_login_attempts = 0,
-            last_failed_login_at = NULL,
-            locked_until = NULL,
-            last_login_at = @now,
-            updated_at = @now
-        WHERE user_id = @user_id;
-
-        EXEC audit.usp_AuditEvent_Append
-            @actor_user_id = @user_id,
-            @actor_role_name = @actor_role_name,
-            @action_code = N'LOGIN_SUCCEEDED',
-            @entity_type = N'User',
-            @entity_id = @user_id,
-            @detail_json = N'{"result":"Login successful."}',
-            @audit_event_id = @audit_event_id OUTPUT,
-            @chain_hash = @chain_hash OUTPUT;
-
-        SET @result_code = N'LOGIN_SUCCEEDED';
-
-        COMMIT;
-    END TRY
-    BEGIN CATCH
-        IF XACT_STATE() <> 0
-            ROLLBACK;
-
-        THROW;
-    END CATCH
-END;
-GO
-CREATE OR ALTER PROCEDURE auth.Login_RecordFailure
-    @user_id INT,
-    @actor_role_name NVARCHAR(128) = NULL,
-    @result_code NVARCHAR(50) OUTPUT,
-    @remaining_attempts INT OUTPUT,
-    @locked_until DATETIME2(7) OUTPUT
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-
-    DECLARE @now DATETIME2(7) = SYSUTCDATETIME();
-
-    DECLARE @max_failed_attempts INT = 5;
-    DECLARE @lock_minutes INT = 15;
-
-    DECLARE @status NVARCHAR(30);
-    DECLARE @current_attempts INT;
-    DECLARE @new_attempts INT;
-
-    DECLARE @audit_event_id BIGINT;
-    DECLARE @chain_hash CHAR(64);
-
-    BEGIN TRY
-        BEGIN TRAN;
-
-        SELECT
-            @status = status,
-            @current_attempts = failed_login_attempts,
-            @locked_until = locked_until
-        FROM auth.Users WITH (UPDLOCK, HOLDLOCK)
-        WHERE user_id = @user_id;
-
-        IF @status IS NULL
-        BEGIN
-            THROW 51002, 'User account does not exist.', 1;
-        END;
-
-        IF @status = 'DISABLED'
-        BEGIN
-            SET @result_code = N'ACCOUNT_DISABLED';
-            SET @remaining_attempts = 0;
-
-            EXEC audit.usp_AuditEvent_Append
-                @actor_user_id = @user_id,
-                @actor_role_name = @actor_role_name,
-                @action_code = N'LOGIN_FAILED_DISABLED_ACCOUNT',
-                @entity_type = N'User',
-                @entity_id = @user_id,
-                @detail_json = N'{"reason":"Failed login attempt on disabled account."}',
-                @audit_event_id = @audit_event_id OUTPUT,
-                @chain_hash = @chain_hash OUTPUT;
-
-            COMMIT;
-            RETURN;
-        END;
-
-        IF @status = 'PENDING_APPROVAL'
-        BEGIN
-            SET @result_code = N'ACCOUNT_PENDING_APPROVAL';
-            SET @remaining_attempts = 0;
-
-            EXEC audit.usp_AuditEvent_Append
-                @actor_user_id = @user_id,
-                @actor_role_name = @actor_role_name,
-                @action_code = N'LOGIN_FAILED_PENDING_APPROVAL',
-                @entity_type = N'User',
-                @entity_id = @user_id,
-                @detail_json = N'{"reason":"Failed login attempt on pending account."}',
-                @audit_event_id = @audit_event_id OUTPUT,
-                @chain_hash = @chain_hash OUTPUT;
-
-            COMMIT;
-            RETURN;
-        END;
-
-        IF @status = 'LOCKED' AND @locked_until IS NOT NULL AND @locked_until > @now
-        BEGIN
-            SET @result_code = N'ACCOUNT_LOCKED';
-            SET @remaining_attempts = 0;
-
-            EXEC audit.usp_AuditEvent_Append
-                @actor_user_id = @user_id,
-                @actor_role_name = @actor_role_name,
-                @action_code = N'LOGIN_FAILED_LOCKED_ACCOUNT',
-                @entity_type = N'User',
-                @entity_id = @user_id,
-                @detail_json = N'{"reason":"Login attempt while account is locked."}',
-                @audit_event_id = @audit_event_id OUTPUT,
-                @chain_hash = @chain_hash OUTPUT;
-
-            COMMIT;
-            RETURN;
-        END;
-
-        /*
-            If lock has expired, reset and count this failed attempt as attempt #1.
-        */
-        IF @status = 'LOCKED' AND (@locked_until IS NULL OR @locked_until <= @now)
-        BEGIN
-            SET @status = 'ACTIVE';
-            SET @current_attempts = 0;
-            SET @locked_until = NULL;
-        END;
-
-        SET @new_attempts = @current_attempts + 1;
-
-        IF @new_attempts >= @max_failed_attempts
-        BEGIN
-            SET @locked_until = DATEADD(MINUTE, @lock_minutes, @now);
-
-            UPDATE auth.Users
-            SET
-                status = 'LOCKED',
-                failed_login_attempts = @new_attempts,
-                last_failed_login_at = @now,
-                locked_until = @locked_until,
-                updated_at = @now
-            WHERE user_id = @user_id;
-
-            SET @result_code = N'ACCOUNT_LOCKED';
-            SET @remaining_attempts = 0;
-
-            EXEC audit.usp_AuditEvent_Append
-                @actor_user_id = @user_id,
-                @actor_role_name = @actor_role_name,
-                @action_code = N'USER_ACCOUNT_AUTO_LOCKED',
-                @entity_type = N'User',
-                @entity_id = @user_id,
-                @detail_json = N'{"reason":"Too many failed login attempts.","failed_attempts":5,"lock_minutes":15}',
-                @audit_event_id = @audit_event_id OUTPUT,
-                @chain_hash = @chain_hash OUTPUT;
-        END
-        ELSE
-        BEGIN
-            UPDATE auth.Users
-            SET
-                status = 'ACTIVE',
-                failed_login_attempts = @new_attempts,
-                last_failed_login_at = @now,
-                locked_until = NULL,
-                updated_at = @now
-            WHERE user_id = @user_id;
-
-            SET @result_code = N'LOGIN_FAILED';
-            SET @remaining_attempts = @max_failed_attempts - @new_attempts;
-
-            EXEC audit.usp_AuditEvent_Append
-                @actor_user_id = @user_id,
-                @actor_role_name = @actor_role_name,
-                @action_code = N'LOGIN_FAILED',
-                @entity_type = N'User',
-                @entity_id = @user_id,
-                @detail_json = N'{"reason":"Invalid password."}',
-                @audit_event_id = @audit_event_id OUTPUT,
-                @chain_hash = @chain_hash OUTPUT;
-        END;
-
-        COMMIT;
-    END TRY
-    BEGIN CATCH
-        IF XACT_STATE() <> 0
-            ROLLBACK;
-
-        THROW;
-    END CATCH
-END;
 GO
 CREATE OR ALTER PROCEDURE auth.User_ResetPassword
     @target_user_id INT,
@@ -1038,489 +596,6 @@ BEGIN
     END CATCH
 END;
 GO
-CREATE OR ALTER PROCEDURE auth.Admin_CreateApprovedUser
-    @admin_user_id INT,
-    @admin_role_name_snapshot NVARCHAR(128),
-
-    @username NVARCHAR(50),
-    @email NVARCHAR(254),
-    @password_hash NVARCHAR(255),
-    @role_id INT,
-
-    @new_user_id INT OUTPUT
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-
-    DECLARE @now DATETIME2(7) = SYSUTCDATETIME();
-
-    DECLARE @audit_event_id BIGINT;
-    DECLARE @chain_hash CHAR(64);
-
-    IF @username IS NULL OR LTRIM(RTRIM(@username)) = N''
-    BEGIN
-        THROW 53001, 'Username is required.', 1;
-    END;
-
-    IF @email IS NULL OR LTRIM(RTRIM(@email)) = N''
-    BEGIN
-        THROW 53002, 'Email is required.', 1;
-    END;
-
-    IF @password_hash IS NULL OR LEN(@password_hash) < 20
-    BEGIN
-        THROW 53003, 'password_hash is invalid.', 1;
-    END;
-
-    BEGIN TRY
-        BEGIN TRAN;
-
-        IF NOT EXISTS (SELECT 1 FROM auth.Users WHERE user_id = @admin_user_id AND status = 'ACTIVE')
-        BEGIN
-            THROW 53004, 'Admin user is not active or does not exist.', 1;
-        END;
-
-        IF NOT EXISTS (SELECT 1 FROM auth.Roles WHERE role_id = @role_id)
-        BEGIN
-            THROW 53005, 'Role does not exist.', 1;
-        END;
-
-        INSERT INTO auth.Users
-        (
-            username,
-            email,
-            password_hash,
-            status,
-            failed_login_attempts,
-            created_at
-        )
-        VALUES
-        (
-            @username,
-            @email,
-            @password_hash,
-            'ACTIVE',
-            0,
-            @now
-        );
-
-        SET @new_user_id = CONVERT(INT, SCOPE_IDENTITY());
-
-        INSERT INTO auth.UserRole
-        (
-            user_id,
-            role_id,
-            assigned_by_user_id
-        )
-        VALUES
-        (
-            @new_user_id,
-            @role_id,
-            @admin_user_id
-        );
-
-        EXEC audit.usp_AuditEvent_Append
-            @actor_user_id = @admin_user_id,
-            @actor_role_name = @admin_role_name_snapshot,
-            @action_code = N'USER_ACCOUNT_CREATED_BY_ADMIN',
-            @entity_type = N'User',
-            @entity_id = @new_user_id,
-            @detail_json = N'{"result":"Admin created approved user account and assigned role."}',
-            @audit_event_id = @audit_event_id OUTPUT,
-            @chain_hash = @chain_hash OUTPUT;
-
-        COMMIT;
-    END TRY
-    BEGIN CATCH
-        IF XACT_STATE() <> 0
-            ROLLBACK;
-
-        THROW;
-    END CATCH
-END;
-GO
-CREATE OR ALTER PROCEDURE auth.Admin_ApproveRegistrationRequest
-    @admin_user_id INT,
-    @admin_role_name_snapshot NVARCHAR(128),
-
-    @registration_request_id BIGINT,
-    @review_note NVARCHAR(500) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-
-    DECLARE @now DATETIME2(7) = SYSUTCDATETIME();
-
-    DECLARE @target_user_id INT;
-    DECLARE @requested_role_id INT;
-    DECLARE @request_status NVARCHAR(20);
-
-    DECLARE @audit_event_id BIGINT;
-    DECLARE @chain_hash CHAR(64);
-
-    BEGIN TRY
-        BEGIN TRAN;
-
-        IF NOT EXISTS (SELECT 1 FROM auth.Users WHERE user_id = @admin_user_id AND status = 'ACTIVE')
-        BEGIN
-            THROW 54001, 'Admin user is not active or does not exist.', 1;
-        END;
-
-        SELECT
-            @target_user_id = user_id,
-            @requested_role_id = requested_role_id,
-            @request_status = request_status
-        FROM auth.UserRegistrationRequest WITH (UPDLOCK, HOLDLOCK)
-        WHERE registration_request_id = @registration_request_id;
-
-        IF @target_user_id IS NULL
-        BEGIN
-            THROW 54002, 'Registration request does not exist.', 1;
-        END;
-
-        IF @request_status <> 'PENDING'
-        BEGIN
-            THROW 54003, 'Only pending registration requests can be approved.', 1;
-        END;
-
-        UPDATE auth.UserRegistrationRequest
-        SET
-            request_status = 'APPROVED',
-            reviewed_by_user_id = @admin_user_id,
-            reviewed_at = @now,
-            review_note = @review_note
-        WHERE registration_request_id = @registration_request_id;
-
-        UPDATE auth.Users
-        SET
-            status = 'ACTIVE',
-            failed_login_attempts = 0,
-            last_failed_login_at = NULL,
-            locked_until = NULL,
-            updated_at = @now
-        WHERE user_id = @target_user_id;
-
-        IF NOT EXISTS (
-            SELECT 1
-            FROM auth.UserRole
-            WHERE user_id = @target_user_id
-              AND role_id = @requested_role_id
-              AND revoked_at IS NULL
-        )
-        BEGIN
-            INSERT INTO auth.UserRole
-            (
-                user_id,
-                role_id,
-                assigned_by_user_id
-            )
-            VALUES
-            (
-                @target_user_id,
-                @requested_role_id,
-                @admin_user_id
-            );
-        END;
-
-        EXEC audit.usp_AuditEvent_Append
-            @actor_user_id = @admin_user_id,
-            @actor_role_name = @admin_role_name_snapshot,
-            @action_code = N'REGISTRATION_REQUEST_APPROVED',
-            @entity_type = N'UserRegistrationRequest',
-            @entity_id = @registration_request_id,
-            @detail_json = N'{"result":"Registration request approved; account activated; requested role assigned."}',
-            @audit_event_id = @audit_event_id OUTPUT,
-            @chain_hash = @chain_hash OUTPUT;
-
-        COMMIT;
-    END TRY
-    BEGIN CATCH
-        IF XACT_STATE() <> 0
-            ROLLBACK;
-
-        THROW;
-    END CATCH
-END;
-GO
-CREATE OR ALTER PROCEDURE auth.Admin_RejectRegistrationRequest
-    @admin_user_id INT,
-    @admin_role_name_snapshot NVARCHAR(128),
-
-    @registration_request_id BIGINT,
-    @review_note NVARCHAR(500) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-
-    DECLARE @now DATETIME2(7) = SYSUTCDATETIME();
-
-    DECLARE @target_user_id INT;
-    DECLARE @request_status NVARCHAR(20);
-
-    DECLARE @audit_event_id BIGINT;
-    DECLARE @chain_hash CHAR(64);
-
-    BEGIN TRY
-        BEGIN TRAN;
-
-        IF NOT EXISTS (SELECT 1 FROM auth.Users WHERE user_id = @admin_user_id AND status = 'ACTIVE')
-        BEGIN
-            THROW 55001, 'Admin user is not active or does not exist.', 1;
-        END;
-
-        SELECT
-            @target_user_id = user_id,
-            @request_status = request_status
-        FROM auth.UserRegistrationRequest WITH (UPDLOCK, HOLDLOCK)
-        WHERE registration_request_id = @registration_request_id;
-
-        IF @target_user_id IS NULL
-        BEGIN
-            THROW 55002, 'Registration request does not exist.', 1;
-        END;
-
-        IF @request_status <> 'PENDING'
-        BEGIN
-            THROW 55003, 'Only pending registration requests can be rejected.', 1;
-        END;
-
-        UPDATE auth.UserRegistrationRequest
-        SET
-            request_status = 'REJECTED',
-            reviewed_by_user_id = @admin_user_id,
-            reviewed_at = @now,
-            review_note = @review_note
-        WHERE registration_request_id = @registration_request_id;
-
-        UPDATE auth.Users
-        SET
-            status = 'DISABLED',
-            updated_at = @now
-        WHERE user_id = @target_user_id;
-
-        EXEC audit.usp_AuditEvent_Append
-            @actor_user_id = @admin_user_id,
-            @actor_role_name = @admin_role_name_snapshot,
-            @action_code = N'REGISTRATION_REQUEST_REJECTED',
-            @entity_type = N'UserRegistrationRequest',
-            @entity_id = @registration_request_id,
-            @detail_json = N'{"result":"Registration request rejected; account disabled."}',
-            @audit_event_id = @audit_event_id OUTPUT,
-            @chain_hash = @chain_hash OUTPUT;
-
-        COMMIT;
-    END TRY
-    BEGIN CATCH
-        IF XACT_STATE() <> 0
-            ROLLBACK;
-
-        THROW;
-    END CATCH
-END;
-GO
-CREATE OR ALTER PROCEDURE auth.Admin_DisableUser
-    @admin_user_id INT,
-    @admin_role_name_snapshot NVARCHAR(128),
-
-    @target_user_id INT,
-    @disable_reason NVARCHAR(500) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-
-    DECLARE @now DATETIME2(7) = SYSUTCDATETIME();
-    DECLARE @old_status NVARCHAR(30);
-
-    DECLARE @audit_event_id BIGINT;
-    DECLARE @chain_hash CHAR(64);
-
-    IF @admin_user_id = @target_user_id
-    BEGIN
-        THROW 56001, 'Admin cannot disable their own account.', 1;
-    END;
-
-    BEGIN TRY
-        BEGIN TRAN;
-
-        SELECT @old_status = status
-        FROM auth.Users WITH (UPDLOCK, HOLDLOCK)
-        WHERE user_id = @target_user_id;
-
-        IF @old_status IS NULL
-        BEGIN
-            THROW 56002, 'Target user does not exist.', 1;
-        END;
-
-        UPDATE auth.Users
-        SET
-            status = 'DISABLED',
-            failed_login_attempts = 0,
-            last_failed_login_at = NULL,
-            locked_until = NULL,
-            updated_at = @now
-        WHERE user_id = @target_user_id;
-
-        EXEC audit.usp_AuditEvent_Append
-            @actor_user_id = @admin_user_id,
-            @actor_role_name = @admin_role_name_snapshot,
-            @action_code = N'USER_ACCOUNT_DISABLED',
-            @entity_type = N'User',
-            @entity_id = @target_user_id,
-            @detail_json = N'{"result":"User account disabled by admin."}',
-            @audit_event_id = @audit_event_id OUTPUT,
-            @chain_hash = @chain_hash OUTPUT;
-
-        COMMIT;
-    END TRY
-    BEGIN CATCH
-        IF XACT_STATE() <> 0
-            ROLLBACK;
-
-        THROW;
-    END CATCH
-END;
-GO
-CREATE OR ALTER PROCEDURE auth.Admin_LockUser
-    @admin_user_id INT,
-    @admin_role_name_snapshot NVARCHAR(128),
-
-    @target_user_id INT,
-    @lock_minutes INT = 15,
-    @lock_reason NVARCHAR(500) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-
-    DECLARE @now DATETIME2(7) = SYSUTCDATETIME();
-    DECLARE @new_locked_until DATETIME2(7);
-    DECLARE @old_status NVARCHAR(30);
-
-    DECLARE @audit_event_id BIGINT;
-    DECLARE @chain_hash CHAR(64);
-
-    IF @admin_user_id = @target_user_id
-    BEGIN
-        THROW 57001, 'Admin cannot lock their own account.', 1;
-    END;
-
-    IF @lock_minutes IS NULL OR @lock_minutes <= 0
-    BEGIN
-        THROW 57002, 'lock_minutes must be greater than 0.', 1;
-    END;
-
-    SET @new_locked_until = DATEADD(MINUTE, @lock_minutes, @now);
-
-    BEGIN TRY
-        BEGIN TRAN;
-
-        SELECT @old_status = status
-        FROM auth.Users WITH (UPDLOCK, HOLDLOCK)
-        WHERE user_id = @target_user_id;
-
-        IF @old_status IS NULL
-        BEGIN
-            THROW 57003, 'Target user does not exist.', 1;
-        END;
-
-        IF @old_status = 'DISABLED'
-        BEGIN
-            THROW 57004, 'Disabled accounts should not be locked. They are already blocked.', 1;
-        END;
-
-        UPDATE auth.Users
-        SET
-            status = 'LOCKED',
-            locked_until = @new_locked_until,
-            updated_at = @now
-        WHERE user_id = @target_user_id;
-
-        EXEC audit.usp_AuditEvent_Append
-            @actor_user_id = @admin_user_id,
-            @actor_role_name = @admin_role_name_snapshot,
-            @action_code = N'USER_ACCOUNT_LOCKED_BY_ADMIN',
-            @entity_type = N'User',
-            @entity_id = @target_user_id,
-            @detail_json = N'{"result":"User account manually locked by admin."}',
-            @audit_event_id = @audit_event_id OUTPUT,
-            @chain_hash = @chain_hash OUTPUT;
-
-        COMMIT;
-    END TRY
-    BEGIN CATCH
-        IF XACT_STATE() <> 0
-            ROLLBACK;
-
-        THROW;
-    END CATCH
-END;
-GO
-CREATE OR ALTER PROCEDURE auth.Admin_UnlockUser
-    @admin_user_id INT,
-    @admin_role_name_snapshot NVARCHAR(128),
-
-    @target_user_id INT,
-    @unlock_reason NVARCHAR(500) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-
-    DECLARE @now DATETIME2(7) = SYSUTCDATETIME();
-    DECLARE @old_status NVARCHAR(30);
-
-    DECLARE @audit_event_id BIGINT;
-    DECLARE @chain_hash CHAR(64);
-
-    BEGIN TRY
-        BEGIN TRAN;
-
-        SELECT @old_status = status
-        FROM auth.Users WITH (UPDLOCK, HOLDLOCK)
-        WHERE user_id = @target_user_id;
-
-        IF @old_status IS NULL
-        BEGIN
-            THROW 58001, 'Target user does not exist.', 1;
-        END;
-
-        IF @old_status <> 'LOCKED'
-        BEGIN
-            THROW 58002, 'Only locked accounts can be unlocked.', 1;
-        END;
-
-        UPDATE auth.Users
-        SET
-            status = 'ACTIVE',
-            failed_login_attempts = 0,
-            last_failed_login_at = NULL,
-            locked_until = NULL,
-            updated_at = @now
-        WHERE user_id = @target_user_id;
-
-        EXEC audit.usp_AuditEvent_Append
-            @actor_user_id = @admin_user_id,
-            @actor_role_name = @admin_role_name_snapshot,
-            @action_code = N'USER_ACCOUNT_UNLOCKED_BY_ADMIN',
-            @entity_type = N'User',
-            @entity_id = @target_user_id,
-            @detail_json = N'{"result":"User account unlocked by admin."}',
-            @audit_event_id = @audit_event_id OUTPUT,
-            @chain_hash = @chain_hash OUTPUT;
-
-        COMMIT;
-    END TRY
-    BEGIN CATCH
-        IF XACT_STATE() <> 0
-            ROLLBACK;
-
-        THROW;
-    END CATCH
-END;
 GO
 CREATE OR ALTER PROCEDURE dbo.Bootstrap_Init
 AS

@@ -23,7 +23,6 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         public IGenericRepository<ChapterPageAnnotation> ChapterPageAnnotations { get; }
         public IGenericRepository<ChapterEditorialReview> ChapterEditorialReviews { get; }
         public IGenericRepository<Role> Roles { get; }
-        public IGenericRepository<UserRegistrationRequest> UserRegistrationRequests { get; }
         public IGenericRepository<SeriesContributor> SeriesContributors { get; }
         public IGenericRepository<SeriesBoardPoll> SeriesBoardPolls { get; }
         public IGenericRepository<ChapterReaderVoteSnapshot> ChapterReaderVoteSnapshots { get; }
@@ -47,7 +46,6 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             IGenericRepository<ChapterPageAnnotation> chapterPageAnnotations,
             IGenericRepository<ChapterEditorialReview> chapterEditorialReviews,
             IGenericRepository<Role> roles,
-            IGenericRepository<UserRegistrationRequest> userRegistrationRequests,
             IGenericRepository<SeriesContributor> seriesContributors,
             IGenericRepository<SeriesBoardPoll> seriesBoardPolls,
             IGenericRepository<ChapterReaderVoteSnapshot> chapterReaderVoteSnapshots,
@@ -70,7 +68,6 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             ChapterPageAnnotations = chapterPageAnnotations;
             ChapterEditorialReviews = chapterEditorialReviews;
             Roles = roles;
-            UserRegistrationRequests = userRegistrationRequests;
             SeriesContributors = seriesContributors;
             SeriesBoardPolls = seriesBoardPolls;
             ChapterReaderVoteSnapshots = chapterReaderVoteSnapshots;

@@ -1,8 +1,6 @@
 using MangaManagementSystem.Domain.Entities;
-using MangaManagementSystem.Domain.Common;
 using Microsoft.EntityFrameworkCore;
 using System.Reflection;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace MangaManagementSystem.Infrastructure.Persistence
 {
@@ -12,7 +10,6 @@ namespace MangaManagementSystem.Infrastructure.Persistence
 
         public DbSet<Role> Roles => Set<Role>();
         public DbSet<User> Users => Set<User>();
-        public DbSet<UserRegistrationRequest> UserRegistrationRequests => Set<UserRegistrationRequest>();
         public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
         public DbSet<FileResource> FileResources => Set<FileResource>();
         public DbSet<Series> Series => Set<Series>();
@@ -20,6 +17,7 @@ namespace MangaManagementSystem.Infrastructure.Persistence
         public DbSet<SeriesProposal> SeriesProposals => Set<SeriesProposal>();
         public DbSet<SeriesBoardPoll> SeriesBoardPolls => Set<SeriesBoardPoll>();
         public DbSet<SeriesBoardVote> SeriesBoardVotes => Set<SeriesBoardVote>();
+        public DbSet<SeriesBoardPollVoteSummary> SeriesBoardPollVoteSummaries => Set<SeriesBoardPollVoteSummary>();
         public DbSet<Chapter> Chapters => Set<Chapter>();
         public DbSet<ChapterPage> ChapterPages => Set<ChapterPage>();
         public DbSet<ChapterPageVersion> ChapterPageVersions => Set<ChapterPageVersion>();
@@ -37,23 +35,9 @@ namespace MangaManagementSystem.Infrastructure.Persistence
             base.OnModelCreating(builder);
             builder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
 
-            // Ignore audit navigation properties on all BaseEntity-derived types
-            var auditNavs = new[] { "CreatedByUser", "UpdatedByUser", "DeletedByUser" };
-            foreach (var entityType in builder.Model.GetEntityTypes())
-            {
-                var clrType = entityType.ClrType;
-                if (clrType != null && typeof(BaseEntity).IsAssignableFrom(clrType))
-                {
-                    foreach (var nav in auditNavs)
-                    {
-                        var prop = clrType.GetProperty(nav, BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly);
-                        if (prop != null)
-                        {
-                            builder.Entity(clrType).Ignore(nav);
-                        }
-                    }
-                }
-            }
+            builder.Entity<SeriesBoardPollVoteSummary>()
+                .ToView("vw_SeriesBoardPollVoteSummary", "manga")
+                .HasNoKey();
         }
     }
 
@@ -61,7 +45,6 @@ namespace MangaManagementSystem.Infrastructure.Persistence
     {
         DbSet<Role> Roles { get; }
         DbSet<User> Users { get; }
-        DbSet<UserRegistrationRequest> UserRegistrationRequests { get; }
         DbSet<AuditEvent> AuditEvents { get; }
         DbSet<FileResource> FileResources { get; }
         DbSet<Series> Series { get; }
@@ -69,6 +52,7 @@ namespace MangaManagementSystem.Infrastructure.Persistence
         DbSet<SeriesProposal> SeriesProposals { get; }
         DbSet<SeriesBoardPoll> SeriesBoardPolls { get; }
         DbSet<SeriesBoardVote> SeriesBoardVotes { get; }
+        DbSet<SeriesBoardPollVoteSummary> SeriesBoardPollVoteSummaries { get; }
         DbSet<Chapter> Chapters { get; }
         DbSet<ChapterPage> ChapterPages { get; }
         DbSet<ChapterPageVersion> ChapterPageVersions { get; }
@@ -81,20 +65,5 @@ namespace MangaManagementSystem.Infrastructure.Persistence
         DbSet<ChapterReaderVoteSnapshot> ChapterReaderVoteSnapshots { get; }
         DbSet<Notification> Notifications { get; }
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
-    }
-
-    public class ChapterConfiguration : IEntityTypeConfiguration<Chapter>
-    {
-        public void Configure(EntityTypeBuilder<Chapter> builder)
-        {
-            builder.HasKey(c => c.ChapterId);
-
-            builder.HasOne(c => c.Series)
-                .WithMany(s => s.Chapters)
-                .HasForeignKey(c => c.SeriesId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            // Other property configurations...
-        }
     }
 }

@@ -18,9 +18,8 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
             builder.Property(u => u.CreatedAt).IsRequired();
             builder.HasIndex(u => u.Username).IsUnique();
             builder.HasIndex(u => u.Email).IsUnique();
-            builder.HasIndex(u => new { u.Status, u.CreatedAt }).HasDatabaseName("ix_users_status_created").IncludeProperties(u => new { u.Username, u.Email, u.RoleId });
-            builder.HasIndex(u => new { u.RoleId, u.Status }).HasDatabaseName("ix_users_role_status").IncludeProperties(u => new { u.Username, u.Email });
-            builder.HasCheckConstraint("CK_Users_Status", "[Status] IN ('PENDING_APPROVAL','ACTIVE','DISABLED')");
+            builder.HasIndex(u => new { u.Status, u.CreatedAt }).HasDatabaseName("ix_users_status_created");
+            builder.HasIndex(u => new { u.RoleId, u.Status }).HasDatabaseName("ix_users_role_status");
             builder.HasOne(u => u.Role).WithMany(r => r.Users).HasForeignKey(u => u.RoleId);
             builder.HasOne(u => u.AvatarFile).WithMany().HasForeignKey(u => u.AvatarFileId);
             builder.HasOne(u => u.PortfolioFile).WithMany().HasForeignKey(u => u.PortfolioFileId);
