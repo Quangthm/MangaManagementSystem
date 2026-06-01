@@ -34,6 +34,7 @@ VALUES (N'Mangaka'),
 	(N'Assistant'),
 	(N'Tantou Editor'),
 	(N'Editorial Board Member'),
+	(N'Editorial Board Chief'),
 	(N'Admin');
 
 CREATE TABLE auth.Users (
@@ -102,6 +103,7 @@ CREATE TABLE manga.FileResource (
 			N'USER_AVATAR'
 			)
 		),
+	CONSTRAINT ck_file_resource_file_size_positive CHECK (file_size_bytes > 0),
 	CONSTRAINT ck_file_resource_deleted_pair CHECK (
 		(
 			deleted_at_utc IS NULL
@@ -145,7 +147,7 @@ CREATE TABLE audit.AuditEvent (
 		),
 	CONSTRAINT fk_audit_event_actor_user FOREIGN KEY (actor_user_id) REFERENCES auth.Users(user_id)
 	)
-	WITH (LEDGER = ON (APPEND_ONLY = ON));
+	--WITH (LEDGER = ON (APPEND_ONLY = ON));
 
 CREATE INDEX ix_audit_event_entity_time ON audit.AuditEvent (
 	entity_type,
@@ -370,6 +372,7 @@ CREATE TABLE manga.SeriesBoardPoll (
 	poll_type_code NVARCHAR(50) NOT NULL,
 	poll_reason NVARCHAR(MAX) NOT NULL,
 	poll_status_code NVARCHAR(50) NOT NULL CONSTRAINT df_series_board_poll_status_code DEFAULT(N'OPEN'),
+	board_publication_frequency_code NVARCHAR(50) NULL,
 	created_by_user_id INT NOT NULL,
 	started_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_board_poll_started_at_utc DEFAULT(SYSUTCDATETIME()),
 	ends_at_utc DATETIME2(0) NULL,
@@ -384,6 +387,24 @@ CREATE TABLE manga.SeriesBoardPoll (
 			N'OPEN',
 			N'CLOSED',
 			N'CANCELLED'
+			)
+		),
+	CONSTRAINT ck_series_board_poll_frequency_code CHECK (
+		board_publication_frequency_code IS NULL
+		OR board_publication_frequency_code IN (
+			N'WEEKLY',
+			N'MONTHLY',
+			N'IRREGULAR'
+			)
+		),
+	CONSTRAINT ck_series_board_poll_frequency_required CHECK (
+		(
+			poll_type_code = N'START_SERIALIZATION'
+			AND board_publication_frequency_code IS NOT NULL
+			)
+		OR (
+			poll_type_code = N'CANCEL_SERIALIZATION'
+			AND board_publication_frequency_code IS NULL
 			)
 		),
 	CONSTRAINT ck_series_board_poll_time_range CHECK (
