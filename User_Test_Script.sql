@@ -3,31 +3,15 @@ INSERT INTO [auth].[Users] (
     [email], 
     [password_hash], 
     [role_id], 
-    [STATUS], 
-    [created_at]
+    [status_code], 
+    [created_at_utc]
 )
 VALUES 
 (
-    'TestMangaka',
-    'mangaka@test.com',
+    'TestRealAdmin',
+    'realadmin@test.com',
     '$2a$12$eBGlrcdEPsP8c6yDmKhnv.OojpFaPqmJ.DcYRswLWEFZAYTwGNDtq',
-    1,
-    'ACTIVE',
-    SYSUTCDATETIME()
-),
-(
-    'TestEditor',
-    'editor@test.com',
-    '$2a$12$eBGlrcdEPsP8c6yDmKhnv.OojpFaPqmJ.DcYRswLWEFZAYTwGNDtq',
-    3,
-    'ACTIVE',
-    SYSUTCDATETIME()
-),
-(
-    'TestAdmin',
-    'admin@test.com',
-    '$2a$12$eBGlrcdEPsP8c6yDmKhnv.OojpFaPqmJ.DcYRswLWEFZAYTwGNDtq',
-    5,
+    6,
     'ACTIVE',
     SYSUTCDATETIME()
 );
