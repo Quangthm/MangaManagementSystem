@@ -1,5 +1,7 @@
 @page "/admin/registration-requests"
 @inject NavigationManager Nav
+@inject IUserService UserService
+@inject ISnackbar Snackbar
 
 <AdminLayout>
     <div class="mf-page">
@@ -11,10 +13,13 @@
         <MudGrid Class="mb-6"><MudItem xs="12" md="4"><StatCard Label="Pending Requests" Value="12" /></MudItem><MudItem xs="12" md="4"><StatCard Label="Approved This Month" Value="45" /></MudItem><MudItem xs="12" md="4"><StatCard Label="Rejected This Month" Value="8" /></MudItem></MudGrid>
         <MudPaper Class="pa-5 mf-card" Elevation="0">
             <MudTable Items="Requests" Hover="true">
-                <HeaderContent><MudTh>Name</MudTh><MudTh>Email</MudTh><MudTh>Requested Role</MudTh><MudTh>Request Date</MudTh><MudTh>Actions</MudTh></HeaderContent>
+                <HeaderContent><MudTh>Username</MudTh><MudTh>Email</MudTh><MudTh>Requested Role</MudTh><MudTh>Request Date</MudTh><MudTh>Actions</MudTh></HeaderContent>
                 <RowTemplate>
-                    <MudTd>@context.Name</MudTd><MudTd>@context.Email</MudTd><MudTd>@context.Role</MudTd><MudTd>@context.Date</MudTd>
-                    <MudTd><MudButton Size="Size.Small" Color="Color.Success" Variant="Variant.Filled" OnClick="@(()=>Approve(context.Name))">Approve</MudButton><MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined" Class="ml-2" OnClick="@(()=>Reject(context.Name))">Reject</MudButton></MudTd>
+                    <MudTd>@context.Username</MudTd><MudTd>@context.Email</MudTd><MudTd>@context.RoleName</MudTd><MudTd>@context.CreatedAt</MudTd>
+                    <MudTd>
+                        <MudButton Size="Size.Small" Color="Color.Success" Variant="Variant.Filled" OnClick="@(()=>OnApprove(context.UserId))">Approve</MudButton>
+                        <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined" Class="ml-2" OnClick="@(()=>OnReject(context.UserId))">Reject</MudButton>
+                    </MudTd>
                 </RowTemplate>
             </MudTable>
         </MudPaper>
@@ -25,14 +30,61 @@
 @code {
 
     [Inject] private ToastService Toast { get; set; } = default!;
-    private readonly List<RequestRow> Requests = new()
+    private List<PendingRequestRow> Requests = new();
+
+    protected override async Task OnInitializedAsync()
     {
-        new("Hana Lee", "hana@example.com", "Mangaka", "May 21, 2026"),
-        new("Minh Tran", "minh@example.com", "Assistant", "May 22, 2026"),
-        new("Sora Kim", "sora@example.com", "Tantou Editor", "May 23, 2026")
+        await LoadPendingRequestsAsync();
+    }
+
+    private async Task LoadPendingRequestsAsync()
+    {
+        Requests.Clear();
+        var pending = await UserService.GetUsersByStatusAsync("PENDING_APPROVAL");
+        foreach (var u in pending)
+        {
+            Requests.Add(new PendingRequestRow(u.UserId, u.Username, u.Email, MapRoleName(u.RoleId), u.CreatedAtUtc.ToString("MMM d, yyyy")));
+        }
+    }
+
+    private string MapRoleName(short roleId) => roleId switch
+    {
+        1 => "Mangaka",
+        2 => "Assistant",
+        3 => "Tantou Editor",
+        4 => "Editorial Board Member",
+        5 => "Admin",
+        _ => "Unknown"
     };
-    private void Approve(string name) => Toast.Show($"Approved registration for {name}", ToastType.Success);
-    private void Reject(string name) => Toast.Show($"Rejected registration for {name}", ToastType.Warning);
-    private record RequestRow(string Name, string Email, string Role, string Date);
+
+    private async Task OnApprove(int userId)
+    {
+        try
+        {
+            await UserService.ApproveUserAsync(userId);
+            Snackbar.Add("User approved", Severity.Success);
+            await LoadPendingRequestsAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task OnReject(int userId)
+    {
+        try
+        {
+            await UserService.RejectUserAsync(userId);
+            Snackbar.Add("User rejected", Severity.Warning);
+            await LoadPendingRequestsAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private record PendingRequestRow(int UserId, string Username, string Email, string RoleName, string CreatedAt);
 
 }

@@ -25,8 +25,8 @@ namespace MangaManagementSystem.Application.Services
                 SeriesBoardPollId = dto.SeriesBoardPollId,
                 UserId = dto.UserId,
                 ChoiceCode = dto.ChoiceCode,
-                Reason = dto.Reason,
-                CreatedAtUtc = DateTime.UtcNow
+                VoteReason = dto.VoteReason,
+                VotedAtUtc = DateTime.UtcNow
             };
             await _unitOfWork.SeriesBoardVotes.AddAsync(entity);
             await _unitOfWork.SaveChangesAsync();
@@ -50,8 +50,8 @@ namespace MangaManagementSystem.Application.Services
             v.SeriesBoardPollId,
             v.UserId,
             v.ChoiceCode,
-            v.Reason,
-            v.CreatedAtUtc
+            v.VoteReason,
+            v.VotedAtUtc
         );
     }
 }

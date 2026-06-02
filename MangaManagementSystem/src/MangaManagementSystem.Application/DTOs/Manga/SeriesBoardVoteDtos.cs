@@ -8,14 +8,14 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         long SeriesBoardPollId,
         int UserId,
         string ChoiceCode,
-        string? Reason,
-        DateTime CreatedAtUtc
+        string? VoteReason,
+        DateTime VotedAtUtc
     );
 
     public record CreateSeriesBoardVoteDto(
         [Required] long SeriesBoardPollId,
         [Required] int UserId,
-        [Required][MaxLength(20)] string ChoiceCode,
-        string? Reason
+        [Required][MaxLength(50)] string ChoiceCode,
+        string? VoteReason
     );
 }

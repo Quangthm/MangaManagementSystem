@@ -1,7 +1,11 @@
-﻿using MangaManagementSystem.Domain.Interfaces;
+﻿using MangaManagementSystem.Application.Interfaces;
+using MangaManagementSystem.Domain.Interfaces;
+using MangaManagementSystem.Infrastructure.Options;
 using MangaManagementSystem.Infrastructure.Persistence;
 using MangaManagementSystem.Infrastructure.Repositories;
+using MangaManagementSystem.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
+using EFCore.NamingConventions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -12,7 +16,12 @@ namespace MangaManagementSystem.Infrastructure
         public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
         {
             services.AddDbContext<ApplicationDbContext>(options =>
-                options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+                options.UseSqlServer(configuration.GetConnectionString("DefaultConnection"))
+                    .UseSnakeCaseNamingConvention());
+
+            services.Configure<SmtpSettings>(configuration.GetSection(SmtpSettings.SectionName));
+            services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
+            services.AddScoped<IEmailService, EmailService>();
 
             // Generic repository
             services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));

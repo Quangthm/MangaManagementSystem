@@ -11,6 +11,7 @@ namespace MangaManagementSystem.Application
             services.AddScoped<ISeriesService, SeriesService>();
             services.AddScoped<IChapterService, ChapterService>();
             services.AddScoped<IUserService, UserService>();
+            services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IChapterPageService, ChapterPageService>();
             services.AddScoped<IFileResourceService, FileResourceService>();
             services.AddScoped<ISeriesProposalService, SeriesProposalService>();
@@ -21,7 +22,6 @@ namespace MangaManagementSystem.Application
             services.AddScoped<IChapterPageAnnotationService, ChapterPageAnnotationService>();
             services.AddScoped<IChapterEditorialReviewService, ChapterEditorialReviewService>();
             services.AddScoped<IRoleService, RoleService>();
-            services.AddScoped<IUserRegistrationRequestService, UserRegistrationRequestService>();
             services.AddScoped<ISeriesContributorService, SeriesContributorService>();
             services.AddScoped<ISeriesBoardPollService, SeriesBoardPollService>();
             services.AddScoped<IChapterReaderVoteSnapshotService, ChapterReaderVoteSnapshotService>();

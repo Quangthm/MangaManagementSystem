@@ -1,5 +1,8 @@
 @page "/register"
-@inject NavigationManager Nav
+@using Microsoft.AspNetCore.WebUtilities
+@inject IAuthService AuthService
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
 
 <PageTitle>Register - MangaFlow</PageTitle>
 
@@ -12,34 +15,231 @@
         <MudPaper Class="pa-8 mf-card" Elevation="8">
             <MudText Typo="Typo.h4" Class="font-weight-bold mb-2">Create Your Account</MudText>
             <MudAlert Severity="Severity.Info" Class="mb-4">
-                Your account request will be reviewed by the System Administrator. Your role will be assigned after approval.
+                Verify your email with a one-time code. Your account will be saved as pending admin approval after verification.
             </MudAlert>
-            <MudStack Spacing="3">
-                <MudTextField Label="Full Name" @bind-Value="FullName" Variant="Variant.Outlined" Required="true" />
-                <MudTextField Label="Username" @bind-Value="Username" Variant="Variant.Outlined" Required="true" />
-                <MudTextField Label="Email" @bind-Value="Email" Variant="Variant.Outlined" InputType="InputType.Email" Required="true" />
-                <MudTextField Label="Password" @bind-Value="Password" Variant="Variant.Outlined" InputType="InputType.Password" Required="true" />
-                <MudTextField Label="Confirm Password" @bind-Value="ConfirmPassword" Variant="Variant.Outlined" InputType="InputType.Password" Required="true" />
-                <MudCheckBox T="bool" @bind-Checked="Agree" Label="I agree to the Terms and Conditions and Privacy Policy" />
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large" Disabled="@(!Agree)" OnClick="SubmitAsync">Create Account</MudButton>
-                <MudDivider />
-                <MudText Align="Align.Center">Already have an account? <MudLink Href="/login">Login to Your Account</MudLink></MudText>
-            </MudStack>
+
+            @if (!_isOtpSent)
+            {
+                <MudStack Spacing="3">
+                    <MudTextField Label="Username"
+                                  @bind-Value="_username"
+                                  Variant="Variant.Outlined"
+                                  Required="true"
+                                  Disabled="_isSendingOtp" />
+                    <!-- FullName removed to match DB schema (no full_name column) -->
+                    <MudSelect T="short"
+                               Label="Role"
+                               @bind-Value="_roleId"
+                               Variant="Variant.Outlined"
+                               Required="true"
+                               Disabled="_isSendingOtp">
+                        <MudSelectItem T="short" Value="@((short)1)">Mangaka</MudSelectItem>
+                        <MudSelectItem T="short" Value="@((short)2)">Assistant</MudSelectItem>
+                        <MudSelectItem T="short" Value="@((short)3)">Tantou Editor</MudSelectItem>
+                    </MudSelect>
+                    <MudTextField Label="Email"
+                                  @bind-Value="_email"
+                                  Variant="Variant.Outlined"
+                                  InputType="InputType.Email"
+                                  Required="true"
+                                  Disabled="_isSendingOtp" />
+                    <MudTextField Label="Password"
+                                  @bind-Value="_password"
+                                  Variant="Variant.Outlined"
+                                  InputType="InputType.Password"
+                                  Required="true"
+                                  Disabled="_isSendingOtp" />
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               FullWidth="true"
+                               Size="Size.Large"
+                               Disabled="_isSendingOtp"
+                               OnClick="HandleSendOtp">
+                        @if (_isSendingOtp)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        }
+                        Send OTP
+                    </MudButton>
+                </MudStack>
+            }
+            else
+            {
+                <MudStack Spacing="3">
+                    <MudAlert Severity="Severity.Success" Class="mb-2">
+                        A 6-digit verification code was sent to <strong>@_email</strong>. Check your inbox or the server console in development.
+                    </MudAlert>
+                    <MudTextField Label="6-Digit Verification Code"
+                                  @bind-Value="_otpCode"
+                                  Variant="Variant.Outlined"
+                                  MaxLength="6"
+                                  Required="true"
+                                  Disabled="_isVerifyingOtp" />
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               FullWidth="true"
+                               Size="Size.Large"
+                               Disabled="_isVerifyingOtp"
+                               OnClick="HandleVerifyOtp">
+                        @if (_isVerifyingOtp)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        }
+                        Verify &amp; Register
+                    </MudButton>
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Secondary"
+                               FullWidth="true"
+                               Disabled="_isVerifyingOtp"
+                               OnClick="ResetRegistration">
+                        Use a different email
+                    </MudButton>
+                </MudStack>
+            }
+
+            <MudDivider Class="my-4" />
+            <form action="/api/auth/google-signup" method="post" data-enhance="false">
+                <button type="submit" class="google-auth-button">
+                    <span class="google-auth-button__content">
+                        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+                             alt=""
+                             width="18"
+                             height="18"
+                             class="google-auth-button__icon" />
+                        <span>Sign up with Google</span>
+                    </span>
+                </button>
+            </form>
+            <MudDivider Class="my-2" />
+            <MudText Align="Align.Center">
+                Already have an account? <MudLink Href="/login">Login to Your Account</MudLink>
+            </MudText>
         </MudPaper>
     </MudContainer>
 </div>
 
-@code {
-    private string FullName { get; set; } = string.Empty;
-    private string Username { get; set; } = string.Empty;
-    private string Email { get; set; } = string.Empty;
-    private string Password { get; set; } = string.Empty;
-    private string ConfirmPassword { get; set; } = string.Empty;
-    private bool Agree { get; set; }
+<style>
+    .google-auth-button {
+        display: block;
+        width: 100%;
+        padding: 10px 16px;
+        border: 1px solid #dadce0;
+        border-radius: 4px;
+        background: #fff;
+        color: #3c4043;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        text-transform: none;
+    }
 
-    private Task SubmitAsync()
+    .google-auth-button:hover {
+        background: #f8f9fa;
+    }
+
+    .google-auth-button__content {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        width: 100%;
+        font-weight: 500;
+    }
+
+    .google-auth-button__icon {
+        display: block;
+    }
+</style>
+
+@code {
+    private string _username = string.Empty;
+    private string _email = string.Empty;
+    private string _password = string.Empty;
+    private short _roleId = 1;
+    private string _otpCode = string.Empty;
+
+    private bool _isOtpSent;
+    private bool _isSendingOtp;
+    private bool _isVerifyingOtp;
+
+    protected override void OnInitialized()
     {
-        Nav.NavigateTo("/pending-approval");
-        return Task.CompletedTask;
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        if (query.TryGetValue("error", out var error))
+        {
+            var message = error.ToString() switch
+            {
+                "GoogleEmailMissing" => "Google did not return an email address. Try another account or use email registration.",
+                "account_pending" => "An account with this email is pending approval. Check your email for a verification code or complete verification below.",
+                "account_disabled" => "This account cannot be used for sign-up. Contact support.",
+                _ => Uri.UnescapeDataString(error.ToString())
+            };
+            Snackbar.Add(message, Severity.Error);
+        }
+    }
+
+    private async Task HandleSendOtp()
+    {
+        if (_isSendingOtp)
+        {
+            return;
+        }
+
+        _isSendingOtp = true;
+            try
+            {
+                var request = new RegisterDto(_username, _email, _password, _roleId);
+                await AuthService.SendRegistrationOtpAsync(request);
+                _isOtpSent = true;
+                Snackbar.Add("Verification code sent. Enter the 6-digit OTP to complete registration.", Severity.Success);
+            }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        catch (Exception)
+        {
+            Snackbar.Add("Unable to send verification code. Please try again.", Severity.Error);
+        }
+        finally
+        {
+            _isSendingOtp = false;
+        }
+    }
+
+    private async Task HandleVerifyOtp()
+    {
+        if (_isVerifyingOtp)
+        {
+            return;
+        }
+
+        _isVerifyingOtp = true;
+        try
+        {
+            await AuthService.CompleteRegistrationWithOtpAsync(_email, _otpCode);
+            Snackbar.Add("Registration successful. Pending Admin Approval.", Severity.Success);
+            NavigationManager.NavigateTo("/login");
+        }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        catch (Exception)
+        {
+            Snackbar.Add("Unable to complete registration. Please try again.", Severity.Error);
+        }
+        finally
+        {
+            _isVerifyingOtp = false;
+        }
+    }
+
+    private void ResetRegistration()
+    {
+        _isOtpSent = false;
+        _otpCode = string.Empty;
     }
 }

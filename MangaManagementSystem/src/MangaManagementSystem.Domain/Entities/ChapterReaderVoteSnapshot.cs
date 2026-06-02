@@ -1,16 +1,19 @@
-using MangaManagementSystem.Domain.Common;
 using System;
 
 namespace MangaManagementSystem.Domain.Entities
 {
-    public class ChapterReaderVoteSnapshot : BaseEntity
+    public class ChapterReaderVoteSnapshot
     {
         public long ChapterReaderVoteSnapshotId { get; set; }
         public long ChapterId { get; set; }
         public Chapter? Chapter { get; set; }
         public int ReaderVoteCount { get; set; }
-        public decimal AverageRating { get; set; }
-        public int? EnteredByUserId { get; set; }
+        public decimal? AverageRating { get; set; }
+        public int? PositiveFeedbackCount { get; set; }
+        public int? NegativeFeedbackCount { get; set; }
+        public string? DataSourceNote { get; set; }
+        public int EnteredByUserId { get; set; }
         public User? EnteredByUser { get; set; }
+        public DateTime VotedAtUtc { get; set; }
     }
 }

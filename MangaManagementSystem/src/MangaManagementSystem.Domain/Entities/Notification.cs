@@ -10,9 +10,9 @@ namespace MangaManagementSystem.Domain.Entities
         public User? RecipientUser { get; set; }
         public string NotificationTypeCode { get; set; } = "SYSTEM_MESSAGE";
         public string? Title { get; set; }
-        public string? Message { get; set; }
+        public string Message { get; set; } = null!;
         public string? RelatedEntityType { get; set; }
-        public string? RelatedEntityId { get; set; }
+        public long? RelatedEntityId { get; set; }
         public DateTime? ReadAtUtc { get; set; }
         public DateTime CreatedAtUtc { get; set; }
     }

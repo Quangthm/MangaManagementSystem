@@ -20,7 +20,6 @@ namespace MangaManagementSystem.Domain.Interfaces
         IGenericRepository<ChapterPageAnnotation> ChapterPageAnnotations { get; }
         IGenericRepository<ChapterEditorialReview> ChapterEditorialReviews { get; }
         IGenericRepository<Role> Roles { get; }
-        IGenericRepository<UserRegistrationRequest> UserRegistrationRequests { get; }
         IGenericRepository<SeriesContributor> SeriesContributors { get; }
         IGenericRepository<SeriesBoardPoll> SeriesBoardPolls { get; }
         IGenericRepository<ChapterReaderVoteSnapshot> ChapterReaderVoteSnapshots { get; }

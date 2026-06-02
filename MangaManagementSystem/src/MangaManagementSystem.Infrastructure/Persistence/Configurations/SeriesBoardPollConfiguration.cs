@@ -12,10 +12,15 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
             builder.HasKey(p => p.SeriesBoardPollId);
             builder.Property(p => p.SeriesBoardPollId).ValueGeneratedOnAdd();
             builder.Property(p => p.PollTypeCode).IsRequired().HasMaxLength(50);
-            builder.Property(p => p.PollStatusCode).IsRequired().HasMaxLength(20).HasDefaultValue("OPEN");
-            builder.Property(p => p.CreatedAtUtc).IsRequired();
-            builder.HasIndex(p => new { p.SeriesId, p.PollTypeCode }).IsUnique().HasDatabaseName("ux_series_board_poll_open_type").HasFilter("[PollStatusCode]='OPEN'");
+            builder.Property(p => p.PollReason).IsRequired();
+            builder.Property(p => p.PollStatusCode).IsRequired().HasMaxLength(50).HasDefaultValue("OPEN");
+            builder.Property(p => p.StartedAtUtc).IsRequired();
+            builder.HasIndex(p => new { p.SeriesId, p.PollTypeCode })
+                .IsUnique()
+                .HasDatabaseName("ux_series_board_poll_open_type")
+                .HasFilter("poll_status_code = N'OPEN'");
             builder.HasOne(p => p.Series).WithMany().HasForeignKey(p => p.SeriesId);
+            builder.HasOne(p => p.CreatedByUser).WithMany().HasForeignKey(p => p.CreatedByUserId);
         }
     }
 }

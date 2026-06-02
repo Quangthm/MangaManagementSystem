@@ -10,8 +10,8 @@ namespace MangaManagementSystem.Application.DTOs.Auth
         string Email,
         long? AvatarFileId,
         long? PortfolioFileId,
-        string Status,
-        DateTime CreatedAt
+        string StatusCode,
+        DateTime CreatedAtUtc
     );
 
     public record CreateUserDto(
@@ -30,6 +30,6 @@ namespace MangaManagementSystem.Application.DTOs.Auth
         [Required][MaxLength(254)] string Email,
         long? AvatarFileId,
         long? PortfolioFileId,
-        [Required][MaxLength(30)] string Status
+        [Required][MaxLength(30)] string StatusCode
     );
 }
