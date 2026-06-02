@@ -62,13 +62,13 @@ namespace MangaManagementSystem.Application.Services
             return entities.Select(MapToDto);
         }
 
-        public async Task<UserDto> ApproveUserAsync(int userId, short assignedRoleId)
+        public async Task<UserDto> ApproveUserAsync(int userId)
         {
             var user = await RequirePendingUserAsync(userId);
-            await EnsureValidRoleIdAsync(assignedRoleId);
 
+            // Approval simply activates the account. The role was chosen by the user at registration
+            // and must not be changed by admins during approval.
             user.StatusCode = StatusActive;
-            user.RoleId = assignedRoleId;
             _unitOfWork.Users.Update(user);
             await _unitOfWork.SaveChangesAsync();
             return MapToDto(user);

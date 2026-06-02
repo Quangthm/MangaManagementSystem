@@ -26,6 +26,17 @@
                                   Variant="Variant.Outlined"
                                   Required="true"
                                   Disabled="_isSendingOtp" />
+                    <!-- FullName removed to match DB schema (no full_name column) -->
+                    <MudSelect T="short"
+                               Label="Role"
+                               @bind-Value="_roleId"
+                               Variant="Variant.Outlined"
+                               Required="true"
+                               Disabled="_isSendingOtp">
+                        <MudSelectItem T="short" Value="@((short)1)">Mangaka</MudSelectItem>
+                        <MudSelectItem T="short" Value="@((short)2)">Assistant</MudSelectItem>
+                        <MudSelectItem T="short" Value="@((short)3)">Tantou Editor</MudSelectItem>
+                    </MudSelect>
                     <MudTextField Label="Email"
                                   @bind-Value="_email"
                                   Variant="Variant.Outlined"
@@ -144,6 +155,7 @@
     private string _username = string.Empty;
     private string _email = string.Empty;
     private string _password = string.Empty;
+    private short _roleId = 1;
     private string _otpCode = string.Empty;
 
     private bool _isOtpSent;
@@ -176,13 +188,13 @@
         }
 
         _isSendingOtp = true;
-        try
-        {
-            var request = new RegisterDto(_username, _email, _password);
-            await AuthService.SendRegistrationOtpAsync(request);
-            _isOtpSent = true;
-            Snackbar.Add("Verification code sent. Enter the 6-digit OTP to complete registration.", Severity.Success);
-        }
+            try
+            {
+                var request = new RegisterDto(_username, _email, _password, _roleId);
+                await AuthService.SendRegistrationOtpAsync(request);
+                _isOtpSent = true;
+                Snackbar.Add("Verification code sent. Enter the 6-digit OTP to complete registration.", Severity.Success);
+            }
         catch (InvalidOperationException ex)
         {
             Snackbar.Add(ex.Message, Severity.Error);

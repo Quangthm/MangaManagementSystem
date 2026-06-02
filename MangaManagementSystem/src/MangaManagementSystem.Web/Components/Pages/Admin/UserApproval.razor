@@ -23,31 +23,20 @@
                     <MudText Typo="Typo.body2" Class="mf-muted pa-4">No users are waiting for approval.</MudText>
                 </NoRecordsContent>
                 <HeaderContent>
+                    <MudTh>Name</MudTh>
                     <MudTh>Username</MudTh>
                     <MudTh>Email</MudTh>
+                    <MudTh>Role</MudTh>
                     <MudTh>Created At</MudTh>
                     <MudTh>Actions</MudTh>
                 </HeaderContent>
                 <RowTemplate>
                     <MudTd DataLabel="Username">@context.Username</MudTd>
                     <MudTd DataLabel="Email">@context.Email</MudTd>
+                    <MudTd DataLabel="Role">@MapRoleName(context.RoleId)</MudTd>
                     <MudTd DataLabel="Created At">@context.CreatedAtUtc.ToLocalTime().ToString("g")</MudTd>
                     <MudTd DataLabel="Actions">
                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                            <MudSelect T="short"
-                                       Label="Role"
-                                       Dense="true"
-                                       Variant="Variant.Outlined"
-                                       Margin="Margin.Dense"
-                                       Style="min-width: 200px;"
-                                       Disabled="@IsRowBusy(context.UserId)"
-                                       Value="@GetSelectedRole(context.UserId)"
-                                       ValueChanged="@(roleId => SetSelectedRole(context.UserId, roleId))">
-                                @foreach (var role in RoleOptions)
-                                {
-                                    <MudSelectItem T="short" Value="@role.Id">@role.Label</MudSelectItem>
-                                }
-                            </MudSelect>
                             <MudButton Size="Size.Small"
                                        Color="Color.Success"
                                        Variant="Variant.Filled"
@@ -87,6 +76,16 @@
         (5, "Admin")
     };
 
+    private string MapRoleName(short roleId) => roleId switch
+    {
+        1 => "Mangaka",
+        2 => "Assistant",
+        3 => "Tantou Editor",
+        4 => "Editorial Board Member",
+        5 => "Admin",
+        _ => "Unknown"
+    };
+
     protected override async Task OnInitializedAsync()
     {
         await LoadPendingUsersAsync();
@@ -100,7 +99,7 @@
             var users = await UserService.GetUsersByStatusAsync(PendingStatus);
             _pendingUsers.Clear();
             _pendingUsers.AddRange(users);
-            _selectedRolesByUserId = _pendingUsers.ToDictionary(u => u.UserId, u => u.RoleId);
+                _selectedRolesByUserId = users.ToDictionary(u => u.UserId, u => u.RoleId);
         }
         catch (Exception ex)
         {
@@ -139,8 +138,7 @@
         _processingUserId = user.UserId;
         try
         {
-            var roleId = GetSelectedRole(user.UserId);
-            await UserService.ApproveUserAsync(user.UserId, roleId);
+            await UserService.ApproveUserAsync(user.UserId);
             Snackbar.Add($"Approved {user.Username}.", Severity.Success);
             await LoadPendingUsersAsync();
         }

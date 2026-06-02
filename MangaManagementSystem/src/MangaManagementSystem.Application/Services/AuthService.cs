@@ -49,10 +49,11 @@ namespace MangaManagementSystem.Application.Services
             }
 
             var otp = GenerateOtp();
+            var trimmedUsername = request.Username.Trim();
             var cachedRequest = request with
             {
                 Email = normalizedEmail,
-                Username = request.Username.Trim()
+                Username = trimmedUsername
             };
 
             _otpCacheService.StoreRegistrationOtp(normalizedEmail, otp, cachedRequest);
@@ -82,7 +83,7 @@ namespace MangaManagementSystem.Application.Services
 
             var user = new User
             {
-                RoleId = DefaultRegistrationRoleId,
+                RoleId = pendingRegistration.RoleId,
                 Username = pendingRegistration.Username,
                 Email = normalizedEmail,
                 PasswordHash = _passwordHasher.HashPassword(pendingRegistration.Password),
