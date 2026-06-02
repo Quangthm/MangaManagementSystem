@@ -1,0 +1,186 @@
+@page "/admin/user-approval"
+@attribute [Authorize(Roles = "Admin")]
+@inject IUserService UserService
+@inject ISnackbar Snackbar
+
+<PageTitle>User Approval - MangaFlow</PageTitle>
+
+<AdminLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">User Approval</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Review and approve accounts pending admin activation</MudText>
+        </div>
+
+        <MudPaper Class="pa-5 mf-card" Elevation="0">
+            @if (_isLoading)
+            {
+                <MudProgressLinear Indeterminate="true" Class="mb-4" />
+            }
+
+            <MudTable Items="_pendingUsers" Hover="true" Dense="true" Breakpoint="Breakpoint.Sm">
+                <NoRecordsContent>
+                    <MudText Typo="Typo.body2" Class="mf-muted pa-4">No users are waiting for approval.</MudText>
+                </NoRecordsContent>
+                <HeaderContent>
+                    <MudTh>Name</MudTh>
+                    <MudTh>Username</MudTh>
+                    <MudTh>Email</MudTh>
+                    <MudTh>Role</MudTh>
+                    <MudTh>Created At</MudTh>
+                    <MudTh>Actions</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Username">@context.Username</MudTd>
+                    <MudTd DataLabel="Email">@context.Email</MudTd>
+                    <MudTd DataLabel="Role">@MapRoleName(context.RoleId)</MudTd>
+                    <MudTd DataLabel="Created At">@context.CreatedAtUtc.ToLocalTime().ToString("g")</MudTd>
+                    <MudTd DataLabel="Actions">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                            <MudButton Size="Size.Small"
+                                       Color="Color.Success"
+                                       Variant="Variant.Filled"
+                                       Disabled="@IsRowBusy(context.UserId)"
+                                       OnClick="@(() => ApproveAsync(context))">
+                                Approve
+                            </MudButton>
+                            <MudButton Size="Size.Small"
+                                       Color="Color.Error"
+                                       Variant="Variant.Outlined"
+                                       Disabled="@IsRowBusy(context.UserId)"
+                                       OnClick="@(() => RejectAsync(context))">
+                                Reject
+                            </MudButton>
+                        </MudStack>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+    </div>
+</AdminLayout>
+
+@code {
+    private const string PendingStatus = "PENDING_APPROVAL";
+
+    private readonly List<UserDto> _pendingUsers = new();
+    private Dictionary<int, short> _selectedRolesByUserId = new();
+    private bool _isLoading;
+    private int? _processingUserId;
+
+    private static readonly (short Id, string Label)[] RoleOptions =
+    {
+        (1, "Mangaka"),
+        (2, "Assistant"),
+        (3, "Tantou Editor"),
+        (4, "Editorial Board Member"),
+        (5, "Admin")
+    };
+
+    private string MapRoleName(short roleId) => roleId switch
+    {
+        1 => "Mangaka",
+        2 => "Assistant",
+        3 => "Tantou Editor",
+        4 => "Editorial Board Member",
+        5 => "Admin",
+        _ => "Unknown"
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPendingUsersAsync();
+    }
+
+    private async Task LoadPendingUsersAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            var users = await UserService.GetUsersByStatusAsync(PendingStatus);
+            _pendingUsers.Clear();
+            _pendingUsers.AddRange(users);
+                _selectedRolesByUserId = users.ToDictionary(u => u.UserId, u => u.RoleId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load pending users: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private short GetSelectedRole(int userId)
+    {
+        if (_selectedRolesByUserId.TryGetValue(userId, out var roleId))
+        {
+            return roleId;
+        }
+
+        return _pendingUsers.FirstOrDefault(u => u.UserId == userId)?.RoleId ?? 1;
+    }
+
+    private void SetSelectedRole(int userId, short roleId)
+    {
+        _selectedRolesByUserId[userId] = roleId;
+    }
+
+    private bool IsRowBusy(int userId) => _isLoading || _processingUserId == userId;
+
+    private async Task ApproveAsync(UserDto user)
+    {
+        if (_processingUserId.HasValue)
+        {
+            return;
+        }
+
+        _processingUserId = user.UserId;
+        try
+        {
+            await UserService.ApproveUserAsync(user.UserId);
+            Snackbar.Add($"Approved {user.Username}.", Severity.Success);
+            await LoadPendingUsersAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to approve {user.Username}: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processingUserId = null;
+        }
+    }
+
+    private async Task RejectAsync(UserDto user)
+    {
+        if (_processingUserId.HasValue)
+        {
+            return;
+        }
+
+        _processingUserId = user.UserId;
+        try
+        {
+            await UserService.RejectUserAsync(user.UserId);
+            Snackbar.Add($"Rejected {user.Username}.", Severity.Warning);
+            await LoadPendingUsersAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to reject {user.Username}: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processingUserId = null;
+        }
+    }
+}

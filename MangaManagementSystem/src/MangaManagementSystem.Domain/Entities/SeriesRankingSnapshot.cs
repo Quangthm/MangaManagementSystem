@@ -13,6 +13,7 @@ namespace MangaManagementSystem.Domain.Entities
         public DateTime PeriodEndDate { get; set; }
         public int RankPosition { get; set; }
         public decimal RankingScore { get; set; }
+        public decimal? CancellationRiskScore { get; set; }
         public int? GeneratedByUserId { get; set; }
         public User? GeneratedByUser { get; set; }
     }

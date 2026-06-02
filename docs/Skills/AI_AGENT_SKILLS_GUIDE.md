@@ -1,52 +1,75 @@
-# HƯỚNG DẪN CẤU HÌNH SKILLS CHO AI AGENT & ĐỒNG BỘ GITHUB PROJECT
+# AI Agent Skills Guide - Manga Management System (MCWPMS)
 
-Tài liệu này định nghĩa cấu trúc luồng công việc (Workflow Pipeline), chi tiết các kỹ năng (Skills) thực thi dành cho AI Agent, và hướng dẫn chi tiết cách tạo, thêm dữ liệu tự động lên GitHub bằng Copilot CLI và GitHub CLI (`gh`).
-
----
-
-## 🛠 QUY TRÌNH TỔNG QUAN (PIPELINE FLOW)
-
-1. **init_product_vision**: Phân tích văn bản thô để định hình bối cảnh, giới hạn ban đầu của dự án.
-2. **generate_user_stories**: Chuyển đổi danh sách tính năng thô thành các thẻ thực thi (User Stories).
-3. **decompose_epic_to_tasks**: Chia nhỏ các User Story lớn (Epic) thành các tác vụ kỹ thuật (Sub-tasks).
-4. **calculate_priority_matrix**: Chấm điểm khoa học và phân định mức độ ưu tiên.
-5. **refine_functional_requirements**: Tinh chỉnh lại yêu cầu hệ thống bằng văn phong kỹ thuật chính xác.
-6. **generate_acceptance_criteria**: Định nghĩa Tiêu chí nghiệm thu (Definition of Done) làm căn cứ kiểm thử.
-7. **sync_to_github_projects**: Thực thi mã lệnh CLI để đẩy toàn bộ dữ liệu thành GitHub Issues và tích hợp vào Project Board.
+This document configures the operational pipeline and system instructions for AI Agents and GitHub Copilot to analyze, decompose, and implement features within the **Manga Creation Workflow and Publishing Management System (MCWPMS)**.
 
 ---
 
-## 📋 CHI TIẾT CẤU HÌNH CÁC SKILLS CHO AI AGENT
+## 🛠 SYSTEM WORKFLOW PIPELINE
+
+AI Agents must follow this exact sequential pipeline when interpreting user requests, text specifications, or generating pull requests:
+
+1. `init_product_vision` ➔ Establishes boundaries based on the latest relational database schema.
+2. `generate_user_stories` ➔ Creates discrete user stories for the 5 RBAC roles.
+3. `decompose_epic_to_tasks` ➔ Splits requirements into Blazor UI and .NET Clean Architecture sub-tasks.
+4. `calculate_priority_matrix` ➔ Approves prioritization using Karl Wiegers matrix matching MVP constraints.
+5. `refine_functional_requirements` ➔ Converts logic to strict "The system shall..." statements using explicit C# types.
+6. `generate_acceptance_criteria` ➔ Writes BDD tests validating both C# business rules and Blazor UI states.
+7. `sync_to_github_projects` ➔ Automates GitHub tracking using `gh` CLI.
+
+---
+
+## 📋 DETAILED SKILLS SPECIFICATIONS FOR GITHUB COPILOT
 
 ### 1. Skill Name: `init_product_vision`
-* **Chỉ thị thực thi (System Prompt):** "Bạn là một Business Analyst cao cấp. Hãy phân tích tài liệu đầu vào và trích xuất các thông tin cốt lõi bao gồm: Mục tiêu kinh doanh cao nhất (Business Requirements), Phạm vi dự án của giai đoạn này (Project Scope), và Các giới hạn/ràng buộc (Limitations). Định dạng kết quả theo cấu trúc Markdown chuẩn của file `VISION_SCOPE.md`."
+* **System Prompt Constraint:** You are an expert Enterprise Business Analyst. When given any feature request, map it strictly against the MCWPMS architecture.
+* **Execution Rules:**
+  - Reject requests involving out-of-scope modules: full illustration editors, public reader portals, or platform wallets.
+  - Force constraints into 3 core schemas: `auth` (Simple RBAC with 5 roles), `audit` (SQL Server Ledger Append-Only), and `manga` (Workflow operations).
 
 ### 2. Skill Name: `generate_user_stories`
-* **Chỉ thị thực thi (System Prompt):** "Hãy chuyển đổi danh sách các tính năng được cung cấp thành các User Story hoàn chỉnh. Cấu trúc bắt buộc áp dụng: `As a [User Class], I want to [Action], So that [Value]`. Trả về kết quả dưới dạng một danh sách có cấu trúc đối tượng dữ liệu cụ thể."
+* **System Prompt Constraint:** Translate raw feature descriptions into Agile User Stories.
+* **Execution Rules:**
+  - Strictly assign stories to one of the 5 valid actors: **Mangaka**, **Assistant**, **Tantou Editor**, **Editorial Board Member**, or **Admin**.
+  - Format: `As a [Role], I want to [Action] so that [Value].`
+  - Automatically attach the corresponding RBAC authorization tag: `[Authorize(Roles = "RoleName")]`.
 
 ### 3. Skill Name: `decompose_epic_to_tasks`
-* **Chỉ thị thực thi (System Prompt):** "Dựa trên User Story được cung cấp, hãy đóng vai trò là Technical Lead để phân rã câu chuyện này thành các tác vụ kỹ thuật nhỏ hơn (Sub-tasks) bao gồm: Database, Backend, Frontend, và Exceptions Handling. Định dạng các tác vụ này dưới dạng danh sách việc cần làm (Markdown Checklist `- [ ]`)."
+* **System Prompt Constraint:** Break down complex Epics into technical checklist sub-tasks.
+* **Execution Rules:**
+  - Every technical breakdown MUST generate four distinct layers formatted as a Markdown checklist (`- [ ]`):
+    1. **Frontend (FE):** MudBlazor `.razor` component placement in `MangaManagementSystem.Web.Client/Pages/[Actor]/`.
+    2. **Backend (BE):** MediatR Command/Query handlers in the `Application` layer, Domain rules in `Domain`, and EF Core Fluent API configurations in `Infrastructure`.
+    3. **AI Integration:** Async integration hooks to Python FastAPI (YOLOv8 panel detection) if processing `ChapterPage` canvases.
+    4. **Exceptions & Audit:** Custom middleware handling and automatic logging into `audit.AuditEvent`.
 
 ### 4. Skill Name: `calculate_priority_matrix`
-* **Chỉ thị thực thi (System Prompt):** "Đánh giá từng yêu cầu dựa trên thang điểm từ 1 đến 9 đối với ba tiêu chí: Business Value, Relative Cost, và Relative Risk. Áp dụng công thức tính điểm ưu tiên của Karl Wiegers. Phân loại chính xác các yêu cầu này vào 3 nhóm nhãn: `priority:high`, `priority:medium`, hoặc `priority:low`."
+* **System Prompt Constraint:** Rank requirements to protect the project deadline.
+* **Execution Rules:**
+  - Score Business Value, Relative Cost, and Relative Risk from 1 to 9.
+  - Automatically label anything with high cost/risk and low core value as `priority:low` or `out-of-scope`.
 
 ### 5. Skill Name: `refine_functional_requirements`
-* **Chỉ thị thực thi (System Prompt):** "Hãy tinh chỉnh lại yêu cầu hệ thống bằng văn phong kỹ thuật chính xác. Áp dụng nghiêm ngặt cấu trúc cấu câu 'The system shall...'. Thay thế và loại bỏ hoàn toàn các trạng từ, tính từ mơ hồ như 'giao diện đẹp', 'tốc độ nhanh'."
+* **System Prompt Constraint:** Enforce high-precision specification language.
+* **Execution Rules:**
+  - Convert descriptions into `"The system shall..."` structures.
+  - Replace ambiguous verbs with specific database/code operations. Specify exact C# data types, Cloudinary `secure_url` properties, or coordinate ranges `(X, Y, Width, Height)` mapping to `PageRegion`.
 
 ### 6. Skill Name: `generate_acceptance_criteria`
-* **Chỉ thị thực thi (System Prompt):** "Sinh các kịch bản kiểm thử nghiệm thu (Acceptance Criteria) cho tính năng này. Áp dụng định dạng Cucumber chuẩn: `Given [Bối cảnh] - When [Hành động] - Then [Kết quả mong đợi]`. Bao phủ cả Happy Path và Edge Cases."
+* **System Prompt Constraint:** Write comprehensive Behavioral-Driven Development (BDD) testing scenarios.
+* **Execution Rules:**
+  - Use the Cucumber framework: `Given - When - Then`.
+  - Must write 2 Happy Path scenarios and 2 Edge Case scenarios (e.g., unauthorized role rejection, invalid file uploads, SQL Server Ledger tamper verification failures).
+  - Explicitly state the MudBlazor UI feedback state (e.g., `<MudProgressCircular>`, `<MudDialog>`, or `ISnackbar` toast notification).
 
 ---
 
-## 🚀 HƯỚNG DẪN KHỞI TẠO VÀ THÊM DỮ LIỆU QUA CLI
+## 🚀 COPILOT CLI AUTOMATION CHEATSHEET
 
-### BƯỚC 1: CHUẨN BỊ MÔI TRƯỜNG KẾT NỐI
+Use these explicit commands to force Copilot CLI to leverage this skills file during pull request reviews or code generation:
 
-1. **Cài đặt GitHub CLI (`gh`):**
-   * Windows: `winget install --id GitHub.cli`
-   * Mac: `brew install gh`
+```bash
+# Generate a new service ensuring compliance with the skills guide
+gh copilot suggest -f docs/ai_agent_skills/AI_AGENT_SKILLS_GUIDE.md "Create a MediatR command for creating a ChapterPageTask assigned to an Assistant"
 
-2. **Đăng nhập và cấp quyền hệ thống:**
-   ```bash
-   gh auth login
-   ```
+# Code Audit before merging a Pull Request
+gh copilot explain -f docs/ai_agent_skills/AI_AGENT_SKILLS_GUIDE.md "Review current Git changes to check if the new Blazor view uses MudBlazor components and valid API requests"

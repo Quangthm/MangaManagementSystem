@@ -2,7 +2,6 @@
 GO
 CREATE OR ALTER PROCEDURE audit.usp_AuditEvent_Append
     @actor_user_id      INT = NULL,
-    @actor_role_name    NVARCHAR(128) = NULL,
     @action_code        NVARCHAR(64),
     @entity_type        NVARCHAR(128),
     @entity_id          NVARCHAR(100) = NULL,
@@ -14,14 +13,9 @@ BEGIN
 
     DECLARE @started_tran BIT = 0;
     DECLARE @lock_result INT;
+    DECLARE @actor_role_name NVARCHAR(128) = NULL;
 
     BEGIN TRY
-        /*
-            Keep JSON validation because detail_json is optional,
-            but when provided it should be valid JSON.
-            Required fields such as action_code and entity_type are
-            handled by database constraints and application logic.
-        */
         IF @detail_json IS NOT NULL AND ISJSON(@detail_json) <> 1
         BEGIN
             THROW 50001, 'detail_json must be valid JSON.', 1;
@@ -34,10 +28,24 @@ BEGIN
         END;
 
         /*
-            Serialize audit appends under high concurrency.
-            With @LockOwner = 'Transaction', SQL Server releases the
-            application lock when the transaction commits or rolls back.
+            Resolve actor role snapshot inside the audit procedure.
+            This prevents the backend from passing role-name text manually.
         */
+        IF @actor_user_id IS NOT NULL
+        BEGIN
+            SELECT
+                @actor_role_name = r.role_name
+            FROM auth.Users u
+            INNER JOIN auth.Roles r
+                ON r.role_id = u.role_id
+            WHERE u.user_id = @actor_user_id;
+
+            IF @actor_role_name IS NULL
+            BEGIN
+                THROW 50003, 'Actor user role could not be resolved.', 1;
+            END;
+        END;
+
         EXEC @lock_result = sys.sp_getapplock
             @Resource = N'audit_event_append',
             @LockMode = 'Exclusive',
@@ -84,15 +92,15 @@ BEGIN
 END;
 GO
 CREATE OR ALTER PROCEDURE auth.usp_User_Create
-    @role_id                 SMALLINT,
+    @role_name               NVARCHAR(30),
     @username                NVARCHAR(50),
     @email                   NVARCHAR(254),
     @password_hash           NVARCHAR(255),
+    @display_name            NVARCHAR(100) = NULL,
     @avatar_file_id          BIGINT = NULL,
     @portfolio_file_id       BIGINT = NULL,
 
     @created_by_user_id      INT = NULL,
-    @created_by_role_name    NVARCHAR(128) = NULL,
 
     @new_user_id             INT OUTPUT
 AS
@@ -103,6 +111,14 @@ BEGIN
     DECLARE @started_tran BIT = 0;
     DECLARE @detail_json NVARCHAR(MAX);
 
+    DECLARE @resolved_role_id SMALLINT;
+    DECLARE @resolved_role_name NVARCHAR(30);
+
+    DECLARE @normalized_role_name NVARCHAR(30) = LTRIM(RTRIM(@role_name));
+    DECLARE @normalized_username NVARCHAR(50) = LTRIM(RTRIM(@username));
+    DECLARE @normalized_email NVARCHAR(254) = LOWER(LTRIM(RTRIM(@email)));
+    DECLARE @normalized_display_name NVARCHAR(100) = NULLIF(LTRIM(RTRIM(@display_name)), N'');
+
     DECLARE @created_user TABLE
     (
         user_id     INT NOT NULL,
@@ -110,10 +126,50 @@ BEGIN
     );
 
     BEGIN TRY
+        IF @normalized_role_name IS NULL OR @normalized_role_name = N''
+        BEGIN
+            THROW 50010, 'Role name is required.', 1;
+        END;
+
+        IF @normalized_username IS NULL OR @normalized_username = N''
+        BEGIN
+            THROW 50012, 'Username is required.', 1;
+        END;
+
+        IF @normalized_email IS NULL OR @normalized_email = N''
+        BEGIN
+            THROW 50013, 'Email is required.', 1;
+        END;
+
+        IF @password_hash IS NULL OR LTRIM(RTRIM(@password_hash)) = N''
+        BEGIN
+            THROW 50014, 'Password hash is required.', 1;
+        END;
+
+        IF @normalized_display_name IS NULL
+        BEGIN
+            SET @normalized_display_name = @normalized_username;
+        END;
+
         IF @@TRANCOUNT = 0
         BEGIN
             SET @started_tran = 1;
             BEGIN TRAN;
+        END;
+
+        /*
+            Resolve requested role name into role_id.
+            App passes role name; database stores role_id.
+        */
+        SELECT
+            @resolved_role_id = r.role_id,
+            @resolved_role_name = r.role_name
+        FROM auth.Roles r
+        WHERE UPPER(LTRIM(RTRIM(r.role_name))) = UPPER(@normalized_role_name);
+
+        IF @resolved_role_id IS NULL
+        BEGIN
+            THROW 50015, 'Invalid role name.', 1;
         END;
 
         INSERT INTO auth.Users
@@ -122,6 +178,7 @@ BEGIN
             username,
             email,
             password_hash,
+            display_name,
             avatar_file_id,
             portfolio_file_id,
             status_code
@@ -136,10 +193,11 @@ BEGIN
         )
         VALUES
         (
-            @role_id,
-            LTRIM(RTRIM(@username)),
-            LTRIM(RTRIM(@email)),
+            @resolved_role_id,
+            @normalized_username,
+            @normalized_email,
             @password_hash,
+            @normalized_display_name,
             @avatar_file_id,
             @portfolio_file_id,
             N'PENDING_APPROVAL'
@@ -153,16 +211,17 @@ BEGIN
         (
             SELECT
                 @new_user_id AS user_id,
-                @role_id AS role_id,
-                LTRIM(RTRIM(@username)) AS username,
-                LTRIM(RTRIM(@email)) AS email,
+                @resolved_role_id AS role_id,
+                @resolved_role_name AS role_name,
+                @normalized_username AS username,
+                @normalized_email AS email,
+                @normalized_display_name AS display_name,
                 N'PENDING_APPROVAL' AS status_code
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
         );
 
         EXEC audit.usp_AuditEvent_Append
             @actor_user_id = @created_by_user_id,
-            @actor_role_name = @created_by_role_name,
             @action_code = N'USER_REGISTERED',
             @entity_type = N'Users',
             @entity_id = @new_user_id,

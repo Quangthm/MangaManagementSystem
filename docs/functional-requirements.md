@@ -95,6 +95,15 @@
 | FR-USER-010 | The system shall allow Admin users to reject pending users by changing their status to `REJECTED`. | BR-USER-011 |
 | FR-USER-011 | The system shall prevent rejected accounts from logging in. | BR-USER-012 |
 | FR-USER-012 | The system shall keep rejected users' email and username reserved in MVP. | BR-USER-012 |
+| FR-USER-013 | The system shall store a `display_name` for each user account. | BR-USER-013 |
+| FR-USER-014 | The system shall use `display_name` for user-facing identity display in contributor lists, task assignments, annotations, notifications, board votes, and audit screens. | BR-USER-014 |
+| FR-USER-015 | The system shall keep `username` as the login/system account identifier instead of using `display_name` for login. | BR-USER-015 |
+| FR-USER-016 | The system shall allow multiple users to have the same `display_name`. | BR-USER-016 |
+| FR-USER-017 | The system shall default `display_name` to `username` when no display name is provided during registration or external login. | BR-USER-017 |
+| FR-USER-018 | The system shall allow authenticated users to update their own `display_name` without requiring their account password. | BR-USER-018 |
+| FR-USER-019 | The system shall prevent a display name update from changing `username`, `email`, role, account status, password, or approval state. | BR-USER-019 |
+| FR-USER-020 | The system shall record display name changes in the audit log. | BR-USER-020 |
+| FR-USER-021 | The system shall reject empty or whitespace-only display names after trimming. | BR-USER-021 |
 
 ---
 

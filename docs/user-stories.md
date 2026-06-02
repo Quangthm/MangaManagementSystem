@@ -31,6 +31,7 @@ Basis: Verified MVP business rules, updated PageRegion segmentation rules, and p
 |---|---|---|
 | US-NEW-001 | BR-USER-002, BR-USER-003, BR-USER-011, BR-USER-012 | As a New User, I want to register an account and receive pending approval or rejection status, so that I understand why I cannot access protected workspace functions immediately or create another account with the same email/username after rejection. |
 | US-NEW-002 | BR-USER-007, BR-USER-008, BR-USER-009 | As a New User, I want to optionally attach an avatar or portfolio file during account setup, so that my profile can support identity display and admin review. |
+| US-NEW-003 | BR-USER-013, BR-USER-017 | As a New User, I want the system to create a display name for me during registration or external login, so that my account has a readable name in the system even if I do not provide one manually. |
 
 ---
 
@@ -44,6 +45,8 @@ Basis: Verified MVP business rules, updated PageRegion segmentation rules, and p
 | US-USER-004 | BR-HIST-007 | As a General System User, I want meaningful event timestamps to be visible where relevant, so that submitted, reviewed, voted, created, and released actions are understandable. |
 | US-USER-005 | BR-NOTIF-001, BR-NOTIF-005, BR-NOTIF-006 | As a General System User, I want to view unread in-app notifications and mark them as read, so that I can manage important workflow updates. |
 | US-USER-006 | BR-NOTIF-003, BR-NOTIF-004 | As a General System User, I want notifications to link to their related business record when available, so that I can navigate directly to the relevant series, chapter, task, proposal, poll, or ranking snapshot. |
+| US-USER-007 | BR-USER-014, BR-USER-015, BR-USER-016 | As a General System User, I want other users to be shown by display name instead of only username, so that task assignments, annotations, notifications, board votes, and contributor lists are easier to understand. |
+| US-USER-008 | BR-USER-018, BR-USER-019, BR-USER-021 | As a General System User, I want to update my display name without entering my password, so that I can adjust my visible profile name without changing my login identity or account security settings. |
 
 ---
 
@@ -177,5 +180,6 @@ Basis: Verified MVP business rules, updated PageRegion segmentation rules, and p
 | US-ADMIN-018 | BR-RANK-001, BR-RANK-002, BR-RANK-003, BR-RANK-004, BR-RANK-009, BR-RANK-010, BR-RANK-011 | As an Admin, I want generated ranking snapshots to remain visible for audit and traceability, so that series performance can be reviewed over time without Admin owning reader vote input. |
 | US-ADMIN-019 | BR-NOTIF-013, BR-HIST-004 | As an Admin, I want important notification-triggering workflow actions to also be audit-logged when required, so that user awareness does not replace traceability. |
 | US-ADMIN-020 | BR-HIST-001, BR-HIST-002, BR-HIST-003, BR-HIST-005, BR-HIST-006, BR-HIST-008 | As an Admin, I want domain records and audit logs to serve as workflow evidence instead of separate status-history tables, so that the MVP stays simple while preserving traceability. |
+| US-ADMIN-021 | BR-USER-020 | As an Admin, I want display name changes to be visible in audit logs, so that user-facing identity changes remain traceable. |
 
 ---

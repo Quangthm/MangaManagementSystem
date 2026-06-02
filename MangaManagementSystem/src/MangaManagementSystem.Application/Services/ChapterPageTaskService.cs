@@ -2,6 +2,7 @@ using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -24,8 +25,8 @@ namespace MangaManagementSystem.Application.Services
                 AssignedToUserId = dto.AssignedToUserId,
                 TypeCode = dto.TypeCode,
                 StatusCode = dto.StatusCode,
-                PriorityLevel = dto.PriorityLevel,
-                DueAtUtc = dto.DueAtUtc,
+                PriorityLevel = (byte)dto.PriorityLevel,
+                DueAtUtc = dto.DueAtUtc ?? DateTime.UtcNow,
                 CompletedPageVersionId = dto.CompletedPageVersionId
             };
             await _unitOfWork.ChapterPageTasks.AddAsync(entity);
@@ -58,8 +59,8 @@ namespace MangaManagementSystem.Application.Services
             entity.AssignedToUserId = dto.AssignedToUserId;
             entity.TypeCode = dto.TypeCode;
             entity.StatusCode = dto.StatusCode;
-            entity.PriorityLevel = dto.PriorityLevel;
-            entity.DueAtUtc = dto.DueAtUtc;
+            entity.PriorityLevel = (byte)dto.PriorityLevel;
+            entity.DueAtUtc = dto.DueAtUtc ?? entity.DueAtUtc;
             entity.CompletedPageVersionId = dto.CompletedPageVersionId;
             _unitOfWork.ChapterPageTasks.Update(entity);
             await _unitOfWork.SaveChangesAsync();
@@ -84,7 +85,7 @@ namespace MangaManagementSystem.Application.Services
             t.AssignedToUserId,
             t.TypeCode,
             t.StatusCode,
-            t.PriorityLevel,
+            (int)t.PriorityLevel,
             t.DueAtUtc,
             t.CompletedPageVersionId
         );

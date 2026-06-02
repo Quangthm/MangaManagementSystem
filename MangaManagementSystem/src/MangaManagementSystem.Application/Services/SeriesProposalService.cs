@@ -2,6 +2,7 @@ using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -29,7 +30,8 @@ namespace MangaManagementSystem.Application.Services
                 ProposalFileId = dto.ProposalFileId,
                 StatusCode = dto.StatusCode,
                 SubmittedByUserId = dto.SubmittedByUserId,
-                ReviewedByUserId = dto.ReviewedByUserId,
+                SubmittedAtUtc = DateTime.UtcNow,
+                Comments = dto.Comments,
                 MarkupFileId = dto.MarkupFileId
             };
             await _unitOfWork.SeriesProposals.AddAsync(entity);
@@ -69,6 +71,8 @@ namespace MangaManagementSystem.Application.Services
             entity.StatusCode = dto.StatusCode;
             entity.SubmittedByUserId = dto.SubmittedByUserId;
             entity.ReviewedByUserId = dto.ReviewedByUserId;
+            entity.ReviewedAtUtc = dto.ReviewedAtUtc;
+            entity.Comments = dto.Comments;
             entity.MarkupFileId = dto.MarkupFileId;
             _unitOfWork.SeriesProposals.Update(entity);
             await _unitOfWork.SaveChangesAsync();
@@ -98,7 +102,11 @@ namespace MangaManagementSystem.Application.Services
             p.ProposalFileId,
             p.StatusCode,
             p.SubmittedByUserId,
+            p.SubmittedAtUtc,
+            p.WithdrawnAtUtc,
             p.ReviewedByUserId,
+            p.ReviewedAtUtc,
+            p.Comments,
             p.MarkupFileId
         );
     }

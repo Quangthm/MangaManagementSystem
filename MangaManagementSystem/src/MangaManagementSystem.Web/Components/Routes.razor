@@ -1,6 +1,19 @@
 ﻿<Router AppAssembly="typeof(Program).Assembly">
     <Found Context="routeData">
-        <RouteView RouteData="routeData" />
+        <AuthorizeRouteView RouteData="routeData">
+            <NotAuthorized>
+                <PageTitle>Access denied - MangaFlow</PageTitle>
+                <MudContainer MaxWidth="MaxWidth.Medium" Class="py-16">
+                    <MudPaper Class="pa-8 text-center mf-card" Elevation="0">
+                        <MudText Typo="Typo.h4" Class="mb-2">Access denied</MudText>
+                        <MudText Color="Color.Secondary" Class="mb-6">
+                            You must sign in as an administrator to view this page.
+                        </MudText>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/login">Go to Login</MudButton>
+                    </MudPaper>
+                </MudContainer>
+            </NotAuthorized>
+        </AuthorizeRouteView>
         <FocusOnNavigate RouteData="routeData" Selector="h1" />
     </Found>
     <NotFound>

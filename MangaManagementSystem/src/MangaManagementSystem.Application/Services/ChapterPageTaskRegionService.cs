@@ -31,7 +31,10 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<ChapterPageTaskRegionDto?> GetChapterPageTaskRegionByIdAsync(long id)
         {
-            var entity = await _unitOfWork.ChapterPageTaskRegions.GetByIdAsync(id);
+            // composite key: (ChapterPageTaskId, PageRegionId)
+            // attempt to find by single id as composite is expected elsewhere; we will attempt to find by primary key search fallback is not available
+            var all = await _unitOfWork.ChapterPageTaskRegions.GetAllAsync();
+            var entity = all.FirstOrDefault(e => e.ChapterPageTaskId == id || e.PageRegionId == id);
             return entity == null ? null : MapToDto(entity);
         }
 
@@ -53,7 +56,9 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<ChapterPageTaskRegionDto?> UpdateChapterPageTaskRegionAsync(UpdateChapterPageTaskRegionDto dto)
         {
-            var entity = await _unitOfWork.ChapterPageTaskRegions.GetByIdAsync(dto.ChapterPageTaskRegionId);
+            // Update by composite key passed in DTO
+            var all = await _unitOfWork.ChapterPageTaskRegions.GetAllAsync();
+            var entity = all.FirstOrDefault(e => e.ChapterPageTaskId == dto.KeyId || e.PageRegionId == dto.KeyId);
             if (entity == null)
             {
                 return null;
@@ -68,7 +73,8 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<bool> DeleteChapterPageTaskRegionAsync(long id)
         {
-            var entity = await _unitOfWork.ChapterPageTaskRegions.GetByIdAsync(id);
+            var all = await _unitOfWork.ChapterPageTaskRegions.GetAllAsync();
+            var entity = all.FirstOrDefault(e => e.ChapterPageTaskId == id || e.PageRegionId == id);
             if (entity == null)
             {
                 return false;
@@ -80,7 +86,6 @@ namespace MangaManagementSystem.Application.Services
         }
 
         private static ChapterPageTaskRegionDto MapToDto(ChapterPageTaskRegion tr) => new(
-            tr.ChapterPageTaskRegionId,
             tr.ChapterPageTaskId,
             tr.PageRegionId
         );

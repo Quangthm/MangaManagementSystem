@@ -2,6 +2,7 @@ using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -24,7 +25,11 @@ namespace MangaManagementSystem.Application.Services
                 ChapterId = dto.ChapterId,
                 ReaderVoteCount = dto.ReaderVoteCount,
                 AverageRating = dto.AverageRating,
-                EnteredByUserId = dto.EnteredByUserId
+                PositiveFeedbackCount = dto.PositiveFeedbackCount,
+                NegativeFeedbackCount = dto.NegativeFeedbackCount,
+                DataSourceNote = dto.DataSourceNote,
+                EnteredByUserId = dto.EnteredByUserId,
+                VotedAtUtc = DateTime.UtcNow
             };
             await _unitOfWork.ChapterReaderVoteSnapshots.AddAsync(entity);
             await _unitOfWork.SaveChangesAsync();
@@ -48,7 +53,11 @@ namespace MangaManagementSystem.Application.Services
             s.ChapterId,
             s.ReaderVoteCount,
             s.AverageRating,
-            s.EnteredByUserId
+            s.PositiveFeedbackCount,
+            s.NegativeFeedbackCount,
+            s.DataSourceNote,
+            s.EnteredByUserId,
+            s.VotedAtUtc
         );
     }
 }
