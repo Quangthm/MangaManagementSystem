@@ -28,20 +28,21 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<UserDto> CreateUserAsync(CreateUserDto dto)
         {
-            var entity = new User
-            {
-                RoleId = dto.RoleId,
-                Username = dto.Username,
-                Email = dto.Email,
-                PasswordHash = _passwordHasher.HashPassword(dto.Password),
-                AvatarFileId = dto.AvatarFileId,
-                PortfolioFileId = dto.PortfolioFileId,
-                StatusCode = "PENDING_APPROVAL",
-                CreatedAtUtc = DateTime.UtcNow
-            };
-            await _unitOfWork.Users.AddAsync(entity);
-            await _unitOfWork.SaveChangesAsync();
-            return MapToDto(entity);
+            var role = await _unitOfWork.Roles.GetByIdAsync(dto.RoleId);
+            var roleCode = role?.RoleName ?? string.Empty;
+            var passwordHash = _passwordHasher.HashPassword(dto.Password);
+            var newUserId = await _unitOfWork.Users.CreateUserViaProcAsync(
+                roleCode,
+                dto.Username,
+                dto.Email,
+                passwordHash,
+                dto.DisplayName,
+                dto.AvatarFileId,
+                dto.PortfolioFileId,
+                null);
+
+            var created = await _unitOfWork.Users.GetByIdAsync(newUserId);
+            return MapToDto(created!);
         }
 
         public async Task<UserDto?> GetUserByIdAsync(int id)
@@ -146,11 +147,13 @@ namespace MangaManagementSystem.Application.Services
             u.UserId,
             u.RoleId,
             u.Username,
+            u.DisplayName,
             u.Email,
             u.AvatarFileId,
             u.PortfolioFileId,
             u.StatusCode,
-            u.CreatedAtUtc
+            u.CreatedAtUtc,
+            null
         );
     }
 }

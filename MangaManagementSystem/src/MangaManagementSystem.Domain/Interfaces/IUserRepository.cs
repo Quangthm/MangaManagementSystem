@@ -10,5 +10,15 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<User?> GetByUsernameAsync(string username);
         Task<User?> GetByUsernameOrEmailAsync(string usernameOrEmail);
         Task<IReadOnlyList<User>> GetByStatusAsync(string status);
+        Task<int> CreateUserViaProcAsync(
+            string roleName,
+            string username,
+            string email,
+            string passwordHash,
+            string? displayName = null,
+            long? avatarFileId = null,
+            long? portfolioFileId = null,
+            int? createdByUserId = null
+        );
     }
 }

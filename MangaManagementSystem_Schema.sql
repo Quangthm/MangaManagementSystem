@@ -41,6 +41,7 @@ CREATE TABLE auth.Users (
 	user_id INT IDENTITY(1, 1) PRIMARY KEY,
 	role_id SMALLINT NOT NULL,
 	username NVARCHAR(50) NOT NULL,
+	display_name NVARCHAR(100) NOT NULL,
 	email NVARCHAR(254) NOT NULL,
 	password_hash NVARCHAR(255) NOT NULL,
 	avatar_file_id BIGINT NULL,

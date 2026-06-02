@@ -27,7 +27,7 @@ The MVP should stay focused and avoid unnecessary tables unless a table represen
 
 | Area | MVP Decision |
 |---|---|
-| Users and accounts | Use one MVP role per account. New users start as `PENDING_APPROVAL`. Admin activates, rejects, or disables accounts. |
+| Users and accounts | Use one MVP role per account. New users start as `PENDING_APPROVAL`. Admin activates, rejects, or disables accounts. Each user has a non-unique `display_name` for UI display; if not provided during registration or external login, it defaults to the username. Users may update their own display name without entering their account password. |
 | File management | Store actual media in Cloudinary; store metadata and references in `manga.FileResource`. |
 | Series management | Manage series profile, unique code, unique slug, lifecycle status, language, genre text, cover image, and optional source series reference. |
 | Series contributors | Manage team membership through `SeriesContributor`, not a direct lead Mangaka column on `Series`. |
@@ -74,7 +74,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 | Actor | Meaning / Responsibilities |
 |---|---|
 | New User | Registers an account and waits for approval before accessing protected workspace functions. |
-| General System User | Any approved authenticated user using common features such as file display, status visibility, timestamps, and notifications. |
+| General System User | Any approved authenticated user using common features such as file display, display-name profile updates, status visibility, timestamps, and notifications. |
 | Authorized Workflow Participant | A user allowed to view a specific workflow list, queue, or dashboard for their role. |
 | Authorized Page Workspace User | A user permitted to access page-level editing, annotation, segmentation, translation-support, or page-version feedback tools. Normally includes Mangaka and Tantou Editor; Assistants may access assigned task/page work only. Editorial Board Members are excluded unless explicitly granted page workspace permissions. |
 | Mangaka | Creates and manages series, proposals, chapters, pages, page versions, regions for production, task assignments, assistant task review, chapter submission, ranking monitoring, and response to editorial feedback. |
@@ -153,6 +153,12 @@ The project uses **permission-based actor grouping** for shared features and rol
 - Admin disables accounts by changing status to `DISABLED`.
 - Rejected and disabled accounts cannot log in.
 - A rejected user account keeps its email and username reserved in MVP.
+- Each user account has a `display_name` for user-facing identity display.
+- If a user does not provide a display name during registration or external login, the system uses the username as the default display name.
+- Users may update their own display name without entering their account password.
+- Updating display name does not change username, email, password, role, account status, or approval state.
+- Display name does not need to be unique and should be used for UI readability in contributor lists, tasks, annotations, notifications, board votes, and audit screens.
+- Display name changes should be recorded in the audit log for traceability.
 - Users may optionally have avatar and portfolio files stored through `FileResource`.
 - Registration approval/rejection history is handled through current user status and audit logs, not a separate registration request table.
 

@@ -26,6 +26,11 @@
                                   Variant="Variant.Outlined"
                                   Required="true"
                                   Disabled="_isSendingOtp" />
+                    <MudTextField Label="Display Name (optional)"
+                                  @bind-Value="_displayName"
+                                  Variant="Variant.Outlined"
+                                  HelperText="Display name shown publicly. Defaults to username if left empty."
+                                  Disabled="_isSendingOtp" />
                     <!-- FullName removed to match DB schema (no full_name column) -->
                     <MudSelect T="short"
                                Label="Role"
@@ -49,6 +54,10 @@
                                   InputType="InputType.Password"
                                   Required="true"
                                   Disabled="_isSendingOtp" />
+                    <div>
+                        <label class="mf-muted">Portfolio (optional) — upload coming soon</label>
+                        <input type="file" disabled />
+                    </div>
                     <MudButton Variant="Variant.Filled"
                                Color="Color.Primary"
                                FullWidth="true"
@@ -156,6 +165,7 @@
     private string _email = string.Empty;
     private string _password = string.Empty;
     private short _roleId = 1;
+    private string? _displayName = null;
     private string _otpCode = string.Empty;
 
     private bool _isOtpSent;
@@ -190,7 +200,7 @@
         _isSendingOtp = true;
             try
             {
-                var request = new RegisterDto(_username, _email, _password, _roleId);
+                var request = new RegisterDto(_username, _email, _password, _roleId, _displayName);
                 await AuthService.SendRegistrationOtpAsync(request);
                 _isOtpSent = true;
                 Snackbar.Add("Verification code sent. Enter the 6-digit OTP to complete registration.", Severity.Success);

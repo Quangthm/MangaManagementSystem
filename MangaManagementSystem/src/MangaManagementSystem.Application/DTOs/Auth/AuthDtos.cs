@@ -6,7 +6,8 @@ namespace MangaManagementSystem.Application.DTOs.Auth
         [Required][MaxLength(50)] string Username,
         [Required][MaxLength(254)] string Email,
         [Required][MinLength(8)][MaxLength(255)] string Password,
-        [Required] short RoleId
+        [Required] short RoleId,
+        [MaxLength(100)] string? DisplayName
     );
 
     public record LoginDto(

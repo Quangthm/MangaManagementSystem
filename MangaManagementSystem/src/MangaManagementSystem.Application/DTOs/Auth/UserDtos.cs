@@ -7,16 +7,19 @@ namespace MangaManagementSystem.Application.DTOs.Auth
         int UserId,
         short RoleId,
         string Username,
+        string? DisplayName,
         string Email,
         long? AvatarFileId,
         long? PortfolioFileId,
         string StatusCode,
-        DateTime CreatedAtUtc
+        DateTime CreatedAtUtc,
+        string? RoleName
     );
 
     public record CreateUserDto(
         [Required] short RoleId,
         [Required][MaxLength(50)] string Username,
+        [MaxLength(100)] string? DisplayName,
         [Required][MaxLength(254)] string Email,
         [Required][MaxLength(255)] string Password,
         long? AvatarFileId,
@@ -27,6 +30,7 @@ namespace MangaManagementSystem.Application.DTOs.Auth
         [Required] int UserId,
         [Required] short RoleId,
         [Required][MaxLength(50)] string Username,
+        [MaxLength(100)] string? DisplayName,
         [Required][MaxLength(254)] string Email,
         long? AvatarFileId,
         long? PortfolioFileId,

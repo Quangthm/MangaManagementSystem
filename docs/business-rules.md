@@ -87,6 +87,15 @@
 | BR-USER-010 | Registration approval/rejection history is handled through current user status and audit log in MVP, not a separate registration request table. | Active draft |
 | BR-USER-011 | Admin can reject a pending user by changing status to `REJECTED`. | Active draft |
 | BR-USER-012 | A rejected account cannot log in, and its email and username remain reserved in MVP. | Active draft |
+| BR-USER-013 | Each user account must have a `display_name` for user-facing identity display. | Active draft |
+| BR-USER-014 | `display_name` is used on user-facing screens such as contributor lists, task assignments, annotations, notifications, board votes, and audit display. | Active draft |
+| BR-USER-015 | `display_name` is not used as the login identifier; `username` remains the login/system account identifier. | Active draft |
+| BR-USER-016 | `display_name` does not need to be unique. Multiple users may have the same display name. | Active draft |
+| BR-USER-017 | If a user does not provide a display name during registration or external login, the system uses the username as the default display name. | Active draft |
+| BR-USER-018 | A user may update their own display name without providing the account password. | Active draft |
+| BR-USER-019 | Updating `display_name` must not change `username`, `email`, role, account status, password, or account approval state. | Active draft |
+| BR-USER-020 | Display name changes should be recorded in the audit log for traceability. | Active draft |
+| BR-USER-021 | The system should reject empty or whitespace-only display names after trimming. | Active draft |
 
 ---
 

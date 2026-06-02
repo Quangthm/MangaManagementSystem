@@ -81,19 +81,27 @@ namespace MangaManagementSystem.Application.Services
                 throw new InvalidOperationException("This username is already taken.");
             }
 
-            var user = new User
-            {
-                RoleId = pendingRegistration.RoleId,
-                Username = pendingRegistration.Username,
-                Email = normalizedEmail,
-                PasswordHash = _passwordHasher.HashPassword(pendingRegistration.Password),
-                StatusCode = "PENDING_APPROVAL",
-                CreatedAtUtc = DateTime.UtcNow
-            };
+            // create via stored procedure so DB-side rules and audit are applied
+            var role = await _unitOfWork.Roles.GetByIdAsync(pendingRegistration.RoleId);
+            var roleName = role?.RoleName ?? string.Empty;
+            var passwordHash = _passwordHasher.HashPassword(pendingRegistration.Password);
+            var newUserId = await _unitOfWork.Users.CreateUserViaProcAsync(
+                roleName,
+                pendingRegistration.Username,
+                normalizedEmail,
+                passwordHash,
+                pendingRegistration.DisplayName,
+                null,
+                null,
+                null);
 
-            await _unitOfWork.Users.AddAsync(user);
-            await _unitOfWork.SaveChangesAsync();
-            return MapToDto(user);
+            var created = await _unitOfWork.Users.GetByIdAsync(newUserId);
+            if (created == null)
+            {
+                throw new InvalidOperationException("Failed to create user.");
+            }
+
+            return MapToDto(created);
         }
 
         public async Task<AuthResultDto> LoginAsync(LoginDto request)
@@ -208,24 +216,24 @@ namespace MangaManagementSystem.Application.Services
             if (existingUser is null)
             {
                 var username = await GenerateUniqueUsernameAsync(googleDisplayName, normalizedEmail);
-                var user = new User
-                {
-                    RoleId = DefaultRegistrationRoleId,
-                    Username = username,
-                    Email = normalizedEmail,
-                    PasswordHash = _passwordHasher.HashPassword(Guid.NewGuid().ToString("N") + "!Aa1"),
-                    StatusCode = "PENDING_APPROVAL",
-                    CreatedAtUtc = DateTime.UtcNow
-                };
-
-                await _unitOfWork.Users.AddAsync(user);
-                await _unitOfWork.SaveChangesAsync();
+                var passwordHash = _passwordHasher.HashPassword(Guid.NewGuid().ToString("N") + "!Aa1");
+                var role = await _unitOfWork.Roles.GetByIdAsync(DefaultRegistrationRoleId);
+                var roleName = role?.RoleName ?? string.Empty;
+                var newUserId = await _unitOfWork.Users.CreateUserViaProcAsync(
+                    roleName,
+                    username,
+                    normalizedEmail,
+                    passwordHash,
+                    googleDisplayName,
+                    null,
+                    null,
+                    null);
 
                 await SendEmailVerificationOtpAsync(normalizedEmail);
 
                 _logger.LogInformation(
                     "Google sign-up created pending user {UserId} ({Email}) with username {Username}",
-                    user.UserId,
+                    newUserId,
                     normalizedEmail,
                     username);
 
@@ -373,11 +381,13 @@ namespace MangaManagementSystem.Application.Services
             user.UserId,
             user.RoleId,
             user.Username,
+            user.DisplayName,
             user.Email,
             user.AvatarFileId,
             user.PortfolioFileId,
             user.StatusCode,
-            user.CreatedAtUtc
+            user.CreatedAtUtc,
+            null
         );
     }
 }

@@ -10,6 +10,7 @@ namespace MangaManagementSystem.Domain.Entities
         public Role? Role { get; set; }
         public string Username { get; set; } = null!;
         public string Email { get; set; } = null!;
+        public string? DisplayName { get; set; }
         public string PasswordHash { get; set; } = null!;
         public long? AvatarFileId { get; set; }
         public FileResource? AvatarFile { get; set; }
