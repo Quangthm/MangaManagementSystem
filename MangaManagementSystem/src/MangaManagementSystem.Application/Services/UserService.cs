@@ -113,7 +113,35 @@ namespace MangaManagementSystem.Application.Services
                 throw new InvalidOperationException($"Role id {roleId} does not exist.");
             }
         }
+        public async Task<UserDto> ActivateUserAsync(int userId)
+       {
+               var user = await _unitOfWork.Users.GetByIdAsync(userId);
 
+               if (user == null)
+               throw new InvalidOperationException($"User {userId} was not found.");
+
+               user.StatusCode = StatusActive;
+
+               _unitOfWork.Users.Update(user);
+               await _unitOfWork.SaveChangesAsync();
+
+           return MapToDto(user);
+      }
+
+        public async Task<UserDto> DisableUserAsync(int userId)
+     {
+    var user = await _unitOfWork.Users.GetByIdAsync(userId);
+
+    if (user == null)
+        throw new InvalidOperationException($"User {userId} was not found.");
+
+    user.StatusCode = StatusDisabled;
+
+    _unitOfWork.Users.Update(user);
+    await _unitOfWork.SaveChangesAsync();
+
+    return MapToDto(user);
+}
         private static UserDto MapToDto(User u) => new(
             u.UserId,
             u.RoleId,
