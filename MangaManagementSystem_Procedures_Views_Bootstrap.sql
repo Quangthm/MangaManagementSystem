@@ -421,5 +421,233 @@ BEGIN
     END CATCH
 END;
 GO
+CREATE OR ALTER PROCEDURE manga.usp_FileResource_Create
+    @file_purpose_code        NVARCHAR(50),
+    @original_file_name       NVARCHAR(260),
+    @cloudinary_public_id     NVARCHAR(255),
+    @cloudinary_secure_url    NVARCHAR(1000),
+    @content_type             NVARCHAR(100),
+    @file_size_bytes          BIGINT,
+    @sha256_hash              CHAR(64) = NULL,
+    @uploaded_by_user_id      INT = NULL,
+    @file_resource_id         BIGINT OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
 
+    INSERT INTO manga.FileResource
+    (
+        file_purpose_code,
+        original_file_name,
+        cloudinary_public_id,
+        cloudinary_secure_url,
+        content_type,
+        file_size_bytes,
+        sha256_hash,
+        uploaded_by_user_id
+    )
+    VALUES
+    (
+        @file_purpose_code,
+        @original_file_name,
+        @cloudinary_public_id,
+        @cloudinary_secure_url,
+        @content_type,
+        @file_size_bytes,
+        @sha256_hash,
+        @uploaded_by_user_id
+    );
 
+    SET @file_resource_id = CONVERT(BIGINT, SCOPE_IDENTITY());
+END;
+GO
+CREATE OR ALTER PROCEDURE manga.usp_FileResource_SoftDelete
+    @file_resource_id BIGINT,
+    @deleted_by_user_id INT,
+    @deleted_by_role_name NVARCHAR(128),
+    @delete_reason NVARCHAR(500) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+
+    DECLARE @old_file_purpose_code NVARCHAR(50);
+    DECLARE @old_original_file_name NVARCHAR(260);
+    DECLARE @old_cloudinary_public_id NVARCHAR(255);
+    DECLARE @old_content_type NVARCHAR(100);
+    DECLARE @old_deleted_at_utc DATETIME2(0);
+
+    DECLARE @detail_json NVARCHAR(MAX);
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        SELECT
+            @old_file_purpose_code = file_purpose_code,
+            @old_original_file_name = original_file_name,
+            @old_cloudinary_public_id = cloudinary_public_id,
+            @old_content_type = content_type,
+            @old_deleted_at_utc = deleted_at_utc
+        FROM manga.FileResource WITH (UPDLOCK, HOLDLOCK)
+        WHERE file_resource_id = @file_resource_id;
+
+        IF @old_file_purpose_code IS NULL
+        BEGIN
+            THROW 54001, 'File resource does not exist.', 1;
+        END;
+
+        IF @old_deleted_at_utc IS NOT NULL
+        BEGIN
+            THROW 54002, 'File resource is already deleted.', 1;
+        END;
+
+        UPDATE manga.FileResource
+        SET
+            deleted_at_utc = SYSUTCDATETIME(),
+            deleted_by_user_id = @deleted_by_user_id
+        WHERE file_resource_id = @file_resource_id;
+
+        SELECT @detail_json =
+        (
+            SELECT
+                @file_resource_id AS file_resource_id,
+                @old_file_purpose_code AS file_purpose_code,
+                @old_original_file_name AS original_file_name,
+                @old_cloudinary_public_id AS cloudinary_public_id,
+                @old_content_type AS content_type,
+                @delete_reason AS delete_reason
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @deleted_by_user_id,
+            @actor_role_name = @deleted_by_role_name,
+            @action_code = N'FILE_RESOURCE_SOFT_DELETED',
+            @entity_type = N'FileResource',
+            @entity_id = @file_resource_id,
+            @detail_json = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        THROW;
+    END CATCH
+END;
+GO
+CREATE OR ALTER PROCEDURE manga.usp_SeriesProposal_Submit
+    @series_id                    BIGINT,
+    @submitted_by_user_id          INT,
+    @submitted_by_role_name        NVARCHAR(128),
+
+    @proposal_title                NVARCHAR(200),
+    @synopsis_snapshot             NVARCHAR(MAX),
+    @genre_snapshot                NVARCHAR(100),
+
+    @original_file_name            NVARCHAR(260),
+    @cloudinary_public_id          NVARCHAR(255),
+    @cloudinary_secure_url         NVARCHAR(1000),
+    @content_type                  NVARCHAR(100),
+    @file_size_bytes               BIGINT,
+    @sha256_hash                   CHAR(64) = NULL,
+
+    @series_proposal_id            BIGINT OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+    DECLARE @proposal_file_resource_id BIGINT;
+    DECLARE @detail_json NVARCHAR(MAX);
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        EXEC manga.usp_FileResource_Create
+            @file_purpose_code = N'SERIES_PROPOSAL',
+            @original_file_name = @original_file_name,
+            @cloudinary_public_id = @cloudinary_public_id,
+            @cloudinary_secure_url = @cloudinary_secure_url,
+            @content_type = @content_type,
+            @file_size_bytes = @file_size_bytes,
+            @sha256_hash = @sha256_hash,
+            @uploaded_by_user_id = @submitted_by_user_id,
+            @file_resource_id = @proposal_file_resource_id OUTPUT;
+
+        INSERT INTO manga.SeriesProposal
+        (
+            series_id,
+            proposal_title,
+            synopsis_snapshot,
+            genre_snapshot,
+            proposal_file_id,
+            status_code,
+            submitted_by_user_id,
+            submitted_at_utc
+        )
+        VALUES
+        (
+            @series_id,
+            @proposal_title,
+            @synopsis_snapshot,
+            @genre_snapshot,
+            @proposal_file_resource_id,
+            N'UNDER_EDITORIAL_REVIEW',
+            @submitted_by_user_id,
+            SYSUTCDATETIME()
+        );
+
+        SET @series_proposal_id = CONVERT(BIGINT, SCOPE_IDENTITY());
+
+        SELECT @detail_json =
+        (
+            SELECT
+                @series_id AS series_id,
+                @series_proposal_id AS series_proposal_id,
+                @proposal_file_resource_id AS proposal_file_resource_id,
+                N'UNDER_EDITORIAL_REVIEW' AS status_code
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @submitted_by_user_id,
+            @actor_role_name = @submitted_by_role_name,
+            @action_code = N'SERIES_PROPOSAL_SUBMITTED',
+            @entity_type = N'SeriesProposal',
+            @entity_id = @series_proposal_id,
+            @detail_json = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        THROW;
+    END CATCH
+END;
+GO

@@ -103,6 +103,7 @@ CREATE TABLE manga.FileResource (
 			N'USER_AVATAR'
 			)
 		),
+	CONSTRAINT ck_file_resource_file_size_positive CHECK (file_size_bytes > 0),
 	CONSTRAINT ck_file_resource_deleted_pair CHECK (
 		(
 			deleted_at_utc IS NULL
