@@ -27,7 +27,7 @@ VALUES
     'TestAdmin',
     'admin@test.com',
     '$2a$12$eBGlrcdEPsP8c6yDmKhnv.OojpFaPqmJ.DcYRswLWEFZAYTwGNDtq',
-    5,
+    6,
     'ACTIVE',
     SYSUTCDATETIME()
 );
