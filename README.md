@@ -43,8 +43,8 @@ Do **not** treat this repository as production-ready.
 
 | Area | MVP Direction |
 |---|---|
-| Users and accounts | One MVP role per account. New users start as `PENDING_APPROVAL`. Admin can activate, reject, or disable accounts. Rejected accounts cannot log in and keep their email/username reserved in MVP. |
-| File management | Store actual media in Cloudinary; store file metadata and references in `manga.FileResource`. |
+| Users and accounts | One MVP role per account. New users start as `PENDING_APPROVAL`. Admin can activate, reject, or disable accounts. Rejected accounts cannot log in and keep their email/username reserved in MVP. Users have a display name for readable UI identity. |
+| File management | Store actual media in Cloudinary and store file references/metadata in the system. Uploaded files keep a content fingerprint to support traceability, integrity checks, and optional duplicate-file warnings. |
 | Series management | Manage series profile, unique code, unique slug, lifecycle status, primary language, genre text, cover image, and optional source series reference. |
 | Series contributors | Manage team membership through `SeriesContributor`, not a direct lead Mangaka field on `Series`. |
 | Series proposals | Store formal submitted proposal versions in `SeriesProposal`. Revisions create new proposal rows. |
@@ -55,7 +55,7 @@ Do **not** treat this repository as production-ready.
 | Annotations | Store annotations through linked `PageRegion` records, not direct annotation coordinates. |
 | Page tasks | Use page-based `ChapterPageTask` and optional `ChapterPageTaskRegion` links. |
 | Editorial review | Store final chapter-level review decisions in `ChapterEditorialReview`. |
-| Publication planning | Use chapter-level planned release dates and release timestamps. Mangaka may provide/update preferred publication frequency only while the series is in `PROPOSAL_DRAFT`; Editorial Board Chief specifies official frequency in a `START_SERIALIZATION` poll, and an approved poll applies that frequency to `Series.publication_frequency_code`. After board decision, Mangaka may request a change through in-app notification, but only Editorial Board Chief may directly change the official frequency with a required audit reason. |
+| Publication planning | Use chapter-level planned release dates and release timestamps. Mangaka may provide/update preferred publication frequency only while the series is in `PROPOSAL_DRAFT`; Editorial Board Chief specifies official frequency in a `START_SERIALIZATION` poll, and an approved poll applies that frequency. After board decision, Mangaka may request a change through in-app notification, but only Editorial Board Chief may directly change the official frequency with a required audit reason. |
 | Ranking | Use simulated/manual reader vote input entered by Editorial Board Members and time-based `SeriesRankingSnapshot`. |
 | Notifications | Use in-app notifications only. Notifications are not the audit trail. |
 | Auditability | Use current status on main records plus domain records and audit logs. Avoid generic status-history tables. |
@@ -87,15 +87,15 @@ The project uses both role-based actors and shared permission-based actor groups
 | Actor / Group | Responsibility |
 |---|---|
 | New User | Registers an account and waits for approval or rejection before accessing protected workspace functions. Rejected users cannot log in or reuse the same reserved email/username in MVP. |
-| General System User | Uses shared authenticated features such as file display, status visibility, timestamps, and notifications. |
+| General System User | Uses shared authenticated features such as file display, display-name profile updates, status visibility, timestamps, and notifications. |
 | Authorized Workflow Participant | Views workflow lists, queues, dashboards, or records allowed for their role. |
-| Authorized Page Workspace User | Accesses page-level editing, annotation, segmentation, translation-support, or page-version feedback tools when permitted. |
+| Authorized Page Workspace User | Accesses page-level editing, annotation, segmentation, translation-support, or page-version feedback tools when permitted. Editorial Board Members are excluded unless explicitly granted page workspace permissions. |
 | Mangaka | Creates and manages series, proposals, chapters, pages, page versions, production regions, assistant tasks, task review, chapter submission, ranking monitoring, and responses to editorial feedback. |
 | Assistant | Views assigned page tasks, sees linked regions, uploads completed output as a new page version, and tracks assigned task history. |
 | Tantou Editor | Reviews proposals and chapters, creates page-region annotations, records chapter-level editorial decisions, reviews translation-related issues, and monitors publication/ranking context. |
 | Editorial Board Member | Views board polls, votes `APPROVE`, `REJECT`, or `ABSTAIN`, provides rejection reasons, enters simulated/aggregated reader vote input, and reviews ranking/cancellation-risk evidence. |
 | Editorial Board Chief | Opens, closes, and cancels board polls; specifies publication frequency when opening `START_SERIALIZATION` polls; may directly change official series publication frequency with a required audit reason; may also vote `APPROVE`, `REJECT`, or `ABSTAIN`; provides rejection reasons when voting `REJECT`; and reviews ranking/cancellation-risk evidence. |
-| Admin | Manages accounts, including activation, rejection, and disabling; also manages file deletion workflow, audit visibility, traceability, and system-level management. Admin does not own chapter cancellation overrides, publication scheduling, or simulated reader vote input in MVP. |
+| Admin | Manages accounts, including activation, rejection, and disabling; also manages file deletion workflow, audit visibility, traceability, and system-level management. Admin does not own chapter cancellation overrides, publication scheduling, board poll control, official publication-frequency changes, or simulated reader vote input in MVP. |
 
 ### Actor consolidation decisions
 
@@ -110,7 +110,15 @@ The project uses both role-based actors and shared permission-based actor groups
 
 ## 5. Core Workflow Summary
 
-### 5.1 Series and Proposal Workflow
+### 5.1 Account and File Setup
+
+1. New users register and wait for Admin approval.
+2. Users may provide a display name; if not provided, the system can use the username as the display name.
+3. Users may optionally attach profile files such as avatars or registration portfolios.
+4. Uploaded files are stored through the system file workflow, with Cloudinary holding the actual file and the system keeping file metadata.
+5. File fingerprints help support integrity checks, traceability, and optional duplicate-file warnings when the MVP UI supports them.
+
+### 5.2 Series and Proposal Workflow
 
 1. Mangaka creates or maintains a series profile.
 2. The series team is managed through `SeriesContributor`.
@@ -120,9 +128,9 @@ The project uses both role-based actors and shared permission-based actor groups
 6. Editorial Board Chief opens a valid `START_SERIALIZATION` board poll and specifies the publication frequency to apply if the poll is approved.
 7. Editorial Board Chief and Editorial Board Members vote through `SeriesBoardVote`.
 8. When the poll closes, the system computes the result from vote counts.
-9. If approved, the computed result updates the series/proposal status and applies the board-specified publication frequency as the official `Series.publication_frequency_code`.
+9. If approved, the computed result updates the series/proposal status and applies the board-specified publication frequency as the official frequency.
 
-### 5.2 Chapter and Page Workflow
+### 5.3 Chapter and Page Workflow
 
 1. Mangaka creates chapters under a series.
 2. Mangaka creates logical pages under chapters.
@@ -133,7 +141,7 @@ The project uses both role-based actors and shared permission-based actor groups
 7. Page creation, page deletion, and page-version upload are locked while the chapter is under review, approved, scheduled, or released.
 8. If revision is requested, the chapter becomes editable again.
 
-### 5.3 Page Region, Annotation, and Task Workflow
+### 5.4 Page Region, Annotation, and Task Workflow
 
 1. Authorized page workspace users can create page regions manually or use AI-assisted segmentation suggestions.
 2. Saved regions are stored as `PageRegion` records linked to a specific `ChapterPageVersion`.
@@ -145,7 +153,7 @@ The project uses both role-based actors and shared permission-based actor groups
 8. Assistants submit task output as a new page version.
 9. Mangaka or a Tantou Editor, when permitted by workflow rules, reviews the submitted page version before the task is completed.
 
-### 5.4 Editorial Review Workflow
+### 5.5 Editorial Review Workflow
 
 1. Tantou Editor reviews submitted chapters page by page.
 2. Page-level annotations support review but do not replace the final chapter-level decision.
@@ -154,7 +162,7 @@ The project uses both role-based actors and shared permission-based actor groups
 5. Revision and cancellation decisions require meaningful comments or a markup file.
 6. Creating a chapter editorial review updates `Chapter.status_code` according to the decision.
 
-### 5.5 Board Poll, Publication Frequency, and Ranking Workflow
+### 5.6 Board Poll, Publication Frequency, and Ranking Workflow
 
 1. Editorial Board Chief may open board polls for `START_SERIALIZATION` or `CANCEL_SERIALIZATION`.
 2. `START_SERIALIZATION` polls require the Editorial Board Chief to specify the publication frequency to apply if approved.
@@ -163,7 +171,7 @@ The project uses both role-based actors and shared permission-based actor groups
 5. Votes are preserved after the poll closes or is cancelled.
 6. Board results are computed from approve/reject vote counts.
 7. Abstain votes are counted separately but do not directly determine approval or rejection in MVP.
-8. Approved `START_SERIALIZATION` poll results apply the board-specified publication frequency to `Series.publication_frequency_code`.
+8. Approved `START_SERIALIZATION` poll results apply the board-specified publication frequency as the official series frequency.
 9. After board decision, Mangaka may request a publication frequency change through in-app notification to the Editorial Board Chief.
 10. Editorial Board Chief may directly change official publication frequency only with a required audit reason.
 11. Editorial Board Members enter simulated reader vote input to support ranking demonstration without a public reader module.
@@ -194,7 +202,7 @@ The intended architecture is a **Distributed Monolith with an optional local AI 
 | Database | SQL Server |
 | ORM | Entity Framework Core |
 | Schemas | `auth`, `manga`, `audit` |
-| File storage | Cloudinary + `manga.FileResource` metadata |
+| File storage | Cloudinary + system file metadata |
 | AI service | Optional Python FastAPI local/internal service |
 | AI communication | JSON API bridge |
 | Real-time updates | Optional SignalR for notifications/status updates |
@@ -216,8 +224,9 @@ Key rules:
 - Admin can activate, reject, or disable accounts.
 - Rejected and disabled accounts cannot log in.
 - Rejected accounts keep their email and username reserved in MVP.
+- Users have display names for readable UI identity.
 - Registration approval/rejection history is represented through current user status and audit logs, not a separate registration request table.
-- Avatar and portfolio files are stored through `FileResource`.
+- Avatar and portfolio files are stored through the file workflow.
 
 ### 7.2 File Resource and Cloudinary
 
@@ -226,8 +235,10 @@ Handles file metadata and media storage references.
 Key rules:
 
 - Actual media files are stored in Cloudinary.
-- SQL Server stores file metadata and references in `manga.FileResource`.
-- Business tables should reference `file_resource_id`, not raw Cloudinary URLs.
+- The system stores file metadata and references for business records.
+- Business tables should reference system file records, not raw Cloudinary URLs.
+- File fingerprints support traceability, integrity checks, and optional duplicate-file warnings.
+- Duplicate-file warnings are advisory and may be omitted from some MVP screens if implementation time is limited.
 - Deleted file resources are excluded from normal UI queries unless viewing historical/audit data.
 - Normal UI should show a safe placeholder when a referenced file is unavailable or deleted.
 
@@ -290,7 +301,7 @@ Key rules:
 - Each voting board participant can vote once per poll.
 - Rejection votes require a reason.
 - Results are computed from votes.
-- Approved `START_SERIALIZATION` results apply the board-specified frequency as the official `Series.publication_frequency_code`.
+- Approved `START_SERIALIZATION` results apply the board-specified frequency as the official series frequency.
 - Editorial Board Chief may directly change official publication frequency only with a required audit reason.
 - No separate `SeriesBoardDecision` table is required for MVP.
 
@@ -341,27 +352,31 @@ AI must **not**:
 |---|---|
 | Status history | Store current status on main records and use audit/domain records for important events. Do not create generic status-history tables for every entity. |
 | User account decision | New accounts start as `PENDING_APPROVAL`; Admin may change them to `ACTIVE`, `REJECTED`, or `DISABLED`. `REJECTED` and `DISABLED` accounts cannot log in; rejected accounts keep email/username reserved in MVP. |
+| Display identity | Use `display_name` for readable UI display while keeping `username` as the login/system identifier. |
+| File references | Business tables reference system file records; Cloudinary details stay inside file metadata. |
+| File fingerprints | Store a file fingerprint for uploaded business files to support traceability, integrity checks, and optional duplicate warnings without globally blocking file reuse. |
 | Chapter submission | Use `Chapter.status_code = UNDER_REVIEW`; do not create `ChapterSubmission`. |
-| Board decision and publication frequency | Editorial Board Chief owns normal board poll opening, closing, and cancellation; must specify publication frequency for `START_SERIALIZATION`; approved `START_SERIALIZATION` results apply that frequency to `Series.publication_frequency_code`; compute result from `SeriesBoardPoll` and `SeriesBoardVote`; do not create `SeriesBoardDecision`. |
+| Board decision and publication frequency | Editorial Board Chief owns normal board poll opening, closing, and cancellation; must specify publication frequency for `START_SERIALIZATION`; approved `START_SERIALIZATION` results apply that frequency; compute result from `SeriesBoardPoll` and `SeriesBoardVote`; do not create `SeriesBoardDecision`. |
 | Translation | Do not create structured translation tables for MVP; save final edited/translated page as `ChapterPageVersion`. |
 | AI history | Do not store persistent AI job history if accepted AI output as `PageRegion` is enough. |
 | Annotation coordinates | Do not store direct annotation coordinates; derive location from linked `PageRegion`. |
-| File references | Business tables reference `FileResource`; Cloudinary details stay inside file metadata. |
 | Contributor ownership | Use `SeriesContributor`; do not store direct lead Mangaka ownership on `Series`. |
 | Reader module | No public reader module in MVP; ranking uses simulated/manual aggregated input. |
-| Admin scope | Admin includes account, audit, traceability, and system-level management responsibilities for MVP, but not chapter cancellation overrides, board poll control, official publication frequency changes, publication scheduling, or simulated reader vote input. |
+| Admin scope | Admin includes account, audit, traceability, file deletion, and system-level management responsibilities for MVP, but not chapter cancellation overrides, board poll control, official publication-frequency changes, publication scheduling, or simulated reader vote input. |
 
 ---
 
 ## 10. Documentation References
 
 For detailed traceability, `business-rules.md`, `functional-requirements.md`, and `user-stories.md` are the authoritative planning documents; this README is a high-level project summary.
+
 The repository should keep these planning documents aligned:
 
 - `Context.md` — teammate and AI-assistant handoff context.
 - `business-rules.md` — MVP business rules and constraints.
 - `functional-requirements.md` — technical “The system shall...” requirements.
 - `user-stories.md` — actor-based user stories.
+- `business-flows-use-cases.md` — agreed business-flow/use-case notes.
 
 When one of these files changes, update the others if the change affects scope, actors, requirements, or implementation boundaries.
 
@@ -373,6 +388,7 @@ When one of these files changes, update the others if the change affects scope, 
 - Prefer clear workflow records over unnecessary extra tables.
 - Avoid adding payroll, salary, payment, public reader, or full drawing-editor features.
 - Keep AI optional and advisory.
+- Keep file upload behavior traceable without making duplicate warnings mandatory on every screen.
 - Enforce access control in the backend, not only by hiding frontend buttons.
 - Preserve workflow history through domain records and audit logs.
 - Do not delete important workflow evidence when status changes or revisions occur.

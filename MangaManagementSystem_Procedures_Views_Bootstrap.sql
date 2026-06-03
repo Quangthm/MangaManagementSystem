@@ -18,7 +18,7 @@ BEGIN
     BEGIN TRY
         IF @detail_json IS NOT NULL AND ISJSON(@detail_json) <> 1
         BEGIN
-            THROW 50001, 'detail_json must be valid JSON.', 1;
+            ;THROW 50001, 'detail_json must be valid JSON.', 1;
         END;
 
         IF @@TRANCOUNT = 0
@@ -42,7 +42,7 @@ BEGIN
 
             IF @actor_role_name IS NULL
             BEGIN
-                THROW 50003, 'Actor user role could not be resolved.', 1;
+                ;THROW 50003, 'Actor user role could not be resolved.', 1;
             END;
         END;
 
@@ -54,7 +54,7 @@ BEGIN
 
         IF @lock_result < 0
         BEGIN
-            THROW 50002, 'Could not acquire audit event append lock.', 1;
+            ;THROW 50002, 'Could not acquire audit event append lock.', 1;
         END;
 
         INSERT INTO audit.AuditEvent
@@ -114,6 +114,8 @@ BEGIN
     DECLARE @resolved_role_id SMALLINT;
     DECLARE @resolved_role_name NVARCHAR(30);
 
+    DECLARE @audit_actor_user_id INT;
+
     DECLARE @normalized_role_name NVARCHAR(30) = LTRIM(RTRIM(@role_name));
     DECLARE @normalized_username NVARCHAR(50) = LTRIM(RTRIM(@username));
     DECLARE @normalized_email NVARCHAR(254) = LOWER(LTRIM(RTRIM(@email)));
@@ -126,26 +128,6 @@ BEGIN
     );
 
     BEGIN TRY
-        IF @normalized_role_name IS NULL OR @normalized_role_name = N''
-        BEGIN
-            THROW 50010, 'Role name is required.', 1;
-        END;
-
-        IF @normalized_username IS NULL OR @normalized_username = N''
-        BEGIN
-            THROW 50012, 'Username is required.', 1;
-        END;
-
-        IF @normalized_email IS NULL OR @normalized_email = N''
-        BEGIN
-            THROW 50013, 'Email is required.', 1;
-        END;
-
-        IF @password_hash IS NULL OR LTRIM(RTRIM(@password_hash)) = N''
-        BEGIN
-            THROW 50014, 'Password hash is required.', 1;
-        END;
-
         IF @normalized_display_name IS NULL
         BEGIN
             SET @normalized_display_name = @normalized_username;
@@ -169,7 +151,7 @@ BEGIN
 
         IF @resolved_role_id IS NULL
         BEGIN
-            THROW 50015, 'Invalid role name.', 1;
+            ;THROW 50015, 'Invalid role name.', 1;
         END;
 
         INSERT INTO auth.Users
@@ -207,6 +189,13 @@ BEGIN
             @new_user_id = user_id
         FROM @created_user;
 
+        /*
+            If created by Admin/staff, audit actor is the creator.
+            If self-registration, audit actor is the newly created user.
+            audit.usp_AuditEvent_Append resolves actor_role_name internally.
+        */
+        SET @audit_actor_user_id = COALESCE(@created_by_user_id, @new_user_id);
+
         SELECT @detail_json =
         (
             SELECT
@@ -221,7 +210,7 @@ BEGIN
         );
 
         EXEC audit.usp_AuditEvent_Append
-            @actor_user_id = @created_by_user_id,
+            @actor_user_id = @audit_actor_user_id,
             @action_code = N'USER_REGISTERED',
             @entity_type = N'Users',
             @entity_id = @new_user_id,
@@ -242,7 +231,7 @@ BEGIN
 
         IF @error_number IN (2601, 2627)
         BEGIN
-            THROW 50011, 'Username or email already exists.', 1;
+            ;THROW 50011, 'Username or email already exists.', 1;
         END;
 
         THROW;
@@ -251,8 +240,6 @@ END;
 GO
 CREATE OR ALTER PROCEDURE auth.usp_Admin_ChangeUserStatus
     @admin_user_id              INT,
-    @admin_role_name_snapshot   NVARCHAR(128),
-
     @target_user_id             INT,
     @new_status_code            NVARCHAR(30),
     @reason                     NVARCHAR(500) = NULL
@@ -263,8 +250,12 @@ BEGIN
 
     DECLARE @started_tran BIT = 0;
     DECLARE @lock_result INT;
+    DECLARE @lock_resource NVARCHAR(255);
 
     DECLARE @old_status_code NVARCHAR(30);
+    DECLARE @normalized_new_status_code NVARCHAR(30) = UPPER(LTRIM(RTRIM(@new_status_code)));
+    DECLARE @normalized_reason NVARCHAR(500) = NULLIF(LTRIM(RTRIM(@reason)), N'');
+
     DECLARE @detail_json NVARCHAR(MAX);
 
     BEGIN TRY
@@ -274,26 +265,19 @@ BEGIN
             BEGIN TRAN;
         END;
 
-        /*
-            Serialize status changes for the same target user.
-            This avoids two admin actions changing the same account at the same time.
-        */
+        SET @lock_resource = N'auth_user_status_change_' + CONVERT(NVARCHAR(20), @target_user_id);
+
         EXEC @lock_result = sys.sp_getapplock
-            @Resource = CONCAT(N'auth_user_status_change_', @target_user_id),
+            @Resource = @lock_resource,
             @LockMode = 'Exclusive',
             @LockOwner = 'Transaction',
             @LockTimeout = 10000;
 
         IF @lock_result < 0
         BEGIN
-            THROW 53101, 'Could not acquire user status change lock.', 1;
+            ;THROW 53101, 'Could not acquire user status change lock.', 1;
         END;
 
-        /*
-            Optional DB-side safety check.
-            The UI should already restrict this to Admin users,
-            but this prevents direct procedure misuse.
-        */
         IF NOT EXISTS
         (
             SELECT 1
@@ -305,27 +289,20 @@ BEGIN
               AND r.role_name = N'Admin'
         )
         BEGIN
-            THROW 53102, 'Admin user is not active or does not have permission.', 1;
+            ;THROW 53102, 'Admin user is not active or does not have permission.', 1;
         END;
 
-        /*
-            Read current status with update lock before changing it.
-        */
         SELECT
-            @old_status_code = status_code
-        FROM auth.Users WITH (UPDLOCK, HOLDLOCK)
-        WHERE user_id = @target_user_id;
+            @old_status_code = u.status_code
+        FROM auth.Users u WITH (UPDLOCK, HOLDLOCK)
+        WHERE u.user_id = @target_user_id;
 
         IF @old_status_code IS NULL
         BEGIN
-            THROW 53103, 'Target user does not exist.', 1;
+            ;THROW 53103, 'Target user does not exist.', 1;
         END;
 
-        /*
-            Do nothing if the requested status is already current.
-            This keeps the procedure idempotent for repeated UI clicks.
-        */
-        IF @old_status_code = @new_status_code
+        IF @old_status_code = @normalized_new_status_code
         BEGIN
             IF @started_tran = 1
             BEGIN
@@ -337,8 +314,7 @@ BEGIN
 
         UPDATE auth.Users
         SET
-            status_code = @new_status_code,
-            updated_at_utc = SYSUTCDATETIME()
+            status_code = @normalized_new_status_code
         WHERE user_id = @target_user_id;
 
         SELECT @detail_json =
@@ -346,14 +322,13 @@ BEGIN
             SELECT
                 @target_user_id AS user_id,
                 @old_status_code AS old_status_code,
-                @new_status_code AS new_status_code,
-                @reason AS reason
+                @normalized_new_status_code AS new_status_code,
+                @normalized_reason AS reason
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
         );
 
         EXEC audit.usp_AuditEvent_Append
             @actor_user_id = @admin_user_id,
-            @actor_role_name = @admin_role_name_snapshot,
             @action_code = N'USER_STATUS_CHANGED',
             @entity_type = N'Users',
             @entity_id = @target_user_id,
@@ -374,12 +349,10 @@ BEGIN
     END CATCH
 END;
 GO
-GO
 CREATE OR ALTER PROCEDURE auth.usp_User_ResetPassword
     @target_user_id      INT,
     @new_password_hash   NVARCHAR(255),
     @actor_user_id       INT = NULL,
-    @actor_role_name     NVARCHAR(128) = NULL,
     @reset_mode          NVARCHAR(30),
     @reset_reason        NVARCHAR(500) = NULL
 AS
@@ -388,20 +361,37 @@ BEGIN
     SET XACT_ABORT ON;
 
     DECLARE @started_tran BIT = 0;
-    DECLARE @now DATETIME2(7) = SYSUTCDATETIME();
+    DECLARE @lock_result INT;
+    DECLARE @lock_resource NVARCHAR(255);
 
     DECLARE @old_status_code NVARCHAR(30);
+    DECLARE @normalized_reset_mode NVARCHAR(30) = UPPER(LTRIM(RTRIM(@reset_mode)));
+    DECLARE @normalized_reset_reason NVARCHAR(500) = NULLIF(LTRIM(RTRIM(@reset_reason)), N'');
+
     DECLARE @detail_json NVARCHAR(MAX);
+    DECLARE @action_code NVARCHAR(64);
 
     BEGIN TRY
-        IF @reset_mode NOT IN (N'SELF_CHANGE', N'TOKEN_RESET', N'ADMIN_RESET')
+        IF @normalized_reset_mode NOT IN (N'SELF_CHANGE', N'TOKEN_RESET', N'ADMIN_RESET')
         BEGIN
-            THROW 52001, 'Invalid reset_mode.', 1;
+            ;THROW 52001, 'Invalid reset_mode.', 1;
         END;
 
-        IF @new_password_hash IS NULL OR LEN(@new_password_hash) < 20
+        IF @new_password_hash IS NULL OR LEN(LTRIM(RTRIM(@new_password_hash))) < 20
         BEGIN
-            THROW 52002, 'new_password_hash is invalid.', 1;
+            ;THROW 52002, 'new_password_hash is invalid.', 1;
+        END;
+
+        IF @normalized_reset_mode = N'SELF_CHANGE'
+           AND (@actor_user_id IS NULL OR @actor_user_id <> @target_user_id)
+        BEGIN
+            ;THROW 52004, 'Self password change must be performed by the target user.', 1;
+        END;
+
+        IF @normalized_reset_mode = N'ADMIN_RESET'
+           AND @actor_user_id IS NULL
+        BEGIN
+            ;THROW 52005, 'Admin password reset requires an actor user.', 1;
         END;
 
         IF @@TRANCOUNT = 0
@@ -410,6 +400,46 @@ BEGIN
             BEGIN TRAN;
         END;
 
+        /*
+            Serialize password reset/change for the same target user.
+            Use a variable instead of CONCAT() directly inside sp_getapplock parameters.
+        */
+        SET @lock_resource = N'auth_user_password_reset_' + CONVERT(NVARCHAR(20), @target_user_id);
+
+        EXEC @lock_result = sys.sp_getapplock
+            @Resource = @lock_resource,
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 10000;
+
+        IF @lock_result < 0
+        BEGIN
+            ;THROW 52006, 'Could not acquire password reset lock.', 1;
+        END;
+
+        /*
+            Admin reset must be performed by an ACTIVE Admin.
+        */
+        IF @normalized_reset_mode = N'ADMIN_RESET'
+        BEGIN
+            IF NOT EXISTS
+            (
+                SELECT 1
+                FROM auth.Users u
+                INNER JOIN auth.Roles r
+                    ON r.role_id = u.role_id
+                WHERE u.user_id = @actor_user_id
+                  AND u.status_code = N'ACTIVE'
+                  AND r.role_name = N'Admin'
+            )
+            BEGIN
+                THROW 52007, 'Actor user is not an active Admin.', 1;
+            END;
+        END;
+
+        /*
+            Read target user with update lock.
+        */
         SELECT
             @old_status_code = status_code
         FROM auth.Users WITH (UPDLOCK, HOLDLOCK)
@@ -417,11 +447,11 @@ BEGIN
 
         IF @old_status_code IS NULL
         BEGIN
-            THROW 52003, 'Target user does not exist.', 1;
+            ;THROW 52003, 'Target user does not exist.', 1;
         END;
 
         /*
-            Password reset updates only credential and login-failure state.
+            Password reset updates only password_hash.
 
             It must not approve, reject, disable, or re-enable accounts.
             Therefore:
@@ -429,38 +459,33 @@ BEGIN
             - ACTIVE stays ACTIVE
             - REJECTED stays REJECTED
             - DISABLED stays DISABLED
-
-            Login permission is still decided by status_code elsewhere.
         */
         UPDATE auth.Users
         SET
-            password_hash = @new_password_hash,
-            failed_login_attempts = 0,
-            last_failed_login_at = NULL,
-            locked_until = NULL,
-            updated_at_utc = @now
+            password_hash = @new_password_hash
         WHERE user_id = @target_user_id;
+
+        SET @action_code =
+            CASE
+                WHEN @normalized_reset_mode = N'SELF_CHANGE' THEN N'PASSWORD_CHANGED'
+                WHEN @normalized_reset_mode = N'TOKEN_RESET' THEN N'PASSWORD_RESET_BY_TOKEN'
+                WHEN @normalized_reset_mode = N'ADMIN_RESET' THEN N'PASSWORD_RESET_BY_ADMIN'
+            END;
 
         SELECT @detail_json =
         (
             SELECT
                 @target_user_id AS user_id,
                 @old_status_code AS status_code,
-                @reset_mode AS reset_mode,
-                @reset_reason AS reset_reason,
-                N'Password hash updated and failed login state reset.' AS result
+                @normalized_reset_mode AS reset_mode,
+                @normalized_reset_reason AS reset_reason,
+                N'Password hash updated.' AS result
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
         );
 
         EXEC audit.usp_AuditEvent_Append
             @actor_user_id = @actor_user_id,
-            @actor_role_name = @actor_role_name,
-            @action_code =
-                CASE
-                    WHEN @reset_mode = N'SELF_CHANGE' THEN N'PASSWORD_CHANGED'
-                    WHEN @reset_mode = N'TOKEN_RESET' THEN N'PASSWORD_RESET_BY_TOKEN'
-                    WHEN @reset_mode = N'ADMIN_RESET' THEN N'PASSWORD_RESET_BY_ADMIN'
-                END,
+            @action_code = @action_code,
             @entity_type = N'Users',
             @entity_id = @target_user_id,
             @detail_json = @detail_json;
@@ -487,7 +512,7 @@ CREATE OR ALTER PROCEDURE manga.usp_FileResource_Create
     @cloudinary_secure_url    NVARCHAR(1000),
     @content_type             NVARCHAR(100),
     @file_size_bytes          BIGINT,
-    @sha256_hash              CHAR(64) = NULL,
+    @sha256_hash              CHAR(64),
     @uploaded_by_user_id      INT = NULL,
     @file_resource_id         BIGINT OUTPUT
 AS
@@ -524,7 +549,6 @@ GO
 CREATE OR ALTER PROCEDURE manga.usp_FileResource_SoftDelete
     @file_resource_id BIGINT,
     @deleted_by_user_id INT,
-    @deleted_by_role_name NVARCHAR(128),
     @delete_reason NVARCHAR(500) = NULL
 AS
 BEGIN
@@ -539,6 +563,7 @@ BEGIN
     DECLARE @old_content_type NVARCHAR(100);
     DECLARE @old_deleted_at_utc DATETIME2(0);
 
+    DECLARE @normalized_delete_reason NVARCHAR(500) = NULLIF(LTRIM(RTRIM(@delete_reason)), N'');
     DECLARE @detail_json NVARCHAR(MAX);
 
     BEGIN TRY
@@ -581,13 +606,12 @@ BEGIN
                 @old_original_file_name AS original_file_name,
                 @old_cloudinary_public_id AS cloudinary_public_id,
                 @old_content_type AS content_type,
-                @delete_reason AS delete_reason
+                @normalized_delete_reason AS delete_reason
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
         );
 
         EXEC audit.usp_AuditEvent_Append
             @actor_user_id = @deleted_by_user_id,
-            @actor_role_name = @deleted_by_role_name,
             @action_code = N'FILE_RESOURCE_SOFT_DELETED',
             @entity_type = N'FileResource',
             @entity_id = @file_resource_id,
@@ -608,10 +632,252 @@ BEGIN
     END CATCH
 END;
 GO
+CREATE OR ALTER PROCEDURE manga.usp_FileResource_FindActiveDuplicates
+    @sha256_hash         CHAR(64),
+    @file_size_bytes     BIGINT = NULL,
+    @file_purpose_code   NVARCHAR(50) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT
+        file_resource_id,
+        file_purpose_code,
+        original_file_name,
+        cloudinary_public_id,
+        cloudinary_secure_url,
+        content_type,
+        file_size_bytes,
+        sha256_hash,
+        uploaded_by_user_id,
+        uploaded_at_utc
+    FROM manga.FileResource
+    WHERE sha256_hash = @sha256_hash
+      AND deleted_at_utc IS NULL
+      AND (@file_size_bytes IS NULL OR file_size_bytes = @file_size_bytes)
+      AND (@file_purpose_code IS NULL OR file_purpose_code = @file_purpose_code)
+    ORDER BY uploaded_at_utc DESC;
+END;
+GO
+CREATE OR ALTER PROCEDURE auth.usp_User_UpdatePortfolioFile
+    @target_user_id              INT,
+    @actor_user_id               INT,
+
+    @original_file_name          NVARCHAR(260),
+    @cloudinary_public_id        NVARCHAR(255),
+    @cloudinary_secure_url       NVARCHAR(1000),
+    @content_type                NVARCHAR(100),
+    @file_size_bytes             BIGINT,
+    @sha256_hash                 CHAR(64),
+
+    @new_portfolio_file_id       BIGINT OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+    DECLARE @lock_result INT;
+    DECLARE @lock_resource NVARCHAR(255);
+
+    DECLARE @old_portfolio_file_id BIGINT;
+    DECLARE @detail_json NVARCHAR(MAX);
+    DECLARE @action_code NVARCHAR(64);
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        SET @lock_resource = N'auth_user_portfolio_update_' + CONVERT(NVARCHAR(20), @target_user_id);
+
+        EXEC @lock_result = sys.sp_getapplock
+            @Resource = @lock_resource,
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 10000;
+
+        IF @lock_result < 0
+        BEGIN
+            ;THROW 54101, 'Could not acquire user portfolio update lock.', 1;
+        END;
+
+        /*
+            Permission rule:
+            - A user may update their own portfolio.
+            - An active Admin may update another user's portfolio.
+            This also supports registration-time attachment after the user row is created.
+        */
+        IF @actor_user_id <> @target_user_id
+           AND NOT EXISTS
+           (
+               SELECT 1
+               FROM auth.Users u
+               INNER JOIN auth.Roles r
+                   ON r.role_id = u.role_id
+               WHERE u.user_id = @actor_user_id
+                 AND u.status_code = N'ACTIVE'
+                 AND r.role_name = N'Admin'
+           )
+        BEGIN
+            THROW 54102, 'Actor does not have permission to update this portfolio.', 1;
+        END;
+
+        SELECT
+            @old_portfolio_file_id = portfolio_file_id
+        FROM auth.Users WITH (UPDLOCK, HOLDLOCK)
+        WHERE user_id = @target_user_id;
+
+        IF @@ROWCOUNT = 0
+        BEGIN
+            THROW 54103, 'Target user does not exist.', 1;
+        END;
+
+        EXEC manga.usp_FileResource_Create
+            @file_purpose_code = N'REGISTRATION_PORTFOLIO',
+            @original_file_name = @original_file_name,
+            @cloudinary_public_id = @cloudinary_public_id,
+            @cloudinary_secure_url = @cloudinary_secure_url,
+            @content_type = @content_type,
+            @file_size_bytes = @file_size_bytes,
+            @sha256_hash = @sha256_hash,
+            @uploaded_by_user_id = @target_user_id,
+            @file_resource_id = @new_portfolio_file_id OUTPUT;
+
+        UPDATE auth.Users
+        SET
+            portfolio_file_id = @new_portfolio_file_id
+        WHERE user_id = @target_user_id;
+
+        SET @action_code =
+            CASE
+                WHEN @old_portfolio_file_id IS NULL
+                    THEN N'REGISTRATION_PORTFOLIO_ATTACHED'
+                ELSE N'USER_PORTFOLIO_UPDATED'
+            END;
+
+        SELECT @detail_json =
+        (
+            SELECT
+                @target_user_id AS user_id,
+                @old_portfolio_file_id AS old_portfolio_file_id,
+                @new_portfolio_file_id AS new_portfolio_file_id
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @actor_user_id,
+            @action_code = @action_code,
+            @entity_type = N'Users',
+            @entity_id = @target_user_id,
+            @detail_json = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        THROW;
+    END CATCH
+END;
+GO
+CREATE OR ALTER PROCEDURE auth.usp_User_CreateWithOptionalPortfolio
+    @role_name                       NVARCHAR(30),
+    @username                        NVARCHAR(50),
+    @email                           NVARCHAR(254),
+    @password_hash                   NVARCHAR(255),
+    @display_name                    NVARCHAR(100) = NULL,
+    @avatar_file_id                  BIGINT = NULL,
+
+    @portfolio_original_file_name    NVARCHAR(260) = NULL,
+    @portfolio_cloudinary_public_id  NVARCHAR(255) = NULL,
+    @portfolio_cloudinary_secure_url NVARCHAR(1000) = NULL,
+    @portfolio_content_type          NVARCHAR(100) = NULL,
+    @portfolio_file_size_bytes       BIGINT = NULL,
+    @portfolio_sha256_hash           CHAR(64) = NULL,
+
+    @created_by_user_id              INT = NULL,
+
+    @new_user_id                     INT OUTPUT,
+    @portfolio_file_resource_id      BIGINT OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+    DECLARE @has_portfolio BIT = 0;
+
+    BEGIN TRY
+        SET @portfolio_file_resource_id = NULL;
+
+        IF @portfolio_cloudinary_public_id IS NOT NULL
+        BEGIN
+            SET @has_portfolio = 1;
+        END;
+
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        /*
+            Create the user first.
+            Portfolio is attached after the user exists, so FileResource.uploaded_by_user_id
+            can point to the new user.
+        */
+        EXEC auth.usp_User_Create
+            @role_name = @role_name,
+            @username = @username,
+            @email = @email,
+            @password_hash = @password_hash,
+            @display_name = @display_name,
+            @avatar_file_id = @avatar_file_id,
+            @portfolio_file_id = NULL,
+            @created_by_user_id = @created_by_user_id,
+            @new_user_id = @new_user_id OUTPUT;
+
+        IF @has_portfolio = 1
+        BEGIN
+            EXEC auth.usp_User_UpdatePortfolioFile
+                @target_user_id = @new_user_id,
+                @actor_user_id = @new_user_id,
+                @original_file_name = @portfolio_original_file_name,
+                @cloudinary_public_id = @portfolio_cloudinary_public_id,
+                @cloudinary_secure_url = @portfolio_cloudinary_secure_url,
+                @content_type = @portfolio_content_type,
+                @file_size_bytes = @portfolio_file_size_bytes,
+                @sha256_hash = @portfolio_sha256_hash,
+                @new_portfolio_file_id = @portfolio_file_resource_id OUTPUT;
+        END;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        THROW;
+    END CATCH
+END;
+GO
 CREATE OR ALTER PROCEDURE manga.usp_SeriesProposal_Submit
     @series_id                    BIGINT,
     @submitted_by_user_id          INT,
-    @submitted_by_role_name        NVARCHAR(128),
 
     @proposal_title                NVARCHAR(200),
     @synopsis_snapshot             NVARCHAR(MAX),
@@ -689,7 +955,6 @@ BEGIN
 
         EXEC audit.usp_AuditEvent_Append
             @actor_user_id = @submitted_by_user_id,
-            @actor_role_name = @submitted_by_role_name,
             @action_code = N'SERIES_PROPOSAL_SUBMITTED',
             @entity_type = N'SeriesProposal',
             @entity_id = @series_proposal_id,
