@@ -39,7 +39,7 @@ Basis: Verified MVP business rules, updated PageRegion segmentation rules, and p
 
 | Story ID | Source Rule(s) | User Story |
 |---|---|---|
-| US-USER-001 | BR-FILE-001, BR-FILE-002, BR-FILE-007 | As a General System User, I want uploaded and generated files to be managed through the system file workflow, so that proposals, covers, avatars, portfolios, page images, markup files, and task outputs are handled consistently. |
+| US-USER-001 | BR-FILE-001, BR-FILE-002, BR-FILE-007, BR-FILE-009, BR-FILE-010 | As a General System User, I want uploaded and generated files to be managed through the system file workflow, so that proposals, covers, avatars, portfolios, page-version files, editorial attachments, and task reference files are handled consistently. |
 | US-USER-002 | BR-FILE-008 | As a General System User, I want deleted or unavailable files to show a safe placeholder, so that the page remains usable without exposing broken file references. |
 | US-USER-003 | BR-HIST-002, BR-HIST-006 | As a General System User, I want current workflow status to be visible on the main record, so that I can quickly understand the latest state without needing a separate status-history page. |
 | US-USER-004 | BR-HIST-007 | As a General System User, I want meaningful event timestamps to be visible where relevant, so that submitted, reviewed, voted, created, and released actions are understandable. |
@@ -47,6 +47,7 @@ Basis: Verified MVP business rules, updated PageRegion segmentation rules, and p
 | US-USER-006 | BR-NOTIF-003, BR-NOTIF-004 | As a General System User, I want notifications to link to their related business record when available, so that I can navigate directly to the relevant series, chapter, task, proposal, poll, or ranking snapshot. |
 | US-USER-007 | BR-USER-014, BR-USER-015, BR-USER-016 | As a General System User, I want other users to be shown by display name instead of only username, so that task assignments, annotations, notifications, board votes, and contributor lists are easier to understand. |
 | US-USER-008 | BR-USER-018, BR-USER-019, BR-USER-021 | As a General System User, I want to update my display name without entering my password, so that I can adjust my visible profile name without changing my login identity or account security settings. |
+| US-USER-009 | BR-FILE-011, BR-FILE-012, BR-FILE-013, BR-FILE-014, BR-FILE-015, BR-FILE-016 | As a General System User, I may receive an optional warning when I upload a file that appears identical to an existing active file, so that I can avoid accidental duplicate uploads when the MVP UI supports this warning. |
 
 ---
 
@@ -129,7 +130,7 @@ Basis: Verified MVP business rules, updated PageRegion segmentation rules, and p
 | US-EDITOR-010 | BR-CH-REV-006, BR-CH-REV-007, BR-CH-REV-008, BR-CH-REV-010, BR-CH-REV-011, BR-CH-REV-012, BR-CH-REV-013 | As a Tantou Editor, I want to record APPROVED, REVISION_REQUESTED, or CANCELLED decisions with required comments or markup when needed, so that chapter outcomes are clear and enforceable. |
 | US-EDITOR-011 | BR-CH-CANCEL-001, BR-CH-CANCEL-002, BR-CH-CANCEL-003, BR-CH-CANCEL-004, BR-CH-REV-006, BR-CH-REV-007, BR-CH-REV-013 | As a Tantou Editor, I want to cancel a chapter through an editorial review decision only when it should not proceed, so that serious rejection decisions are formally recorded and preserved without deleting chapter materials. |
 | US-EDITOR-012 | BR-CH-010 | As a Tantou Editor, I want to place a chapter ON_HOLD when there is a valid editorial or operational reason, so that work can pause without being cancelled. |
-| US-EDITOR-013 | BR-PGTASK-020, BR-PGTASK-021, BR-PGTASK-022 | As a Tantou Editor, I want to review submitted task page versions when acting as an authorized reviewer, so that task outputs are accepted before completion. |
+| US-EDITOR-013 | BR-PGTASK-020, BR-PGTASK-021, BR-PGTASK-022 | As a Tantou Editor, I want to review submitted task page versions when acting as an authorized reviewer, so that submitted page-version output is accepted before completion. |
 | US-EDITOR-016 | BR-RANK-005, BR-RANK-008, BR-RANK-012 | As a Tantou Editor, I want to view ranking history and cancellation-risk evidence, so that editorial decisions can consider series performance without automatic cancellation. |
 
 ---

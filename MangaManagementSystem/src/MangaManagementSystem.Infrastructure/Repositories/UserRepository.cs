@@ -56,12 +56,19 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             cmd.CommandText = "auth.usp_User_Create";
             cmd.CommandType = System.Data.CommandType.StoredProcedure;
 
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@role_name", roleName));
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@username", username));
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@email", email));
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@password_hash", passwordHash));
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@display_name", (object?)displayName ?? System.DBNull.Value));
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@avatar_file_id", (object?)avatarFileId ?? System.DBNull.Value));
+            var pRole = new Microsoft.Data.SqlClient.SqlParameter("@role_name", System.Data.SqlDbType.NVarChar, 30) { Value = (object)roleName };
+            var pUsername = new Microsoft.Data.SqlClient.SqlParameter("@username", System.Data.SqlDbType.NVarChar, 50) { Value = (object)username };
+            var pEmail = new Microsoft.Data.SqlClient.SqlParameter("@email", System.Data.SqlDbType.NVarChar, 254) { Value = (object)email };
+            var pPasswordHash = new Microsoft.Data.SqlClient.SqlParameter("@password_hash", System.Data.SqlDbType.NVarChar, 255) { Value = (object)passwordHash };
+            var pDisplayName = new Microsoft.Data.SqlClient.SqlParameter("@display_name", System.Data.SqlDbType.NVarChar, 100) { Value = (object?)displayName ?? System.DBNull.Value };
+            var pAvatarFileId = new Microsoft.Data.SqlClient.SqlParameter("@avatar_file_id", System.Data.SqlDbType.BigInt) { Value = (object?)avatarFileId ?? System.DBNull.Value };
+
+            cmd.Parameters.Add(pRole);
+            cmd.Parameters.Add(pUsername);
+            cmd.Parameters.Add(pEmail);
+            cmd.Parameters.Add(pPasswordHash);
+            cmd.Parameters.Add(pDisplayName);
+            cmd.Parameters.Add(pAvatarFileId);
             cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@portfolio_file_id", (object?)portfolioFileId ?? System.DBNull.Value));
 
             var outParam = new Microsoft.Data.SqlClient.SqlParameter("@new_user_id", System.Data.SqlDbType.Int) { Direction = System.Data.ParameterDirection.Output };
@@ -74,6 +81,67 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
             var newUserId = outParam.Value == System.DBNull.Value ? 0 : (int)outParam.Value;
             return newUserId;
+        }
+
+        public async Task<(int newUserId, long? portfolioFileResourceId)> CreateUserWithOptionalPortfolioAsync(
+            string roleName,
+            string username,
+            string email,
+            string passwordHash,
+            string? displayName = null,
+            long? avatarFileId = null,
+            string? portfolioOriginalFileName = null,
+            string? portfolioCloudinaryPublicId = null,
+            string? portfolioCloudinarySecureUrl = null,
+            string? portfolioContentType = null,
+            long? portfolioFileSizeBytes = null,
+            string? portfolioSha256Hash = null,
+            int? createdByUserId = null)
+        {
+            var conn = _context.Database.GetDbConnection();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "auth.usp_User_CreateWithOptionalPortfolio";
+            cmd.CommandType = System.Data.CommandType.StoredProcedure;
+
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@role_name", roleName));
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@username", username));
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@email", email));
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@password_hash", passwordHash));
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@display_name", (object?)displayName ?? System.DBNull.Value));
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@avatar_file_id", (object?)avatarFileId ?? System.DBNull.Value));
+
+            // portfolio metadata
+            var pPortfolioOriginalFileName = new Microsoft.Data.SqlClient.SqlParameter("@portfolio_original_file_name", System.Data.SqlDbType.NVarChar, 260) { Value = (object?)portfolioOriginalFileName ?? System.DBNull.Value };
+            var pPortfolioPublicId = new Microsoft.Data.SqlClient.SqlParameter("@portfolio_cloudinary_public_id", System.Data.SqlDbType.NVarChar, 255) { Value = (object?)portfolioCloudinaryPublicId ?? System.DBNull.Value };
+            var pPortfolioSecureUrl = new Microsoft.Data.SqlClient.SqlParameter("@portfolio_cloudinary_secure_url", System.Data.SqlDbType.NVarChar, 1000) { Value = (object?)portfolioCloudinarySecureUrl ?? System.DBNull.Value };
+            var pPortfolioContentType = new Microsoft.Data.SqlClient.SqlParameter("@portfolio_content_type", System.Data.SqlDbType.NVarChar, 100) { Value = (object?)portfolioContentType ?? System.DBNull.Value };
+            var pPortfolioFileSize = new Microsoft.Data.SqlClient.SqlParameter("@portfolio_file_size_bytes", System.Data.SqlDbType.BigInt) { Value = (object?)portfolioFileSizeBytes ?? System.DBNull.Value };
+            var pPortfolioSha256 = new Microsoft.Data.SqlClient.SqlParameter("@portfolio_sha256_hash", System.Data.SqlDbType.Char, 64) { Value = (object?)portfolioSha256Hash ?? System.DBNull.Value };
+
+            cmd.Parameters.Add(pPortfolioOriginalFileName);
+            cmd.Parameters.Add(pPortfolioPublicId);
+            cmd.Parameters.Add(pPortfolioSecureUrl);
+            cmd.Parameters.Add(pPortfolioContentType);
+            cmd.Parameters.Add(pPortfolioFileSize);
+            cmd.Parameters.Add(pPortfolioSha256);
+
+            var pCreatedBy = new Microsoft.Data.SqlClient.SqlParameter("@created_by_user_id", System.Data.SqlDbType.Int) { Value = (object?)createdByUserId ?? System.DBNull.Value };
+            cmd.Parameters.Add(pCreatedBy);
+
+            var outUserId = new Microsoft.Data.SqlClient.SqlParameter("@new_user_id", System.Data.SqlDbType.Int) { Direction = System.Data.ParameterDirection.Output };
+            cmd.Parameters.Add(outUserId);
+
+            var outFileResourceId = new Microsoft.Data.SqlClient.SqlParameter("@portfolio_file_resource_id", System.Data.SqlDbType.BigInt) { Direction = System.Data.ParameterDirection.Output };
+            cmd.Parameters.Add(outFileResourceId);
+
+            if (conn.State != System.Data.ConnectionState.Open)
+                await conn.OpenAsync();
+
+            await cmd.ExecuteNonQueryAsync();
+
+            var newUserId = outUserId.Value == System.DBNull.Value ? 0 : (int)outUserId.Value;
+            var portfolioId = outFileResourceId.Value == System.DBNull.Value ? (long?)null : (long)outFileResourceId.Value;
+            return (newUserId, portfolioId);
         }
     }
 }

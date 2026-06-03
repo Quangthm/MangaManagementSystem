@@ -388,6 +388,28 @@ Example ranges:
 | Board poll/vote/result | 55000–56999 |
 | Series/proposal/chapter/page | 57000–59999 |
 
+
+### `THROW` statement semicolon rule
+
+SQL Server requires the statement before `THROW` to be terminated with a semicolon. To avoid parser or editor issues, especially in SSMS or Visual Studio SQL scripts, use a leading semicolon before `THROW`.
+
+Recommended style:
+
+```sql
+IF @lock_result < 0
+BEGIN
+    ;THROW 54101, 'Could not acquire user portfolio update lock.', 1;
+END;
+```
+
+This leading semicolon safely terminates any previous statement before `THROW`. It is harmless and helps avoid messages such as:
+
+```text
+Incorrect syntax near 'THROW'.
+```
+
+Use this style for all future stored procedures when raising custom errors with `THROW`.
+
 Use clear error messages, but do not over-validate schema constraints.
 
 ---
@@ -406,3 +428,4 @@ Before finalizing a stored procedure, check:
 - Is `detail_json` focused only on relevant change details?
 - Does it avoid updating columns that do not exist?
 - Does it preserve MVP scope and avoid extra tables unless required?
+- If it uses `THROW`, does it use `;THROW` to avoid SQL Server parser issues?

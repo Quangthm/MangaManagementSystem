@@ -19,19 +19,25 @@ namespace MangaManagementSystem.Application.Services
         private readonly IEmailService _emailService;
         private readonly IOtpCacheService _otpCacheService;
         private readonly ILogger<AuthService> _logger;
+        private readonly MangaManagementSystem.Application.Interfaces.IFileStorageService _fileStorageService;
+        private readonly IFileResourceService _fileResourceService;
 
         public AuthService(
             IUnitOfWork unitOfWork,
             IPasswordHasher passwordHasher,
             IEmailService emailService,
             IOtpCacheService otpCacheService,
-            ILogger<AuthService> logger)
+            ILogger<AuthService> logger,
+            MangaManagementSystem.Application.Interfaces.IFileStorageService fileStorageService,
+            IFileResourceService fileResourceService)
         {
             _unitOfWork = unitOfWork;
             _passwordHasher = passwordHasher;
-            _emailService = emailService;
-            _otpCacheService = otpCacheService;
+            _email_service: _emailService = emailService;
+            _otp_cache_service: _otpCacheService = otpCacheService;
             _logger = logger;
+            _fileStorageService = fileStorageService;
+            _fileResourceService = fileResourceService;
         }
 
         public async Task<bool> SendRegistrationOtpAsync(RegisterDto request)
@@ -81,27 +87,88 @@ namespace MangaManagementSystem.Application.Services
                 throw new InvalidOperationException("This username is already taken.");
             }
 
-            // create via stored procedure so DB-side rules and audit are applied
+            // create via wrapper stored procedure that can atomically create the user and optional portfolio
             var role = await _unitOfWork.Roles.GetByIdAsync(pendingRegistration.RoleId);
             var roleName = role?.RoleName ?? string.Empty;
             var passwordHash = _passwordHasher.HashPassword(pendingRegistration.Password);
-            var newUserId = await _unitOfWork.Users.CreateUserViaProcAsync(
-                roleName,
-                pendingRegistration.Username,
-                normalizedEmail,
-                passwordHash,
-                pendingRegistration.DisplayName,
-                null,
-                null,
-                null);
 
-            var created = await _unitOfWork.Users.GetByIdAsync(newUserId);
-            if (created == null)
+            // If a portfolio was provided in the cached registration, upload to Cloudinary first
+            string? portfolioPublicId = null;
+            string? portfolioSecureUrl = null;
+            string? portfolioContentType = null;
+            long? portfolioFileSize = null;
+            string? portfolioOriginalFileName = null;
+            string? portfolioSha256 = null;
+
+            if (pendingRegistration.PortfolioFileBytes != null && pendingRegistration.PortfolioFileBytes.Length > 0)
             {
-                throw new InvalidOperationException("Failed to create user.");
+                var uploadResult = await _fileStorageService.UploadFileAsync(
+                    pendingRegistration.PortfolioFileBytes,
+                    pendingRegistration.PortfolioFileName ?? "portfolio",
+                    pendingRegistration.PortfolioContentType ?? "application/octet-stream",
+                    "REGISTRATION_PORTFOLIO",
+                    null);
+
+                portfolioPublicId = uploadResult.PublicId;
+                portfolioSecureUrl = uploadResult.SecureUrl;
+                portfolioContentType = uploadResult.ContentType;
+                portfolioFileSize = uploadResult.FileSizeBytes;
+                portfolioOriginalFileName = uploadResult.OriginalFileName;
+                portfolioSha256 = uploadResult.Sha256Hash;
             }
 
-            return MapToDto(created);
+            // Call stored-proc wrapper that will create user, optional FileResource, link, and write audit in a single DB transaction.
+            try
+            {
+                var (newUserId, portfolioFileResourceId) = await _unitOfWork.Users.CreateUserWithOptionalPortfolioAsync(
+                    roleName,
+                    pendingRegistration.Username,
+                    normalizedEmail,
+                    passwordHash,
+                    pendingRegistration.DisplayName,
+                    null,
+                    portfolioOriginalFileName,
+                    portfolioPublicId,
+                    portfolioSecureUrl,
+                    portfolioContentType,
+                    portfolioFileSize,
+                    portfolioSha256,
+                    null);
+
+                var created = await _unitOfWork.Users.GetByIdAsync(newUserId);
+                if (created == null)
+                {
+                    throw new InvalidOperationException("Failed to create user.");
+                }
+
+                return MapToDto(created);
+            }
+            catch (Exception ex)
+            {
+                // If database work failed after Cloudinary upload, attempt to clean up Cloudinary asset
+                if (!string.IsNullOrEmpty(portfolioPublicId))
+                {
+                    try
+                    {
+                        var resourceType = !string.IsNullOrEmpty(portfolioContentType) && portfolioContentType.StartsWith("image/", System.StringComparison.OrdinalIgnoreCase)
+                            ? "image"
+                            : "raw";
+
+                        await _fileStorageService.DeleteFileAsync(portfolioPublicId, resourceType);
+                    }
+                    catch (Exception cleanupEx)
+                    {
+                        try
+                        {
+                            _logger.LogError(cleanupEx, "Failed to delete Cloudinary asset {PublicId} after DB failure.", portfolioPublicId);
+                        }
+                        catch { }
+                    }
+                }
+
+                // rethrow original DB exception
+                throw;
+            }
         }
 
         public async Task<AuthResultDto> LoginAsync(LoginDto request)

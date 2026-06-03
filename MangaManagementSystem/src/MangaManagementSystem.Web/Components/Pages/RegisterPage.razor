@@ -55,8 +55,16 @@
                                   Required="true"
                                   Disabled="_isSendingOtp" />
                     <div>
-                        <label class="mf-muted">Portfolio (optional) — upload coming soon</label>
-                        <input type="file" disabled />
+                        <label class="mf-muted">Portfolio (optional)</label>
+                        <InputFile OnChange="HandleFileSelected" />
+                        @if (!string.IsNullOrEmpty(_selectedFileName))
+                        {
+                            <div class="mf-muted mt-1">Selected: @_selectedFileName (@_selectedFileSizeDisplay)</div>
+                        }
+                        @if (!string.IsNullOrEmpty(_fileValidationError))
+                        {
+                            <MudText Color="Color.Error">@_fileValidationError</MudText>
+                        }
                     </div>
                     <MudButton Variant="Variant.Filled"
                                Color="Color.Primary"
@@ -171,6 +179,14 @@
     private bool _isOtpSent;
     private bool _isSendingOtp;
     private bool _isVerifyingOtp;
+    private const long MaxFileSizeBytes = 10 * 1024 * 1024; // 10 MB
+    private readonly string[] AllowedFileTypes = new[] { "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "image/png", "image/jpeg", "image/webp" };
+    private IBrowserFile? _selectedFile;
+    private string _selectedFileName = string.Empty;
+    private string _selectedFileSizeDisplay = string.Empty;
+    private string _selectedFileContentType = string.Empty;
+    private byte[]? _selectedFileBytes;
+    private string _fileValidationError = string.Empty;
 
     protected override void OnInitialized()
     {
@@ -200,7 +216,12 @@
         _isSendingOtp = true;
             try
             {
-                var request = new RegisterDto(_username, _email, _password, _roleId, _displayName);
+                // Build DTO including optional portfolio
+                var request = new RegisterDto(_username, _email, _password, _roleId, _displayName,
+                    PortfolioFileName: _selectedFileName == string.Empty ? null : _selectedFileName,
+                    PortfolioContentType: string.IsNullOrEmpty(_selectedFileContentType) ? null : _selectedFileContentType,
+                    PortfolioFileBytes: _selectedFileBytes);
+
                 await AuthService.SendRegistrationOtpAsync(request);
                 _isOtpSent = true;
                 Snackbar.Add("Verification code sent. Enter the 6-digit OTP to complete registration.", Severity.Success);
@@ -217,6 +238,47 @@
         {
             _isSendingOtp = false;
         }
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        _fileValidationError = string.Empty;
+        _selectedFile = e.File;
+        if (_selectedFile == null)
+        {
+            _selectedFileName = string.Empty;
+            _selectedFileBytes = null;
+            _selectedFileContentType = string.Empty;
+            _selectedFileSizeDisplay = string.Empty;
+            return;
+        }
+
+        if (_selectedFile.Size > MaxFileSizeBytes)
+        {
+            _fileValidationError = $"File is too large. Maximum allowed is {MaxFileSizeBytes / (1024 * 1024)} MB.";
+            _selectedFileName = string.Empty;
+            _selectedFileBytes = null;
+            _selectedFileContentType = string.Empty;
+            _selectedFileSizeDisplay = string.Empty;
+            return;
+        }
+
+        if (!AllowedFileTypes.Contains(_selectedFile.ContentType))
+        {
+            _fileValidationError = "Unsupported file type. Allowed: PDF, DOCX, PNG, JPG/JPEG, WEBP.";
+            _selectedFileName = string.Empty;
+            _selectedFileBytes = null;
+            _selectedFileContentType = string.Empty;
+            _selectedFileSizeDisplay = string.Empty;
+            return;
+        }
+
+        _selectedFileName = _selectedFile.Name;
+        _selectedFileContentType = _selectedFile.ContentType;
+        _selectedFileSizeDisplay = $"{_selectedFile.Size / 1024} KB";
+        using var ms = new MemoryStream();
+        await _selectedFile.OpenReadStream(MaxFileSizeBytes).CopyToAsync(ms);
+        _selectedFileBytes = ms.ToArray();
     }
 
     private async Task HandleVerifyOtp()

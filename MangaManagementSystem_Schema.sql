@@ -86,7 +86,7 @@ CREATE TABLE manga.FileResource (
 	cloudinary_secure_url NVARCHAR(1000) NOT NULL,
 	content_type NVARCHAR(100) NOT NULL,
 	file_size_bytes BIGINT NOT NULL,
-	sha256_hash CHAR(64) NULL,
+	sha256_hash CHAR(64) NOT NULL,
 	uploaded_by_user_id INT NULL,
 	uploaded_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_file_resource_uploaded_at_utc DEFAULT(SYSUTCDATETIME()),
 	deleted_at_utc DATETIME2(0) NULL,
@@ -95,10 +95,8 @@ CREATE TABLE manga.FileResource (
 		file_purpose_code IN (
 			N'SERIES_PROPOSAL',
 			N'SERIES_COVER',
-			N'CHAPTER_DRAFT',
-			N'CHAPTER_ASSET',
+			N'CHAPTER_PAGE_VERSION',
 			N'TASK_REFERENCE',
-			N'TASK_SUBMISSION',
 			N'EDITORIAL_ATTACHMENT',
 			N'REGISTRATION_PORTFOLIO',
 			N'USER_AVATAR'
@@ -124,12 +122,19 @@ CREATE INDEX ix_file_resource_purpose_code ON manga.FileResource (file_purpose_c
 
 CREATE INDEX ix_file_resource_uploaded_by ON manga.FileResource (uploaded_by_user_id);
 
-CREATE INDEX ix_file_resource_active_by_purpose ON manga.FileResource (
-	file_purpose_code,
-	uploaded_at_utc DESC
-	)
+CREATE INDEX ix_file_resource_active_hash
+ON manga.FileResource (sha256_hash, file_size_bytes)
+INCLUDE (
+    file_resource_id,
+    file_purpose_code,
+    original_file_name,
+    cloudinary_public_id,
+    cloudinary_secure_url,
+    uploaded_by_user_id,
+    uploaded_at_utc
+)
 WHERE deleted_at_utc IS NULL;
-
+GO
 ALTER TABLE auth.Users ADD CONSTRAINT fk_users_avatar_file FOREIGN KEY (avatar_file_id) REFERENCES manga.FileResource(file_resource_id);
 
 ALTER TABLE auth.Users ADD CONSTRAINT fk_users_portfolio_file FOREIGN KEY (portfolio_file_id) REFERENCES manga.FileResource(file_resource_id);

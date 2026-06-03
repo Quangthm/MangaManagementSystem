@@ -20,6 +20,15 @@ namespace MangaManagementSystem.Infrastructure
                     .UseSnakeCaseNamingConvention());
 
             services.Configure<SmtpSettings>(configuration.GetSection(SmtpSettings.SectionName));
+            // Cloudinary settings and client
+            services.Configure<Options.CloudinarySettings>(configuration.GetSection(Options.CloudinarySettings.SectionName));
+            var cloudOpts = configuration.GetSection(Options.CloudinarySettings.SectionName).Get<Options.CloudinarySettings>();
+            if (cloudOpts != null)
+            {
+                var account = new CloudinaryDotNet.Account(cloudOpts.CloudName, cloudOpts.ApiKey, cloudOpts.ApiSecret);
+                var cloudinary = new CloudinaryDotNet.Cloudinary(account) { Api = { Secure = true } };
+                services.AddSingleton(cloudinary);
+            }
             services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
             services.AddScoped<IEmailService, EmailService>();
 
@@ -33,6 +42,10 @@ namespace MangaManagementSystem.Infrastructure
 
             // Unit of Work
             services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+            // File storage (application interface implemented in Infrastructure)
+            services.AddScoped<MangaManagementSystem.Application.Interfaces.IFileStorageService, Services.CloudinaryFileStorageService>();
+            services.AddScoped<Services.CloudinaryFileStorageFormAdapter>();
 
             return services;
         }
