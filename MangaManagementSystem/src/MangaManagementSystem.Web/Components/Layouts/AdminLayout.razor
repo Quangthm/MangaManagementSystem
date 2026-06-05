@@ -2,10 +2,10 @@
 @inject NavigationManager Nav
 
 <div class="mf-shell">
-    <aside class="mf-sidebar">
+    <aside class="mf-sidebar mf-admin-sidebar">
         <div class="mf-sidebar-header">
             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                <span class="mf-logo-box">MF</span>
+                <span class="mf-logo-box mf-admin-logo">MF</span>
                 <div>
                     <MudText Typo="Typo.subtitle1" Class="font-weight-bold text-white">MangaFlow</MudText>
                     <MudText Typo="Typo.caption" Style="color:#94a3b8">System Administrator</MudText>
@@ -24,8 +24,8 @@
                     <NavLink href="/admin/user-approval" class="mf-nav-link" Match="NavLinkMatch.Prefix">User Approval</NavLink>
                 </Authorized>
             </AuthorizeView>
-            <!-- Registration Requests merged with User Approval in MVP; link removed to avoid duplication -->
-            <NavLink href="/admin/audit-logs" class="mf-nav-link" Match="NavLinkMatch.Prefix">Audit Logs</NavLink>
+            <!-- Audit Logs UI removed per MVP scope -->
+            <NavLink href="/admin/board-polls" class="mf-nav-link" Match="NavLinkMatch.Prefix">Board Polls</NavLink>
             <div class="mf-nav-link disabled">Role & Permissions (Not available)</div>
             <div class="mf-nav-link disabled">System Settings (Not available)</div>
 

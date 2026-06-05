@@ -1,0 +1,63 @@
+@namespace MangaManagementSystem.Web.Components.Layouts
+@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
+
+<div class="mf-shell">
+    <aside class="mf-sidebar mf-editor-sidebar">
+        <div class="mf-sidebar-header">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <div class="mf-logo-box mf-editor-logo">🎨</div>
+                <div>
+                    <MudText Typo="Typo.subtitle1" Class="font-weight-bold text-white">MangaFlow</MudText>
+                    <MudText Typo="Typo.caption" Style="color:#94a3b8">Editorial Board</MudText>
+                </div>
+            </MudStack>
+        </div>
+        <nav class="mf-nav-section">
+            <div class="mf-nav-title">Editorial Workflow</div>
+            <NavLink href="/editor" class="mf-nav-link" Match="NavLinkMatch.Prefix">
+                <MudIcon Icon="mdi-view-dashboard" Size="Size.Small" Class="mf-nav-icon" />
+                Dashboard
+            </NavLink>
+            <NavLink href="/editor/series" class="mf-nav-link" Match="NavLinkMatch.Prefix">
+                <MudIcon Icon="mdi-book-open-page-variant" Size="Size.Small" Class="mf-nav-icon" />
+                Series Library
+            </NavLink>
+            <NavLink href="/editor/proposals" class="mf-nav-link" Match="NavLinkMatch.Prefix">
+                <MudIcon Icon="mdi-file-document-edit" Size="Size.Small" Class="mf-nav-icon" />
+                Proposals
+            </NavLink>
+            <NavLink href="/editor/chapters" class="mf-nav-link" Match="NavLinkMatch.Prefix">
+                <MudIcon Icon="mdi-bookshelf" Size="Size.Small" Class="mf-nav-icon" />
+                Chapters
+            </NavLink>
+            <NavLink href="/editor/annotations" class="mf-nav-link" Match="NavLinkMatch.Prefix">
+                <MudIcon Icon="mdi-pen" Size="Size.Small" Class="mf-nav-icon" />
+                Annotations
+            </NavLink>
+            
+            <div class="mf-nav-title mt-4">Ranking & Context</div>
+            <NavLink href="/ranking" class="mf-nav-link" Match="NavLinkMatch.Prefix">
+                <MudIcon Icon="mdi-chart-line" Size="Size.Small" Class="mf-nav-icon" />
+                Series Ranking
+            </NavLink>
+        </nav>
+        <MudSpacer />
+        <div class="pa-4">
+            <MudButton FullWidth="true" Variant="Variant.Outlined" Color="Color.Default" OnClick="BackToOverview">
+                Back to Overview
+            </MudButton>
+            <div class="mt-3">
+                <LogoutForm />
+            </div>
+        </div>
+    </aside>
+    <main class="mf-main">
+        @ChildContent
+    </main>
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    private void BackToOverview() => Nav.NavigateTo("/dashboard");
+}

@@ -57,16 +57,7 @@
         </MudGrid>
 
         <MudGrid Class="mb-4">
-            <MudItem xs="12" md="4">
-                @if (_hasAuditRoute)
-                {
-                    <WorkspaceCard Title="View Audit Logs" Description="Review system actions and account changes." Href="/admin/audit-logs" />
-                }
-                else
-                {
-                    <WorkspaceCard Title="View Audit Logs" Description="Not available yet." Disabled="true" />
-                }
-            </MudItem>
+            <!-- Audit Logs UI removed per MVP scope -->
             <MudItem xs="12" md="4">
                 @if (_hasFileManagement)
                 {
@@ -86,7 +77,6 @@
         <MudGrid>
             <MudItem xs="12" md="3"><MudPaper Class="pa-3 mf-card text-center"><MudText Typo="Typo.subtitle2">Accounts</MudText><MudText class="mf-muted">User lifecycle &amp; access</MudText></MudPaper></MudItem>
             <MudItem xs="12" md="3"><MudPaper Class="pa-3 mf-card text-center"><MudText Typo="Typo.subtitle2">Portfolios</MudText><MudText class="mf-muted">Pending portfolio approvals</MudText></MudPaper></MudItem>
-            <MudItem xs="12" md="3"><MudPaper Class="pa-3 mf-card text-center"><MudText Typo="Typo.subtitle2">Audit</MudText><MudText class="mf-muted">Traceability &amp; logs</MudText></MudPaper></MudItem>
             <MudItem xs="12" md="3"><MudPaper Class="pa-3 mf-card text-center"><MudText Typo="Typo.subtitle2">Files</MudText><MudText class="mf-muted">Storage &amp; CDN</MudText></MudPaper></MudItem>
         </MudGrid>
 
@@ -100,14 +90,11 @@
     private int _rejectedCount;
     private bool _isLoading;
     private string? _loadError;
-    private bool _hasAuditRoute = false;
     private bool _hasFileManagement = false;
 
     protected override async Task OnInitializedAsync()
     {
-        // detect presence of certain admin routes based on known pages in the project
-        // Audit logs page exists in the project -> enable audit shortcut
-        _hasAuditRoute = true; // AuditLogs.razor is present in the project
+        // Audit Logs UI removed per MVP scope
         // File management page is not implemented in this build
         _hasFileManagement = false;
 

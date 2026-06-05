@@ -3,6 +3,7 @@
 @inject IUserService UserService
 @inject IFileResourceService _fileResourceService
 @inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>User Approval - MangaFlow</PageTitle>
 
@@ -12,6 +13,10 @@
             <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">User Approval</MudText>
             <MudText Typo="Typo.body1" Class="mf-muted">Review and approve accounts pending admin activation</MudText>
         </div>
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4">
+            <MudText Typo="Typo.caption" Class="font-weight-bold">Help</MudText>
+            <MudText UseWrapAttr="true" Class="mt-1">Use this page to approve or reject newly registered accounts before they can log in.</MudText>
+        </MudAlert>
 
         <MudPaper Class="pa-5 mf-card" Elevation="0">
             @if (_isLoading)
@@ -24,65 +29,76 @@
                 <MudDialog Open="true">
                     <DialogContent>
                         <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Reject User</MudText>
-                        <MudText Class="mt-2">Are you sure you want to reject registration for <strong>@_rejectTarget.Username</strong> (@_rejectTarget.DisplayName)?</MudText>
+                        <MudText Class="mt-2">Are you sure you want to reject this user registration?</MudText>
                         <MudText Class="mt-2">Current status: <MudChip T="string" Size="Size.Small">@_rejectTarget.StatusCode</MudChip></MudText>
-                        <MudAlert Severity="Severity.Warning" Class="mt-3">Rejected accounts cannot log in. This action can be reviewed in the audit logs.</MudAlert>
+                        <MudAlert Severity="Severity.Warning" Class="mt-3">Rejected accounts cannot log in. This action can be reviewed in the system records.</MudAlert>
                     </DialogContent>
                     <DialogActions>
                         <MudButton Variant="Variant.Text" OnClick="CancelReject">Cancel</MudButton>
-                        <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="ConfirmRejectAsync">Confirm Reject</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="ConfirmRejectAsync">Reject</MudButton>
                     </DialogActions>
                 </MudDialog>
             }
 
-            <MudTable Items="_pendingUsers" Hover="true" Dense="true" Breakpoint="Breakpoint.Sm">
-                <NoRecordsContent>
-                    <MudText Typo="Typo.body2" Class="mf-muted pa-4">No users are waiting for approval.</MudText>
-                </NoRecordsContent>
-                <HeaderContent>
-                    <MudTh>Name</MudTh>
-                    <MudTh>Username</MudTh>
-                    <MudTh>Email</MudTh>
-                    <MudTh>Role</MudTh>
-                    <MudTh>Portfolio</MudTh>
-                    <MudTh>Created At</MudTh>
-                    <MudTh>Actions</MudTh>
-                </HeaderContent>
-                <RowTemplate>
-                    <MudTd DataLabel="Username">@context.Username</MudTd>
-                    <MudTd DataLabel="Email">@context.Email</MudTd>
-                    <MudTd DataLabel="Portfolio">
-                        @if (context.PortfolioFileId.HasValue)
-                        {
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(()=>ViewPortfolioAsync(context.PortfolioFileId.Value))">View Portfolio</MudButton>
-                        }
-                        else
-                        {
-                            <MudText Typo="Typo.caption" Class="mf-muted">No portfolio</MudText>
-                        }
-                    </MudTd>
-                    <MudTd DataLabel="Role">@MapRoleName(context.RoleId)</MudTd>
-                    <MudTd DataLabel="Created At">@context.CreatedAtUtc.ToLocalTime().ToString("g")</MudTd>
-                    <MudTd DataLabel="Actions">
-                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                            <MudButton Size="Size.Small"
-                                       Color="Color.Success"
-                                       Variant="Variant.Filled"
-                                       Disabled="@IsRowBusy(context.UserId)"
-                                       OnClick="@(() => ApproveAsync(context))">
-                                Approve
-                            </MudButton>
-                            <MudButton Size="Size.Small"
-                                       Color="Color.Error"
-                                       Variant="Variant.Outlined"
-                                       Disabled="@IsRowBusy(context.UserId)"
-                                       OnClick="@(() => RejectAsync(context))">
-                                Reject
-                            </MudButton>
-                        </MudStack>
-                    </MudTd>
-                </RowTemplate>
-            </MudTable>
+            @if (!_isLoading && !_pendingUsers.Any())
+            {
+                <MudPaper Class="pa-8 mf-card text-center" Elevation="0">
+                    <MudAvatar Color="Color.Primary" Size="Size.Large" Class="mx-auto mb-3">✓</MudAvatar>
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-1">No pending users</MudText>
+                    <MudText Typo="Typo.body2" Class="mf-muted">Newly registered accounts that require admin approval will appear here.</MudText>
+                </MudPaper>
+            }
+            else
+            {
+                <MudTable Items="_pendingUsers" Hover="true" Dense="true" Breakpoint="Breakpoint.Sm">
+                    <NoRecordsContent>
+                        <MudText Typo="Typo.body2" Class="mf-muted pa-4">No users are waiting for approval.</MudText>
+                    </NoRecordsContent>
+                    <HeaderContent>
+                        <MudTh>Name</MudTh>
+                        <MudTh>Username</MudTh>
+                        <MudTh>Email</MudTh>
+                        <MudTh>Role</MudTh>
+                        <MudTh>Portfolio</MudTh>
+                        <MudTh>Created At</MudTh>
+                        <MudTh>Actions</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Username">@context.Username</MudTd>
+                        <MudTd DataLabel="Email">@context.Email</MudTd>
+                        <MudTd DataLabel="Portfolio">
+                            @if (context.PortfolioFileId.HasValue)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(()=>ViewPortfolioAsync(context.PortfolioFileId.Value))">View Portfolio</MudButton>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.caption" Class="mf-muted">No portfolio</MudText>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Role">@MapRoleName(context.RoleId)</MudTd>
+                        <MudTd DataLabel="Created At">@context.CreatedAtUtc.ToLocalTime().ToString("g")</MudTd>
+                        <MudTd DataLabel="Actions">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudButton Size="Size.Small"
+                                           Color="Color.Success"
+                                           Variant="Variant.Filled"
+                                           Disabled="@IsRowBusy(context.UserId)"
+                                           OnClick="@(() => ApproveAsync(context))">
+                                    Approve
+                                </MudButton>
+                                <MudButton Size="Size.Small"
+                                           Color="Color.Error"
+                                           Variant="Variant.Outlined"
+                                           Disabled="@IsRowBusy(context.UserId)"
+                                           OnClick="@(() => RejectAsync(context))">
+                                    Reject
+                                </MudButton>
+                            </MudStack>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
 
             @if (_showPortfolioPreview && _currentPortfolio != null)
             {
@@ -210,6 +226,24 @@
     {
         _showPortfolioPreview = false;
         _currentPortfolio = null;
+    }
+
+    private string? _currentUserUsername;
+
+    private async Task<AuthenticationState> GetAuthenticationStateAsync()
+    {
+        return await AuthStateProvider.GetAuthenticationStateAsync();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated == true)
+        {
+            _currentUserUsername = user.Identity.Name;
+        }
+        await LoadPendingUsersAsync();
     }
 
     private async Task ApproveAsync(UserDto user)
