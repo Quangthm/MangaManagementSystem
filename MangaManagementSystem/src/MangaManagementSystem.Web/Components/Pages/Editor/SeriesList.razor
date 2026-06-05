@@ -1,0 +1,70 @@
+@page "/editor/series"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Tantou Editor")]
+@inject MangaManagementSystem.Application.Interfaces.ISeriesService SeriesService
+@inject NavigationManager Nav
+
+<EditorLayout>
+	<div class="mf-page">
+		<div class="mf-page-header">
+			<MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Series Review</MudText>
+			<MudText Typo="Typo.body1" Class="mf-muted">Select a series to open read-only review context</MudText>
+		</div>
+
+		<MudPaper Class="pa-4 mf-card">
+			@if (_loading)
+			{
+				<MudProgressLinear Indeterminate="true" />
+			}
+			else if (_error != null)
+			{
+				<MudAlert Severity="Severity.Error">Failed to load series: @_error</MudAlert>
+			}
+			else if (_series == null || !_series.Any())
+			{
+				<MudPaper Class="pa-6 text-center mf-card"><MudText>Series list service is not available yet.</MudText></MudPaper>
+			}
+			else
+			{
+				<MudTable Items="_series" Hover="true">
+					<HeaderContent>
+						<MudTh>Title</MudTh>
+						<MudTh>Code</MudTh>
+						<MudTh>Genre</MudTh>
+						<MudTh>Status</MudTh>
+						<MudTh></MudTh>
+					</HeaderContent>
+					<RowTemplate>
+						<MudTd>@context.Title</MudTd>
+						<MudTd>@context.SeriesCode</MudTd>
+						<MudTd>@context.Genre</MudTd>
+						<MudTd><MudChip T="string">@context.StatusCode</MudChip></MudTd>
+						<MudTd><MudButton Size="Size.Small" Variant="Variant.Filled" OnClick="@(() => Nav.NavigateTo("/editor/series/" + context.SeriesId))">Open</MudButton></MudTd>
+					</RowTemplate>
+				</MudTable>
+			}
+		</MudPaper>
+	</div>
+</EditorLayout>
+
+@code {
+	private bool _loading = true;
+	private string? _error;
+	private IEnumerable<MangaManagementSystem.Application.DTOs.Manga.SeriesDto>? _series;
+
+	protected override async Task OnInitializedAsync()
+	{
+		try
+		{
+			_series = await SeriesService.GetAllSeriesAsync();
+		}
+		catch (Exception ex)
+		{
+			_error = ex.Message;
+		}
+		finally
+		{
+			_loading = false;
+		}
+	}
+}

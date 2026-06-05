@@ -1,9 +1,6 @@
 @page "/ranking"
-@page "/ranking/series"
-@page "/ranking/performance"
-@page "/ranking/risk"
-@page "/ranking/decisions"
-@page "/ranking/settings"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Mangaka,Tantou Editor,Editorial Board Member,Editorial Board Chief,Admin")]
 @inject NavigationManager Nav
 
 <RankingLayout>

@@ -1,4 +1,6 @@
 @page "/mangaka/assign-task"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Mangaka")]
 @inject NavigationManager Nav
 
 <MangakaLayout>

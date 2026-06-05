@@ -1,5 +1,10 @@
 @page "/assistant/tasks"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@attribute [Authorize(Roles = "Assistant")]
 @inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
+@inject MangaManagementSystem.Application.Interfaces.IChapterPageTaskService TaskService
 
 <AssistantLayout>
     <div class="mf-page">
@@ -9,31 +14,87 @@
         </div>
 
         <MudGrid Class="mb-6"><MudItem xs="12" md="3"><StatCard Label="In Progress" Value="2" /></MudItem><MudItem xs="12" md="3"><StatCard Label="Not Started" Value="2" /></MudItem><MudItem xs="12" md="3"><StatCard Label="In Review" Value="1" /></MudItem><MudItem xs="12" md="3"><StatCard Label="Overdue" Value="1" /></MudItem></MudGrid>
-        <MudGrid>
-            @foreach (var task in Tasks)
-            {
-                <MudItem xs="12" md="6">
-                    <MudPaper Class="pa-5 mf-card" Elevation="0">
-                        <MudStack Row="true" Justify="Justify.SpaceBetween"><MudText Typo="Typo.h6" Class="font-weight-bold">@task.Title</MudText><MudChip T="string" Color="@task.Color" Size="Size.Small">@task.Status</MudChip></MudStack>
-                        <MudText class="mf-muted">@task.Series • @task.Chapter</MudText>
-                        <MudText Typo="Typo.body2" Class="mt-2">Due: @task.Due • Priority: @task.Priority</MudText>
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"/assistant/task/{task.Id}")" Class="mt-3">Open Task</MudButton>
-                    </MudPaper>
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error">Failed to load tasks: @_error</MudAlert>
+        }
+        else if (_tasks == null || !_tasks.Any())
+        {
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudPaper Class="pa-6 text-center mf-card"><MudText>No assigned tasks found.</MudText></MudPaper>
                 </MudItem>
-            }
-        </MudGrid>
+            </MudGrid>
+        }
+        else
+        {
+            <MudGrid>
+                @foreach (var t in _tasks)
+                {
+                    <MudItem xs="12" md="6">
+                        <MudPaper Class="pa-5 mf-card" Elevation="0">
+                            <MudStack Row="true" Justify="Justify.SpaceBetween"><MudText Typo="Typo.h6" Class="font-weight-bold">@t.TypeCode</MudText><MudChip T="string" Color="Color.Info" Size="Size.Small">@t.StatusCode</MudChip></MudStack>
+                            <MudText class="mf-muted">Task Id: @t.ChapterPageTaskId</MudText>
+                            <MudText Typo="Typo.body2" Class="mt-2">Priority: @t.PriorityLevel • Due: @FormatDate(t.DueAtUtc)</MudText>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"/assistant/task/{t.ChapterPageTaskId}")" Class="mt-3">Open Task</MudButton>
+                        </MudPaper>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
 
     </div>
 </AssistantLayout>
 
 @code {
 
-    private readonly List<TaskCard> Tasks = new()
+    private bool _loading = true;
+    private string? _error;
+    private IEnumerable<MangaManagementSystem.Application.DTOs.Manga.ChapterPageTaskDto>? _tasks;
+
+    protected override async Task OnInitializedAsync()
     {
-        new("T1", "Tone Shading", "Shadow Blade Chronicles", "Ch. 12 · Page 8", "May 22", "High", "In Progress", Color.Info),
-        new("T2", "Background Drawing", "Lunar Eclipse Academy", "Ch. 24 · Page 15", "May 23", "Medium", "Not Started", Color.Warning),
-        new("T3", "Cleanup", "Star Runner Protocol", "Ch. 15 · Page 11", "May 22", "High", "In Review", Color.Secondary)
-    };
-    private record TaskCard(string Id, string Title, string Series, string Chapter, string Due, string Priority, string Status, Color Color);
+        await LoadTasksAsync();
+    }
+
+    private async Task LoadTasksAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = auth.User;
+            if (user?.Identity?.IsAuthenticated != true)
+            {
+                _tasks = Array.Empty<MangaManagementSystem.Application.DTOs.Manga.ChapterPageTaskDto>();
+                return;
+            }
+
+            var idClaim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+            if (!int.TryParse(idClaim?.Value, out var uid))
+            {
+                _tasks = Array.Empty<MangaManagementSystem.Application.DTOs.Manga.ChapterPageTaskDto>();
+                return;
+            }
+
+            var tasks = (await TaskService.GetChapterPageTasksByAssignedUserIdAsync(uid)).ToList();
+            _tasks = tasks;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string FormatDate(DateTime? value) => value.HasValue ? value.Value.ToLocalTime().ToString("g") : "—";
 
 }

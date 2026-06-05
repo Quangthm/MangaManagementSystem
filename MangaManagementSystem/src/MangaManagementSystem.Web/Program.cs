@@ -104,8 +104,29 @@ namespace MangaManagementSystem.Web
                 }
 
                 var result = await authService.LoginAsync(new LoginDto(username, password));
+
+                // Map common server-side messages to browser-friendly error codes so the UI
+                // can show helpful but non-revealing messages.
                 if (!result.Succeeded || result.User is null || string.IsNullOrWhiteSpace(result.RoleName))
                 {
+                    var error = (result.ErrorMessage ?? string.Empty).ToLowerInvariant();
+
+                    if (error.Contains("pending"))
+                    {
+                        return Results.Redirect("/login?error=account_pending");
+                    }
+
+                    if (error.Contains("disabled"))
+                    {
+                        return Results.Redirect("/login?error=account_disabled");
+                    }
+
+                    if (error.Contains("reject") || error.Contains("rejected"))
+                    {
+                        return Results.Redirect("/login?error=account_rejected");
+                    }
+
+                    // Generic fallback for wrong username/password or other authentication failures.
                     return Results.Redirect("/login?error=InvalidCredentials");
                 }
 

@@ -1,6 +1,7 @@
 @page "/admin/user-approval"
 @attribute [Authorize(Roles = "Admin")]
 @inject IUserService UserService
+@inject IFileResourceService _fileResourceService
 @inject ISnackbar Snackbar
 
 <PageTitle>User Approval - MangaFlow</PageTitle>
@@ -18,6 +19,22 @@
                 <MudProgressLinear Indeterminate="true" Class="mb-4" />
             }
 
+            @if (_showRejectConfirm && _rejectTarget != null)
+            {
+                <MudDialog Open="true">
+                    <DialogContent>
+                        <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Reject User</MudText>
+                        <MudText Class="mt-2">Are you sure you want to reject registration for <strong>@_rejectTarget.Username</strong> (@_rejectTarget.DisplayName)?</MudText>
+                        <MudText Class="mt-2">Current status: <MudChip T="string" Size="Size.Small">@_rejectTarget.StatusCode</MudChip></MudText>
+                        <MudAlert Severity="Severity.Warning" Class="mt-3">Rejected accounts cannot log in. This action can be reviewed in the audit logs.</MudAlert>
+                    </DialogContent>
+                    <DialogActions>
+                        <MudButton Variant="Variant.Text" OnClick="CancelReject">Cancel</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="ConfirmRejectAsync">Confirm Reject</MudButton>
+                    </DialogActions>
+                </MudDialog>
+            }
+
             <MudTable Items="_pendingUsers" Hover="true" Dense="true" Breakpoint="Breakpoint.Sm">
                 <NoRecordsContent>
                     <MudText Typo="Typo.body2" Class="mf-muted pa-4">No users are waiting for approval.</MudText>
@@ -27,12 +44,23 @@
                     <MudTh>Username</MudTh>
                     <MudTh>Email</MudTh>
                     <MudTh>Role</MudTh>
+                    <MudTh>Portfolio</MudTh>
                     <MudTh>Created At</MudTh>
                     <MudTh>Actions</MudTh>
                 </HeaderContent>
                 <RowTemplate>
                     <MudTd DataLabel="Username">@context.Username</MudTd>
                     <MudTd DataLabel="Email">@context.Email</MudTd>
+                    <MudTd DataLabel="Portfolio">
+                        @if (context.PortfolioFileId.HasValue)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(()=>ViewPortfolioAsync(context.PortfolioFileId.Value))">View Portfolio</MudButton>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.caption" Class="mf-muted">No portfolio</MudText>
+                        }
+                    </MudTd>
                     <MudTd DataLabel="Role">@MapRoleName(context.RoleId)</MudTd>
                     <MudTd DataLabel="Created At">@context.CreatedAtUtc.ToLocalTime().ToString("g")</MudTd>
                     <MudTd DataLabel="Actions">
@@ -55,6 +83,31 @@
                     </MudTd>
                 </RowTemplate>
             </MudTable>
+
+            @if (_showPortfolioPreview && _currentPortfolio != null)
+            {
+                <MudDialog Open="true" MaxWidth="MaxWidth.Medium" KeepContentMounted="true">
+                    <DialogContent>
+                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">Portfolio Preview</MudText>
+                        @if (_isImagePreview)
+                        {
+                            <ImageWithFallback Src="@_currentPortfolio.CloudinarySecureUrl" Alt="Portfolio Image" />
+                        }
+                        else if (!string.IsNullOrWhiteSpace(_currentPortfolio.CloudinarySecureUrl))
+                        {
+                            <MudText Class="mb-2">File: @_currentPortfolio.OriginalFileName</MudText>
+                            <MudButton Href="@_currentPortfolio.CloudinarySecureUrl" Target="_blank">Open file</MudButton>
+                        }
+                        else
+                        {
+                            <MudText class="mf-muted">File unavailable or has been removed.</MudText>
+                        }
+                    </DialogContent>
+                    <DialogActions>
+                        <MudButton Variant="Variant.Text" OnClick="ClosePortfolioPreview">Close</MudButton>
+                    </DialogActions>
+                </MudDialog>
+            }
         </MudPaper>
     </div>
 </AdminLayout>
@@ -128,6 +181,37 @@
 
     private bool IsRowBusy(int userId) => _isLoading || _processingUserId == userId;
 
+    private MangaManagementSystem.Application.DTOs.Manga.FileResourceDto? _currentPortfolio;
+    private bool _showPortfolioPreview;
+    private bool _isImagePreview;
+
+    private async Task ViewPortfolioAsync(long fileResourceId)
+    {
+        try
+        {
+            var file = await _fileResourceService.GetFileResourceByIdAsync(fileResourceId);
+            if (file == null)
+            {
+                Snackbar.Add("Portfolio file not found.", Severity.Error);
+                return;
+            }
+
+            _currentPortfolio = file;
+            _isImagePreview = file.ContentType?.StartsWith("image/") == true;
+            _showPortfolioPreview = true;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load portfolio: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void ClosePortfolioPreview()
+    {
+        _showPortfolioPreview = false;
+        _currentPortfolio = null;
+    }
+
     private async Task ApproveAsync(UserDto user)
     {
         if (_processingUserId.HasValue)
@@ -156,14 +240,25 @@
         }
     }
 
+    // Confirmation dialog state
+    private bool _showRejectConfirm;
+    private UserDto? _rejectTarget;
+
     private async Task RejectAsync(UserDto user)
     {
-        if (_processingUserId.HasValue)
-        {
-            return;
-        }
+        // Open confirmation dialog
+        _rejectTarget = user;
+        _showRejectConfirm = true;
+    }
+
+    private async Task ConfirmRejectAsync()
+    {
+        if (_rejectTarget == null) return;
+        var user = _rejectTarget;
+        if (_processingUserId.HasValue) return;
 
         _processingUserId = user.UserId;
+        _showRejectConfirm = false;
         try
         {
             await UserService.RejectUserAsync(user.UserId);
@@ -181,6 +276,13 @@
         finally
         {
             _processingUserId = null;
+            _rejectTarget = null;
         }
+    }
+
+    private void CancelReject()
+    {
+        _showRejectConfirm = false;
+        _rejectTarget = null;
     }
 }

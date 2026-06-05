@@ -1,4 +1,6 @@
 @page "/admin/audit-logs"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin")]
 @inject NavigationManager Nav
 
 <AdminLayout>

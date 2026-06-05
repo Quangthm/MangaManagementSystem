@@ -1,2 +1,5 @@
-@page "/workspace/editor"
+@page "/editor"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Tantou Editor")]
+
 <WorkspaceDemo Title="Tantou Editor Workspace" Description="Welcome to your editorial dashboard! Here you'll review submissions, provide feedback to creators, and guide manga through the editorial process." />

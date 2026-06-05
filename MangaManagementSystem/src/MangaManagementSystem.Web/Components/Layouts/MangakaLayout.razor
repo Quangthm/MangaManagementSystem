@@ -18,7 +18,9 @@
             <NavLink href="/mangaka/series" class="mf-nav-link" Match="NavLinkMatch.Prefix">My Series & Chapters</NavLink>
             <NavLink href="/mangaka/assign-task" class="mf-nav-link" Match="NavLinkMatch.Prefix">Assign Task</NavLink>
             <NavLink href="/mangaka/review-submissions" class="mf-nav-link" Match="NavLinkMatch.Prefix">Review Submissions</NavLink>
-            <NavLink href="/mangaka/settings" class="mf-nav-link" Match="NavLinkMatch.Prefix">Settings</NavLink>
+            <!-- Mangaka settings are available via Profile; route /mangaka/settings is not a separate dashboard page -->
+            <div class="mf-nav-title mt-3">Publication</div>
+            <div class="mf-nav-link disabled">Ranking & Publication (Read-only)</div>
 
         </nav>
         <MudSpacer />

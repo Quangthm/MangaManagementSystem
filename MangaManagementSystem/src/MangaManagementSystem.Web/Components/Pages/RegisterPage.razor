@@ -80,6 +80,14 @@
                     </MudButton>
                 </MudStack>
             }
+
+            @if (!string.IsNullOrWhiteSpace(_registrationMessage))
+            {
+                <MudAlert Severity="@_registrationSeverity" Class="mt-4">
+                    @_registrationMessage
+                </MudAlert>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="GoToLogin" Class="mt-2">Go to Login</MudButton>
+            }
             else
             {
                 <MudStack Spacing="3">
@@ -179,6 +187,8 @@
     private bool _isOtpSent;
     private bool _isSendingOtp;
     private bool _isVerifyingOtp;
+    private string? _registrationMessage;
+    private Severity _registrationSeverity = Severity.Success;
     private const long MaxFileSizeBytes = 10 * 1024 * 1024; // 10 MB
     private readonly string[] AllowedFileTypes = new[] { "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "image/png", "image/jpeg", "image/webp" };
     private IBrowserFile? _selectedFile;
@@ -291,9 +301,22 @@
         _isVerifyingOtp = true;
         try
         {
-            await AuthService.CompleteRegistrationWithOtpAsync(_email, _otpCode);
-            Snackbar.Add("Registration successful. Pending Admin Approval.", Severity.Success);
-            NavigationManager.NavigateTo("/login");
+            var created = await AuthService.CompleteRegistrationWithOtpAsync(_email, _otpCode);
+
+            // Determine portfolio presence using returned UserDto.PortfolioFileId
+            if (created?.PortfolioFileId != null && created.PortfolioFileId > 0)
+            {
+                _registrationMessage = "Registration successful. Your account is waiting for Admin approval. Your portfolio was uploaded for Admin review.";
+                _registrationSeverity = Severity.Success;
+            }
+            else
+            {
+                _registrationMessage = "Registration successful. Your account is now waiting for Admin approval.";
+                _registrationSeverity = Severity.Success;
+            }
+
+            // Keep user on page per decision (do not auto-redirect). Show snackbar as well but the page-level alert remains.
+            Snackbar.Add(_registrationMessage, Severity.Success);
         }
         catch (InvalidOperationException ex)
         {
@@ -313,5 +336,10 @@
     {
         _isOtpSent = false;
         _otpCode = string.Empty;
+    }
+
+    private void GoToLogin()
+    {
+        NavigationManager.NavigateTo("/login");
     }
 }

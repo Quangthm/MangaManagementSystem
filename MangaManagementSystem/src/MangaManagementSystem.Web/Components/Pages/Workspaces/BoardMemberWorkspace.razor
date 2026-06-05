@@ -1,0 +1,5 @@
+@page "/board"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Editorial Board Member")]
+
+<WorkspaceDemo Title="Editorial Board Member Workspace" Description="Open Polls, My Votes, Ranking & Risk Evidence. Use the Board Poll workflow to open and vote on polls. If a function is not available it will be shown as not available yet." />

@@ -1,5 +1,8 @@
 @page "/admin"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin")]
 @inject NavigationManager Nav
+@inject IUserService UserService
 
 <AdminLayout>
     <div class="mf-page">
@@ -7,25 +10,133 @@
             <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">System Administration Dashboard</MudText>
             <MudText Typo="Typo.body1" Class="mf-muted">Monitor and manage MangaFlow platform operations</MudText>
         </div>
+        <MudText Typo="Typo.overline" Class="mf-muted">Account Management</MudText>
+        <MudPaper Class="pa-4 mf-card mb-4">
+            @if (_isLoading)
+            {
+                <MudProgressLinear Indeterminate="true" />
+            }
+            else if (_loadError != null)
+            {
+                <MudAlert Severity="Severity.Error">Failed to load admin stats: @_loadError</MudAlert>
+            }
+            else
+            {
+                <MudGrid Class="mb-3">
+                    <MudItem xs="12" sm="6" md="3">
+                        <StatCard Label="Pending Approvals" Value="@_pendingCount.ToString()" />
+                        <MudButton Variant="Variant.Text" Size="Size.Small" Href="/admin/user-approval">Manage</MudButton>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <StatCard Label="Active Users" Value="@_activeCount.ToString()" />
+                        <MudButton Variant="Variant.Text" Size="Size.Small" Href="/admin/users">Manage</MudButton>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <StatCard Label="Disabled Users" Value="@_disabledCount.ToString()" />
+                        <MudButton Variant="Variant.Text" Size="Size.Small" Href="/admin/users">Manage</MudButton>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <StatCard Label="Rejected Users" Value="@_rejectedCount.ToString()" />
+                        <MudButton Variant="Variant.Text" Size="Size.Small" Href="/admin/users">Manage</MudButton>
+                    </MudItem>
+                </MudGrid>
+            }
+        </MudPaper>
 
-        <MudGrid Class="mb-6">
-            <MudItem xs="12" sm="6" md="2"><StatCard Label="Active Users" Value="236" /></MudItem>
-            <MudItem xs="12" sm="6" md="2"><StatCard Label="Pending Requests" Value="12" /></MudItem>
-            <MudItem xs="12" sm="6" md="2"><StatCard Label="Locked Accounts" Value="3" /></MudItem>
-            <MudItem xs="12" sm="6" md="2"><StatCard Label="Disabled Accounts" Value="8" /></MudItem>
-            <MudItem xs="12" sm="6" md="2"><StatCard Label="Audit Events Today" Value="147" /></MudItem>
-            <MudItem xs="12" sm="6" md="2"><StatCard Label="Critical Actions Logged" Value="23" /></MudItem>
+        <MudText Typo="Typo.overline" Class="mf-muted">Review &amp; Traceability</MudText>
+        <MudGrid Class="mb-4">
+            <MudItem xs="12" md="4">
+                <WorkspaceCard Title="Manage User Approvals" Description="Review and approve pending account requests." Href="/admin/user-approval" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <WorkspaceCard Title="Manage User Accounts" Description="Lock, unlock, disable, and manage user access." Href="/admin/users" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <WorkspaceCard Title="Review Portfolios" Description="Preview user portfolios awaiting review." Href="/admin/user-approval" />
+            </MudItem>
         </MudGrid>
-        <MudText Typo="Typo.overline" Class="mf-muted">QUICK ACTIONS</MudText>
+
+        <MudGrid Class="mb-4">
+            <MudItem xs="12" md="4">
+                @if (_hasAuditRoute)
+                {
+                    <WorkspaceCard Title="View Audit Logs" Description="Review system actions and account changes." Href="/admin/audit-logs" />
+                }
+                else
+                {
+                    <WorkspaceCard Title="View Audit Logs" Description="Not available yet." Disabled="true" />
+                }
+            </MudItem>
+            <MudItem xs="12" md="4">
+                @if (_hasFileManagement)
+                {
+                    <WorkspaceCard Title="File Management" Description="Manage system file resources." Href="/admin/files" />
+                }
+                else
+                {
+                    <WorkspaceCard Title="File Management" Description="Not available yet." Disabled="true" />
+                }
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <WorkspaceCard Title="System Settings" Description="Access system-level configuration and maintenance." Href="/admin" />
+            </MudItem>
+        </MudGrid>
+
+        <MudText Typo="Typo.overline" Class="mf-muted">System Shortcuts</MudText>
         <MudGrid>
-            <MudItem xs="12" md="4"><WorkspaceCard Title="View Audit Log" Description="Review system actions, account changes, and workflow decisions." Href="/admin/audit-logs" /></MudItem>
-            <MudItem xs="12" md="4"><WorkspaceCard Title="Manage User Accounts" Description="Lock, unlock, disable, and manage user access." Href="/admin/users" /></MudItem>
-            <MudItem xs="12" md="4"><WorkspaceCard Title="Registration Requests" Description="Review and approve pending account requests." Href="/admin/registration-requests" /></MudItem>
+            <MudItem xs="12" md="3"><MudPaper Class="pa-3 mf-card text-center"><MudText Typo="Typo.subtitle2">Accounts</MudText><MudText class="mf-muted">User lifecycle &amp; access</MudText></MudPaper></MudItem>
+            <MudItem xs="12" md="3"><MudPaper Class="pa-3 mf-card text-center"><MudText Typo="Typo.subtitle2">Portfolios</MudText><MudText class="mf-muted">Pending portfolio approvals</MudText></MudPaper></MudItem>
+            <MudItem xs="12" md="3"><MudPaper Class="pa-3 mf-card text-center"><MudText Typo="Typo.subtitle2">Audit</MudText><MudText class="mf-muted">Traceability &amp; logs</MudText></MudPaper></MudItem>
+            <MudItem xs="12" md="3"><MudPaper Class="pa-3 mf-card text-center"><MudText Typo="Typo.subtitle2">Files</MudText><MudText class="mf-muted">Storage &amp; CDN</MudText></MudPaper></MudItem>
         </MudGrid>
 
     </div>
 </AdminLayout>
 
 @code {
+    private int _pendingCount;
+    private int _activeCount;
+    private int _disabledCount;
+    private int _rejectedCount;
+    private bool _isLoading;
+    private string? _loadError;
+    private bool _hasAuditRoute = false;
+    private bool _hasFileManagement = false;
 
+    protected override async Task OnInitializedAsync()
+    {
+        // detect presence of certain admin routes based on known pages in the project
+        // Audit logs page exists in the project -> enable audit shortcut
+        _hasAuditRoute = true; // AuditLogs.razor is present in the project
+        // File management page is not implemented in this build
+        _hasFileManagement = false;
+
+        await LoadStatsAsync();
+    }
+
+    private async Task LoadStatsAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+        try
+        {
+            var pending = (await UserService.GetUsersByStatusAsync("PENDING_APPROVAL")).ToList();
+            var active = (await UserService.GetUsersByStatusAsync("ACTIVE")).ToList();
+            var disabled = (await UserService.GetUsersByStatusAsync("DISABLED")).ToList();
+            var rejected = (await UserService.GetUsersByStatusAsync("REJECTED")).ToList();
+
+            _pendingCount = pending.Count;
+            _activeCount = active.Count;
+            _disabledCount = disabled.Count;
+            _rejectedCount = rejected.Count;
+        }
+        catch (Exception ex)
+        {
+            _loadError = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
 }

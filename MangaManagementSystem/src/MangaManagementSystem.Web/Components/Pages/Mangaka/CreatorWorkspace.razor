@@ -1,4 +1,6 @@
 @page "/mangaka/workspace/{SeriesId}"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Mangaka")]
 @inject NavigationManager Nav
 
 <MangakaLayout>

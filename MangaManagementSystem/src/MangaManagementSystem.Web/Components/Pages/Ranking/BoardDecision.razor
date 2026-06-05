@@ -1,4 +1,6 @@
 @page "/board-decision"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Editorial Board Member,Editorial Board Chief,Admin")]
 @inject NavigationManager Nav
 
 <RankingLayout>
@@ -12,7 +14,11 @@
         <MudGrid>
             @foreach (var item in Reviews)
             {
-                <MudItem xs="12" md="6"><MudPaper Class="pa-5 mf-card" Elevation="0"><MudStack Row="true" Justify="Justify.SpaceBetween"><MudText Typo="Typo.h6">@item.Series</MudText><MudChip T="string" Color="Color.Error">@item.RiskLevel</MudChip></MudStack><MudText>Current Rank: #@item.Rank</MudText><MudText>Total Votes: @item.Votes</MudText><MudText>Declining for @item.Weeks weeks</MudText><MudStack Spacing="2" Class="mt-4"><MudButton Variant="Variant.Filled" Color="Color.Success">Continue Serialization</MudButton><MudButton Variant="Variant.Outlined" Color="Color.Warning">Request Revision</MudButton><MudButton Variant="Variant.Outlined" Color="Color.Secondary">Place on Hiatus</MudButton><MudButton Variant="Variant.Outlined" Color="Color.Error">Drop Series</MudButton></MudStack></MudPaper></MudItem>
+            <MudItem xs="12" md="6"><MudPaper Class="pa-5 mf-card" Elevation="0"><MudStack Row="true" Justify="Justify.SpaceBetween"><MudText Typo="Typo.h6">@item.Series</MudText><MudChip T="string" Color="Color.Error">@item.RiskLevel</MudChip></MudStack><MudText>Current Rank: #@item.Rank</MudText><MudText>Total Votes: @item.Votes</MudText><MudText>Declining for @item.Weeks weeks</MudText>
+                    <MudStack Spacing="2" Class="mt-4">
+                        <MudText Typo="Typo.body2" Class="mf-muted">Direct board actions are disabled in the frontend. Board outcomes are produced by board polls and computed votes. Use the Board Poll workflow to open, vote, and close polls.</MudText>
+                    </MudStack>
+                </MudPaper></MudItem>
             }
         </MudGrid>
         <MudPaper Class="pa-5 mf-card mt-6" Elevation="0"><MudText Typo="Typo.h6">Latest Board Decisions</MudText><MudText>Moonlit Blade Academy — Decision: Request Revision • 2 days ago</MudText><MudText>Crystal Heart Journey — Decision: Continue • 5 days ago</MudText></MudPaper>

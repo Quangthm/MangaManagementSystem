@@ -1,6 +1,7 @@
 @page "/login"
 @using Microsoft.AspNetCore.WebUtilities
 @inject ISnackbar Snackbar
+@inject IAuthService AuthService
 @inject NavigationManager NavigationManager
 
 <PageTitle>Login - MangaFlow</PageTitle>
@@ -17,6 +18,12 @@
                 <MudText Typo="Typo.h5" Class="font-weight-bold text-white">Login to Your Account</MudText>
             </div>
             <div class="pa-8">
+                @if (!string.IsNullOrWhiteSpace(_pageAlertMessage))
+                {
+                    <MudAlert Severity="@_pageAlertSeverity" Class="mb-4">
+                        @_pageAlertMessage
+                    </MudAlert>
+                }
                 <form action="/api/auth/login" method="post" data-enhance="false" class="login-form">
                     <AntiforgeryToken />
                     <MudStack Spacing="3">
@@ -152,6 +159,9 @@
 </style>
 
 @code {
+    private string? _pageAlertMessage;
+    private Severity _pageAlertSeverity = Severity.Info;
+
     protected override void OnInitialized()
     {
         var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
@@ -159,21 +169,26 @@
 
         if (query.TryGetValue("verified", out _))
         {
-            Snackbar.Add("Email verified successfully. You can sign in once an administrator approves your account.", Severity.Success);
+            _pageAlertMessage = "Email verified successfully. You can sign in once an administrator approves your account.";
+            _pageAlertSeverity = Severity.Success;
         }
 
         if (query.TryGetValue("error", out var error))
         {
-            var message = error.ToString() switch
+            var err = error.ToString();
+            _pageAlertMessage = err switch
             {
                 "GoogleAuthFailed" => "Google sign-in failed. Please try again or use email login.",
                 "GoogleEmailMissing" => "Google did not return an email address for this account. Try another Google account or use email login.",
                 "UserNotInDatabase" or "UserNotFoundOrInactive" => "No active account found for this Google email. Register first or contact an administrator.",
-                "account_pending" => "Your account is pending email verification or admin approval. Complete verification or wait for approval.",
-                "InvalidCredentials" or "invalid" => "Invalid credentials. Please check your username and password.",
+                "account_pending" => "Your account has been created and is waiting for Admin approval. Please try again later or contact an Admin.",
+                "account_disabled" => "This account has been disabled. Please contact an Admin.",
+                "account_rejected" => "This account registration was rejected. Please contact an Admin for more information.",
+                "InvalidCredentials" or "invalid" => "Username/email or password is incorrect.",
                 _ => "Unable to sign in. Please try again."
             };
-            Snackbar.Add(message, Severity.Error);
+
+            _pageAlertSeverity = (_pageAlertMessage == "Username/email or password is incorrect.") ? Severity.Error : Severity.Warning;
         }
     }
 }
