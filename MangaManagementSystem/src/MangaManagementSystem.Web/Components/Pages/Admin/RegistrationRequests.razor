@@ -1,4 +1,6 @@
 @page "/admin/registration-requests"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin")]
 @inject NavigationManager Nav
 @inject IUserService UserService
 @inject ISnackbar Snackbar

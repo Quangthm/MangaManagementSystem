@@ -1,4 +1,6 @@
 @page "/assistant/studio/{TaskId}"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Assistant")]
 @inject NavigationManager Nav
 
 <AssistantLayout>
