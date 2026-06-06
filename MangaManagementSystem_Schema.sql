@@ -24,10 +24,14 @@ IF SCHEMA_ID(N'audit') IS NULL
 GO
 
 CREATE TABLE auth.Roles (
-	role_id SMALLINT IDENTITY PRIMARY KEY,
-	role_name NVARCHAR(30) NOT NULL,
-	CONSTRAINT uq_roles_role_name UNIQUE (role_name)
-	);
+    role_id UNIQUEIDENTIFIER NOT NULL
+        CONSTRAINT df_roles_role_id DEFAULT NEWID()
+        CONSTRAINT pk_roles PRIMARY KEY,
+
+    role_name NVARCHAR(30) NOT NULL,
+
+    CONSTRAINT uq_roles_role_name UNIQUE (role_name)
+);
 
 INSERT INTO auth.Roles (role_name)
 VALUES (N'Mangaka'),
@@ -38,14 +42,14 @@ VALUES (N'Mangaka'),
 	(N'Admin');
 
 CREATE TABLE auth.Users (
-	user_id INT IDENTITY(1, 1) PRIMARY KEY,
-	role_id SMALLINT NOT NULL,
+	user_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_users_user_id DEFAULT NEWID() PRIMARY KEY,
+	role_id UNIQUEIDENTIFIER NOT NULL,
 	username NVARCHAR(50) NOT NULL,
 	display_name NVARCHAR(100) NOT NULL,
 	email NVARCHAR(254) NOT NULL,
 	password_hash NVARCHAR(255) NOT NULL,
-	avatar_file_id BIGINT NULL,
-	portfolio_file_id BIGINT NULL,
+	avatar_file_id UNIQUEIDENTIFIER NULL,
+	portfolio_file_id UNIQUEIDENTIFIER NULL,
 	status_code NVARCHAR(30) NOT NULL CONSTRAINT df_users_status DEFAULT N'PENDING_APPROVAL',
 	created_at_utc DATETIME2(7) NOT NULL CONSTRAINT df_users_created_at_utc DEFAULT SYSUTCDATETIME(),
 	CONSTRAINT uq_users_username UNIQUE (username),
@@ -79,7 +83,7 @@ CREATE INDEX ix_users_role_status ON auth.Users (
 	);
 
 CREATE TABLE manga.FileResource (
-	file_resource_id BIGINT IDENTITY(1, 1) NOT NULL CONSTRAINT pk_file_resource PRIMARY KEY,
+	file_resource_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_file_resource_id DEFAULT NEWID() CONSTRAINT pk_file_resource PRIMARY KEY,
 	file_purpose_code NVARCHAR(50) NOT NULL,
 	original_file_name NVARCHAR(260) NOT NULL,
 	cloudinary_public_id NVARCHAR(255) NOT NULL,
@@ -87,10 +91,10 @@ CREATE TABLE manga.FileResource (
 	content_type NVARCHAR(100) NOT NULL,
 	file_size_bytes BIGINT NOT NULL,
 	sha256_hash CHAR(64) NOT NULL,
-	uploaded_by_user_id INT NULL,
+	uploaded_by_user_id UNIQUEIDENTIFIER NULL,
 	uploaded_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_file_resource_uploaded_at_utc DEFAULT(SYSUTCDATETIME()),
 	deleted_at_utc DATETIME2(0) NULL,
-	deleted_by_user_id INT NULL,
+	deleted_by_user_id UNIQUEIDENTIFIER NULL,
 	CONSTRAINT ck_file_resource_file_purpose_code CHECK (
 		file_purpose_code IN (
 			N'SERIES_PROPOSAL',
@@ -135,9 +139,15 @@ INCLUDE (
 )
 WHERE deleted_at_utc IS NULL;
 GO
-ALTER TABLE auth.Users ADD CONSTRAINT fk_users_avatar_file FOREIGN KEY (avatar_file_id) REFERENCES manga.FileResource(file_resource_id);
+ALTER TABLE auth.Users
+ADD CONSTRAINT fk_users_avatar_file
+FOREIGN KEY (avatar_file_id)
+REFERENCES manga.FileResource(file_resource_id);
 
-ALTER TABLE auth.Users ADD CONSTRAINT fk_users_portfolio_file FOREIGN KEY (portfolio_file_id) REFERENCES manga.FileResource(file_resource_id);
+ALTER TABLE auth.Users
+ADD CONSTRAINT fk_users_portfolio_file
+FOREIGN KEY (portfolio_file_id)
+REFERENCES manga.FileResource(file_resource_id);
 
 CREATE TABLE audit.AuditEvent (
 	audit_event_id BIGINT IDENTITY(1, 1) NOT NULL CONSTRAINT pk_audit_event PRIMARY KEY,
