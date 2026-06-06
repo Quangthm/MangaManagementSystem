@@ -5,7 +5,6 @@ using MangaManagementSystem.Infrastructure;
 using MangaManagementSystem.Web.Components;
 using MangaManagementSystem.Web.Helpers;
 using MangaManagementSystem.Web.Services;
-using MangaManagementSystem.Application.DTOs.Auth;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;

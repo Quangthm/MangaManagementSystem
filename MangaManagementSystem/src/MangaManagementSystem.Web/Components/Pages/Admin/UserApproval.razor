@@ -18,6 +18,8 @@
             <MudText UseWrapAttr="true" Class="mt-1">Use this page to approve or reject newly registered accounts before they can log in.</MudText>
         </MudAlert>
 
+        <MudText Typo="Typo.body2" Class="mf-muted mb-3">Review pending user registrations that require admin approval.</MudText>
+
         <MudPaper Class="pa-5 mf-card" Elevation="0">
             @if (_isLoading)
             {
@@ -154,11 +156,6 @@
         5 => "Admin",
         _ => "Unknown"
     };
-
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadPendingUsersAsync();
-    }
 
     private async Task LoadPendingUsersAsync()
     {
