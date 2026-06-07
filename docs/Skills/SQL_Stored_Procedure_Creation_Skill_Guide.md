@@ -63,15 +63,21 @@ Example:
 IF NOT EXISTS
 (
     SELECT 1
-    FROM auth.Users u
+    FROM
+    (
+        SELECT
+            u.user_id,
+            u.role_id
+        FROM auth.Users u
+        WHERE u.user_id = @admin_user_id
+          AND u.status_code = N'ACTIVE'
+    ) AS active_admin
     INNER JOIN auth.Roles r
-        ON r.role_id = u.role_id
-    WHERE u.user_id = @admin_user_id
-      AND u.status_code = N'ACTIVE'
-      AND r.role_name = N'Admin'
+        ON r.role_id = active_admin.role_id
+    WHERE r.role_name = N'Admin'
 )
 BEGIN
-    THROW 53102, 'Admin user is not active or does not have permission.', 1;
+    ;THROW 53102, 'Admin user is not active or does not have permission.', 1;
 END;
 ```
 
@@ -85,6 +91,8 @@ Examples:
 - A Mangaka may only update preferred publication frequency while the series is `PROPOSAL_DRAFT`.
 - A chapter can only be submitted when required current page versions exist.
 - An Editorial Board Chief must provide a reason when directly changing official publication frequency.
+- A proposal submission should generate `proposal_version_no` inside the database, not in the backend.
+- A proposal submission should snapshot current `manga.Series` title/synopsis/genre inside the procedure.
 
 ### 2.3 Cross-row and cross-table rules
 
@@ -117,7 +125,7 @@ Example:
 ```sql
 IF @detail_json IS NOT NULL AND ISJSON(@detail_json) <> 1
 BEGIN
-    THROW 50001, 'detail_json must be valid JSON.', 1;
+    ;THROW 50001, 'detail_json must be valid JSON.', 1;
 END;
 ```
 
@@ -150,7 +158,7 @@ BEGIN CATCH
         ROLLBACK;
     END;
 
-    THROW;
+    ;THROW;
 END CATCH;
 ```
 
@@ -159,8 +167,6 @@ END CATCH;
 Only commit or roll back if the procedure started the transaction.
 
 This allows procedures to be safely called by other procedures that already own a transaction.
-
----
 
 ---
 
@@ -174,11 +180,19 @@ In SQL Server, use:
 UNIQUEIDENTIFIER
 ```
 
-For table primary keys, the schema should normally generate the GUID using:
+For business/domain table primary keys, the schema should normally generate the GUID using:
 
 ```sql
 DEFAULT NEWID()
 ```
+
+Audit event exception:
+
+```sql
+audit.AuditEvent.audit_event_id BIGINT IDENTITY(1, 1)
+```
+
+This exception is allowed because audit events are append-only, chronological, and ledger-style.
 
 ### 4.1 Procedure rule: do not manually create IDs unless needed
 
@@ -296,13 +310,29 @@ SET @lock_resource =
 
 ### 4.5 Audit entity IDs with GUID values
 
-If an audit procedure stores `entity_id` as text, convert GUID IDs before passing them when needed.
+If an audit procedure stores `entity_id` as text, convert GUID IDs to a variable before passing them.
+
+Do not pass expressions directly inside `EXEC` named parameters.
+
+Avoid:
 
 ```sql
-@entity_id = CONVERT(NVARCHAR(36), @target_user_id)
+EXEC audit.usp_AuditEvent_Append
+    @entity_id = CONVERT(NVARCHAR(36), @target_user_id);
 ```
 
-If the audit procedure parameter is already `NVARCHAR`, passing a `UNIQUEIDENTIFIER` directly may rely on implicit conversion. Prefer explicit conversion in procedures where clarity matters.
+Use:
+
+```sql
+DECLARE @audit_entity_id NVARCHAR(100);
+
+SET @audit_entity_id = CONVERT(NVARCHAR(36), @target_user_id);
+
+EXEC audit.usp_AuditEvent_Append
+    @entity_id = @audit_entity_id;
+```
+
+This avoids SQL Server syntax issues with expressions in procedure parameter assignment.
 
 ### 4.6 Backend compatibility reminder
 
@@ -344,7 +374,50 @@ Recommended table default:
 CONSTRAINT df_users_user_id DEFAULT NEWID()
 ```
 
-`NEWSEQUENTIALID()` can reduce index page splits and random I/O when GUIDs are used as row identifiers, but it is more predictable than random GUIDs. Since this project values a simple lecturer-compliant GUID/UUID implementation, use `NEWID()` as the default rule.
+`NEWSEQUENTIALID()` can reduce index page splits and random I/O when GUIDs are used as row identifiers, but it is more predictable than random GUIDs. Since this project values a simple lecturer-compliant GUID/UUID implementation, use `NEWID()` as the default rule for business/domain tables. `audit.AuditEvent.audit_event_id` may remain `BIGINT IDENTITY`.
+
+### 4.8 SeriesProposal submit procedure rule
+
+`proposal_version_no` should be generated inside `manga.usp_SeriesProposal_Submit`, not by the backend.
+
+Recommended pattern:
+
+```text
+acquire per-series application lock
+→ read current Series row with locking
+→ calculate MAX(proposal_version_no) + 1
+→ create FileResource
+→ insert SeriesProposal
+→ return series_proposal_id and proposal_version_no as OUTPUT values
+```
+
+The backend should not pass:
+
+```sql
+@proposal_version_no
+@proposal_title
+@synopsis_snapshot
+@genre_snapshot
+```
+
+The procedure should read these snapshot values from the current `manga.Series` row:
+
+```sql
+SELECT
+    @proposal_title = s.title,
+    @synopsis_snapshot = s.synopsis,
+    @genre_snapshot = s.genre
+FROM manga.Series s WITH (UPDLOCK, HOLDLOCK)
+WHERE s.series_id = @series_id;
+```
+
+Keep the table constraint:
+
+```sql
+UNIQUE(series_id, proposal_version_no)
+```
+
+as final database protection against duplicate proposal versions.
 
 ## 5. Concurrency and locking
 
@@ -374,7 +447,7 @@ The lock only makes the behavior cleaner.
 
 ### Important SQL Server syntax rule
 
-Do **not** pass expressions such as `CONCAT(...)` directly to named procedure parameters.
+Do **not** pass expressions such as `CONCAT(...)`, `CONVERT(...)`, or `CASE ... END` directly to named procedure parameters.
 
 Avoid:
 
@@ -401,15 +474,30 @@ EXEC @lock_result = sys.sp_getapplock
     @LockTimeout = 10000;
 ```
 
+This same rule also applies to audit calls and other procedure calls:
+
+```sql
+DECLARE @audit_entity_id NVARCHAR(100);
+
+SET @audit_entity_id = CONVERT(NVARCHAR(36), @target_user_id);
+
+EXEC audit.usp_AuditEvent_Append
+    @entity_id = @audit_entity_id;
+```
+
 ---
 
 ## 6. Audit procedure behavior
 
 The audit procedure owns actor role resolution.
 
-Procedures should call audit like this:
+Procedures should call audit with precomputed values like this:
 
 ```sql
+DECLARE @entity_id NVARCHAR(100);
+
+SET @entity_id = CONVERT(NVARCHAR(36), @some_guid_id);
+
 EXEC audit.usp_AuditEvent_Append
     @actor_user_id = @actor_user_id,
     @action_code = N'SOME_ACTION',
@@ -482,7 +570,7 @@ WHERE UPPER(LTRIM(RTRIM(r.role_name))) = UPPER(LTRIM(RTRIM(@role_name)));
 
 IF @resolved_role_id IS NULL
 BEGIN
-    THROW 50015, 'Invalid role name.', 1;
+    ;THROW 50015, 'Invalid role name.', 1;
 END;
 ```
 
@@ -606,6 +694,10 @@ Use clear error messages, but do not over-validate schema constraints.
 Before finalizing a stored procedure, check:
 
 - Does it match the actual current table columns?
+- If the procedure calls another procedure, does it pass variables instead of inline expressions such as `CONVERT(...)`, `CONCAT(...)`, or `CASE ... END`?
+- If the procedure submits a series proposal, does it generate `proposal_version_no` inside the database using a per-series lock?
+- If the procedure submits a series proposal, does it read proposal snapshot fields from `manga.Series` instead of accepting them from the backend?
+- Is `audit.AuditEvent.audit_event_id BIGINT IDENTITY` treated as the intentional audit/ledger exception rather than a GUID migration mistake?
 - If the procedure inserts into a GUID primary-key table, does it let `DEFAULT NEWID()` generate the ID unless pre-generation is truly needed?
 - If the procedure creates a row and needs the new ID, does it use `OUTPUT inserted.<id>` into a table variable and return a `UNIQUEIDENTIFIER OUTPUT` value?
 - Are all ID parameters, output parameters, local variables, and table-variable ID columns using `UNIQUEIDENTIFIER`?
@@ -616,7 +708,7 @@ Before finalizing a stored procedure, check:
 - Did it validate workflow rules not enforced by schema?
 - Does it use a transaction only when needed?
 - If it uses `sp_getapplock`, does it pass a variable as `@Resource`?
-- Does it call `audit.usp_AuditEvent_Append` without `@actor_role_name`?
+- Does it call `audit.usp_AuditEvent_Append` without `@actor_role_name` and with precomputed `@entity_id` variables?
 - Is `detail_json` focused only on relevant change details?
 - Does it avoid updating columns that do not exist?
 - Does it preserve MVP scope and avoid extra tables unless required?
