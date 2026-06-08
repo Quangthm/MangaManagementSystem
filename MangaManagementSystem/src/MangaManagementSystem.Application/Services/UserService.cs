@@ -14,8 +14,8 @@ namespace MangaManagementSystem.Application.Services
         private const string StatusPendingApproval = "PENDING_APPROVAL";
         private const string StatusActive = "ACTIVE";
         private const string StatusDisabled = "DISABLED";
-        private const short MinRoleId = 1;
-        private const short MaxRoleId = 5;
+        private static readonly Guid MinRoleId = new Guid("00000000-0000-0000-0000-000000000001");
+        private static readonly Guid MaxRoleId = new Guid("00000000-0000-0000-0000-000000000005");
 
         private readonly IUnitOfWork _unitOfWork;
         private readonly IPasswordHasher _passwordHasher;
@@ -45,7 +45,7 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(created!);
         }
 
-        public async Task<UserDto?> GetUserByIdAsync(int id)
+        public async Task<UserDto?> GetUserByIdAsync(Guid id)
         {
             var entity = await _unitOfWork.Users.GetByIdAsync(id);
             return entity == null ? null : MapToDto(entity);
@@ -63,7 +63,7 @@ namespace MangaManagementSystem.Application.Services
             return entities.Select(MapToDto);
         }
 
-        public async Task<UserDto> ApproveUserAsync(int userId)
+        public async Task<UserDto> ApproveUserAsync(Guid userId)
         {
             var user = await RequirePendingUserAsync(userId);
 
@@ -75,7 +75,7 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(user);
         }
 
-        public async Task RejectUserAsync(int userId)
+        public async Task RejectUserAsync(Guid userId)
         {
             var user = await RequirePendingUserAsync(userId);
 
@@ -84,7 +84,7 @@ namespace MangaManagementSystem.Application.Services
             await _unitOfWork.SaveChangesAsync();
         }
 
-        private async Task<User> RequirePendingUserAsync(int userId)
+        private async Task<User> RequirePendingUserAsync(Guid userId)
         {
             var user = await _unitOfWork.Users.GetByIdAsync(userId);
             if (user == null)
@@ -101,7 +101,7 @@ namespace MangaManagementSystem.Application.Services
             return user;
         }
 
-        private async Task EnsureValidRoleIdAsync(short roleId)
+        private async Task EnsureValidRoleIdAsync(Guid roleId)
         {
             if (roleId < MinRoleId || roleId > MaxRoleId)
             {
@@ -114,7 +114,7 @@ namespace MangaManagementSystem.Application.Services
                 throw new InvalidOperationException($"Role id {roleId} does not exist.");
             }
         }
-        public async Task<UserDto> ActivateUserAsync(int userId)
+        public async Task<UserDto> ActivateUserAsync(Guid userId)
        {
                var user = await _unitOfWork.Users.GetByIdAsync(userId);
 
@@ -129,7 +129,7 @@ namespace MangaManagementSystem.Application.Services
            return MapToDto(user);
       }
 
-        public async Task<UserDto> DisableUserAsync(int userId)
+        public async Task<UserDto> DisableUserAsync(Guid userId)
      {
     var user = await _unitOfWork.Users.GetByIdAsync(userId);
 

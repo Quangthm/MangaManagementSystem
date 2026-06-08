@@ -110,7 +110,7 @@ namespace MangaManagementSystem.Web
                 }
 
                 await SignInApplicationUserAsync(context, result.User, result.RoleName);
-                return Results.Redirect(GetDashboardRedirectUrl(result.User.RoleId));
+                return Results.Redirect(GetDashboardRedirectUrl(result.User.RoleId, result.RoleName));
             }).DisableAntiforgery();
 
             app.MapPost("/api/auth/google-login", () =>
@@ -135,7 +135,7 @@ namespace MangaManagementSystem.Web
                 }
 
                 await SignInApplicationUserAsync(context, authResult.User, authResult.RoleName);
-                return Results.Redirect(GetDashboardRedirectUrl(authResult.User.RoleId));
+                return Results.Redirect(GetDashboardRedirectUrl(authResult.User.RoleId, authResult.RoleName));
             });
 
             app.MapPost("/api/auth/google-signup", () =>
@@ -254,14 +254,14 @@ namespace MangaManagementSystem.Web
                 });
         }
 
-        private static string GetDashboardRedirectUrl(short roleId) => roleId switch
+        private static string GetDashboardRedirectUrl(short roleId, string roleName) => roleName switch
         {
-            1 => "/mangaka",
-            2 => "/assistant",
-            3 => "/dashboard",
-            4 => "/ranking",
-            5 => "/board-decision",
-            6 => "/admin/user-approval",
+            "Admin" => "/admin/user-approval",
+            "Mangaka" => "/mangaka",
+            "Assistant" => "/assistant",
+            "Tantou Editor" => "/dashboard",
+            "Editorial Board Member" => "/ranking",
+            "Editorial Board Chief" => "/board-decision",
             _ => "/login?error=InvalidCredentials"
         };
 
@@ -271,7 +271,7 @@ namespace MangaManagementSystem.Web
             string roleName)
         {
             await SignInApplicationUserAsync(context, user, roleName);
-            return Results.Redirect(GetDashboardRedirectUrl(user.RoleId));
+            return Results.Redirect(GetDashboardRedirectUrl(user.RoleId, roleName));
         }
     }
 }
