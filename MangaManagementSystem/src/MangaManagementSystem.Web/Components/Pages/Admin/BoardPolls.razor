@@ -17,6 +17,10 @@
             <MudText Typo="Typo.caption" Class="font-weight-bold">Note</MudText>
             <MudText Class="mt-1">Board members vote on opened polls. If a START_SERIALIZATION poll is approved, the selected publication frequency becomes the official series publication frequency.</MudText>
         </MudAlert>
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">
+            <MudText Typo="Typo.caption" Class="font-weight-bold">Coming Soon</MudText>
+            <MudText Class="mt-1">Board poll creation and management functionality requires backend implementation. This page currently shows mock data.</MudText>
+        </MudAlert>
 
         <MudPaper Class="pa-5 mf-card mb-6" Elevation="0">
             <MudText Typo="Typo.h6" Class="font-weight-bold mb-4">Create New Poll</MudText>
@@ -68,9 +72,13 @@
                     </MudItem>
                 </MudGrid>
 
+                <MudAlert Severity="Severity.Warning" Class="mt-3 mb-2">
+                    <MudText Typo="Typo.caption" Class="font-weight-bold">Coming Soon</MudText>
+                    <MudText class="mt-1">Board poll creation requires backend implementation.</MudText>
+                </MudAlert>
                 <MudStack Row="true" Spacing="2">
-                    <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="CancelCreate">Cancel</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OpenPollAsync">Create Poll</MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="true" OnClick="CancelCreate">Cancel</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="true" OnClick="OpenPollAsync">Create Poll (Disabled)</MudButton>
                 </MudStack>
             </MudForm>
         </MudPaper>
@@ -129,18 +137,20 @@
                         </MudTd>
                         <MudTd>
                             <MudStack Row="true" Spacing="1">
-                                <MudButton Size="Size.Small" Variant="Variant.Text" Href="@($"/admin/board-polls/{context.SeriesBoardPollId}")">View Details</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="true">View Details (Disabled)</MudButton>
                                 <MudButton Size="Size.Small"
                                            Variant="Variant.Outlined"
                                            Color="Color.Error"
+                                           Disabled="true"
                                            OnClick="@(() => ConfirmClosePoll(context.SeriesBoardPollId, context.SeriesTitle))">
-                                    Close Poll
+                                    Close Poll (Disabled)
                                 </MudButton>
                                 <MudButton Size="Size.Small"
                                            Variant="Variant.Outlined"
                                            Color="Color.Warning"
+                                           Disabled="true"
                                            OnClick="@(() => ConfirmCancelPoll(context.SeriesBoardPollId, context.SeriesTitle))">
-                                    Cancel Poll
+                                    Cancel Poll (Disabled)
                                 </MudButton>
                             </MudStack>
                         </MudTd>

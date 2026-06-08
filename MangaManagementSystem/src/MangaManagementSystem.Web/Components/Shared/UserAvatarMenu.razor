@@ -1,6 +1,7 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
 @using MangaManagementSystem.Application.DTOs.Auth
+@using MangaManagementSystem.Web.Components.Shared
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IUserService UserService
 @inject IFileResourceService FileResourceService
@@ -27,7 +28,9 @@
 					<MudMenuItem OnClick="OpenProfile">View / Edit Profile</MudMenuItem>
 					<MudMenuItem OnClick="ChangePassword">Change Password</MudMenuItem>
 					<MudDivider />
-					<MudMenuItem Href="/signout">Logout</MudMenuItem>
+					<MudMenuItem>
+    <LogoutForm />
+</MudMenuItem>
 				</ChildContent>
 			</MudMenu>
 		}

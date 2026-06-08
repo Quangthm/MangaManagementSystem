@@ -89,8 +89,8 @@
                                                Variant="Variant.Outlined"
                                                Color="Color.Error"
                                                Disabled="@(context.StatusCode == "DISABLED" || context.StatusCode == "REJECTED")"
-                                               OnClick="@(()=>ConfirmDelete(context))">
-                                        Delete
+                                               OnClick="@(()=>ConfirmDisable(context))">
+                                        Disable
                                     </MudButton>
                                 </MudStack>
                             </MudTd>
@@ -103,14 +103,14 @@
             {
                 <MudDialog Open="true">
                     <DialogContent>
-                        <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Account Deletion</MudText>
-                        <MudText Class="mt-2">Are you sure you want to delete this account? This action cannot be undone.</MudText>
+                        <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Disable Account</MudText>
+                        <MudText Class="mt-2">Are you sure you want to disable this account? The account will be marked as DISABLED and cannot log in.</MudText>
                         <MudText Class="mt-2">Current status: <MudChip T="string" Size="Size.Small">@_deleteTarget.StatusCode</MudChip></MudText>
-                        <MudAlert Severity="Severity.Error" Class="mt-3">Deleted accounts will be removed from the system and cannot be recovered.</MudAlert>
+                        <MudAlert Severity="Severity.Warning" Class="mt-3">Disabled accounts are retained in the system for audit purposes.</MudAlert>
                     </DialogContent>
                     <DialogActions>
-                        <MudButton Variant="Variant.Text" OnClick="CancelDelete">Cancel</MudButton>
-                        <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="ConfirmDeleteAsync">Delete Account</MudButton>
+                        <MudButton Variant="Variant.Text" OnClick="CancelDisable">Cancel</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="ConfirmDisableAsync">Disable Account</MudButton>
                     </DialogActions>
                 </MudDialog>
             }
@@ -181,19 +181,19 @@
         }
     }
 
-    private void ConfirmDelete(MangaManagementSystem.Application.DTOs.Auth.UserDto user)
+    private void ConfirmDisable(MangaManagementSystem.Application.DTOs.Auth.UserDto user)
     {
         _deleteTarget = user;
         _showDeleteConfirm = true;
     }
 
-    private void CancelDelete()
+    private void CancelDisable()
     {
         _showDeleteConfirm = false;
         _deleteTarget = null;
     }
 
-    private async Task ConfirmDeleteAsync()
+    private async Task ConfirmDisableAsync()
     {
         if (_deleteTarget == null) return;
         var user = _deleteTarget;

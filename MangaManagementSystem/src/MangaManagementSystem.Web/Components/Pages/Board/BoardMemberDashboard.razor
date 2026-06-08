@@ -1,0 +1,44 @@
+@page "/board"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Editorial Board Member")]
+@inject NavigationManager Nav
+
+<RankingLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Editorial Board Member Workspace</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Series ranking, board decisions, and voting</MudText>
+        </div>
+
+        <MudAlert Severity="Severity.Info" Class="mb-6">
+            <MudText Typo="Typo.caption" Class="font-weight-bold">Welcome</MudText>
+            <MudText Class="mt-1">As a Board Member, you can view series rankings, participate in board polls, and review decisions.</MudText>
+        </MudAlert>
+
+        <MudGrid Class="mb-6">
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-5 mf-card" Elevation="0">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">Series Ranking</MudText>
+                    <MudText Class="mf-muted">View current reader poll results and series performance metrics.</MudText>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="mt-3" OnClick="@(() => Nav.NavigateTo("/ranking"))">
+                        View Rankings
+                    </MudButton>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-5 mf-card" Elevation="0">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">Board Decisions</MudText>
+                    <MudText Class="mf-muted">View board poll outcomes and series decisions.</MudText>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="mt-3" OnClick="@(() => Nav.NavigateTo("/board-decision"))">
+                        View Decisions
+                    </MudButton>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <MudPaper Class="pa-5 mf-card" Elevation="0">
+            <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Series Requiring Attention</MudText>
+            <MudText Class="mf-muted">No series currently in the danger zone requiring board review.</MudText>
+        </MudPaper>
+    </div>
+</RankingLayout>

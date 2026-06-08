@@ -239,11 +239,12 @@ namespace MangaManagementSystem.Web
                 return Results.Redirect("/login");
             }).DisableAntiforgery();
 
-            app.MapGet("/signout", async (CustomAuthenticationStateProvider authStateProvider) =>
-            {
-                await authStateProvider.MarkUserAsLoggedOut();
-                return Results.Redirect("/login");
-            });
+app.MapGet("/signout", async (CustomAuthenticationStateProvider authStateProvider, HttpContext context) =>
+{
+    await authStateProvider.MarkUserAsLoggedOut();
+    await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+    return Results.Redirect("/login");
+});
 
             app.MapRazorComponents<App>()
                 .AddInteractiveServerRenderMode();
@@ -274,16 +275,16 @@ namespace MangaManagementSystem.Web
                 });
         }
 
-        private static string GetDashboardRedirectUrl(short roleId) => roleId switch
-        {
-            1 => "/mangaka",
-            2 => "/assistant",
-            3 => "/dashboard",
-            4 => "/ranking",
-            5 => "/board-decision",
-            6 => "/admin/user-approval",
-            _ => "/login?error=InvalidCredentials"
-        };
+private static string GetDashboardRedirectUrl(short roleId) => roleId switch
+{
+    1 => "/mangaka",
+    2 => "/assistant",
+    3 => "/editor",
+    4 => "/board",
+    5 => "/board-chief",
+    6 => "/admin",
+    _ => "/login?error=InvalidCredentials"
+};
 
         private static async Task<IResult> SignInAndRedirectAsync(
             HttpContext context,
