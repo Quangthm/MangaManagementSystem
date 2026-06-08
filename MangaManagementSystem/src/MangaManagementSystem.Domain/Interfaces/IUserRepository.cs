@@ -10,6 +10,12 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<User?> GetByUsernameAsync(string username);
         Task<User?> GetByUsernameOrEmailAsync(string usernameOrEmail);
         Task<IReadOnlyList<User>> GetByStatusAsync(string status);
+        Task ChangeUserStatusViaProcAsync(
+            Guid adminUserId,
+            Guid targetUserId,
+            string newStatusCode,
+            string? reason = null
+        );
         Task<Guid> CreateUserViaProcAsync(
             string roleName,
             string username,

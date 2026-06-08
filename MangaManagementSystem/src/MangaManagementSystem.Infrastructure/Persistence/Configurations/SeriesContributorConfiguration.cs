@@ -20,8 +20,12 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
             builder.HasIndex(sc => sc.SeriesId).HasDatabaseName("ix_series_contributor_series_active").HasFilter("end_date IS NULL");
             builder.HasIndex(sc => sc.UserId).HasDatabaseName("ix_series_contributor_user_active").HasFilter("end_date IS NULL");
             // check constraint moved into ToTable above
-            builder.HasOne(sc => sc.Series).WithMany().HasForeignKey(sc => sc.SeriesId);
-            builder.HasOne(sc => sc.User).WithMany().HasForeignKey(sc => sc.UserId);
+            builder.HasOne<Series>()
+                .WithMany()
+                .HasForeignKey(sc => sc.SeriesId);
+            builder.HasOne(sc => sc.User)
+                .WithMany()
+                .HasForeignKey(sc => sc.UserId);
         }
     }
 }

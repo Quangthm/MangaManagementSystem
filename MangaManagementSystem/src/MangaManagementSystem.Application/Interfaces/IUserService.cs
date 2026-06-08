@@ -11,10 +11,10 @@ namespace MangaManagementSystem.Application.Interfaces
     Task<UserDto?> GetUserByEmailAsync(string email);
     Task<IEnumerable<UserDto>> GetUsersByStatusAsync(string status);
 
-    Task<UserDto> ApproveUserAsync(Guid userId);
-    Task RejectUserAsync(Guid userId);
+    Task<UserDto> ApproveUserAsync(Guid adminUserId, Guid userId);
+    Task RejectUserAsync(Guid adminUserId, Guid userId, string? reason = null);
 
-    Task<UserDto> ActivateUserAsync(Guid userId);
-    Task<UserDto> DisableUserAsync(Guid userId);
+    Task<UserDto> ActivateUserAsync(Guid adminUserId, Guid userId);
+    Task<UserDto> DisableUserAsync(Guid adminUserId, Guid userId, string? reason = null);
 }
 }

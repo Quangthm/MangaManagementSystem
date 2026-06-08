@@ -40,7 +40,43 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .ToListAsync();
         }
 
-    public async Task<Guid> CreateUserViaProcAsync(
+        public async Task ChangeUserStatusViaProcAsync(
+            Guid adminUserId,
+            Guid targetUserId,
+            string newStatusCode,
+            string? reason = null)
+        {
+            var conn = _context.Database.GetDbConnection();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "auth.usp_Admin_ChangeUserStatus";
+            cmd.CommandType = System.Data.CommandType.StoredProcedure;
+
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@admin_user_id", System.Data.SqlDbType.UniqueIdentifier)
+            {
+                Value = adminUserId
+            });
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@target_user_id", System.Data.SqlDbType.UniqueIdentifier)
+            {
+                Value = targetUserId
+            });
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@new_status_code", System.Data.SqlDbType.NVarChar, 30)
+            {
+                Value = newStatusCode
+            });
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@reason", System.Data.SqlDbType.NVarChar, 500)
+            {
+                Value = string.IsNullOrWhiteSpace(reason) ? System.DBNull.Value : reason.Trim()
+            });
+
+            if (conn.State != System.Data.ConnectionState.Open)
+            {
+                await conn.OpenAsync();
+            }
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        public async Task<Guid> CreateUserViaProcAsync(
         string roleName,
         string username,
         string email,

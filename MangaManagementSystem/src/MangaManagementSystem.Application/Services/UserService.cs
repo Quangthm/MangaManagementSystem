@@ -63,25 +63,27 @@ namespace MangaManagementSystem.Application.Services
             return entities.Select(MapToDto);
         }
 
-        public async Task<UserDto> ApproveUserAsync(Guid userId)
+        public async Task<UserDto> ApproveUserAsync(Guid adminUserId, Guid userId)
         {
-            var user = await RequirePendingUserAsync(userId);
+            await RequirePendingUserAsync(userId);
+            await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
+                adminUserId,
+                userId,
+                StatusActive,
+                "User registration approved.");
 
-            // Approval simply activates the account. The role was chosen by the user at registration
-            // and must not be changed by admins during approval.
-            user.StatusCode = StatusActive;
-            _unitOfWork.Users.Update(user);
-            await _unitOfWork.SaveChangesAsync();
-            return MapToDto(user);
+            var updated = await _unitOfWork.Users.GetByIdAsync(userId);
+            return MapToDto(updated!);
         }
 
-        public async Task RejectUserAsync(Guid userId)
+        public async Task RejectUserAsync(Guid adminUserId, Guid userId, string? reason = null)
         {
-            var user = await RequirePendingUserAsync(userId);
-
-            user.StatusCode = "REJECTED";
-            _unitOfWork.Users.Update(user);
-            await _unitOfWork.SaveChangesAsync();
+            await RequirePendingUserAsync(userId);
+            await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
+                adminUserId,
+                userId,
+                "REJECTED",
+                reason ?? "User registration rejected.");
         }
 
         private async Task<User> RequirePendingUserAsync(Guid userId)
@@ -114,35 +116,43 @@ namespace MangaManagementSystem.Application.Services
                 throw new InvalidOperationException($"Role id {roleId} does not exist.");
             }
         }
-        public async Task<UserDto> ActivateUserAsync(Guid userId)
-       {
-               var user = await _unitOfWork.Users.GetByIdAsync(userId);
+        public async Task<UserDto> ActivateUserAsync(Guid adminUserId, Guid userId)
+        {
+            var user = await _unitOfWork.Users.GetByIdAsync(userId);
 
-               if (user == null)
-               throw new InvalidOperationException($"User {userId} was not found.");
+            if (user == null)
+            {
+                throw new InvalidOperationException($"User {userId} was not found.");
+            }
 
-               user.StatusCode = StatusActive;
+            await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
+                adminUserId,
+                userId,
+                StatusActive,
+                "User account activated.");
 
-               _unitOfWork.Users.Update(user);
-               await _unitOfWork.SaveChangesAsync();
+            var updated = await _unitOfWork.Users.GetByIdAsync(userId);
+            return MapToDto(updated!);
+        }
 
-           return MapToDto(user);
-      }
+        public async Task<UserDto> DisableUserAsync(Guid adminUserId, Guid userId, string? reason = null)
+        {
+            var user = await _unitOfWork.Users.GetByIdAsync(userId);
 
-        public async Task<UserDto> DisableUserAsync(Guid userId)
-     {
-    var user = await _unitOfWork.Users.GetByIdAsync(userId);
+            if (user == null)
+            {
+                throw new InvalidOperationException($"User {userId} was not found.");
+            }
 
-    if (user == null)
-        throw new InvalidOperationException($"User {userId} was not found.");
+            await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
+                adminUserId,
+                userId,
+                StatusDisabled,
+                reason ?? "User account disabled.");
 
-    user.StatusCode = StatusDisabled;
-
-    _unitOfWork.Users.Update(user);
-    await _unitOfWork.SaveChangesAsync();
-
-    return MapToDto(user);
-}
+            var updated = await _unitOfWork.Users.GetByIdAsync(userId);
+            return MapToDto(updated!);
+        }
         private static UserDto MapToDto(User u) => new(
             u.UserId,
             u.RoleId,

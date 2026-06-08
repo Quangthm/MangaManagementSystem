@@ -200,6 +200,15 @@ namespace MangaManagementSystem.Application.Services
                 return new AuthResultDto(false, null, null, "Account pending admin approval.");
             }
 
+            if (user.StatusCode == "REJECTED")
+            {
+                _logger.LogWarning(
+                    "Login failed: Account rejected for user {UserId} ({Username})",
+                    user.UserId,
+                    user.Username);
+                return new AuthResultDto(false, null, null, "Account registration was rejected.");
+            }
+
             if (user.StatusCode == "DISABLED")
             {
                 _logger.LogWarning(

@@ -110,7 +110,7 @@ namespace MangaManagementSystem.Web
                 }
 
                 await SignInApplicationUserAsync(context, result.User, result.RoleName);
-                return Results.Redirect(GetDashboardRedirectUrl(result.User.RoleId, result.RoleName));
+                return Results.Redirect(GetDashboardRedirectUrl(result.RoleName));
             }).DisableAntiforgery();
 
             app.MapPost("/api/auth/google-login", () =>
@@ -135,7 +135,7 @@ namespace MangaManagementSystem.Web
                 }
 
                 await SignInApplicationUserAsync(context, authResult.User, authResult.RoleName);
-                return Results.Redirect(GetDashboardRedirectUrl(authResult.User.RoleId, authResult.RoleName));
+                return Results.Redirect(GetDashboardRedirectUrl(authResult.RoleName));
             });
 
             app.MapPost("/api/auth/google-signup", () =>
@@ -254,7 +254,7 @@ namespace MangaManagementSystem.Web
                 });
         }
 
-        private static string GetDashboardRedirectUrl(short roleId, string roleName) => roleName switch
+        private static string GetDashboardRedirectUrl(string roleName) => roleName switch
         {
             "Admin" => "/admin/user-approval",
             "Mangaka" => "/mangaka",
@@ -271,7 +271,7 @@ namespace MangaManagementSystem.Web
             string roleName)
         {
             await SignInApplicationUserAsync(context, user, roleName);
-            return Results.Redirect(GetDashboardRedirectUrl(user.RoleId, roleName));
+            return Results.Redirect(GetDashboardRedirectUrl(roleName));
         }
     }
 }
