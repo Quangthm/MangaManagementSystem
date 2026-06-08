@@ -1,4 +1,6 @@
 @page "/admin/audit-logs"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin")]
 @inject NavigationManager Nav
 
 <AdminLayout>
@@ -8,13 +10,9 @@
             <MudText Typo="Typo.body1" Class="mf-muted">Review system actions, account changes, and workflow decisions</MudText>
         </div>
 
-        <MudGrid Class="mb-6"><MudItem xs="12" md="4"><StatCard Label="Events Today" Value="147" /></MudItem><MudItem xs="12" md="4"><StatCard Label="Critical Actions" Value="23" /></MudItem><MudItem xs="12" md="4"><StatCard Label="Integrity Status" Value="100%" /></MudItem></MudGrid>
-        <MudPaper Class="pa-5 mf-card" Elevation="0">
-            <MudTable Items="Logs" Hover="true">
-                <HeaderContent><MudTh>Timestamp</MudTh><MudTh>Actor</MudTh><MudTh>Action</MudTh><MudTh>Object</MudTh><MudTh>Integrity</MudTh></HeaderContent>
-                <RowTemplate><MudTd>@context.Time</MudTd><MudTd>@context.Actor</MudTd><MudTd>@context.Action</MudTd><MudTd>@context.Object</MudTd><MudTd><MudChip T="string" Color="Color.Success" Size="Size.Small">Valid</MudChip></MudTd></RowTemplate>
-            </MudTable>
-        </MudPaper>
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+            <MudText>System audit logs are disabled in this release. Contact your system administrator if you need to access audit data.</MudText>
+        </MudAlert>
 
     </div>
 </AdminLayout>

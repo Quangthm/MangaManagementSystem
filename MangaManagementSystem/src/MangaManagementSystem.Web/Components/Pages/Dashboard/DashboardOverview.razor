@@ -1,5 +1,7 @@
 @page "/dashboard"
+@using Microsoft.AspNetCore.Components.Authorization
 @inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
 
 <DashboardLayout>
     <div class="mf-page">
@@ -8,8 +10,14 @@
             <MudText Typo="Typo.body1" Class="mf-muted">Here's a summary of your editorial platform activity.</MudText>
         </div>
 
+    @if (_redirecting)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else
+    {
         <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-6">
-            Prototype demo view. In the real system, users are redirected based on their assigned role.
+            This overview is a demo. You are redirected to your primary workspace when assigned a role.
         </MudAlert>
         <MudGrid Class="mb-6">
             <MudItem xs="12" sm="6" md="3"><StatCard Label="Active Reviews" Value="1" Description="Updated recently" /></MudItem>
@@ -25,15 +33,81 @@
         </MudGrid>
         <MudText Typo="Typo.overline" Class="mf-muted">ALL WORKSPACES</MudText>
         <MudGrid>
-            <MudItem xs="12" md="3"><WorkspaceCard Title="Mangaka Workspace" Description="Series, chapters, assistants and submissions." Href="/mangaka" /></MudItem>
-            <MudItem xs="12" md="3"><WorkspaceCard Title="Assistant Workspace" Description="Assigned tasks and submission flow." Href="/assistant" /></MudItem>
-            <MudItem xs="12" md="3"><WorkspaceCard Title="System Admin Workspace" Description="Users, registrations, audit logs and settings." Href="/admin" /></MudItem>
-            <MudItem xs="12" md="3"><WorkspaceCard Title="Board & Ranking" Description="Series ranking and board decision support." Href="/ranking" /></MudItem>
+            @if (_showMangakaLink)
+            {
+                <MudItem xs="12" md="3"><WorkspaceCard Title="Mangaka Workspace" Description="Series, chapters, assistants and submissions." Href="/mangaka" /></MudItem>
+            }
+            @if (_showAssistantLink)
+            {
+                <MudItem xs="12" md="3"><WorkspaceCard Title="Assistant Workspace" Description="Assigned tasks and submission flow." Href="/assistant" /></MudItem>
+            }
+            @if (_showAdminLink)
+            {
+                <MudItem xs="12" md="3"><WorkspaceCard Title="System Admin Workspace" Description="Users, registrations, audit logs and settings." Href="/admin" /></MudItem>
+            }
+            @if (_showRankingLink)
+            {
+                <MudItem xs="12" md="3"><WorkspaceCard Title="Board & Ranking" Description="Series ranking and board decision support." Href="/ranking" /></MudItem>
+            }
         </MudGrid>
+    }
 
     </div>
 </DashboardLayout>
 
 @code {
+    private bool _redirecting = true;
+    private bool _showMangakaLink;
+    private bool _showAssistantLink;
+    private bool _showAdminLink;
+    private bool _showRankingLink;
 
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = auth.User;
+        if (user?.Identity?.IsAuthenticated == true)
+        {
+            if (user.IsInRole("Admin"))
+            {
+                _showAdminLink = true;
+                // Admin users redirect to the admin home workspace
+                Nav.NavigateTo("/admin");
+                return;
+            }
+            if (user.IsInRole("Mangaka"))
+            {
+                _showMangakaLink = true;
+                Nav.NavigateTo("/mangaka");
+                return;
+            }
+            if (user.IsInRole("Assistant"))
+            {
+                _showAssistantLink = true;
+                Nav.NavigateTo("/assistant");
+                return;
+            }
+            if (user.IsInRole("Tantou Editor"))
+            {
+                // Tantou Editor has a dedicated editor workspace
+                Nav.NavigateTo("/editor");
+                return;
+            }
+            if (user.IsInRole("Editorial Board Member"))
+            {
+                _showRankingLink = true;
+                Nav.NavigateTo("/board");
+                return;
+            }
+            if (user.IsInRole("Editorial Board Chief"))
+            {
+                _showRankingLink = true;
+                Nav.NavigateTo("/board-chief");
+                return;
+            }
+        }
+
+        // no redirect, show overview with links based on available roles
+        _redirecting = false;
+    }
 }

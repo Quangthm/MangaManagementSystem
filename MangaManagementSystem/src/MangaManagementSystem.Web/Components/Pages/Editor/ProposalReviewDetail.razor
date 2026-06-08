@@ -1,0 +1,90 @@
+@page "/editor/proposals/{SeriesId:long}"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Tantou Editor")]
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<EditorLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Proposal Review</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Review proposal material, add feedback, and move it to the next workflow step</MudText>
+        </div>
+
+        <MudGrid>
+            <MudItem xs="12" md="8">
+                <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Class="mb-4">
+                        <div>
+                            <MudText Typo="Typo.h5" Class="font-weight-bold">Crimson Moon Academy</MudText>
+                            <MudText Class="mf-muted">Proposal v2 • Submitted by Ken Sato • Japanese</MudText>
+                        </div>
+                        <MudChip T="string" Color="Color.Warning">UNDER_EDITORIAL_REVIEW</MudChip>
+                    </MudStack>
+
+                    <MudTabs>
+                        <MudTabPanel Text="Synopsis">
+                            <MudText Typo="Typo.h6" Class="mb-2">Story Summary</MudText>
+                            <MudText Class="mf-muted">
+                                A group of young artists enter a mysterious academy where every manga panel they draw can alter the real world. The editorial focus is on pacing, character motivation, and whether the serialization premise can sustain multiple arcs.
+                            </MudText>
+                        </MudTabPanel>
+                        <MudTabPanel Text="Proposal File">
+                            <MudPaper Class="pa-6 text-center mf-card" Elevation="0">
+                                <MudIcon Icon="mdi-file-document-outline" Size="Size.Large" Color="Color.Primary" Class="mb-3" />
+                                <MudText Typo="Typo.h6">Proposal document preview</MudText>
+                                <MudText Class="mf-muted mb-3">File preview/download will use FileResource when the backend workflow is connected.</MudText>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Primary">Open Proposal File</MudButton>
+                            </MudPaper>
+                        </MudTabPanel>
+                        <MudTabPanel Text="Review Criteria">
+                            <MudList T="string">
+                                <MudListItem T="string" Text="Series premise is clear and suitable for serialization" />
+                                <MudListItem T="string" Text="Chapter direction has enough production detail" />
+                                <MudListItem T="string" Text="Art references and portfolio evidence are sufficient" />
+                                <MudListItem T="string" Text="Potential ranking/publication risk is documented" />
+                            </MudList>
+                        </MudTabPanel>
+                    </MudTabs>
+                </MudPaper>
+
+                <MudPaper Class="pa-5 mf-card" Elevation="0">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Editorial Feedback</MudText>
+                    <MudTextField Label="Review comments" @bind-Value="ReviewComments" Lines="6" Variant="Variant.Outlined" FullWidth="true" />
+                    <MudAlert Severity="Severity.Info" Class="mt-4">
+                        Revision or cancellation decisions should include clear comments or markup according to the MVP workflow.
+                    </MudAlert>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="4">
+                <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Decision Actions</MudText>
+                    <MudStack Spacing="2">
+                        <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="PassToBoard">Pass to Board Review</MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="RequestRevision">Request Revision</MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="CancelProposal">Cancel Proposal</MudButton>
+                    </MudStack>
+                </MudPaper>
+
+                <MudPaper Class="pa-5 mf-card" Elevation="0">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Workflow Trace</MudText>
+                    <MudTimeline>
+                        <MudTimelineItem Color="Color.Success">Proposal submitted</MudTimelineItem>
+                        <MudTimelineItem Color="Color.Warning">Editorial review in progress</MudTimelineItem>
+                        <MudTimelineItem Color="Color.Default">Board review pending</MudTimelineItem>
+                    </MudTimeline>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    </div>
+</EditorLayout>
+
+@code {
+    [Parameter] public long SeriesId { get; set; }
+    private string ReviewComments { get; set; } = string.Empty;
+
+    private void PassToBoard() => Snackbar.Add("Proposal marked for board review UI flow.", Severity.Success);
+    private void RequestRevision() => Snackbar.Add("Revision request captured in UI draft.", Severity.Warning);
+    private void CancelProposal() => Snackbar.Add("Cancellation decision captured in UI draft.", Severity.Error);
+}

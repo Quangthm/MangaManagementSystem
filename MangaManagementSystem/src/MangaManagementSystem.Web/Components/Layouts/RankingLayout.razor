@@ -2,10 +2,10 @@
 @inject NavigationManager Nav
 
 <div class="mf-shell">
-    <aside class="mf-sidebar">
+    <aside class="mf-sidebar mf-ranking-sidebar">
         <div class="mf-sidebar-header">
             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                <span class="mf-logo-box">MF</span>
+                <span class="mf-logo-box mf-ranking-logo">MF</span>
                 <div>
                     <MudText Typo="Typo.subtitle1" Class="font-weight-bold text-white">MangaFlow</MudText>
                     <MudText Typo="Typo.caption" Style="color:#94a3b8">Ranking Dashboard</MudText>
@@ -15,11 +15,11 @@
         <nav class="mf-nav-section">
             <div class="mf-nav-title">Editorial Board</div>
             <NavLink href="/ranking" class="mf-nav-link" Match="NavLinkMatch.Prefix">Dashboard</NavLink>
-            <NavLink href="/ranking/series" class="mf-nav-link" Match="NavLinkMatch.Prefix">Series Rankings</NavLink>
-            <NavLink href="/ranking/performance" class="mf-nav-link" Match="NavLinkMatch.Prefix">Performance Tracking</NavLink>
-            <NavLink href="/ranking/risk" class="mf-nav-link" Match="NavLinkMatch.Prefix">Cancellation Risk</NavLink>
-            <NavLink href="/ranking/decisions" class="mf-nav-link" Match="NavLinkMatch.Prefix">Board Decisions</NavLink>
-            <NavLink href="/ranking/settings" class="mf-nav-link" Match="NavLinkMatch.Prefix">Account Settings</NavLink>
+            <div class="mf-nav-link disabled">Series Rankings (Not available)</div>
+            <div class="mf-nav-link disabled">Performance Tracking (Not available)</div>
+            <div class="mf-nav-link disabled">Cancellation Risk (Not available)</div>
+            <div class="mf-nav-link disabled">Board Decisions (Not available)</div>
+            <div class="mf-nav-link disabled">Account Settings (Not available)</div>
             <NavLink href="/board-decision" class="mf-nav-link" Match="NavLinkMatch.Prefix">Board Decision Workspace</NavLink>
 
         </nav>
