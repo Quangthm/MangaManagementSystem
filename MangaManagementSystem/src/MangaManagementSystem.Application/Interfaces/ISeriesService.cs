@@ -7,7 +7,13 @@ namespace MangaManagementSystem.Application.Interfaces
     public interface ISeriesService
     {
         Task<SeriesDto> CreateSeriesAsync(CreateSeriesDto dto);
+
         Task<SeriesDto?> GetSeriesByIdAsync(long id);
+
         Task<IEnumerable<SeriesDto>> GetAllSeriesAsync();
+
+        Task<SeriesDto?> UpdateSeriesAsync(long id, UpdateSeriesDto dto, int updatedByUserId);
+
+        Task<bool> DeleteSeriesAsync(long id);
     }
 }
