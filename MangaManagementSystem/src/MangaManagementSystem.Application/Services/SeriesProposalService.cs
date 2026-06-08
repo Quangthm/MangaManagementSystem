@@ -20,7 +20,7 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<SeriesProposalDto> CreateSeriesProposalAsync(CreateSeriesProposalDto dto)
         {
-            var entity = new SeriesProposal
+            var entity = new SeriesProposal()
             {
                 SeriesId = dto.SeriesId,
                 ProposalVersionNo = dto.ProposalVersionNo,
@@ -32,20 +32,20 @@ namespace MangaManagementSystem.Application.Services
                 SubmittedByUserId = dto.SubmittedByUserId,
                 SubmittedAtUtc = DateTime.UtcNow,
                 Comments = dto.Comments,
-                MarkupFileId = dto.MarkupFileId
+                MarkupFileId = dto.MarkupFileId,
             };
             await _unitOfWork.SeriesProposals.AddAsync(entity);
             await _unitOfWork.SaveChangesAsync();
             return MapToDto(entity);
         }
 
-        public async Task<SeriesProposalDto?> GetSeriesProposalByIdAsync(long id)
+        public async Task<SeriesProposalDto?> GetSeriesProposalByIdAsync(Guid id)
         {
             var entity = await _unitOfWork.SeriesProposals.GetByIdAsync(id);
             return entity == null ? null : MapToDto(entity);
         }
 
-        public async Task<IEnumerable<SeriesProposalDto>> GetSeriesProposalsBySeriesIdAsync(long seriesId)
+        public async Task<IEnumerable<SeriesProposalDto>> GetSeriesProposalsBySeriesIdAsync(Guid seriesId)
         {
             var all = await _unitOfWork.SeriesProposals.GetAllAsync();
             return all
@@ -56,30 +56,30 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<SeriesProposalDto?> UpdateSeriesProposalAsync(UpdateSeriesProposalDto dto)
         {
-            var entity = await _unitOfWork.SeriesProposals.GetByIdAsync(dto.SeriesProposalId);
-            if (entity == null)
+            var proposal = await _unitOfWork.SeriesProposals.GetByIdAsync(dto.SeriesProposalId);
+            if (proposal == null)
             {
                 return null;
             }
 
-            entity.SeriesId = dto.SeriesId;
-            entity.ProposalVersionNo = dto.ProposalVersionNo;
-            entity.ProposalTitle = dto.ProposalTitle;
-            entity.SynopsisSnapshot = dto.SynopsisSnapshot;
-            entity.GenreSnapshot = dto.GenreSnapshot;
-            entity.ProposalFileId = dto.ProposalFileId;
-            entity.StatusCode = dto.StatusCode;
-            entity.SubmittedByUserId = dto.SubmittedByUserId;
-            entity.ReviewedByUserId = dto.ReviewedByUserId;
-            entity.ReviewedAtUtc = dto.ReviewedAtUtc;
-            entity.Comments = dto.Comments;
-            entity.MarkupFileId = dto.MarkupFileId;
-            _unitOfWork.SeriesProposals.Update(entity);
+            proposal.SeriesId = dto.SeriesId;
+            proposal.ProposalVersionNo = dto.ProposalVersionNo;
+            proposal.ProposalTitle = dto.ProposalTitle;
+            proposal.SynopsisSnapshot = dto.SynopsisSnapshot;
+            proposal.GenreSnapshot = dto.GenreSnapshot;
+            proposal.ProposalFileId = dto.ProposalFileId;
+            proposal.StatusCode = dto.StatusCode;
+            proposal.SubmittedByUserId = dto.SubmittedByUserId;
+            proposal.ReviewedByUserId = dto.ReviewedByUserId;
+            proposal.ReviewedAtUtc = dto.ReviewedAtUtc;
+            proposal.Comments = dto.Comments;
+            proposal.MarkupFileId = dto.MarkupFileId;
+            _unitOfWork.SeriesProposals.Update(proposal);
             await _unitOfWork.SaveChangesAsync();
-            return MapToDto(entity);
+            return MapToDto(proposal);
         }
 
-        public async Task<bool> DeleteSeriesProposalAsync(long id)
+        public async Task<bool> DeleteSeriesProposalAsync(Guid id)
         {
             var entity = await _unitOfWork.SeriesProposals.GetByIdAsync(id);
             if (entity == null)

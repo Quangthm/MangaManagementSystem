@@ -4,26 +4,26 @@ using System.ComponentModel.DataAnnotations;
 namespace MangaManagementSystem.Application.DTOs.Manga
 {
     public record SeriesBoardPollDto(
-        long SeriesBoardPollId,
-        long SeriesId,
+        Guid SeriesBoardPollId,
+        Guid SeriesId,
         string PollTypeCode,
         string PollReason,
         string PollStatusCode,
-        int CreatedByUserId,
+        Guid CreatedByUserId,
         DateTime StartedAtUtc,
         DateTime? EndsAtUtc
     );
 
     public record CreateSeriesBoardPollDto(
-        [Required] long SeriesId,
+        [Required] Guid SeriesId,
         [Required][MaxLength(50)] string PollTypeCode,
         [Required] string PollReason,
-        [Required] int CreatedByUserId,
+        [Required] Guid CreatedByUserId,
         DateTime? EndsAtUtc
     );
 
     public record UpdateSeriesBoardPollDto(
-        [Required] long SeriesBoardPollId,
+        [Required] Guid SeriesBoardPollId,
         [Required][MaxLength(50)] string PollStatusCode
     );
 }

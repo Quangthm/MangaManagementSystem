@@ -3,28 +3,28 @@ using System.ComponentModel.DataAnnotations;
 namespace MangaManagementSystem.Application.DTOs.Manga
 {
     public record ChapterEditorialReviewDto(
-        long ChapterEditorialReviewId,
-        long ChapterId,
-        int ReviewerUserId,
+        Guid ChapterEditorialReviewId,
+        Guid ChapterId,
+        Guid ReviewerUserId,
         string DecisionCode,
         string? Feedback,
-        long? MarkupFileId
+        Guid? MarkupFileId
     );
 
     public record CreateChapterEditorialReviewDto(
-        [Required] long ChapterId,
-        [Required] int ReviewerUserId,
+        [Required] Guid ChapterId,
+        [Required] Guid ReviewerUserId,
         [Required][MaxLength(30)] string DecisionCode,
         string? Feedback,
-        long? MarkupFileId
+        Guid? MarkupFileId
     );
 
     public record UpdateChapterEditorialReviewDto(
-        [Required] long ChapterEditorialReviewId,
-        [Required] long ChapterId,
-        [Required] int ReviewerUserId,
+        [Required] Guid ChapterEditorialReviewId,
+        [Required] Guid ChapterId,
+        [Required] Guid ReviewerUserId,
         [Required][MaxLength(30)] string DecisionCode,
         string? Feedback,
-        long? MarkupFileId
+        Guid? MarkupFileId
     );
 }

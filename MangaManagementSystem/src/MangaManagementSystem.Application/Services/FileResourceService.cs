@@ -37,7 +37,7 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(entity);
         }
 
-        public async Task<FileResourceDto?> GetFileResourceByIdAsync(long id)
+        public async Task<FileResourceDto?> GetFileResourceByIdAsync(Guid id)
         {
             var entity = await _unitOfWork.FileResources.GetByIdAsync(id);
             return entity == null ? null : MapToDto(entity);
@@ -51,7 +51,7 @@ namespace MangaManagementSystem.Application.Services
                 .Select(MapToDto);
         }
 
-        public async Task<bool> DeleteFileResourceAsync(long id, int? deletedByUserId = null)
+        public async Task<bool> DeleteFileResourceAsync(Guid id, Guid? deletedByUserId = null)
         {
             var entity = await _unitOfWork.FileResources.GetByIdAsync(id);
             if (entity == null || entity.DeletedAtUtc != null)

@@ -32,13 +32,13 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(entity);
         }
 
-        public async Task<ChapterPageVersionDto?> GetChapterPageVersionByIdAsync(long id)
+        public async Task<ChapterPageVersionDto?> GetChapterPageVersionByIdAsync(Guid id)
         {
             var entity = await _unitOfWork.ChapterPageVersions.GetByIdAsync(id);
             return entity == null ? null : MapToDto(entity);
         }
 
-        public async Task<IEnumerable<ChapterPageVersionDto>> GetChapterPageVersionsByChapterPageIdAsync(long chapterPageId)
+        public async Task<IEnumerable<ChapterPageVersionDto>> GetChapterPageVersionsByChapterPageIdAsync(Guid chapterPageId)
         {
             var all = await _unitOfWork.ChapterPageVersions.GetAllAsync();
             return all
@@ -65,7 +65,7 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(entity);
         }
 
-        public async Task<bool> DeleteChapterPageVersionAsync(long id)
+        public async Task<bool> DeleteChapterPageVersionAsync(Guid id)
         {
             var entity = await _unitOfWork.ChapterPageVersions.GetByIdAsync(id);
             if (entity == null)

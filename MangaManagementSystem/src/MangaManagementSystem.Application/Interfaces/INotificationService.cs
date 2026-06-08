@@ -7,8 +7,8 @@ namespace MangaManagementSystem.Application.Interfaces
     public interface INotificationService
     {
         Task<NotificationDto> CreateNotificationAsync(CreateNotificationDto dto);
-        Task<NotificationDto?> GetNotificationByIdAsync(long id);
-        Task<IEnumerable<NotificationDto>> GetNotificationsByRecipientUserIdAsync(int recipientUserId);
-        Task<NotificationDto?> MarkNotificationAsReadAsync(long notificationId);
+        Task<NotificationDto?> GetNotificationByIdAsync(Guid id);
+        Task<IEnumerable<NotificationDto>> GetNotificationsByRecipientUserIdAsync(Guid recipientUserId);
+        Task<NotificationDto?> MarkNotificationAsReadAsync(Guid notificationId);
     }
 }

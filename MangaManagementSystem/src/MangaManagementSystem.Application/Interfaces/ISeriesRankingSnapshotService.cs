@@ -7,7 +7,7 @@ namespace MangaManagementSystem.Application.Interfaces
     public interface ISeriesRankingSnapshotService
     {
         Task<SeriesRankingSnapshotDto> CreateSeriesRankingSnapshotAsync(CreateSeriesRankingSnapshotDto dto);
-        Task<SeriesRankingSnapshotDto?> GetSeriesRankingSnapshotByIdAsync(long id);
-        Task<IEnumerable<SeriesRankingSnapshotDto>> GetSeriesRankingSnapshotsBySeriesIdAsync(long seriesId);
+        Task<SeriesRankingSnapshotDto?> GetSeriesRankingSnapshotByIdAsync(Guid id);
+        Task<IEnumerable<SeriesRankingSnapshotDto>> GetSeriesRankingSnapshotsBySeriesIdAsync(Guid seriesId);
     }
 }

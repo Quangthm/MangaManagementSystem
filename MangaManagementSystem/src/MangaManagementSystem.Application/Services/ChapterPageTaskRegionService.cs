@@ -29,7 +29,7 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(entity);
         }
 
-        public async Task<ChapterPageTaskRegionDto?> GetChapterPageTaskRegionByIdAsync(long id)
+        public async Task<ChapterPageTaskRegionDto?> GetChapterPageTaskRegionByIdAsync(Guid id)
         {
             // composite key: (ChapterPageTaskId, PageRegionId)
             // attempt to find by single id as composite is expected elsewhere; we will attempt to find by primary key search fallback is not available
@@ -38,7 +38,7 @@ namespace MangaManagementSystem.Application.Services
             return entity == null ? null : MapToDto(entity);
         }
 
-        public async Task<IEnumerable<ChapterPageTaskRegionDto>> GetChapterPageTaskRegionsByTaskIdAsync(long chapterPageTaskId)
+        public async Task<IEnumerable<ChapterPageTaskRegionDto>> GetChapterPageTaskRegionsByTaskIdAsync(Guid chapterPageTaskId)
         {
             var all = await _unitOfWork.ChapterPageTaskRegions.GetAllAsync();
             return all
@@ -46,7 +46,7 @@ namespace MangaManagementSystem.Application.Services
                 .Select(MapToDto);
         }
 
-        public async Task<IEnumerable<ChapterPageTaskRegionDto>> GetChapterPageTaskRegionsByPageRegionIdAsync(long pageRegionId)
+        public async Task<IEnumerable<ChapterPageTaskRegionDto>> GetChapterPageTaskRegionsByPageRegionIdAsync(Guid pageRegionId)
         {
             var all = await _unitOfWork.ChapterPageTaskRegions.GetAllAsync();
             return all
@@ -71,7 +71,7 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(entity);
         }
 
-        public async Task<bool> DeleteChapterPageTaskRegionAsync(long id)
+        public async Task<bool> DeleteChapterPageTaskRegionAsync(Guid id)
         {
             var all = await _unitOfWork.ChapterPageTaskRegions.GetAllAsync();
             var entity = all.FirstOrDefault(e => e.ChapterPageTaskId == id || e.PageRegionId == id);

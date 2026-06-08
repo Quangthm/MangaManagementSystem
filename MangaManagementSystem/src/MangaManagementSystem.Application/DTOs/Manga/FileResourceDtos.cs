@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations;
 namespace MangaManagementSystem.Application.DTOs.Manga
 {
     public record FileResourceDto(
-        long FileResourceId,
+        Guid FileResourceId,
         string FilePurposeCode,
         string OriginalFileName,
         string CloudinaryPublicId,
@@ -12,10 +12,10 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         string ContentType,
         long FileSizeBytes,
         string? Sha256Hash,
-        int? UploadedByUserId,
+        Guid? UploadedByUserId,
         DateTime UploadedAtUtc,
         DateTime? DeletedAtUtc,
-        int? DeletedByUserId
+        Guid? DeletedByUserId
     );
 
     public record CreateFileResourceDto(
@@ -26,6 +26,6 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         [Required][MaxLength(100)] string ContentType,
         [Required] long FileSizeBytes,
         [MaxLength(64)] string? Sha256Hash,
-        int? UploadedByUserId
+        Guid? UploadedByUserId
     );
 }

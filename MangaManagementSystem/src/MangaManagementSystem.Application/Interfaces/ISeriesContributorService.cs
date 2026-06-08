@@ -7,9 +7,9 @@ namespace MangaManagementSystem.Application.Interfaces
     public interface ISeriesContributorService
     {
         Task<SeriesContributorDto> CreateSeriesContributorAsync(CreateSeriesContributorDto dto);
-        Task<SeriesContributorDto?> GetSeriesContributorByIdAsync(long id);
-        Task<IEnumerable<SeriesContributorDto>> GetSeriesContributorsBySeriesIdAsync(long seriesId);
+        Task<SeriesContributorDto?> GetSeriesContributorByIdAsync(Guid id);
+        Task<IEnumerable<SeriesContributorDto>> GetSeriesContributorsBySeriesIdAsync(Guid seriesId);
         Task<SeriesContributorDto?> UpdateSeriesContributorAsync(UpdateSeriesContributorDto dto);
-        Task<bool> DeleteSeriesContributorAsync(long id);
+        Task<bool> DeleteSeriesContributorAsync(Guid id);
     }
 }

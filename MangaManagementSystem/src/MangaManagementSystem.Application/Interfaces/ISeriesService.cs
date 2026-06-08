@@ -7,7 +7,7 @@ namespace MangaManagementSystem.Application.Interfaces
     public interface ISeriesService
     {
         Task<SeriesDto> CreateSeriesAsync(CreateSeriesDto dto);
-        Task<SeriesDto?> GetSeriesByIdAsync(long id);
+        Task<SeriesDto?> GetSeriesByIdAsync(Guid id);
         Task<IEnumerable<SeriesDto>> GetAllSeriesAsync();
     }
 }

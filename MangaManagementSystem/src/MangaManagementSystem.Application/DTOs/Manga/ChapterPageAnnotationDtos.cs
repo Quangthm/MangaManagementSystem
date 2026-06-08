@@ -3,27 +3,27 @@ using System.ComponentModel.DataAnnotations;
 namespace MangaManagementSystem.Application.DTOs.Manga
 {
     public record ChapterPageAnnotationDto(
-        long ChapterPageAnnotationId,
-        long PageRegionId,
+        Guid ChapterPageAnnotationId,
+        Guid PageRegionId,
         string IssueTypeCode,
-        int AnnotatedByUserId,
+        Guid AnnotatedByUserId,
         string? AnnotationText,
-        int? ResolvedByUserId
+        Guid? ResolvedByUserId
     );
 
     public record CreateChapterPageAnnotationDto(
-        [Required] long PageRegionId,
+        [Required] Guid PageRegionId,
         [Required][MaxLength(50)] string IssueTypeCode,
-        [Required] int AnnotatedByUserId,
+        [Required] Guid AnnotatedByUserId,
         string? AnnotationText
     );
 
     public record UpdateChapterPageAnnotationDto(
-        [Required] long ChapterPageAnnotationId,
-        [Required] long PageRegionId,
+        [Required] Guid ChapterPageAnnotationId,
+        [Required] Guid PageRegionId,
         [Required][MaxLength(50)] string IssueTypeCode,
-        [Required] int AnnotatedByUserId,
+        [Required] Guid AnnotatedByUserId,
         string? AnnotationText,
-        int? ResolvedByUserId
+        Guid? ResolvedByUserId
     );
 }
