@@ -854,7 +854,16 @@ CREATE INDEX ix_chapter_page_task_status_due ON manga.ChapterPageTask (
 	task_title
 	);
 
-
+CREATE TABLE manga.ChapterPageTaskRegion (
+	chapter_page_task_id UNIQUEIDENTIFIER NOT NULL,
+	page_region_id UNIQUEIDENTIFIER NOT NULL,
+	CONSTRAINT pk_chapter_page_task_region PRIMARY KEY (
+		chapter_page_task_id,
+		page_region_id
+		),
+	CONSTRAINT fk_chapter_page_task_region_task FOREIGN KEY (chapter_page_task_id) REFERENCES manga.ChapterPageTask(chapter_page_task_id),
+	CONSTRAINT fk_chapter_page_task_region_region FOREIGN KEY (page_region_id) REFERENCES manga.PageRegion(page_region_id)
+	);
 
 CREATE TABLE manga.ChapterEditorialReview (
 	chapter_editorial_review_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_chapter_editorial_review_id DEFAULT NEWID() CONSTRAINT pk_chapter_editorial_review PRIMARY KEY,
