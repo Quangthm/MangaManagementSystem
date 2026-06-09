@@ -317,6 +317,35 @@ a { text-decoration: none; }
   box-shadow: 0 8px 24px rgba(245, 158, 11, .3);
 }
 
+/* ── Empty State ───────────────────────────────────────────── */
+.mf-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 48px 24px;
+  border: 1px dashed var(--mf-slate-300);
+  border-radius: var(--mf-radius);
+  background: var(--mf-slate-50);
+  gap: .35rem;
+}
+
+.mf-empty-state .mf-empty-icon {
+  color: var(--mf-slate-400);
+  margin-bottom: .5rem;
+}
+
+.mf-empty-state .mf-empty-title {
+  font-weight: 700;
+  color: var(--mf-slate-700);
+}
+
+/* ── Demo / Not-wired banner accent ────────────────────────── */
+.mf-demo-banner {
+  border-left: 4px solid var(--mf-amber);
+}
+
 /* ── Responsive ────────────────────────────────────────────── */
 .mf-mobile-topbar { display: none; }
 

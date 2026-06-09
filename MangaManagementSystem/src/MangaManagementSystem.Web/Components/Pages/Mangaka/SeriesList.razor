@@ -22,11 +22,11 @@
         }
         else if (_series == null || !_series.Any())
         {
-            <MudPaper Class="pa-8 text-center mf-card" Elevation="0">
-                <MudIcon Icon="mdi-book-open-page-variant" Size="Size.Large" Color="Color.Secondary" Class="mb-3" />
-                <MudText Typo="Typo.h6">No series found yet.</MudText>
-                <MudText Class="mf-muted mt-1">Series creation isn't wired up yet, so new series can't be added from here for now.</MudText>
-            </MudPaper>
+            <div class="mf-empty-state">
+                <MudIcon Icon="@Icons.Material.Outlined.LibraryBooks" Size="Size.Large" Class="mf-empty-icon" />
+                <MudText Typo="Typo.h6" Class="mf-empty-title">No series found yet</MudText>
+                <MudText Typo="Typo.body2" Class="mf-muted">Series creation isn't wired up yet, so new series can't be added from here for now.</MudText>
+            </div>
         }
         else
         {
