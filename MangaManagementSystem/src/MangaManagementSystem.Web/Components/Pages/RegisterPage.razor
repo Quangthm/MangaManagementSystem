@@ -32,15 +32,15 @@
                                   HelperText="Display name shown publicly. Defaults to username if left empty."
                                   Disabled="_isSendingOtp" />
                     <!-- FullName removed to match DB schema (no full_name column) -->
-                    <MudSelect T="short"
+                    <MudSelect T="string"
                                Label="Role"
-                               @bind-Value="_roleId"
+                               @bind-Value="_roleName"
                                Variant="Variant.Outlined"
                                Required="true"
                                Disabled="_isSendingOtp">
-                        <MudSelectItem T="short" Value="@((short)1)">Mangaka</MudSelectItem>
-                        <MudSelectItem T="short" Value="@((short)2)">Assistant</MudSelectItem>
-                        <MudSelectItem T="short" Value="@((short)3)">Tantou Editor</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("Mangaka")">Mangaka</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("Assistant")">Assistant</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("Tantou Editor")">Tantou Editor</MudSelectItem>
                     </MudSelect>
                     <MudTextField Label="Email"
                                   @bind-Value="_email"
@@ -180,7 +180,7 @@
     private string _username = string.Empty;
     private string _email = string.Empty;
     private string _password = string.Empty;
-    private short _roleId = 1;
+    private string _roleName = "Mangaka";
     private string? _displayName = null;
     private string _otpCode = string.Empty;
 
@@ -227,7 +227,7 @@
             try
             {
                 // Build DTO including optional portfolio
-                var request = new RegisterDto(_username, _email, _password, _roleId, _displayName,
+                var request = new RegisterDto(_username, _email, _password, _roleName, _displayName,
                     PortfolioFileName: _selectedFileName == string.Empty ? null : _selectedFileName,
                     PortfolioContentType: string.IsNullOrEmpty(_selectedFileContentType) ? null : _selectedFileContentType,
                     PortfolioFileBytes: _selectedFileBytes);

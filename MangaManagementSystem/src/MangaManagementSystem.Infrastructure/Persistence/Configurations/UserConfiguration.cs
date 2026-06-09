@@ -13,7 +13,7 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
             builder.Property(u => u.UserId).ValueGeneratedOnAdd();
             builder.Property(u => u.Username).IsRequired().HasMaxLength(50);
             builder.Property(u => u.Email).IsRequired().HasMaxLength(254);
-            builder.Property(u => u.DisplayName).HasMaxLength(100);
+            builder.Property(u => u.DisplayName).IsRequired().HasMaxLength(100);
             builder.Property(u => u.PasswordHash).IsRequired().HasMaxLength(255);
             builder.Property(u => u.StatusCode).IsRequired().HasMaxLength(30).HasDefaultValue("PENDING_APPROVAL");
             builder.Property(u => u.CreatedAtUtc).IsRequired();

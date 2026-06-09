@@ -7,7 +7,7 @@ namespace MangaManagementSystem.Application.DTOs.Auth
         Guid UserId,
         Guid RoleId,
         string Username,
-        string? DisplayName,
+        string DisplayName,
         string Email,
         Guid? AvatarFileId,
         Guid? PortfolioFileId,
