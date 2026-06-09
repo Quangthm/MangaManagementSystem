@@ -6,25 +6,143 @@
 <MangakaLayout>
     <div class="mf-page">
         <div class="mf-page-header">
-            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Crimson Moon Academy</MudText>
-            <MudText Typo="Typo.body1" Class="mf-muted">紅月学院</MudText>
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">@CurrentSeries.Title</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">@CurrentSeries.Subtitle</MudText>
         </div>
 
-        <MudGrid>
-            <MudItem xs="12" md="8"><MudPaper Class="pa-5 mf-card" Elevation="0"><MudStack Row="true" Justify="Justify.SpaceBetween" Class="mb-3"><MudText Typo="Typo.h6">Chapter @SelectedChapter · Page @SelectedPage of 24</MudText><MudChip T="string" Color="Color.Primary">Draft</MudChip></MudStack><div class="mf-canvas">Manga page preview canvas<br/>Example dialogue text / More dialogue here...</div><MudStack Row="true" Class="mt-3">@foreach (var pageNo in Enumerable.Range(1, 5)) {<MudButton Variant="@(SelectedPage == pageNo ? Variant.Filled : Variant.Outlined)" OnClick="@(() => SelectedPage = pageNo)">Page @pageNo</MudButton>}</MudStack></MudPaper></MudItem>
-            <MudItem xs="12" md="4"><MudPaper Class="pa-5 mf-card" Elevation="0"><MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Task Assignment</MudText><MudText class="mf-muted mb-3">Current selection: Chapter @SelectedChapter, Page @SelectedPage. The task will be assigned for this specific page.</MudText><MudSelect T="string" Label="Task Type" @bind-Value="TaskType" Variant="Variant.Outlined"><MudSelectItem Value="@("Tone Shading")">Tone Shading</MudSelectItem><MudSelectItem Value="@("Background Drawing")">Background Drawing</MudSelectItem><MudSelectItem Value="@("Cleanup")">Cleanup</MudSelectItem></MudSelect><MudTextField Label="Assign to" @bind-Value="Assistant" Variant="Variant.Outlined" Class="mt-3" /><MudTextField Label="Instructions" Lines="4" @bind-Value="Instructions" Variant="Variant.Outlined" Class="mt-3" /><MudAlert Severity="Severity.Warning" Class="my-3"><MudText Typo="Typo.caption" Class="font-weight-bold">Coming Soon</MudText><MudText Class="mt-1">Task assignment requires backend implementation.</MudText></MudAlert><MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" Disabled="true">Assign Task (Disabled)</MudButton><MudButton FullWidth="true" Variant="Variant.Text" Class="mt-2" Disabled="true">Save Draft (Disabled)</MudButton></MudPaper></MudItem>
-        </MudGrid>
+        <!-- Hierarchy breadcrumb: makes the Series -> Chapter -> Page relationship explicit -->
+        <MudBreadcrumbs Items="BreadcrumbItems" Class="px-0 mb-3" />
 
+        <MudGrid>
+            <!-- LEFT: Chapter list (a series HAS MANY chapters) -->
+            <MudItem xs="12" md="3">
+                <MudPaper Class="pa-4 mf-card" Elevation="0">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold">Chapters</MudText>
+                        <MudChip T="string" Size="Size.Small" Color="Color.Default">@CurrentSeries.Chapters.Count total</MudChip>
+                    </MudStack>
+                    <MudText Typo="Typo.caption" Class="mf-muted mb-2 d-block">This series contains @CurrentSeries.Chapters.Count chapters.</MudText>
+                    <MudList T="int" SelectedValue="SelectedChapterNo" SelectedValueChanged="OnChapterSelected" Dense="true">
+                        @foreach (var chapter in CurrentSeries.Chapters)
+                        {
+                            <MudListItem T="int" Value="chapter.Number" Icon="@Icons.Material.Filled.MenuBook">
+                                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                    <MudText>Chapter @chapter.Number</MudText>
+                                    <MudText Typo="Typo.caption" Class="mf-muted">@chapter.PageCount pages</MudText>
+                                </MudStack>
+                            </MudListItem>
+                        }
+                    </MudList>
+                </MudPaper>
+            </MudItem>
+
+            <!-- CENTER: Page preview + page list for the SELECTED chapter (a chapter HAS MANY pages) -->
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-5 mf-card" Elevation="0">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
+                        <MudText Typo="Typo.h6">Chapter @SelectedChapterNo · Page @SelectedPage of @SelectedChapterPageCount</MudText>
+                        <MudChip T="string" Color="Color.Primary">Draft</MudChip>
+                    </MudStack>
+                    <div class="mf-canvas">
+                        Manga page preview canvas<br />
+                        Chapter @SelectedChapterNo — Page @SelectedPage / @SelectedChapterPageCount<br />
+                        Example dialogue text / More dialogue here...
+                    </div>
+                    <MudText Typo="Typo.caption" Class="mf-muted mt-3 mb-1 d-block">Pages in Chapter @SelectedChapterNo</MudText>
+                    <MudStack Row="true" Class="flex-wrap" Spacing="2">
+                        @foreach (var pageNo in Enumerable.Range(1, SelectedChapterPageCount))
+                        {
+                            <MudButton Variant="@(SelectedPage == pageNo ? Variant.Filled : Variant.Outlined)"
+                                       Color="@(SelectedPage == pageNo ? Color.Primary : Color.Default)"
+                                       Size="Size.Small"
+                                       OnClick="@(() => SelectedPage = pageNo)">@pageNo</MudButton>
+                        }
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+
+            <!-- RIGHT: Task assignment for the selected page -->
+            <MudItem xs="12" md="3">
+                <MudPaper Class="pa-5 mf-card" Elevation="0">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Task Assignment</MudText>
+                    <MudText Class="mf-muted mb-3">Current selection: Chapter @SelectedChapterNo, Page @SelectedPage. The task will be assigned for this specific page.</MudText>
+                    <MudSelect T="string" Label="Task Type" @bind-Value="TaskType" Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("Tone Shading")">Tone Shading</MudSelectItem>
+                        <MudSelectItem Value="@("Background Drawing")">Background Drawing</MudSelectItem>
+                        <MudSelectItem Value="@("Cleanup")">Cleanup</MudSelectItem>
+                    </MudSelect>
+                    <MudTextField Label="Assign to" @bind-Value="Assistant" Variant="Variant.Outlined" Class="mt-3" />
+                    <MudTextField Label="Instructions" Lines="4" @bind-Value="Instructions" Variant="Variant.Outlined" Class="mt-3" />
+                    <MudAlert Severity="Severity.Warning" Class="my-3">
+                        <MudText Typo="Typo.caption" Class="font-weight-bold">Coming Soon</MudText>
+                        <MudText Class="mt-1">Task assignment requires backend implementation.</MudText>
+                    </MudAlert>
+                    <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" Disabled="true">Assign Task (Disabled)</MudButton>
+                    <MudButton FullWidth="true" Variant="Variant.Text" Class="mt-2" Disabled="true">Save Draft (Disabled)</MudButton>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
     </div>
 </MangakaLayout>
 
 @code {
 
     [Parameter] public string? SeriesId { get; set; }
-    private int SelectedChapter { get; set; } = 12;
+
+    private int SelectedChapterNo { get; set; }
     private int SelectedPage { get; set; } = 1;
     private string TaskType { get; set; } = "Tone Shading";
     private string Assistant { get; set; } = "";
     private string Instructions { get; set; } = "";
+
+    // Demo data modelling the hierarchy: 1 Series -> many Chapters -> many Pages.
+    private SeriesDetail CurrentSeries { get; set; } = new();
+
+    private int SelectedChapterPageCount =>
+        CurrentSeries.Chapters.FirstOrDefault(c => c.Number == SelectedChapterNo)?.PageCount ?? 0;
+
+    private List<BreadcrumbItem> BreadcrumbItems => new()
+    {
+        new BreadcrumbItem(CurrentSeries.Title, href: null, disabled: true),
+        new BreadcrumbItem($"Chapter {SelectedChapterNo}", href: null, disabled: true),
+        new BreadcrumbItem($"Page {SelectedPage}", href: null, disabled: true)
+    };
+
+    protected override void OnInitialized()
+    {
+        CurrentSeries = LoadSeries(SeriesId);
+        SelectedChapterNo = CurrentSeries.Chapters.FirstOrDefault()?.Number ?? 1;
+        SelectedPage = 1;
+    }
+
+    private void OnChapterSelected(int chapterNo)
+    {
+        SelectedChapterNo = chapterNo;
+        // Reset to first page because page numbers are scoped to a chapter, not the series.
+        SelectedPage = 1;
+    }
+
+    // Placeholder loader (no backend yet). A series owns its chapters, each chapter owns its pages.
+    private static SeriesDetail LoadSeries(string? seriesId) => new()
+    {
+        Title = "Crimson Moon Academy",
+        Subtitle = "紅月学院",
+        Chapters = new()
+        {
+            new ChapterInfo(10, 20),
+            new ChapterInfo(11, 22),
+            new ChapterInfo(12, 24),
+            new ChapterInfo(13, 18)
+        }
+    };
+
+    private class SeriesDetail
+    {
+        public string Title { get; set; } = "";
+        public string Subtitle { get; set; } = "";
+        public List<ChapterInfo> Chapters { get; set; } = new();
+    }
+
+    private record ChapterInfo(int Number, int PageCount);
 
 }
