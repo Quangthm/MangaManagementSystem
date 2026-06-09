@@ -10,10 +10,9 @@
     <div class="mf-page">
         <div class="mf-page-header">
             <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Assigned Tasks</MudText>
-            <MudText Typo="Typo.body1" Class="mf-muted">5 tasks requiring your attention</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">@_subtitle</MudText>
         </div>
 
-        <MudGrid Class="mb-6"><MudItem xs="12" md="3"><StatCard Label="In Progress" Value="2" /></MudItem><MudItem xs="12" md="3"><StatCard Label="Not Started" Value="2" /></MudItem><MudItem xs="12" md="3"><StatCard Label="In Review" Value="1" /></MudItem><MudItem xs="12" md="3"><StatCard Label="Overdue" Value="1" /></MudItem></MudGrid>
         @if (_loading)
         {
             <MudProgressLinear Indeterminate="true" />
@@ -32,6 +31,7 @@
         }
         else
         {
+            <MudGrid Class="mb-6"><MudItem xs="12" md="3"><StatCard Label="Assigned" Value="@_assignedCount.ToString()" /></MudItem><MudItem xs="12" md="3"><StatCard Label="Under Review" Value="@_underReviewCount.ToString()" /></MudItem><MudItem xs="12" md="3"><StatCard Label="Completed" Value="@_completedCount.ToString()" /></MudItem><MudItem xs="12" md="3"><StatCard Label="Overdue" Value="@_overdueCount.ToString()" /></MudItem></MudGrid>
             <MudGrid>
                 @foreach (var t in _tasks)
                 {
@@ -55,6 +55,11 @@
     private bool _loading = true;
     private string? _error;
     private IEnumerable<MangaManagementSystem.Application.DTOs.Manga.ChapterPageTaskDto>? _tasks;
+    private int _assignedCount;
+    private int _underReviewCount;
+    private int _completedCount;
+    private int _overdueCount;
+    private string _subtitle = "Loading tasks…";
 
     protected override async Task OnInitializedAsync()
     {
@@ -84,6 +89,17 @@
 
             var tasks = (await TaskService.GetChapterPageTasksByAssignedUserIdAsync(uid)).ToList();
             _tasks = tasks;
+
+            var now = DateTime.UtcNow;
+            _assignedCount = tasks.Count(t => t.StatusCode == "ASSIGNED");
+            _underReviewCount = tasks.Count(t => t.StatusCode == "UNDER_REVIEW");
+            _completedCount = tasks.Count(t => t.StatusCode == "COMPLETED");
+            _overdueCount = tasks.Count(t =>
+                t.DueAtUtc.HasValue
+                && t.DueAtUtc.Value < now
+                && t.StatusCode != "COMPLETED"
+                && t.StatusCode != "CANCELLED");
+            _subtitle = $"{tasks.Count} task{(tasks.Count == 1 ? "" : "s")} requiring your attention";
         }
         catch (Exception ex)
         {

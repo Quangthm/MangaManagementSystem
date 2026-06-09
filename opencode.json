@@ -1,0 +1,17 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "plan",
+  "instructions": [
+    "AGENTS.md",
+    "docs/ai-memory/session-handoff.md",
+    "docs/ai-memory/project-memory.md",
+    "docs/ai-memory/current-task.md",
+    "docs/ai-memory/decisions.md",
+    "docs/ai-memory/token-rules.md"
+  ],
+  "compaction": {
+    "auto": true,
+    "prune": true,
+    "reserved": 20000
+  }
+}

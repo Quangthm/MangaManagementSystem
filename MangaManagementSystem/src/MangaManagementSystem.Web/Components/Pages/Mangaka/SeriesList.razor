@@ -2,6 +2,8 @@
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "Mangaka")]
 @inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject ISeriesService SeriesService
 
 <MangakaLayout>
     <div class="mf-page">
@@ -10,24 +12,107 @@
             <MudText Typo="Typo.body1" Class="mf-muted">Active projects in your catalog</MudText>
         </div>
 
-        <MudGrid>
-            @foreach (var item in Series)
-            {
-                <MudItem xs="12" md="4"><MudPaper Class="pa-5 mf-card h-100" Elevation="0"><MudText Typo="Typo.h6" Class="font-weight-bold">@item.Title</MudText><MudText class="mf-muted">@item.Subtitle</MudText><MudChip T="string" Color="Color.Success" Size="Size.Small" Class="my-3">@item.Status</MudChip><MudText>Chapters: @item.Chapters</MudText><MudText>Pages: @item.Pages</MudText><MudText Typo="Typo.caption" class="mf-muted">Updated @item.Updated</MudText><MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"/mangaka/workspace/{item.Id}")" Class="mt-3">Open Workspace</MudButton></MudPaper></MudItem>
-            }
-        </MudGrid>
-
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (_error != null)
+        {
+            <MudAlert Severity="Severity.Error">Failed to load series: @_error</MudAlert>
+        }
+        else if (_series == null || !_series.Any())
+        {
+            <MudPaper Class="pa-8 text-center mf-card" Elevation="0">
+                <MudIcon Icon="mdi-book-open-page-variant" Size="Size.Large" Color="Color.Secondary" Class="mb-3" />
+                <MudText Typo="Typo.h6">No series found yet.</MudText>
+                <MudText Class="mf-muted mt-1">Series creation isn't wired up yet, so new series can't be added from here for now.</MudText>
+            </MudPaper>
+        }
+        else
+        {
+            <MudGrid>
+                @foreach (var item in _series)
+                {
+                    <MudItem xs="12" md="4">
+                        <MudPaper Class="pa-5 mf-card h-100" Elevation="0">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold">@item.Title</MudText>
+                            <MudText class="mf-muted">@DisplayOrDash(item.Genre)</MudText>
+                            <MudChip T="string" Color="@GetStatusColor(item.StatusCode)" Size="Size.Small" Class="my-3">@item.StatusCode</MudChip>
+                            <MudText>Language: @DisplayOrDash(item.ContentLanguageCode)</MudText>
+                            <MudText>Frequency: @DisplayOrDash(item.PublicationFrequencyCode)</MudText>
+                            <MudText Typo="Typo.caption" class="mf-muted">Updated @FormatDate(item.UpdatedAtUtc ?? item.CreatedAtUtc)</MudText>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"/mangaka/workspace/{item.SeriesId}")" Class="mt-3">Open Workspace</MudButton>
+                        </MudPaper>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
     </div>
 </MangakaLayout>
 
 @code {
+    private bool _loading = true;
+    private string? _error;
+    private IEnumerable<SeriesRow>? _series;
 
-    private readonly List<SeriesCard> Series = new()
+    protected override async Task OnInitializedAsync()
     {
-        new(1, "Crimson Moon Academy", "紅月学院", "Active", 44, 528, "2 hours ago"),
-        new(2, "Neon Samurai Path", "ネオンサムライ", "Active", 18, 216, "1 day ago"),
-        new(3, "Lunar Eclipse Academy", "月食学院", "Active", 12, 144, "3 days ago")
-    };
-    private record SeriesCard(int Id, string Title, string Subtitle, string Status, int Chapters, int Pages, string Updated);
+        await LoadSeriesAsync();
+    }
 
+    private async Task LoadSeriesAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var series = await SeriesService.GetAllSeriesAsync();
+            _series = series.Select(s => new SeriesRow(
+                s.SeriesId,
+                s.Title,
+                s.Genre,
+                s.StatusCode,
+                s.ContentLanguageCode,
+                s.PublicationFrequencyCode,
+                s.CreatedAtUtc,
+                s.UpdatedAtUtc
+            )).ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            Snackbar.Add($"Could not load series: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string DisplayOrDash(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? "—" : value;
+
+    private static string FormatDate(DateTime value) =>
+        value.ToLocalTime().ToString("MMM d, yyyy");
+
+    private Color GetStatusColor(string status) => status switch
+    {
+        "SERIALIZED"              => Color.Success,
+        "HIATUS"                  => Color.Warning,
+        "CANCELLED"               => Color.Error,
+        "PROPOSAL_DRAFT"          => Color.Info,
+        "UNDER_EDITORIAL_REVIEW"  => Color.Warning,
+        "UNDER_BOARD_REVIEW"      => Color.Info,
+        _                         => Color.Default
+    };
+
+    private record SeriesRow(
+        long SeriesId,
+        string Title,
+        string Genre,
+        string StatusCode,
+        string ContentLanguageCode,
+        string? PublicationFrequencyCode,
+        DateTime CreatedAtUtc,
+        DateTime? UpdatedAtUtc);
 }
