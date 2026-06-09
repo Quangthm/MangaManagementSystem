@@ -304,7 +304,7 @@
             var created = await AuthService.CompleteRegistrationWithOtpAsync(_email, _otpCode);
 
             // Determine portfolio presence using returned UserDto.PortfolioFileId
-            if (created?.PortfolioFileId != null && created.PortfolioFileId > 0)
+            if (created?.PortfolioFileId != null && created.PortfolioFileId != Guid.Empty)
             {
                 _registrationMessage = "Registration successful. Your account is waiting for Admin approval. Your portfolio was uploaded for Admin review.";
                 _registrationSeverity = Severity.Success;

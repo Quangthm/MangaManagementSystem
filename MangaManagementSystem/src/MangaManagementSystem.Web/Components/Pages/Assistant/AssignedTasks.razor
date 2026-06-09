@@ -76,7 +76,7 @@
             }
 
             var idClaim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
-            if (!int.TryParse(idClaim?.Value, out var uid))
+            if (!Guid.TryParse(idClaim?.Value, out var uid))
             {
                 _tasks = Array.Empty<MangaManagementSystem.Application.DTOs.Manga.ChapterPageTaskDto>();
                 return;

@@ -194,7 +194,7 @@
     private bool _showPortfolioPreview;
     private bool _isImagePreview;
 
-    private async Task ViewPortfolioAsync(long fileResourceId)
+    private async Task ViewPortfolioAsync(Guid fileResourceId)
     {
         try
         {
@@ -225,7 +225,7 @@
 
     private async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
-        return await AuthStateProvider.GetAuthenticationStateAsync();
+        return await AuthenticationStateProvider.GetAuthenticationStateAsync();
     }
 
     protected override async Task OnInitializedAsync()
