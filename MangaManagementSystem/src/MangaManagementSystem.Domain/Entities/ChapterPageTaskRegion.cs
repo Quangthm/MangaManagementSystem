@@ -2,11 +2,11 @@ using MangaManagementSystem.Domain.Common;
 
 namespace MangaManagementSystem.Domain.Entities
 {
-    public class ChapterPageTaskRegion : BaseEntity
-    {
-        public long ChapterPageTaskId { get; set; }
-        public ChapterPageTask? ChapterPageTask { get; set; }
-        public long PageRegionId { get; set; }
-        public PageRegion? PageRegion { get; set; }
-    }
+public class ChapterPageTaskRegion : BaseEntity
+{
+    public Guid ChapterPageTaskId { get; set; }
+    public ChapterPageTask? ChapterPageTask { get; set; }
+    public Guid PageRegionId { get; set; }
+    public PageRegion? PageRegion { get; set; }
+}
 }

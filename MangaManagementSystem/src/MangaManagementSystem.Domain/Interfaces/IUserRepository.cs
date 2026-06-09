@@ -10,24 +10,30 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<User?> GetByUsernameAsync(string username);
         Task<User?> GetByUsernameOrEmailAsync(string usernameOrEmail);
         Task<IReadOnlyList<User>> GetByStatusAsync(string status);
-        Task<int> CreateUserViaProcAsync(
+        Task ChangeUserStatusViaProcAsync(
+            Guid adminUserId,
+            Guid targetUserId,
+            string newStatusCode,
+            string? reason = null
+        );
+        Task<Guid> CreateUserViaProcAsync(
             string roleName,
             string username,
             string email,
             string passwordHash,
             string? displayName = null,
-            long? avatarFileId = null,
-            long? portfolioFileId = null,
-            int? createdByUserId = null
+            Guid? avatarFileId = null,
+            Guid? portfolioFileId = null,
+            Guid? createdByUserId = null
         );
 
-        Task<(int newUserId, long? portfolioFileResourceId)> CreateUserWithOptionalPortfolioAsync(
+        Task<(Guid newUserId, Guid? portfolioFileResourceId)> CreateUserWithOptionalPortfolioAsync(
             string roleName,
             string username,
             string email,
             string passwordHash,
             string? displayName = null,
-            long? avatarFileId = null,
+            Guid? avatarFileId = null,
             // portfolio metadata - all nullable; pass DBNull.Value for missing
             string? portfolioOriginalFileName = null,
             string? portfolioCloudinaryPublicId = null,
@@ -35,7 +41,7 @@ namespace MangaManagementSystem.Domain.Interfaces
             string? portfolioContentType = null,
             long? portfolioFileSizeBytes = null,
             string? portfolioSha256Hash = null,
-            int? createdByUserId = null
+            Guid? createdByUserId = null
         );
     }
 }

@@ -36,13 +36,13 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(entity);
         }
 
-        public async Task<ChapterReaderVoteSnapshotDto?> GetChapterReaderVoteSnapshotByIdAsync(long id)
+        public async Task<ChapterReaderVoteSnapshotDto?> GetChapterReaderVoteSnapshotByIdAsync(Guid id)
         {
             var entity = await _unitOfWork.ChapterReaderVoteSnapshots.GetByIdAsync(id);
             return entity == null ? null : MapToDto(entity);
         }
 
-        public async Task<IEnumerable<ChapterReaderVoteSnapshotDto>> GetChapterReaderVoteSnapshotsByChapterIdAsync(long chapterId)
+        public async Task<IEnumerable<ChapterReaderVoteSnapshotDto>> GetChapterReaderVoteSnapshotsByChapterIdAsync(Guid chapterId)
         {
             var all = await _unitOfWork.ChapterReaderVoteSnapshots.GetAllAsync();
             return all.Where(s => s.ChapterId == chapterId).Select(MapToDto);

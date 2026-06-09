@@ -7,13 +7,13 @@ namespace MangaManagementSystem.Domain.Entities
     /// </summary>
     public class SeriesBoardPollVoteSummary
     {
-        public long SeriesBoardPollId { get; set; }
-        public long SeriesId { get; set; }
+        public Guid SeriesBoardPollId { get; set; }
+        public Guid SeriesId { get; set; }
         public string SeriesTitle { get; set; } = null!;
         public string PollTypeCode { get; set; } = null!;
         public string PollStatusCode { get; set; } = null!;
         public string PollReason { get; set; } = null!;
-        public int CreatedByUserId { get; set; }
+        public Guid CreatedByUserId { get; set; }
         public DateTime StartedAtUtc { get; set; }
         public DateTime? EndsAtUtc { get; set; }
         public int ApproveCount { get; set; }

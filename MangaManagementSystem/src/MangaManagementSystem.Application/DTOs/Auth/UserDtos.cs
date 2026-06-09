@@ -4,36 +4,36 @@ using System.ComponentModel.DataAnnotations;
 namespace MangaManagementSystem.Application.DTOs.Auth
 {
     public record UserDto(
-        int UserId,
-        short RoleId,
+        Guid UserId,
+        Guid RoleId,
         string Username,
-        string? DisplayName,
+        string DisplayName,
         string Email,
-        long? AvatarFileId,
-        long? PortfolioFileId,
+        Guid? AvatarFileId,
+        Guid? PortfolioFileId,
         string StatusCode,
         DateTime CreatedAtUtc,
         string? RoleName
     );
 
     public record CreateUserDto(
-        [Required] short RoleId,
+        [Required] Guid RoleId,
         [Required][MaxLength(50)] string Username,
         [MaxLength(100)] string? DisplayName,
         [Required][MaxLength(254)] string Email,
         [Required][MaxLength(255)] string Password,
-        long? AvatarFileId,
-        long? PortfolioFileId
+        Guid? AvatarFileId,
+        Guid? PortfolioFileId
     );
 
     public record UpdateUserDto(
-        [Required] int UserId,
-        [Required] short RoleId,
+        [Required] Guid UserId,
+        [Required] Guid RoleId,
         [Required][MaxLength(50)] string Username,
         [MaxLength(100)] string? DisplayName,
         [Required][MaxLength(254)] string Email,
-        long? AvatarFileId,
-        long? PortfolioFileId,
+        Guid? AvatarFileId,
+        Guid? PortfolioFileId,
         [Required][MaxLength(30)] string StatusCode
     );
 }

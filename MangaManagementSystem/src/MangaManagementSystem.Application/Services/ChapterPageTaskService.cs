@@ -27,25 +27,25 @@ namespace MangaManagementSystem.Application.Services
                 StatusCode = dto.StatusCode,
                 PriorityLevel = (byte)dto.PriorityLevel,
                 DueAtUtc = dto.DueAtUtc ?? DateTime.UtcNow,
-                CompletedPageVersionId = dto.CompletedPageVersionId
+                CompletedPageVersionId = dto.CompletedPageVersionId,
             };
             await _unitOfWork.ChapterPageTasks.AddAsync(entity);
             await _unitOfWork.SaveChangesAsync();
             return MapToDto(entity);
         }
 
-        public async Task<ChapterPageTaskDto?> GetChapterPageTaskByIdAsync(long id)
+        public async Task<ChapterPageTaskDto?> GetChapterPageTaskByIdAsync(Guid id)
         {
             var entity = await _unitOfWork.ChapterPageTasks.GetByIdAsync(id);
             return entity == null ? null : MapToDto(entity);
         }
 
-        public async Task<IEnumerable<ChapterPageTaskDto>> GetChapterPageTasksByAssignedUserIdAsync(int assignedToUserId)
+        public async Task<IEnumerable<ChapterPageTaskDto>> GetChapterPageTasksByAssignedUserIdAsync(Guid assignedToUserId)
         {
             var all = await _unitOfWork.ChapterPageTasks.GetAllAsync();
             return all
                 .Where(t => t.AssignedToUserId == assignedToUserId)
-                .Select(MapToDto);
+                .Select(MapToDto).ToList();
         }
 
         public async Task<ChapterPageTaskDto?> UpdateChapterPageTaskAsync(UpdateChapterPageTaskDto dto)
@@ -56,6 +56,7 @@ namespace MangaManagementSystem.Application.Services
                 return null;
             }
 
+            // Update fields from DTO
             entity.AssignedToUserId = dto.AssignedToUserId;
             entity.TypeCode = dto.TypeCode;
             entity.StatusCode = dto.StatusCode;
@@ -67,7 +68,7 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(entity);
         }
 
-        public async Task<bool> DeleteChapterPageTaskAsync(long id)
+        public async Task<bool> DeleteChapterPageTaskAsync(Guid id)
         {
             var entity = await _unitOfWork.ChapterPageTasks.GetByIdAsync(id);
             if (entity == null)
@@ -80,14 +81,17 @@ namespace MangaManagementSystem.Application.Services
             return true;
         }
 
-        private static ChapterPageTaskDto MapToDto(ChapterPageTask t) => new(
-            t.ChapterPageTaskId,
-            t.AssignedToUserId,
-            t.TypeCode,
-            t.StatusCode,
-            (int)t.PriorityLevel,
-            t.DueAtUtc,
-            t.CompletedPageVersionId
-        );
+        private static ChapterPageTaskDto MapToDto(ChapterPageTask t)
+        {
+            return new ChapterPageTaskDto(
+                t.ChapterPageTaskId,
+                t.AssignedToUserId,
+                t.TypeCode,
+                t.StatusCode,
+                (int)t.PriorityLevel,
+                t.DueAtUtc,
+                t.CompletedPageVersionId
+            );
+        }
     }
 }

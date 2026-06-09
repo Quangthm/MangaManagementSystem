@@ -5,6 +5,6 @@ namespace MangaManagementSystem.Domain.Interfaces
 {
     public interface ISeriesRepository : IGenericRepository<Series>
     {
-        Task<Series?> GetSeriesWithChaptersAsync(long seriesId);
+        Task<Series?> GetSeriesWithChaptersAsync(Guid seriesId);
     }
 }

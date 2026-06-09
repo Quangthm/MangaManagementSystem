@@ -11,6 +11,14 @@
 
 This guide explains how the uploaded SQL Server schema script is organized, how to execute it safely, and how future database changes should be added without breaking the MVP workflow.
 
+Current project ID standard:
+
+- Use SQL Server `UNIQUEIDENTIFIER` for table primary keys and matching foreign keys.
+- Use `DEFAULT NEWID()` for generated GUID/UUID identifiers.
+- Keep existing `_id` column names, such as `user_id`, `series_id`, and `file_resource_id`, even though their type is now `UNIQUEIDENTIFIER`.
+- Do not use `INT IDENTITY`, `BIGINT IDENTITY`, or `SMALLINT IDENTITY` for business table primary keys in the current GUID-based schema.
+- Exception: `audit.AuditEvent.audit_event_id` may remain `BIGINT IDENTITY` because audit is an append-only ledger-style event log where sequential ordering is useful.
+
 The uploaded script currently defines:
 
 | Object Type | Count |
@@ -33,17 +41,215 @@ The uploaded script currently defines:
 
 ---
 
-## 3. Object Inventory
+## 3. GUID / UUID Identifier Standard
+
+The project uses GUID/UUID-style identifiers in SQL Server.
+
+In SQL Server, GUID/UUID values should be implemented with:
+
+```sql
+UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID()
+```
+
+### 3.1 Primary key rule
+
+All main table primary keys should use `UNIQUEIDENTIFIER` instead of numeric `IDENTITY`.
+
+Preferred pattern:
+
+```sql
+user_id UNIQUEIDENTIFIER NOT NULL
+    CONSTRAINT df_users_user_id DEFAULT NEWID()
+    CONSTRAINT pk_users PRIMARY KEY
+```
+
+Avoid this pattern for current project tables:
+
+```sql
+user_id INT IDENTITY(1, 1) PRIMARY KEY
+```
+Audit exception:
+
+```sql
+audit_event_id BIGINT IDENTITY(1, 1) NOT NULL
+    CONSTRAINT pk_audit_event PRIMARY KEY
+```
+
+This exception is allowed only for `audit.AuditEvent` because it is an append-only ledger-style event table. Business/domain tables should still use `UNIQUEIDENTIFIER DEFAULT NEWID()`.
+
+
+The project keeps `_id` column names to reduce naming changes in SQL scripts, stored procedures, C# models, DTOs, and UI code.
+
+Example:
+
+| Column name | Type |
+|---|---|
+| `user_id` | `UNIQUEIDENTIFIER` |
+| `series_id` | `UNIQUEIDENTIFIER` |
+| `file_resource_id` | `UNIQUEIDENTIFIER` |
+| `chapter_page_version_id` | `UNIQUEIDENTIFIER` |
+
+### 3.2 Foreign key rule
+
+Any foreign key column that references a GUID primary key must also be `UNIQUEIDENTIFIER`.
+
+Example:
+
+```sql
+created_by_user_id UNIQUEIDENTIFIER NULL,
+uploaded_by_user_id UNIQUEIDENTIFIER NULL,
+series_id UNIQUEIDENTIFIER NOT NULL,
+file_resource_id UNIQUEIDENTIFIER NOT NULL
+```
+
+Foreign key constraints do not need special syntax for GUID. The column types just need to match.
+
+Example:
+
+```sql
+CONSTRAINT fk_file_resource_uploaded_by_user
+FOREIGN KEY (uploaded_by_user_id)
+REFERENCES auth.Users(user_id)
+```
+
+### 3.3 Lookup table rule
+
+Lookup and role tables should also use GUID primary keys if the lecturer/project requirement is to replace integer IDs with GUID/UUID identifiers.
+
+Example:
+
+```sql
+CREATE TABLE auth.Roles (
+    role_id UNIQUEIDENTIFIER NOT NULL
+        CONSTRAINT df_roles_role_id DEFAULT NEWID()
+        CONSTRAINT pk_roles PRIMARY KEY,
+
+    role_name NVARCHAR(30) NOT NULL,
+
+    CONSTRAINT uq_roles_role_name UNIQUE (role_name)
+);
+```
+
+### 3.4 Stored procedure rule
+
+Stored procedure parameters, local variables, table variables, and output parameters must use `UNIQUEIDENTIFIER` for ID values.
+
+Example:
+
+```sql
+CREATE OR ALTER PROCEDURE auth.usp_User_Create
+    @role_name NVARCHAR(30),
+    @new_user_id UNIQUEIDENTIFIER OUTPUT
+AS
+BEGIN
+    DECLARE @resolved_role_id UNIQUEIDENTIFIER;
+
+    -- procedure logic
+END;
+```
+
+When using GUID values in lock-resource strings, convert them to text:
+
+```sql
+SET @lock_resource =
+    N'auth_user_status_change_' + CONVERT(NVARCHAR(36), @target_user_id);
+```
+
+### 3.5 Backend compatibility rule
+
+Keeping column/property names such as `UserId`, `SeriesId`, and `FileResourceId` is acceptable.
+
+The required backend change is the type:
+
+```csharp
+Guid UserId
+Guid SeriesId
+Guid FileResourceId
+```
+
+SQL parameters should use:
+
+```csharp
+SqlDbType.UniqueIdentifier
+```
+
+Do not keep using:
+
+```csharp
+SqlDbType.Int
+SqlDbType.BigInt
+```
+
+for GUID-based ID parameters.
+
+### 3.6 `NEWID()` vs `NEWSEQUENTIALID()`
+
+Use `NEWID()` for this project unless the team explicitly decides otherwise.
+
+Preferred default:
+
+```sql
+CONSTRAINT df_table_column DEFAULT NEWID()
+```
+
+`NEWSEQUENTIALID()` may be more index-friendly for clustered GUID keys, but it is less random and may be more predictable. For this MVP, `NEWID()` is simpler and satisfies the GUID/UUID requirement for business/domain tables. Audit event IDs may remain `BIGINT IDENTITY`.
+
+### 3.7 SHA-256 is still separate from GUID
+
+For `manga.FileResource`, keep both:
+
+| Column | Purpose |
+|---|---|
+| `file_resource_id UNIQUEIDENTIFIER` | Identifies the file metadata row. |
+| `sha256_hash CHAR(64)` | Identifies the exact file content for integrity checks, duplicate detection, and audit traceability. |
+
+A GUID does not replace `sha256_hash`.
+
+### 3.8 SeriesProposal version and snapshot rule
+
+`manga.SeriesProposal.proposal_version_no` should be generated by the database procedure, not by the backend.
+
+Recommended behavior:
+
+```text
+lock proposal submission for one series
+→ read MAX(proposal_version_no) for that series
+→ insert MAX + 1
+→ keep UNIQUE(series_id, proposal_version_no) as final protection
+```
+
+The proposal procedure should also read current `manga.Series` values inside the database at submission time and copy them into the proposal snapshot columns.
+
+Backend should not pass:
+
+```sql
+@proposal_version_no
+@proposal_title
+@synopsis_snapshot
+@genre_snapshot
+```
+
+The procedure should infer those from current database state:
+
+```sql
+manga.Series.title
+manga.Series.synopsis
+manga.Series.genre
+```
+
+This keeps version generation concurrency-safe and prevents stale frontend/backend values from becoming proposal snapshot data.
+
+## 4. Object Inventory
 
 | Schema | Object | Purpose |
 |---|---|---|
-| `auth` | `Roles` | Role lookup/seed table for Mangaka, Assistant, Tantou Editor, Editorial Board Member, and Admin. |
-| `auth` | `Users` | Main account table with one role per user, login identity, avatar/portfolio references, and account status. |
+| `auth` | `Roles` | Role lookup/seed table using GUID role IDs for Mangaka, Assistant, Tantou Editor, Editorial Board Member, Editorial Board Chief, and Admin. |
+| `auth` | `Users` | Main account table with GUID user IDs, one role per user, login identity, avatar/portfolio references, and account status. |
 | `audit` | `AuditEvent` | Append-only SQL Server Ledger audit event table with actor, action, entity, and JSON detail payload. |
-| `manga` | `FileResource` | Cloudinary file metadata and application-level file references. |
+| `manga` | `FileResource` | Cloudinary file metadata, GUID file IDs, required SHA-256 file fingerprints, and application-level file references. |
 | `manga` | `Series` | Manga series profile, slug/code, lifecycle status, language, cover, source series, and publication frequency. |
 | `manga` | `SeriesContributor` | Links users to series contributor membership with active/history support through start/end dates. |
-| `manga` | `SeriesProposal` | Formal submitted proposal version records with review metadata stored directly on the proposal. |
+| `manga` | `SeriesProposal` | Formal submitted proposal version records. Version numbers and snapshot fields are generated inside the database procedure from current Series data at submit time. |
 | `manga` | `SeriesBoardPoll` | Board poll container for START_SERIALIZATION and CANCEL_SERIALIZATION workflows. |
 | `manga` | `SeriesBoardVote` | One board member vote per poll with approve/reject/abstain choices. |
 | `manga` | `Chapter` | Chapter record with status, planned release date, release timestamp, and creator. |
@@ -66,25 +272,25 @@ The uploaded script currently defines:
 
 ---
 
-## 4. Recommended Script Execution Order
+## 5. Recommended Script Execution Order
 
 1. Create database `MangaManagementDB` and switch context using `USE MangaManagementDB`.
 2. Enable safe script behavior such as `SET NOCOUNT ON`.
 3. Create schemas in dependency-neutral order: `manga`, `auth`, `audit`.
-4. Create `auth.Roles` and seed the approved roles.
-5. Create `auth.Users` without avatar/portfolio foreign keys first because those files live in `manga.FileResource`.
-6. Create `manga.FileResource`, then add `auth.Users` avatar/portfolio foreign keys with `ALTER TABLE`.
-8. Create `audit.AuditEvent` after `auth.Users` because audit events reference actors.
-9. Create series/proposal/board objects: `Series`, `SeriesContributor`, `SeriesProposal`, `SeriesBoardPoll`, `SeriesBoardVote`.
-10. Create board summary view `manga.vw_SeriesBoardPollVoteSummary` after polls, votes, and series exist.
-11. Create chapter/page/page-version/region/annotation/task/review objects.
-12. Create ranking, reader-vote snapshot, and notification objects.
-13. Create nonclustered, unique, and filtered indexes immediately after the tables they support.
-14. Run smoke-test inserts and FK/check constraint validation after the schema is created.
+4. Create `auth.Roles` with `UNIQUEIDENTIFIER` role IDs and seed the approved roles.
+5. Create `auth.Users` with `UNIQUEIDENTIFIER` user IDs and role/file reference columns. Create it without avatar/portfolio foreign keys first because those files live in `manga.FileResource`.
+6. Create `manga.FileResource` with `UNIQUEIDENTIFIER` file IDs, then add `auth.Users` avatar/portfolio foreign keys with `ALTER TABLE`.
+7. Create `audit.AuditEvent` after `auth.Users` because audit events reference actors. `audit_event_id` may stay `BIGINT IDENTITY` for ledger-style append ordering.
+8. Create series/proposal/board objects: `Series`, `SeriesContributor`, `SeriesProposal`, `SeriesBoardPoll`, `SeriesBoardVote`.
+9. Create board summary view `manga.vw_SeriesBoardPollVoteSummary` after polls, votes, and series exist.
+10. Create chapter/page/page-version/region/annotation/task/review objects.
+11. Create ranking, reader-vote snapshot, and notification objects.
+12. Create nonclustered, unique, and filtered indexes immediately after the tables they support.
+13. Run smoke-test inserts and FK/check constraint validation after the schema is created.
 
 ---
 
-## 5. Script Layout Standard
+## 6. Script Layout Standard
 
 Future schema scripts should follow this structure:
 
@@ -112,6 +318,27 @@ GO
 -- 10. Seed data and smoke checks
 ```
 
+
+### GUID script rule
+
+When creating or updating tables, use this ID pattern:
+
+```sql
+<entity_id> UNIQUEIDENTIFIER NOT NULL
+    CONSTRAINT df_<table>_<entity_id> DEFAULT NEWID()
+    CONSTRAINT pk_<table> PRIMARY KEY
+```
+
+Do not use `IDENTITY` for new business/domain table primary keys in the GUID-based schema.
+
+Audit table exception:
+
+```sql
+audit.AuditEvent.audit_event_id BIGINT IDENTITY(1, 1)
+```
+
+This exception is allowed for the append-only ledger audit event table.
+
 For course/demo work, a single script is acceptable. For team development, split scripts into numbered files:
 
 | Script | Purpose |
@@ -127,9 +354,9 @@ For course/demo work, a single script is acceptable. For team development, split
 
 ---
 
-## 6. Dependency Notes
+## 7. Dependency Notes
 
-### 6.1 User and FileResource cycle
+### 7.1 User and FileResource cycle
 
 `auth.Users` references avatar and portfolio files, while `manga.FileResource` references uploader/deleter users. The uploaded schema solves this by:
 
@@ -139,11 +366,11 @@ For course/demo work, a single script is acceptable. For team development, split
 
 Keep this pattern. Do not force circular dependencies into table creation order.
 
-### 6.2 Page version and task output integrity
+### 7.2 Page version and task output integrity
 
 `manga.ChapterPageTask` uses a composite FK to `manga.ChapterPageVersion(chapter_page_version_id, chapter_page_id)` so a completed task output must belong to the same logical chapter page as the task. This is a strong integrity pattern and should be preserved.
 
-### 6.3 Soft delete and active/current row rules
+### 7.3 Soft delete and active/current row rules
 
 The schema uses filtered unique indexes for important MVP rules:
 
@@ -155,15 +382,36 @@ The schema uses filtered unique indexes for important MVP rules:
 | Only one active contributor row for the same user/series | `ux_series_contributor_active_role` where `end_date IS NULL` |
 | Only unread notification query support | `ix_notification_unread_recipient` where `read_at_utc IS NULL` |
 
+
+### 7.4 GUID foreign key type matching
+
+When a parent table primary key is `UNIQUEIDENTIFIER`, every child foreign key column referencing it must also be `UNIQUEIDENTIFIER`.
+
+Examples:
+
+```sql
+auth.Users.user_id                         UNIQUEIDENTIFIER
+manga.FileResource.uploaded_by_user_id     UNIQUEIDENTIFIER
+manga.FileResource.deleted_by_user_id      UNIQUEIDENTIFIER
+```
+
+```sql
+manga.FileResource.file_resource_id        UNIQUEIDENTIFIER
+auth.Users.avatar_file_id                  UNIQUEIDENTIFIER
+auth.Users.portfolio_file_id               UNIQUEIDENTIFIER
+```
+
+Do not mix `INT`, `BIGINT`, or `SMALLINT` foreign keys with GUID parent keys.
+
 ---
 
-## 7. Status and Code Values
+## 8. Status and Code Values
 
 Use `CHECK` constraints for stable MVP code sets. Keep code values in `SCREAMING_SNAKE_CASE`.
 
 | Object | Current code values in uploaded schema |
 |---|---|
-| `auth.Users` | `PENDING_APPROVAL`, `ACTIVE`, `DISABLED` |
+| `auth.Users` | `PENDING_APPROVAL`, `REJECTED`, `ACTIVE`, `DISABLED` |
 | `auth.UserRegistrationRequest` | `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED` |
 | `manga.Series` | `PROPOSAL_DRAFT`, `UNDER_EDITORIAL_REVIEW`, `UNDER_BOARD_REVIEW`, `SERIALIZED`, `HIATUS`, `CANCELLED`, `COMPLETED` |
 | `manga.SeriesProposal` | `UNDER_EDITORIAL_REVIEW`, `UNDER_BOARD_REVIEW`, `REVISION_REQUESTED`, `APPROVED`, `CANCELLED`, `WITHDRAWN` |
@@ -178,7 +426,19 @@ Use `CHECK` constraints for stable MVP code sets. Keep code values in `SCREAMING
 
 ---
 
-## 8. Indexing Guide
+## 9. Indexing Guide
+
+
+### GUID index note
+
+Because GUID values are wider than integer IDs, avoid unnecessary extra indexes on GUID columns.
+
+Recommended practices:
+
+- Primary key GUID columns already have a primary key index.
+- Add indexes on GUID foreign keys that are commonly used for joins or filtering.
+- Keep filtered and covering indexes only where they support real list/dashboard queries.
+- Do not create duplicate indexes over the same GUID columns without a query reason.
 
 The uploaded schema uses three useful index styles:
 
@@ -213,13 +473,13 @@ The uploaded schema uses three useful index styles:
 
 ---
 
-## 9. Constraints and Validation Patterns
+## 10. Constraints and Validation Patterns
 
 Use named constraints for all business rules. The uploaded schema already uses these patterns:
 
 | Pattern | Example | Purpose |
 |---|---|---|
-| Primary key | `pk_series` | Stable row identity. |
+| Primary key | `pk_series` | Stable GUID row identity using `UNIQUEIDENTIFIER DEFAULT NEWID()`. |
 | Unique constraint | `uq_series_slug` | Prevent duplicate business identifiers. |
 | Default constraint | `df_chapter_status_code` | Provide default workflow status. |
 | Check constraint | `ck_page_region_dimensions` | Enforce positive region dimensions. |
@@ -228,9 +488,15 @@ Use named constraints for all business rules. The uploaded schema already uses t
 
 ---
 
-## 10. Audit Strategy
+## 11. Audit Strategy
 
-The uploaded schema uses `audit.AuditEvent` with `LEDGER = ON (APPEND_ONLY = ON)`. Use it for important events such as:
+The uploaded schema uses `audit.AuditEvent` with `LEDGER = ON (APPEND_ONLY = ON)`.
+
+### Audit table ID exception
+
+`audit.AuditEvent.audit_event_id` may remain `BIGINT IDENTITY`. This is intentional because audit events are append-only, chronological, and ledger-style. Other business/domain entity IDs should still use GUID/UUID identifiers.
+
+Use audit for important events such as:
 
 - account approval/disable actions
 - series/proposal submission and review decisions
@@ -240,6 +506,14 @@ The uploaded schema uses `audit.AuditEvent` with `LEDGER = ON (APPEND_ONLY = ON)
 - file deletion workflow
 - publication schedule changes
 - ranking snapshot generation
+
+Audit `entity_id` values are stored as text-friendly identifiers in audit detail. When the business entity ID is a GUID, convert it to `NVARCHAR(36)` or `NVARCHAR(100)` before storing it in audit fields that expect text.
+
+Example:
+
+```sql
+CONVERT(NVARCHAR(36), @chapter_id)
+```
 
 Recommended audit insert shape:
 
@@ -272,6 +546,12 @@ Before committing a schema change:
 
 - [ ] Does the table belong in `auth`, `manga`, or `audit`?
 - [ ] Does every table have a named primary key?
+- [ ] Are all business/domain primary key ID columns using `UNIQUEIDENTIFIER DEFAULT NEWID()` instead of `INT/BIGINT/SMALLINT IDENTITY`?
+- [ ] If `audit.AuditEvent` uses `BIGINT IDENTITY`, is it documented as the ledger-style audit exception?
+- [ ] Do all foreign key ID columns use `UNIQUEIDENTIFIER` when referencing GUID primary keys?
+- [ ] Did stored procedure parameters, output parameters, local variables, and table variables use `UNIQUEIDENTIFIER` for IDs?
+- [ ] Does `SeriesProposal` submission generate `proposal_version_no` inside the database procedure and snapshot current Series data there?
+- [ ] Did backend C# models/DTOs/repositories use `Guid` and `SqlDbType.UniqueIdentifier` for GUID IDs?
 - [ ] Are all foreign keys named and created after parent tables?
 - [ ] Are business code values enforced with `CHECK` constraints?
 - [ ] Are timestamps using UTC naming if generated with `SYSUTCDATETIME()`?
@@ -299,9 +579,9 @@ JOIN sys.schemas s ON t.schema_id = s.schema_id
 WHERE s.name IN (N'auth', N'manga', N'audit')
 ORDER BY s.name, t.name;
 
-SELECT role_name
+SELECT role_id, role_name
 FROM auth.Roles
-ORDER BY role_id;
+ORDER BY role_name;
 
 SELECT name AS view_name
 FROM sys.views
@@ -312,6 +592,7 @@ WHERE OBJECT_SCHEMA_NAME(object_id) = N'manga';
 
 ## 14. External References
 
+- Microsoft Learn — UNIQUEIDENTIFIER and NEWID: SQL Server GUID/UUID identifiers.
 - Microsoft Learn — Database identifiers: SQL Server identifier rules.
 - Microsoft Learn — CREATE TABLE: named constraints and table constraints.
 - Microsoft Learn — Primary and foreign key constraints: relational integrity.

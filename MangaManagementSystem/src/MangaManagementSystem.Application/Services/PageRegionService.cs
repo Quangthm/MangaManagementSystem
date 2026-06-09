@@ -39,13 +39,13 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(entity);
         }
 
-        public async Task<PageRegionDto?> GetPageRegionByIdAsync(long id)
+        public async Task<PageRegionDto?> GetPageRegionByIdAsync(Guid id)
         {
             var entity = await _unitOfWork.PageRegions.GetByIdAsync(id);
             return entity == null ? null : MapToDto(entity);
         }
 
-        public async Task<IEnumerable<PageRegionDto>> GetPageRegionsByChapterPageVersionIdAsync(long chapterPageVersionId)
+        public async Task<IEnumerable<PageRegionDto>> GetPageRegionsByChapterPageVersionIdAsync(Guid chapterPageVersionId)
         {
             var all = await _unitOfWork.PageRegions.GetAllAsync();
             return all
@@ -77,7 +77,7 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(entity);
         }
 
-        public async Task<bool> DeletePageRegionAsync(long id)
+        public async Task<bool> DeletePageRegionAsync(Guid id)
         {
             var entity = await _unitOfWork.PageRegions.GetByIdAsync(id);
             if (entity == null)

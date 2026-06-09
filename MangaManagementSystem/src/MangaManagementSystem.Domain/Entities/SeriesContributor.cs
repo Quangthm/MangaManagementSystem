@@ -5,10 +5,9 @@ namespace MangaManagementSystem.Domain.Entities
 {
     public class SeriesContributor : BaseEntity
     {
-        public long SeriesContributorId { get; set; }
-        public long SeriesId { get; set; }
-        public Series? Series { get; set; }
-        public int UserId { get; set; }
+        public Guid SeriesContributorId { get; set; }
+        public Guid SeriesId { get; set; }
+        public Guid UserId { get; set; }
         public User? User { get; set; }
         public DateTime StartDate { get; set; }
         public DateTime? EndDate { get; set; }

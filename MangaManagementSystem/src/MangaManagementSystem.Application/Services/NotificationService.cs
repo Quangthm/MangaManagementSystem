@@ -35,13 +35,13 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(entity);
         }
 
-        public async Task<NotificationDto?> GetNotificationByIdAsync(long id)
+        public async Task<NotificationDto?> GetNotificationByIdAsync(Guid id)
         {
             var entity = await _unitOfWork.Notifications.GetByIdAsync(id);
             return entity == null ? null : MapToDto(entity);
         }
 
-        public async Task<IEnumerable<NotificationDto>> GetNotificationsByRecipientUserIdAsync(int recipientUserId)
+        public async Task<IEnumerable<NotificationDto>> GetNotificationsByRecipientUserIdAsync(Guid recipientUserId)
         {
             var all = await _unitOfWork.Notifications.GetAllAsync();
             return all
@@ -50,7 +50,7 @@ namespace MangaManagementSystem.Application.Services
                 .Select(MapToDto);
         }
 
-        public async Task<NotificationDto?> MarkNotificationAsReadAsync(long notificationId)
+        public async Task<NotificationDto?> MarkNotificationAsReadAsync(Guid notificationId)
         {
             var entity = await _unitOfWork.Notifications.GetByIdAsync(notificationId);
             if (entity == null)

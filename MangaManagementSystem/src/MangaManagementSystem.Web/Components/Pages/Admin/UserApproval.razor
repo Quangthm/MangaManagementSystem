@@ -3,7 +3,7 @@
 @inject IUserService UserService
 @inject IFileResourceService _fileResourceService
 @inject ISnackbar Snackbar
-@inject AuthenticationStateProvider AuthStateProvider
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>User Approval - MangaFlow</PageTitle>
 
@@ -134,28 +134,11 @@
     private const string PendingStatus = "PENDING_APPROVAL";
 
     private readonly List<UserDto> _pendingUsers = new();
-    private Dictionary<int, short> _selectedRolesByUserId = new();
+    private Dictionary<Guid, Guid> _selectedRolesByUserId = new();
     private bool _isLoading;
-    private int? _processingUserId;
+    private Guid? _processingUserId;
 
-    private static readonly (short Id, string Label)[] RoleOptions =
-    {
-        (1, "Mangaka"),
-        (2, "Assistant"),
-        (3, "Tantou Editor"),
-        (4, "Editorial Board Member"),
-        (5, "Admin")
-    };
-
-    private string MapRoleName(short roleId) => roleId switch
-    {
-        1 => "Mangaka",
-        2 => "Assistant",
-        3 => "Tantou Editor",
-        4 => "Editorial Board Member",
-        5 => "Admin",
-        _ => "Unknown"
-    };
+    private string MapRoleName(Guid roleId) => roleId == Guid.Empty ? "Unknown" : "Member";
 
     private async Task LoadPendingUsersAsync()
     {
@@ -177,28 +160,41 @@
         }
     }
 
-    private short GetSelectedRole(int userId)
+    private Guid GetSelectedRole(Guid userId)
     {
         if (_selectedRolesByUserId.TryGetValue(userId, out var roleId))
         {
             return roleId;
         }
 
-        return _pendingUsers.FirstOrDefault(u => u.UserId == userId)?.RoleId ?? 1;
+        return _pendingUsers.FirstOrDefault(u => u.UserId == userId)?.RoleId ?? Guid.Empty;
     }
 
-    private void SetSelectedRole(int userId, short roleId)
+    private void SetSelectedRole(Guid userId, Guid roleId)
     {
         _selectedRolesByUserId[userId] = roleId;
     }
 
-    private bool IsRowBusy(int userId) => _isLoading || _processingUserId == userId;
+    private bool IsRowBusy(Guid userId) => _isLoading || _processingUserId == userId;
+
+    private async Task<Guid> GetCurrentAdminUserIdAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var userIdClaim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+        if (!Guid.TryParse(userIdClaim, out var adminUserId))
+        {
+            throw new InvalidOperationException("Current admin user id is not available.");
+        }
+
+        return adminUserId;
+    }
 
     private MangaManagementSystem.Application.DTOs.Manga.FileResourceDto? _currentPortfolio;
     private bool _showPortfolioPreview;
     private bool _isImagePreview;
 
-    private async Task ViewPortfolioAsync(long fileResourceId)
+    private async Task ViewPortfolioAsync(Guid fileResourceId)
     {
         try
         {
@@ -229,7 +225,7 @@
 
     private async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
-        return await AuthStateProvider.GetAuthenticationStateAsync();
+        return await AuthenticationStateProvider.GetAuthenticationStateAsync();
     }
 
     protected override async Task OnInitializedAsync()
@@ -253,7 +249,8 @@
         _processingUserId = user.UserId;
         try
         {
-            await UserService.ApproveUserAsync(user.UserId);
+            var adminUserId = await GetCurrentAdminUserIdAsync();
+            await UserService.ApproveUserAsync(adminUserId, user.UserId);
             Snackbar.Add($"Approved {user.Username}.", Severity.Success);
             await LoadPendingUsersAsync();
         }
@@ -292,7 +289,8 @@
         _showRejectConfirm = false;
         try
         {
-            await UserService.RejectUserAsync(user.UserId);
+            var adminUserId = await GetCurrentAdminUserIdAsync();
+            await UserService.RejectUserAsync(adminUserId, user.UserId);
             Snackbar.Add($"Rejected {user.Username}.", Severity.Warning);
             await LoadPendingUsersAsync();
         }

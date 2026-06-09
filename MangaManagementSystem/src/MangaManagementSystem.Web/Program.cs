@@ -130,7 +130,7 @@ namespace MangaManagementSystem.Web
                 }
 
                 await SignInApplicationUserAsync(context, result.User, result.RoleName);
-                return Results.Redirect(GetDashboardRedirectUrl(result.User.RoleId));
+                return Results.Redirect(GetDashboardRedirectUrl(result.RoleName));
             }).DisableAntiforgery();
 
             app.MapPost("/api/auth/google-login", () =>
@@ -155,7 +155,7 @@ namespace MangaManagementSystem.Web
                 }
 
                 await SignInApplicationUserAsync(context, authResult.User, authResult.RoleName);
-                return Results.Redirect(GetDashboardRedirectUrl(authResult.User.RoleId));
+                return Results.Redirect(GetDashboardRedirectUrl(authResult.RoleName));
             });
 
             app.MapPost("/api/auth/google-signup", () =>
@@ -275,16 +275,16 @@ app.MapGet("/signout", async (CustomAuthenticationStateProvider authStateProvide
                 });
         }
 
-private static string GetDashboardRedirectUrl(short roleId) => roleId switch
-{
-    1 => "/mangaka",
-    2 => "/assistant",
-    3 => "/editor",
-    4 => "/board",
-    5 => "/board-chief",
-    6 => "/admin",
-    _ => "/login?error=InvalidCredentials"
-};
+        private static string GetDashboardRedirectUrl(string roleName) => roleName switch
+        {
+            "Admin" => "/admin",
+            "Mangaka" => "/mangaka",
+            "Assistant" => "/assistant",
+            "Tantou Editor" => "/editor",
+            "Editorial Board Member" => "/board",
+            "Editorial Board Chief" => "/board-chief",
+            _ => "/login?error=InvalidCredentials"
+        };
 
         private static async Task<IResult> SignInAndRedirectAsync(
             HttpContext context,
@@ -292,7 +292,7 @@ private static string GetDashboardRedirectUrl(short roleId) => roleId switch
             string roleName)
         {
             await SignInApplicationUserAsync(context, user, roleName);
-            return Results.Redirect(GetDashboardRedirectUrl(user.RoleId));
+            return Results.Redirect(GetDashboardRedirectUrl(roleName));
         }
     }
 }

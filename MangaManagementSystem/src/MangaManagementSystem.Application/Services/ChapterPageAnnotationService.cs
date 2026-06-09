@@ -31,13 +31,13 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(entity);
         }
 
-        public async Task<ChapterPageAnnotationDto?> GetChapterPageAnnotationByIdAsync(long id)
+        public async Task<ChapterPageAnnotationDto?> GetChapterPageAnnotationByIdAsync(Guid id)
         {
             var entity = await _unitOfWork.ChapterPageAnnotations.GetByIdAsync(id);
             return entity == null ? null : MapToDto(entity);
         }
 
-        public async Task<IEnumerable<ChapterPageAnnotationDto>> GetChapterPageAnnotationsByPageRegionIdAsync(long pageRegionId)
+        public async Task<IEnumerable<ChapterPageAnnotationDto>> GetChapterPageAnnotationsByPageRegionIdAsync(Guid pageRegionId)
         {
             var all = await _unitOfWork.ChapterPageAnnotations.GetAllAsync();
             return all
@@ -63,7 +63,7 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(entity);
         }
 
-        public async Task<bool> DeleteChapterPageAnnotationAsync(long id)
+        public async Task<bool> DeleteChapterPageAnnotationAsync(Guid id)
         {
             var entity = await _unitOfWork.ChapterPageAnnotations.GetByIdAsync(id);
             if (entity == null)

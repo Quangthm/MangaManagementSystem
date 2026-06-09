@@ -6,7 +6,7 @@ namespace MangaManagementSystem.Application.DTOs.Manga
     public record AuditEventDto(
         long AuditEventId,
         DateTime OccurredAtUtc,
-        int? ActorUserId,
+        Guid? ActorUserId,
         string? ActorRoleName,
         string ActionCode,
         string EntityType,
@@ -15,7 +15,7 @@ namespace MangaManagementSystem.Application.DTOs.Manga
     );
 
     public record CreateAuditEventDto(
-        int? ActorUserId,
+        Guid? ActorUserId,
         [MaxLength(100)] string? ActorRoleName,
         [Required][MaxLength(100)] string ActionCode,
         [Required][MaxLength(100)] string EntityType,

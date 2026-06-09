@@ -4,8 +4,8 @@ using System.ComponentModel.DataAnnotations;
 namespace MangaManagementSystem.Application.DTOs.Manga
 {
     public record PageRegionDto(
-        long PageRegionId,
-        long ChapterPageVersionId,
+        Guid PageRegionId,
+        Guid ChapterPageVersionId,
         string TypeCode,
         string? RegionLabel,
         decimal X,
@@ -15,12 +15,12 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         decimal? ConfidenceScore,
         string SourceType,
         string? OriginalText,
-        int? CreatedByUserId,
-        int? UpdatedByUserId
+        Guid? CreatedByUserId,
+        Guid? UpdatedByUserId
     );
 
     public record CreatePageRegionDto(
-        [Required] long ChapterPageVersionId,
+        [Required] Guid ChapterPageVersionId,
         [Required][MaxLength(80)] string TypeCode,
         string? RegionLabel,
         [Required] decimal X,
@@ -33,8 +33,8 @@ namespace MangaManagementSystem.Application.DTOs.Manga
     );
 
     public record UpdatePageRegionDto(
-        [Required] long PageRegionId,
-        [Required] long ChapterPageVersionId,
+        [Required] Guid PageRegionId,
+        [Required] Guid ChapterPageVersionId,
         [Required][MaxLength(80)] string TypeCode,
         string? RegionLabel,
         [Required] decimal X,

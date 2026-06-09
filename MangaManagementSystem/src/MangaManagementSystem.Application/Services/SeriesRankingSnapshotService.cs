@@ -34,13 +34,13 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(entity);
         }
 
-        public async Task<SeriesRankingSnapshotDto?> GetSeriesRankingSnapshotByIdAsync(long id)
+        public async Task<SeriesRankingSnapshotDto?> GetSeriesRankingSnapshotByIdAsync(Guid id)
         {
             var entity = await _unitOfWork.SeriesRankingSnapshots.GetByIdAsync(id);
             return entity == null ? null : MapToDto(entity);
         }
 
-        public async Task<IEnumerable<SeriesRankingSnapshotDto>> GetSeriesRankingSnapshotsBySeriesIdAsync(long seriesId)
+        public async Task<IEnumerable<SeriesRankingSnapshotDto>> GetSeriesRankingSnapshotsBySeriesIdAsync(Guid seriesId)
         {
             var all = await _unitOfWork.SeriesRankingSnapshots.GetAllAsync();
             return all.Where(s => s.SeriesId == seriesId).Select(MapToDto);

@@ -14,7 +14,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             _context = context;
         }
 
-        public async Task<Series?> GetSeriesWithChaptersAsync(long seriesId)
+        public async Task<Series?> GetSeriesWithChaptersAsync(Guid seriesId)
         {
             return await _context.Series
                 .Include(s => s.Chapters)

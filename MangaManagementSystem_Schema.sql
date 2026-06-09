@@ -24,10 +24,14 @@ IF SCHEMA_ID(N'audit') IS NULL
 GO
 
 CREATE TABLE auth.Roles (
-	role_id SMALLINT IDENTITY PRIMARY KEY,
-	role_name NVARCHAR(30) NOT NULL,
-	CONSTRAINT uq_roles_role_name UNIQUE (role_name)
-	);
+    role_id UNIQUEIDENTIFIER NOT NULL
+        CONSTRAINT df_roles_role_id DEFAULT NEWID()
+        CONSTRAINT pk_roles PRIMARY KEY,
+
+    role_name NVARCHAR(30) NOT NULL,
+
+    CONSTRAINT uq_roles_role_name UNIQUE (role_name)
+);
 
 INSERT INTO auth.Roles (role_name)
 VALUES (N'Mangaka'),
@@ -38,14 +42,14 @@ VALUES (N'Mangaka'),
 	(N'Admin');
 
 CREATE TABLE auth.Users (
-	user_id INT IDENTITY(1, 1) PRIMARY KEY,
-	role_id SMALLINT NOT NULL,
+	user_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_users_user_id DEFAULT NEWID() PRIMARY KEY,
+	role_id UNIQUEIDENTIFIER NOT NULL,
 	username NVARCHAR(50) NOT NULL,
 	display_name NVARCHAR(100) NOT NULL,
 	email NVARCHAR(254) NOT NULL,
 	password_hash NVARCHAR(255) NOT NULL,
-	avatar_file_id BIGINT NULL,
-	portfolio_file_id BIGINT NULL,
+	avatar_file_id UNIQUEIDENTIFIER NULL,
+	portfolio_file_id UNIQUEIDENTIFIER NULL,
 	status_code NVARCHAR(30) NOT NULL CONSTRAINT df_users_status DEFAULT N'PENDING_APPROVAL',
 	created_at_utc DATETIME2(7) NOT NULL CONSTRAINT df_users_created_at_utc DEFAULT SYSUTCDATETIME(),
 	CONSTRAINT uq_users_username UNIQUE (username),
@@ -79,7 +83,7 @@ CREATE INDEX ix_users_role_status ON auth.Users (
 	);
 
 CREATE TABLE manga.FileResource (
-	file_resource_id BIGINT IDENTITY(1, 1) NOT NULL CONSTRAINT pk_file_resource PRIMARY KEY,
+	file_resource_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_file_resource_id DEFAULT NEWID() CONSTRAINT pk_file_resource PRIMARY KEY,
 	file_purpose_code NVARCHAR(50) NOT NULL,
 	original_file_name NVARCHAR(260) NOT NULL,
 	cloudinary_public_id NVARCHAR(255) NOT NULL,
@@ -87,10 +91,10 @@ CREATE TABLE manga.FileResource (
 	content_type NVARCHAR(100) NOT NULL,
 	file_size_bytes BIGINT NOT NULL,
 	sha256_hash CHAR(64) NOT NULL,
-	uploaded_by_user_id INT NULL,
+	uploaded_by_user_id UNIQUEIDENTIFIER NULL,
 	uploaded_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_file_resource_uploaded_at_utc DEFAULT(SYSUTCDATETIME()),
 	deleted_at_utc DATETIME2(0) NULL,
-	deleted_by_user_id INT NULL,
+	deleted_by_user_id UNIQUEIDENTIFIER NULL,
 	CONSTRAINT ck_file_resource_file_purpose_code CHECK (
 		file_purpose_code IN (
 			N'SERIES_PROPOSAL',
@@ -135,14 +139,20 @@ INCLUDE (
 )
 WHERE deleted_at_utc IS NULL;
 GO
-ALTER TABLE auth.Users ADD CONSTRAINT fk_users_avatar_file FOREIGN KEY (avatar_file_id) REFERENCES manga.FileResource(file_resource_id);
+ALTER TABLE auth.Users
+ADD CONSTRAINT fk_users_avatar_file
+FOREIGN KEY (avatar_file_id)
+REFERENCES manga.FileResource(file_resource_id);
 
-ALTER TABLE auth.Users ADD CONSTRAINT fk_users_portfolio_file FOREIGN KEY (portfolio_file_id) REFERENCES manga.FileResource(file_resource_id);
+ALTER TABLE auth.Users
+ADD CONSTRAINT fk_users_portfolio_file
+FOREIGN KEY (portfolio_file_id)
+REFERENCES manga.FileResource(file_resource_id);
 
 CREATE TABLE audit.AuditEvent (
 	audit_event_id BIGINT IDENTITY(1, 1) NOT NULL CONSTRAINT pk_audit_event PRIMARY KEY,
 	occurred_at_utc DATETIME2(7) NOT NULL CONSTRAINT df_audit_event_occurred_at_utc DEFAULT SYSUTCDATETIME(),
-	actor_user_id INT NULL,
+	actor_user_id UNIQUEIDENTIFIER NULL,
 	actor_role_name NVARCHAR(128) NULL,
 	action_code NVARCHAR(64) NOT NULL,
 	entity_type NVARCHAR(128) NOT NULL,
@@ -166,19 +176,19 @@ CREATE INDEX ix_audit_event_actor_time ON audit.AuditEvent (
 	);
 
 CREATE TABLE manga.Series (
-	series_id BIGINT IDENTITY(1, 1) NOT NULL CONSTRAINT pk_series PRIMARY KEY,
+	series_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_series_id DEFAULT NEWID() CONSTRAINT pk_series PRIMARY KEY,
 	series_code NVARCHAR(50) NOT NULL,
 	title NVARCHAR(200) NOT NULL,
 	slug NVARCHAR(220) NOT NULL,
 	synopsis NVARCHAR(MAX) NOT NULL,
 	genre NVARCHAR(100) NOT NULL,
-	cover_file_id BIGINT NULL,
+	cover_file_id UNIQUEIDENTIFIER NULL,
 	status_code NVARCHAR(50) NOT NULL CONSTRAINT df_series_current_status_code DEFAULT(N'PROPOSAL_DRAFT'),
 	content_language_code NVARCHAR(10) NOT NULL CONSTRAINT df_series_content_language_code DEFAULT(N'ja'),
-	source_series_id BIGINT NULL,
+	source_series_id UNIQUEIDENTIFIER NULL,
 	created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_created_at_utc DEFAULT(SYSUTCDATETIME()),
 	updated_at_utc DATETIME2(0) NULL,
-	updated_by_user_id INT NULL,
+	updated_by_user_id UNIQUEIDENTIFIER NULL,
 	publication_frequency_code NVARCHAR(50) NULL,
 	CONSTRAINT ck_series_current_status_code CHECK (
 		status_code IN (
@@ -230,9 +240,9 @@ CREATE TABLE manga.Series (
 CREATE INDEX ix_series_current_status_code ON manga.Series (status_code);
 
 CREATE TABLE manga.SeriesContributor (
-	series_contributor_id BIGINT IDENTITY(1, 1) NOT NULL CONSTRAINT pk_series_contributor PRIMARY KEY,
-	series_id BIGINT NOT NULL,
-	user_id INT NOT NULL,
+	series_contributor_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_series_contributor_id DEFAULT NEWID() CONSTRAINT pk_series_contributor PRIMARY KEY,
+	series_id UNIQUEIDENTIFIER NOT NULL,
+	user_id UNIQUEIDENTIFIER NOT NULL,
 	start_date DATE NOT NULL CONSTRAINT df_series_contributor_start_date DEFAULT(CONVERT(DATE, SYSUTCDATETIME())),
 	end_date DATE NULL,
 	notes NVARCHAR(500) NULL,
@@ -274,21 +284,21 @@ CREATE UNIQUE INDEX ux_series_contributor_active_role ON manga.SeriesContributor
 WHERE end_date IS NULL;
 
 CREATE TABLE manga.SeriesProposal (
-	series_proposal_id BIGINT IDENTITY(1, 1) NOT NULL CONSTRAINT pk_series_proposal PRIMARY KEY,
-	series_id BIGINT NOT NULL,
+	series_proposal_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_series_proposal_id DEFAULT NEWID() CONSTRAINT pk_series_proposal PRIMARY KEY,
+	series_id UNIQUEIDENTIFIER NOT NULL,
 	proposal_version_no SMALLINT NOT NULL,
 	proposal_title NVARCHAR(200) NOT NULL,
 	synopsis_snapshot NVARCHAR(MAX) NOT NULL,
 	genre_snapshot NVARCHAR(100) NOT NULL,
-	proposal_file_id BIGINT NOT NULL,
+	proposal_file_id UNIQUEIDENTIFIER NOT NULL,
 	status_code NVARCHAR(50) NOT NULL CONSTRAINT df_series_proposal_status_code DEFAULT(N'UNDER_EDITORIAL_REVIEW'),
-	submitted_by_user_id INT NOT NULL,
+	submitted_by_user_id UNIQUEIDENTIFIER NOT NULL,
 	submitted_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_proposal_submitted_at_utc DEFAULT SYSUTCDATETIME(),
 	withdrawn_at_utc DATETIME2(0) NULL,
-	reviewed_by_user_id INT NULL,
+	reviewed_by_user_id UNIQUEIDENTIFIER NULL,
 	reviewed_at_utc DATETIME2(0) NULL,
 	comments NVARCHAR(MAX) NULL,
-	markup_file_id BIGINT NULL,
+	markup_file_id UNIQUEIDENTIFIER NULL,
 	CONSTRAINT ck_series_proposal_status_code CHECK (
 		status_code IN (
 			N'UNDER_EDITORIAL_REVIEW',
@@ -373,13 +383,13 @@ CREATE INDEX ix_series_proposal_reviewed_by ON manga.SeriesProposal (
 WHERE reviewed_by_user_id IS NOT NULL;
 
 CREATE TABLE manga.SeriesBoardPoll (
-	series_board_poll_id BIGINT IDENTITY(1, 1) NOT NULL CONSTRAINT pk_series_board_poll PRIMARY KEY,
-	series_id BIGINT NOT NULL,
+	series_board_poll_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_series_board_poll_id DEFAULT NEWID() CONSTRAINT pk_series_board_poll PRIMARY KEY,
+	series_id UNIQUEIDENTIFIER NOT NULL,
 	poll_type_code NVARCHAR(50) NOT NULL,
 	poll_reason NVARCHAR(MAX) NOT NULL,
 	poll_status_code NVARCHAR(50) NOT NULL CONSTRAINT df_series_board_poll_status_code DEFAULT(N'OPEN'),
 	board_publication_frequency_code NVARCHAR(50) NULL,
-	created_by_user_id INT NOT NULL,
+	created_by_user_id UNIQUEIDENTIFIER NOT NULL,
 	started_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_board_poll_started_at_utc DEFAULT(SYSUTCDATETIME()),
 	ends_at_utc DATETIME2(0) NULL,
 	CONSTRAINT ck_series_board_poll_type_code CHECK (
@@ -428,9 +438,9 @@ CREATE UNIQUE INDEX ux_series_board_poll_open_type ON manga.SeriesBoardPoll (
 WHERE poll_status_code = N'OPEN';
 
 CREATE TABLE manga.SeriesBoardVote (
-	series_board_vote_id BIGINT IDENTITY(1, 1) NOT NULL CONSTRAINT pk_series_board_vote PRIMARY KEY,
-	series_board_poll_id BIGINT NOT NULL,
-	user_id INT NOT NULL,
+	series_board_vote_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_series_board_vote_id DEFAULT NEWID() CONSTRAINT pk_series_board_vote PRIMARY KEY,
+	series_board_poll_id UNIQUEIDENTIFIER NOT NULL,
+	user_id UNIQUEIDENTIFIER NOT NULL,
 	choice_code NVARCHAR(50) NOT NULL,
 	vote_reason NVARCHAR(500) NULL,
 	voted_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_board_vote_voted_at_utc DEFAULT(SYSUTCDATETIME()),
@@ -528,15 +538,15 @@ GROUP BY p.series_board_poll_id,
 GO
 
 CREATE TABLE manga.Chapter (
-	chapter_id BIGINT IDENTITY(1, 1) NOT NULL CONSTRAINT pk_chapter PRIMARY KEY,
-	series_id BIGINT NOT NULL,
+	chapter_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_chapter_id DEFAULT NEWID() CONSTRAINT pk_chapter PRIMARY KEY,
+	series_id UNIQUEIDENTIFIER NOT NULL,
 	chapter_number_label NVARCHAR(20) NOT NULL,
 	chapter_title NVARCHAR(200) NULL,
 	status_code NVARCHAR(50) NOT NULL CONSTRAINT df_chapter_status_code DEFAULT(N'DRAFT'),
 	planned_release_date DATE NULL,
 	released_at_utc DATETIME2(0) NULL,
 	created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_created_at_utc DEFAULT(SYSUTCDATETIME()),
-	created_by_user_id INT NULL,
+	created_by_user_id UNIQUEIDENTIFIER NULL,
 	updated_at_utc DATETIME2(0) NULL,
 	CONSTRAINT ck_chapter_status_code CHECK (
 		status_code IN (
@@ -571,12 +581,12 @@ CREATE INDEX ix_chapter_series_id ON manga.Chapter (series_id);
 CREATE INDEX ix_chapter_status_code ON manga.Chapter (status_code);
 
 CREATE TABLE manga.ChapterPage (
-	chapter_page_id BIGINT IDENTITY(1, 1) NOT NULL CONSTRAINT pk_chapter_page PRIMARY KEY,
-	chapter_id BIGINT NOT NULL,
+	chapter_page_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_chapter_page_id DEFAULT NEWID() CONSTRAINT pk_chapter_page PRIMARY KEY,
+	chapter_id UNIQUEIDENTIFIER NOT NULL,
 	page_no INT NOT NULL,
 	page_notes NVARCHAR(MAX) NULL,
 	deleted_at_utc DATETIME2(0) NULL,
-	deleted_by_user_id INT NULL,
+	deleted_by_user_id UNIQUEIDENTIFIER NULL,
 	CONSTRAINT ck_chapter_page_page_no_positive CHECK (page_no > 0),
 	CONSTRAINT ck_chapter_page_deleted_pair CHECK (
 		(
@@ -600,10 +610,10 @@ CREATE UNIQUE INDEX ux_chapter_page_active_page_no ON manga.ChapterPage (
 WHERE deleted_at_utc IS NULL;
 
 CREATE TABLE manga.ChapterPageVersion (
-	chapter_page_version_id BIGINT IDENTITY(1, 1) CONSTRAINT pk_chapter_page_version PRIMARY KEY,
-	chapter_page_id BIGINT NOT NULL,
+	chapter_page_version_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_chapter_page_version_id DEFAULT NEWID() CONSTRAINT pk_chapter_page_version PRIMARY KEY,
+	chapter_page_id UNIQUEIDENTIFIER NOT NULL,
 	version_no SMALLINT NOT NULL,
-	page_file_id BIGINT NOT NULL,
+	page_file_id UNIQUEIDENTIFIER NOT NULL,
 	version_note NVARCHAR(500) NULL,
 	is_current_version BIT NOT NULL CONSTRAINT df_chapter_page_version_is_current DEFAULT(0),
 	CONSTRAINT fk_chapter_page_version_page FOREIGN KEY (chapter_page_id) REFERENCES manga.ChapterPage(chapter_page_id),
@@ -622,8 +632,8 @@ CREATE UNIQUE INDEX ux_chapter_page_version_current ON manga.ChapterPageVersion 
 WHERE is_current_version = 1;
 
 CREATE TABLE manga.PageRegion (
-	page_region_id BIGINT IDENTITY(1, 1) NOT NULL CONSTRAINT pk_page_region PRIMARY KEY,
-	chapter_page_version_id BIGINT NOT NULL,
+	page_region_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_page_region_id DEFAULT NEWID() CONSTRAINT pk_page_region PRIMARY KEY,
+	chapter_page_version_id UNIQUEIDENTIFIER NOT NULL,
 	type_code NVARCHAR(80) NOT NULL,
 	region_label NVARCHAR(100) NULL,
 	x DECIMAL(10, 2) NOT NULL,
@@ -634,9 +644,9 @@ CREATE TABLE manga.PageRegion (
 	source_type NVARCHAR(20) NOT NULL CONSTRAINT df_page_region_source_type DEFAULT(N'MANUAL'),
 	original_text NVARCHAR(MAX) NULL,
 	created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_page_region_created_at_utc DEFAULT SYSUTCDATETIME(),
-	created_by_user_id INT NULL,
+	created_by_user_id UNIQUEIDENTIFIER NULL,
 	updated_at_utc DATETIME2(0) NULL,
-	updated_by_user_id INT NULL,
+	updated_by_user_id UNIQUEIDENTIFIER NULL,
 	CONSTRAINT ck_page_region_confidence_source CHECK (
 		(
 			source_type = N'AI'
@@ -708,13 +718,13 @@ CREATE INDEX ix_page_region_type ON manga.PageRegion (type_code) INCLUDE (
 	);
 
 CREATE TABLE manga.ChapterPageAnnotation (
-	chapter_page_annotation_id BIGINT IDENTITY(1, 1) NOT NULL CONSTRAINT pk_chapter_page_annotation PRIMARY KEY,
-	page_region_id BIGINT NOT NULL,
+	chapter_page_annotation_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_chapter_page_annotation_id DEFAULT NEWID() CONSTRAINT pk_chapter_page_annotation PRIMARY KEY,
+	page_region_id UNIQUEIDENTIFIER NOT NULL,
 	issue_type_code NVARCHAR(80) NOT NULL,
-	annotated_by_user_id INT NOT NULL,
+	annotated_by_user_id UNIQUEIDENTIFIER NOT NULL,
 	annotation_text NVARCHAR(MAX) NOT NULL,
 	resolved_at_utc DATETIME2(0) NULL,
-	resolved_by_user_id INT NULL,
+	resolved_by_user_id UNIQUEIDENTIFIER NULL,
 	created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_page_annotation_created_at_utc DEFAULT SYSUTCDATETIME(),
 	CONSTRAINT ck_chapter_page_annotation_issue_type_code CHECK (
 		issue_type_code IS NULL
@@ -756,9 +766,9 @@ WHERE page_region_id IS NOT NULL;
 
 
 CREATE TABLE manga.ChapterPageTask (
-	chapter_page_task_id BIGINT IDENTITY(1, 1) NOT NULL CONSTRAINT pk_chapter_page_task PRIMARY KEY,
-	chapter_page_id BIGINT NOT NULL,
-	assigned_to_user_id INT NOT NULL,
+	chapter_page_task_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_chapter_page_task_id DEFAULT NEWID() CONSTRAINT pk_chapter_page_task PRIMARY KEY,
+	chapter_page_id UNIQUEIDENTIFIER NOT NULL,
+	assigned_to_user_id UNIQUEIDENTIFIER NOT NULL,
 	type_code NVARCHAR(50) NOT NULL,
 	status_code NVARCHAR(50) NOT NULL CONSTRAINT df_chapter_page_task_status_code DEFAULT(N'ASSIGNED'),
 	task_title NVARCHAR(200) NOT NULL,
@@ -766,9 +776,9 @@ CREATE TABLE manga.ChapterPageTask (
 	priority_level TINYINT NOT NULL CONSTRAINT df_chapter_page_task_priority_level DEFAULT(3),
 	due_at_utc DATETIME2(0) NOT NULL,
 	compensation_amount DECIMAL(12, 2) NULL,
-	completed_page_version_id BIGINT NULL,
+	completed_page_version_id UNIQUEIDENTIFIER NULL,
 	created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_page_task_created_at_utc DEFAULT(SYSUTCDATETIME()),
-	created_by_user_id INT NOT NULL,
+	created_by_user_id UNIQUEIDENTIFIER NOT NULL,
 	updated_at_utc DATETIME2(0) NULL,
 	CONSTRAINT ck_chapter_page_task_status_code CHECK (
 		status_code IN (
@@ -847,8 +857,8 @@ CREATE INDEX ix_chapter_page_task_status_due ON manga.ChapterPageTask (
 	);
 
 CREATE TABLE manga.ChapterPageTaskRegion (
-	chapter_page_task_id BIGINT NOT NULL,
-	page_region_id BIGINT NOT NULL,
+	chapter_page_task_id UNIQUEIDENTIFIER NOT NULL,
+	page_region_id UNIQUEIDENTIFIER NOT NULL,
 	CONSTRAINT pk_chapter_page_task_region PRIMARY KEY (
 		chapter_page_task_id,
 		page_region_id
@@ -858,12 +868,12 @@ CREATE TABLE manga.ChapterPageTaskRegion (
 	);
 
 CREATE TABLE manga.ChapterEditorialReview (
-	chapter_editorial_review_id BIGINT IDENTITY(1, 1) NOT NULL CONSTRAINT pk_chapter_editorial_review PRIMARY KEY,
-	chapter_id BIGINT NOT NULL,
-	reviewer_user_id INT NOT NULL,
+	chapter_editorial_review_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_chapter_editorial_review_id DEFAULT NEWID() CONSTRAINT pk_chapter_editorial_review PRIMARY KEY,
+	chapter_id UNIQUEIDENTIFIER NOT NULL,
+	reviewer_user_id UNIQUEIDENTIFIER NOT NULL,
 	decision_code NVARCHAR(50) NOT NULL,
 	comments NVARCHAR(MAX) NULL,
-	markup_file_id BIGINT NULL,
+	markup_file_id UNIQUEIDENTIFIER NULL,
 	reviewed_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_editorial_review_reviewed_at_utc DEFAULT(SYSUTCDATETIME()),
 	CONSTRAINT ck_chapter_editorial_review_decision_code CHECK (
 		decision_code IN (
@@ -889,8 +899,8 @@ CREATE INDEX ix_chapter_editorial_review_reviewer ON manga.ChapterEditorialRevie
 CREATE INDEX ix_chapter_editorial_review_decision_code ON manga.ChapterEditorialReview (decision_code);
 
 CREATE TABLE manga.SeriesRankingSnapshot (
-	series_ranking_snapshot_id BIGINT IDENTITY(1, 1) NOT NULL CONSTRAINT pk_series_ranking_snapshot PRIMARY KEY,
-	series_id BIGINT NOT NULL,
+	series_ranking_snapshot_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_series_ranking_snapshot_id DEFAULT NEWID() CONSTRAINT pk_series_ranking_snapshot PRIMARY KEY,
+	series_id UNIQUEIDENTIFIER NOT NULL,
 	ranking_period_type_code NVARCHAR(50) NOT NULL,
 	period_start_date DATE NOT NULL,
 	period_end_date DATE NOT NULL,
@@ -899,7 +909,7 @@ CREATE TABLE manga.SeriesRankingSnapshot (
 	reader_vote_count INT NOT NULL CONSTRAINT df_series_ranking_snapshot_reader_vote_count DEFAULT(0),
 	cancellation_risk_score DECIMAL(10, 2) NULL,
 	generated_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_ranking_snapshot_generated_at_utc DEFAULT(SYSUTCDATETIME()),
-	generated_by_user_id INT NULL,
+	generated_by_user_id UNIQUEIDENTIFIER NULL,
 	created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_ranking_snapshot_created_at_utc DEFAULT(SYSUTCDATETIME()),
 	CONSTRAINT ck_series_ranking_snapshot_period_type_code CHECK (
 		ranking_period_type_code IN (
@@ -949,14 +959,14 @@ CREATE INDEX ix_series_ranking_snapshot_series_period ON manga.SeriesRankingSnap
 	);
 
 CREATE TABLE manga.ChapterReaderVoteSnapshot (
-	chapter_reader_vote_snapshot_id BIGINT IDENTITY(1, 1) NOT NULL CONSTRAINT pk_chapter_reader_vote_snapshot PRIMARY KEY,
-	chapter_id BIGINT NOT NULL,
+	chapter_reader_vote_snapshot_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_chapter_reader_vote_snapshot_id DEFAULT NEWID() CONSTRAINT pk_chapter_reader_vote_snapshot PRIMARY KEY,
+	chapter_id UNIQUEIDENTIFIER NOT NULL,
 	reader_vote_count INT NOT NULL CONSTRAINT df_chapter_reader_vote_snapshot_reader_vote_count DEFAULT(0),
 	average_rating DECIMAL(4, 2) NULL,
 	positive_feedback_count INT NULL,
 	negative_feedback_count INT NULL,
 	data_source_note NVARCHAR(500) NULL,
-	entered_by_user_id INT NOT NULL,
+	entered_by_user_id UNIQUEIDENTIFIER NOT NULL,
 	voted_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_reader_vote_snapshot_voted_at_utc DEFAULT(SYSUTCDATETIME()),
 	CONSTRAINT ck_chapter_reader_vote_snapshot_counts CHECK (
 		reader_vote_count >= 0
@@ -997,13 +1007,13 @@ CREATE INDEX ix_chapter_reader_vote_snapshot_entered_by ON manga.ChapterReaderVo
 	);
 
 CREATE TABLE manga.Notification (
-	notification_id BIGINT IDENTITY(1, 1) NOT NULL CONSTRAINT pk_notification PRIMARY KEY,
-	recipient_user_id INT NOT NULL,
+	notification_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_notification_id DEFAULT NEWID() CONSTRAINT pk_notification PRIMARY KEY,
+	recipient_user_id UNIQUEIDENTIFIER NOT NULL,
 	notification_type_code NVARCHAR(50) NOT NULL CONSTRAINT df_notification_type_code DEFAULT(N'SYSTEM_MESSAGE'),
 	title NVARCHAR(200) NOT NULL,
 	message NVARCHAR(MAX) NOT NULL,
 	related_entity_type NVARCHAR(50) NULL,
-	related_entity_id BIGINT NULL,
+	related_entity_id UNIQUEIDENTIFIER NULL,
 	read_at_utc DATETIME2(0) NULL,
 	created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_notification_created_at_utc DEFAULT(SYSUTCDATETIME()),
 	CONSTRAINT ck_notification_type_code CHECK (

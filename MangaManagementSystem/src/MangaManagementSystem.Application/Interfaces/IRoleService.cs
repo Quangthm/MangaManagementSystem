@@ -6,7 +6,7 @@ namespace MangaManagementSystem.Application.Interfaces
 {
     public interface IRoleService
     {
-        Task<RoleDto?> GetRoleByIdAsync(short id);
+        Task<RoleDto?> GetRoleByIdAsync(Guid id);
         Task<IEnumerable<RoleDto>> GetAllRolesAsync();
     }
 }

@@ -7,7 +7,7 @@ namespace MangaManagementSystem.Application.Interfaces
     public interface ISeriesBoardVoteService
     {
         Task<SeriesBoardVoteDto> CreateSeriesBoardVoteAsync(CreateSeriesBoardVoteDto dto);
-        Task<SeriesBoardVoteDto?> GetSeriesBoardVoteByIdAsync(long id);
-        Task<IEnumerable<SeriesBoardVoteDto>> GetSeriesBoardVotesByPollIdAsync(long seriesBoardPollId);
+        Task<SeriesBoardVoteDto?> GetSeriesBoardVoteByIdAsync(Guid id);
+        Task<IEnumerable<SeriesBoardVoteDto>> GetSeriesBoardVotesByPollIdAsync(Guid seriesBoardPollId);
     }
 }

@@ -44,7 +44,7 @@
 	private bool _loading = true;
 	private string? _avatarUrl;
 	private string? _initial;
-	private int? _userId;
+	private Guid? _userId;
 
 	protected override async Task OnInitializedAsync()
 	{
@@ -55,7 +55,7 @@
 			if (user?.Identity?.IsAuthenticated == true)
 			{
 				var idClaim = user.FindFirst(ClaimTypes.NameIdentifier);
-				if (int.TryParse(idClaim?.Value, out var uid))
+				if (Guid.TryParse(idClaim?.Value, out var uid))
 				{
 					_userId = uid;
 					var dto = await UserService.GetUserByIdAsync(uid);

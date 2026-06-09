@@ -1,40 +1,48 @@
 USE MangaManagementDB;
 GO
-INSERT INTO [auth].[Users] (
-    [username], 
+
+DECLARE @PasswordHash NVARCHAR(255) =
+N'$2a$12$eBGlrcdEPsP8c6yDmKhnv.OojpFaPqmJ.DcYRswLWEFZAYTwGNDtq';
+
+DECLARE @Now DATETIME2(7) = SYSUTCDATETIME();
+
+;WITH TestUsers AS
+(
+    SELECT *
+    FROM (VALUES
+        (N'TestAdmin',   N'Admin@test.com', N'admin',   N'Admin'),
+        (N'TestEditor',      N'Editor@test.com',    N'editor',  N'Tantou Editor'),
+        (N'TestMangaka',     N'Mangaka@test.com',   N'mangaka', N'Mangaka'),
+        (N'TestBoardMember', N'Member@test.com',    N'member',  N'Editorial Board Member'),
+        (N'TestBoardChief',  N'Chief@test.com',     N'chief',   N'Editorial Board Chief')
+    ) AS v(username, email, display_name, role_name)
+)
+INSERT INTO [auth].[Users]
+(
+    [username],
     [email],
     [display_name],
-    [password_hash], 
-    [role_id], 
-    [status_code], 
+    [password_hash],
+    [role_id],
+    [status_code],
     [created_at_utc]
 )
-VALUES 
+SELECT
+    tu.username,
+    tu.email,
+    tu.display_name,
+    @PasswordHash,
+    r.role_id,
+    N'ACTIVE',
+    @Now
+FROM TestUsers tu
+INNER JOIN [auth].[Roles] r
+    ON r.role_name = tu.role_name
+WHERE NOT EXISTS
 (
-    'TestRealAdmin',
-    'realadmin@test.com',
-    'admin',
-    '$2a$12$eBGlrcdEPsP8c6yDmKhnv.OojpFaPqmJ.DcYRswLWEFZAYTwGNDtq',
-    6,
-    'ACTIVE',
-    SYSUTCDATETIME()
+    SELECT 1
+    FROM [auth].[Users] u
+    WHERE u.username = tu.username
+       OR u.email = tu.email
 );
-
-DECLARE @new_user_id INT;
-
-EXEC auth.usp_User_Create
-    @role_name = N'Mangaka',
-    @username = N'huy123',
-    @email = N'huy@example.com',
-    @password_hash = N'hashed_password_here',
-    @display_name = NULL,
-    @avatar_file_id = NULL,
-    @portfolio_file_id = NULL,
-    @created_by_user_id = NULL,
-    @new_user_id = @new_user_id OUTPUT;
-
-SELECT @new_user_id AS new_user_id;
-
-Delete from Auth.Users where user_id = 10
-
-EXEC sp_helptext 'auth.usp_User_UpdatePortfolioFile';
+GO

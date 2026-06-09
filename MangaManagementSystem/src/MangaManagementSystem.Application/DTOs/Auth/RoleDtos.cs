@@ -1,7 +1,7 @@
 namespace MangaManagementSystem.Application.DTOs.Auth
 {
     public record RoleDto(
-        short RoleId,
+        Guid RoleId,
         string RoleName
     );
 }
