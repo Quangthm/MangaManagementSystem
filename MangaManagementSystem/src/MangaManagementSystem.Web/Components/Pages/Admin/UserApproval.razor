@@ -21,7 +21,7 @@
         <MudText Typo="Typo.body2" Class="mf-muted mb-3">Review pending user registrations that require admin approval.</MudText>
 
         <MudPaper Class="pa-5 mf-card" Elevation="0">
-            @if (_isLoading)
+            @if (_isLoadingPendingUsers)
             {
                 <MudProgressLinear Indeterminate="true" Class="mb-4" />
             }
@@ -36,13 +36,13 @@
                         <MudAlert Severity="Severity.Warning" Class="mt-3">Rejected accounts cannot log in. This action can be reviewed in the system records.</MudAlert>
                     </DialogContent>
                     <DialogActions>
-                        <MudButton Variant="Variant.Text" OnClick="CancelReject">Cancel</MudButton>
-                        <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="ConfirmRejectAsync">Reject</MudButton>
+                        <MudButton Variant="Variant.Text" Disabled="@IsBusy" OnClick="CancelReject">Cancel</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="@IsBusy" OnClick="ConfirmRejectAsync">Reject</MudButton>
                     </DialogActions>
                 </MudDialog>
             }
 
-            @if (!_isLoading && !_pendingUsers.Any())
+            @if (!_isLoadingPendingUsers && !_pendingUsers.Any())
             {
                 <MudPaper Class="pa-8 mf-card text-center" Elevation="0">
                     <MudAvatar Color="Color.Primary" Size="Size.Large" Class="mx-auto mb-3">✓</MudAvatar>
@@ -71,7 +71,7 @@
                         <MudTd DataLabel="Portfolio">
                             @if (context.PortfolioFileId.HasValue)
                             {
-                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(()=>ViewPortfolioAsync(context.PortfolioFileId.Value))">View Portfolio</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@IsBusy" OnClick="@(()=>ViewPortfolioAsync(context.PortfolioFileId.Value))">View Portfolio</MudButton>
                             }
                             else
                             {
@@ -135,7 +135,7 @@
 
     private readonly List<UserDto> _pendingUsers = new();
     private Dictionary<int, short> _selectedRolesByUserId = new();
-    private bool _isLoading;
+    private bool _isLoadingPendingUsers;
     private int? _processingUserId;
 
     private static readonly (short Id, string Label)[] RoleOptions =
@@ -159,13 +159,18 @@
 
     private async Task LoadPendingUsersAsync()
     {
-        _isLoading = true;
+        if (_isLoadingPendingUsers)
+        {
+            return;
+        }
+
+        _isLoadingPendingUsers = true;
         try
         {
             var users = await UserService.GetUsersByStatusAsync(PendingStatus);
             _pendingUsers.Clear();
             _pendingUsers.AddRange(users);
-                _selectedRolesByUserId = users.ToDictionary(u => u.UserId, u => u.RoleId);
+            _selectedRolesByUserId = users.ToDictionary(u => u.UserId, u => u.RoleId);
         }
         catch (Exception ex)
         {
@@ -173,7 +178,7 @@
         }
         finally
         {
-            _isLoading = false;
+            _isLoadingPendingUsers = false;
         }
     }
 
@@ -192,7 +197,9 @@
         _selectedRolesByUserId[userId] = roleId;
     }
 
-    private bool IsRowBusy(int userId) => _isLoading || _processingUserId == userId;
+    private bool IsBusy => _isLoadingPendingUsers || _processingUserId.HasValue;
+
+    private bool IsRowBusy(int userId) => IsBusy || _processingUserId == userId;
 
     private MangaManagementSystem.Application.DTOs.Manga.FileResourceDto? _currentPortfolio;
     private bool _showPortfolioPreview;
@@ -275,9 +282,13 @@
     private bool _showRejectConfirm;
     private UserDto? _rejectTarget;
 
-    private async Task RejectAsync(UserDto user)
+    private void RejectAsync(UserDto user)
     {
-        // Open confirmation dialog
+        if (IsBusy)
+        {
+            return;
+        }
+
         _rejectTarget = user;
         _showRejectConfirm = true;
     }

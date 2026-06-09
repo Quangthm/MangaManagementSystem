@@ -12,7 +12,12 @@
             <MudText Typo="Typo.body1" Class="mf-muted">Manage your series, chapters, and production tasks</MudText>
         </div>
 
-        <MudGrid Class="mb-6"><MudItem xs="12" md="3"><StatCard Label="Active Series" Value="3" /></MudItem><MudItem xs="12" md="3"><StatCard Label="Chapter Drafts" Value="7" /></MudItem><MudItem xs="12" md="3"><StatCard Label="Pending Review" Value="2" /></MudItem><MudItem xs="12" md="3"><StatCard Label="Tasks Assigned" Value="5" /></MudItem></MudGrid>
+        <MudGrid Class="mb-6">
+            <MudItem xs="12" md="3"><StatCard Label="Draft / Active Work" Value="@_inProgressCount.ToString()" Description="Series in progress" /></MudItem>
+            <MudItem xs="12" md="3"><StatCard Label="Total Series" Value="@_totalCount.ToString()" Description="All series in catalog" /></MudItem>
+            <MudItem xs="12" md="3"><StatCard Label="Pending Review" Value="@_pendingReviewCount.ToString()" Description="Editorial or board review" /></MudItem>
+            <MudItem xs="12" md="3"><StatCard Label="Tasks Assigned" Value="—" Description="Not wired yet" /></MudItem>
+        </MudGrid>
         <MudGrid>
             <MudItem xs="12" md="7">
                 <MudPaper Class="pa-5 mf-card" Elevation="0">
@@ -30,7 +35,12 @@
                     }
                     else if (_series == null || !_series.Any())
                     {
-                        <MudText class="mf-muted">No series found yet.</MudText>
+                        <MudPaper Class="pa-8 text-center mf-card" Elevation="0">
+                            <MudIcon Icon="@Icons.Material.Outlined.LibraryBooks" Size="Size.Large" Color="Color.Secondary" Class="mb-3" />
+                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-1">No series found in the connected database</MudText>
+                            <MudText Typo="Typo.body2" Class="mf-muted">Run the demo seed against the same database used by the app, then refresh this page.</MudText>
+                            <MudText Typo="Typo.caption" Class="mf-muted mt-2">The dashboard uses live series data from the database.</MudText>
+                        </MudPaper>
                     }
                     else
                     {
@@ -59,6 +69,11 @@
     // (ISeriesService has no current-Mangaka method yet).
     private IEnumerable<SeriesRow>? _series;
 
+    // Stat counts are computed over the full fetched list (not the top-5 table slice).
+    private int _totalCount;
+    private int _inProgressCount;
+    private int _pendingReviewCount;
+
     protected override async Task OnInitializedAsync()
     {
         await LoadSeriesAsync();
@@ -70,7 +85,20 @@
         _error = null;
         try
         {
-            var series = await SeriesService.GetAllSeriesAsync();
+            var series = (await SeriesService.GetAllSeriesAsync()).ToList();
+
+            _totalCount = series.Count;
+            // Valid Series statuses only (Series.status_code CHECK):
+            // PROPOSAL_DRAFT, UNDER_EDITORIAL_REVIEW, UNDER_BOARD_REVIEW, SERIALIZED, HIATUS, CANCELLED, COMPLETED.
+            _inProgressCount = series.Count(s =>
+                s.StatusCode == "PROPOSAL_DRAFT"
+                || s.StatusCode == "UNDER_EDITORIAL_REVIEW"
+                || s.StatusCode == "UNDER_BOARD_REVIEW"
+                || s.StatusCode == "SERIALIZED");
+            _pendingReviewCount = series.Count(s =>
+                s.StatusCode == "UNDER_EDITORIAL_REVIEW"
+                || s.StatusCode == "UNDER_BOARD_REVIEW");
+
             _series = series
                 .OrderByDescending(s => s.UpdatedAtUtc ?? s.CreatedAtUtc)
                 .Take(5)
