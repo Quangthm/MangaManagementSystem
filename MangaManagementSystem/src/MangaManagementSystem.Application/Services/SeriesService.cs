@@ -21,7 +21,6 @@ namespace MangaManagementSystem.Application.Services
         {
             var entity = new Series
             {
-                SeriesCode = dto.SeriesCode,
                 Title = dto.Title,
                 Slug = dto.Slug,
                 Synopsis = dto.Synopsis,
@@ -52,7 +51,6 @@ namespace MangaManagementSystem.Application.Services
 
         private static SeriesDto MapToDto(Series s) => new(
             s.SeriesId,
-            s.SeriesCode,
             s.Title,
             s.Slug,
             s.Synopsis,

@@ -1096,3 +1096,515 @@ BEGIN
     END CATCH
 END;
 GO
+CREATE OR ALTER PROCEDURE manga.usp_Series_CancelDraft
+    @actor_user_id UNIQUEIDENTIFIER,
+    @series_id UNIQUEIDENTIFIER,
+    @reason NVARCHAR(500) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        DECLARE @lock_resource NVARCHAR(200) =
+            N'manga_series_cancel_' + CONVERT(NVARCHAR(36), @series_id);
+
+        DECLARE @lock_result INT;
+
+        EXEC @lock_result = sys.sp_getapplock
+            @Resource = @lock_resource,
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 10000;
+
+        IF @lock_result < 0
+        BEGIN
+            ;THROW 57101, 'Could not acquire series cancellation lock.', 1;
+        END;
+
+        DECLARE @old_status_code NVARCHAR(50);
+
+        SELECT
+            @old_status_code = status_code
+        FROM manga.Series
+        WHERE series_id = @series_id;
+
+        IF @old_status_code IS NULL
+        BEGIN
+            ;THROW 57102, 'Series does not exist.', 1;
+        END;
+
+        IF @old_status_code <> N'PROPOSAL_DRAFT'
+        BEGIN
+            ;THROW 57103, 'Only draft series can be cancelled by Mangaka through this procedure.', 1;
+        END;
+
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM manga.SeriesContributor sc
+            INNER JOIN auth.Users u
+                ON u.user_id = sc.user_id
+            INNER JOIN auth.Roles r
+                ON r.role_id = u.role_id
+            WHERE sc.series_id = @series_id
+              AND sc.user_id = @actor_user_id
+              AND sc.end_date IS NULL
+              AND u.status_code = N'ACTIVE'
+              AND r.role_name = N'Mangaka'
+        )
+        BEGIN
+            ;THROW 57104, 'Only an active Mangaka contributor can cancel this draft series.', 1;
+        END;
+
+        UPDATE manga.Series
+        SET
+            status_code = N'CANCELLED',
+            updated_at_utc = SYSUTCDATETIME(),
+            updated_by_user_id = @actor_user_id
+        WHERE series_id = @series_id;
+
+        DECLARE @audit_entity_id NVARCHAR(100) =
+            CONVERT(NVARCHAR(36), @series_id);
+
+        DECLARE @detail_json NVARCHAR(MAX) =
+        (
+            SELECT
+                @old_status_code AS old_status_code,
+                N'CANCELLED' AS new_status_code,
+                @reason AS reason
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @actor_user_id,
+            @action_code = N'SERIES_DRAFT_CANCELLED',
+            @entity_type = N'Series',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH;
+END;
+GO
+CREATE OR ALTER PROCEDURE manga.usp_SeriesContributor_Add
+    @actor_user_id UNIQUEIDENTIFIER,
+    @series_id UNIQUEIDENTIFIER,
+    @user_id UNIQUEIDENTIFIER,
+    @notes NVARCHAR(500) = NULL,
+    @new_series_contributor_id UNIQUEIDENTIFIER OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        --------------------------------------------------------------------
+        -- 1. Lock contributor changes for this series
+        --------------------------------------------------------------------
+        DECLARE @lock_resource NVARCHAR(200) =
+            N'manga_series_contributor_add_' + CONVERT(NVARCHAR(36), @series_id);
+
+        DECLARE @lock_result INT;
+
+        EXEC @lock_result = sys.sp_getapplock
+            @Resource = @lock_resource,
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 10000;
+
+        IF @lock_result < 0
+        BEGIN
+            ;THROW 57201, 'Could not acquire series contributor lock.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 2. Series must exist and must not be terminal
+        --------------------------------------------------------------------
+        DECLARE @series_status_code NVARCHAR(50);
+
+        SELECT
+            @series_status_code = s.status_code
+        FROM manga.Series s
+        WHERE s.series_id = @series_id;
+
+        IF @series_status_code IS NULL
+        BEGIN
+            ;THROW 57202, 'Series does not exist.', 1;
+        END;
+
+        IF @series_status_code IN (N'CANCELLED', N'COMPLETED')
+        BEGIN
+            ;THROW 57203, 'Cannot add contributors to cancelled or completed series.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 3. Target user must be active
+        --------------------------------------------------------------------
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM auth.Users u
+            WHERE u.user_id = @user_id
+              AND u.status_code = N'ACTIVE'
+        )
+        BEGIN
+            ;THROW 57204, 'Target user does not exist or is not active.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 4. Actor permission
+        --
+        -- Initial creator case:
+        --   allowed when there are no active contributors yet,
+        --   actor = target user,
+        --   actor is active Mangaka.
+        --
+        -- Normal contributor management case:
+        --   allowed when actor is already an active Mangaka contributor.
+        --------------------------------------------------------------------
+        DECLARE @has_active_contributor BIT = 0;
+
+        IF EXISTS
+        (
+            SELECT 1
+            FROM manga.SeriesContributor sc
+            WHERE sc.series_id = @series_id
+              AND sc.end_date IS NULL
+        )
+        BEGIN
+            SET @has_active_contributor = 1;
+        END;
+
+        DECLARE @actor_is_active_mangaka BIT = 0;
+
+        IF EXISTS
+        (
+            SELECT 1
+            FROM auth.Users u
+            INNER JOIN auth.Roles r
+                ON r.role_id = u.role_id
+            WHERE u.user_id = @actor_user_id
+              AND u.status_code = N'ACTIVE'
+              AND r.role_name = N'Mangaka'
+        )
+        BEGIN
+            SET @actor_is_active_mangaka = 1;
+        END;
+
+        IF @has_active_contributor = 0
+        BEGIN
+            IF @actor_user_id <> @user_id OR @actor_is_active_mangaka = 0
+            BEGIN
+                ;THROW 57205, 'Only the active Mangaka creator can be added as the initial series contributor.', 1;
+            END;
+        END;
+        ELSE
+        BEGIN
+            IF NOT EXISTS
+            (
+                SELECT 1
+                FROM manga.SeriesContributor sc
+                INNER JOIN auth.Users u
+                    ON u.user_id = sc.user_id
+                INNER JOIN auth.Roles r
+                    ON r.role_id = u.role_id
+                WHERE sc.series_id = @series_id
+                  AND sc.user_id = @actor_user_id
+                  AND sc.end_date IS NULL
+                  AND u.status_code = N'ACTIVE'
+                  AND r.role_name = N'Mangaka'
+            )
+            BEGIN
+                ;THROW 57206, 'Only an active Mangaka contributor can add contributors to this series.', 1;
+            END;
+        END;
+        --------------------------------------------------------------------
+        -- 6. Insert contributor
+        --------------------------------------------------------------------
+        DECLARE @created_contributor TABLE
+        (
+            series_contributor_id UNIQUEIDENTIFIER NOT NULL
+        );
+
+        INSERT INTO manga.SeriesContributor
+        (
+            series_id,
+            user_id,
+            notes
+        )
+        OUTPUT inserted.series_contributor_id
+        INTO @created_contributor(series_contributor_id)
+        VALUES
+        (
+            @series_id,
+            @user_id,
+            @notes
+        );
+
+        SELECT
+            @new_series_contributor_id = series_contributor_id
+        FROM @created_contributor;
+
+        --------------------------------------------------------------------
+        -- 7. Audit
+        --------------------------------------------------------------------
+        DECLARE @audit_entity_id NVARCHAR(100) =
+            CONVERT(NVARCHAR(36), @new_series_contributor_id);
+
+        DECLARE @detail_json NVARCHAR(MAX) =
+        (
+            SELECT
+                @series_id AS series_id,
+                @user_id AS contributor_user_id,
+                @notes AS notes
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @actor_user_id,
+            @action_code = N'SERIES_CONTRIBUTOR_ADDED',
+            @entity_type = N'SeriesContributor',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH;
+END;
+GO
+USE MangaManagementDB;
+GO
+CREATE OR ALTER PROCEDURE manga.usp_Series_Create
+    @actor_user_id UNIQUEIDENTIFIER,
+
+    @title NVARCHAR(200),
+    @slug NVARCHAR(220),
+    @synopsis NVARCHAR(MAX),
+    @genre NVARCHAR(100),
+    @content_language_code NVARCHAR(10) = N'ja',
+    @source_series_id UNIQUEIDENTIFIER = NULL,
+    @publication_frequency_code NVARCHAR(50) = NULL,
+
+    @cover_original_file_name NVARCHAR(260) = NULL,
+    @cover_cloudinary_public_id NVARCHAR(255) = NULL,
+    @cover_cloudinary_secure_url NVARCHAR(1000) = NULL,
+    @cover_content_type NVARCHAR(100) = NULL,
+    @cover_file_size_bytes BIGINT = NULL,
+    @cover_sha256_hash CHAR(64) = NULL,
+
+    @new_series_id UNIQUEIDENTIFIER OUTPUT,
+    @cover_file_resource_id UNIQUEIDENTIFIER OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        SET @cover_file_resource_id = NULL;
+
+        --------------------------------------------------------------------
+        -- 1. Actor permission: only active Mangaka can create series draft
+        --------------------------------------------------------------------
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM auth.Users u
+            INNER JOIN auth.Roles r
+                ON r.role_id = u.role_id
+            WHERE u.user_id = @actor_user_id
+              AND u.status_code = N'ACTIVE'
+              AND r.role_name = N'Mangaka'
+        )
+        BEGIN
+            ;THROW 57301, 'Only an active Mangaka can create a series draft.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 2. Optional cover metadata group validation
+        --------------------------------------------------------------------
+        DECLARE @has_cover_metadata BIT = 0;
+
+        IF @cover_original_file_name IS NOT NULL
+           OR @cover_cloudinary_public_id IS NOT NULL
+           OR @cover_cloudinary_secure_url IS NOT NULL
+           OR @cover_content_type IS NOT NULL
+           OR @cover_file_size_bytes IS NOT NULL
+           OR @cover_sha256_hash IS NOT NULL
+        BEGIN
+            SET @has_cover_metadata = 1;
+        END;
+
+        IF @has_cover_metadata = 1
+           AND
+           (
+               @cover_original_file_name IS NULL
+               OR @cover_cloudinary_public_id IS NULL
+               OR @cover_cloudinary_secure_url IS NULL
+               OR @cover_content_type IS NULL
+               OR @cover_file_size_bytes IS NULL
+               OR @cover_sha256_hash IS NULL
+           )
+        BEGIN
+            ;THROW 57302, 'Cover file metadata is incomplete.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 3. Create FileResource for cover if metadata exists
+        --------------------------------------------------------------------
+        IF @has_cover_metadata = 1
+        BEGIN
+            EXEC manga.usp_FileResource_Create
+                @file_purpose_code = N'SERIES_COVER',
+                @original_file_name = @cover_original_file_name,
+                @cloudinary_public_id = @cover_cloudinary_public_id,
+                @cloudinary_secure_url = @cover_cloudinary_secure_url,
+                @content_type = @cover_content_type,
+                @file_size_bytes = @cover_file_size_bytes,
+                @sha256_hash = @cover_sha256_hash,
+                @uploaded_by_user_id = @actor_user_id,
+                @file_resource_id = @cover_file_resource_id OUTPUT;
+        END;
+
+        --------------------------------------------------------------------
+        -- 4. Insert series draft
+        --
+        -- Table defaults should handle:
+        -- - series_id = NEWID()
+        -- - status_code = PROPOSAL_DRAFT
+        -- - created_at_utc = SYSUTCDATETIME()
+        --------------------------------------------------------------------
+        DECLARE @created_series TABLE
+        (
+            series_id UNIQUEIDENTIFIER NOT NULL
+        );
+
+        INSERT INTO manga.Series
+        (
+            title,
+            slug,
+            synopsis,
+            genre,
+            cover_file_id,
+            content_language_code,
+            source_series_id,
+            publication_frequency_code
+        )
+        OUTPUT inserted.series_id
+        INTO @created_series(series_id)
+        VALUES
+        (
+            @title,
+            @slug,
+            @synopsis,
+            @genre,
+            @cover_file_resource_id,
+            @content_language_code,
+            @source_series_id,
+            @publication_frequency_code
+        );
+
+        SELECT
+            @new_series_id = series_id
+        FROM @created_series;
+
+        --------------------------------------------------------------------
+        -- 5. Add creator as initial contributor
+        --------------------------------------------------------------------
+        DECLARE @new_series_contributor_id UNIQUEIDENTIFIER;
+
+        EXEC manga.usp_SeriesContributor_Add
+            @actor_user_id = @actor_user_id,
+            @series_id = @new_series_id,
+            @user_id = @actor_user_id,
+            @notes = N'Creator',
+            @new_series_contributor_id = @new_series_contributor_id OUTPUT;
+
+        --------------------------------------------------------------------
+        -- 6. Audit
+        --------------------------------------------------------------------
+        DECLARE @audit_entity_id NVARCHAR(100) =
+            CONVERT(NVARCHAR(36), @new_series_id);
+
+        DECLARE @detail_json NVARCHAR(MAX) =
+        (
+            SELECT
+                @title AS title,
+                @slug AS slug,
+                @synopsis AS synopsis,
+                @genre AS genre,
+                @content_language_code AS content_language_code,
+                @source_series_id AS source_series_id,
+                @publication_frequency_code AS publication_frequency_code,
+                @cover_file_resource_id AS cover_file_id,
+                @new_series_contributor_id AS creator_series_contributor_id
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @actor_user_id,
+            @action_code = N'SERIES_CREATED',
+            @entity_type = N'Series',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH;
+END;
+GO

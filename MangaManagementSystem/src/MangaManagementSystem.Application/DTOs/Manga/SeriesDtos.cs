@@ -5,7 +5,6 @@ namespace MangaManagementSystem.Application.DTOs.Manga
 {
     public record SeriesDto(
         Guid SeriesId,
-        string SeriesCode,
         string Title,
         string Slug,
         string Synopsis,
@@ -21,7 +20,6 @@ namespace MangaManagementSystem.Application.DTOs.Manga
     );
 
     public record CreateSeriesDto(
-        [Required][MaxLength(50)] string SeriesCode,
         [Required][MaxLength(200)] string Title,
         [Required][MaxLength(220)] string Slug,
         [Required] string Synopsis,
@@ -35,7 +33,6 @@ namespace MangaManagementSystem.Application.DTOs.Manga
 
     public record UpdateSeriesDto(
         [Required] Guid SeriesId,
-        [Required][MaxLength(50)] string SeriesCode,
         [Required][MaxLength(200)] string Title,
         [Required][MaxLength(220)] string Slug,
         [Required] string Synopsis,

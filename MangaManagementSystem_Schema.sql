@@ -177,7 +177,6 @@ CREATE INDEX ix_audit_event_actor_time ON audit.AuditEvent (
 
 CREATE TABLE manga.Series (
 	series_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_series_id DEFAULT NEWID() CONSTRAINT pk_series PRIMARY KEY,
-	series_code NVARCHAR(50) NOT NULL,
 	title NVARCHAR(200) NOT NULL,
 	slug NVARCHAR(220) NOT NULL,
 	synopsis NVARCHAR(MAX) NOT NULL,
@@ -230,7 +229,6 @@ CREATE TABLE manga.Series (
 			N'IRREGULAR'
 			)
 		),
-	CONSTRAINT uq_series_series_code UNIQUE (series_code),
 	CONSTRAINT uq_series_slug UNIQUE (slug),
 	CONSTRAINT fk_series_cover_file FOREIGN KEY (cover_file_id) REFERENCES manga.FileResource(file_resource_id),
 	CONSTRAINT fk_series_source_series FOREIGN KEY (source_series_id) REFERENCES manga.Series(series_id),

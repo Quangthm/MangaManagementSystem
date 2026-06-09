@@ -436,6 +436,113 @@ User selects/uploads a file
 
 # 4. Series and Proposal Flows
 
+
+## BF-SERIES-001 — Create Series Draft
+
+**Status:** Agreed  
+**Primary actor:** Mangaka  
+**Goal:** Create a new draft series profile and immediately register the creating Mangaka as an active contributor.
+
+### Main Flow
+
+```text
+Mangaka opens /mangaka/series/drafts
+→ Mangaka clicks Create Draft
+→ UI shows create draft popup/modal
+→ Mangaka enters title, synopsis, genre, content language, optional source series, optional proposed publication frequency, and optional cover image
+→ Backend validates the form and confirms the actor is an active Mangaka
+→ Backend generates slug from title
+→ Backend resolves slug uniqueness
+→ If a cover image is provided, backend uploads the file to Cloudinary and calculates SHA-256 from the exact uploaded bytes
+→ Backend calls manga.usp_Series_Create with series data and optional cover metadata
+→ Database calls manga.usp_FileResource_Create if cover metadata exists
+→ Database creates manga.Series with status_code = PROPOSAL_DRAFT
+→ Database creates an active manga.SeriesContributor row for the creating Mangaka
+→ Database writes SERIES_CREATED and contributor-related audit event(s)
+→ UI refreshes the draft list and shows the created draft
+```
+
+### Database Procedure(s)
+
+```text
+manga.usp_Series_Create
+manga.usp_FileResource_Create
+manga.usp_SeriesContributor_Add
+audit.usp_AuditEvent_Append
+```
+
+### Important Notes
+
+- Normal series draft creation is a Mangaka workflow, not an Admin workflow.
+- The MVP schema does not use `series_code`; `series_id` is the internal identifier and `slug` is the URL identifier.
+- Draft series are managed internally by `series_id`, not by `/series/{slug}`.
+- Backend generates and resolves slug uniqueness before calling the stored procedure.
+- `publication_frequency_code` may be provided by Mangaka during draft creation as the proposed/preferred frequency.
+- If a cover image is provided, C# uploads to Cloudinary first, then passes Cloudinary metadata to SQL.
+- SQL creates the `FileResource` row inside the series creation workflow.
+- If SQL fails after Cloudinary upload, the backend should attempt to delete the uploaded Cloudinary asset to avoid orphaned files.
+- The creator must be added as an active `SeriesContributor` in the same database workflow/transaction as the `Series` creation.
+
+### System Should Try To
+
+- Keep draft creation simple and owned by Mangaka.
+- Keep Cloudinary file metadata, Series row creation, contributor creation, and audit writing transactionally consistent on the SQL side.
+- Avoid exposing draft series through slug-based public URLs.
+- Avoid requiring a redundant series code when `series_id` and `slug` already serve distinct identity purposes.
+
+---
+
+## BF-SERIES-002 — Update Series Draft Profile
+
+**Status:** Agreed  
+**Primary actor:** Mangaka  
+**Goal:** Allow an active Mangaka contributor to update draft series profile information while the series is still in `PROPOSAL_DRAFT`.
+
+### Main Flow
+
+```text
+Mangaka opens /mangaka/series/drafts
+→ Mangaka selects a draft series
+→ UI opens edit draft popup/modal
+→ Mangaka updates title, synopsis, genre, content language, optional source series, optional proposed publication frequency, and optional cover image
+→ Backend validates the form and confirms the actor is an active Mangaka contributor of the selected series
+→ Backend confirms the series is still PROPOSAL_DRAFT
+→ If title changed, backend regenerates slug from title and resolves slug uniqueness
+→ If cover image changed, backend uploads the new cover to Cloudinary and calculates SHA-256 from the exact uploaded bytes
+→ Backend calls manga.usp_Series_UpdateProfile with updated series data and optional new cover metadata
+→ Database calls manga.usp_FileResource_Create if new cover metadata exists
+→ Database updates manga.Series editable profile fields
+→ Database updates updated_at_utc and updated_by_user_id together
+→ Database writes SERIES_PROFILE_UPDATED audit event
+→ UI refreshes the draft list/detail
+```
+
+### Database Procedure(s)
+
+```text
+manga.usp_Series_UpdateProfile
+manga.usp_FileResource_Create
+audit.usp_AuditEvent_Append
+```
+
+### Important Notes
+
+- Normal Mangaka profile updates are allowed only while `Series.status_code = PROPOSAL_DRAFT`.
+- Once the series leaves `PROPOSAL_DRAFT`, title, slug, synopsis, genre, cover, content language, source series, and `publication_frequency_code` are locked from normal Mangaka profile editing.
+- Slug may auto-regenerate from title during `PROPOSAL_DRAFT` because draft workflows use `series_id`.
+- Slug locks after the series leaves `PROPOSAL_DRAFT`; no slug history or redirect table is required for MVP.
+- `publication_frequency_code` is treated as Mangaka's proposed/preferred frequency during draft; board serialization/frequency override is handled by a separate board procedure.
+- The procedure should rely on database constraints for simple `CHECK`, `UNIQUE`, `NOT NULL`, and FK enforcement, while still validating actor permission and workflow state.
+
+### System Should Try To
+
+- Preserve stable review information after the draft leaves `PROPOSAL_DRAFT`.
+- Prevent Admin from owning manga business-content creation/update flows.
+- Keep draft editing convenient through popup/modal UI.
+- Keep future `/series/{slug}` URLs stable after serialization.
+
+---
+
 ## BF-PROP-001 — Submit Series Proposal
 
 **Status:** Agreed  
@@ -746,7 +853,6 @@ schema.procedure_name
 Add detailed flows for these when the team finalizes them:
 
 - Admin approval/rejection screen flow
-- Series profile creation flow
 - Series contributor assignment flow
 - Tantou Editor proposal review flow
 - Chapter creation flow

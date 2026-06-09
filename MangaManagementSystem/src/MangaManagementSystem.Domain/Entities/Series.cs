@@ -7,7 +7,6 @@ namespace MangaManagementSystem.Domain.Entities
 public class Series : BaseEntity
 {
     public Guid SeriesId { get; set; }
-    public string SeriesCode { get; set; } = null!;
     public string Title { get; set; } = null!;
     public string Slug { get; set; } = null!;
     public string Synopsis { get; set; } = null!;
