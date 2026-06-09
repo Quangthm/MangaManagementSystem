@@ -5,7 +5,6 @@ using MangaManagementSystem.Infrastructure;
 using MangaManagementSystem.Web.Components;
 using MangaManagementSystem.Web.Helpers;
 using MangaManagementSystem.Web.Services;
-using MangaManagementSystem.Application.DTOs.Auth;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
@@ -104,8 +103,29 @@ namespace MangaManagementSystem.Web
                 }
 
                 var result = await authService.LoginAsync(new LoginDto(username, password));
+
+                // Map common server-side messages to browser-friendly error codes so the UI
+                // can show helpful but non-revealing messages.
                 if (!result.Succeeded || result.User is null || string.IsNullOrWhiteSpace(result.RoleName))
                 {
+                    var error = (result.ErrorMessage ?? string.Empty).ToLowerInvariant();
+
+                    if (error.Contains("pending"))
+                    {
+                        return Results.Redirect("/login?error=account_pending");
+                    }
+
+                    if (error.Contains("disabled"))
+                    {
+                        return Results.Redirect("/login?error=account_disabled");
+                    }
+
+                    if (error.Contains("reject") || error.Contains("rejected"))
+                    {
+                        return Results.Redirect("/login?error=account_rejected");
+                    }
+
+                    // Generic fallback for wrong username/password or other authentication failures.
                     return Results.Redirect("/login?error=InvalidCredentials");
                 }
 
@@ -219,11 +239,12 @@ namespace MangaManagementSystem.Web
                 return Results.Redirect("/login");
             }).DisableAntiforgery();
 
-            app.MapGet("/signout", async (CustomAuthenticationStateProvider authStateProvider) =>
-            {
-                await authStateProvider.MarkUserAsLoggedOut();
-                return Results.Redirect("/login");
-            });
+app.MapGet("/signout", async (CustomAuthenticationStateProvider authStateProvider, HttpContext context) =>
+{
+    await authStateProvider.MarkUserAsLoggedOut();
+    await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+    return Results.Redirect("/login");
+});
 
             app.MapRazorComponents<App>()
                 .AddInteractiveServerRenderMode();
@@ -256,12 +277,12 @@ namespace MangaManagementSystem.Web
 
         private static string GetDashboardRedirectUrl(string roleName) => roleName switch
         {
-            "Admin" => "/admin/user-approval",
+            "Admin" => "/admin",
             "Mangaka" => "/mangaka",
             "Assistant" => "/assistant",
-            "Tantou Editor" => "/dashboard",
-            "Editorial Board Member" => "/ranking",
-            "Editorial Board Chief" => "/board-decision",
+            "Tantou Editor" => "/editor",
+            "Editorial Board Member" => "/board",
+            "Editorial Board Chief" => "/board-chief",
             _ => "/login?error=InvalidCredentials"
         };
 

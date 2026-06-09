@@ -1,4 +1,6 @@
 @page "/admin/registration-requests"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin")]
 @inject NavigationManager Nav
 @inject IUserService UserService
 @inject ISnackbar Snackbar
@@ -11,7 +13,6 @@
             <MudText Typo="Typo.body1" Class="mf-muted">Review and approve pending account registration requests</MudText>
         </div>
 
-        <MudGrid Class="mb-6"><MudItem xs="12" md="4"><StatCard Label="Pending Requests" Value="12" /></MudItem><MudItem xs="12" md="4"><StatCard Label="Approved This Month" Value="45" /></MudItem><MudItem xs="12" md="4"><StatCard Label="Rejected This Month" Value="8" /></MudItem></MudGrid>
         <MudPaper Class="pa-5 mf-card" Elevation="0">
             <MudTable Items="Requests" Hover="true">
                 <HeaderContent><MudTh>Username</MudTh><MudTh>Email</MudTh><MudTh>Requested Role</MudTh><MudTh>Request Date</MudTh><MudTh>Actions</MudTh></HeaderContent>

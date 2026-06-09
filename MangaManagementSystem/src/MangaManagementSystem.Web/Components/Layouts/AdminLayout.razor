@@ -2,15 +2,18 @@
 @inject NavigationManager Nav
 
 <div class="mf-shell">
-    <aside class="mf-sidebar">
+    <aside class="mf-sidebar mf-admin-sidebar">
         <div class="mf-sidebar-header">
             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                <span class="mf-logo-box">MF</span>
+                <span class="mf-logo-box mf-admin-logo">MF</span>
                 <div>
                     <MudText Typo="Typo.subtitle1" Class="font-weight-bold text-white">MangaFlow</MudText>
                     <MudText Typo="Typo.caption" Style="color:#94a3b8">System Administrator</MudText>
                 </div>
             </MudStack>
+        </div>
+        <div class="pa-3">
+            <UserAvatarMenu />
         </div>
         <nav class="mf-nav-section">
             <div class="mf-nav-title">Main Navigation</div>
@@ -21,10 +24,9 @@
                     <NavLink href="/admin/user-approval" class="mf-nav-link" Match="NavLinkMatch.Prefix">User Approval</NavLink>
                 </Authorized>
             </AuthorizeView>
-            <NavLink href="/admin/registration-requests" class="mf-nav-link" Match="NavLinkMatch.Prefix">Registration Requests</NavLink>
-            <NavLink href="/admin/audit-logs" class="mf-nav-link" Match="NavLinkMatch.Prefix">Audit Logs</NavLink>
-            <NavLink href="/admin/roles" class="mf-nav-link" Match="NavLinkMatch.Prefix">Role & Permissions</NavLink>
-            <NavLink href="/admin/settings" class="mf-nav-link" Match="NavLinkMatch.Prefix">System Settings</NavLink>
+            <NavLink href="/admin/board-polls" class="mf-nav-link" Match="NavLinkMatch.Prefix">Board Polls</NavLink>
+            <div class="mf-nav-link disabled">Role & Permissions (Not available)</div>
+            <div class="mf-nav-link disabled">System Settings (Not available)</div>
 
         </nav>
         <MudSpacer />

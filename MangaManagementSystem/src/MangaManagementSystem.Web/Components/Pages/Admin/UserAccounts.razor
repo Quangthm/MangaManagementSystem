@@ -1,40 +1,224 @@
 @page "/admin/users"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin")]
 @inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IUserService UserService
+@inject IFileResourceService FileResourceService
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>User Accounts - MangaFlow</PageTitle>
 
 <AdminLayout>
     <div class="mf-page">
         <div class="mf-page-header">
-            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">User Account Management</MudText>
-            <MudText Typo="Typo.body1" Class="mf-muted">Manage user access, roles, and account status</MudText>
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">User Accounts</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Manage and review all user accounts</MudText>
         </div>
 
-        <MudGrid Class="mb-6">
-            <MudItem xs="12" md="2"><StatCard Label="Active Users" Value="236" /></MudItem>
-            <MudItem xs="12" md="2"><StatCard Label="Locked Users" Value="3" /></MudItem>
-            <MudItem xs="12" md="2"><StatCard Label="Disabled Users" Value="8" /></MudItem>
-            <MudItem xs="12" md="2"><StatCard Label="Pending Requests" Value="12" /></MudItem>
-            <MudItem xs="12" md="2"><StatCard Label="Admin Accounts" Value="4" /></MudItem>
-        </MudGrid>
         <MudPaper Class="pa-5 mf-card" Elevation="0">
-            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4"><MudText Typo="Typo.h6">Accounts</MudText><MudStack Row="true"><MudButton Variant="Variant.Outlined">Export</MudButton><MudButton Variant="Variant.Filled" Color="Color.Primary">Create User</MudButton></MudStack></MudStack>
-            <MudTable Items="Users" Hover="true">
-                <HeaderContent><MudTh>User</MudTh><MudTh>Role</MudTh><MudTh>Status</MudTh><MudTh>Last Login</MudTh></HeaderContent>
-                <RowTemplate><MudTd>@context.Name</MudTd><MudTd>@context.Role</MudTd><MudTd><MudChip T="string" Color="@context.Color" Size="Size.Small">@context.Status</MudChip></MudTd><MudTd>@context.LastLogin</MudTd></RowTemplate>
-            </MudTable>
-        </MudPaper>
+            @if (_isLoading)
+            {
+                <MudProgressLinear Indeterminate="true" Class="mb-4" />
+            }
+            else
+            {
+                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+                    <MudText Typo="Typo.h6">Accounts</MudText>
+                    <MudStack Row="true">
+                        <MudButton Variant="Variant.Outlined" OnClick="ReloadUsers">Refresh</MudButton>
+                    </MudStack>
+                </MudStack>
 
+                @if (_loadError != null)
+                {
+                    <MudAlert Severity="Severity.Error">Failed to load users: @_loadError</MudAlert>
+                }
+                else if (!_users.Any())
+                {
+                    <MudPaper Class="pa-6 text-center mf-card"><MudText>No users found.</MudText></MudPaper>
+                }
+                else
+                {
+                    <MudTable Items="_users" Hover="true" Dense="true">
+                        <HeaderContent>
+                            <MudTh>Avatar</MudTh>
+                            <MudTh>Display Name</MudTh>
+                            <MudTh>Username</MudTh>
+                            <MudTh>Email</MudTh>
+                            <MudTh>Role</MudTh>
+                            <MudTh>Status</MudTh>
+                            <MudTh>Created</MudTh>
+                            <MudTh></MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>
+                                @if (context.AvatarFileId.HasValue)
+                                {
+                                    <MudIcon Icon="mdi-image" />
+                                }
+                                else
+                                {
+                                    var initial = "?";
+                                    if (!string.IsNullOrWhiteSpace(context.DisplayName))
+                                        initial = context.DisplayName.Substring(0, 1).ToUpperInvariant();
+                                    else if (!string.IsNullOrWhiteSpace(context.Username))
+                                        initial = context.Username.Substring(0, 1).ToUpperInvariant();
+                                    <MudAvatar Size="Size.Small">@initial</MudAvatar>
+                                }
+                            </MudTd>
+                            <MudTd>@(context.DisplayName ?? "-")</MudTd>
+                            <MudTd>@context.Username</MudTd>
+                            <MudTd>@context.Email</MudTd>
+                            <MudTd>@context.RoleName</MudTd>
+                            <MudTd>
+                                @switch (context.StatusCode)
+                                {
+                                    case "PENDING_APPROVAL":<MudChip T="string" Color="Color.Info" Size="Size.Small">PENDING_APPROVAL</MudChip>;break;
+                                    case "ACTIVE":<MudChip T="string" Color="Color.Success" Size="Size.Small">ACTIVE</MudChip>;break;
+                                    case "REJECTED":<MudChip T="string" Color="Color.Warning" Size="Size.Small">REJECTED</MudChip>;break;
+                                    case "DISABLED":<MudChip T="string" Color="Color.Error" Size="Size.Small">DISABLED</MudChip>;break;
+                                    default:<MudChip T="string" Size="Size.Small">@context.StatusCode</MudChip>;break;
+                                }
+                            </MudTd>
+                            <MudTd>@context.CreatedAtUtc.ToLocalTime().ToString("g")</MudTd>
+                            <MudTd>
+                                <MudStack Row="true" Spacing="1">
+                                    <MudButton Size="Size.Small" Variant="Variant.Text" Href="@($"/admin/user-approval")">View</MudButton>
+                                    <MudButton Size="Size.Small"
+                                               Variant="Variant.Outlined"
+                                               Color="Color.Error"
+                                               Disabled="@(context.StatusCode == "DISABLED" || context.StatusCode == "REJECTED")"
+                                               OnClick="@(()=>ConfirmDisable(context))">
+                                        Disable
+                                    </MudButton>
+                                </MudStack>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+            }
+
+            @if (_showDeleteConfirm && _deleteTarget != null && !_deleteTarget.Username.Equals(_currentUserUsername, StringComparison.OrdinalIgnoreCase))
+            {
+                <MudDialog Open="true">
+                    <DialogContent>
+                        <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Disable Account</MudText>
+                        <MudText Class="mt-2">Are you sure you want to disable this account? The account will be marked as DISABLED and cannot log in.</MudText>
+                        <MudText Class="mt-2">Current status: <MudChip T="string" Size="Size.Small">@_deleteTarget.StatusCode</MudChip></MudText>
+                        <MudAlert Severity="Severity.Warning" Class="mt-3">Disabled accounts are retained in the system for audit purposes.</MudAlert>
+                    </DialogContent>
+                    <DialogActions>
+                        <MudButton Variant="Variant.Text" OnClick="CancelDisable">Cancel</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="ConfirmDisableAsync">Disable Account</MudButton>
+                    </DialogActions>
+                </MudDialog>
+            }
+        </MudPaper>
     </div>
 </AdminLayout>
 
 @code {
+    private List<MangaManagementSystem.Application.DTOs.Auth.UserDto> _users = new();
+    private bool _isLoading;
+    private string? _loadError;
+    private int? _processingUserId;
 
-    private readonly List<UserRow> Users = new()
+    private bool _showDeleteConfirm;
+    private MangaManagementSystem.Application.DTOs.Auth.UserDto? _deleteTarget;
+    private string? _currentUserUsername;
+
+    private async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
-        new("Yuki Tanaka", "Tantou Editor", "ACTIVE", "Today", Color.Success),
-        new("Aiko Mori", "Mangaka", "ACTIVE", "Yesterday", Color.Success),
-        new("Ken Sato", "Assistant", "LOCKED", "2 days ago", Color.Warning),
-        new("System Bot", "System Administrator", "DISABLED", "Never", Color.Error)
-    };
-    private record UserRow(string Name, string Role, string Status, string LastLogin, Color Color);
+        return await AuthStateProvider.GetAuthenticationStateAsync();
+    }
 
+    private async Task ReloadUsers()
+    {
+        await LoadAllUsersAsync();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated == true)
+        {
+            _currentUserUsername = user.Identity.Name;
+        }
+        await LoadAllUsersAsync();
+    }
+
+    private async Task LoadAllUsersAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+        _users.Clear();
+        try
+        {
+            // Load core statuses and combine
+            var pending = (await UserService.GetUsersByStatusAsync("PENDING_APPROVAL")).ToList();
+            var active = (await UserService.GetUsersByStatusAsync("ACTIVE")).ToList();
+            var disabled = (await UserService.GetUsersByStatusAsync("DISABLED")).ToList();
+            var rejected = (await UserService.GetUsersByStatusAsync("REJECTED")).ToList();
+
+            // Combine distinct users by id
+            var map = new Dictionary<int, MangaManagementSystem.Application.DTOs.Auth.UserDto>();
+            foreach (var u in pending.Concat(active).Concat(disabled).Concat(rejected))
+            {
+                if (!map.ContainsKey(u.UserId)) map[u.UserId] = u;
+            }
+
+            _users = map.Values.OrderByDescending(u => u.CreatedAtUtc).ToList();
+        }
+        catch (Exception ex)
+        {
+            _loadError = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void ConfirmDisable(MangaManagementSystem.Application.DTOs.Auth.UserDto user)
+    {
+        _deleteTarget = user;
+        _showDeleteConfirm = true;
+    }
+
+    private void CancelDisable()
+    {
+        _showDeleteConfirm = false;
+        _deleteTarget = null;
+    }
+
+    private async Task ConfirmDisableAsync()
+    {
+        if (_deleteTarget == null) return;
+        var user = _deleteTarget;
+        if (_processingUserId.HasValue) return;
+
+        _processingUserId = user.UserId;
+        _showDeleteConfirm = false;
+        try
+        {
+            await UserService.DisableUserAsync(user.UserId);
+            Snackbar.Add($"Disabled {user.Username}.", Severity.Success);
+            await LoadAllUsersAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to disable {user.Username}: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processingUserId = null;
+            _deleteTarget = null;
+        }
+    }
 }
