@@ -5,6 +5,7 @@ using MangaManagementSystem.Infrastructure;
 using MangaManagementSystem.Web.Components;
 using MangaManagementSystem.Web.Helpers;
 using MangaManagementSystem.Web.Services;
+using MangaManagementSystem.Web.Options;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
@@ -24,6 +25,9 @@ namespace MangaManagementSystem.Web
 
             builder.Services.AddApplicationServices();
             builder.Services.AddInfrastructure(builder.Configuration);
+
+            builder.Services.Configure<RecaptchaOptions>(builder.Configuration.GetSection(RecaptchaOptions.SectionName));
+            builder.Services.AddHttpClient<RecaptchaService>();
 
             builder.Services.AddMemoryCache();
             builder.Services.AddSingleton<IOtpCacheService, OtpCacheService>();
@@ -94,9 +98,18 @@ namespace MangaManagementSystem.Web
             app.MapPost("/api/auth/login", async (
                 HttpContext context,
                 IAuthService authService,
+                RecaptchaService recaptchaService,
                 [FromForm] string username,
                 [FromForm] string password) =>
             {
+                var recaptchaResponse = context.Request.Form["g-recaptcha-response"].ToString();
+                var ip = context.Connection.RemoteIpAddress?.ToString();
+                var isRecaptchaValid = await recaptchaService.VerifyTokenAsync(recaptchaResponse, ip);
+                if (!isRecaptchaValid)
+                {
+                    return Results.Redirect("/login?error=RecaptchaFailed");
+                }
+
                 if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
                 {
                     return Results.Redirect("/login?error=InvalidCredentials");
