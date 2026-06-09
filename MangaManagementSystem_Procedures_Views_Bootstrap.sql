@@ -1608,3 +1608,394 @@ BEGIN
     END CATCH;
 END;
 GO
+USE MangaManagementDB;
+GO
+
+CREATE OR ALTER PROCEDURE manga.usp_PageRegion_Create
+    @actor_user_id UNIQUEIDENTIFIER,
+    @chapter_page_version_id UNIQUEIDENTIFIER,
+
+    @type_code NVARCHAR(80),
+    @region_label NVARCHAR(100) = NULL,
+
+    @x DECIMAL(10, 2),
+    @y DECIMAL(10, 2),
+    @width DECIMAL(10, 2),
+    @height DECIMAL(10, 2),
+
+    @confidence_score DECIMAL(5, 4) = NULL,
+    @source_type NVARCHAR(20) = N'MANUAL',
+    @original_text NVARCHAR(MAX) = NULL,
+
+    @new_page_region_id UNIQUEIDENTIFIER OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        --------------------------------------------------------------------
+        -- Permission check:
+        -- Actor must be an active SeriesContributor for the series that owns
+        -- the selected ChapterPageVersion.
+        --------------------------------------------------------------------
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM manga.ChapterPageVersion cpv
+            INNER JOIN manga.ChapterPage cp
+                ON cp.chapter_page_id = cpv.chapter_page_id
+            INNER JOIN manga.Chapter ch
+                ON ch.chapter_id = cp.chapter_id
+            INNER JOIN manga.SeriesContributor sc
+                ON sc.series_id = ch.series_id
+            INNER JOIN auth.Users u
+                ON u.user_id = sc.user_id
+            WHERE cpv.chapter_page_version_id = @chapter_page_version_id
+              AND sc.user_id = @actor_user_id
+              AND sc.end_date IS NULL
+              AND u.status_code = N'ACTIVE'
+        )
+        BEGIN
+            ;THROW 57401, 'User is not an active contributor for the series that owns this page version.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- Insert PageRegion.
+        -- Let table constraints enforce:
+        -- - valid chapter_page_version_id FK
+        -- - valid type_code
+        -- - valid source_type
+        -- - width > 0 and height > 0
+        -- - confidence_score range
+        -- - AI requires confidence_score
+        -- - MANUAL requires confidence_score NULL
+        --------------------------------------------------------------------
+        DECLARE @created_region TABLE
+        (
+            page_region_id UNIQUEIDENTIFIER NOT NULL
+        );
+
+        INSERT INTO manga.PageRegion
+        (
+            chapter_page_version_id,
+            type_code,
+            region_label,
+            x,
+            y,
+            width,
+            height,
+            confidence_score,
+            source_type,
+            original_text,
+            created_by_user_id
+        )
+        OUTPUT inserted.page_region_id
+        INTO @created_region(page_region_id)
+        VALUES
+        (
+            @chapter_page_version_id,
+            @type_code,
+            @region_label,
+            @x,
+            @y,
+            @width,
+            @height,
+            @confidence_score,
+            @source_type,
+            @original_text,
+            @actor_user_id
+        );
+
+        SELECT
+            @new_page_region_id = page_region_id
+        FROM @created_region;
+
+        --------------------------------------------------------------------
+        -- Audit
+        --------------------------------------------------------------------
+        DECLARE @audit_entity_id NVARCHAR(100) =
+            CONVERT(NVARCHAR(36), @new_page_region_id);
+
+        DECLARE @detail_json NVARCHAR(MAX) =
+        (
+            SELECT
+                @chapter_page_version_id AS chapter_page_version_id,
+                @type_code AS type_code,
+                @region_label AS region_label,
+                @x AS x,
+                @y AS y,
+                @width AS width,
+                @height AS height,
+                @confidence_score AS confidence_score,
+                @source_type AS source_type
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @actor_user_id,
+            @action_code = N'PAGE_REGION_CREATED',
+            @entity_type = N'PageRegion',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH;
+END;
+GO
+USE MangaManagementDB;
+GO
+
+CREATE OR ALTER PROCEDURE manga.usp_PageRegion_CreateBatch
+    @actor_user_id UNIQUEIDENTIFIER,
+    @chapter_page_version_id UNIQUEIDENTIFIER,
+    @regions_json NVARCHAR(MAX),
+    @created_count INT OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        SET @created_count = 0;
+
+        --------------------------------------------------------------------
+        -- 1. Permission check
+        -- Actor must be an active contributor of the series that owns the
+        -- selected chapter_page_version_id.
+        --------------------------------------------------------------------
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM manga.ChapterPageVersion cpv
+            INNER JOIN manga.ChapterPage cp
+                ON cp.chapter_page_id = cpv.chapter_page_id
+            INNER JOIN manga.Chapter ch
+                ON ch.chapter_id = cp.chapter_id
+            INNER JOIN manga.SeriesContributor sc
+                ON sc.series_id = ch.series_id
+            WHERE cpv.chapter_page_version_id = @chapter_page_version_id
+              AND sc.user_id = @actor_user_id
+              AND sc.end_date IS NULL
+        )
+        BEGIN
+            ;THROW 57411, 'User is not an active contributor for the series that owns this page version.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 2. Validate JSON input
+        --------------------------------------------------------------------
+        IF @regions_json IS NULL OR LTRIM(RTRIM(@regions_json)) = N''
+        BEGIN
+            ;THROW 57412, 'regions_json is required.', 1;
+        END;
+
+        IF ISJSON(@regions_json) <> 1
+        BEGIN
+            ;THROW 57413, 'regions_json must be valid JSON.', 1;
+        END;
+
+        -- Expect a JSON array
+        IF LEFT(LTRIM(@regions_json), 1) <> N'['
+        BEGIN
+            ;THROW 57414, 'regions_json must be a JSON array.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 3. Parse JSON into a table variable
+        --
+        -- Expected JSON shape:
+        -- [
+        --   {
+        --     "type_code": "PANEL",
+        --     "region_label": "Panel 1",
+        --     "x": 10.00,
+        --     "y": 20.00,
+        --     "width": 100.00,
+        --     "height": 150.00,
+        --     "confidence_score": 0.9345,
+        --     "source_type": "AI",
+        --     "original_text": null
+        --   },
+        --   ...
+        -- ]
+        --------------------------------------------------------------------
+        DECLARE @parsed_regions TABLE
+        (
+            row_no INT NOT NULL,
+            type_code NVARCHAR(80) NULL,
+            region_label NVARCHAR(100) NULL,
+            x DECIMAL(10, 2) NULL,
+            y DECIMAL(10, 2) NULL,
+            width DECIMAL(10, 2) NULL,
+            height DECIMAL(10, 2) NULL,
+            confidence_score DECIMAL(5, 4) NULL,
+            source_type NVARCHAR(20) NULL,
+            original_text NVARCHAR(MAX) NULL
+        );
+
+        INSERT INTO @parsed_regions
+        (
+            row_no,
+            type_code,
+            region_label,
+            x,
+            y,
+            width,
+            height,
+            confidence_score,
+            source_type,
+            original_text
+        )
+        SELECT
+            TRY_CAST(j.[key] AS INT) + 1 AS row_no,
+            p.type_code,
+            p.region_label,
+            p.x,
+            p.y,
+            p.width,
+            p.height,
+            p.confidence_score,
+            p.source_type,
+            p.original_text
+        FROM OPENJSON(@regions_json) j
+        CROSS APPLY OPENJSON(j.value)
+        WITH
+        (
+            type_code NVARCHAR(80) '$.type_code',
+            region_label NVARCHAR(100) '$.region_label',
+            x DECIMAL(10, 2) '$.x',
+            y DECIMAL(10, 2) '$.y',
+            width DECIMAL(10, 2) '$.width',
+            height DECIMAL(10, 2) '$.height',
+            confidence_score DECIMAL(5, 4) '$.confidence_score',
+            source_type NVARCHAR(20) '$.source_type',
+            original_text NVARCHAR(MAX) '$.original_text'
+        ) p;
+
+        IF NOT EXISTS (SELECT 1 FROM @parsed_regions)
+        BEGIN
+            ;THROW 57415, 'regions_json must contain at least one region object.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 4. Insert PageRegion rows
+        --
+        -- The PageRegion table constraints enforce:
+        -- - FK to valid chapter_page_version_id
+        -- - type_code list
+        -- - source_type list
+        -- - positive width/height
+        -- - confidence range
+        -- - AI/MANUAL confidence rule
+        --------------------------------------------------------------------
+        DECLARE @created_regions TABLE
+        (
+            page_region_id UNIQUEIDENTIFIER NOT NULL
+        );
+
+        INSERT INTO manga.PageRegion
+        (
+            chapter_page_version_id,
+            type_code,
+            region_label,
+            x,
+            y,
+            width,
+            height,
+            confidence_score,
+            source_type,
+            original_text,
+            created_by_user_id
+        )
+        OUTPUT inserted.page_region_id
+        INTO @created_regions(page_region_id)
+        SELECT
+            @chapter_page_version_id,
+            pr.type_code,
+            pr.region_label,
+            pr.x,
+            pr.y,
+            pr.width,
+            pr.height,
+            pr.confidence_score,
+            pr.source_type,
+            pr.original_text,
+            @actor_user_id
+        FROM @parsed_regions pr
+        ORDER BY pr.row_no;
+
+        SELECT
+            @created_count = COUNT(*)
+        FROM @created_regions;
+
+        --------------------------------------------------------------------
+        -- 5. Audit one batch event
+        --------------------------------------------------------------------
+        DECLARE @audit_entity_id NVARCHAR(100) =
+            CONVERT(NVARCHAR(36), @chapter_page_version_id);
+
+        DECLARE @detail_json NVARCHAR(MAX) =
+        (
+            SELECT
+                @chapter_page_version_id AS chapter_page_version_id,
+                @created_count AS created_count
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @actor_user_id,
+            @action_code = N'PAGE_REGIONS_CREATED_BATCH',
+            @entity_type = N'ChapterPageVersion',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
+
+        --------------------------------------------------------------------
+        -- 6. Return created IDs as a result set
+        --------------------------------------------------------------------
+        SELECT
+            page_region_id
+        FROM @created_regions;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH;
+END;
+GO
