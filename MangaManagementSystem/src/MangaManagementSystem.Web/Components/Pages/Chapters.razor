@@ -1,0 +1,360 @@
+﻿@page "/mangaka/chapters"
+@rendermode InteractiveServer
+
+@using MangaManagementSystem.Application.DTOs.Manga
+@using MangaManagementSystem.Application.Interfaces
+@inject IChapterService ChapterService
+
+<h3>Chapter CRUD Management</h3>
+
+<p>
+    Demo page for SCRUM-89 - Mangaka Chapter CRUD Management.
+</p>
+
+@if (!string.IsNullOrWhiteSpace(ErrorMessage))
+{
+    <div class="alert alert-danger">@ErrorMessage</div>
+}
+
+@if (!string.IsNullOrWhiteSpace(SuccessMessage))
+{
+    <div class="alert alert-success">@SuccessMessage</div>
+}
+
+<div class="card mb-4">
+    <div class="card-header">
+        <strong>Create / Update Chapter</strong>
+    </div>
+
+    <div class="card-body">
+        <div class="mb-3">
+            <label class="form-label">Series ID</label>
+            <input class="form-control" @bind="Form.SeriesIdText" />
+            <small class="text-muted">
+                Demo Series ID: bcd3550f-90ce-48f5-88c1-6580b6bea47e
+            </small>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Chapter Number Label</label>
+            <input class="form-control" @bind="Form.ChapterNumberLabel" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Chapter Title</label>
+            <input class="form-control" @bind="Form.ChapterTitle" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Status Code</label>
+            <select class="form-select" @bind="Form.StatusCode">
+                <option value="DRAFT">DRAFT</option>
+                <option value="UNDER_REVIEW">UNDER_REVIEW</option>
+                <option value="REVISION_REQUESTED">REVISION_REQUESTED</option>
+                <option value="APPROVED">APPROVED</option>
+                <option value="SCHEDULED">SCHEDULED</option>
+                <option value="RELEASED">RELEASED</option>
+                <option value="ON_HOLD">ON_HOLD</option>
+                <option value="CANCELLED">CANCELLED</option>
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Planned Release Date</label>
+            <input class="form-control" type="date" @bind="Form.PlannedReleaseDate" />
+            <small class="text-muted">
+                Required only when StatusCode is SCHEDULED.
+            </small>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Released At UTC</label>
+            <input class="form-control" type="datetime-local" @bind="Form.ReleasedAtUtc" />
+            <small class="text-muted">
+                Only set this when StatusCode is RELEASED.
+            </small>
+        </div>
+
+        <button class="btn btn-primary me-2" @onclick="CreateChapterAsync">
+            Create Chapter
+        </button>
+
+        <button class="btn btn-warning me-2" @onclick="UpdateChapterAsync" disabled="@(!EditingChapterId.HasValue)">
+            Update Selected Chapter
+        </button>
+
+        <button class="btn btn-secondary me-2" @onclick="ClearForm">
+            Clear
+        </button>
+
+        <button class="btn btn-outline-primary" @onclick="LoadChaptersAsync">
+            Refresh
+        </button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <strong>Chapter List</strong>
+    </div>
+
+    <div class="card-body">
+        @if (IsLoading)
+        {
+            <p>Loading...</p>
+        }
+        else if (ChapterList.Count == 0)
+        {
+            <p>No chapters found.</p>
+        }
+        else
+        {
+            <table class="table table-bordered table-striped">
+                <thead>
+                    <tr>
+                        <th>Chapter ID</th>
+                        <th>Series ID</th>
+                        <th>Number</th>
+                        <th>Title</th>
+                        <th>Status</th>
+                        <th>Created At UTC</th>
+                        <th>Updated At UTC</th>
+                        <th style="width: 180px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var chapter in ChapterList)
+                    {
+                        <tr>
+                            <td>@chapter.ChapterId</td>
+                            <td>@chapter.SeriesId</td>
+                            <td>@chapter.ChapterNumberLabel</td>
+                            <td>@chapter.ChapterTitle</td>
+                            <td>@chapter.StatusCode</td>
+                            <td>@chapter.CreatedAtUtc</td>
+                            <td>@chapter.UpdatedAtUtc</td>
+                            <td>
+                                <button class="btn btn-sm btn-info me-1" @onclick="() => SelectForEdit(chapter)">
+                                    Edit
+                                </button>
+
+                                <button class="btn btn-sm btn-danger" @onclick="() => DeleteChapterAsync(chapter.ChapterId)">
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@code {
+    private List<ChapterDto> ChapterList { get; set; } = new();
+    private ChapterFormModel Form { get; set; } = new();
+    private Guid? EditingChapterId { get; set; }
+
+    private bool IsLoading { get; set; }
+    private string? ErrorMessage { get; set; }
+    private string? SuccessMessage { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Form.SeriesIdText = "bcd3550f-90ce-48f5-88c1-6580b6bea47e";
+        Form.ChapterNumberLabel = "CH-002";
+        Form.ChapterTitle = "Chapter Created From Web UI";
+        Form.StatusCode = "DRAFT";
+
+        await LoadChaptersAsync();
+    }
+
+    private async Task LoadChaptersAsync()
+    {
+        ClearMessages();
+        IsLoading = true;
+
+        try
+        {
+            var result = await ChapterService.GetAllChaptersAsync();
+            ChapterList = result.ToList();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task CreateChapterAsync()
+    {
+        ClearMessages();
+
+        if (!TryValidateSeriesId(out var seriesId))
+            return;
+
+        try
+        {
+            var dto = new CreateChapterDto(
+                seriesId,
+                Form.ChapterNumberLabel?.Trim() ?? string.Empty,
+                string.IsNullOrWhiteSpace(Form.ChapterTitle) ? null : Form.ChapterTitle.Trim(),
+                Form.PlannedReleaseDate,
+                null
+            );
+
+            var created = await ChapterService.CreateChapterAsync(dto);
+
+            SuccessMessage = $"Chapter created successfully: {created.ChapterId}";
+            ClearForm(keepSeriesId: true);
+            await LoadChaptersAsync();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    private async Task UpdateChapterAsync()
+    {
+        ClearMessages();
+
+        if (!EditingChapterId.HasValue)
+        {
+            ErrorMessage = "Please select a chapter to update.";
+            return;
+        }
+
+        if (!TryValidateSeriesId(out var seriesId))
+            return;
+
+        try
+        {
+            var dto = new UpdateChapterDto(
+                EditingChapterId.Value,
+                seriesId,
+                Form.ChapterNumberLabel?.Trim() ?? string.Empty,
+                string.IsNullOrWhiteSpace(Form.ChapterTitle) ? null : Form.ChapterTitle.Trim(),
+                Form.StatusCode?.Trim() ?? "DRAFT",
+                Form.PlannedReleaseDate,
+                Form.ReleasedAtUtc
+            );
+
+            var updated = await ChapterService.UpdateChapterAsync(EditingChapterId.Value, dto);
+
+            if (updated == null)
+            {
+                ErrorMessage = "Chapter not found.";
+                return;
+            }
+
+            SuccessMessage = $"Chapter updated successfully: {updated.ChapterId}";
+            ClearForm(keepSeriesId: true);
+            await LoadChaptersAsync();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    private async Task DeleteChapterAsync(Guid chapterId)
+    {
+        ClearMessages();
+
+        try
+        {
+            var deleted = await ChapterService.DeleteChapterAsync(chapterId);
+
+            if (!deleted)
+            {
+                ErrorMessage = "Chapter not found.";
+                return;
+            }
+
+            SuccessMessage = "Chapter deleted successfully.";
+
+            if (EditingChapterId == chapterId)
+            {
+                ClearForm(keepSeriesId: true);
+            }
+
+            await LoadChaptersAsync();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    private void SelectForEdit(ChapterDto chapter)
+    {
+        ClearMessages();
+
+        EditingChapterId = chapter.ChapterId;
+        Form.SeriesIdText = chapter.SeriesId.ToString();
+        Form.ChapterNumberLabel = chapter.ChapterNumberLabel;
+        Form.ChapterTitle = chapter.ChapterTitle;
+        Form.StatusCode = chapter.StatusCode;
+        Form.PlannedReleaseDate = chapter.PlannedReleaseDate;
+        Form.ReleasedAtUtc = chapter.ReleasedAtUtc;
+
+        SuccessMessage = $"Selected chapter for editing: {chapter.ChapterId}";
+    }
+
+    private bool TryValidateSeriesId(out Guid seriesId)
+    {
+        seriesId = Guid.Empty;
+
+        if (string.IsNullOrWhiteSpace(Form.SeriesIdText))
+        {
+            ErrorMessage = "SeriesId is required.";
+            return false;
+        }
+
+        if (!Guid.TryParse(Form.SeriesIdText.Trim(), out seriesId))
+        {
+            ErrorMessage = "SeriesId must be a valid GUID.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private void ClearForm()
+    {
+        ClearForm(keepSeriesId: false);
+    }
+
+    private void ClearForm(bool keepSeriesId)
+    {
+        var currentSeriesId = Form.SeriesIdText;
+
+        Form = new ChapterFormModel
+        {
+            SeriesIdText = keepSeriesId ? currentSeriesId : string.Empty,
+            StatusCode = "DRAFT"
+        };
+
+        EditingChapterId = null;
+    }
+
+    private void ClearMessages()
+    {
+        ErrorMessage = null;
+        SuccessMessage = null;
+    }
+
+    private class ChapterFormModel
+    {
+        public string SeriesIdText { get; set; } = string.Empty;
+        public string ChapterNumberLabel { get; set; } = string.Empty;
+        public string? ChapterTitle { get; set; }
+        public string StatusCode { get; set; } = "DRAFT";
+        public DateTime? PlannedReleaseDate { get; set; }
+        public DateTime? ReleasedAtUtc { get; set; }
+    }
+}

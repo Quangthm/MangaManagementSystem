@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using EFCore.NamingConventions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using System;
 
 namespace MangaManagementSystem.Infrastructure
 {
@@ -20,32 +21,57 @@ namespace MangaManagementSystem.Infrastructure
                     .UseSnakeCaseNamingConvention());
 
             services.Configure<SmtpSettings>(configuration.GetSection(SmtpSettings.SectionName));
-            // Cloudinary settings and client
-            services.Configure<Options.CloudinarySettings>(configuration.GetSection(Options.CloudinarySettings.SectionName));
-            var cloudOpts = configuration.GetSection(Options.CloudinarySettings.SectionName).Get<Options.CloudinarySettings>();
-            if (cloudOpts != null)
+
+            services.Configure<CloudinarySettings>(
+                configuration.GetSection(CloudinarySettings.SectionName)
+            );
+
+            var cloudOpts = configuration
+                .GetSection(CloudinarySettings.SectionName)
+                .Get<CloudinarySettings>();
+
+            var hasValidCloudinaryConfig =
+                cloudOpts != null &&
+                !string.IsNullOrWhiteSpace(cloudOpts.CloudName) &&
+                !string.IsNullOrWhiteSpace(cloudOpts.ApiKey) &&
+                !string.IsNullOrWhiteSpace(cloudOpts.ApiSecret) &&
+                !cloudOpts.CloudName.StartsWith("DAN_", StringComparison.OrdinalIgnoreCase) &&
+                !cloudOpts.ApiKey.StartsWith("DAN_", StringComparison.OrdinalIgnoreCase) &&
+                !cloudOpts.ApiSecret.StartsWith("DAN_", StringComparison.OrdinalIgnoreCase);
+
+            if (hasValidCloudinaryConfig)
             {
-                var account = new CloudinaryDotNet.Account(cloudOpts.CloudName, cloudOpts.ApiKey, cloudOpts.ApiSecret);
-                var cloudinary = new CloudinaryDotNet.Cloudinary(account) { Api = { Secure = true } };
+                var account = new CloudinaryDotNet.Account(
+                    cloudOpts!.CloudName,
+                    cloudOpts.ApiKey,
+                    cloudOpts.ApiSecret
+                );
+
+                var cloudinary = new CloudinaryDotNet.Cloudinary(account)
+                {
+                    Api = { Secure = true }
+                };
+
                 services.AddSingleton(cloudinary);
+
+                services.AddScoped<IFileStorageService, CloudinaryFileStorageService>();
+                services.AddScoped<CloudinaryFileStorageFormAdapter>();
             }
+            else
+            {
+                services.AddScoped<IFileStorageService, NullFileStorageService>();
+            }
+
             services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
             services.AddScoped<IEmailService, EmailService>();
 
-            // Generic repository
             services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
 
-            // Specific repositories
             services.AddScoped<ISeriesRepository, SeriesRepository>();
             services.AddScoped<IChapterRepository, ChapterRepository>();
             services.AddScoped<IUserRepository, UserRepository>();
 
-            // Unit of Work
             services.AddScoped<IUnitOfWork, UnitOfWork>();
-
-            // File storage (application interface implemented in Infrastructure)
-            services.AddScoped<MangaManagementSystem.Application.Interfaces.IFileStorageService, Services.CloudinaryFileStorageService>();
-            services.AddScoped<Services.CloudinaryFileStorageFormAdapter>();
 
             return services;
         }
