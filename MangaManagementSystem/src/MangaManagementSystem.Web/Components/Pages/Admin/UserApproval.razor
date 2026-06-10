@@ -26,9 +26,9 @@
                 <MudProgressLinear Indeterminate="true" Class="mb-4" />
             }
 
-            @if (_showRejectConfirm && _rejectTarget != null)
+            @if (_rejectTarget != null)
             {
-                <MudDialog Open="true">
+                <MudDialog @bind-Visible="_showRejectConfirm">
                     <DialogContent>
                         <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Reject User</MudText>
                         <MudText Class="mt-2">Are you sure you want to reject this user registration?</MudText>
@@ -66,8 +66,10 @@
                         <MudTh>Actions</MudTh>
                     </HeaderContent>
                     <RowTemplate>
+                        <MudTd DataLabel="Name">@(context.DisplayName ?? "-")</MudTd>
                         <MudTd DataLabel="Username">@context.Username</MudTd>
                         <MudTd DataLabel="Email">@context.Email</MudTd>
+                        <MudTd DataLabel="Role">@MapRoleName(context.RoleId)</MudTd>
                         <MudTd DataLabel="Portfolio">
                             @if (context.PortfolioFileId.HasValue)
                             {
@@ -78,7 +80,6 @@
                                 <MudText Typo="Typo.caption" Class="mf-muted">No portfolio</MudText>
                             }
                         </MudTd>
-                        <MudTd DataLabel="Role">@MapRoleName(context.RoleId)</MudTd>
                         <MudTd DataLabel="Created At">@context.CreatedAtUtc.ToLocalTime().ToString("g")</MudTd>
                         <MudTd DataLabel="Actions">
                             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
@@ -104,25 +105,32 @@
 
             @if (_showPortfolioPreview && _currentPortfolio != null)
             {
-                <MudDialog Open="true" MaxWidth="MaxWidth.Medium" KeepContentMounted="true">
+                <MudDialog @bind-Visible="_showPortfolioPreview" Options="_dialogOptions">
+                    <TitleContent>
+                        <MudText Typo="Typo.h6" Class="font-weight-bold">
+                            <MudIcon Icon="@Icons.Material.Filled.Preview" Class="mr-2" />
+                            Portfolio Preview - @_currentPortfolio.OriginalFileName
+                        </MudText>
+                    </TitleContent>
                     <DialogContent>
-                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">Portfolio Preview</MudText>
                         @if (_isImagePreview)
                         {
-                            <ImageWithFallback Src="@_currentPortfolio.CloudinarySecureUrl" Alt="Portfolio Image" />
-                        }
-                        else if (!string.IsNullOrWhiteSpace(_currentPortfolio.CloudinarySecureUrl))
-                        {
-                            <MudText Class="mb-2">File: @_currentPortfolio.OriginalFileName</MudText>
-                            <MudButton Href="@_currentPortfolio.CloudinarySecureUrl" Target="_blank">Open file</MudButton>
+                            <div class="d-flex justify-center my-2">
+                                <MudImage Src="@_currentPortfolio.CloudinarySecureUrl" Alt="Portfolio Image" Fluid="true" Class="rounded" Style="max-height: 60vh; object-fit: contain;" />
+                            </div>
                         }
                         else
                         {
-                            <MudText class="mf-muted">File unavailable or has been removed.</MudText>
+                            <div style="height: 80vh;">
+                                <MudText Typo="Typo.caption" Class="mf-muted text-center mb-2">
+                                    If the document does not load, <MudLink Href="@($"/api/portfolio/{_currentPortfolio.FileResourceId}")" Target="_blank">click here to open in a new tab</MudLink>.
+                                </MudText>
+                                <iframe src="@($"/api/portfolio/{_currentPortfolio.FileResourceId}")" width="100%" style="height: calc(80vh - 30px); border: none; border-radius: 4px;"></iframe>
+                            </div>
                         }
                     </DialogContent>
                     <DialogActions>
-                        <MudButton Variant="Variant.Text" OnClick="ClosePortfolioPreview">Close</MudButton>
+                        <MudButton Variant="Variant.Text" Color="Color.Secondary" OnClick="ClosePortfolioPreview">Close</MudButton>
                     </DialogActions>
                 </MudDialog>
             }
@@ -131,6 +139,7 @@
 </AdminLayout>
 
 @code {
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.ExtraLarge, FullWidth = true, CloseButton = true };
     private const string PendingStatus = "PENDING_APPROVAL";
 
     private readonly List<UserDto> _pendingUsers = new();

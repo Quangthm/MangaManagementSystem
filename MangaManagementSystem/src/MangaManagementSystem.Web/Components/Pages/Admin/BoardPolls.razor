@@ -159,57 +159,54 @@
             }
         </MudPaper>
 
-        @if (_showCloseConfirm)
-        {
-            <MudDialog Open="true">
-                <DialogContent>
-                    <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Close Poll</MudText>
-                    <MudText Class="mt-2">Are you sure you want to close the poll for <strong>@_closeTargetSeries</strong>?</MudText>
-                    <MudText Class="mt-2">Closing the poll will compute the vote result and apply it to the series.</MudText>
-                </DialogContent>
-                <DialogActions>
-                    <MudButton Variant="Variant.Text" OnClick="CancelClosePoll">Cancel</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ConfirmClosePollAsync">Close Poll</MudButton>
-                </DialogActions>
-            </MudDialog>
-        }
+        <MudDialog @bind-Visible="_showCloseConfirm">
+            <TitleContent>
+                <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Close Poll</MudText>
+            </TitleContent>
+            <DialogContent>
+                <MudText Class="mt-2">Are you sure you want to close the poll for <strong>@_closeTargetSeries</strong>?</MudText>
+                <MudText Class="mt-2">Closing the poll will compute the vote result and apply it to the series.</MudText>
+            </DialogContent>
+            <DialogActions>
+                <MudButton Variant="Variant.Text" OnClick="CancelClosePoll">Cancel</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ConfirmClosePollAsync">Close Poll</MudButton>
+            </DialogActions>
+        </MudDialog>
 
-        @if (_showCancelConfirm)
-        {
-            <MudDialog Open="true">
-                <DialogContent>
-                    <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Cancel Poll</MudText>
-                    <MudText Class="mt-2">Are you sure you want to cancel the poll for <strong>@_cancelTargetSeries</strong>?</MudText>
-                    <MudText Class="mt-2">Cancelled polls preserve votes for audit but do not affect series status.</MudText>
-                </DialogContent>
-                <DialogActions>
-                    <MudButton Variant="Variant.Text" OnClick="CancelCancelPoll">Cancel</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="ConfirmCancelPollAsync">Cancel Poll</MudButton>
-                </DialogActions>
-            </MudDialog>
-        }
+        <MudDialog @bind-Visible="_showCancelConfirm">
+            <TitleContent>
+                <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Cancel Poll</MudText>
+            </TitleContent>
+            <DialogContent>
+                <MudText Class="mt-2">Are you sure you want to cancel the poll for <strong>@_cancelTargetSeries</strong>?</MudText>
+                <MudText Class="mt-2">Cancelled polls preserve votes for audit but do not affect series status.</MudText>
+            </DialogContent>
+            <DialogActions>
+                <MudButton Variant="Variant.Text" OnClick="CancelCancelPoll">Cancel</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="ConfirmCancelPollAsync">Cancel Poll</MudButton>
+            </DialogActions>
+        </MudDialog>
 
-        @if (_showOpenConfirm)
-        {
-            <MudDialog Open="true">
-                <DialogContent>
-                    <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Create Poll</MudText>
-                    <MudText Class="mt-2">Open this board poll for members to vote?</MudText>
-                    <MudText Class="mt-2">
-                        <strong>Poll Type:</strong> @_pollTypeCode<br />
-                        @if (!string.IsNullOrEmpty(_publicationFrequencyCode))
-                        {
-                            <strong>Frequency:</strong> @_publicationFrequencyCode<br />
-                        }
-                        <strong>Series:</strong> @(_seriesList.FirstOrDefault(s => s.SeriesId == _selectedSeriesId)?.Title ?? "Unknown")
-                    </MudText>
-                </DialogContent>
-                <DialogActions>
-                    <MudButton Variant="Variant.Text" OnClick="CancelOpenPoll">Cancel</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ConfirmOpenPollAsync">Open Poll</MudButton>
-                </DialogActions>
-            </MudDialog>
-        }
+        <MudDialog @bind-Visible="_showOpenConfirm">
+            <TitleContent>
+                <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Create Poll</MudText>
+            </TitleContent>
+            <DialogContent>
+                <MudText Class="mt-2">Open this board poll for members to vote?</MudText>
+                <MudText Class="mt-2">
+                    <strong>Poll Type:</strong> @_pollTypeCode<br />
+                    @if (!string.IsNullOrEmpty(_publicationFrequencyCode))
+                    {
+                        <strong>Frequency:</strong> @_publicationFrequencyCode<br />
+                    }
+                    <strong>Series:</strong> @(_seriesList.FirstOrDefault(s => s.SeriesId == _selectedSeriesId)?.Title ?? "Unknown")
+                </MudText>
+            </DialogContent>
+            <DialogActions>
+                <MudButton Variant="Variant.Text" OnClick="CancelOpenPoll">Cancel</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ConfirmOpenPollAsync">Open Poll</MudButton>
+            </DialogActions>
+        </MudDialog>
     </div>
 </AdminLayout>
 

@@ -35,6 +35,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         public async Task<IReadOnlyList<User>> GetByStatusAsync(string status)
         {
             return await _context.Users
+                .AsNoTracking()
                 .Where(u => u.StatusCode == status)
                 .OrderBy(u => u.CreatedAtUtc)
                 .ToListAsync();
@@ -74,6 +75,12 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             }
 
             await cmd.ExecuteNonQueryAsync();
+
+            var trackedUser = _context.Users.Local.FirstOrDefault(u => u.UserId == targetUserId);
+            if (trackedUser != null)
+            {
+                await _context.Entry(trackedUser).ReloadAsync();
+            }
         }
 
         public async Task<Guid> CreateUserViaProcAsync(

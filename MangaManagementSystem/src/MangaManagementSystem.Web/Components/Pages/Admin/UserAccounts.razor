@@ -99,9 +99,9 @@
                 }
             }
 
-            @if (_showDeleteConfirm && _deleteTarget != null && !_deleteTarget.Username.Equals(_currentUserUsername, StringComparison.OrdinalIgnoreCase))
+            @if (_deleteTarget != null && !_deleteTarget.Username.Equals(_currentUserUsername, StringComparison.OrdinalIgnoreCase))
             {
-                <MudDialog Open="true">
+                <MudDialog @bind-Visible="_showDeleteConfirm">
                     <DialogContent>
                         <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Disable Account</MudText>
                         <MudText Class="mt-2">Are you sure you want to disable this account? The account will be marked as DISABLED and cannot log in.</MudText>
