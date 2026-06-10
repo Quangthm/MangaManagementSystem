@@ -30,7 +30,7 @@
                 </MudSelect>
             </MudStack>
 
-            <MudTable Items="FilteredAnnotations" Hover="true" Dense="true">
+            <MudTable Items="_annotations" Hover="true" Dense="true">
                 <HeaderContent>
                     <MudTh>Series</MudTh>
                     <MudTh>Chapter/Page</MudTh>
@@ -57,7 +57,7 @@
                         }
                     </MudTd>
                     <MudTd>
-                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => Nav.NavigateTo($"/editor/chapters/{context.ChapterId}?page={context.PageNumber}"))">Open Page</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => Nav.NavigateTo($"/editor/chapters/{context.ChapterId}"))">Open Page</MudButton>
                     </MudTd>
                 </RowTemplate>
             </MudTable>
@@ -74,16 +74,11 @@
 
     private readonly List<AnnotationRow> _annotations = new()
     {
-        new(101, 3,  "Crimson Moon Academy", "Ch.45 / Pg.03", "SPEECH_BUBBLE", "DIALOGUE_ERROR",   "Dialogue text exceeds bubble area",               false),
-        new(101, 7,  "Crimson Moon Academy", "Ch.45 / Pg.07", "BACKGROUND",    "SHADING_ERROR",    "Background shading breaks continuity",            false),
-        new(102, 12, "Neon Samurai Path",    "Ch.19 / Pg.12", "PANEL",         "PANEL_ORDER_ERROR","Panel read order is ambiguous",                   false),
-        new(103, 2,  "Lunar Eclipse Academy","Ch.13 / Pg.02", "CHARACTER",     "CONTINUITY_ERROR", "Character outfit differs from previous page",     true)
+        new(101, "Crimson Moon Academy", "Ch.45 / Pg.03", "SPEECH_BUBBLE", "DIALOGUE_ERROR", "Dialogue text exceeds bubble area", false),
+        new(101, "Crimson Moon Academy", "Ch.45 / Pg.07", "BACKGROUND", "SHADING_ERROR", "Background shading breaks continuity", false),
+        new(102, "Neon Samurai Path", "Ch.19 / Pg.12", "PANEL", "PANEL_ORDER_ERROR", "Panel read order is ambiguous", false),
+        new(103, "Lunar Eclipse Academy", "Ch.13 / Pg.02", "CHARACTER", "CONTINUITY_ERROR", "Character outfit differs from previous page", true)
     };
 
-    private IEnumerable<AnnotationRow> FilteredAnnotations =>
-        string.IsNullOrEmpty(_issueFilter) || _issueFilter == "all"
-            ? _annotations
-            : _annotations.Where(a => a.IssueType == _issueFilter);
-
-    private record AnnotationRow(long ChapterId, int PageNumber, string Series, string ChapterPage, string RegionType, string IssueType, string Text, bool IsResolved);
+    private record AnnotationRow(long ChapterId, string Series, string ChapterPage, string RegionType, string IssueType, string Text, bool IsResolved);
 }

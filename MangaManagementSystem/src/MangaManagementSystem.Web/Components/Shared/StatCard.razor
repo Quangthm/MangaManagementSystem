@@ -1,20 +1,12 @@
 @namespace MangaManagementSystem.Web.Components.Shared
 <MudPaper Class="pa-5 mf-card" Elevation="0">
-    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
-        @if (!string.IsNullOrWhiteSpace(Icon))
+    <MudStack Spacing="1">
+        <MudText Typo="Typo.caption" Color="Color.Secondary">@Label</MudText>
+        <MudText Typo="Typo.h4" Class="font-weight-bold">@Value</MudText>
+        @if (!string.IsNullOrWhiteSpace(Description))
         {
-            <MudAvatar Color="@IconColor" Variant="Variant.Outlined" Size="Size.Medium">
-                <MudIcon Icon="@Icon" />
-            </MudAvatar>
+            <MudText Typo="Typo.body2" Class="mf-muted">@Description</MudText>
         }
-        <MudStack Spacing="1" Class="flex-grow-1">
-            <MudText Typo="Typo.caption" Color="Color.Secondary">@Label</MudText>
-            <MudText Typo="Typo.h4" Class="font-weight-bold">@Value</MudText>
-            @if (!string.IsNullOrWhiteSpace(Description))
-            {
-                <MudText Typo="Typo.body2" Class="mf-muted">@Description</MudText>
-            }
-        </MudStack>
     </MudStack>
 </MudPaper>
 
@@ -22,6 +14,4 @@
     [Parameter] public string Label { get; set; } = "";
     [Parameter] public string Value { get; set; } = "";
     [Parameter] public string? Description { get; set; }
-    [Parameter] public string? Icon { get; set; }
-    [Parameter] public Color IconColor { get; set; } = Color.Primary;
 }

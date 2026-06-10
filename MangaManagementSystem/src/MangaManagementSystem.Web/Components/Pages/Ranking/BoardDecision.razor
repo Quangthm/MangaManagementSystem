@@ -1,6 +1,6 @@
 @page "/board-decision"
 @using Microsoft.AspNetCore.Authorization
-@attribute [Authorize(Roles = "Editorial Board Member,Editorial Board Chief")]
+@attribute [Authorize(Roles = "Editorial Board Member,Editorial Board Chief,Admin")]
 @inject NavigationManager Nav
 
 <RankingLayout>

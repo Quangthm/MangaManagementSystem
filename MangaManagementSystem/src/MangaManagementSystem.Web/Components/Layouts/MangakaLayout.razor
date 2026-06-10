@@ -2,43 +2,31 @@
 @inject NavigationManager Nav
 
 <div class="mf-shell">
-    <aside class="mf-sidebar mf-mangaka-sidebar @(_sidebarExpanded ? "mf-sidebar--expanded" : "")"
-           @onmouseenter="ExpandSidebar" @onmouseleave="CollapseSidebar">
+    <aside class="mf-sidebar mf-mangaka-sidebar">
         <div class="mf-sidebar-header">
             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                 <span class="mf-logo-box mf-mangaka-logo">MF</span>
-                <div class="mf-sidebar-text">
+                <div>
                     <MudText Typo="Typo.subtitle1" Class="font-weight-bold text-white">MangaFlow</MudText>
                     <MudText Typo="Typo.caption" Style="color:#94a3b8">Mangaka Workspace</MudText>
                 </div>
             </MudStack>
         </div>
         <nav class="mf-nav-section">
-            <div class="mf-nav-title mf-sidebar-text">Main Menu</div>
-            <NavLink href="/mangaka" class="mf-nav-link" Match="NavLinkMatch.All">
-                <MudIcon Icon="@Icons.Material.Filled.Dashboard" Size="Size.Small" Class="mf-nav-icon" />
-                <span class="mf-sidebar-text">Dashboard</span>
-            </NavLink>
-            <NavLink href="/mangaka/series" class="mf-nav-link" Match="NavLinkMatch.Prefix">
-                <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Small" Class="mf-nav-icon" />
-                <span class="mf-sidebar-text">My Series &amp; Chapters</span>
-            </NavLink>
-            <NavLink href="/mangaka/review-submissions" class="mf-nav-link" Match="NavLinkMatch.Prefix">
-                <MudIcon Icon="@Icons.Material.Filled.RateReview" Size="Size.Small" Class="mf-nav-icon" />
-                <span class="mf-sidebar-text">Review Submissions</span>
-            </NavLink>
-            <div class="mf-nav-title mt-3 mf-sidebar-text">Publication</div>
-            <div class="mf-nav-link disabled">
-                <MudIcon Icon="@Icons.Material.Filled.BarChart" Size="Size.Small" Class="mf-nav-icon" />
-                <span class="mf-sidebar-text">Ranking &amp; Publication</span>
-            </div>
+            <div class="mf-nav-title">Main Menu</div>
+            <NavLink href="/mangaka" class="mf-nav-link" Match="NavLinkMatch.Prefix">Dashboard</NavLink>
+            <NavLink href="/mangaka/series" class="mf-nav-link" Match="NavLinkMatch.Prefix">My Series & Chapters</NavLink>
+            <NavLink href="/mangaka/assign-task" class="mf-nav-link" Match="NavLinkMatch.Prefix">Assign Task</NavLink>
+            <NavLink href="/mangaka/review-submissions" class="mf-nav-link" Match="NavLinkMatch.Prefix">Review Submissions</NavLink>
+            <!-- Mangaka settings are available via Profile; route /mangaka/settings is not a separate dashboard page -->
+            <div class="mf-nav-title mt-3">Publication</div>
+            <div class="mf-nav-link disabled">Ranking & Publication (Read-only)</div>
+
         </nav>
         <MudSpacer />
         <div class="pa-4">
-            <MudButton FullWidth="true" Variant="Variant.Outlined" Color="Color.Default" OnClick="BackToOverview"
-                       Class="mf-sidebar-back-btn">
-                <MudIcon Icon="@Icons.Material.Filled.ArrowBack" Size="Size.Small" />
-                <span class="mf-sidebar-text ms-1">Back to Overview</span>
+            <MudButton FullWidth="true" Variant="Variant.Outlined" Color="Color.Default" OnClick="BackToOverview">
+                Back to Overview
             </MudButton>
             <div class="mt-3">
                 <LogoutForm />
@@ -52,9 +40,5 @@
 
 @code {
     [Parameter] public RenderFragment? ChildContent { get; set; }
-    private bool _sidebarExpanded = false;
-
-    private void ExpandSidebar() => _sidebarExpanded = true;
-    private void CollapseSidebar() => _sidebarExpanded = false;
     private void BackToOverview() => Nav.NavigateTo("/dashboard");
 }

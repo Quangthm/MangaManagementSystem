@@ -2,7 +2,6 @@
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "Tantou Editor")]
 @inject MangaManagementSystem.Application.Interfaces.ISeriesProposalService ProposalService
-@inject ISeriesService SeriesService
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
@@ -44,7 +43,7 @@
                     <RowTemplate>
                         <MudTd><MudLink Href="@($"/editor/proposals/{context.SeriesId}")">@context.SeriesTitle</MudLink></MudTd>
                         <MudTd>v@context.Version</MudTd>
-                        <MudTd>User #@context.SubmittedByUserId</MudTd>
+                        <MudTd>@context.SubmittedBy</MudTd>
                         <MudTd>@context.SubmittedAt.ToString("MMM d, yyyy")</MudTd>
                         <MudTd><MudChip T="string" Color="@GetStatusColor(context.Status)" Size="Size.Small">@context.Status</MudChip></MudTd>
                         <MudTd>
@@ -78,30 +77,13 @@
     {
         try
         {
-            var seriesList = await SeriesService.GetAllSeriesAsync();
-            var rows = new List<ProposalRow>();
-
-            // Load latest proposal version for each series in parallel
-            var tasks = seriesList.Select(async series =>
+            // TODO: Call API to get proposals
+            _proposals = new List<ProposalRow>
             {
-                var proposals = await ProposalService.GetSeriesProposalsBySeriesIdAsync(series.SeriesId);
-                var latest = proposals.OrderByDescending(p => p.ProposalVersionNo).FirstOrDefault();
-                if (latest != null)
-                    return new ProposalRow(
-                        series.SeriesId,
-                        series.Title,
-                        latest.ProposalVersionNo,
-                        latest.SubmittedByUserId,
-                        latest.SubmittedAtUtc,
-                        latest.StatusCode);
-                return null;
-            });
-
-            var results = await Task.WhenAll(tasks);
-            _proposals = results
-                .Where(r => r != null)
-                .Cast<ProposalRow>()
-                .OrderByDescending(r => r.SubmittedAt);
+                new(1, "Crimson Moon Academy", 2, "Ken Sato", DateTime.UtcNow.AddDays(-2), "PROPOSAL_001", "UNDER_EDITORIAL_REVIEW"),
+                new(2, "Neon Samurai Path", 1, "Yuki Tanaka", DateTime.UtcNow.AddDays(-5), "PROPOSAL_002", "UNDER_EDITORIAL_REVIEW"),
+                new(3, "Lunar Eclipse Academy", 3, "Hiroshi Yamamoto", DateTime.UtcNow.AddDays(-10), "PROPOSAL_003", "UNDER_BOARD_REVIEW")
+            };
         }
         catch (Exception ex)
         {
@@ -123,5 +105,5 @@
         Snackbar.Add($"Reject proposal {proposalId} - implement rejection dialog", Severity.Warning);
     }
 
-    private record ProposalRow(long SeriesId, string SeriesTitle, int Version, int SubmittedByUserId, DateTime SubmittedAt, string Status);
+    private record ProposalRow(long SeriesId, string SeriesTitle, int Version, string SubmittedBy, DateTime SubmittedAt, string ProposalCode, string Status);
 }

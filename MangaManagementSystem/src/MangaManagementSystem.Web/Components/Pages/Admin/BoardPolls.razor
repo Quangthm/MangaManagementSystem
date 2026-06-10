@@ -1,0 +1,416 @@
+@page "/admin/board-polls"
+@attribute [Authorize(Roles = "Admin")]
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject ISeriesService SeriesService
+
+<PageTitle>Board Poll Management - MangaFlow</PageTitle>
+
+<AdminLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Board Poll Management</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Open serialization or cancellation polls for board voting</MudText>
+        </div>
+
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4">
+            <MudText Typo="Typo.caption" Class="font-weight-bold">Note</MudText>
+            <MudText Class="mt-1">Board members vote on opened polls. If a START_SERIALIZATION poll is approved, the selected publication frequency becomes the official series publication frequency.</MudText>
+        </MudAlert>
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">
+            <MudText Typo="Typo.caption" Class="font-weight-bold">Coming Soon</MudText>
+            <MudText Class="mt-1">Board poll creation and management functionality requires backend implementation. This page currently shows mock data.</MudText>
+        </MudAlert>
+
+        <MudPaper Class="pa-5 mf-card mb-6" Elevation="0">
+            <MudText Typo="Typo.h6" Class="font-weight-bold mb-4">Create New Poll</MudText>
+
+            <MudForm @ref="_form">
+                <MudGrid Class="mb-4">
+                    <MudItem xs="12" md="6">
+                        <MudSelect T="Guid" Label="Series" @bind-Value="_selectedSeriesId" Required="true" Error="_validationErrors.ContainsKey(nameof(_selectedSeriesId))">
+                            @foreach (var series in _seriesList)
+                            {
+                                <MudSelectItem T="Guid" Value="@series.SeriesId">@series.Title</MudSelectItem>
+                            }
+                        </MudSelect>
+                        @if (_validationErrors.ContainsKey(nameof(_selectedSeriesId)))
+                        {
+                            <MudText Color="Color.Error" Typo="Typo.caption">@_validationErrors[nameof(_selectedSeriesId)]</MudText>
+                        }
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudSelect T="string" Label="Poll Type" @bind-Value="_pollTypeCode" Required="true" Error="_validationErrors.ContainsKey(nameof(_pollTypeCode))">
+                            <MudSelectItem T="string" Value="@("START_SERIALIZATION")">START_SERIALIZATION</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("CANCEL_SERIALIZATION")">CANCEL_SERIALIZATION</MudSelectItem>
+                        </MudSelect>
+                        @if (_validationErrors.ContainsKey(nameof(_pollTypeCode)))
+                        {
+                            <MudText Color="Color.Error" Typo="Typo.caption">@_validationErrors[nameof(_pollTypeCode)]</MudText>
+                        }
+                    </MudItem>
+                    @if (_pollTypeCode == "START_SERIALIZATION")
+                    {
+                        <MudItem xs="12" md="6">
+                        <MudSelect T="string" Label="Publication Frequency" @bind-Value="_publicationFrequencyCode" Required="true" Error="_validationErrors.ContainsKey(nameof(_publicationFrequencyCode))">
+                            <MudSelectItem T="string" Value="@("WEEKLY")">WEEKLY</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("BIWEEKLY")">BIWEEKLY</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("MONTHLY")">MONTHLY</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("IRREGULAR")">IRREGULAR</MudSelectItem>
+                        </MudSelect>
+                            @if (_validationErrors.ContainsKey(nameof(_publicationFrequencyCode)))
+                            {
+                                <MudText Color="Color.Error" Typo="Typo.caption">@_validationErrors[nameof(_publicationFrequencyCode)]</MudText>
+                            }
+                        </MudItem>
+                    }
+                    <MudItem xs="12" md="6">
+                        <MudDatePicker Label="End Date / Deadline" @bind-Value="_endDate" Variant="Variant.Outlined" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField T="string" Label="Reason / Description" @bind-Value="_pollReason" Required="true" multiline="true" Rows="4" Variant="Variant.Outlined" />
+                    </MudItem>
+                </MudGrid>
+
+                <MudAlert Severity="Severity.Warning" Class="mt-3 mb-2">
+                    <MudText Typo="Typo.caption" Class="font-weight-bold">Coming Soon</MudText>
+                    <MudText class="mt-1">Board poll creation requires backend implementation.</MudText>
+                </MudAlert>
+                <MudStack Row="true" Spacing="2">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="true" OnClick="CancelCreate">Cancel</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="true" OnClick="OpenPollAsync">Create Poll (Disabled)</MudButton>
+                </MudStack>
+            </MudForm>
+        </MudPaper>
+
+        <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Open Polls</MudText>
+
+        <MudPaper Class="pa-5 mf-card" Elevation="0">
+            @if (_isLoading)
+            {
+                <MudProgressLinear Indeterminate="true" Class="mb-4" />
+            }
+            else if (!_openPolls.Any())
+            {
+                <MudPaper Class="pa-8 mf-card text-center">
+                    <MudText Typo="Typo.body2" Class="mf-muted">No open polls at this time.</MudText>
+                </MudPaper>
+            }
+            else
+            {
+                <MudTable Items="_openPolls" Hover="true" Dense="true" Breakpoint="Breakpoint.Sm">
+                    <HeaderContent>
+                        <MudTh>Series</MudTh>
+                        <MudTh>Poll Type</MudTh>
+                        <MudTh>Publication Frequency</MudTh>
+                        <MudTh>Status</MudTh>
+                        <MudTh>Opened By</MudTh>
+                        <MudTh>Deadline</MudTh>
+                        <MudTh></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Series">@context.SeriesTitle</MudTd>
+                        <MudTd DataLabel="Poll Type">@context.PollTypeCode</MudTd>
+                        <MudTd DataLabel="Publication Frequency">
+                            @if (!string.IsNullOrEmpty(context.BoardPublicationFrequencyCode))
+                            {
+                                @context.BoardPublicationFrequencyCode
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.caption" Class="mf-muted">-</MudText>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Status">
+                            <MudChip T="string" Color="Color.Success" Size="Size.Small">@context.PollStatusCode</MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Opened By">@context.CreatedByName</MudTd>
+                        <MudTd DataLabel="Deadline">
+                            @if (context.EndsAtUtc.HasValue)
+                            {
+                                @context.EndsAtUtc.Value.ToLocalTime().ToString("g")
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.caption" Class="mf-muted">No deadline</MudText>
+                            }
+                        </MudTd>
+                        <MudTd>
+                            <MudStack Row="true" Spacing="1">
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="true">View Details (Disabled)</MudButton>
+                                <MudButton Size="Size.Small"
+                                           Variant="Variant.Outlined"
+                                           Color="Color.Error"
+                                           Disabled="true"
+                                           OnClick="@(() => ConfirmClosePoll(context.SeriesBoardPollId, context.SeriesTitle))">
+                                    Close Poll (Disabled)
+                                </MudButton>
+                                <MudButton Size="Size.Small"
+                                           Variant="Variant.Outlined"
+                                           Color="Color.Warning"
+                                           Disabled="true"
+                                           OnClick="@(() => ConfirmCancelPoll(context.SeriesBoardPollId, context.SeriesTitle))">
+                                    Cancel Poll (Disabled)
+                                </MudButton>
+                            </MudStack>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudPaper>
+
+        <MudDialog @bind-Visible="_showCloseConfirm">
+            <TitleContent>
+                <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Close Poll</MudText>
+            </TitleContent>
+            <DialogContent>
+                <MudText Class="mt-2">Are you sure you want to close the poll for <strong>@_closeTargetSeries</strong>?</MudText>
+                <MudText Class="mt-2">Closing the poll will compute the vote result and apply it to the series.</MudText>
+            </DialogContent>
+            <DialogActions>
+                <MudButton Variant="Variant.Text" OnClick="CancelClosePoll">Cancel</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ConfirmClosePollAsync">Close Poll</MudButton>
+            </DialogActions>
+        </MudDialog>
+
+        <MudDialog @bind-Visible="_showCancelConfirm">
+            <TitleContent>
+                <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Cancel Poll</MudText>
+            </TitleContent>
+            <DialogContent>
+                <MudText Class="mt-2">Are you sure you want to cancel the poll for <strong>@_cancelTargetSeries</strong>?</MudText>
+                <MudText Class="mt-2">Cancelled polls preserve votes for audit but do not affect series status.</MudText>
+            </DialogContent>
+            <DialogActions>
+                <MudButton Variant="Variant.Text" OnClick="CancelCancelPoll">Cancel</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="ConfirmCancelPollAsync">Cancel Poll</MudButton>
+            </DialogActions>
+        </MudDialog>
+
+        <MudDialog @bind-Visible="_showOpenConfirm">
+            <TitleContent>
+                <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Create Poll</MudText>
+            </TitleContent>
+            <DialogContent>
+                <MudText Class="mt-2">Open this board poll for members to vote?</MudText>
+                <MudText Class="mt-2">
+                    <strong>Poll Type:</strong> @_pollTypeCode<br />
+                    @if (!string.IsNullOrEmpty(_publicationFrequencyCode))
+                    {
+                        <strong>Frequency:</strong> @_publicationFrequencyCode<br />
+                    }
+                    <strong>Series:</strong> @(_seriesList.FirstOrDefault(s => s.SeriesId == _selectedSeriesId)?.Title ?? "Unknown")
+                </MudText>
+            </DialogContent>
+            <DialogActions>
+                <MudButton Variant="Variant.Text" OnClick="CancelOpenPoll">Cancel</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ConfirmOpenPollAsync">Open Poll</MudButton>
+            </DialogActions>
+        </MudDialog>
+    </div>
+</AdminLayout>
+
+@code {
+    private record BoardPollRow(Guid SeriesBoardPollId, string SeriesTitle, string PollTypeCode, string? BoardPublicationFrequencyCode, string PollStatusCode, string CreatedByName, DateTime? EndsAtUtc);
+
+    private MudForm? _form;
+    private Dictionary<string, string> _validationErrors = new();
+
+    private List<SeriesDto> _seriesList = new();
+    private List<BoardPollRow> _openPolls = new();
+
+    private Guid _selectedSeriesId;
+    private string _pollTypeCode = "START_SERIALIZATION";
+    private string? _publicationFrequencyCode;
+    private string _pollReason = "";
+    private DateTime? _endDate;
+
+    private bool _isLoading;
+
+    private bool _showCloseConfirm;
+    private Guid _closeTargetPollId;
+    private string _closeTargetSeries = "";
+
+    private bool _showCancelConfirm;
+    private Guid _cancelTargetPollId;
+    private string _cancelTargetSeries = "";
+
+    private bool _showOpenConfirm;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSeriesAsync();
+        // Mock data - replace with actual API call when backend is ready
+        _openPolls = new List<BoardPollRow>
+        {
+            new(Guid.NewGuid(), "Crimson Moon Academy", "START_SERIALIZATION", "WEEKLY", "OPEN", "Admin", DateTime.UtcNow.AddDays(7)),
+            new(Guid.NewGuid(), "Neon Samurai Path", "CANCEL_SERIALIZATION", null, "OPEN", "Editor Tanaka", DateTime.UtcNow.AddDays(3))
+        };
+    }
+
+    private async Task LoadSeriesAsync()
+    {
+        try
+        {
+            _seriesList = (await SeriesService.GetAllSeriesAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load series: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void CancelCreate()
+    {
+        _form?.Validate();
+        _selectedSeriesId = Guid.Empty;
+        _pollTypeCode = "START_SERIALIZATION";
+        _publicationFrequencyCode = null;
+        _pollReason = "";
+        _endDate = null;
+    }
+
+    private void ValidateForm()
+    {
+        _validationErrors.Clear();
+
+        if (_selectedSeriesId == Guid.Empty)
+        {
+            _validationErrors.Add(nameof(_selectedSeriesId), "Please select a series.");
+        }
+
+        if (_pollTypeCode != "START_SERIALIZATION" && _pollTypeCode != "CANCEL_SERIALIZATION")
+        {
+            _validationErrors.Add(nameof(_pollTypeCode), "Invalid poll type.");
+        }
+
+        if (_pollTypeCode == "START_SERIALIZATION" && string.IsNullOrEmpty(_publicationFrequencyCode))
+        {
+            _validationErrors.Add(nameof(_publicationFrequencyCode), "Publication frequency is required for START_SERIALIZATION.");
+        }
+
+        if (string.IsNullOrEmpty(_pollReason.Trim()))
+        {
+            _validationErrors.Add(nameof(_pollReason), "Reason is required.");
+        }
+    }
+
+    private async Task OpenPollAsync()
+    {
+        ValidateForm();
+
+        if (_validationErrors.Any())
+        {
+            _form?.Validate();
+            return;
+        }
+
+        _showOpenConfirm = true;
+    }
+
+    private void CancelOpenPoll()
+    {
+        _showOpenConfirm = false;
+    }
+
+    private async Task ConfirmOpenPollAsync()
+    {
+        if (_selectedSeriesId == Guid.Empty) return;
+
+        try
+        {
+            // Mock - replace with actual API call when backend is ready
+            _openPolls.Add(new BoardPollRow(
+                Guid.NewGuid(),
+                _seriesList.FirstOrDefault(s => s.SeriesId == _selectedSeriesId)?.Title ?? "Unknown Series",
+                _pollTypeCode,
+                _pollTypeCode == "START_SERIALIZATION" ? _publicationFrequencyCode : null,
+                "OPEN",
+                "Current User",
+                _endDate
+            ));
+            
+            Snackbar.Add("Board poll created successfully.", Severity.Success);
+            await Task.Delay(100); // Simulate async
+            CancelCreate();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to create poll: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _showOpenConfirm = false;
+        }
+    }
+
+    private void ConfirmClosePoll(Guid pollId, string seriesTitle)
+    {
+        _closeTargetPollId = pollId;
+        _closeTargetSeries = seriesTitle;
+        _showCloseConfirm = true;
+    }
+
+    private void CancelClosePoll()
+    {
+        _showCloseConfirm = false;
+        _closeTargetPollId = Guid.Empty;
+        _closeTargetSeries = "";
+    }
+
+    private async Task ConfirmClosePollAsync()
+    {
+        try
+        {
+            // Mock - replace with actual API call when backend is ready
+            _openPolls.RemoveAll(p => p.SeriesBoardPollId == _closeTargetPollId);
+            Snackbar.Add("Poll closed successfully.", Severity.Success);
+            await Task.Delay(100); // Simulate async
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to close poll: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _showCloseConfirm = false;
+            _closeTargetPollId = Guid.Empty;
+            _closeTargetSeries = "";
+        }
+    }
+
+    private void ConfirmCancelPoll(Guid pollId, string seriesTitle)
+    {
+        _cancelTargetPollId = pollId;
+        _cancelTargetSeries = seriesTitle;
+        _showCancelConfirm = true;
+    }
+
+    private void CancelCancelPoll()
+    {
+        _showCancelConfirm = false;
+        _cancelTargetPollId = Guid.Empty;
+        _cancelTargetSeries = "";
+    }
+
+    private async Task ConfirmCancelPollAsync()
+    {
+        try
+        {
+            // Mock - replace with actual API call when backend is ready
+            _openPolls.RemoveAll(p => p.SeriesBoardPollId == _cancelTargetPollId);
+            Snackbar.Add("Poll cancelled successfully.", Severity.Warning);
+            await Task.Delay(100); // Simulate async
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to cancel poll: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _showCancelConfirm = false;
+            _cancelTargetPollId = Guid.Empty;
+            _cancelTargetSeries = "";
+        }
+    }
+}
