@@ -29,15 +29,15 @@ The MVP should stay focused and avoid unnecessary tables unless a table represen
 |---|---|
 | Users and accounts | Use one MVP role per account. New users start as `PENDING_APPROVAL`. Admin activates, rejects, or disables accounts. Each user has a non-unique `display_name` for UI display; if not provided during registration or external login, it defaults to the username. Users may update their own display name without entering their account password. |
 | File management | Store actual media in Cloudinary; store metadata and references in `manga.FileResource`. Every file resource must store a backend-calculated `sha256_hash`; duplicate-file warnings based on this hash are optional MVP usability behavior and may be implemented only where time allows. |
-Series management | Manage series profile, unique slug, lifecycle status, primary language, genre text, cover image, publication frequency, and optional source series reference. `series_id` is the internal backend identity; `slug` is the stable URL identity after serialization. No separate `series_code` is used in MVP.
+| Series management | Manage series profile, unique slug, lifecycle status, primary language, genre text, cover image, publication frequency, and optional source series reference. `series_id` is the internal backend identity; `slug` is the stable URL identity after serialization. No separate `series_code` is used in MVP. |
 | Series contributors | Manage team membership through `SeriesContributor`, not a direct lead Mangaka column on `Series`. |
 | Series proposals | Store formal submitted proposal versions in `SeriesProposal`; revisions create new proposal rows. |
 | Board workflow | Use `SeriesBoardPoll` and `SeriesBoardVote`; Editorial Board Chief opens, closes, and cancels board polls, specifies publication frequency when opening `START_SERIALIZATION` polls, may also vote, and board results are computed from votes. Do **not** use a separate `SeriesBoardDecision` table. |
 | Chapters and pages | Use `Chapter`, `ChapterPage`, and `ChapterPageVersion`. `ChapterPage` is a logical page slot; `ChapterPageVersion` stores uploaded/revised files. |
 | Chapter submission | Submit a chapter by changing `Chapter.status_code` to `UNDER_REVIEW`; do **not** create a `ChapterSubmission` table. |
 | Page regions | Store accepted AI/manual regions directly as `PageRegion` records linked to `ChapterPageVersion`. |
-| Page annotations | Store annotations linked to `PageRegion`, not direct annotation coordinates. |
-| Page tasks | Use page-based `ChapterPageTask` and optional `ChapterPageTaskRegion` links. |
+| Page annotations | Store annotation headers in `ChapterPageAnnotation` and link them to one or more `PageRegion` records through `ChapterPageAnnotationRegion`; do not store direct annotation coordinates. |
+| Page tasks | Use `ChapterPageTask` as the task header and `ChapterPageTaskRegion` to link one or more target regions; the task's page context is derived from linked `PageRegion` records, not from a direct `chapter_page_id` column on `ChapterPageTask`. |
 | Editorial review | Store final chapter-level review decisions in `ChapterEditorialReview`. Page annotations support the review but do not replace chapter-level decisions. |
 | Publication planning | Use chapter-level planned release dates and release timestamps. Mangaka may provide/update preferred publication frequency only while the series is in `PROPOSAL_DRAFT`; Editorial Board Chief specifies the official frequency in a `START_SERIALIZATION` poll, and an approved poll applies that frequency to `Series.publication_frequency_code`. After board decision, Mangaka may request a frequency change through in-app notification, but only Editorial Board Chief may directly change the official frequency with a required audit reason. |
 | Ranking | Use simulated/manual reader vote input entered by Editorial Board Members and time-based `SeriesRankingSnapshot`. No public reader module in MVP. |
@@ -290,39 +290,44 @@ The project uses **permission-based actor grouping** for shared features and rol
 - Replacing/revising a page creates a new `ChapterPageVersion`, not a new `ChapterPage`.
 - A `ChapterPage` may be soft-deleted from active drafts without deleting historical versions.
 - Page task output should reference the produced `ChapterPageVersion`.
-- Page annotations remain linked to page versions through linked `PageRegion`.
+- Page annotations remain linked to page versions through one or more linked `PageRegion` records.
 
 ## 4.9 Chapter Page Annotation
 
-- Each annotation references exactly one `PageRegion`.
-- Annotation location is represented through `PageRegion`; annotation does not store direct coordinates.
-- Annotation page version is derived from `PageRegion.chapter_page_version_id`.
-- Whole-page feedback uses a manually created full-page `PageRegion`.
+- `ChapterPageAnnotation` stores the annotation header: issue type, annotation text, annotated-by user, creation time, and resolution fields.
+- `ChapterPageAnnotation` does not store direct coordinates or a direct `page_region_id` column.
+- `ChapterPageAnnotationRegion` links one annotation to one or more `PageRegion` records.
+- Annotation location is represented through linked `PageRegion` records.
+- The page version of an annotation is derived from the linked `PageRegion.chapter_page_version_id` values.
+- All regions linked to one annotation must belong to the same `ChapterPageVersion` so the annotation context remains unambiguous.
+- Whole-page feedback uses a manually created full-page `PageRegion` linked through `ChapterPageAnnotationRegion`.
 - Each annotation must have a valid issue type.
 - Annotation text must be non-empty.
 - Creator and created time must be recorded.
 - Authorized users such as Tantou Editors, Mangaka reviewers, or assigned users may create annotations according to permissions.
+- A page annotation may be created from existing saved regions, newly created regions, or both.
 - Resolved annotations must record resolver and resolved timestamp.
 - Unresolved annotations must have `resolved_by_user_id` and `resolved_at_utc` as `NULL`.
+- Resolving an annotation does not delete the annotation or its linked region records.
 - Old annotations remain linked to the original region/page version and should not automatically move to newer page versions.
 - Annotation issue types are fixed for MVP and enforced by database constraint rather than a separate lookup table.
 
 ## 4.10 Page Task
 
-- Each page task targets exactly one logical `ChapterPage`.
+- Each page task targets one logical page context through one or more linked `PageRegion` records; `ChapterPageTask` does not store `chapter_page_id` directly.
 - A page task represents one assignment to one assistant or authorized user.
-- Task assignment is page-based in MVP; whole-chapter task assignment is future scope.
+- Task assignment is region-linked and page-derived in MVP; whole-chapter task assignment is future scope.
 - A task may target one or more `PageRegion` records through `ChapterPageTaskRegion`.
 - Task target regions are not stored as free-text descriptions.
 - The same task-region pair cannot be inserted more than once.
-- Linked regions must belong to the same logical `ChapterPage` as the task.
+- All `PageRegion` records linked to the same task must belong to the same logical `ChapterPage`, derived through their `ChapterPageVersion` records.
 - Region-based annotations can be used as the basis for page tasks.
 - Assistant task UI should highlight linked page regions.
 - Every task must have a due date.
 - Task statuses are `ASSIGNED`, `UNDER_REVIEW`, `COMPLETED`, and `CANCELLED`.
 - There is no `IN_PROGRESS` status in MVP.
 - A task must have an uploaded page version before it enters `UNDER_REVIEW` or `COMPLETED`.
-- Completed task output must reference the produced `ChapterPageVersion` for the same logical page.
+- Completed task output must reference the produced `ChapterPageVersion` for the same logical page derived from the task's linked regions.
 - Assistants do not approve their own task output.
 - Mangaka or permitted reviewer accepts submitted page versions before task completion.
 - Assigned user should not be changed after task creation.
@@ -707,9 +712,9 @@ This keeps region and annotation feedback accurate even after newer page version
 
 ### 10.4 Annotation
 
-`ChapterPageAnnotation` should reference `PageRegion`. It should not store direct annotation coordinates because coordinates belong to the linked region.
+`ChapterPageAnnotation` stores the annotation header and should not store direct annotation coordinates or a direct `page_region_id`. `ChapterPageAnnotationRegion` links one annotation to one or more `PageRegion` records, and those linked regions provide the visual/page-version context.
 
-Whole-page feedback should use a manually created full-page region.
+Whole-page feedback should use a manually created full-page region linked through `ChapterPageAnnotationRegion`.
 
 ### 10.5 Board Workflow
 
@@ -752,7 +757,7 @@ Do not assume or add:
 - Persistent AI job history unless required
 - `ChapterSubmission`
 - `SeriesBoardDecision`
-- Direct coordinates on `ChapterPageAnnotation`
+- Direct coordinates or direct `page_region_id` on `ChapterPageAnnotation`; use `ChapterPageAnnotationRegion` instead
 - Final translated text rows in `PageRegionTranslation`
 - Status-history tables for every entity
 - Registration request table for MVP approval history
