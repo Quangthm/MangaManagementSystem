@@ -2,29 +2,271 @@
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "Mangaka")]
 @inject NavigationManager Nav
+@inject ISeriesService SeriesService
 
 <MangakaLayout>
     <div class="mf-page">
         <div class="mf-page-header">
-            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Crimson Moon Academy</MudText>
-            <MudText Typo="Typo.body1" Class="mf-muted">紅月学院</MudText>
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                <div>
+                    <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">@WorkspaceTitle</MudText>
+                    <MudText Typo="Typo.body1" Class="mf-muted">@WorkspaceSubtitle</MudText>
+                </div>
+                <MudButton Variant="@(_taskPanelOpen ? Variant.Filled : Variant.Outlined)"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Assignment"
+                           OnClick="@(() => _taskPanelOpen = !_taskPanelOpen)">
+                    @(_taskPanelOpen ? "Close Task" : "Assign Task")
+                </MudButton>
+            </MudStack>
         </div>
 
-        <MudGrid>
-            <MudItem xs="12" md="8"><MudPaper Class="pa-5 mf-card" Elevation="0"><MudStack Row="true" Justify="Justify.SpaceBetween" Class="mb-3"><MudText Typo="Typo.h6">Chapter @SelectedChapter · Page @SelectedPage of 24</MudText><MudChip T="string" Color="Color.Primary">Draft</MudChip></MudStack><div class="mf-canvas">Manga page preview canvas<br/>Example dialogue text / More dialogue here...</div><MudStack Row="true" Class="mt-3">@foreach (var pageNo in Enumerable.Range(1, 5)) {<MudButton Variant="@(SelectedPage == pageNo ? Variant.Filled : Variant.Outlined)" OnClick="@(() => SelectedPage = pageNo)">Page @pageNo</MudButton>}</MudStack></MudPaper></MudItem>
-            <MudItem xs="12" md="4"><MudPaper Class="pa-5 mf-card" Elevation="0"><MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Task Assignment</MudText><MudText class="mf-muted mb-3">Current selection: Chapter @SelectedChapter, Page @SelectedPage. The task will be assigned for this specific page.</MudText><MudSelect T="string" Label="Task Type" @bind-Value="TaskType" Variant="Variant.Outlined"><MudSelectItem Value="@("Tone Shading")">Tone Shading</MudSelectItem><MudSelectItem Value="@("Background Drawing")">Background Drawing</MudSelectItem><MudSelectItem Value="@("Cleanup")">Cleanup</MudSelectItem></MudSelect><MudTextField Label="Assign to" @bind-Value="Assistant" Variant="Variant.Outlined" Class="mt-3" /><MudTextField Label="Instructions" Lines="4" @bind-Value="Instructions" Variant="Variant.Outlined" Class="mt-3" /><MudAlert Severity="Severity.Warning" Class="my-3"><MudText Typo="Typo.caption" Class="font-weight-bold">Coming Soon</MudText><MudText Class="mt-1">Task assignment requires backend implementation.</MudText></MudAlert><MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" Disabled="true">Assign Task (Disabled)</MudButton><MudButton FullWidth="true" Variant="Variant.Text" Class="mt-2" Disabled="true">Save Draft (Disabled)</MudButton></MudPaper></MudItem>
-        </MudGrid>
+        <!-- Hierarchy breadcrumb -->
+        <MudBreadcrumbs Items="BreadcrumbItems" Class="px-0 mb-3" />
 
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4 mf-demo-banner">
+            <MudText Typo="Typo.caption" Class="font-weight-bold">Demo workspace preview</MudText>
+            <MudText Class="mt-1">Demo workspace preview — chapter/page data is not wired to backend yet.</MudText>
+        </MudAlert>
+
+        <MudGrid>
+            <!-- LEFT: Compact navigator card -->
+            <MudItem xs="12" md="3">
+                <MudPaper Class="pa-4 mf-card" Elevation="0">
+                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-1">Workspace Navigator</MudText>
+                    <MudText Typo="Typo.caption" Class="mf-muted mb-3 d-block">Switch chapter and page preview</MudText>
+
+                    <!-- Chapter prev/next + dropdown -->
+                    <MudText Typo="Typo.caption" Class="mf-muted mb-1 d-block">Chapter</MudText>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-4">
+                        <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft"
+                                       Size="Size.Small"
+                                       Disabled="@(CurrentChapterIndex <= 0)"
+                                       OnClick="PrevChapter" />
+                        <MudSelect T="int" Value="SelectedChapterNo" ValueChanged="OnChapterSelected"
+                                   Variant="Variant.Outlined" Dense="true"
+                                   Style="flex:1; min-width:0;">
+                            @foreach (var chapter in CurrentSeries.Chapters)
+                            {
+                                <MudSelectItem Value="@chapter.Number">Ch. @chapter.Number — @chapter.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight"
+                                       Size="Size.Small"
+                                       Disabled="@(CurrentChapterIndex >= CurrentSeries.Chapters.Count - 1)"
+                                       OnClick="NextChapter" />
+                    </MudStack>
+
+                    <!-- Page prev/next navigator -->
+                    <MudText Typo="Typo.caption" Class="mf-muted mb-1 d-block">Page</MudText>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Spacing="1">
+                        <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft"
+                                       Size="Size.Small"
+                                       Disabled="@(SelectedPage <= 1)"
+                                       OnClick="PrevPage" />
+                        <MudText Typo="Typo.body2" Class="font-weight-bold" Style="white-space:nowrap;">
+                            @SelectedPage / @SelectedChapterPageCount
+                        </MudText>
+                        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight"
+                                       Size="Size.Small"
+                                       Disabled="@(SelectedPage >= SelectedChapterPageCount || SelectedChapterPageCount == 0)"
+                                       OnClick="NextPage" />
+                    </MudStack>
+
+                    <MudDivider Class="my-3" />
+                    <MudText Typo="Typo.caption" Class="mf-muted">
+                        Ch. @SelectedChapterNo @SelectedChapterName &nbsp;·&nbsp; Pg. @SelectedPage of @SelectedChapterPageCount
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+
+            <!-- CENTER: Page preview canvas -->
+            <MudItem xs="12" md="9">
+                <MudPaper Class="pa-5 mf-card" Elevation="0">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
+                        <div>
+                            <MudText Typo="Typo.h6">@WorkspaceTitle</MudText>
+                            <MudText Typo="Typo.caption" Class="mf-muted">
+                                Chapter @SelectedChapterNo @SelectedChapterName · Page @SelectedPage of @SelectedChapterPageCount
+                            </MudText>
+                        </div>
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                            <MudChip T="string" Color="Color.Secondary" Size="Size.Small">Demo</MudChip>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.Assignment"
+                                       OnClick="@(() => _taskPanelOpen = true)">Assign Task</MudButton>
+                        </MudStack>
+                    </MudStack>
+
+                    <div class="mf-canvas">
+                        <MudStack AlignItems="AlignItems.Center" Spacing="1">
+                            <MudIcon Icon="@Icons.Material.Outlined.Image" Size="Size.Large" />
+                            <MudText Typo="Typo.h6" Class="font-weight-bold">Preview canvas</MudText>
+                            <MudText Typo="Typo.body2">Chapter @SelectedChapterNo · Page @SelectedPage</MudText>
+                            <MudText Typo="Typo.caption" Class="mf-muted">Regions, annotations, and task assignment preview</MudText>
+                        </MudStack>
+                    </div>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
     </div>
+
+    <!-- Right-side Task Assignment drawer — overlays viewport, no scroll needed -->
+    <MudDrawer @bind-Open="_taskPanelOpen"
+               Anchor="Anchor.End"
+               Variant="DrawerVariant.Temporary"
+               Elevation="4"
+               Width="400px"
+               ClipMode="DrawerClipMode.Never">
+        <MudDrawerHeader>
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Style="width:100%">
+                <div>
+                    <MudText Typo="Typo.h6" Class="font-weight-bold">Assign Task</MudText>
+                    <MudText Typo="Typo.caption" Class="mf-muted">
+                        Chapter @SelectedChapterNo, Page @SelectedPage
+                    </MudText>
+                </div>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                               OnClick="@(() => _taskPanelOpen = false)" />
+            </MudStack>
+        </MudDrawerHeader>
+
+        <div class="pa-4">
+            <MudSelect T="string" Label="Task Type" @bind-Value="TaskType"
+                       Variant="Variant.Outlined" Class="mb-3">
+                <MudSelectItem Value="@("Tone Shading")">Tone Shading</MudSelectItem>
+                <MudSelectItem Value="@("Background Drawing")">Background Drawing</MudSelectItem>
+                <MudSelectItem Value="@("Cleanup")">Cleanup</MudSelectItem>
+            </MudSelect>
+
+            <MudTextField Label="Assign to" @bind-Value="AssistantName"
+                          Variant="Variant.Outlined" Class="mb-3" />
+
+            <MudTextField Label="Instructions" Lines="4" @bind-Value="Instructions"
+                          Variant="Variant.Outlined" Class="mb-3" />
+
+            <MudAlert Severity="Severity.Warning" Class="mb-3">
+                <MudText Typo="Typo.caption" Class="font-weight-bold">Coming Soon</MudText>
+                <MudText Class="mt-1">Task assignment requires backend implementation.</MudText>
+            </MudAlert>
+
+            <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Primary"
+                       Class="mb-2" Disabled="true">Assign Task (Disabled)</MudButton>
+            <MudButton FullWidth="true" Variant="Variant.Text" Disabled="true">Save Draft (Disabled)</MudButton>
+        </div>
+    </MudDrawer>
 </MangakaLayout>
 
 @code {
 
     [Parameter] public string? SeriesId { get; set; }
-    private int SelectedChapter { get; set; } = 12;
+
+    private int SelectedChapterNo { get; set; }
     private int SelectedPage { get; set; } = 1;
+    private bool _taskPanelOpen = false;
     private string TaskType { get; set; } = "Tone Shading";
-    private string Assistant { get; set; } = "";
+    private string AssistantName { get; set; } = "";
     private string Instructions { get; set; } = "";
 
+    // Real series header context (loaded from ISeriesService when the id resolves).
+    // Chapter/page data below stays demo-only and is clearly labelled in the UI.
+    private string? _realSeriesTitle;
+    private string? _realSeriesStatus;
+
+    private string WorkspaceTitle => _realSeriesTitle ?? CurrentSeries.Title;
+
+    private string WorkspaceSubtitle => _realSeriesTitle != null
+        ? $"{_realSeriesStatus} · live series · demo workspace"
+        : CurrentSeries.Subtitle;
+
+    private SeriesDetail CurrentSeries { get; set; } = new();
+
+    private int CurrentChapterIndex =>
+        CurrentSeries.Chapters.FindIndex(c => c.Number == SelectedChapterNo);
+
+    private int SelectedChapterPageCount =>
+        CurrentSeries.Chapters.FirstOrDefault(c => c.Number == SelectedChapterNo)?.PageCount ?? 0;
+
+    private string SelectedChapterName =>
+        CurrentSeries.Chapters.FirstOrDefault(c => c.Number == SelectedChapterNo)?.Name is { Length: > 0 } name
+            ? $"· {name}"
+            : string.Empty;
+
+    private List<BreadcrumbItem> BreadcrumbItems => new()
+    {
+        new BreadcrumbItem(WorkspaceTitle, href: null, disabled: true),
+        new BreadcrumbItem($"Chapter {SelectedChapterNo}", href: null, disabled: true),
+        new BreadcrumbItem($"Page {SelectedPage}", href: null, disabled: true)
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        CurrentSeries = LoadDemoSeries();
+        SelectedChapterNo = CurrentSeries.Chapters.FirstOrDefault()?.Number ?? 1;
+        SelectedPage = 1;
+
+        // Best-effort: load the real series title for the header. Failure or a
+        // missing id falls back silently to the demo title.
+        if (long.TryParse(SeriesId, out var parsedId))
+        {
+            try
+            {
+                var series = await SeriesService.GetSeriesByIdAsync(parsedId);
+                if (series != null)
+                {
+                    _realSeriesTitle = series.Title;
+                    _realSeriesStatus = series.StatusCode;
+                }
+            }
+            catch
+            {
+                // Keep demo title; workspace must render regardless of DB state.
+            }
+        }
+    }
+
+    private void OnChapterSelected(int chapterNo)
+    {
+        SelectedChapterNo = chapterNo;
+        SelectedPage = 1;
+    }
+
+    private void PrevChapter()
+    {
+        var idx = CurrentChapterIndex;
+        if (idx > 0)
+            OnChapterSelected(CurrentSeries.Chapters[idx - 1].Number);
+    }
+
+    private void NextChapter()
+    {
+        var idx = CurrentChapterIndex;
+        if (idx < CurrentSeries.Chapters.Count - 1)
+            OnChapterSelected(CurrentSeries.Chapters[idx + 1].Number);
+    }
+
+    private void PrevPage() { if (SelectedPage > 1) SelectedPage--; }
+    private void NextPage() { if (SelectedPage < SelectedChapterPageCount) SelectedPage++; }
+
+    // Intentional demo data: named chapters illustrate the navigator/canvas flow.
+    private static SeriesDetail LoadDemoSeries() => new()
+    {
+        Title = "Demo Series",
+        Subtitle = "Demo workspace preview",
+        Chapters = new()
+        {
+            new ChapterInfo(1, "Opening Scene", 12),
+            new ChapterInfo(2, "First Conflict", 16),
+            new ChapterInfo(3, "Board Review Draft", 18)
+        }
+    };
+
+    private class SeriesDetail
+    {
+        public string Title { get; set; } = "";
+        public string Subtitle { get; set; } = "";
+        public List<ChapterInfo> Chapters { get; set; } = new();
+    }
+
+    private record ChapterInfo(int Number, string Name, int PageCount);
 }

@@ -31,7 +31,6 @@
                         <div class="nav-item px-3"><NavLink class="nav-link" href="/admin">Admin Dashboard</NavLink></div>
                         <div class="nav-item px-3"><NavLink class="nav-link" href="/admin/user-approval">User Approval</NavLink></div>
                         <div class="nav-item px-3"><NavLink class="nav-link" href="/admin/users">User Accounts</NavLink></div>
-                        <div class="nav-item px-3"><NavLink class="nav-link" href="/admin/board-polls">Board Polls</NavLink></div>
                         <div class="nav-item px-3"><NavLink class="nav-link" href="/admin/settings">System Settings</NavLink></div>
                     </Authorized>
                 </AuthorizeView>
@@ -55,6 +54,18 @@
                         <div class="nav-item px-3"><NavLink class="nav-link" href="/editor/series">Series Review</NavLink></div>
                         <div class="nav-item px-3"><NavLink class="nav-link" href="/editor/chapters">Chapter Review</NavLink></div>
                         <div class="nav-item px-3"><NavLink class="nav-link" href="/editor/proposals">Proposal Review</NavLink></div>
+                    </Authorized>
+                </AuthorizeView>
+
+                <AuthorizeView Roles="Editorial Board Chief">
+                    <Authorized Context="boardChiefAuth">
+                        <div class="nav-item px-3"><NavLink class="nav-link" href="/board-chief">Board Chief Dashboard</NavLink></div>
+                    </Authorized>
+                </AuthorizeView>
+
+                <AuthorizeView Roles="Editorial Board Member">
+                    <Authorized Context="boardMemberAuth">
+                        <div class="nav-item px-3"><NavLink class="nav-link" href="/board">Board Dashboard</NavLink></div>
                     </Authorized>
                 </AuthorizeView>
 

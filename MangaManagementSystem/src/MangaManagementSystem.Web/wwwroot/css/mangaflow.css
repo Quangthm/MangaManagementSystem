@@ -317,6 +317,35 @@ a { text-decoration: none; }
   box-shadow: 0 8px 24px rgba(245, 158, 11, .3);
 }
 
+/* ── Empty State ───────────────────────────────────────────── */
+.mf-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 48px 24px;
+  border: 1px dashed var(--mf-slate-300);
+  border-radius: var(--mf-radius);
+  background: var(--mf-slate-50);
+  gap: .35rem;
+}
+
+.mf-empty-state .mf-empty-icon {
+  color: var(--mf-slate-400);
+  margin-bottom: .5rem;
+}
+
+.mf-empty-state .mf-empty-title {
+  font-weight: 700;
+  color: var(--mf-slate-700);
+}
+
+/* ── Demo / Not-wired banner accent ────────────────────────── */
+.mf-demo-banner {
+  border-left: 4px solid var(--mf-amber);
+}
+
 /* ── Responsive ────────────────────────────────────────────── */
 .mf-mobile-topbar { display: none; }
 
@@ -337,4 +366,70 @@ a { text-decoration: none; }
   .mf-nav-title { display: none; }
   .mf-nav-link { white-space: nowrap; padding: .5rem .7rem; }
   .mf-page { padding: 20px 16px; }
+}
+
+/* ── Mangaka hover-collapse sidebar ─────────────────────────── */
+.mf-mangaka-sidebar {
+  width: 56px;
+  transition: width 260ms ease, box-shadow 260ms ease;
+  overflow: hidden;
+}
+
+.mf-mangaka-sidebar .mf-sidebar-text,
+.mf-mangaka-sidebar .mf-nav-title,
+.mf-mangaka-sidebar .mf-nav-link span {
+  white-space: nowrap;
+  overflow: hidden;
+  opacity: 0;
+  max-width: 0;
+  transition: opacity 200ms ease, max-width 200ms ease;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.mf-mangaka-sidebar:hover,
+.mf-mangaka-sidebar.mf-sidebar--expanded {
+  width: 272px;
+  box-shadow: 4px 0 24px rgba(0,0,0,.22);
+  overflow: visible;
+}
+
+.mf-mangaka-sidebar:hover .mf-sidebar-text,
+.mf-mangaka-sidebar:hover .mf-nav-title,
+.mf-mangaka-sidebar:hover .mf-nav-link span,
+.mf-mangaka-sidebar.mf-sidebar--expanded .mf-sidebar-text,
+.mf-mangaka-sidebar.mf-sidebar--expanded .mf-nav-title,
+.mf-mangaka-sidebar.mf-sidebar--expanded .mf-nav-link span {
+  opacity: 1;
+  max-width: 220px;
+}
+
+/* Logo box and icons always visible at collapsed width */
+.mf-mangaka-sidebar .mf-logo-box,
+.mf-mangaka-sidebar .mf-nav-icon,
+.mf-mangaka-sidebar .mud-icon-root {
+  flex-shrink: 0;
+  min-width: 24px;
+}
+
+/* Back button: icon visible at all times, text hidden when collapsed */
+.mf-mangaka-sidebar .mf-sidebar-back-btn {
+  min-width: 36px;
+  justify-content: flex-start;
+  padding: 4px 8px;
+}
+
+@media (max-width: 900px) {
+  .mf-mangaka-sidebar,
+  .mf-mangaka-sidebar:hover,
+  .mf-mangaka-sidebar.mf-sidebar--expanded {
+    width: 100%;
+    overflow: visible;
+  }
+  .mf-mangaka-sidebar .mf-sidebar-text,
+  .mf-mangaka-sidebar .mf-nav-title,
+  .mf-mangaka-sidebar .mf-nav-link span {
+    opacity: 1;
+    max-width: 100%;
+  }
 }

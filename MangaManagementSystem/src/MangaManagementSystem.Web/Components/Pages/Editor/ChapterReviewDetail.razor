@@ -20,13 +20,7 @@
             <!-- Page Preview Area -->
             <MudItem xs="12" md="8">
                 <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
-                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
-                        <MudText Typo="Typo.h6" Class="font-weight-bold">Page @_currentPage of @_totalPages</MudText>
-                        <MudStack Row="true" Spacing="2">
-                            <MudButton Variant="Variant.Outlined" Size="Size.Small" Disabled="@(_currentPage <= 1)" OnClick="PrevPage">Previous</MudButton>
-                            <MudButton Variant="Variant.Outlined" Size="Size.Small" Disabled="@(_currentPage >= _totalPages)" OnClick="NextPage">Next</MudButton>
-                        </MudStack>
-                    </MudStack>
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Page @_currentPage of @_totalPages</MudText>
 
                     <!-- Canvas placeholder for page display -->
                     <div class="mf-canvas" style="min-height:520px">
@@ -37,18 +31,19 @@
                         </MudStack>
                     </div>
 
-                    <!-- Page navigation thumbnails -->
-                    <MudStack Row="true" Class="mt-4" Spacing="1" Wrap="Wrap.Wrap">
-                        @for (int i = 1; i <= _totalPages; i++)
-                        {
-                            var pageNo = i;
-                            <MudButton Variant="@(_currentPage == pageNo ? Variant.Filled : Variant.Outlined)"
-                                       Color="@(_currentPage == pageNo ? Color.Primary : Color.Default)"
-                                       Size="Size.Small"
-                                       OnClick="@(() => GoToPage(pageNo))">
-                                @pageNo
-                            </MudButton>
-                        }
+                    <!-- Compact page selector -->
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-4">
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" Disabled="@(_currentPage <= 1)" OnClick="PrevPage">‹ Prev</MudButton>
+                        <MudSelect T="int" Value="_currentPage" ValueChanged="GoToPage" Variant="Variant.Outlined"
+                                   Dense="true" Style="min-width:110px; max-width:130px">
+                            @for (int i = 1; i <= _totalPages; i++)
+                            {
+                                var pageNo = i;
+                                <MudSelectItem Value="@pageNo">Page @pageNo</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudText Typo="Typo.body2" Class="mf-muted">of @_totalPages</MudText>
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" Disabled="@(_currentPage >= _totalPages)" OnClick="NextPage">Next ›</MudButton>
                     </MudStack>
                 </MudPaper>
 
@@ -141,8 +136,18 @@
 @code {
     [Parameter] public long ChapterId { get; set; }
 
+    [SupplyParameterFromQuery(Name = "page")]
+    public int? PageQuery { get; set; }
+
     private int _currentPage = 1;
     private int _totalPages = 24;
+
+    protected override void OnParametersSet()
+    {
+        if (PageQuery.HasValue && PageQuery.Value >= 1 && PageQuery.Value <= _totalPages)
+            _currentPage = PageQuery.Value;
+    }
+
     private string _decision = "APPROVED";
     private string _comments = string.Empty;
 
