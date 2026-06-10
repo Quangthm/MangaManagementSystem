@@ -1,8 +1,14 @@
 @page "/register"
 @using Microsoft.AspNetCore.WebUtilities
+@using MangaManagementSystem.Web.Options
+@using MangaManagementSystem.Web.Services
 @inject IAuthService AuthService
 @inject ISnackbar Snackbar
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@inject RecaptchaService RecaptchaService
+@inject Microsoft.Extensions.Options.IOptions<RecaptchaOptions> RecaptchaOptions
+
 
 <PageTitle>Register - MangaFlow</PageTitle>
 
@@ -66,6 +72,7 @@
                             <MudText Color="Color.Error">@_fileValidationError</MudText>
                         }
                     </div>
+                    <div id="register-recaptcha" @key="@("register-recaptcha-key")" class="my-2 d-flex justify-center"></div>
                     <MudButton Variant="Variant.Filled"
                                Color="Color.Primary"
                                FullWidth="true"
@@ -80,46 +87,48 @@
                     </MudButton>
                 </MudStack>
             }
-
-            @if (!string.IsNullOrWhiteSpace(_registrationMessage))
-            {
-                <MudAlert Severity="@_registrationSeverity" Class="mt-4">
-                    @_registrationMessage
-                </MudAlert>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="GoToLogin" Class="mt-2">Go to Login</MudButton>
-            }
             else
             {
-                <MudStack Spacing="3">
-                    <MudAlert Severity="Severity.Success" Class="mb-2">
-                        A 6-digit verification code was sent to <strong>@_email</strong>. Check your inbox or the server console in development.
+                @if (!string.IsNullOrWhiteSpace(_registrationMessage))
+                {
+                    <MudAlert Severity="@_registrationSeverity" Class="mt-4">
+                        @_registrationMessage
                     </MudAlert>
-                    <MudTextField Label="6-Digit Verification Code"
-                                  @bind-Value="_otpCode"
-                                  Variant="Variant.Outlined"
-                                  MaxLength="6"
-                                  Required="true"
-                                  Disabled="_isVerifyingOtp" />
-                    <MudButton Variant="Variant.Filled"
-                               Color="Color.Primary"
-                               FullWidth="true"
-                               Size="Size.Large"
-                               Disabled="_isVerifyingOtp"
-                               OnClick="HandleVerifyOtp">
-                        @if (_isVerifyingOtp)
-                        {
-                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                        }
-                        Verify &amp; Register
-                    </MudButton>
-                    <MudButton Variant="Variant.Text"
-                               Color="Color.Secondary"
-                               FullWidth="true"
-                               Disabled="_isVerifyingOtp"
-                               OnClick="ResetRegistration">
-                        Use a different email
-                    </MudButton>
-                </MudStack>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="GoToLogin" Class="mt-2">Go to Login</MudButton>
+                }
+                else
+                {
+                    <MudStack Spacing="3">
+                        <MudAlert Severity="Severity.Success" Class="mb-2">
+                            A 6-digit verification code was sent to <strong>@_email</strong>. Check your inbox or the server console in development.
+                        </MudAlert>
+                        <MudTextField Label="6-Digit Verification Code"
+                                      @bind-Value="_otpCode"
+                                      Variant="Variant.Outlined"
+                                      MaxLength="6"
+                                      Required="true"
+                                      Disabled="_isVerifyingOtp" />
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   FullWidth="true"
+                                   Size="Size.Large"
+                                   Disabled="_isVerifyingOtp"
+                                   OnClick="HandleVerifyOtp">
+                            @if (_isVerifyingOtp)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            }
+                            Verify &amp; Register
+                        </MudButton>
+                        <MudButton Variant="Variant.Text"
+                                   Color="Color.Secondary"
+                                   FullWidth="true"
+                                   Disabled="_isVerifyingOtp"
+                                   OnClick="ResetRegistration">
+                            Use a different email
+                        </MudButton>
+                    </MudStack>
+                }
             }
 
             <MudDivider Class="my-4" />
@@ -197,6 +206,8 @@
     private string _selectedFileContentType = string.Empty;
     private byte[]? _selectedFileBytes;
     private string _fileValidationError = string.Empty;
+    private int? _recaptchaWidgetId;
+    private bool _recaptchaRendered;
 
     protected override void OnInitialized()
     {
@@ -224,25 +235,50 @@
         }
 
         _isSendingOtp = true;
-            try
+        try
+        {
+            var token = await JSRuntime.InvokeAsync<string>("recaptchaInterop.getResponse", _recaptchaWidgetId);
+            if (string.IsNullOrWhiteSpace(token))
             {
-                // Build DTO including optional portfolio
-                var request = new RegisterDto(_username, _email, _password, _roleName, _displayName,
-                    PortfolioFileName: _selectedFileName == string.Empty ? null : _selectedFileName,
-                    PortfolioContentType: string.IsNullOrEmpty(_selectedFileContentType) ? null : _selectedFileContentType,
-                    PortfolioFileBytes: _selectedFileBytes);
-
-                await AuthService.SendRegistrationOtpAsync(request);
-                _isOtpSent = true;
-                Snackbar.Add("Verification code sent. Enter the 6-digit OTP to complete registration.", Severity.Success);
+                Snackbar.Add("Please solve the reCAPTCHA challenge.", Severity.Warning);
+                _isSendingOtp = false;
+                return;
             }
+
+            var isRecaptchaValid = await RecaptchaService.VerifyTokenAsync(token);
+            if (!isRecaptchaValid)
+            {
+                Snackbar.Add("reCAPTCHA verification failed. Please try again.", Severity.Error);
+                await JSRuntime.InvokeVoidAsync("recaptchaInterop.reset", _recaptchaWidgetId);
+                _isSendingOtp = false;
+                return;
+            }
+
+            // Build DTO including optional portfolio
+            var request = new RegisterDto(_username, _email, _password, _roleName, _displayName,
+                PortfolioFileName: _selectedFileName == string.Empty ? null : _selectedFileName,
+                PortfolioContentType: string.IsNullOrEmpty(_selectedFileContentType) ? null : _selectedFileContentType,
+                PortfolioFileBytes: _selectedFileBytes);
+
+            await AuthService.SendRegistrationOtpAsync(request);
+            _isOtpSent = true;
+            Snackbar.Add("Verification code sent. Enter the 6-digit OTP to complete registration.", Severity.Success);
+        }
         catch (InvalidOperationException ex)
         {
             Snackbar.Add(ex.Message, Severity.Error);
+            if (_recaptchaWidgetId != null)
+            {
+                await JSRuntime.InvokeVoidAsync("recaptchaInterop.reset", _recaptchaWidgetId);
+            }
         }
         catch (Exception)
         {
             Snackbar.Add("Unable to send verification code. Please try again.", Severity.Error);
+            if (_recaptchaWidgetId != null)
+            {
+                await JSRuntime.InvokeVoidAsync("recaptchaInterop.reset", _recaptchaWidgetId);
+            }
         }
         finally
         {
@@ -336,10 +372,32 @@
     {
         _isOtpSent = false;
         _otpCode = string.Empty;
+        _recaptchaRendered = false;
+        _recaptchaWidgetId = null;
     }
 
     private void GoToLogin()
     {
         NavigationManager.NavigateTo("/login");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_isOtpSent)
+        {
+            try
+            {
+                var siteKey = RecaptchaOptions.Value.SiteKey;
+                _recaptchaWidgetId = await JSRuntime.InvokeAsync<int?>("recaptchaInterop.render", "register-recaptcha", siteKey);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error rendering register reCAPTCHA: " + ex.Message);
+            }
+        }
+        else
+        {
+            _recaptchaWidgetId = null;
+        }
     }
 }

@@ -1,8 +1,12 @@
 @page "/login"
 @using Microsoft.AspNetCore.WebUtilities
+@using MangaManagementSystem.Web.Options
 @inject ISnackbar Snackbar
 @inject IAuthService AuthService
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@inject Microsoft.Extensions.Options.IOptions<RecaptchaOptions> RecaptchaOptions
+
 
 <PageTitle>Login - MangaFlow</PageTitle>
 
@@ -46,6 +50,7 @@
                                    autocomplete="current-password" />
                         </div>
                         <MudText Align="Align.Right"><MudLink Href="#">Forgot Password?</MudLink></MudText>
+                        <div id="login-recaptcha" class="my-2 d-flex justify-center"></div>
                         <button type="submit" class="login-form__submit">
                             Login
                         </button>
@@ -185,10 +190,29 @@
                 "account_disabled" => "This account has been disabled. Please contact an Admin.",
                 "account_rejected" => "This account registration was rejected. Please contact an Admin for more information.",
                 "InvalidCredentials" or "invalid" => "Username/email or password is incorrect.",
+                "RecaptchaFailed" => "reCAPTCHA verification failed. Please complete the captcha.",
                 _ => "Unable to sign in. Please try again."
             };
 
-            _pageAlertSeverity = (_pageAlertMessage == "Username/email or password is incorrect.") ? Severity.Error : Severity.Warning;
+            _pageAlertSeverity = (_pageAlertMessage == "Username/email or password is incorrect." || _pageAlertMessage == "reCAPTCHA verification failed. Please complete the captcha.") ? Severity.Error : Severity.Warning;
+        }
+    }
+
+    private int? _recaptchaWidgetId;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var siteKey = RecaptchaOptions.Value.SiteKey;
+                _recaptchaWidgetId = await JSRuntime.InvokeAsync<int?>("recaptchaInterop.render", "login-recaptcha", siteKey);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error rendering login reCAPTCHA: " + ex.Message);
+            }
         }
     }
 }
