@@ -226,7 +226,7 @@ Display selected content.
 
 - Show selected `ChapterPageVersion` image/file.
 - Render saved `PageRegion` overlays when available.
-- Render annotation indicators linked to regions.
+- Render annotation indicators linked to one or more regions through annotation-region links.
 - Allow zoom/pan if feasible for MVP.
 - Show empty state if the selected page has no version yet.
 - Show read-only state when user lacks edit permission.
@@ -247,9 +247,9 @@ Display selected content.
 
 | Role | Actions |
 |---|---|
-| Mangaka | Save/adjust regions when permitted, assign selected page regions as tasks to Assistants, review task output, upload new page versions, submit chapter for review. |
-| Assistant | View assigned regions/tasks, upload task output as a page version when allowed, mark work ready for review. |
-| Tantou Editor | Add annotations, review regions/page context, request revision or approve/cancel chapter through chapter review workflow. |
+| Mangaka | Save/adjust regions when permitted, assign selected page regions as tasks to Assistants, review task output, upload new page versions, submit chapter for review. Task page context is derived from selected regions, not from a direct task `chapter_page_id`. |
+| Assistant | View assigned regions/tasks, upload task output as a page version for the same logical page derived from the linked task regions when allowed, mark work ready for review. |
+| Tantou Editor | Add annotations linked to one or more page regions, resolve annotations when permitted, review regions/page context, request revision or approve/cancel chapter through chapter review workflow. |
 | Editorial Board Member | No workspace access by default. |
 | Editorial Board Chief | No workspace access by default unless future permission grants it. |
 | Admin | No manga production actions. |
@@ -321,6 +321,7 @@ For MVP, symbolic `returnContext` is safer and easier to avoid open-redirect mis
 | Use AI/OCR translation support | Yes | Yes, in accessible workspace | Yes | No by default | No by default | No production actions |
 | Assign page-region task | Yes | No | No | No | No | No |
 | Create review annotation | Possibly, if permitted | No | Yes | No | No | No |
+| Resolve annotation | Possibly, if permitted | No | Yes | No | No | No |
 | Submit chapter for review | Yes | No | No | No | No | No |
 | Final chapter review decision | No | No | Yes | No | No | No |
 

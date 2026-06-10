@@ -543,42 +543,6 @@ audit.usp_AuditEvent_Append
 
 ---
 
-## BF-PROP-001 — Submit Series Proposal
-
-**Status:** Agreed  
-**Primary actor:** Mangaka  
-**Goal:** Submit a formal proposal version for editorial review.
-
-### Main Flow
-
-```text
-Mangaka opens proposal submission form
-→ Mangaka enters proposal title/synopsis/genre snapshot
-→ Mangaka uploads proposal file
-→ Backend uploads proposal file to Cloudinary
-→ Backend calls manga.usp_SeriesProposal_Submit
-→ Database creates FileResource with file_purpose_code = SERIES_PROPOSAL
-→ Database creates SeriesProposal row
-→ SeriesProposal status becomes UNDER_EDITORIAL_REVIEW
-→ Database writes SERIES_PROPOSAL_SUBMITTED audit event
-→ UI shows proposal submitted and waiting for editorial review
-```
-
-### Important Notes
-
-- `SeriesProposal` represents a formal submitted version.
-- Submitted snapshot fields should not be overwritten.
-- If revision is requested, submit a new proposal version later.
-- Proposal file should be stored as `FileResource`.
-- Audit procedure resolves actor role internally.
-
-### System Should Try To
-
-- Preserve submitted proposal history.
-- Avoid overwriting previous formal submissions.
-- Keep proposal file and proposal row created in one database transaction.
-
----
 
 # 5. Board Poll and Publication Frequency Flows
 
@@ -808,6 +772,334 @@ manga.usp_ChapterPageVersion_Create or equivalent page-version workflow procedur
 
 ---
 
+---
+
+## BF-PAGE-003 — Create Page Regions for a Page Version
+
+**Status:** Agreed  
+**Primary actor:** Authorized Page Workspace User  
+**Goal:** Save one or more manual or AI-suggested page regions for a specific `ChapterPageVersion`.
+
+### Main Flow
+
+```text
+User opens the chapter/page workspace
+→ User selects a page version
+→ User draws one or more manual regions or accepts AI-suggested regions
+→ UI prepares region JSON as either one object or an array of objects
+→ Backend validates the selected chapter_page_version_id and region request shape
+→ Backend calls manga.usp_PageRegion_Create
+→ Database verifies actor is an ACTIVE user and active SeriesContributor for the series that owns the selected page version
+→ Database normalizes single-object JSON into an array when needed
+→ Database parses region fields from JSON
+→ Database inserts manga.PageRegion rows linked to the selected chapter_page_version_id
+→ Database returns created page_region_id values as JSON
+→ Database writes PAGE_REGIONS_CREATED audit event
+→ UI can use the returned page_region_id values for annotation, task assignment, segmentation display, or later workspace actions
+```
+
+### Expected Region JSON
+
+Single region input is allowed:
+
+```json
+{
+  "type_code": "PANEL",
+  "region_label": "Panel 1",
+  "x": 10.00,
+  "y": 20.00,
+  "width": 300.00,
+  "height": 200.00,
+  "confidence_score": 0.9123,
+  "source_type": "AI",
+  "original_text": null
+}
+```
+
+Batch region input is also allowed:
+
+```json
+[
+  {
+    "type_code": "PANEL",
+    "region_label": "Panel 1",
+    "x": 10.00,
+    "y": 20.00,
+    "width": 300.00,
+    "height": 200.00,
+    "confidence_score": 0.9123,
+    "source_type": "AI",
+    "original_text": null
+  },
+  {
+    "type_code": "SPEECH_BUBBLE",
+    "region_label": "Bubble 1",
+    "x": 350.00,
+    "y": 60.00,
+    "width": 120.00,
+    "height": 90.00,
+    "confidence_score": 0.8750,
+    "source_type": "AI",
+    "original_text": "こんにちは"
+  }
+]
+```
+
+### Database Procedure(s)
+
+```text
+manga.usp_PageRegion_Create
+audit.usp_AuditEvent_Append
+```
+
+### Important Notes
+
+- `manga.usp_PageRegion_Create` is the main PageRegion creation procedure for both singular and bulk creation.
+- The procedure accepts either one JSON object or a JSON array of region objects.
+- The procedure returns created IDs through `@created_page_region_ids_json`.
+- The preferred output shape for C# workflow orchestration is a plain JSON array of GUID strings.
+- `PageRegion` is linked directly to `ChapterPageVersion`.
+- `PageRegion` should be used for saved manual regions and saved/accepted AI-suggested regions.
+- Temporary AI suggestions that the user has not accepted do not need to be saved as `PageRegion`.
+- The procedure should check actor permission and ownership context because those are cross-table business rules.
+- The table constraints should enforce simple field rules such as valid region type, valid source type, positive dimensions, confidence score rules, and foreign keys.
+- `source_type = AI` means the region came from an AI suggestion. If an AI region is manually adjusted later, the system should update it as manual according to the PageRegion editing rules.
+
+### System Should Try To
+
+- Let the same stored procedure handle one region or many regions.
+- Keep region creation consistent for manual drawing, accepted AI segmentation output, annotation support, and task support.
+- Avoid saving duplicate or temporary AI suggestions unless the user chooses to keep them.
+- Return created IDs in a format that is easy for C# to merge with existing region IDs.
+- Keep audit detail focused on the page version and created region IDs/count.
+
+---
+
+## BF-PAGE-004 — Create Page Annotation Linked to Existing or Newly Created Page Regions
+
+**Status:** Agreed  
+**Primary actor:** Authorized Page Workspace User  
+**Goal:** Create a page annotation/comment and link it to one or more `PageRegion` records.
+
+### Main Flow
+
+```text
+User opens the chapter/page workspace
+→ User selects one or more existing saved PageRegion records and/or draws new unsaved regions
+→ User enters issue type and annotation text
+→ Backend separates existing_page_region_ids from new region objects
+→ Backend starts one SQL transaction
+→ If new unsaved regions exist:
+    Backend calls manga.usp_PageRegion_Create with chapter_page_version_id and regions_json
+    Database creates PageRegion rows and returns created_page_region_ids_json
+    Backend reads the returned created page_region_id values
+→ Backend merges existing_page_region_ids with newly created page_region_id values
+→ Backend removes duplicate IDs before sending the final region list
+→ Backend calls manga.usp_ChapterPageAnnotation_Create with actor_user_id, issue_type_code, annotation_text, and final page_region_ids_json
+→ Database validates page_region_ids_json
+→ Database verifies all referenced PageRegion rows exist
+→ Database verifies all referenced PageRegion rows belong to the same ChapterPageVersion
+→ Database verifies the actor is allowed to annotate the owning series/page workspace
+→ Database creates one manga.ChapterPageAnnotation row
+→ Database creates one or more manga.ChapterPageAnnotationRegion rows
+→ Database writes CHAPTER_PAGE_ANNOTATION_CREATED audit event
+→ Backend commits the SQL transaction
+→ UI shows the annotation marker/comment linked to all selected regions
+```
+
+### Existing Region ID JSON
+
+```json
+[
+  "A2F98C3A-CE7D-44BD-85F2-B7C1525B4C41",
+  "46D8D55C-1174-4DA8-8E7E-6E49B5D6E53A"
+]
+```
+
+### Database Procedure(s)
+
+```text
+manga.usp_PageRegion_Create
+manga.usp_ChapterPageAnnotation_Create
+audit.usp_AuditEvent_Append
+```
+
+### Database Tables
+
+```text
+manga.ChapterPageAnnotation
+manga.ChapterPageAnnotationRegion
+manga.PageRegion
+manga.ChapterPageVersion
+```
+
+### Important Notes
+
+- `ChapterPageAnnotation` stores the annotation header: issue type, author, text, resolution fields, and created timestamp.
+- `ChapterPageAnnotation` no longer stores `page_region_id` directly.
+- `ChapterPageAnnotationRegion` links one annotation to one or more `PageRegion` records.
+- One annotation may reference multiple regions, such as several speech bubbles with the same typesetting issue.
+- Each annotation must link to at least one `PageRegion`.
+- All regions linked to the same annotation must belong to the same `ChapterPageVersion`.
+- The annotation does not need its own direct `chapter_page_version_id` because the page-version context is derived through `ChapterPageAnnotationRegion → PageRegion → ChapterPageVersion`.
+- The annotation does not store direct coordinates; coordinates remain in `PageRegion`.
+- Existing saved regions and newly created regions may be mixed in one annotation workflow.
+- C# should own the outer transaction for the mixed case so newly created PageRegion rows can be rolled back if annotation creation/linking fails.
+- The stored procedures use the standard transaction pattern, so they should not commit when called inside an existing C# transaction.
+- The annotation creation procedure should still validate cross-table rules even if C# already checked the IDs.
+- The `issue_type_code` allowed values are enforced by the `ChapterPageAnnotation` table constraint.
+- `ChapterPageAnnotationRegion` primary key prevents duplicate annotation-region pairs.
+
+### System Should Try To
+
+- Keep annotation creation easy from the workspace UI.
+- Support comments on one region or many regions.
+- Support mixed workflows where some regions already exist and some are created during annotation.
+- Keep page-version traceability through linked `PageRegion` records.
+- Keep annotation text separate from region geometry.
+- Roll back both new regions and the annotation if any part of the mixed workflow fails.
+
+---
+
+## BF-PAGE-005 — Resolve Page Annotation
+
+**Status:** Agreed  
+**Primary actor:** Authorized Page Workspace User / reviewer with permission  
+**Goal:** Mark an annotation as handled without deleting the original feedback record.
+
+### Main Flow
+
+```text
+User opens the chapter/page workspace
+→ User reviews an unresolved annotation
+→ Related work is corrected, usually through a newer ChapterPageVersion or accepted task output for the same logical page derived from linked regions
+→ Authorized resolver confirms the issue has been handled
+→ Backend calls the annotation resolve workflow procedure
+→ Database verifies annotation exists and is not already resolved
+→ Database verifies resolver is active and has permission for the owning page workspace through linked PageRegion records
+→ Database sets resolved_at_utc = SYSUTCDATETIME()
+→ Database sets resolved_by_user_id = resolver user ID
+→ Database writes CHAPTER_PAGE_ANNOTATION_RESOLVED audit event
+→ UI marks the annotation as resolved while preserving it for history
+```
+
+### Database Procedure(s)
+
+```text
+manga.usp_ChapterPageAnnotation_Resolve
+audit.usp_AuditEvent_Append
+```
+
+### Important Notes
+
+- `resolved_at_utc` and `resolved_by_user_id` work as a pair.
+- If the annotation is unresolved, both resolution fields are `NULL`.
+- If the annotation is resolved, both resolution fields must be non-null.
+- The table constraint `ck_chapter_page_annotation_resolved_pair` enforces that pair rule.
+- Resolving an annotation does not delete the annotation.
+- Resolved annotations remain useful for traceability, review history, and explaining why a later page version was created.
+- Many visual/content issues should normally be resolved only after a corrected page version or accepted output exists.
+- Some annotations may be resolved without a new page version if the reviewer decides the feedback is no longer applicable, duplicated, or intentionally accepted.
+
+### System Should Try To
+
+- Make unresolved feedback visible and actionable.
+- Preserve resolved feedback as workflow history.
+- Avoid deleting annotation records just because the issue was fixed.
+- Keep resolution accountable by recording who resolved it and when.
+
+
+
+---
+
+## BF-PAGE-006 — Create Chapter Page Task Linked to Page Regions
+
+**Status:** Agreed  
+**Primary actor:** Mangaka / authorized task creator  
+**Goal:** Create a page task for an Assistant or contributor and link the task to one or more `PageRegion` records.
+
+### Main Flow
+
+```text
+User opens the chapter/page workspace
+→ User selects one or more existing saved PageRegion records for the task target
+→ If the task applies to the whole page, UI/backend uses a full-page PageRegion for the selected ChapterPageVersion
+→ User enters assigned user, task type, title, description, priority, due date, and compensation amount
+→ Backend prepares page_region_ids_json as a JSON array of PageRegion IDs
+→ Backend calls manga.usp_ChapterPageTask_Create
+→ Database validates page_region_ids_json is a valid JSON array
+→ Database verifies all referenced PageRegion rows exist
+→ Database verifies all referenced PageRegion rows belong to the same ChapterPageVersion
+→ Database derives the owning series through PageRegion → ChapterPageVersion → ChapterPage → Chapter
+→ Database verifies the actor is an active contributor for the owning series
+→ Database verifies the assigned user is ACTIVE and an active contributor for the owning series
+→ Database creates one manga.ChapterPageTask row
+→ Database creates one or more manga.ChapterPageTaskRegion rows
+→ Database writes CHAPTER_PAGE_TASK_CREATED audit event
+→ UI shows the new task with its linked target regions
+```
+
+### Page Region ID JSON
+
+A task must always provide at least one page region ID:
+
+```json
+[
+  "A2F98C3A-CE7D-44BD-85F2-B7C1525B4C41"
+]
+```
+
+Multiple linked regions are allowed:
+
+```json
+[
+  "A2F98C3A-CE7D-44BD-85F2-B7C1525B4C41",
+  "46D8D55C-1174-4DA8-8E7E-6E49B5D6E53A"
+]
+```
+
+### Database Procedure(s)
+
+```text
+manga.usp_ChapterPageTask_Create
+audit.usp_AuditEvent_Append
+```
+
+### Database Tables
+
+```text
+manga.ChapterPageTask
+manga.ChapterPageTaskRegion
+manga.PageRegion
+manga.ChapterPageVersion
+```
+
+### Important Notes
+
+- `ChapterPageTask` stores the task header: assigned user, task type, status, title, description, priority, due date, compensation amount, completion output, creator, and timestamps.
+- `ChapterPageTask` no longer stores `chapter_page_id` directly.
+- `ChapterPageTaskRegion` links one task to one or more `PageRegion` records.
+- Each task must link to at least one `PageRegion`.
+- A whole-page task must still link to a `PageRegion`; the system should create or reuse a full-page region covering the selected `ChapterPageVersion`.
+- All regions linked to the same task must belong to the same `ChapterPageVersion`.
+- The task page context is derived through `ChapterPageTaskRegion → PageRegion → ChapterPageVersion → ChapterPage`.
+- The task owning series is derived through `PageRegion → ChapterPageVersion → ChapterPage → Chapter → Series`.
+- The actor creating the task must be an active contributor for the owning series.
+- The assigned user must be an `ACTIVE` account and an active contributor for the owning series.
+- `compensation_amount` is required, must be non-negative, and should use `0.00` when no compensation is paid.
+- Compensation amount is task metadata only and does not introduce payroll, salary calculation, payment processing, or accounting features.
+- The `type_code`, `status_code`, `priority_level`, compensation range, and foreign keys should be enforced by table constraints.
+- When the task later reaches `UNDER_REVIEW` or `COMPLETED`, the completed page version must be checked against the same logical page derived from the task's linked regions.
+
+### System Should Try To
+
+- Keep task creation tied to visible page regions instead of hidden page-level assumptions.
+- Support one-region, multi-region, and whole-page task targets consistently.
+- Avoid storing duplicate page context directly on `ChapterPageTask` when it can be derived through linked regions.
+- Keep permission checks based on the owning series derived from the selected regions.
+- Keep the task assignment workflow traceable through audit.
+
+
 # 7. Workflow Template for Future Additions
 
 Use this template when adding new flows.
@@ -858,8 +1150,7 @@ Add detailed flows for these when the team finalizes them:
 - Chapter creation flow
 - Chapter page upload/versioning flow
 - General page modification temporary download/save-as-version flow
-- Page region AI/manual segmentation flow
-- Page annotation flow
+- AI suggestion generation before saving PageRegion records
 - Assistant task assignment and submission flow
 - Chapter editorial review flow
 - Board vote flow

@@ -1410,8 +1410,6 @@ BEGIN
     END CATCH;
 END;
 GO
-USE MangaManagementDB;
-GO
 CREATE OR ALTER PROCEDURE manga.usp_Series_Create
     @actor_user_id UNIQUEIDENTIFIER,
 
@@ -1590,6 +1588,791 @@ BEGIN
             @actor_user_id = @actor_user_id,
             @action_code = N'SERIES_CREATED',
             @entity_type = N'Series',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH;
+END;
+GO
+CREATE OR ALTER PROCEDURE manga.usp_PageRegion_Create
+    @actor_user_id UNIQUEIDENTIFIER,
+    @chapter_page_version_id UNIQUEIDENTIFIER,
+    @regions_json NVARCHAR(MAX),
+    @created_page_region_ids_json NVARCHAR(MAX) OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        SET @created_page_region_ids_json = N'[]';
+
+        --------------------------------------------------------------------
+        -- 1. Permission check
+        -- Actor must be an active contributor of the series that owns the
+        -- selected chapter_page_version_id.
+        --------------------------------------------------------------------
+        IF NOT EXISTS
+        (
+             SELECT 1
+    FROM auth.Users u
+    INNER JOIN manga.ChapterPageVersion cpv
+        ON cpv.chapter_page_version_id = @chapter_page_version_id
+    INNER JOIN manga.ChapterPage cp
+        ON cp.chapter_page_id = cpv.chapter_page_id
+    INNER JOIN manga.Chapter ch
+        ON ch.chapter_id = cp.chapter_id
+    INNER JOIN manga.SeriesContributor sc
+        ON sc.series_id = ch.series_id
+       AND sc.user_id = u.user_id
+    WHERE u.user_id = @actor_user_id
+      AND u.status_code = N'ACTIVE'
+      AND sc.end_date IS NULL
+        )
+        BEGIN
+            ;THROW 57411, 'User is not an active contributor for the series that owns this page version.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 2. Validate JSON input
+        -- Accept either:
+        -- - one JSON object
+        -- - a JSON array of objects
+        --------------------------------------------------------------------
+        IF @regions_json IS NULL OR LTRIM(RTRIM(@regions_json)) = N''
+        BEGIN
+            ;THROW 57412, 'regions_json is required.', 1;
+        END;
+
+        IF ISJSON(@regions_json) <> 1
+        BEGIN
+            ;THROW 57413, 'regions_json must be valid JSON.', 1;
+        END;
+
+        DECLARE @trimmed_json NVARCHAR(MAX) = LTRIM(RTRIM(@regions_json));
+        DECLARE @normalized_regions_json NVARCHAR(MAX);
+
+        IF LEFT(@trimmed_json, 1) = N'['
+        BEGIN
+            SET @normalized_regions_json = @trimmed_json;
+        END;
+        ELSE IF LEFT(@trimmed_json, 1) = N'{'
+        BEGIN
+            SET @normalized_regions_json = N'[' + @trimmed_json + N']';
+        END;
+        ELSE
+        BEGIN
+            ;THROW 57414, 'regions_json must be a JSON object or JSON array.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 3. Parse JSON
+        --------------------------------------------------------------------
+        DECLARE @parsed_regions TABLE
+        (
+            type_code NVARCHAR(80) NULL,
+            region_label NVARCHAR(100) NULL,
+            x DECIMAL(10, 2) NULL,
+            y DECIMAL(10, 2) NULL,
+            width DECIMAL(10, 2) NULL,
+            height DECIMAL(10, 2) NULL,
+            confidence_score DECIMAL(5, 4) NULL,
+            source_type NVARCHAR(20) NULL,
+            original_text NVARCHAR(MAX) NULL
+        );
+
+        INSERT INTO @parsed_regions
+        (
+            type_code,
+            region_label,
+            x,
+            y,
+            width,
+            height,
+            confidence_score,
+            source_type,
+            original_text
+        )
+        SELECT
+            p.type_code,
+            p.region_label,
+            p.x,
+            p.y,
+            p.width,
+            p.height,
+            p.confidence_score,
+            p.source_type,
+            p.original_text
+        FROM OPENJSON(@normalized_regions_json) j
+        CROSS APPLY OPENJSON(j.value)
+        WITH
+        (
+            type_code NVARCHAR(80) '$.type_code',
+            region_label NVARCHAR(100) '$.region_label',
+            x DECIMAL(10, 2) '$.x',
+            y DECIMAL(10, 2) '$.y',
+            width DECIMAL(10, 2) '$.width',
+            height DECIMAL(10, 2) '$.height',
+            confidence_score DECIMAL(5, 4) '$.confidence_score',
+            source_type NVARCHAR(20) '$.source_type',
+            original_text NVARCHAR(MAX) '$.original_text'
+        ) p;
+
+        IF NOT EXISTS (SELECT 1 FROM @parsed_regions)
+        BEGIN
+            ;THROW 57415, 'regions_json must contain at least one region object.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 4. Insert PageRegion rows
+        --
+        -- Let manga.PageRegion constraints enforce:
+        -- - valid chapter_page_version_id FK
+        -- - valid type_code
+        -- - valid source_type
+        -- - width > 0 and height > 0
+        -- - confidence_score range
+        -- - AI requires confidence_score
+        -- - MANUAL requires confidence_score NULL
+        --------------------------------------------------------------------
+        DECLARE @created_regions TABLE
+        (
+            page_region_id UNIQUEIDENTIFIER NOT NULL
+        );
+
+        INSERT INTO manga.PageRegion
+        (
+            chapter_page_version_id,
+            type_code,
+            region_label,
+            x,
+            y,
+            width,
+            height,
+            confidence_score,
+            source_type,
+            original_text,
+            created_by_user_id
+        )
+        OUTPUT inserted.page_region_id
+        INTO @created_regions(page_region_id)
+        SELECT
+            @chapter_page_version_id,
+            pr.type_code,
+            pr.region_label,
+            pr.x,
+            pr.y,
+            pr.width,
+            pr.height,
+            pr.confidence_score,
+            pr.source_type,
+            pr.original_text,
+            @actor_user_id
+        FROM @parsed_regions pr;
+
+        --------------------------------------------------------------------
+        -- 5. Output created IDs as JSON
+        --
+        -- Shape:
+        -- [
+        --   { "page_region_id": "..." },
+        --   { "page_region_id": "..." }
+        -- ]
+        --------------------------------------------------------------------
+        SET @created_page_region_ids_json =
+(
+    SELECT
+        N'[' + STRING_AGG(
+            N'"' + CONVERT(NVARCHAR(36), page_region_id) + N'"',
+            N','
+        ) + N']'
+    FROM @created_regions
+);
+        --------------------------------------------------------------------
+        -- 6. Audit one create event
+        --------------------------------------------------------------------
+        DECLARE @audit_entity_id NVARCHAR(100) =
+            CONVERT(NVARCHAR(36), @chapter_page_version_id);
+
+        DECLARE @detail_json NVARCHAR(MAX) =
+        (
+            SELECT
+                @chapter_page_version_id AS chapter_page_version_id,
+                JSON_QUERY(@created_page_region_ids_json) AS created_page_regions
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @actor_user_id,
+            @action_code = N'PAGE_REGIONS_CREATED',
+            @entity_type = N'ChapterPageVersion',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH;
+END;
+GO
+CREATE OR ALTER PROCEDURE manga.usp_ChapterPageAnnotation_Create
+    @actor_user_id UNIQUEIDENTIFIER,
+    @page_region_ids_json NVARCHAR(MAX),
+    @issue_type_code NVARCHAR(80),
+    @annotation_text NVARCHAR(MAX),
+    @new_chapter_page_annotation_id UNIQUEIDENTIFIER OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+       IF ISJSON(@page_region_ids_json, ARRAY) <> 1
+BEGIN
+    ;THROW 57901, 'page_region_ids_json must be a valid JSON array of page region IDs.', 1;
+END;
+
+DECLARE @parsed_page_region_ids TABLE
+(
+    page_region_id UNIQUEIDENTIFIER NULL
+);
+
+INSERT INTO @parsed_page_region_ids
+(
+    page_region_id
+)
+SELECT DISTINCT
+    TRY_CONVERT(UNIQUEIDENTIFIER, [value])
+FROM OPENJSON(@page_region_ids_json);
+
+IF EXISTS
+(
+    SELECT 1
+    FROM
+    (
+        SELECT
+            COUNT(*) AS parsed_count,
+            COUNT(pr.page_region_id) AS existing_region_count,
+            COUNT(DISTINCT pr.chapter_page_version_id) AS page_version_count
+        FROM @parsed_page_region_ids parsed
+        LEFT JOIN manga.PageRegion pr
+            ON pr.page_region_id = parsed.page_region_id
+    ) region_check
+    WHERE region_check.existing_region_count <> region_check.parsed_count
+       OR region_check.page_version_count <> 1
+)
+BEGIN
+    ;THROW 57902, 'All page regions must exist and belong to the same chapter page version.', 1;
+END;
+
+        --------------------------------------------------------------------
+        DECLARE @owning_series_id UNIQUEIDENTIFIER;
+
+        SELECT TOP (1)
+            @owning_series_id = ch.series_id
+        FROM @parsed_page_region_ids parsed
+        INNER JOIN manga.PageRegion pr
+            ON pr.page_region_id = parsed.page_region_id
+        INNER JOIN manga.ChapterPageVersion cpv
+            ON cpv.chapter_page_version_id = pr.chapter_page_version_id
+        INNER JOIN manga.ChapterPage cp
+            ON cp.chapter_page_id = cpv.chapter_page_id
+        INNER JOIN manga.Chapter ch
+            ON ch.chapter_id = cp.chapter_id;
+
+        --------------------------------------------------------------------
+        -- 4. Actor must be active contributor for the owning series.
+        --------------------------------------------------------------------
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM manga.SeriesContributor sc
+            WHERE sc.series_id = @owning_series_id
+              AND sc.user_id = @actor_user_id
+              AND sc.end_date IS NULL
+        )
+        BEGIN
+            ;THROW 57504, 'User is not an active contributor for the series that owns these page regions.', 1;
+        END;
+
+
+        --------------------------------------------------------------------
+        -- 4. Create annotation.
+        --
+        -- Let table constraints enforce:
+        -- - valid issue_type_code
+        -- - annotated_by_user_id FK
+        --------------------------------------------------------------------
+        DECLARE @created_annotation TABLE
+        (
+            chapter_page_annotation_id UNIQUEIDENTIFIER NOT NULL
+        );
+
+        INSERT INTO manga.ChapterPageAnnotation
+        (
+            issue_type_code,
+            annotated_by_user_id,
+            annotation_text
+        )
+        OUTPUT inserted.chapter_page_annotation_id
+        INTO @created_annotation(chapter_page_annotation_id)
+        VALUES
+        (
+            @issue_type_code,
+            @actor_user_id,
+            @annotation_text
+        );
+
+        SELECT
+            @new_chapter_page_annotation_id = chapter_page_annotation_id
+        FROM @created_annotation;
+
+        --------------------------------------------------------------------
+        -- 5. Link annotation to page regions.
+        --
+        -- Let link-table constraints enforce:
+        -- - valid annotation FK
+        -- - valid page region FK
+        -- - no duplicate annotation-region pair
+        --------------------------------------------------------------------
+        INSERT INTO manga.ChapterPageAnnotationRegion
+        (
+            chapter_page_annotation_id,
+            page_region_id
+        )
+        SELECT
+            @new_chapter_page_annotation_id,
+            parsed.page_region_id
+        FROM @parsed_page_region_ids parsed;
+
+        --------------------------------------------------------------------
+        -- 6. Audit.
+        --------------------------------------------------------------------
+        DECLARE @audit_entity_id NVARCHAR(100) =
+            CONVERT(NVARCHAR(36), @new_chapter_page_annotation_id);
+
+        DECLARE @detail_json NVARCHAR(MAX) =
+        (
+            SELECT
+                @issue_type_code AS issue_type_code,
+                JSON_QUERY(@page_region_ids_json) AS page_region_ids
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @actor_user_id,
+            @action_code = N'CHAPTER_PAGE_ANNOTATION_CREATED',
+            @entity_type = N'ChapterPageAnnotation',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH;
+END;
+GO
+CREATE OR ALTER PROCEDURE manga.usp_ChapterPageAnnotation_Resolve
+    @actor_user_id UNIQUEIDENTIFIER,
+    @chapter_page_annotation_id UNIQUEIDENTIFIER,
+    @resolution_note NVARCHAR(500) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+    DECLARE @lock_result INT;
+    DECLARE @resolved_at_utc DATETIME2(0) = SYSUTCDATETIME();
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+        DECLARE @lock_resource NVARCHAR(200) =
+            N'chapter_page_annotation_resolve_' +
+            CONVERT(NVARCHAR(36), @chapter_page_annotation_id);
+
+        EXEC @lock_result = sys.sp_getapplock
+            @Resource = @lock_resource,
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 10000;
+
+        IF @lock_result < 0
+        BEGIN
+            ;THROW 57803, 'Could not acquire annotation resolve lock.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 4. Prevent resolving an already resolved annotation
+        --------------------------------------------------------------------
+        IF EXISTS
+        (
+            SELECT 1
+            FROM manga.ChapterPageAnnotation cpa
+            WHERE cpa.chapter_page_annotation_id = @chapter_page_annotation_id
+              AND cpa.resolved_at_utc IS NOT NULL
+              AND cpa.resolved_by_user_id IS NOT NULL
+        )
+        BEGIN
+            ;THROW 57804, 'Chapter page annotation is already resolved.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 7. Actor must be active contributor for the owning series
+        --------------------------------------------------------------------
+        IF NOT EXISTS
+(
+    SELECT 1
+    FROM manga.ChapterPageAnnotationRegion cpar
+    INNER JOIN manga.PageRegion pr
+        ON pr.page_region_id = cpar.page_region_id
+    INNER JOIN manga.ChapterPageVersion cpv
+        ON cpv.chapter_page_version_id = pr.chapter_page_version_id
+    INNER JOIN manga.ChapterPage cp
+        ON cp.chapter_page_id = cpv.chapter_page_id
+    INNER JOIN manga.Chapter ch
+        ON ch.chapter_id = cp.chapter_id
+    INNER JOIN manga.SeriesContributor sc
+        ON sc.series_id = ch.series_id
+    WHERE cpar.chapter_page_annotation_id = @chapter_page_annotation_id
+      AND sc.user_id = @actor_user_id
+      AND sc.end_date IS NULL
+)
+BEGIN
+    ;THROW 57807, 'User is not an active contributor for the series that owns this annotation.', 1;
+END;
+
+        --------------------------------------------------------------------
+        -- 8. Resolve annotation
+        --------------------------------------------------------------------
+        UPDATE manga.ChapterPageAnnotation
+        SET
+            resolved_at_utc = @resolved_at_utc,
+            resolved_by_user_id = @actor_user_id
+        WHERE chapter_page_annotation_id = @chapter_page_annotation_id
+          AND resolved_at_utc IS NULL
+          AND resolved_by_user_id IS NULL;
+
+        IF @@ROWCOUNT <> 1
+        BEGIN
+            ;THROW 57808, 'Failed to resolve chapter page annotation.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 9. Audit
+        --------------------------------------------------------------------
+        DECLARE @audit_entity_id NVARCHAR(100) =
+            CONVERT(NVARCHAR(36), @chapter_page_annotation_id);
+
+        DECLARE @detail_json NVARCHAR(MAX) =
+        (
+            SELECT
+                @chapter_page_annotation_id AS chapter_page_annotation_id,
+                @resolved_at_utc AS resolved_at_utc,
+                @resolution_note AS resolution_note,
+                cpa.issue_type_code AS issue_type_code,
+                (
+                    SELECT TOP (1)
+                        pr.chapter_page_version_id
+                    FROM manga.ChapterPageAnnotationRegion cpar
+                    INNER JOIN manga.PageRegion pr
+                        ON pr.page_region_id = cpar.page_region_id
+                    WHERE cpar.chapter_page_annotation_id = @chapter_page_annotation_id
+                ) AS chapter_page_version_id,
+                JSON_QUERY
+                (
+                    (
+                        SELECT
+                            cpar.page_region_id
+                        FROM manga.ChapterPageAnnotationRegion cpar
+                        WHERE cpar.chapter_page_annotation_id = @chapter_page_annotation_id
+                        FOR JSON PATH
+                    )
+                ) AS page_regions
+            FROM manga.ChapterPageAnnotation cpa
+            WHERE cpa.chapter_page_annotation_id = @chapter_page_annotation_id
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @actor_user_id,
+            @action_code = N'CHAPTER_PAGE_ANNOTATION_RESOLVED',
+            @entity_type = N'ChapterPageAnnotation',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
+
+        --------------------------------------------------------------------
+        -- 10. Return resolved annotation summary
+        --------------------------------------------------------------------
+        SELECT
+            cpa.chapter_page_annotation_id,
+            cpa.issue_type_code,
+            cpa.annotation_text,
+            cpa.resolved_at_utc,
+            cpa.resolved_by_user_id
+        FROM manga.ChapterPageAnnotation cpa
+        WHERE cpa.chapter_page_annotation_id = @chapter_page_annotation_id;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH;
+END;
+GO
+CREATE OR ALTER PROCEDURE manga.usp_ChapterPageTask_Create
+    @actor_user_id UNIQUEIDENTIFIER,
+    @assigned_to_user_id UNIQUEIDENTIFIER,
+
+    @type_code NVARCHAR(50),
+    @task_title NVARCHAR(200),
+    @task_description NVARCHAR(MAX),
+    @priority_level TINYINT = 3,
+    @due_at_utc DATETIME2(0),
+    @compensation_amount DECIMAL(12, 2) = 0,
+
+    @page_region_ids_json NVARCHAR(MAX),
+
+    @new_chapter_page_task_id UNIQUEIDENTIFIER OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        --------------------------------------------------------------------
+-- 1. Validate JSON array and parse region IDs.
+--------------------------------------------------------------------
+IF ISJSON(@page_region_ids_json, ARRAY) <> 1
+BEGIN
+    ;THROW 57901, 'page_region_ids_json must be a valid JSON array of page region IDs.', 1;
+END;
+
+DECLARE @parsed_page_region_ids TABLE
+(
+    page_region_id UNIQUEIDENTIFIER NULL
+);
+
+INSERT INTO @parsed_page_region_ids
+(
+    page_region_id
+)
+SELECT DISTINCT
+    TRY_CONVERT(UNIQUEIDENTIFIER, [value])
+FROM OPENJSON(@page_region_ids_json);
+
+       --------------------------------------------------------------------
+-- 2. All linked regions must exist and belong to one same page version.
+--------------------------------------------------------------------
+IF EXISTS
+(
+    SELECT 1
+    FROM
+    (
+        SELECT
+            COUNT(*) AS parsed_count,
+            COUNT(pr.page_region_id) AS existing_region_count,
+            COUNT(DISTINCT pr.chapter_page_version_id) AS page_version_count
+        FROM @parsed_page_region_ids parsed
+        LEFT JOIN manga.PageRegion pr
+            ON pr.page_region_id = parsed.page_region_id
+    ) region_check
+    WHERE region_check.existing_region_count <> region_check.parsed_count
+       OR region_check.page_version_count <> 1
+)
+BEGIN
+    ;THROW 57902, 'All page regions must exist and belong to the same chapter page version.', 1;
+END;
+
+ --------------------------------------------------------------------
+        -- 3. Derive owning series from the validated page regions.
+        --------------------------------------------------------------------
+        DECLARE @owning_series_id UNIQUEIDENTIFIER;
+
+        SELECT TOP (1)
+            @owning_series_id = ch.series_id
+        FROM @parsed_page_region_ids parsed
+        INNER JOIN manga.PageRegion pr
+            ON pr.page_region_id = parsed.page_region_id
+        INNER JOIN manga.ChapterPageVersion cpv
+            ON cpv.chapter_page_version_id = pr.chapter_page_version_id
+        INNER JOIN manga.ChapterPage cp
+            ON cp.chapter_page_id = cpv.chapter_page_id
+        INNER JOIN manga.Chapter ch
+            ON ch.chapter_id = cp.chapter_id;
+
+--------------------------------------------------------------------
+-- 4. Actor and assigned user must both be active contributors
+-- for the owning series.
+--------------------------------------------------------------------
+IF NOT EXISTS
+(
+    SELECT 1
+    FROM manga.SeriesContributor sc
+    WHERE sc.series_id = @owning_series_id
+      AND sc.user_id = @actor_user_id
+      AND sc.end_date IS NULL
+)
+OR NOT EXISTS
+(
+    SELECT 1
+    FROM manga.SeriesContributor sc
+    INNER JOIN auth.Users u
+        ON u.user_id = sc.user_id
+    WHERE sc.series_id = @owning_series_id
+      AND sc.user_id = @assigned_to_user_id
+      AND sc.end_date IS NULL
+      AND u.status_code = N'ACTIVE'
+)
+BEGIN
+    ;THROW 57908, 'Actor and assigned user must both be active contributors for the series that owns these page regions.', 1;
+END;
+        --------------------------------------------------------------------
+        -- 5. Create task.
+        --
+        -- Let table constraints enforce:
+        -- - valid assigned_to_user_id FK
+        -- - valid type_code
+        -- - valid priority_level
+        -- - compensation_amount >= 0
+        -- - due_at_utc NOT NULL
+        --------------------------------------------------------------------
+        DECLARE @created_task TABLE
+        (
+            chapter_page_task_id UNIQUEIDENTIFIER NOT NULL
+        );
+
+        INSERT INTO manga.ChapterPageTask
+        (
+            assigned_to_user_id,
+            type_code,
+            task_title,
+            task_description,
+            priority_level,
+            due_at_utc,
+            compensation_amount,
+            created_by_user_id
+        )
+        OUTPUT inserted.chapter_page_task_id
+        INTO @created_task(chapter_page_task_id)
+        VALUES
+        (
+            @assigned_to_user_id,
+            @type_code,
+            @task_title,
+            @task_description,
+            @priority_level,
+            @due_at_utc,
+            @compensation_amount,
+            @actor_user_id
+        );
+
+        SELECT
+            @new_chapter_page_task_id = chapter_page_task_id
+        FROM @created_task;
+
+        --------------------------------------------------------------------
+        -- 6. Link task to required page regions.
+        --------------------------------------------------------------------
+        INSERT INTO manga.ChapterPageTaskRegion
+        (
+            chapter_page_task_id,
+            page_region_id
+        )
+        SELECT
+            @new_chapter_page_task_id,
+            parsed.page_region_id
+        FROM @parsed_page_region_ids parsed;
+
+        --------------------------------------------------------------------
+        -- 7. Audit.
+        --------------------------------------------------------------------
+        DECLARE @audit_entity_id NVARCHAR(100) =
+            CONVERT(NVARCHAR(36), @new_chapter_page_task_id);
+
+        DECLARE @detail_json NVARCHAR(MAX) =
+        (
+            SELECT
+                @assigned_to_user_id AS assigned_to_user_id,
+                @type_code AS type_code,
+                @task_title AS task_title,
+                @priority_level AS priority_level,
+                @due_at_utc AS due_at_utc,
+                @compensation_amount AS compensation_amount,
+                JSON_QUERY(@page_region_ids_json) AS page_region_ids
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @actor_user_id,
+            @action_code = N'CHAPTER_PAGE_TASK_CREATED',
+            @entity_type = N'ChapterPageTask',
             @entity_id = @audit_entity_id,
             @detail_json = @detail_json;
 
