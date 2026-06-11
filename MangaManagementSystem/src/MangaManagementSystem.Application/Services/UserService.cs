@@ -14,6 +14,7 @@ namespace MangaManagementSystem.Application.Services
         private const string StatusPendingApproval = "PENDING_APPROVAL";
         private const string StatusActive = "ACTIVE";
         private const string StatusDisabled = "DISABLED";
+
         private static readonly Guid MinRoleId = new Guid("00000000-0000-0000-0000-000000000001");
         private static readonly Guid MaxRoleId = new Guid("00000000-0000-0000-0000-000000000005");
 
@@ -31,12 +32,17 @@ namespace MangaManagementSystem.Application.Services
             var role = await _unitOfWork.Roles.GetByIdAsync(dto.RoleId);
             var roleCode = role?.RoleName ?? string.Empty;
             var passwordHash = _passwordHasher.HashPassword(dto.Password);
+
+            var displayName = string.IsNullOrWhiteSpace(dto.DisplayName)
+                ? dto.Username
+                : dto.DisplayName.Trim();
+
             var newUserId = await _unitOfWork.Users.CreateUserViaProcAsync(
                 roleCode,
                 dto.Username,
                 dto.Email,
                 passwordHash,
-                dto.DisplayName,
+                displayName,
                 dto.AvatarFileId,
                 dto.PortfolioFileId,
                 null);
@@ -66,6 +72,7 @@ namespace MangaManagementSystem.Application.Services
         public async Task<UserDto> ApproveUserAsync(Guid adminUserId, Guid userId)
         {
             await RequirePendingUserAsync(userId);
+
             await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
                 adminUserId,
                 userId,
@@ -79,6 +86,7 @@ namespace MangaManagementSystem.Application.Services
         public async Task RejectUserAsync(Guid adminUserId, Guid userId, string? reason = null)
         {
             await RequirePendingUserAsync(userId);
+
             await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
                 adminUserId,
                 userId,
@@ -86,36 +94,6 @@ namespace MangaManagementSystem.Application.Services
                 reason ?? "User registration rejected.");
         }
 
-        private async Task<User> RequirePendingUserAsync(Guid userId)
-        {
-            var user = await _unitOfWork.Users.GetByIdAsync(userId);
-            if (user == null)
-            {
-                throw new InvalidOperationException($"User {userId} was not found.");
-            }
-
-            if (user.StatusCode != StatusPendingApproval)
-            {
-                throw new InvalidOperationException(
-                    $"User {userId} cannot be processed because their status is '{user.StatusCode}', not '{StatusPendingApproval}'.");
-            }
-
-            return user;
-        }
-
-        private async Task EnsureValidRoleIdAsync(Guid roleId)
-        {
-            if (roleId < MinRoleId || roleId > MaxRoleId)
-            {
-                throw new InvalidOperationException(
-                    $"Role id {roleId} is invalid. Allowed roles are {MinRoleId} through {MaxRoleId}.");
-            }
-
-            if (await _unitOfWork.Roles.GetByIdAsync(roleId) == null)
-            {
-                throw new InvalidOperationException($"Role id {roleId} does not exist.");
-            }
-        }
         public async Task<UserDto> ActivateUserAsync(Guid adminUserId, Guid userId)
         {
             var user = await _unitOfWork.Users.GetByIdAsync(userId);
@@ -153,6 +131,100 @@ namespace MangaManagementSystem.Application.Services
             var updated = await _unitOfWork.Users.GetByIdAsync(userId);
             return MapToDto(updated!);
         }
+
+        public async Task<UserDto> UpdateDisplayNameAsync(Guid userId, string displayName)
+        {
+            var user = await _unitOfWork.Users.GetByIdAsync(userId);
+
+            if (user == null)
+            {
+                throw new InvalidOperationException($"User {userId} was not found.");
+            }
+
+            var trimmedDisplayName = displayName?.Trim();
+
+            if (string.IsNullOrWhiteSpace(trimmedDisplayName))
+            {
+                throw new InvalidOperationException("Display name cannot be empty.");
+            }
+
+            user.DisplayName = trimmedDisplayName;
+
+            _unitOfWork.Users.Update(user);
+            await _unitOfWork.SaveChangesAsync();
+
+            var updated = await _unitOfWork.Users.GetByIdAsync(userId);
+            return MapToDto(updated!);
+        }
+
+        public async Task<UserDto> UpdateAvatarFileAsync(Guid userId, Guid avatarFileId)
+        {
+            var user = await _unitOfWork.Users.GetByIdAsync(userId);
+
+            if (user == null)
+            {
+                throw new InvalidOperationException($"User {userId} was not found.");
+            }
+
+            user.AvatarFileId = avatarFileId;
+
+            _unitOfWork.Users.Update(user);
+            await _unitOfWork.SaveChangesAsync();
+
+            var updated = await _unitOfWork.Users.GetByIdAsync(userId);
+            return MapToDto(updated!);
+        }
+
+        public async Task<UserDto> UpdatePortfolioFileAsync(Guid userId, Guid portfolioFileId)
+        {
+            var user = await _unitOfWork.Users.GetByIdAsync(userId);
+
+            if (user == null)
+            {
+                throw new InvalidOperationException($"User {userId} was not found.");
+            }
+
+            user.PortfolioFileId = portfolioFileId;
+
+            _unitOfWork.Users.Update(user);
+            await _unitOfWork.SaveChangesAsync();
+
+            var updated = await _unitOfWork.Users.GetByIdAsync(userId);
+            return MapToDto(updated!);
+        }
+
+        private async Task<User> RequirePendingUserAsync(Guid userId)
+        {
+            var user = await _unitOfWork.Users.GetByIdAsync(userId);
+
+            if (user == null)
+            {
+                throw new InvalidOperationException($"User {userId} was not found.");
+            }
+
+            if (user.StatusCode != StatusPendingApproval)
+            {
+                throw new InvalidOperationException(
+                    $"User {userId} cannot be processed because their status is '{user.StatusCode}', not '{StatusPendingApproval}'.");
+            }
+
+            return user;
+        }
+
+        private async Task EnsureValidRoleIdAsync(Guid roleId)
+        {
+            if (roleId < MinRoleId || roleId > MaxRoleId)
+            {
+                throw new InvalidOperationException(
+                    $"Role id {roleId} is invalid. Allowed roles are {MinRoleId} through {MaxRoleId}.");
+            }
+
+            if (await _unitOfWork.Roles.GetByIdAsync(roleId) == null)
+            {
+                throw new InvalidOperationException($"Role id {roleId} does not exist.");
+            }
+        }
+
         private static UserDto MapToDto(User u) => new(
             u.UserId,
             u.RoleId,
@@ -163,7 +235,7 @@ namespace MangaManagementSystem.Application.Services
             u.PortfolioFileId,
             u.StatusCode,
             u.CreatedAtUtc,
-            null
+            u.Role?.RoleName
         );
     }
 }

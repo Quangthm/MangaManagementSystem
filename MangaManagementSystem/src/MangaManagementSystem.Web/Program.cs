@@ -4,16 +4,17 @@ using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Infrastructure;
 using MangaManagementSystem.Web.Components;
 using MangaManagementSystem.Web.Helpers;
-using MangaManagementSystem.Web.Services;
 using MangaManagementSystem.Web.Options;
+using MangaManagementSystem.Web.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using MudBlazor.Services;
 using System.Security.Claims;
-using Microsoft.Extensions.Logging;
 
 namespace MangaManagementSystem.Web
 {
@@ -26,7 +27,9 @@ namespace MangaManagementSystem.Web
             builder.Services.AddApplicationServices();
             builder.Services.AddInfrastructure(builder.Configuration);
 
-            builder.Services.Configure<RecaptchaOptions>(builder.Configuration.GetSection(RecaptchaOptions.SectionName));
+            builder.Services.Configure<RecaptchaOptions>(
+                builder.Configuration.GetSection(RecaptchaOptions.SectionName));
+
             builder.Services.AddHttpClient<RecaptchaService>();
 
             builder.Services.AddMemoryCache();
@@ -49,6 +52,7 @@ namespace MangaManagementSystem.Web
                 options.ClientId = builder.Configuration["Authentication:Google:ClientId"] ?? "YOUR_GOOGLE_CLIENT_ID";
                 options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"] ?? "YOUR_GOOGLE_CLIENT_SECRET";
                 options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+
                 options.Events.OnRemoteFailure = context =>
                 {
                     var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
@@ -57,6 +61,7 @@ namespace MangaManagementSystem.Web
                     context.HandleResponse();
                     context.Response.ContentType = "application/json";
                     context.Response.StatusCode = 500;
+
                     var errorJson = System.Text.Json.JsonSerializer.Serialize(new
                     {
                         Message = "Google OAuth Handshake Failed (OnRemoteFailure)",
@@ -70,6 +75,7 @@ namespace MangaManagementSystem.Web
 
             builder.Services.AddAuthorization();
             builder.Services.AddCascadingAuthenticationState();
+
             builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthenticationStateProvider>();
             builder.Services.AddScoped<CustomAuthenticationStateProvider>(sp =>
                 (CustomAuthenticationStateProvider)sp.GetRequiredService<AuthenticationStateProvider>());
@@ -99,15 +105,21 @@ namespace MangaManagementSystem.Web
                 HttpContext context,
                 IAuthService authService,
                 RecaptchaService recaptchaService,
+                IOptions<RecaptchaOptions> recaptchaOptions,
                 [FromForm] string username,
                 [FromForm] string password) =>
             {
-                var recaptchaResponse = context.Request.Form["g-recaptcha-response"].ToString();
-                var ip = context.Connection.RemoteIpAddress?.ToString();
-                var isRecaptchaValid = await recaptchaService.VerifyTokenAsync(recaptchaResponse, ip);
-                if (!isRecaptchaValid)
+                if (recaptchaOptions.Value.Enabled)
                 {
-                    return Results.Redirect("/login?error=RecaptchaFailed");
+                    var recaptchaResponse = context.Request.Form["g-recaptcha-response"].ToString();
+                    var ip = context.Connection.RemoteIpAddress?.ToString();
+
+                    var isRecaptchaValid = await recaptchaService.VerifyTokenAsync(recaptchaResponse, ip);
+
+                    if (!isRecaptchaValid)
+                    {
+                        return Results.Redirect("/login?error=RecaptchaFailed");
+                    }
                 }
 
                 if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
@@ -117,8 +129,6 @@ namespace MangaManagementSystem.Web
 
                 var result = await authService.LoginAsync(new LoginDto(username, password));
 
-                // Map common server-side messages to browser-friendly error codes so the UI
-                // can show helpful but non-revealing messages.
                 if (!result.Succeeded || result.User is null || string.IsNullOrWhiteSpace(result.RoleName))
                 {
                     var error = (result.ErrorMessage ?? string.Empty).ToLowerInvariant();
@@ -138,7 +148,6 @@ namespace MangaManagementSystem.Web
                         return Results.Redirect("/login?error=account_rejected");
                     }
 
-                    // Generic fallback for wrong username/password or other authentication failures.
                     return Results.Redirect("/login?error=InvalidCredentials");
                 }
 
@@ -148,11 +157,17 @@ namespace MangaManagementSystem.Web
 
             app.MapPost("/api/auth/google-login", () =>
             {
-                var properties = new AuthenticationProperties { RedirectUri = "/api/auth/google-callback" };
+                var properties = new AuthenticationProperties
+                {
+                    RedirectUri = "/api/auth/google-callback"
+                };
+
                 return Results.Challenge(properties, [GoogleDefaults.AuthenticationScheme]);
             }).DisableAntiforgery();
 
-            app.MapGet("/api/auth/google-callback", async (HttpContext context, IAuthService authService) =>
+            app.MapGet("/api/auth/google-callback", async (
+                HttpContext context,
+                IAuthService authService) =>
             {
                 var (_, email, _) = await GoogleAuthHelper.ResolveGoogleIdentityAsync(context);
 
@@ -162,6 +177,7 @@ namespace MangaManagementSystem.Web
                 }
 
                 var authResult = await authService.GetUserByEmailAsync(email);
+
                 if (!authResult.Succeeded || authResult.User is null || string.IsNullOrWhiteSpace(authResult.RoleName))
                 {
                     return Results.Redirect("/login?error=UserNotInDatabase");
@@ -173,11 +189,17 @@ namespace MangaManagementSystem.Web
 
             app.MapPost("/api/auth/google-signup", () =>
             {
-                var properties = new AuthenticationProperties { RedirectUri = "/api/auth/google-signup-callback" };
+                var properties = new AuthenticationProperties
+                {
+                    RedirectUri = "/api/auth/google-signup-callback"
+                };
+
                 return Results.Challenge(properties, [GoogleDefaults.AuthenticationScheme]);
             }).DisableAntiforgery();
 
-            app.MapGet("/api/auth/google-signup-callback", async (HttpContext context, IAuthService authService) =>
+            app.MapGet("/api/auth/google-signup-callback", async (
+                HttpContext context,
+                IAuthService authService) =>
             {
                 var (_, email, displayName) = await GoogleAuthHelper.ResolveGoogleIdentityAsync(context);
 
@@ -192,12 +214,16 @@ namespace MangaManagementSystem.Web
                 {
                     GoogleSignupFlow.NewUserVerifyOtp or GoogleSignupFlow.PendingApprovalVerifyOtp
                         => Results.Redirect($"/verify-otp?email={Uri.EscapeDataString(signupResult.Email)}"),
+
                     GoogleSignupFlow.ActiveUserLogin when signupResult.User is not null && signupResult.RoleName is not null
                         => await SignInAndRedirectAsync(context, signupResult.User, signupResult.RoleName),
+
                     GoogleSignupFlow.Rejected when signupResult.ErrorMessage?.Contains("pending", StringComparison.OrdinalIgnoreCase) == true
-                        => Results.Redirect($"/login?error=account_pending"),
+                        => Results.Redirect("/login?error=account_pending"),
+
                     GoogleSignupFlow.Rejected
-                        => Results.Redirect($"/register?error=account_disabled"),
+                        => Results.Redirect("/register?error=account_disabled"),
+
                     _
                         => Results.Redirect("/register?error=GoogleSignupFailed")
                 };
@@ -245,33 +271,40 @@ namespace MangaManagementSystem.Web
                 }
             }).DisableAntiforgery();
 
-            app.MapPost("/api/auth/logout", async (HttpContext context, ILogger<Program> logger) =>
+            app.MapPost("/api/auth/logout", async (
+                HttpContext context,
+                ILogger<Program> logger) =>
             {
                 logger.LogInformation("Logout requested for user {Name}", context.User.Identity?.Name ?? "(anonymous)");
+
                 await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
                 return Results.Redirect("/login");
             }).DisableAntiforgery();
 
-app.MapGet("/signout", async (CustomAuthenticationStateProvider authStateProvider, HttpContext context) =>
-{
-    await authStateProvider.MarkUserAsLoggedOut();
-    await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-    return Results.Redirect("/login");
-});
+            app.MapGet("/signout", async (
+                CustomAuthenticationStateProvider authStateProvider,
+                HttpContext context) =>
+            {
+                await authStateProvider.MarkUserAsLoggedOut();
+                await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
-            // Debug endpoint: tries multiple download strategies and reports results
+                return Results.Redirect("/login");
+            });
+
             app.MapGet("/api/portfolio/{id:guid}/debug", async (
                 Guid id,
                 IFileResourceService fileResourceService,
                 CloudinaryDotNet.Cloudinary cloudinary,
                 ILogger<Program> logger) =>
             {
-                var lines = new System.Collections.Generic.List<string>();
+                var lines = new List<string>();
                 lines.Add($"[1] Looking up FileResource: {id}");
 
                 try
                 {
                     var file = await fileResourceService.GetFileResourceByIdAsync(id);
+
                     if (file == null)
                     {
                         lines.Add("[FAIL] File not found in database.");
@@ -287,55 +320,75 @@ app.MapGet("/signout", async (CustomAuthenticationStateProvider authStateProvide
                     lines.Add($"  Cloud: {account.Cloud}");
                     lines.Add("");
 
-                    // === Strategy A: CDN URL with browser-like headers ===
                     lines.Add("=== Strategy A: CDN URL + Browser Headers ===");
-                    using (var httpClient = new System.Net.Http.HttpClient())
+
+                    using (var httpClient = new HttpClient())
                     {
-                        httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+                        httpClient.DefaultRequestHeaders.Add(
+                            "User-Agent",
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+
                         httpClient.DefaultRequestHeaders.Add("Accept", "*/*");
+
                         var response = await httpClient.GetAsync(file.CloudinarySecureUrl);
                         lines.Add($"  HTTP {(int)response.StatusCode}");
+
                         if (response.IsSuccessStatusCode)
                         {
                             var bytes = await response.Content.ReadAsByteArrayAsync();
                             lines.Add($"  [OK] Downloaded {bytes.Length} bytes");
                         }
                     }
+
                     lines.Add("");
 
-                    // === Strategy B: Admin API with Basic Auth ===
                     lines.Add("=== Strategy B: Admin API (Basic Auth) ===");
-                    using (var httpClient = new System.Net.Http.HttpClient())
+
+                    using (var httpClient = new HttpClient())
                     {
-                        var basicAuth = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($"{account.ApiKey}:{account.ApiSecret}"));
-                        httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", basicAuth);
-                        var adminUrl = $"https://api.cloudinary.com/v1_1/{account.Cloud}/resources/raw/upload/{Uri.EscapeDataString(file.CloudinaryPublicId)}";
+                        var basicAuth = Convert.ToBase64String(
+                            System.Text.Encoding.ASCII.GetBytes($"{account.ApiKey}:{account.ApiSecret}"));
+
+                        httpClient.DefaultRequestHeaders.Authorization =
+                            new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", basicAuth);
+
+                        var adminUrl =
+                            $"https://api.cloudinary.com/v1_1/{account.Cloud}/resources/raw/upload/{Uri.EscapeDataString(file.CloudinaryPublicId)}";
+
                         lines.Add($"  URL: {adminUrl}");
+
                         var response = await httpClient.GetAsync(adminUrl);
                         lines.Add($"  HTTP {(int)response.StatusCode}");
+
+                        var body = await response.Content.ReadAsStringAsync();
+
                         if (response.IsSuccessStatusCode)
                         {
-                            var body = await response.Content.ReadAsStringAsync();
-                            // Truncate to 500 chars for display
                             lines.Add($"  [OK] Response: {(body.Length > 500 ? body[..500] + "..." : body)}");
                         }
                         else
                         {
-                            var body = await response.Content.ReadAsStringAsync();
                             lines.Add($"  [FAIL] Response: {body}");
                         }
                     }
+
                     lines.Add("");
 
-                    // === Strategy C: CDN URL with Basic Auth ===
                     lines.Add("=== Strategy C: CDN URL + Basic Auth ===");
-                    using (var httpClient = new System.Net.Http.HttpClient())
+
+                    using (var httpClient = new HttpClient())
                     {
-                        var basicAuth = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($"{account.ApiKey}:{account.ApiSecret}"));
-                        httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", basicAuth);
+                        var basicAuth = Convert.ToBase64String(
+                            System.Text.Encoding.ASCII.GetBytes($"{account.ApiKey}:{account.ApiSecret}"));
+
+                        httpClient.DefaultRequestHeaders.Authorization =
+                            new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", basicAuth);
+
                         httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+
                         var response = await httpClient.GetAsync(file.CloudinarySecureUrl);
                         lines.Add($"  HTTP {(int)response.StatusCode}");
+
                         if (response.IsSuccessStatusCode)
                         {
                             var bytes = await response.Content.ReadAsByteArrayAsync();
@@ -360,6 +413,7 @@ app.MapGet("/signout", async (CustomAuthenticationStateProvider authStateProvide
                 try
                 {
                     var file = await fileResourceService.GetFileResourceByIdAsync(id);
+
                     if (file == null || string.IsNullOrWhiteSpace(file.CloudinarySecureUrl))
                     {
                         logger.LogWarning("Portfolio {Id}: file not found in DB", id);
@@ -368,13 +422,16 @@ app.MapGet("/signout", async (CustomAuthenticationStateProvider authStateProvide
 
                     logger.LogInformation("Portfolio {Id}: downloading {FileName}", id, file.OriginalFileName);
 
-                    // Cloudinary CDN rejects requests without a User-Agent header (bot detection → 401).
-                    // Adding a browser-like User-Agent resolves this.
-                    using var httpClient = new System.Net.Http.HttpClient();
-                    httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+                    using var httpClient = new HttpClient();
+
+                    httpClient.DefaultRequestHeaders.Add(
+                        "User-Agent",
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+
                     httpClient.DefaultRequestHeaders.Add("Accept", "*/*");
 
                     var response = await httpClient.GetAsync(file.CloudinarySecureUrl);
+
                     if (!response.IsSuccessStatusCode)
                     {
                         logger.LogError("Portfolio {Id}: download failed with HTTP {Status}", id, (int)response.StatusCode);
@@ -386,7 +443,6 @@ app.MapGet("/signout", async (CustomAuthenticationStateProvider authStateProvide
 
                     logger.LogInformation("Portfolio {Id}: serving {Bytes} bytes as {ContentType}", id, bytes.Length, contentType);
 
-                    // Return without fileDownloadName → Content-Disposition: inline
                     return Results.Bytes(bytes, contentType);
                 }
                 catch (Exception ex)
@@ -402,7 +458,10 @@ app.MapGet("/signout", async (CustomAuthenticationStateProvider authStateProvide
             app.Run();
         }
 
-        private static async Task SignInApplicationUserAsync(HttpContext context, UserDto user, string roleName)
+        private static async Task SignInApplicationUserAsync(
+            HttpContext context,
+            UserDto user,
+            string roleName)
         {
             var claims = new List<Claim>
             {

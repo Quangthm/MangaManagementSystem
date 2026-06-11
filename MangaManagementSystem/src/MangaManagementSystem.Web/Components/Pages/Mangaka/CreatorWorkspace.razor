@@ -1,30 +1,477 @@
 @page "/mangaka/workspace/{SeriesId}"
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.Extensions.DependencyInjection
+@using System.Security.Claims
+@using MangaManagementSystem.Application.DTOs.Auth
+@using MangaManagementSystem.Application.DTOs.Manga
+@using MangaManagementSystem.Application.Interfaces
 @attribute [Authorize(Roles = "Mangaka")]
 @inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IUserService UserService
+@inject IServiceProvider ServiceProvider
+@inject ISnackbar Snackbar
 
 <MangakaLayout>
     <div class="mf-page">
         <div class="mf-page-header">
-            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Crimson Moon Academy</MudText>
-            <MudText Typo="Typo.body1" Class="mf-muted">紅月学院</MudText>
+            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                <div>
+                    <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Crimson Moon Academy</MudText>
+                    <MudText Typo="Typo.body1" Class="mf-muted">紅月学院</MudText>
+                </div>
+
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudAvatar Size="Size.Large" Image="@_avatarUrl" Color="Color.Primary">
+                        @if (string.IsNullOrWhiteSpace(_avatarUrl))
+                        {
+                            @_avatarInitial
+                        }
+                    </MudAvatar>
+
+                    <div>
+                        <MudText Typo="Typo.subtitle1" Class="font-weight-bold">
+                            @(_currentUser?.DisplayName ?? "Mangaka")
+                        </MudText>
+                        <MudText Typo="Typo.caption" Class="mf-muted">
+                            @(_currentUser?.Username ?? "")
+                        </MudText>
+                    </div>
+                </MudStack>
+            </MudStack>
         </div>
 
         <MudGrid>
-            <MudItem xs="12" md="8"><MudPaper Class="pa-5 mf-card" Elevation="0"><MudStack Row="true" Justify="Justify.SpaceBetween" Class="mb-3"><MudText Typo="Typo.h6">Chapter @SelectedChapter · Page @SelectedPage of 24</MudText><MudChip T="string" Color="Color.Primary">Draft</MudChip></MudStack><div class="mf-canvas">Manga page preview canvas<br/>Example dialogue text / More dialogue here...</div><MudStack Row="true" Class="mt-3">@foreach (var pageNo in Enumerable.Range(1, 5)) {<MudButton Variant="@(SelectedPage == pageNo ? Variant.Filled : Variant.Outlined)" OnClick="@(() => SelectedPage = pageNo)">Page @pageNo</MudButton>}</MudStack></MudPaper></MudItem>
-            <MudItem xs="12" md="4"><MudPaper Class="pa-5 mf-card" Elevation="0"><MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Task Assignment</MudText><MudText class="mf-muted mb-3">Current selection: Chapter @SelectedChapter, Page @SelectedPage. The task will be assigned for this specific page.</MudText><MudSelect T="string" Label="Task Type" @bind-Value="TaskType" Variant="Variant.Outlined"><MudSelectItem Value="@("Tone Shading")">Tone Shading</MudSelectItem><MudSelectItem Value="@("Background Drawing")">Background Drawing</MudSelectItem><MudSelectItem Value="@("Cleanup")">Cleanup</MudSelectItem></MudSelect><MudTextField Label="Assign to" @bind-Value="Assistant" Variant="Variant.Outlined" Class="mt-3" /><MudTextField Label="Instructions" Lines="4" @bind-Value="Instructions" Variant="Variant.Outlined" Class="mt-3" /><MudAlert Severity="Severity.Warning" Class="my-3"><MudText Typo="Typo.caption" Class="font-weight-bold">Coming Soon</MudText><MudText Class="mt-1">Task assignment requires backend implementation.</MudText></MudAlert><MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" Disabled="true">Assign Task (Disabled)</MudButton><MudButton FullWidth="true" Variant="Variant.Text" Class="mt-2" Disabled="true">Save Draft (Disabled)</MudButton></MudPaper></MudItem>
-        </MudGrid>
+            <MudItem xs="12" md="8">
+                <MudPaper Class="pa-5 mf-card" Elevation="0">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mb-3">
+                        <MudText Typo="Typo.h6">Chapter @SelectedChapter · Page @SelectedPage of 24</MudText>
+                        <MudChip T="string" Color="Color.Primary">Draft</MudChip>
+                    </MudStack>
 
+                    <div class="mf-canvas">
+                        Manga page preview canvas<br />
+                        Example dialogue text / More dialogue here...
+                    </div>
+
+                    <MudStack Row="true" Class="mt-3">
+                        @foreach (var pageNo in Enumerable.Range(1, 5))
+                        {
+                            <MudButton Variant="@(SelectedPage == pageNo ? Variant.Filled : Variant.Outlined)"
+                                       OnClick="@(() => SelectedPage = pageNo)">
+                                Page @pageNo
+                            </MudButton>
+                        }
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="4">
+                <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Profile</MudText>
+
+                    @if (_isProfileLoading)
+                    {
+                        <MudProgressCircular Indeterminate="true" />
+                    }
+                    else
+                    {
+                        <MudStack Spacing="3">
+                            <div>
+                                <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-1">
+                                    Display Name
+                                </MudText>
+
+                                <MudTextField @bind-Value="_displayName"
+                                              Variant="Variant.Outlined"
+                                              Placeholder="Enter display name"
+                                              Immediate="true" />
+
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           Class="mt-2"
+                                           OnClick="UpdateDisplayNameAsync"
+                                           Disabled="@_isSavingDisplayName">
+                                    @(_isSavingDisplayName ? "Saving..." : "Update display name")
+                                </MudButton>
+                            </div>
+
+                            <MudDivider />
+
+                            <div>
+                                <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-1">
+                                    Avatar
+                                </MudText>
+
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudAvatar Size="Size.Large" Image="@_avatarUrl" Color="Color.Primary">
+                                        @if (string.IsNullOrWhiteSpace(_avatarUrl))
+                                        {
+                                            @_avatarInitial
+                                        }
+                                    </MudAvatar>
+
+                                    <InputFile OnChange="UploadAvatarAsync"
+                                               accept="image/png,image/jpeg,image/jpg,image/webp" />
+                                </MudStack>
+
+                                <MudText Typo="Typo.caption" Class="mf-muted">
+                                    PNG, JPG, JPEG, WEBP. Max 10 MB.
+                                </MudText>
+                            </div>
+
+                            <MudDivider />
+
+                            <div>
+                                <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-1">
+                                    Portfolio
+                                </MudText>
+
+                                @if (!string.IsNullOrWhiteSpace(_portfolioUrl))
+                                {
+                                    <MudAlert Severity="Severity.Success" Dense="true" Class="mb-2">
+                                        Current portfolio: @_portfolioFileName
+                                    </MudAlert>
+
+                                    <MudButton Variant="Variant.Outlined"
+                                               Color="Color.Primary"
+                                               Href="@_portfolioUrl"
+                                               Target="_blank"
+                                               Class="mb-2">
+                                        Open portfolio
+                                    </MudButton>
+                                }
+                                else
+                                {
+                                    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">
+                                        No portfolio file available. Safe placeholder is shown instead of a broken file.
+                                    </MudAlert>
+                                }
+
+                                <InputFile OnChange="UploadPortfolioAsync"
+                                           accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,image/jpg,image/webp" />
+
+                                <MudText Typo="Typo.caption" Class="mf-muted">
+                                    PDF, DOC, DOCX, PNG, JPG, JPEG, WEBP. Max 10 MB.
+                                </MudText>
+                            </div>
+                        </MudStack>
+                    }
+                </MudPaper>
+
+                <MudPaper Class="pa-5 mf-card" Elevation="0">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Task Assignment</MudText>
+
+                    <MudText Class="mf-muted mb-3">
+                        Current selection: Chapter @SelectedChapter, Page @SelectedPage. The task will be assigned for this specific page.
+                    </MudText>
+
+                    <MudSelect T="string" Label="Task Type" @bind-Value="TaskType" Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("Tone Shading")">Tone Shading</MudSelectItem>
+                        <MudSelectItem Value="@("Background Drawing")">Background Drawing</MudSelectItem>
+                        <MudSelectItem Value="@("Cleanup")">Cleanup</MudSelectItem>
+                    </MudSelect>
+
+                    <MudTextField Label="Assign to" @bind-Value="Assistant" Variant="Variant.Outlined" Class="mt-3" />
+                    <MudTextField Label="Instructions" Lines="4" @bind-Value="Instructions" Variant="Variant.Outlined" Class="mt-3" />
+
+                    <MudAlert Severity="Severity.Warning" Class="my-3">
+                        <MudText Typo="Typo.caption" Class="font-weight-bold">Coming Soon</MudText>
+                        <MudText Class="mt-1">Task assignment requires backend implementation.</MudText>
+                    </MudAlert>
+
+                    <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" Disabled="true">
+                        Assign Task (Disabled)
+                    </MudButton>
+
+                    <MudButton FullWidth="true" Variant="Variant.Text" Class="mt-2" Disabled="true">
+                        Save Draft (Disabled)
+                    </MudButton>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
     </div>
 </MangakaLayout>
 
 @code {
-
     [Parameter] public string? SeriesId { get; set; }
+
+    private const long MaxUploadBytes = 10 * 1024 * 1024;
+
     private int SelectedChapter { get; set; } = 12;
     private int SelectedPage { get; set; } = 1;
     private string TaskType { get; set; } = "Tone Shading";
     private string Assistant { get; set; } = "";
     private string Instructions { get; set; } = "";
 
+    private bool _isProfileLoading = true;
+    private bool _isSavingDisplayName;
+
+    private Guid _currentUserId;
+    private UserDto? _currentUser;
+
+    private string? _displayName;
+    private string? _avatarUrl;
+    private string _avatarInitial = "?";
+
+    private string? _portfolioUrl;
+    private string? _portfolioFileName;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProfileAsync();
+    }
+
+    private async Task LoadProfileAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var principal = authState.User;
+
+            var idClaim = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (!Guid.TryParse(idClaim, out _currentUserId))
+            {
+                Snackbar.Add("Unable to identify current user. Please login again.", Severity.Error);
+                Nav.NavigateTo("/login", true);
+                return;
+            }
+
+            _currentUser = await UserService.GetUserByIdAsync(_currentUserId);
+
+            if (_currentUser == null)
+            {
+                Snackbar.Add("Current user was not found.", Severity.Error);
+                Nav.NavigateTo("/login", true);
+                return;
+            }
+
+            _displayName = _currentUser.DisplayName;
+            _avatarInitial = BuildInitial(_currentUser.DisplayName, _currentUser.Username);
+
+            await LoadFileUrlsAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load profile: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isProfileLoading = false;
+        }
+    }
+
+    private async Task LoadFileUrlsAsync()
+    {
+        _avatarUrl = null;
+        _portfolioUrl = null;
+        _portfolioFileName = null;
+
+        try
+        {
+            var fileResourceService = ServiceProvider.GetRequiredService<IFileResourceService>();
+
+            if (_currentUser?.AvatarFileId.HasValue == true)
+            {
+                var avatarFile = await fileResourceService.GetFileResourceByIdAsync(_currentUser.AvatarFileId.Value);
+
+                if (avatarFile != null &&
+                    avatarFile.DeletedAtUtc == null &&
+                    !string.IsNullOrWhiteSpace(avatarFile.CloudinarySecureUrl))
+                {
+                    _avatarUrl = avatarFile.CloudinarySecureUrl;
+                }
+            }
+
+            if (_currentUser?.PortfolioFileId.HasValue == true)
+            {
+                var portfolioFile = await fileResourceService.GetFileResourceByIdAsync(_currentUser.PortfolioFileId.Value);
+
+                if (portfolioFile != null &&
+                    portfolioFile.DeletedAtUtc == null &&
+                    !string.IsNullOrWhiteSpace(portfolioFile.CloudinarySecureUrl))
+                {
+                    _portfolioUrl = $"/api/portfolio/{portfolioFile.FileResourceId}";
+                    _portfolioFileName = portfolioFile.OriginalFileName;
+                }
+            }
+        }
+        catch
+        {
+            _avatarUrl = null;
+            _portfolioUrl = null;
+            _portfolioFileName = null;
+        }
+    }
+
+    private async Task UpdateDisplayNameAsync()
+    {
+        if (_currentUser == null)
+        {
+            Snackbar.Add("Profile is not loaded.", Severity.Warning);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_displayName))
+        {
+            Snackbar.Add("Display name cannot be empty.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            _isSavingDisplayName = true;
+
+            _currentUser = await UserService.UpdateDisplayNameAsync(_currentUserId, _displayName.Trim());
+            _displayName = _currentUser.DisplayName;
+            _avatarInitial = BuildInitial(_currentUser.DisplayName, _currentUser.Username);
+
+            Snackbar.Add("Display name updated successfully.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to update display name: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSavingDisplayName = false;
+        }
+    }
+
+    private async Task UploadAvatarAsync(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+
+        if (file == null)
+        {
+            Snackbar.Add("No avatar file selected.", Severity.Warning);
+            return;
+        }
+
+        var contentType = file.ContentType?.ToLowerInvariant() ?? string.Empty;
+
+        if (contentType is not ("image/png" or "image/jpeg" or "image/jpg" or "image/webp"))
+        {
+            Snackbar.Add("Avatar must be PNG, JPG, JPEG, or WEBP.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            var fileStorageService = ServiceProvider.GetRequiredService<IFileStorageService>();
+            var fileResourceService = ServiceProvider.GetRequiredService<IFileResourceService>();
+
+            var upload = await UploadToCloudinaryAsync(fileStorageService, file, "USER_AVATAR");
+
+            var fileResource = await fileResourceService.CreateFileResourceAsync(new CreateFileResourceDto(
+                "USER_AVATAR",
+                upload.OriginalFileName,
+                upload.PublicId,
+                upload.SecureUrl,
+                upload.ContentType,
+                upload.FileSizeBytes,
+                upload.Sha256Hash,
+                _currentUserId
+            ));
+
+            _currentUser = await UserService.UpdateAvatarFileAsync(_currentUserId, fileResource.FileResourceId);
+            _avatarUrl = fileResource.CloudinarySecureUrl;
+
+            Snackbar.Add("Avatar uploaded successfully.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Avatar upload failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task UploadPortfolioAsync(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+
+        if (file == null)
+        {
+            Snackbar.Add("No portfolio file selected.", Severity.Warning);
+            return;
+        }
+
+        var contentType = file.ContentType?.ToLowerInvariant() ?? string.Empty;
+
+        var allowed = contentType is
+            "application/pdf" or
+            "application/msword" or
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document" or
+            "image/png" or
+            "image/jpeg" or
+            "image/jpg" or
+            "image/webp";
+
+        if (!allowed)
+        {
+            Snackbar.Add("Portfolio must be PDF, DOC, DOCX, PNG, JPG, JPEG, or WEBP.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            var fileStorageService = ServiceProvider.GetRequiredService<IFileStorageService>();
+            var fileResourceService = ServiceProvider.GetRequiredService<IFileResourceService>();
+
+            var upload = await UploadToCloudinaryAsync(fileStorageService, file, "REGISTRATION_PORTFOLIO");
+
+            var fileResource = await fileResourceService.CreateFileResourceAsync(new CreateFileResourceDto(
+                "REGISTRATION_PORTFOLIO",
+                upload.OriginalFileName,
+                upload.PublicId,
+                upload.SecureUrl,
+                upload.ContentType,
+                upload.FileSizeBytes,
+                upload.Sha256Hash,
+                _currentUserId
+            ));
+
+            _currentUser = await UserService.UpdatePortfolioFileAsync(_currentUserId, fileResource.FileResourceId);
+            _portfolioUrl = $"/api/portfolio/{fileResource.FileResourceId}";
+            _portfolioFileName = fileResource.OriginalFileName;
+
+            Snackbar.Add("Portfolio uploaded successfully.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Portfolio upload failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private static async Task<FileUploadResultDto> UploadToCloudinaryAsync(
+        IFileStorageService fileStorageService,
+        IBrowserFile file,
+        string purposeCode)
+    {
+        await using var inputStream = file.OpenReadStream(MaxUploadBytes);
+        using var memoryStream = new MemoryStream();
+
+        await inputStream.CopyToAsync(memoryStream);
+
+        return await fileStorageService.UploadFileAsync(
+            memoryStream.ToArray(),
+            file.Name,
+            file.ContentType,
+            purposeCode,
+            null
+        );
+    }
+
+    private static string BuildInitial(string? displayName, string? username)
+    {
+        var source = !string.IsNullOrWhiteSpace(displayName)
+            ? displayName.Trim()
+            : username?.Trim();
+
+        return string.IsNullOrWhiteSpace(source)
+            ? "?"
+            : source[..1].ToUpperInvariant();
+    }
 }
