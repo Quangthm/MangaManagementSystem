@@ -5,7 +5,6 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IUserService UserService
 @inject IFileResourceService FileResourceService
-@inject ISnackbar Snackbar
 @inject NavigationManager NavigationManager
 
 <AuthorizeView>
@@ -18,12 +17,16 @@
         {
             <MudMenu OffsetY="true">
                 <ActivatorContent>
-                    <MudAvatar Size="Size.Medium" Image="@_avatarUrl" Class="mf-avatar" Color="Color.Primary">
-                        @if (string.IsNullOrWhiteSpace(_avatarUrl))
+                    <div class="mf-menu-avatar" @key="_avatarUrl">
+                        @if (!string.IsNullOrWhiteSpace(_avatarUrl))
                         {
-                            @(_initial ?? "?")
+                            <img src="@_avatarUrl" alt="User avatar" />
                         }
-                    </MudAvatar>
+                        else
+                        {
+                            <span>@(_initial ?? "?")</span>
+                        }
+                    </div>
                 </ActivatorContent>
 
                 <ChildContent>
@@ -127,7 +130,26 @@
 }
 
 <style>
-    .mf-avatar {
+    .mf-menu-avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        overflow: hidden;
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: 700;
         cursor: pointer;
+        border: 1px solid #e5e7eb;
     }
+
+        .mf-menu-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
 </style>

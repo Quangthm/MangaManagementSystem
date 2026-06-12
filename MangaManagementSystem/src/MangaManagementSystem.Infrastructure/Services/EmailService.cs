@@ -25,7 +25,7 @@ namespace MangaManagementSystem.Infrastructure.Services
             var body = $"""
                 Hello,
 
-                Your MangaFlow registration verification code is: {otpCode}
+                Your MangaFlow verification code is: {otpCode}
 
                 This code expires in 5 minutes.
 
@@ -51,7 +51,12 @@ namespace MangaManagementSystem.Infrastructure.Services
             message.Body = new TextPart("plain") { Text = body };
 
             using var client = new SmtpClient();
-            await client.ConnectAsync(_settings.Host, _settings.Port, _settings.UseSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.Auto, cancellationToken);
+
+            await client.ConnectAsync(
+                _settings.Host,
+                _settings.Port,
+                _settings.UseSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.Auto,
+                cancellationToken);
 
             if (!string.IsNullOrWhiteSpace(_settings.Username))
             {

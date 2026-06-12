@@ -5,6 +5,7 @@ using MangaManagementSystem.Domain.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 
 namespace MangaManagementSystem.Application.Services
@@ -20,11 +21,19 @@ namespace MangaManagementSystem.Application.Services
 
         private readonly IUnitOfWork _unitOfWork;
         private readonly IPasswordHasher _passwordHasher;
+        private readonly IEmailService _emailService;
+        private readonly IOtpCacheService _otpCacheService;
 
-        public UserService(IUnitOfWork unitOfWork, IPasswordHasher passwordHasher)
+        public UserService(
+            IUnitOfWork unitOfWork,
+            IPasswordHasher passwordHasher,
+            IEmailService emailService,
+            IOtpCacheService otpCacheService)
         {
             _unitOfWork = unitOfWork;
             _passwordHasher = passwordHasher;
+            _emailService = emailService;
+            _otpCacheService = otpCacheService;
         }
 
         public async Task<UserDto> CreateUserAsync(CreateUserDto dto)
@@ -108,12 +117,7 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<UserDto> ActivateUserAsync(Guid adminUserId, Guid userId)
         {
-            var user = await _unitOfWork.Users.GetByIdAsync(userId);
-
-            if (user == null)
-            {
-                throw new InvalidOperationException($"User {userId} was not found.");
-            }
+            var user = await RequireExistingUserAsync(userId);
 
             await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
                 adminUserId,
@@ -121,7 +125,7 @@ namespace MangaManagementSystem.Application.Services
                 StatusActive,
                 "User account activated.");
 
-            var updated = await _unitOfWork.Users.GetByIdAsync(userId);
+            var updated = await _unitOfWork.Users.GetByIdAsync(user.UserId);
 
             if (updated == null)
             {
@@ -133,12 +137,7 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<UserDto> DisableUserAsync(Guid adminUserId, Guid userId, string? reason = null)
         {
-            var user = await _unitOfWork.Users.GetByIdAsync(userId);
-
-            if (user == null)
-            {
-                throw new InvalidOperationException($"User {userId} was not found.");
-            }
+            var user = await RequireExistingUserAsync(userId);
 
             await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
                 adminUserId,
@@ -146,7 +145,7 @@ namespace MangaManagementSystem.Application.Services
                 StatusDisabled,
                 reason ?? "User account disabled.");
 
-            var updated = await _unitOfWork.Users.GetByIdAsync(userId);
+            var updated = await _unitOfWork.Users.GetByIdAsync(user.UserId);
 
             if (updated == null)
             {
@@ -158,12 +157,7 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<UserDto> UpdateDisplayNameAsync(Guid userId, string displayName)
         {
-            var user = await _unitOfWork.Users.GetByIdAsync(userId);
-
-            if (user == null)
-            {
-                throw new InvalidOperationException($"User {userId} was not found.");
-            }
+            await RequireExistingUserAsync(userId);
 
             var trimmedDisplayName = displayName?.Trim();
 
@@ -188,12 +182,7 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<UserDto> UpdateAvatarFileAsync(Guid userId, Guid avatarFileId)
         {
-            var user = await _unitOfWork.Users.GetByIdAsync(userId);
-
-            if (user == null)
-            {
-                throw new InvalidOperationException($"User {userId} was not found.");
-            }
+            await RequireExistingUserAsync(userId);
 
             if (avatarFileId == Guid.Empty)
             {
@@ -216,12 +205,7 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<UserDto> UpdatePortfolioFileAsync(Guid userId, Guid portfolioFileId)
         {
-            var user = await _unitOfWork.Users.GetByIdAsync(userId);
-
-            if (user == null)
-            {
-                throw new InvalidOperationException($"User {userId} was not found.");
-            }
+            await RequireExistingUserAsync(userId);
 
             if (portfolioFileId == Guid.Empty)
             {
@@ -242,24 +226,9 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(updated);
         }
 
-        public async Task ResetPasswordAsync(Guid userId, string currentPassword, string newPassword)
+        public async Task ResetPasswordAsync(Guid userId, string newPassword)
         {
-            var user = await _unitOfWork.Users.GetByIdAsync(userId);
-
-            if (user == null)
-            {
-                throw new InvalidOperationException($"User {userId} was not found.");
-            }
-
-            if (string.IsNullOrWhiteSpace(currentPassword))
-            {
-                throw new InvalidOperationException("Current password is required.");
-            }
-
-            if (!_passwordHasher.VerifyPassword(currentPassword, user.PasswordHash))
-            {
-                throw new InvalidOperationException("Current password is incorrect.");
-            }
+            await RequireExistingUserAsync(userId);
 
             if (string.IsNullOrWhiteSpace(newPassword))
             {
@@ -271,11 +240,6 @@ namespace MangaManagementSystem.Application.Services
                 throw new InvalidOperationException("New password must be at least 8 characters.");
             }
 
-            if (_passwordHasher.VerifyPassword(newPassword, user.PasswordHash))
-            {
-                throw new InvalidOperationException("New password must be different from the current password.");
-            }
-
             var passwordHash = _passwordHasher.HashPassword(newPassword);
 
             await _unitOfWork.Users.ResetPasswordViaProcAsync(
@@ -283,7 +247,75 @@ namespace MangaManagementSystem.Application.Services
                 passwordHash);
         }
 
-        private async Task<User> RequirePendingUserAsync(Guid userId)
+        public async Task SendProfileOtpAsync(Guid userId, string actionCode)
+        {
+            var user = await RequireExistingUserAsync(userId);
+
+            if (string.IsNullOrWhiteSpace(user.Email))
+            {
+                throw new InvalidOperationException("User email is required for OTP verification.");
+            }
+
+            if (string.IsNullOrWhiteSpace(actionCode))
+            {
+                throw new InvalidOperationException("OTP action code is required.");
+            }
+
+            var otp = GenerateOtp();
+
+            _otpCacheService.StoreProfileActionOtp(
+                user.Email,
+                actionCode,
+                otp);
+
+            await _emailService.SendOtpEmailAsync(user.Email, otp);
+        }
+
+        public async Task<bool> VerifyProfileOtpAsync(Guid userId, string actionCode, string otpCode)
+        {
+            var user = await RequireExistingUserAsync(userId);
+
+            if (string.IsNullOrWhiteSpace(user.Email))
+            {
+                throw new InvalidOperationException("User email is required for OTP verification.");
+            }
+
+            if (string.IsNullOrWhiteSpace(actionCode) || string.IsNullOrWhiteSpace(otpCode))
+            {
+                return false;
+            }
+
+            return _otpCacheService.TryValidateAndRemoveProfileActionOtp(
+                user.Email,
+                actionCode,
+                otpCode.Trim());
+        }
+
+        public async Task RecordProfileAuditAsync(Guid actorUserId, string actionCode, string detailJson)
+        {
+            var user = await RequireExistingUserAsync(actorUserId);
+
+            if (string.IsNullOrWhiteSpace(actionCode))
+            {
+                throw new InvalidOperationException("Audit action code is required.");
+            }
+
+            var entity = new AuditEvent
+            {
+                OccurredAtUtc = DateTime.UtcNow,
+                ActorUserId = actorUserId,
+                ActorRoleName = user.Role?.RoleName,
+                ActionCode = actionCode.Trim().ToUpperInvariant(),
+                EntityType = "USER",
+                EntityId = actorUserId.ToString(),
+                DetailJson = string.IsNullOrWhiteSpace(detailJson) ? null : detailJson
+            };
+
+            await _unitOfWork.AuditEvents.AddAsync(entity);
+            await _unitOfWork.SaveChangesAsync();
+        }
+
+        private async Task<User> RequireExistingUserAsync(Guid userId)
         {
             var user = await _unitOfWork.Users.GetByIdAsync(userId);
 
@@ -291,6 +323,13 @@ namespace MangaManagementSystem.Application.Services
             {
                 throw new InvalidOperationException($"User {userId} was not found.");
             }
+
+            return user;
+        }
+
+        private async Task<User> RequirePendingUserAsync(Guid userId)
+        {
+            var user = await RequireExistingUserAsync(userId);
 
             if (user.StatusCode != StatusPendingApproval)
             {
@@ -313,6 +352,12 @@ namespace MangaManagementSystem.Application.Services
             {
                 throw new InvalidOperationException($"Role id {roleId} does not exist.");
             }
+        }
+
+        private static string GenerateOtp()
+        {
+            var value = RandomNumberGenerator.GetInt32(100000, 1000000);
+            return value.ToString();
         }
 
         private static UserDto MapToDto(User u) => new(

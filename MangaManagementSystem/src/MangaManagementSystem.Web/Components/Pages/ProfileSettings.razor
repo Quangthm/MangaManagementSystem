@@ -14,437 +14,454 @@
 @inject IUserService UserService
 @inject IFileResourceService FileResourceService
 @inject IFileStorageService FileStorageService
-@inject IAuditEventService AuditEventService
 @inject ISnackbar Snackbar
 @inject IJSRuntime JSRuntime
+@inject NavigationManager NavigationManager
 
 <PageTitle>Profile Settings - MangaFlow</PageTitle>
 
-<div class="mf-page">
-    <div class="mf-page-header">
-        <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Profile Settings</MudText>
-        <MudText Typo="Typo.body1" Class="mf-muted">
-            Manage your profile, avatar, portfolio, and password. Profile changes are verified and audit logged.
-        </MudText>
-    </div>
-
-    @if (_isLoading)
-    {
-        <MudPaper Class="pa-6 mf-card" Elevation="0">
-            <MudProgressCircular Indeterminate="true" />
-            <MudText Class="mt-3">Loading profile...</MudText>
-        </MudPaper>
-    }
-    else if (_currentUser == null)
-    {
-        <MudAlert Severity="Severity.Error">
-            Unable to load current user. Please login again.
-        </MudAlert>
-    }
-    else
-    {
-        @if (!string.IsNullOrWhiteSpace(_operationMessage))
-        {
-            <MudAlert Severity="@_operationSeverity" Class="mb-4" Dense="true">
-                @_operationMessage
-            </MudAlert>
-        }
-
-        <MudGrid>
-            <MudItem xs="12" md="4">
-                <MudPaper Class="pa-5 mf-card mf-profile-summary" Elevation="0">
-                    <MudStack AlignItems="AlignItems.Center" Spacing="2">
-                        <div class="mf-profile-avatar-view" @key="_avatarUrl">
-                            @if (!string.IsNullOrWhiteSpace(_avatarUrl))
-                            {
-                                <img src="@_avatarUrl" alt="User avatar" />
-                            }
-                            else
-                            {
-                                <span>@_avatarInitial</span>
-                            }
-                        </div>
-
-                        <MudText Typo="Typo.h6" Class="font-weight-bold text-center">
-                            @_currentUser.DisplayName
-                        </MudText>
-
-                        <MudText Typo="Typo.body2" Class="mf-muted text-center">
-                            @_currentUser.Email
-                        </MudText>
-
-                        <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined">
-                            @_currentUser.RoleName
-                        </MudChip>
-                    </MudStack>
-
-                    <MudDivider Class="my-4" />
-
-                    <MudStack Spacing="2">
-                        <div>
-                            <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Username</MudText>
-                            <MudText Typo="Typo.body2" Class="mf-muted">@_currentUser.Username</MudText>
-                        </div>
-
-                        <div>
-                            <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Account Status</MudText>
-                            <MudText Typo="Typo.body2" Class="mf-muted">@_currentUser.StatusCode</MudText>
-                        </div>
-
-                        <div>
-                            <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Audit Status</MudText>
-                            <MudText Typo="Typo.body2" Class="mf-muted">
-                                Display name, avatar, portfolio, and password changes are recorded in audit logs.
-                            </MudText>
-                        </div>
-                    </MudStack>
-                </MudPaper>
-            </MudItem>
-
-            <MudItem xs="12" md="8">
-                <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
-                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
-                        <div>
-                            <MudText Typo="Typo.h6" Class="font-weight-bold">Display Name</MudText>
-                            <MudText Typo="Typo.body2" Class="mf-muted">
-                                Update the name shown across the workspace.
-                            </MudText>
-                        </div>
-                    </MudStack>
-
-                    <MudTextField T="string"
-                                  Label="Display Name"
-                                  @bind-Value="_displayName"
-                                  Variant="Variant.Outlined"
-                                  Immediate="true" />
-
-                    <MudButton Variant="Variant.Filled"
-                               Color="Color.Primary"
-                               Class="mt-3"
-                               Disabled="@_isSavingDisplayName"
-                               OnClick="UpdateDisplayNameAsync">
-                        @(_isSavingDisplayName ? "Saving..." : "Update Display Name")
-                    </MudButton>
-                </MudPaper>
-
-                <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
-                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
-                        <div>
-                            <MudText Typo="Typo.h6" Class="font-weight-bold">Avatar</MudText>
-                            <MudText Typo="Typo.body2" Class="mf-muted">
-                                Select an image, review the crop preview, then confirm upload.
-                            </MudText>
-                        </div>
-                    </MudStack>
-
-                    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
-                        Supported files: PNG, JPG, JPEG, WEBP. The saved avatar uses a square center crop.
-                    </MudAlert>
-
-                    <InputFile OnChange="SelectAvatarForCropAsync"
-                               accept="image/png,image/jpeg,image/jpg,image/webp" />
-
-                    @if (!string.IsNullOrWhiteSpace(_avatarPreviewDataUrl))
+<div class="mf-settings-page">
+    <section class="mf-profile-shell">
+        <div class="mf-profile-top">
+            <div class="mf-user-block">
+                <div class="mf-avatar-large">
+                    @if (!string.IsNullOrWhiteSpace(_avatarUrl))
                     {
-                        <MudGrid Class="mt-4">
-                            <MudItem xs="12" sm="6">
-                                <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2">
-                                    Original Preview
-                                </MudText>
-
-                                <img src="@_avatarPreviewDataUrl"
-                                     class="mf-preview-image" />
-                            </MudItem>
-
-                            <MudItem xs="12" sm="6">
-                                <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2">
-                                    Crop Preview
-                                </MudText>
-
-                                <div class="mf-avatar-crop-preview">
-                                    <img src="@_avatarPreviewDataUrl" />
-                                </div>
-                            </MudItem>
-                        </MudGrid>
-
-                        <MudStack Row="true" Spacing="2" Class="mt-4">
-                            <MudButton Variant="Variant.Filled"
-                                       Color="Color.Primary"
-                                       Disabled="@_isUploadingAvatar"
-                                       OnClick="ConfirmAndUploadAvatarAsync">
-                                @(_isUploadingAvatar ? "Uploading..." : "Confirm & Upload Avatar")
-                            </MudButton>
-
-                            <MudButton Variant="Variant.Outlined"
-                                       Color="Color.Default"
-                                       Disabled="@_isUploadingAvatar"
-                                       OnClick="@(() => CancelAvatarSelection())">
-                                Cancel
-                            </MudButton>
-                        </MudStack>
-                    }
-                </MudPaper>
-
-                <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
-                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
-                        <div>
-                            <MudText Typo="Typo.h6" Class="font-weight-bold">Portfolio</MudText>
-                            <MudText Typo="Typo.body2" Class="mf-muted">
-                                Upload a portfolio file. Image portfolios include crop preview before saving.
-                            </MudText>
-                        </div>
-                    </MudStack>
-
-                    @if (!string.IsNullOrWhiteSpace(_portfolioUrl))
-                    {
-                        <MudAlert Severity="Severity.Success" Dense="true" Class="mb-3">
-                            Current portfolio: @_portfolioFileName
-                        </MudAlert>
-
-                        <MudButton Variant="Variant.Outlined"
-                                   Color="Color.Primary"
-                                   Href="@_portfolioUrl"
-                                   Target="_blank"
-                                   Class="mb-3">
-                            Open Current Portfolio
-                        </MudButton>
+                        <img src="@_avatarUrl" alt="User avatar" />
                     }
                     else
                     {
-                        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
-                            No portfolio file is available.
-                        </MudAlert>
+                        <span>@_avatarInitial</span>
                     }
+                </div>
 
-                    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
-                        Supported files: PDF, DOC, DOCX, PNG, JPG, JPEG, WEBP. Image files can be cropped before upload.
-                    </MudAlert>
+                <div class="mf-user-meta">
+                    <MudText Typo="Typo.h4" Class="font-weight-bold mb-1">Profile Settings</MudText>
+                    <MudText Typo="Typo.body2" Class="mf-muted">
+                        Manage username, display name, avatar, portfolio, and password.
+                    </MudText>
 
-                    <InputFile OnChange="SelectPortfolioAsync"
-                               accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,image/jpg,image/webp" />
-
-                    @if (_pendingPortfolioBytes != null)
+                    @if (_currentUser != null)
                     {
-                        <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">
-                            Pending portfolio: @_pendingPortfolioFileName. Please confirm before saving.
-                        </MudAlert>
+                        <div class="mf-user-line">
+                            <strong>@_currentUser.DisplayName</strong>
+                            <span class="mf-username-chip">@_currentUser.Username</span>
+                            <span>@_currentUser.Email</span>
 
-                        @if (_pendingPortfolioIsImage && !string.IsNullOrWhiteSpace(_portfolioPreviewDataUrl))
-                        {
-                            <MudGrid Class="mt-4">
-                                <MudItem xs="12" sm="6">
-                                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2">
-                                        Original Preview
-                                    </MudText>
+                            <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Small">
+                                @_currentRoleName
+                            </MudChip>
 
-                                    <img src="@_portfolioPreviewDataUrl"
-                                         class="mf-preview-image" />
-                                </MudItem>
-
-                                <MudItem xs="12" sm="6">
-                                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2">
-                                        Crop Preview
-                                    </MudText>
-
-                                    <div class="mf-portfolio-crop-preview">
-                                        <img src="@_portfolioPreviewDataUrl" />
-                                    </div>
-                                </MudItem>
-                            </MudGrid>
-                        }
-                        else
-                        {
-                            <MudText Typo="Typo.body2" Class="mf-muted mt-3">
-                                This file type does not support image crop preview. It will be uploaded after confirmation.
-                            </MudText>
-                        }
-
-                        <MudStack Row="true" Spacing="2" Class="mt-4">
-                            <MudButton Variant="Variant.Filled"
-                                       Color="Color.Primary"
-                                       Disabled="@_isUploadingPortfolio"
-                                       OnClick="ConfirmAndUploadPortfolioAsync">
-                                @(_isUploadingPortfolio ? "Uploading..." : "Confirm & Upload Portfolio")
-                            </MudButton>
-
-                            <MudButton Variant="Variant.Outlined"
-                                       Color="Color.Default"
-                                       Disabled="@_isUploadingPortfolio"
-                                       OnClick="@(() => CancelPortfolioSelection())">
-                                Cancel
-                            </MudButton>
-                        </MudStack>
-                    }
-                </MudPaper>
-
-                <MudPaper Class="pa-5 mf-card" Elevation="0">
-                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
-                        <div>
-                            <MudText Typo="Typo.h6" Class="font-weight-bold">Security / Reset Password</MudText>
-                            <MudText Typo="Typo.body2" Class="mf-muted">
-                                Verify your current password before setting a new password.
-                            </MudText>
+                            <MudChip T="string" Color="Color.Success" Variant="Variant.Outlined" Size="Size.Small">
+                                @_currentUser.StatusCode
+                            </MudChip>
                         </div>
-                    </MudStack>
+                    }
+                </div>
+            </div>
+        </div>
 
-                    <MudTextField T="string"
-                                  Label="Current Password"
-                                  @bind-Value="_currentPassword"
-                                  InputType="InputType.Password"
-                                  Variant="Variant.Outlined" />
+        @if (_isLoading)
+        {
+            <div class="mf-loading-box">
+                <MudProgressCircular Indeterminate="true" />
+                <MudText Typo="Typo.body2" Class="mf-muted">Loading profile...</MudText>
+            </div>
+        }
+        else if (_currentUser == null)
+        {
+            <MudAlert Severity="Severity.Error">
+                Unable to load current user. Please login again.
+            </MudAlert>
+        }
+        else
+        {
+            @if (!string.IsNullOrWhiteSpace(_operationMessage))
+            {
+                <MudAlert Severity="@_operationSeverity" Dense="true" Class="mb-3">
+                    @_operationMessage
+                </MudAlert>
+            }
 
-                    <MudTextField T="string"
-                                  Label="New Password"
-                                  @bind-Value="_newPassword"
-                                  InputType="InputType.Password"
-                                  Variant="Variant.Outlined"
-                                  Class="mt-3" />
+            <div class="mf-summary-grid">
+                <div class="mf-summary-card">
+                    <span>Username</span>
+                    <strong>@_currentUser.Username</strong>
+                    <small>Login account</small>
+                </div>
 
-                    <MudTextField T="string"
-                                  Label="Confirm New Password"
-                                  @bind-Value="_confirmPassword"
-                                  InputType="InputType.Password"
-                                  Variant="Variant.Outlined"
-                                  Class="mt-3" />
+                <div class="mf-summary-card">
+                    <span>Display Name</span>
+                    <strong>@_currentUser.DisplayName</strong>
+                    <small>Shown in workspace</small>
+                </div>
 
-                    <MudButton Variant="Variant.Filled"
-                               Color="Color.Error"
-                               Class="mt-3"
-                               Disabled="@_isResettingPassword"
-                               OnClick="ResetPasswordAsync">
-                        @(_isResettingPassword ? "Resetting..." : "Reset Password")
-                    </MudButton>
-                </MudPaper>
-            </MudItem>
-        </MudGrid>
-    }
+                <div class="mf-summary-card">
+                    <span>Avatar</span>
+                    <strong>@(_currentUser.AvatarFileId.HasValue ? "Linked" : "Not Set")</strong>
+                    <small>Profile image</small>
+                </div>
+
+                <div class="mf-summary-card">
+                    <span>Portfolio</span>
+                    <strong>@(_currentUser.PortfolioFileId.HasValue ? "Linked" : "Not Set")</strong>
+                    <small>Profile document/image</small>
+                </div>
+            </div>
+
+            <MudPaper Class="mf-main-panel">
+                <MudTabs Rounded="true" Elevation="0" PanelClass="mf-tab-content">
+                    <MudTabPanel Text="Profile">
+                        <div class="mf-two-col">
+                            <div class="mf-section-card">
+                                <MudText Typo="Typo.h6" Class="font-weight-bold mb-1">Profile Information</MudText>
+                                <MudText Typo="Typo.body2" Class="mf-muted mb-3">
+                                    Username is read-only. Display name can be updated by the logged-in user.
+                                </MudText>
+
+                                <MudTextField T="string"
+                                              Value="@_currentUser.Username"
+                                              Label="Username"
+                                              Variant="Variant.Outlined"
+                                              ReadOnly="true"
+                                              Disabled="true" />
+
+                                <MudTextField T="string"
+                                              @bind-Value="_displayName"
+                                              Label="Display Name"
+                                              Variant="Variant.Outlined"
+                                              Immediate="true"
+                                              Disabled="@_isBusy"
+                                              Class="mt-3" />
+
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           Disabled="@_isBusy"
+                                           OnClick="UpdateDisplayNameDirectAsync"
+                                           Class="mt-3">
+                                    Save Display Name
+                                </MudButton>
+                            </div>
+
+                            <div class="mf-help-card">
+                                <MudText Typo="Typo.subtitle1" Class="font-weight-bold mb-2">Update Rule</MudText>
+                                <MudText Typo="Typo.body2" Class="mf-muted">
+                                    Username is shown for account identity and is not editable here. Display name is updated directly after login session verification. OTP is only required for password reset.
+                                </MudText>
+                            </div>
+                        </div>
+                    </MudTabPanel>
+
+                    <MudTabPanel Text="Avatar">
+                        <div class="mf-upload-layout">
+                            <div class="mf-upload-control">
+                                <MudText Typo="Typo.h6" Class="font-weight-bold mb-1">Avatar</MudText>
+                                <MudText Typo="Typo.body2" Class="mf-muted mb-3">
+                                    Select an image, preview it, then upload directly.
+                                </MudText>
+
+                                <label class="mf-upload-box">
+                                    <InputFile OnChange="SelectAvatarAsync"
+                                               accept="image/png,image/jpeg,image/jpg,image/webp"
+                                               class="mf-file-input-hidden" />
+                                    <span class="mf-upload-title">Choose avatar image</span>
+                                    <small>PNG, JPG, JPEG, WEBP up to 10MB</small>
+                                </label>
+
+                                @if (!string.IsNullOrWhiteSpace(_selectedAvatarFileName))
+                                {
+                                    <div class="mf-selected-file">
+                                        @_selectedAvatarFileName
+                                    </div>
+                                }
+
+                                <div class="mf-button-row">
+                                    <MudButton Variant="Variant.Filled"
+                                               Color="Color.Primary"
+                                               Disabled="@(_isBusy || _selectedAvatarBytes == null)"
+                                               OnClick="UploadAvatarDirectAsync">
+                                        Upload Avatar
+                                    </MudButton>
+
+                                    <MudButton Variant="Variant.Text"
+                                               Color="Color.Default"
+                                               Disabled="@(_isBusy || _selectedAvatarBytes == null)"
+                                               OnClick="CancelAvatarSelection">
+                                        Clear
+                                    </MudButton>
+                                </div>
+                            </div>
+
+                            <div class="mf-preview-grid">
+                                <div>
+                                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2">Original Preview</MudText>
+                                    <div class="mf-preview-box">
+                                        @if (!string.IsNullOrWhiteSpace(_avatarOriginalPreviewDataUrl))
+                                        {
+                                            <img src="@_avatarOriginalPreviewDataUrl" alt="Original avatar preview" />
+                                        }
+                                        else
+                                        {
+                                            <span>No image selected</span>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2">Crop Preview</MudText>
+                                    <div class="mf-preview-box mf-preview-square">
+                                        @if (!string.IsNullOrWhiteSpace(_avatarCropPreviewDataUrl))
+                                        {
+                                            <img src="@_avatarCropPreviewDataUrl" alt="Cropped avatar preview" />
+                                        }
+                                        else
+                                        {
+                                            <span>No crop yet</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </MudTabPanel>
+
+                    <MudTabPanel Text="Portfolio">
+                        <div class="mf-upload-layout">
+                            <div class="mf-upload-control">
+                                <MudText Typo="Typo.h6" Class="font-weight-bold mb-1">Portfolio</MudText>
+                                <MudText Typo="Typo.body2" Class="mf-muted mb-3">
+                                    Upload image/PDF/DOC/DOCX. Image files show original and crop preview before saving.
+                                </MudText>
+
+                                <label class="mf-upload-box mf-portfolio-upload">
+                                    <InputFile OnChange="SelectPortfolioAsync"
+                                               accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,image/jpg,image/webp"
+                                               class="mf-file-input-hidden" />
+                                    <span class="mf-upload-title">Choose portfolio file</span>
+                                    <small>Image, PDF, DOC, DOCX up to 10MB</small>
+                                </label>
+
+                                @if (!string.IsNullOrWhiteSpace(_selectedPortfolioFileName))
+                                {
+                                    <div class="mf-selected-file">
+                                        @_selectedPortfolioFileName
+                                    </div>
+                                }
+
+                                <div class="mf-button-row">
+                                    <MudButton Variant="Variant.Filled"
+                                               Color="Color.Primary"
+                                               Disabled="@(_isBusy || _selectedPortfolioBytes == null)"
+                                               OnClick="UploadPortfolioDirectAsync">
+                                        Upload Portfolio
+                                    </MudButton>
+
+                                    <MudButton Variant="Variant.Text"
+                                               Color="Color.Default"
+                                               Disabled="@(_isBusy || _selectedPortfolioBytes == null)"
+                                               OnClick="CancelPortfolioSelection">
+                                        Clear
+                                    </MudButton>
+                                </div>
+
+                                @if (!string.IsNullOrWhiteSpace(_portfolioUrl))
+                                {
+                                    <MudButton Href="@_portfolioUrl"
+                                               Target="_blank"
+                                               Variant="Variant.Text"
+                                               Color="Color.Primary"
+                                               Class="mt-2">
+                                        Open Current Portfolio
+                                    </MudButton>
+                                }
+                            </div>
+
+                            <div class="mf-preview-grid">
+                                <div>
+                                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2">Original Preview</MudText>
+                                    <div class="mf-preview-box">
+                                        @if (_selectedPortfolioIsImage && !string.IsNullOrWhiteSpace(_portfolioOriginalPreviewDataUrl))
+                                        {
+                                            <img src="@_portfolioOriginalPreviewDataUrl" alt="Original portfolio preview" />
+                                        }
+                                        else if (_selectedPortfolioBytes != null)
+                                        {
+                                            <span>Document selected</span>
+                                        }
+                                        else
+                                        {
+                                            <span>No file selected</span>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2">Crop Preview</MudText>
+                                    <div class="mf-preview-box">
+                                        @if (_selectedPortfolioIsImage && !string.IsNullOrWhiteSpace(_portfolioCropPreviewDataUrl))
+                                        {
+                                            <img src="@_portfolioCropPreviewDataUrl" alt="Cropped portfolio preview" />
+                                        }
+                                        else if (_selectedPortfolioBytes != null)
+                                        {
+                                            <span>Crop not required</span>
+                                        }
+                                        else
+                                        {
+                                            <span>No crop yet</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </MudTabPanel>
+
+                    <MudTabPanel Text="Security">
+                        <div class="mf-two-col">
+                            <div class="mf-section-card">
+                                <MudText Typo="Typo.h6" Class="font-weight-bold mb-1">Reset Password</MudText>
+                                <MudText Typo="Typo.body2" Class="mf-muted mb-3">
+                                    Only password reset requires OTP confirmation. This works for Google-login users because no current password is required.
+                                </MudText>
+
+                                <MudTextField T="string"
+                                              @bind-Value="_newPassword"
+                                              Label="New Password"
+                                              InputType="InputType.Password"
+                                              Variant="Variant.Outlined"
+                                              Disabled="@_isBusy" />
+
+                                <MudTextField T="string"
+                                              @bind-Value="_confirmPassword"
+                                              Label="Confirm New Password"
+                                              InputType="InputType.Password"
+                                              Variant="Variant.Outlined"
+                                              Disabled="@_isBusy"
+                                              Class="mt-3" />
+
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           Disabled="@_isBusy"
+                                           OnClick="SendOtpForPasswordAsync"
+                                           Class="mt-3">
+                                    Send OTP
+                                </MudButton>
+                            </div>
+
+                            <div class="mf-help-card">
+                                <MudText Typo="Typo.subtitle1" Class="font-weight-bold mb-2">Email OTP Confirmation</MudText>
+                                <MudText Typo="Typo.body2" Class="mf-muted mb-3">
+                                    OTP will be sent to <strong>@_currentUser.Email</strong>. The code expires in 5 minutes.
+                                </MudText>
+
+                                @if (_otpSentForPassword)
+                                {
+                                    <MudTextField T="string"
+                                                  @bind-Value="_otpCodePassword"
+                                                  Label="OTP Code"
+                                                  Variant="Variant.Outlined"
+                                                  MaxLength="6"
+                                                  Disabled="@_isBusy" />
+
+                                    <div class="mf-button-row">
+                                        <MudButton Variant="Variant.Filled"
+                                                   Color="Color.Success"
+                                                   Disabled="@_isBusy"
+                                                   OnClick="ConfirmPasswordResetAsync">
+                                            Confirm Reset
+                                        </MudButton>
+
+                                        <MudButton Variant="Variant.Text"
+                                                   Color="Color.Default"
+                                                   Disabled="@_isBusy"
+                                                   OnClick="CancelPasswordOtp">
+                                            Cancel
+                                        </MudButton>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="mf-empty-note">
+                                        Enter a new password and request OTP to continue.
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </MudTabPanel>
+                </MudTabs>
+            </MudPaper>
+        }
+    </section>
 </div>
-
-<style>
-    .mf-profile-summary {
-        position: sticky;
-        top: 24px;
-    }
-
-    .mf-profile-avatar-view {
-        width: 96px;
-        height: 96px;
-        border-radius: 50%;
-        overflow: hidden;
-        background: linear-gradient(135deg, #4f46e5, #7c3aed);
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 32px;
-        font-weight: 700;
-        border: 2px solid #e5e7eb;
-    }
-
-        .mf-profile-avatar-view img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-        }
-
-    .mf-preview-image {
-        max-width: 100%;
-        max-height: 260px;
-        border-radius: 12px;
-        border: 1px solid #ddd;
-        object-fit: contain;
-        background: #fff;
-    }
-
-    .mf-avatar-crop-preview {
-        width: 220px;
-        height: 220px;
-        border-radius: 50%;
-        overflow: hidden;
-        border: 1px solid #ddd;
-        background: #fff;
-    }
-
-        .mf-avatar-crop-preview img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-    .mf-portfolio-crop-preview {
-        width: 260px;
-        height: 260px;
-        overflow: hidden;
-        border-radius: 12px;
-        border: 1px solid #ddd;
-        background: #fff;
-    }
-
-        .mf-portfolio-crop-preview img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-</style>
 
 @code {
     private const long MaxUploadBytes = 10 * 1024 * 1024;
 
+    private const string ActionPasswordOtp = "PROFILE_PASSWORD_RESET";
+
+    private const string AuditDisplayNameUpdated = "USER_PROFILE_DISPLAY_NAME_UPDATED";
+    private const string AuditAvatarUpdated = "USER_PROFILE_AVATAR_UPDATED";
+    private const string AuditPortfolioUpdated = "USER_PROFILE_PORTFOLIO_UPDATED";
+    private const string AuditPasswordReset = "USER_PROFILE_PASSWORD_RESET";
+
     private bool _isLoading = true;
-    private bool _isSavingDisplayName;
-    private bool _isUploadingAvatar;
-    private bool _isUploadingPortfolio;
-    private bool _isResettingPassword;
+    private bool _isBusy;
 
-    private Guid _currentUserId;
     private UserDto? _currentUser;
+    private Guid _currentUserId;
+    private string _currentRoleName = "User";
 
-    private string? _displayName;
-    private string? _avatarUrl;
+    private string _displayName = string.Empty;
     private string _avatarInitial = "?";
-
+    private string? _avatarUrl;
     private string? _portfolioUrl;
-    private string? _portfolioFileName;
-
-    private string? _avatarPreviewDataUrl;
-    private string? _pendingAvatarFileName;
-    private string? _pendingAvatarContentType;
-    private byte[]? _pendingAvatarBytes;
-
-    private byte[]? _pendingPortfolioBytes;
-    private string? _pendingPortfolioFileName;
-    private string? _pendingPortfolioContentType;
-    private bool _pendingPortfolioIsImage;
-    private string? _portfolioPreviewDataUrl;
-
-    private string? _currentPassword;
-    private string? _newPassword;
-    private string? _confirmPassword;
 
     private string? _operationMessage;
     private Severity _operationSeverity = Severity.Info;
 
+    private string? _avatarOriginalPreviewDataUrl;
+    private string? _avatarCropPreviewDataUrl;
+    private byte[]? _selectedAvatarBytes;
+    private string? _selectedAvatarFileName;
+    private string _selectedAvatarContentType = "image/jpeg";
+
+    private string? _selectedPortfolioFileName;
+    private string? _portfolioOriginalPreviewDataUrl;
+    private string? _portfolioCropPreviewDataUrl;
+    private byte[]? _selectedPortfolioBytes;
+    private string? _selectedPortfolioContentType;
+    private bool _selectedPortfolioIsImage;
+
+    private string _newPassword = string.Empty;
+    private string _confirmPassword = string.Empty;
+    private bool _otpSentForPassword;
+    private string _otpCodePassword = string.Empty;
+
     protected override async Task OnInitializedAsync()
     {
-        await LoadProfileAsync();
+        await LoadCurrentUserAsync();
     }
 
-    private async Task LoadProfileAsync()
+    private async Task LoadCurrentUserAsync()
     {
+        _isLoading = true;
+        _operationMessage = null;
+
         try
         {
-            _isLoading = true;
-
             var authState = await AuthStateProvider.GetAuthenticationStateAsync();
             var principal = authState.User;
 
-            var idClaim = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-            if (!Guid.TryParse(idClaim, out _currentUserId))
+            if (principal?.Identity?.IsAuthenticated != true)
             {
-                SetOperationMessage("Unable to identify current user. Please login again.", Severity.Error);
-                _currentUser = null;
+                NavigationManager.NavigateTo("/login");
+                return;
+            }
+
+            var idClaim = principal.FindFirst(ClaimTypes.NameIdentifier);
+
+            if (!Guid.TryParse(idClaim?.Value, out _currentUserId))
+            {
+                SetOperation("Unable to resolve current user id.", Severity.Error);
                 return;
             }
 
@@ -452,18 +469,24 @@
 
             if (_currentUser == null)
             {
-                SetOperationMessage("Current user was not found. Please login again.", Severity.Error);
+                SetOperation("Unable to load current user profile.", Severity.Error);
                 return;
             }
+
+            _currentRoleName =
+                principal.FindFirst(ClaimTypes.Role)?.Value
+                ?? principal.FindFirst("role")?.Value
+                ?? _currentUser.RoleName
+                ?? "User";
 
             _displayName = _currentUser.DisplayName;
             _avatarInitial = BuildInitial(_currentUser.DisplayName, _currentUser.Username);
 
-            await LoadFileUrlsAsync();
+            await LoadCurrentFilesAsync();
         }
         catch (Exception ex)
         {
-            SetOperationMessage($"Failed to load profile: {ex.GetBaseException().Message}", Severity.Error);
+            SetOperation(ex.Message, Severity.Error);
         }
         finally
         {
@@ -471,11 +494,10 @@
         }
     }
 
-    private async Task LoadFileUrlsAsync()
+    private async Task LoadCurrentFilesAsync()
     {
         _avatarUrl = null;
         _portfolioUrl = null;
-        _portfolioFileName = null;
 
         if (_currentUser?.AvatarFileId.HasValue == true)
         {
@@ -497,445 +519,422 @@
                 portfolioFile.DeletedAtUtc == null &&
                 !string.IsNullOrWhiteSpace(portfolioFile.CloudinarySecureUrl))
             {
-                _portfolioUrl = $"/api/portfolio/{portfolioFile.FileResourceId}";
-                _portfolioFileName = portfolioFile.OriginalFileName;
+                _portfolioUrl = BuildVersionedUrl(portfolioFile.CloudinarySecureUrl, portfolioFile.FileResourceId);
             }
         }
     }
 
-    private async Task UpdateDisplayNameAsync()
+    private async Task UpdateDisplayNameDirectAsync()
     {
-        if (string.IsNullOrWhiteSpace(_displayName))
+        if (_currentUser == null)
         {
-            SetOperationMessage("Display name cannot be empty.", Severity.Warning);
             return;
         }
 
-        try
+        var trimmed = _displayName.Trim();
+
+        if (string.IsNullOrWhiteSpace(trimmed))
         {
-            _isSavingDisplayName = true;
+            SetOperation("Display name cannot be empty.", Severity.Warning);
+            return;
+        }
 
-            var oldDisplayName = _currentUser?.DisplayName;
-            var newDisplayName = _displayName.Trim();
+        if (string.Equals(trimmed, _currentUser.DisplayName, StringComparison.Ordinal))
+        {
+            SetOperation("Display name is unchanged.", Severity.Info);
+            return;
+        }
 
-            _currentUser = await UserService.UpdateDisplayNameAsync(
+        await RunBusyAsync(async () =>
+        {
+            var oldDisplayName = _currentUser.DisplayName;
+
+            var updated = await UserService.UpdateDisplayNameAsync(
                 _currentUserId,
-                newDisplayName);
+                trimmed);
 
-            _displayName = _currentUser.DisplayName;
-            _avatarInitial = BuildInitial(_currentUser.DisplayName, _currentUser.Username);
-
-            await WriteAuditAsync(
-                "USER_PROFILE_DISPLAY_NAME_UPDATED",
-                new
+            await UserService.RecordProfileAuditAsync(
+                _currentUserId,
+                AuditDisplayNameUpdated,
+                JsonSerializer.Serialize(new
                 {
                     oldDisplayName,
-                    newDisplayName
-                });
+                    newDisplayName = trimmed,
+                    confirmedBy = "AUTHENTICATED_SESSION"
+                }));
 
-            SetOperationMessage("Display name updated successfully and audit logged.", Severity.Success);
+            _currentUser = updated;
+            _displayName = updated.DisplayName;
+            _avatarInitial = BuildInitial(updated.DisplayName, updated.Username);
+
+            SetOperation("Display name updated successfully.", Severity.Success);
             Snackbar.Add("Display name updated successfully.", Severity.Success);
-        }
-        catch (Exception ex)
-        {
-            SetOperationMessage($"Failed to update display name: {ex.GetBaseException().Message}", Severity.Error);
-        }
-        finally
-        {
-            _isSavingDisplayName = false;
-        }
+        });
     }
 
-    private async Task SelectAvatarForCropAsync(InputFileChangeEventArgs e)
+    private async Task SelectAvatarAsync(InputFileChangeEventArgs args)
     {
-        var file = e.File;
+        var file = args.File;
 
         if (file == null)
         {
             return;
         }
 
-        var contentType = file.ContentType?.ToLowerInvariant() ?? string.Empty;
-
-        if (!IsImageContentType(contentType))
+        if (!IsImageContentType(file.ContentType))
         {
-            SetOperationMessage("Avatar must be PNG, JPG, JPEG, or WEBP.", Severity.Warning);
+            SetOperation("Avatar must be an image file.", Severity.Warning);
             return;
         }
 
-        try
+        await RunBusyAsync(async () =>
         {
-            await using var stream = file.OpenReadStream(MaxUploadBytes);
-            using var memory = new MemoryStream();
+            var originalBytes = await ReadFileBytesAsync(file);
+            var originalDataUrl = BuildDataUrl(file.ContentType, originalBytes);
 
-            await stream.CopyToAsync(memory);
+            var croppedDataUrl = await TryCropImageDataUrlAsync(
+                originalDataUrl,
+                512,
+                0.92);
 
-            _pendingAvatarBytes = memory.ToArray();
-            _pendingAvatarFileName = file.Name;
-            _pendingAvatarContentType = file.ContentType;
+            _avatarOriginalPreviewDataUrl = originalDataUrl;
+            _avatarCropPreviewDataUrl = croppedDataUrl;
+            _selectedAvatarBytes = DataUrlToBytes(croppedDataUrl);
+            _selectedAvatarFileName = BuildCroppedFileName(file.Name, "avatar");
+            _selectedAvatarContentType = "image/jpeg";
 
-            var base64 = Convert.ToBase64String(_pendingAvatarBytes);
-            _avatarPreviewDataUrl = $"data:{file.ContentType};base64,{base64}";
-
-            SetOperationMessage("Avatar selected. Review the crop preview before uploading.", Severity.Info);
-        }
-        catch (Exception ex)
-        {
-            SetOperationMessage($"Failed to prepare avatar: {ex.GetBaseException().Message}", Severity.Error);
-        }
+            SetOperation("Avatar selected. Review the preview and upload when ready.", Severity.Info);
+        });
     }
 
-    private async Task ConfirmAndUploadAvatarAsync()
+    private async Task UploadAvatarDirectAsync()
     {
-        if (string.IsNullOrWhiteSpace(_avatarPreviewDataUrl) ||
-            _pendingAvatarBytes == null ||
-            string.IsNullOrWhiteSpace(_pendingAvatarFileName) ||
-            string.IsNullOrWhiteSpace(_pendingAvatarContentType))
+        if (_selectedAvatarBytes == null || string.IsNullOrWhiteSpace(_selectedAvatarFileName))
         {
-            SetOperationMessage("Please select an avatar first.", Severity.Warning);
+            SetOperation("Please select an avatar image first.", Severity.Warning);
             return;
         }
 
-        var confirm = await JSRuntime.InvokeAsync<bool>(
-            "confirm",
-            "Do you want to replace your current avatar with this cropped image?");
-
-        if (!confirm)
+        await RunBusyAsync(async () =>
         {
-            SetOperationMessage("Avatar update cancelled.", Severity.Info);
-            return;
-        }
-
-        try
-        {
-            _isUploadingAvatar = true;
-
-            var croppedDataUrl = await CropImageOrFallbackAsync(_avatarPreviewDataUrl, 512, 0.92);
-            var avatarBytes = ConvertDataUrlToBytes(croppedDataUrl);
-            var avatarFileName = BuildUniqueCroppedAvatarFileName(_pendingAvatarFileName);
-            var avatarContentType = "image/jpeg";
+            var oldAvatarFileId = _currentUser?.AvatarFileId;
 
             var upload = await FileStorageService.UploadFileAsync(
-                avatarBytes,
-                avatarFileName,
-                avatarContentType,
-                "USER_AVATAR",
-                null);
+                _selectedAvatarBytes,
+                _selectedAvatarFileName,
+                _selectedAvatarContentType,
+                "USER_AVATAR");
 
-            var fileResource = await FileResourceService.CreateFileResourceAsync(new CreateFileResourceDto(
-                "USER_AVATAR",
-                upload.OriginalFileName,
-                upload.PublicId,
-                upload.SecureUrl,
-                upload.ContentType,
-                upload.FileSizeBytes,
-                upload.Sha256Hash,
-                _currentUserId
-            ));
+            var fileResource = await FileResourceService.CreateFileResourceAsync(
+                new CreateFileResourceDto(
+                    "USER_AVATAR",
+                    upload.OriginalFileName,
+                    upload.PublicId,
+                    upload.SecureUrl,
+                    upload.ContentType,
+                    upload.FileSizeBytes,
+                    upload.Sha256Hash,
+                    _currentUserId));
 
-            _currentUser = await UserService.UpdateAvatarFileAsync(
+            var updated = await UserService.UpdateAvatarFileAsync(
                 _currentUserId,
                 fileResource.FileResourceId);
 
-            _avatarUrl = BuildVersionedUrl(fileResource.CloudinarySecureUrl, fileResource.FileResourceId);
-            _avatarInitial = BuildInitial(_currentUser.DisplayName, _currentUser.Username);
-
-            await WriteAuditAsync(
-                "USER_PROFILE_AVATAR_UPDATED",
-                new
+            await UserService.RecordProfileAuditAsync(
+                _currentUserId,
+                AuditAvatarUpdated,
+                JsonSerializer.Serialize(new
                 {
-                    avatarFileResourceId = fileResource.FileResourceId,
-                    originalFileName = fileResource.OriginalFileName,
-                    contentType = fileResource.ContentType,
-                    cropApplied = true
-                });
+                    oldAvatarFileId,
+                    newAvatarFileId = fileResource.FileResourceId,
+                    fileName = fileResource.OriginalFileName,
+                    confirmedBy = "AUTHENTICATED_SESSION"
+                }));
 
-            CancelAvatarSelection(showMessage: false);
+            _currentUser = updated;
+            await LoadCurrentFilesAsync();
+            CancelAvatarSelection();
 
-            SetOperationMessage("Avatar updated successfully and audit logged.", Severity.Success);
-            Snackbar.Add("Avatar updated successfully.", Severity.Success);
-        }
-        catch (Exception ex)
-        {
-            SetOperationMessage($"Avatar update failed: {ex.GetBaseException().Message}", Severity.Error);
-        }
-        finally
-        {
-            _isUploadingAvatar = false;
-        }
+            SetOperation("Avatar uploaded successfully.", Severity.Success);
+            Snackbar.Add("Avatar uploaded successfully.", Severity.Success);
+        });
     }
 
-    private void CancelAvatarSelection(bool showMessage = true)
+    private async Task SelectPortfolioAsync(InputFileChangeEventArgs args)
     {
-        _avatarPreviewDataUrl = null;
-        _pendingAvatarBytes = null;
-        _pendingAvatarFileName = null;
-        _pendingAvatarContentType = null;
-
-        if (showMessage)
-        {
-            SetOperationMessage("Avatar change cancelled.", Severity.Info);
-        }
-    }
-
-    private async Task SelectPortfolioAsync(InputFileChangeEventArgs e)
-    {
-        var file = e.File;
+        var file = args.File;
 
         if (file == null)
         {
             return;
         }
 
-        var contentType = file.ContentType?.ToLowerInvariant() ?? string.Empty;
-
-        var allowed = IsPortfolioContentType(contentType);
-
-        if (!allowed)
+        if (!IsImageContentType(file.ContentType) && !IsDocumentContentType(file.ContentType))
         {
-            SetOperationMessage("Portfolio must be PDF, DOC, DOCX, PNG, JPG, JPEG, or WEBP.", Severity.Warning);
+            SetOperation("Portfolio must be an image, PDF, DOC, or DOCX file.", Severity.Warning);
             return;
         }
 
-        try
+        await RunBusyAsync(async () =>
         {
-            await using var stream = file.OpenReadStream(MaxUploadBytes);
-            using var memory = new MemoryStream();
+            var originalBytes = await ReadFileBytesAsync(file);
 
-            await stream.CopyToAsync(memory);
+            _selectedPortfolioFileName = Path.GetFileName(file.Name);
+            _selectedPortfolioContentType = file.ContentType;
+            _selectedPortfolioBytes = originalBytes;
+            _selectedPortfolioIsImage = IsImageContentType(file.ContentType);
 
-            _pendingPortfolioBytes = memory.ToArray();
-            _pendingPortfolioFileName = file.Name;
-            _pendingPortfolioContentType = file.ContentType;
-            _pendingPortfolioIsImage = IsImageContentType(contentType);
+            _portfolioOriginalPreviewDataUrl = null;
+            _portfolioCropPreviewDataUrl = null;
 
-            if (_pendingPortfolioIsImage)
+            if (_selectedPortfolioIsImage)
             {
-                var base64 = Convert.ToBase64String(_pendingPortfolioBytes);
-                _portfolioPreviewDataUrl = $"data:{file.ContentType};base64,{base64}";
-                SetOperationMessage("Image portfolio selected. Review the crop preview before uploading.", Severity.Info);
+                var originalDataUrl = BuildDataUrl(file.ContentType, originalBytes);
+
+                var croppedDataUrl = await TryCropImageDataUrlAsync(
+                    originalDataUrl,
+                    900,
+                    0.92);
+
+                _portfolioOriginalPreviewDataUrl = originalDataUrl;
+                _portfolioCropPreviewDataUrl = croppedDataUrl;
+                _selectedPortfolioBytes = DataUrlToBytes(croppedDataUrl);
+                _selectedPortfolioFileName = BuildCroppedFileName(file.Name, "portfolio");
+                _selectedPortfolioContentType = "image/jpeg";
             }
-            else
-            {
-                _portfolioPreviewDataUrl = null;
-                SetOperationMessage("Document portfolio selected. Please confirm before uploading.", Severity.Info);
-            }
-        }
-        catch (Exception ex)
-        {
-            SetOperationMessage($"Failed to prepare portfolio: {ex.GetBaseException().Message}", Severity.Error);
-        }
+
+            SetOperation("Portfolio selected. Review the file and upload when ready.", Severity.Info);
+        });
     }
 
-    private async Task ConfirmAndUploadPortfolioAsync()
+    private async Task UploadPortfolioDirectAsync()
     {
-        if (_pendingPortfolioBytes == null ||
-            string.IsNullOrWhiteSpace(_pendingPortfolioFileName) ||
-            string.IsNullOrWhiteSpace(_pendingPortfolioContentType))
+        if (_selectedPortfolioBytes == null ||
+            string.IsNullOrWhiteSpace(_selectedPortfolioFileName) ||
+            string.IsNullOrWhiteSpace(_selectedPortfolioContentType))
         {
-            SetOperationMessage("Please select a portfolio file first.", Severity.Warning);
+            SetOperation("Please select a portfolio file first.", Severity.Warning);
             return;
         }
 
-        var confirm = await JSRuntime.InvokeAsync<bool>(
-            "confirm",
-            $"Do you want to replace your current portfolio with '{_pendingPortfolioFileName}'?");
-
-        if (!confirm)
+        await RunBusyAsync(async () =>
         {
-            SetOperationMessage("Portfolio update cancelled.", Severity.Info);
-            return;
-        }
-
-        try
-        {
-            _isUploadingPortfolio = true;
-
-            byte[] portfolioBytes = _pendingPortfolioBytes;
-            string portfolioFileName = BuildUniquePortfolioFileName(_pendingPortfolioFileName);
-            string portfolioContentType = _pendingPortfolioContentType;
-            bool cropApplied = false;
-
-            if (_pendingPortfolioIsImage && !string.IsNullOrWhiteSpace(_portfolioPreviewDataUrl))
-            {
-                var croppedDataUrl = await CropImageOrFallbackAsync(_portfolioPreviewDataUrl, 1024, 0.92);
-                portfolioBytes = ConvertDataUrlToBytes(croppedDataUrl);
-                portfolioFileName = BuildUniqueCroppedPortfolioFileName(_pendingPortfolioFileName);
-                portfolioContentType = "image/jpeg";
-                cropApplied = true;
-            }
+            var oldPortfolioFileId = _currentUser?.PortfolioFileId;
 
             var upload = await FileStorageService.UploadFileAsync(
-                portfolioBytes,
-                portfolioFileName,
-                portfolioContentType,
-                "REGISTRATION_PORTFOLIO",
-                null);
+                _selectedPortfolioBytes,
+                _selectedPortfolioFileName,
+                _selectedPortfolioContentType,
+                "REGISTRATION_PORTFOLIO");
 
-            var fileResource = await FileResourceService.CreateFileResourceAsync(new CreateFileResourceDto(
-                "REGISTRATION_PORTFOLIO",
-                upload.OriginalFileName,
-                upload.PublicId,
-                upload.SecureUrl,
-                upload.ContentType,
-                upload.FileSizeBytes,
-                upload.Sha256Hash,
-                _currentUserId
-            ));
+            var fileResource = await FileResourceService.CreateFileResourceAsync(
+                new CreateFileResourceDto(
+                    "REGISTRATION_PORTFOLIO",
+                    upload.OriginalFileName,
+                    upload.PublicId,
+                    upload.SecureUrl,
+                    upload.ContentType,
+                    upload.FileSizeBytes,
+                    upload.Sha256Hash,
+                    _currentUserId));
 
-            _currentUser = await UserService.UpdatePortfolioFileAsync(
+            var updated = await UserService.UpdatePortfolioFileAsync(
                 _currentUserId,
                 fileResource.FileResourceId);
 
-            _portfolioUrl = $"/api/portfolio/{fileResource.FileResourceId}";
-            _portfolioFileName = fileResource.OriginalFileName;
-
-            await WriteAuditAsync(
-                "USER_PROFILE_PORTFOLIO_UPDATED",
-                new
+            await UserService.RecordProfileAuditAsync(
+                _currentUserId,
+                AuditPortfolioUpdated,
+                JsonSerializer.Serialize(new
                 {
-                    portfolioFileResourceId = fileResource.FileResourceId,
-                    originalFileName = fileResource.OriginalFileName,
+                    oldPortfolioFileId,
+                    newPortfolioFileId = fileResource.FileResourceId,
+                    fileName = fileResource.OriginalFileName,
                     contentType = fileResource.ContentType,
-                    cropApplied
-                });
+                    confirmedBy = "AUTHENTICATED_SESSION"
+                }));
 
-            CancelPortfolioSelection(showMessage: false);
+            _currentUser = updated;
+            await LoadCurrentFilesAsync();
+            CancelPortfolioSelection();
 
-            SetOperationMessage("Portfolio updated successfully and audit logged.", Severity.Success);
-            Snackbar.Add("Portfolio updated successfully.", Severity.Success);
-        }
-        catch (Exception ex)
-        {
-            SetOperationMessage($"Portfolio update failed: {ex.GetBaseException().Message}", Severity.Error);
-        }
-        finally
-        {
-            _isUploadingPortfolio = false;
-        }
+            SetOperation("Portfolio uploaded successfully.", Severity.Success);
+            Snackbar.Add("Portfolio uploaded successfully.", Severity.Success);
+        });
     }
 
-    private void CancelPortfolioSelection(bool showMessage = true)
+    private async Task SendOtpForPasswordAsync()
     {
-        _pendingPortfolioBytes = null;
-        _pendingPortfolioFileName = null;
-        _pendingPortfolioContentType = null;
-        _pendingPortfolioIsImage = false;
-        _portfolioPreviewDataUrl = null;
-
-        if (showMessage)
-        {
-            SetOperationMessage("Portfolio change cancelled.", Severity.Info);
-        }
-    }
-
-    private async Task ResetPasswordAsync()
-    {
-        if (string.IsNullOrWhiteSpace(_currentPassword))
-        {
-            SetOperationMessage("Current password is required.", Severity.Warning);
-            return;
-        }
-
         if (string.IsNullOrWhiteSpace(_newPassword))
         {
-            SetOperationMessage("New password cannot be empty.", Severity.Warning);
+            SetOperation("New password cannot be empty.", Severity.Warning);
             return;
         }
 
         if (_newPassword.Length < 8)
         {
-            SetOperationMessage("New password must be at least 8 characters.", Severity.Warning);
+            SetOperation("New password must be at least 8 characters.", Severity.Warning);
             return;
         }
 
-        if (_newPassword != _confirmPassword)
+        if (!string.Equals(_newPassword, _confirmPassword, StringComparison.Ordinal))
         {
-            SetOperationMessage("Password confirmation does not match.", Severity.Warning);
+            SetOperation("Confirm password does not match.", Severity.Warning);
             return;
         }
 
-        var confirm = await JSRuntime.InvokeAsync<bool>(
-            "confirm",
-            "Do you want to reset your password?");
-
-        if (!confirm)
+        await RunBusyAsync(async () =>
         {
-            SetOperationMessage("Password reset cancelled.", Severity.Info);
+            await UserService.SendProfileOtpAsync(_currentUserId, ActionPasswordOtp);
+
+            _otpSentForPassword = true;
+            _otpCodePassword = string.Empty;
+
+            SetOperation("OTP sent to your registered email. The code expires in 5 minutes.", Severity.Info);
+            Snackbar.Add("OTP sent to your registered email.", Severity.Info);
+        });
+    }
+
+    private async Task ConfirmPasswordResetAsync()
+    {
+        await RunBusyAsync(async () =>
+        {
+            var verified = await UserService.VerifyProfileOtpAsync(
+                _currentUserId,
+                ActionPasswordOtp,
+                _otpCodePassword);
+
+            if (!verified)
+            {
+                SetOperation("Invalid or expired OTP.", Severity.Error);
+                return;
+            }
+
+            await UserService.ResetPasswordAsync(_currentUserId, _newPassword);
+
+            await UserService.RecordProfileAuditAsync(
+                _currentUserId,
+                AuditPasswordReset,
+                JsonSerializer.Serialize(new
+                {
+                    confirmedBy = "EMAIL_OTP",
+                    passwordChanged = true
+                }));
+
+            _newPassword = string.Empty;
+            _confirmPassword = string.Empty;
+            _otpSentForPassword = false;
+            _otpCodePassword = string.Empty;
+
+            SetOperation("Password reset successfully.", Severity.Success);
+            Snackbar.Add("Password reset successfully.", Severity.Success);
+        });
+    }
+
+    private async Task RunBusyAsync(Func<Task> action)
+    {
+        if (_isBusy)
+        {
             return;
         }
+
+        _isBusy = true;
 
         try
         {
-            _isResettingPassword = true;
-
-            await UserService.ResetPasswordAsync(
-                _currentUserId,
-                _currentPassword,
-                _newPassword);
-
-            await WriteAuditAsync(
-                "USER_PROFILE_PASSWORD_RESET",
-                new
-                {
-                    verifiedCurrentPassword = true
-                });
-
-            _currentPassword = null;
-            _newPassword = null;
-            _confirmPassword = null;
-
-            SetOperationMessage("Password reset successfully and audit logged.", Severity.Success);
-            Snackbar.Add("Password reset successfully.", Severity.Success);
+            await action();
         }
         catch (Exception ex)
         {
-            SetOperationMessage($"Password reset failed: {ex.GetBaseException().Message}", Severity.Error);
+            SetOperation(ex.Message, Severity.Error);
+            Snackbar.Add(ex.Message, Severity.Error);
         }
         finally
         {
-            _isResettingPassword = false;
+            _isBusy = false;
         }
     }
 
-    private async Task WriteAuditAsync(string actionCode, object detail)
+    private void CancelAvatarSelection()
     {
-        try
-        {
-            var detailJson = JsonSerializer.Serialize(detail);
-
-            await AuditEventService.CreateAuditEventAsync(new CreateAuditEventDto(
-                _currentUserId,
-                _currentUser?.RoleName,
-                actionCode,
-                "User",
-                _currentUserId.ToString(),
-                detailJson
-            ));
-        }
-        catch (Exception ex)
-        {
-            SetOperationMessage($"Profile updated, but audit log failed: {ex.GetBaseException().Message}", Severity.Warning);
-        }
+        _avatarOriginalPreviewDataUrl = null;
+        _avatarCropPreviewDataUrl = null;
+        _selectedAvatarBytes = null;
+        _selectedAvatarFileName = null;
+        _selectedAvatarContentType = "image/jpeg";
     }
 
-    private async Task<string> CropImageOrFallbackAsync(string dataUrl, int size, double quality)
+    private void CancelPortfolioSelection()
+    {
+        _selectedPortfolioFileName = null;
+        _portfolioOriginalPreviewDataUrl = null;
+        _portfolioCropPreviewDataUrl = null;
+        _selectedPortfolioBytes = null;
+        _selectedPortfolioContentType = null;
+        _selectedPortfolioIsImage = false;
+    }
+
+    private void CancelPasswordOtp()
+    {
+        _otpSentForPassword = false;
+        _otpCodePassword = string.Empty;
+    }
+
+    private async Task<string> TryCropImageDataUrlAsync(string originalDataUrl, int size, double quality)
     {
         try
         {
-            return await JSRuntime.InvokeAsync<string>(
+            using var timeoutCts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+            var croppedDataUrl = await JSRuntime.InvokeAsync<string>(
                 "profileSettingsCrop.cropCenter",
-                dataUrl,
-                size,
-                quality);
+                timeoutCts.Token,
+                new object?[] { originalDataUrl, size, quality });
+
+            if (!string.IsNullOrWhiteSpace(croppedDataUrl))
+            {
+                return croppedDataUrl;
+            }
         }
         catch
         {
-            return dataUrl;
+            // If browser-side crop is cancelled or fails, keep the original image.
         }
+
+        return originalDataUrl;
     }
 
-    private static byte[] ConvertDataUrlToBytes(string dataUrl)
+    private async Task<byte[]> ReadFileBytesAsync(IBrowserFile file)
+    {
+        await using var stream = file.OpenReadStream(MaxUploadBytes);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        return ms.ToArray();
+    }
+
+    private static bool IsImageContentType(string? contentType)
+    {
+        return contentType?.ToLowerInvariant() is
+            "image/png" or
+            "image/jpeg" or
+            "image/jpg" or
+            "image/webp";
+    }
+
+    private static bool IsDocumentContentType(string? contentType)
+    {
+        return contentType?.ToLowerInvariant() is
+            "application/pdf" or
+            "application/msword" or
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    }
+
+    private static string BuildDataUrl(string contentType, byte[] bytes)
+    {
+        return $"data:{contentType};base64,{Convert.ToBase64String(bytes)}";
+    }
+
+    private static byte[] DataUrlToBytes(string dataUrl)
     {
         var commaIndex = dataUrl.IndexOf(',');
 
@@ -944,28 +943,21 @@
             return Convert.FromBase64String(dataUrl);
         }
 
-        var base64 = dataUrl[(commaIndex + 1)..];
-        return Convert.FromBase64String(base64);
+        return Convert.FromBase64String(dataUrl[(commaIndex + 1)..]);
     }
 
-    private static bool IsImageContentType(string? contentType)
+    private static string BuildCroppedFileName(string originalFileName, string prefix)
     {
-        return contentType?.ToLowerInvariant() is "image/png" or "image/jpeg" or "image/jpg" or "image/webp";
-    }
+        var safeName = Path.GetFileNameWithoutExtension(originalFileName)
+            .Replace(" ", "-", StringComparison.Ordinal)
+            .ToLowerInvariant();
 
-    private static bool IsPortfolioContentType(string? contentType)
-    {
-        return IsImageContentType(contentType) ||
-               contentType?.ToLowerInvariant() is
-                   "application/pdf" or
-                   "application/msword" or
-                   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-    }
+        if (string.IsNullOrWhiteSpace(safeName))
+        {
+            safeName = prefix;
+        }
 
-    private void SetOperationMessage(string message, Severity severity)
-    {
-        _operationMessage = message;
-        _operationSeverity = severity;
+        return $"{safeName}_cropped_{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}.jpg";
     }
 
     private static string BuildInitial(string? displayName, string? username)
@@ -985,51 +977,328 @@
         return $"{url}{separator}v={fileResourceId:N}";
     }
 
-    private static string BuildUniqueCroppedAvatarFileName(string? originalFileName)
+    private void SetOperation(string message, Severity severity)
     {
-        var baseName = string.IsNullOrWhiteSpace(originalFileName)
-            ? "avatar"
-            : Path.GetFileNameWithoutExtension(originalFileName);
-
-        return $"{SanitizeFileName(baseName)}_cropped_{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}.jpg";
-    }
-
-    private static string BuildUniquePortfolioFileName(string? originalFileName)
-    {
-        var extension = Path.GetExtension(originalFileName);
-
-        if (string.IsNullOrWhiteSpace(extension))
-        {
-            extension = ".bin";
-        }
-
-        var baseName = string.IsNullOrWhiteSpace(originalFileName)
-            ? "portfolio"
-            : Path.GetFileNameWithoutExtension(originalFileName);
-
-        return $"{SanitizeFileName(baseName)}_{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
-    }
-
-    private static string BuildUniqueCroppedPortfolioFileName(string? originalFileName)
-    {
-        var baseName = string.IsNullOrWhiteSpace(originalFileName)
-            ? "portfolio"
-            : Path.GetFileNameWithoutExtension(originalFileName);
-
-        return $"{SanitizeFileName(baseName)}_cropped_{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}.jpg";
-    }
-
-    private static string SanitizeFileName(string value)
-    {
-        var invalidChars = Path.GetInvalidFileNameChars();
-        var cleaned = new string(value
-            .Where(ch => !invalidChars.Contains(ch))
-            .ToArray());
-
-        cleaned = cleaned.Replace(' ', '_');
-
-        return string.IsNullOrWhiteSpace(cleaned)
-            ? "file"
-            : cleaned;
+        _operationMessage = message;
+        _operationSeverity = severity;
     }
 }
+
+<style>
+    .mf-settings-page {
+        width: 100%;
+        padding: 18px 24px;
+    }
+
+    .mf-profile-shell {
+        width: min(100%, 1500px);
+        margin: 0 auto;
+    }
+
+    .mf-profile-top {
+        min-height: 136px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 24px;
+        padding: 22px 26px;
+        border: 1px solid #e5e7eb;
+        border-radius: 22px;
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 60%, #eef2ff 100%);
+        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+        margin-bottom: 16px;
+    }
+
+    .mf-user-block {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        min-width: 0;
+    }
+
+    .mf-avatar-large {
+        width: 94px;
+        height: 94px;
+        border-radius: 24px;
+        overflow: hidden;
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 34px;
+        font-weight: 800;
+        border: 3px solid #ffffff;
+        box-shadow: 0 10px 22px rgba(79, 70, 229, 0.22);
+        flex: 0 0 auto;
+    }
+
+        .mf-avatar-large img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+    .mf-user-meta {
+        min-width: 0;
+    }
+
+    .mf-muted {
+        color: #64748b;
+    }
+
+    .mf-user-line {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+    }
+
+        .mf-user-line strong {
+            color: #0f172a;
+        }
+
+        .mf-user-line span {
+            color: #64748b;
+            font-size: 13px;
+        }
+
+    .mf-username-chip {
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: #f1f5f9;
+        color: #334155 !important;
+        font-size: 12px !important;
+        font-weight: 700;
+    }
+
+    .mf-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        margin-bottom: 16px;
+    }
+
+    .mf-summary-card {
+        min-height: 104px;
+        padding: 16px 18px;
+        border: 1px solid #e5e7eb;
+        border-radius: 18px;
+        background: #ffffff;
+        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.045);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 4px;
+    }
+
+        .mf-summary-card span {
+            color: #64748b;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            font-weight: 800;
+        }
+
+        .mf-summary-card strong {
+            color: #0f172a;
+            font-size: 18px;
+            line-height: 1.2;
+        }
+
+        .mf-summary-card small {
+            color: #94a3b8;
+        }
+
+    .mf-main-panel {
+        border: 1px solid #e5e7eb;
+        border-radius: 20px;
+        overflow: hidden;
+        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+    }
+
+    .mf-tab-content {
+        padding: 20px;
+    }
+
+    .mf-two-col {
+        display: grid;
+        grid-template-columns: minmax(360px, 0.95fr) minmax(360px, 1.05fr);
+        gap: 18px;
+        align-items: stretch;
+    }
+
+    .mf-upload-layout {
+        display: grid;
+        grid-template-columns: minmax(320px, 0.75fr) minmax(540px, 1.25fr);
+        gap: 18px;
+        align-items: stretch;
+    }
+
+    .mf-section-card,
+    .mf-help-card,
+    .mf-upload-control {
+        padding: 20px;
+        border: 1px solid #e5e7eb;
+        border-radius: 18px;
+        background: #ffffff;
+        min-height: 260px;
+    }
+
+    .mf-help-card {
+        background: #eff6ff;
+        border-color: #dbeafe;
+    }
+
+    .mf-empty-note {
+        min-height: 100px;
+        border: 1px dashed #bfdbfe;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, .65);
+        color: #64748b;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 16px;
+        font-size: 14px;
+    }
+
+    .mf-upload-box {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 4px;
+        min-height: 120px;
+        padding: 16px;
+        border: 1px dashed #94a3b8;
+        border-radius: 16px;
+        background: #f8fafc;
+        cursor: pointer;
+        transition: border-color .15s ease, background .15s ease;
+    }
+
+        .mf-upload-box:hover {
+            border-color: #4f46e5;
+            background: #eef2ff;
+        }
+
+    .mf-upload-title {
+        color: #0f172a;
+        font-weight: 800;
+    }
+
+    .mf-upload-box small {
+        color: #64748b;
+    }
+
+    .mf-file-input-hidden {
+        display: none;
+    }
+
+    .mf-selected-file {
+        margin-top: 12px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: #f1f5f9;
+        color: #334155;
+        font-size: 13px;
+        word-break: break-all;
+    }
+
+    .mf-button-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 14px;
+    }
+
+    .mf-preview-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+        padding: 20px;
+        border: 1px solid #e5e7eb;
+        border-radius: 18px;
+        background: #ffffff;
+        min-height: 260px;
+    }
+
+    .mf-preview-box {
+        min-height: 250px;
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        background: #f8fafc;
+        overflow: hidden;
+        color: #94a3b8;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+    }
+
+        .mf-preview-box img {
+            width: 100%;
+            max-height: 280px;
+            object-fit: contain;
+            display: block;
+        }
+
+    .mf-preview-square {
+        aspect-ratio: 1 / 1;
+        min-height: 250px;
+    }
+
+        .mf-preview-square img {
+            height: 100%;
+            object-fit: cover;
+        }
+
+    .mf-loading-box {
+        min-height: 260px;
+        border: 1px solid #e5e7eb;
+        border-radius: 18px;
+        background: #ffffff;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        justify-content: center;
+        margin-top: 16px;
+    }
+
+    @@media (max-width: 1100px) {
+        .mf-summary-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .mf-two-col,
+        .mf-upload-layout {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 700px) {
+        .mf-settings-page {
+            padding: 12px;
+        }
+
+        .mf-profile-top {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .mf-user-block {
+            align-items: flex-start;
+        }
+
+        .mf-summary-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .mf-preview-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>

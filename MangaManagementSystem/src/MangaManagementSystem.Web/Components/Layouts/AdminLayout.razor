@@ -12,33 +12,60 @@
                 </div>
             </MudStack>
         </div>
+
         <div class="pa-3">
             <UserAvatarMenu />
         </div>
+
         <nav class="mf-nav-section">
             <div class="mf-nav-title">Main Navigation</div>
-            <NavLink href="/admin" class="mf-nav-link" Match="NavLinkMatch.Prefix">Dashboard</NavLink>
-            <NavLink href="/admin/users" class="mf-nav-link" Match="NavLinkMatch.Prefix">User Accounts</NavLink>
+
+            <NavLink href="/admin" class="mf-nav-link" Match="NavLinkMatch.Prefix">
+                Dashboard
+            </NavLink>
+
+            <NavLink href="/admin/users" class="mf-nav-link" Match="NavLinkMatch.Prefix">
+                User Accounts
+            </NavLink>
+
             <AuthorizeView Roles="Admin">
                 <Authorized>
-                    <NavLink href="/admin/user-approval" class="mf-nav-link" Match="NavLinkMatch.Prefix">User Approval</NavLink>
+                    <NavLink href="/admin/user-approval" class="mf-nav-link" Match="NavLinkMatch.Prefix">
+                        User Approval
+                    </NavLink>
                 </Authorized>
             </AuthorizeView>
-            <NavLink href="/admin/board-polls" class="mf-nav-link" Match="NavLinkMatch.Prefix">Board Polls</NavLink>
+
+            <NavLink href="/admin/board-polls" class="mf-nav-link" Match="NavLinkMatch.Prefix">
+                Board Polls
+            </NavLink>
+
+            <div class="mf-nav-title mt-3">Account</div>
+
+            <NavLink href="/profile/settings" class="mf-nav-link" Match="NavLinkMatch.Prefix">
+                Profile Settings
+            </NavLink>
+
             <div class="mf-nav-link disabled">Role & Permissions (Not available)</div>
             <div class="mf-nav-link disabled">System Settings (Not available)</div>
-
         </nav>
+
         <MudSpacer />
+
         <div class="pa-4">
-            <MudButton FullWidth="true" Variant="Variant.Outlined" Color="Color.Default" OnClick="BackToOverview">
+            <MudButton FullWidth="true"
+                       Variant="Variant.Outlined"
+                       Color="Color.Default"
+                       OnClick="BackToOverview">
                 Back to Overview
             </MudButton>
+
             <div class="mt-3">
                 <LogoutForm />
             </div>
         </div>
     </aside>
+
     <main class="mf-main">
         @ChildContent
     </main>
@@ -46,5 +73,9 @@
 
 @code {
     [Parameter] public RenderFragment? ChildContent { get; set; }
-    private void BackToOverview() => Nav.NavigateTo("/dashboard");
+
+    private void BackToOverview()
+    {
+        Nav.NavigateTo("/dashboard");
+    }
 }
