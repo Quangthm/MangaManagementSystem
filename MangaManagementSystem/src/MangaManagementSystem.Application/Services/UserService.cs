@@ -300,11 +300,14 @@ namespace MangaManagementSystem.Application.Services
                 throw new InvalidOperationException("Audit action code is required.");
             }
 
+            var role = await _unitOfWork.Roles.GetByIdAsync(user.RoleId);
+            var actorRoleName = role?.RoleName ?? user.Role?.RoleName;
+
             var entity = new AuditEvent
             {
                 OccurredAtUtc = DateTime.UtcNow,
                 ActorUserId = actorUserId,
-                ActorRoleName = user.Role?.RoleName,
+                ActorRoleName = actorRoleName,
                 ActionCode = actionCode.Trim().ToUpperInvariant(),
                 EntityType = "USER",
                 EntityId = actorUserId.ToString(),

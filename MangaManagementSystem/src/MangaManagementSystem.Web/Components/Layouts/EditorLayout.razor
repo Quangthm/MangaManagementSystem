@@ -1,27 +1,21 @@
 @namespace MangaManagementSystem.Web.Components.Layouts
 @inject NavigationManager Nav
-@inject AuthenticationStateProvider AuthStateProvider
 
 <div class="mf-shell">
     <aside class="mf-sidebar mf-editor-sidebar">
-        <div class="mf-sidebar-header">
-            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                <div class="mf-logo-box mf-editor-logo">🎨</div>
-                <div>
-                    <MudText Typo="Typo.subtitle1" Class="font-weight-bold text-white">MangaFlow</MudText>
-                    <MudText Typo="Typo.caption" Style="color:#94a3b8">Editorial Board</MudText>
-                </div>
-            </MudStack>
-        </div>
+        <button type="button" class="mf-sidebar-brand" @onclick="GoToEditorDashboard">
+            <span class="mf-logo-box mf-editor-logo">MF</span>
 
-        <div class="pa-3">
-            <UserAvatarMenu />
-        </div>
+            <span class="mf-brand-text">
+                <span class="mf-brand-name">MangaFlow</span>
+                <span class="mf-brand-subtitle">Editorial Board</span>
+            </span>
+        </button>
 
         <nav class="mf-nav-section">
             <div class="mf-nav-title">Editorial Workflow</div>
 
-            <NavLink href="/editor" class="mf-nav-link" Match="NavLinkMatch.Prefix">
+            <NavLink href="/editor" class="mf-nav-link" Match="NavLinkMatch.All">
                 <MudIcon Icon="mdi-view-dashboard" Size="Size.Small" Class="mf-nav-icon" />
                 Dashboard
             </NavLink>
@@ -85,8 +79,51 @@
 @code {
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
+    private void GoToEditorDashboard()
+    {
+        Nav.NavigateTo("/editor");
+    }
+
     private void BackToOverview()
     {
         Nav.NavigateTo("/dashboard");
     }
 }
+
+<style>
+    .mf-sidebar-brand {
+        width: 100%;
+        border: 0;
+        background: transparent;
+        padding: 22px 18px 18px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        text-align: left;
+        cursor: pointer;
+    }
+
+        .mf-sidebar-brand:hover .mf-logo-box {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 22px rgba(236, 72, 153, 0.35);
+        }
+
+    .mf-brand-text {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .mf-brand-name {
+        color: #ffffff;
+        font-weight: 800;
+        font-size: 16px;
+        line-height: 1.2;
+    }
+
+    .mf-brand-subtitle {
+        color: #94a3b8;
+        font-size: 12px;
+        line-height: 1.2;
+    }
+</style>

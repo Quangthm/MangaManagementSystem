@@ -15,49 +15,18 @@
 @inject IFileResourceService FileResourceService
 @inject IFileStorageService FileStorageService
 @inject ISnackbar Snackbar
-@inject IJSRuntime JSRuntime
 @inject NavigationManager NavigationManager
 
 <PageTitle>Profile Settings - MangaFlow</PageTitle>
 
 <div class="mf-settings-page">
-    <section class="mf-profile-shell">
-        <div class="mf-profile-top">
-            <div class="mf-user-block">
-                <div class="mf-avatar-large">
-                    @if (!string.IsNullOrWhiteSpace(_avatarUrl))
-                    {
-                        <img src="@_avatarUrl" alt="User avatar" />
-                    }
-                    else
-                    {
-                        <span>@_avatarInitial</span>
-                    }
-                </div>
-
-                <div class="mf-user-meta">
-                    <MudText Typo="Typo.h4" Class="font-weight-bold mb-1">Profile Settings</MudText>
-                    <MudText Typo="Typo.body2" Class="mf-muted">
-                        Manage username, display name, avatar, portfolio, and password.
-                    </MudText>
-
-                    @if (_currentUser != null)
-                    {
-                        <div class="mf-user-line">
-                            <strong>@_currentUser.DisplayName</strong>
-                            <span class="mf-username-chip">@_currentUser.Username</span>
-                            <span>@_currentUser.Email</span>
-
-                            <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Small">
-                                @_currentRoleName
-                            </MudChip>
-
-                            <MudChip T="string" Color="Color.Success" Variant="Variant.Outlined" Size="Size.Small">
-                                @_currentUser.StatusCode
-                            </MudChip>
-                        </div>
-                    }
-                </div>
+    <section class="mf-settings-shell">
+        <div class="mf-page-heading">
+            <div>
+                <MudText Typo="Typo.h4" Class="font-weight-bold">Profile Settings</MudText>
+                <MudText Typo="Typo.body2" Class="mf-muted">
+                    Manage your account information, portfolio document, and password security.
+                </MudText>
             </div>
         </div>
 
@@ -83,56 +52,162 @@
                 </MudAlert>
             }
 
-            <div class="mf-summary-grid">
-                <div class="mf-summary-card">
-                    <span>Username</span>
-                    <strong>@_currentUser.Username</strong>
-                    <small>Login account</small>
-                </div>
+            <MudPaper Class="mf-account-panel">
+                <aside class="mf-settings-menu">
+                    <div class="mf-menu-user">
+                        <div class="mf-menu-avatar">
+                            @if (!string.IsNullOrWhiteSpace(_avatarUrl))
+                            {
+                                <img src="@_avatarUrl" alt="User avatar" />
+                            }
+                            else
+                            {
+                                <span>@_avatarInitial</span>
+                            }
+                        </div>
 
-                <div class="mf-summary-card">
-                    <span>Display Name</span>
-                    <strong>@_currentUser.DisplayName</strong>
-                    <small>Shown in workspace</small>
-                </div>
+                        <div class="mf-menu-user-meta">
+                            <strong>@_currentUser.DisplayName</strong>
+                            <span>@_currentUser.Username</span>
+                            <span>@_currentUser.Email</span>
+                        </div>
+                    </div>
 
-                <div class="mf-summary-card">
-                    <span>Avatar</span>
-                    <strong>@(_currentUser.AvatarFileId.HasValue ? "Linked" : "Not Set")</strong>
-                    <small>Profile image</small>
-                </div>
+                    <div class="mf-menu-divider"></div>
 
-                <div class="mf-summary-card">
-                    <span>Portfolio</span>
-                    <strong>@(_currentUser.PortfolioFileId.HasValue ? "Linked" : "Not Set")</strong>
-                    <small>Profile document/image</small>
-                </div>
-            </div>
+                    <button type="button"
+                            class="@GetMenuClass(ProfileSettingsSection.Profile)"
+                            @onclick="() => SelectSection(ProfileSettingsSection.Profile)">
+                        <span>Profile</span>
+                        <small>Identity and avatar</small>
+                    </button>
 
-            <MudPaper Class="mf-main-panel">
-                <MudTabs Rounded="true" Elevation="0" PanelClass="mf-tab-content">
-                    <MudTabPanel Text="Profile">
-                        <div class="mf-two-col">
-                            <div class="mf-section-card">
-                                <MudText Typo="Typo.h6" Class="font-weight-bold mb-1">Profile Information</MudText>
-                                <MudText Typo="Typo.body2" Class="mf-muted mb-3">
-                                    Username is read-only. Display name can be updated by the logged-in user.
-                                </MudText>
+                    <button type="button"
+                            class="@GetMenuClass(ProfileSettingsSection.Portfolio)"
+                            @onclick="() => SelectSection(ProfileSettingsSection.Portfolio)">
+                        <span>Portfolio</span>
+                        <small>PDF, DOC, DOCX</small>
+                    </button>
 
-                                <MudTextField T="string"
-                                              Value="@_currentUser.Username"
-                                              Label="Username"
-                                              Variant="Variant.Outlined"
-                                              ReadOnly="true"
-                                              Disabled="true" />
+                    <button type="button"
+                            class="@GetMenuClass(ProfileSettingsSection.Security)"
+                            @onclick="() => SelectSection(ProfileSettingsSection.Security)">
+                        <span>Security</span>
+                        <small>Password OTP</small>
+                    </button>
+                </aside>
 
-                                <MudTextField T="string"
-                                              @bind-Value="_displayName"
-                                              Label="Display Name"
-                                              Variant="Variant.Outlined"
-                                              Immediate="true"
-                                              Disabled="@_isBusy"
-                                              Class="mt-3" />
+                <main class="mf-settings-content">
+                    <div class="mf-content-header">
+                        <div>
+                            <MudText Typo="Typo.h5" Class="font-weight-bold">@CurrentSectionTitle</MudText>
+                            <MudText Typo="Typo.body2" Class="mf-muted">@CurrentSectionDescription</MudText>
+                        </div>
+
+                        <div class="mf-status-line">
+                            <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Small">
+                                @_currentRoleName
+                            </MudChip>
+
+                            <MudChip T="string" Color="Color.Success" Variant="Variant.Outlined" Size="Size.Small">
+                                @_currentUser.StatusCode
+                            </MudChip>
+                        </div>
+                    </div>
+
+                    @if (_activeSection == ProfileSettingsSection.Profile)
+                    {
+                        <div class="mf-profile-grid">
+                            <section class="mf-card">
+                                <MudText Typo="Typo.subtitle1" Class="font-weight-bold mb-3">Avatar</MudText>
+
+                                <div class="mf-avatar-editor">
+                                    <div class="mf-avatar-preview">
+                                        @if (!string.IsNullOrWhiteSpace(_avatarPreviewDataUrl))
+                                        {
+                                            <img src="@_avatarPreviewDataUrl" alt="Selected avatar preview" />
+                                        }
+                                        else if (!string.IsNullOrWhiteSpace(_avatarUrl))
+                                        {
+                                            <img src="@_avatarUrl" alt="Current avatar preview" />
+                                        }
+                                        else
+                                        {
+                                            <span>@_avatarInitial</span>
+                                        }
+                                    </div>
+
+                                    <div class="mf-avatar-actions">
+                                        <label class="mf-upload-button">
+                                            <InputFile OnChange="SelectAvatarAsync"
+                                                       accept="image/png,image/jpeg,image/jpg,image/webp"
+                                                       class="mf-file-input-hidden" />
+                                            Choose Image
+                                        </label>
+
+                                        <MudText Typo="Typo.caption" Class="mf-muted">
+                                            PNG, JPG, JPEG, WEBP · max 10MB · recommended 512x512px.
+                                        </MudText>
+
+                                        @if (!string.IsNullOrWhiteSpace(_selectedAvatarFileName))
+                                        {
+                                            <div class="mf-selected-file">
+                                                <strong>@_selectedAvatarFileName</strong>
+                                                <span>@_selectedAvatarSizeLabel</span>
+                                            </div>
+                                        }
+
+                                        <MudButton Variant="Variant.Filled"
+                                                   Color="Color.Primary"
+                                                   Disabled="@(_isBusy || _selectedAvatarBytes == null)"
+                                                   OnClick="UploadAvatarDirectAsync">
+                                            Upload Avatar
+                                        </MudButton>
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section class="mf-card">
+                                <MudText Typo="Typo.subtitle1" Class="font-weight-bold mb-3">Account Information</MudText>
+
+                                <div class="mf-form-grid">
+                                    <MudTextField T="string"
+                                                  Value="@_currentUser.Username"
+                                                  Label="Username"
+                                                  Variant="Variant.Outlined"
+                                                  ReadOnly="true"
+                                                  Disabled="true" />
+
+                                    <MudTextField T="string"
+                                                  Value="@_currentUser.Email"
+                                                  Label="Email"
+                                                  Variant="Variant.Outlined"
+                                                  ReadOnly="true"
+                                                  Disabled="true" />
+
+                                    <MudTextField T="string"
+                                                  Value="@_currentRoleName"
+                                                  Label="Role"
+                                                  Variant="Variant.Outlined"
+                                                  ReadOnly="true"
+                                                  Disabled="true" />
+
+                                    <MudTextField T="string"
+                                                  Value="@_currentUser.StatusCode"
+                                                  Label="Status"
+                                                  Variant="Variant.Outlined"
+                                                  ReadOnly="true"
+                                                  Disabled="true" />
+
+                                    <div class="mf-form-full">
+                                        <MudTextField T="string"
+                                                      @bind-Value="_displayName"
+                                                      Label="Display Name"
+                                                      Variant="Variant.Outlined"
+                                                      Immediate="true"
+                                                      Disabled="@_isBusy" />
+                                    </div>
+                                </div>
 
                                 <MudButton Variant="Variant.Filled"
                                            Color="Color.Primary"
@@ -141,186 +216,88 @@
                                            Class="mt-3">
                                     Save Display Name
                                 </MudButton>
-                            </div>
-
-                            <div class="mf-help-card">
-                                <MudText Typo="Typo.subtitle1" Class="font-weight-bold mb-2">Update Rule</MudText>
-                                <MudText Typo="Typo.body2" Class="mf-muted">
-                                    Username is shown for account identity and is not editable here. Display name is updated directly after login session verification. OTP is only required for password reset.
-                                </MudText>
-                            </div>
+                            </section>
                         </div>
-                    </MudTabPanel>
+                    }
+                    else if (_activeSection == ProfileSettingsSection.Portfolio)
+                    {
+                        <div class="mf-portfolio-grid">
+                            <section class="mf-card">
+                                <MudText Typo="Typo.subtitle1" Class="font-weight-bold mb-2">Current Portfolio</MudText>
 
-                    <MudTabPanel Text="Avatar">
-                        <div class="mf-upload-layout">
-                            <div class="mf-upload-control">
-                                <MudText Typo="Typo.h6" Class="font-weight-bold mb-1">Avatar</MudText>
+                                <div class="mf-document-current">
+                                    @if (!string.IsNullOrWhiteSpace(_portfolioUrl))
+                                    {
+                                        <div class="mf-document-row">
+                                            <span class="mf-document-badge">@_portfolioTypeLabel</span>
+
+                                            <div class="mf-document-body">
+                                                <strong>@(string.IsNullOrWhiteSpace(_portfolioFileName) ? "Portfolio document linked" : _portfolioFileName)</strong>
+                                                <span>Current portfolio document is linked to this account.</span>
+                                            </div>
+                                        </div>
+
+                                        <MudButton Href="@_portfolioUrl"
+                                                   Target="_blank"
+                                                   Variant="Variant.Outlined"
+                                                   Color="Color.Primary"
+                                                   Class="mt-3">
+                                            Open Current Portfolio
+                                        </MudButton>
+                                    }
+                                    else
+                                    {
+                                        <div class="mf-document-row">
+                                            <span class="mf-document-badge">FILE</span>
+
+                                            <div class="mf-document-body">
+                                                <strong>No portfolio document</strong>
+                                                <span>Upload a PDF, DOC, or DOCX file to link a portfolio to this account.</span>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </section>
+
+                            <section class="mf-card">
+                                <MudText Typo="Typo.subtitle1" Class="font-weight-bold mb-2">Upload Portfolio Document</MudText>
                                 <MudText Typo="Typo.body2" Class="mf-muted mb-3">
-                                    Select an image, preview it, then upload directly.
+                                    Accepted formats: PDF, DOC, DOCX. Maximum file size: 10MB.
                                 </MudText>
 
-                                <label class="mf-upload-box">
-                                    <InputFile OnChange="SelectAvatarAsync"
-                                               accept="image/png,image/jpeg,image/jpg,image/webp"
-                                               class="mf-file-input-hidden" />
-                                    <span class="mf-upload-title">Choose avatar image</span>
-                                    <small>PNG, JPG, JPEG, WEBP up to 10MB</small>
-                                </label>
-
-                                @if (!string.IsNullOrWhiteSpace(_selectedAvatarFileName))
-                                {
-                                    <div class="mf-selected-file">
-                                        @_selectedAvatarFileName
-                                    </div>
-                                }
-
-                                <div class="mf-button-row">
-                                    <MudButton Variant="Variant.Filled"
-                                               Color="Color.Primary"
-                                               Disabled="@(_isBusy || _selectedAvatarBytes == null)"
-                                               OnClick="UploadAvatarDirectAsync">
-                                        Upload Avatar
-                                    </MudButton>
-
-                                    <MudButton Variant="Variant.Text"
-                                               Color="Color.Default"
-                                               Disabled="@(_isBusy || _selectedAvatarBytes == null)"
-                                               OnClick="CancelAvatarSelection">
-                                        Clear
-                                    </MudButton>
-                                </div>
-                            </div>
-
-                            <div class="mf-preview-grid">
-                                <div>
-                                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2">Original Preview</MudText>
-                                    <div class="mf-preview-box">
-                                        @if (!string.IsNullOrWhiteSpace(_avatarOriginalPreviewDataUrl))
-                                        {
-                                            <img src="@_avatarOriginalPreviewDataUrl" alt="Original avatar preview" />
-                                        }
-                                        else
-                                        {
-                                            <span>No image selected</span>
-                                        }
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2">Crop Preview</MudText>
-                                    <div class="mf-preview-box mf-preview-square">
-                                        @if (!string.IsNullOrWhiteSpace(_avatarCropPreviewDataUrl))
-                                        {
-                                            <img src="@_avatarCropPreviewDataUrl" alt="Cropped avatar preview" />
-                                        }
-                                        else
-                                        {
-                                            <span>No crop yet</span>
-                                        }
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </MudTabPanel>
-
-                    <MudTabPanel Text="Portfolio">
-                        <div class="mf-upload-layout">
-                            <div class="mf-upload-control">
-                                <MudText Typo="Typo.h6" Class="font-weight-bold mb-1">Portfolio</MudText>
-                                <MudText Typo="Typo.body2" Class="mf-muted mb-3">
-                                    Upload image/PDF/DOC/DOCX. Image files show original and crop preview before saving.
-                                </MudText>
-
-                                <label class="mf-upload-box mf-portfolio-upload">
+                                <label class="mf-document-dropzone">
                                     <InputFile OnChange="SelectPortfolioAsync"
-                                               accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,image/jpg,image/webp"
+                                               accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.pdf,.doc,.docx"
                                                class="mf-file-input-hidden" />
-                                    <span class="mf-upload-title">Choose portfolio file</span>
-                                    <small>Image, PDF, DOC, DOCX up to 10MB</small>
+                                    <span>Choose Document</span>
+                                    <small>PDF, DOC, DOCX · max 10MB</small>
                                 </label>
 
                                 @if (!string.IsNullOrWhiteSpace(_selectedPortfolioFileName))
                                 {
-                                    <div class="mf-selected-file">
-                                        @_selectedPortfolioFileName
+                                    <div class="mf-selected-file mt-3">
+                                        <strong>@_selectedPortfolioFileName</strong>
+                                        <span>@_selectedPortfolioSizeLabel</span>
                                     </div>
                                 }
 
-                                <div class="mf-button-row">
-                                    <MudButton Variant="Variant.Filled"
-                                               Color="Color.Primary"
-                                               Disabled="@(_isBusy || _selectedPortfolioBytes == null)"
-                                               OnClick="UploadPortfolioDirectAsync">
-                                        Upload Portfolio
-                                    </MudButton>
-
-                                    <MudButton Variant="Variant.Text"
-                                               Color="Color.Default"
-                                               Disabled="@(_isBusy || _selectedPortfolioBytes == null)"
-                                               OnClick="CancelPortfolioSelection">
-                                        Clear
-                                    </MudButton>
-                                </div>
-
-                                @if (!string.IsNullOrWhiteSpace(_portfolioUrl))
-                                {
-                                    <MudButton Href="@_portfolioUrl"
-                                               Target="_blank"
-                                               Variant="Variant.Text"
-                                               Color="Color.Primary"
-                                               Class="mt-2">
-                                        Open Current Portfolio
-                                    </MudButton>
-                                }
-                            </div>
-
-                            <div class="mf-preview-grid">
-                                <div>
-                                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2">Original Preview</MudText>
-                                    <div class="mf-preview-box">
-                                        @if (_selectedPortfolioIsImage && !string.IsNullOrWhiteSpace(_portfolioOriginalPreviewDataUrl))
-                                        {
-                                            <img src="@_portfolioOriginalPreviewDataUrl" alt="Original portfolio preview" />
-                                        }
-                                        else if (_selectedPortfolioBytes != null)
-                                        {
-                                            <span>Document selected</span>
-                                        }
-                                        else
-                                        {
-                                            <span>No file selected</span>
-                                        }
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2">Crop Preview</MudText>
-                                    <div class="mf-preview-box">
-                                        @if (_selectedPortfolioIsImage && !string.IsNullOrWhiteSpace(_portfolioCropPreviewDataUrl))
-                                        {
-                                            <img src="@_portfolioCropPreviewDataUrl" alt="Cropped portfolio preview" />
-                                        }
-                                        else if (_selectedPortfolioBytes != null)
-                                        {
-                                            <span>Crop not required</span>
-                                        }
-                                        else
-                                        {
-                                            <span>No crop yet</span>
-                                        }
-                                    </div>
-                                </div>
-                            </div>
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           Disabled="@(_isBusy || _selectedPortfolioBytes == null)"
+                                           OnClick="UploadPortfolioDirectAsync"
+                                           Class="mt-3">
+                                    Upload Portfolio
+                                </MudButton>
+                            </section>
                         </div>
-                    </MudTabPanel>
-
-                    <MudTabPanel Text="Security">
-                        <div class="mf-two-col">
-                            <div class="mf-section-card">
-                                <MudText Typo="Typo.h6" Class="font-weight-bold mb-1">Reset Password</MudText>
+                    }
+                    else if (_activeSection == ProfileSettingsSection.Security)
+                    {
+                        <div class="mf-security-grid">
+                            <section class="mf-card">
+                                <MudText Typo="Typo.subtitle1" Class="font-weight-bold mb-2">Reset Password</MudText>
                                 <MudText Typo="Typo.body2" Class="mf-muted mb-3">
-                                    Only password reset requires OTP confirmation. This works for Google-login users because no current password is required.
+                                    Email OTP is required to confirm password reset.
                                 </MudText>
 
                                 <MudTextField T="string"
@@ -345,12 +322,12 @@
                                            Class="mt-3">
                                     Send OTP
                                 </MudButton>
-                            </div>
+                            </section>
 
-                            <div class="mf-help-card">
-                                <MudText Typo="Typo.subtitle1" Class="font-weight-bold mb-2">Email OTP Confirmation</MudText>
+                            <section class="mf-card">
+                                <MudText Typo="Typo.subtitle1" Class="font-weight-bold mb-2">OTP Confirmation</MudText>
                                 <MudText Typo="Typo.body2" Class="mf-muted mb-3">
-                                    OTP will be sent to <strong>@_currentUser.Email</strong>. The code expires in 5 minutes.
+                                    Code will be sent to <strong>@_currentUser.Email</strong>.
                                 </MudText>
 
                                 @if (_otpSentForPassword)
@@ -362,32 +339,24 @@
                                                   MaxLength="6"
                                                   Disabled="@_isBusy" />
 
-                                    <div class="mf-button-row">
-                                        <MudButton Variant="Variant.Filled"
-                                                   Color="Color.Success"
-                                                   Disabled="@_isBusy"
-                                                   OnClick="ConfirmPasswordResetAsync">
-                                            Confirm Reset
-                                        </MudButton>
-
-                                        <MudButton Variant="Variant.Text"
-                                                   Color="Color.Default"
-                                                   Disabled="@_isBusy"
-                                                   OnClick="CancelPasswordOtp">
-                                            Cancel
-                                        </MudButton>
-                                    </div>
+                                    <MudButton Variant="Variant.Filled"
+                                               Color="Color.Success"
+                                               Disabled="@_isBusy"
+                                               OnClick="ConfirmPasswordResetAsync"
+                                               Class="mt-3">
+                                        Confirm Reset
+                                    </MudButton>
                                 }
                                 else
                                 {
                                     <div class="mf-empty-note">
-                                        Enter a new password and request OTP to continue.
+                                        Enter a new password and request OTP.
                                     </div>
                                 }
-                            </div>
+                            </section>
                         </div>
-                    </MudTabPanel>
-                </MudTabs>
+                    }
+                </main>
             </MudPaper>
         }
     </section>
@@ -414,31 +383,64 @@
     private string _avatarInitial = "?";
     private string? _avatarUrl;
     private string? _portfolioUrl;
+    private string? _portfolioFileName;
+    private string _portfolioTypeLabel = "FILE";
 
     private string? _operationMessage;
     private Severity _operationSeverity = Severity.Info;
 
-    private string? _avatarOriginalPreviewDataUrl;
-    private string? _avatarCropPreviewDataUrl;
+    private string? _avatarPreviewDataUrl;
     private byte[]? _selectedAvatarBytes;
     private string? _selectedAvatarFileName;
+    private string? _selectedAvatarUploadFileName;
+    private string? _selectedAvatarSizeLabel;
     private string _selectedAvatarContentType = "image/jpeg";
 
     private string? _selectedPortfolioFileName;
-    private string? _portfolioOriginalPreviewDataUrl;
-    private string? _portfolioCropPreviewDataUrl;
+    private string? _selectedPortfolioUploadFileName;
+    private string? _selectedPortfolioSizeLabel;
     private byte[]? _selectedPortfolioBytes;
     private string? _selectedPortfolioContentType;
-    private bool _selectedPortfolioIsImage;
 
     private string _newPassword = string.Empty;
     private string _confirmPassword = string.Empty;
     private bool _otpSentForPassword;
     private string _otpCodePassword = string.Empty;
 
+    private ProfileSettingsSection _activeSection = ProfileSettingsSection.Profile;
+
+    private string CurrentSectionTitle => _activeSection switch
+    {
+        ProfileSettingsSection.Profile => "Profile",
+        ProfileSettingsSection.Portfolio => "Portfolio Document",
+        ProfileSettingsSection.Security => "Security",
+        _ => "Profile"
+    };
+
+    private string CurrentSectionDescription => _activeSection switch
+    {
+        ProfileSettingsSection.Profile => "Update your display name and profile picture.",
+        ProfileSettingsSection.Portfolio => "Manage your PDF, DOC, or DOCX portfolio document.",
+        ProfileSettingsSection.Security => "Reset password with email OTP confirmation.",
+        _ => string.Empty
+    };
+
     protected override async Task OnInitializedAsync()
     {
         await LoadCurrentUserAsync();
+    }
+
+    private void SelectSection(ProfileSettingsSection section)
+    {
+        _activeSection = section;
+        _operationMessage = null;
+    }
+
+    private string GetMenuClass(ProfileSettingsSection section)
+    {
+        return _activeSection == section
+            ? "mf-menu-item active"
+            : "mf-menu-item";
     }
 
     private async Task LoadCurrentUserAsync()
@@ -498,6 +500,8 @@
     {
         _avatarUrl = null;
         _portfolioUrl = null;
+        _portfolioFileName = null;
+        _portfolioTypeLabel = "FILE";
 
         if (_currentUser?.AvatarFileId.HasValue == true)
         {
@@ -520,6 +524,8 @@
                 !string.IsNullOrWhiteSpace(portfolioFile.CloudinarySecureUrl))
             {
                 _portfolioUrl = BuildVersionedUrl(portfolioFile.CloudinarySecureUrl, portfolioFile.FileResourceId);
+                _portfolioFileName = portfolioFile.OriginalFileName;
+                _portfolioTypeLabel = BuildDocumentTypeLabel(portfolioFile.OriginalFileName, portfolioFile.ContentType);
             }
         }
     }
@@ -581,35 +587,39 @@
             return;
         }
 
-        if (!IsImageContentType(file.ContentType))
+        if (!IsSupportedAvatarFile(file.Name, file.ContentType))
         {
-            SetOperation("Avatar must be an image file.", Severity.Warning);
+            SetOperation("Avatar must be PNG, JPG, JPEG, or WEBP.", Severity.Warning);
+            return;
+        }
+
+        if (file.Size > MaxUploadBytes)
+        {
+            SetOperation("Avatar file must be 10MB or smaller.", Severity.Warning);
             return;
         }
 
         await RunBusyAsync(async () =>
         {
-            var originalBytes = await ReadFileBytesAsync(file);
-            var originalDataUrl = BuildDataUrl(file.ContentType, originalBytes);
+            var bytes = await ReadFileBytesAsync(file);
+            var normalizedContentType = NormalizeAvatarContentType(file.Name, file.ContentType);
 
-            var croppedDataUrl = await TryCropImageDataUrlAsync(
-                originalDataUrl,
-                512,
-                0.92);
+            _selectedAvatarBytes = bytes;
+            _selectedAvatarFileName = Path.GetFileName(file.Name);
+            _selectedAvatarUploadFileName = BuildUniqueStoredFileName(file.Name, "avatar");
+            _selectedAvatarSizeLabel = FormatFileSize(file.Size);
+            _selectedAvatarContentType = normalizedContentType;
+            _avatarPreviewDataUrl = BuildDataUrl(normalizedContentType, bytes);
 
-            _avatarOriginalPreviewDataUrl = originalDataUrl;
-            _avatarCropPreviewDataUrl = croppedDataUrl;
-            _selectedAvatarBytes = DataUrlToBytes(croppedDataUrl);
-            _selectedAvatarFileName = BuildCroppedFileName(file.Name, "avatar");
-            _selectedAvatarContentType = "image/jpeg";
-
-            SetOperation("Avatar selected. Review the preview and upload when ready.", Severity.Info);
+            SetOperation("Avatar selected. Upload when ready.", Severity.Info);
         });
     }
 
     private async Task UploadAvatarDirectAsync()
     {
-        if (_selectedAvatarBytes == null || string.IsNullOrWhiteSpace(_selectedAvatarFileName))
+        if (_selectedAvatarBytes == null ||
+            string.IsNullOrWhiteSpace(_selectedAvatarUploadFileName) ||
+            string.IsNullOrWhiteSpace(_selectedAvatarFileName))
         {
             SetOperation("Please select an avatar image first.", Severity.Warning);
             return;
@@ -618,17 +628,18 @@
         await RunBusyAsync(async () =>
         {
             var oldAvatarFileId = _currentUser?.AvatarFileId;
+            var displayFileName = _selectedAvatarFileName!;
 
             var upload = await FileStorageService.UploadFileAsync(
                 _selectedAvatarBytes,
-                _selectedAvatarFileName,
+                _selectedAvatarUploadFileName,
                 _selectedAvatarContentType,
                 "USER_AVATAR");
 
             var fileResource = await FileResourceService.CreateFileResourceAsync(
                 new CreateFileResourceDto(
                     "USER_AVATAR",
-                    upload.OriginalFileName,
+                    displayFileName,
                     upload.PublicId,
                     upload.SecureUrl,
                     upload.ContentType,
@@ -647,13 +658,14 @@
                 {
                     oldAvatarFileId,
                     newAvatarFileId = fileResource.FileResourceId,
-                    fileName = fileResource.OriginalFileName,
+                    fileName = displayFileName,
                     confirmedBy = "AUTHENTICATED_SESSION"
                 }));
 
             _currentUser = updated;
-            await LoadCurrentFilesAsync();
-            CancelAvatarSelection();
+            _avatarUrl = BuildVersionedUrl(fileResource.CloudinarySecureUrl, fileResource.FileResourceId);
+
+            ClearAvatarSelection();
 
             SetOperation("Avatar uploaded successfully.", Severity.Success);
             Snackbar.Add("Avatar uploaded successfully.", Severity.Success);
@@ -669,68 +681,59 @@
             return;
         }
 
-        if (!IsImageContentType(file.ContentType) && !IsDocumentContentType(file.ContentType))
+        if (!IsSupportedPortfolioFile(file.Name, file.ContentType))
         {
-            SetOperation("Portfolio must be an image, PDF, DOC, or DOCX file.", Severity.Warning);
+            SetOperation("Portfolio must be PDF, DOC, or DOCX.", Severity.Warning);
+            return;
+        }
+
+        if (file.Size > MaxUploadBytes)
+        {
+            SetOperation("Portfolio file must be 10MB or smaller.", Severity.Warning);
             return;
         }
 
         await RunBusyAsync(async () =>
         {
-            var originalBytes = await ReadFileBytesAsync(file);
+            var bytes = await ReadFileBytesAsync(file);
 
             _selectedPortfolioFileName = Path.GetFileName(file.Name);
-            _selectedPortfolioContentType = file.ContentType;
-            _selectedPortfolioBytes = originalBytes;
-            _selectedPortfolioIsImage = IsImageContentType(file.ContentType);
+            _selectedPortfolioUploadFileName = BuildUniqueStoredFileName(file.Name, "portfolio");
+            _selectedPortfolioSizeLabel = FormatFileSize(file.Size);
+            _selectedPortfolioContentType = NormalizePortfolioContentType(file.Name, file.ContentType);
+            _selectedPortfolioBytes = bytes;
 
-            _portfolioOriginalPreviewDataUrl = null;
-            _portfolioCropPreviewDataUrl = null;
-
-            if (_selectedPortfolioIsImage)
-            {
-                var originalDataUrl = BuildDataUrl(file.ContentType, originalBytes);
-
-                var croppedDataUrl = await TryCropImageDataUrlAsync(
-                    originalDataUrl,
-                    900,
-                    0.92);
-
-                _portfolioOriginalPreviewDataUrl = originalDataUrl;
-                _portfolioCropPreviewDataUrl = croppedDataUrl;
-                _selectedPortfolioBytes = DataUrlToBytes(croppedDataUrl);
-                _selectedPortfolioFileName = BuildCroppedFileName(file.Name, "portfolio");
-                _selectedPortfolioContentType = "image/jpeg";
-            }
-
-            SetOperation("Portfolio selected. Review the file and upload when ready.", Severity.Info);
+            SetOperation("Portfolio document selected. Upload when ready.", Severity.Info);
         });
     }
 
     private async Task UploadPortfolioDirectAsync()
     {
         if (_selectedPortfolioBytes == null ||
+            string.IsNullOrWhiteSpace(_selectedPortfolioUploadFileName) ||
             string.IsNullOrWhiteSpace(_selectedPortfolioFileName) ||
             string.IsNullOrWhiteSpace(_selectedPortfolioContentType))
         {
-            SetOperation("Please select a portfolio file first.", Severity.Warning);
+            SetOperation("Please select a portfolio document first.", Severity.Warning);
             return;
         }
 
         await RunBusyAsync(async () =>
         {
             var oldPortfolioFileId = _currentUser?.PortfolioFileId;
+            var displayFileName = _selectedPortfolioFileName!;
+            var displayContentType = _selectedPortfolioContentType!;
 
             var upload = await FileStorageService.UploadFileAsync(
                 _selectedPortfolioBytes,
-                _selectedPortfolioFileName,
-                _selectedPortfolioContentType,
+                _selectedPortfolioUploadFileName,
+                displayContentType,
                 "REGISTRATION_PORTFOLIO");
 
             var fileResource = await FileResourceService.CreateFileResourceAsync(
                 new CreateFileResourceDto(
                     "REGISTRATION_PORTFOLIO",
-                    upload.OriginalFileName,
+                    displayFileName,
                     upload.PublicId,
                     upload.SecureUrl,
                     upload.ContentType,
@@ -749,17 +752,23 @@
                 {
                     oldPortfolioFileId,
                     newPortfolioFileId = fileResource.FileResourceId,
-                    fileName = fileResource.OriginalFileName,
+                    fileName = displayFileName,
                     contentType = fileResource.ContentType,
                     confirmedBy = "AUTHENTICATED_SESSION"
                 }));
 
             _currentUser = updated;
-            await LoadCurrentFilesAsync();
-            CancelPortfolioSelection();
+
+            _portfolioUrl = BuildVersionedUrl(fileResource.CloudinarySecureUrl, fileResource.FileResourceId);
+            _portfolioFileName = displayFileName;
+            _portfolioTypeLabel = BuildDocumentTypeLabel(displayFileName, fileResource.ContentType);
+
+            ClearPortfolioSelection();
 
             SetOperation("Portfolio uploaded successfully.", Severity.Success);
             Snackbar.Add("Portfolio uploaded successfully.", Severity.Success);
+
+            StateHasChanged();
         });
     }
 
@@ -790,13 +799,19 @@
             _otpSentForPassword = true;
             _otpCodePassword = string.Empty;
 
-            SetOperation("OTP sent to your registered email. The code expires in 5 minutes.", Severity.Info);
+            SetOperation("OTP sent to your registered email.", Severity.Info);
             Snackbar.Add("OTP sent to your registered email.", Severity.Info);
         });
     }
 
     private async Task ConfirmPasswordResetAsync()
     {
+        if (string.IsNullOrWhiteSpace(_otpCodePassword))
+        {
+            SetOperation("OTP code is required.", Severity.Warning);
+            return;
+        }
+
         await RunBusyAsync(async () =>
         {
             var verified = await UserService.VerifyProfileOtpAsync(
@@ -855,53 +870,23 @@
         }
     }
 
-    private void CancelAvatarSelection()
+    private void ClearAvatarSelection()
     {
-        _avatarOriginalPreviewDataUrl = null;
-        _avatarCropPreviewDataUrl = null;
+        _avatarPreviewDataUrl = null;
         _selectedAvatarBytes = null;
         _selectedAvatarFileName = null;
+        _selectedAvatarUploadFileName = null;
+        _selectedAvatarSizeLabel = null;
         _selectedAvatarContentType = "image/jpeg";
     }
 
-    private void CancelPortfolioSelection()
+    private void ClearPortfolioSelection()
     {
         _selectedPortfolioFileName = null;
-        _portfolioOriginalPreviewDataUrl = null;
-        _portfolioCropPreviewDataUrl = null;
+        _selectedPortfolioUploadFileName = null;
+        _selectedPortfolioSizeLabel = null;
         _selectedPortfolioBytes = null;
         _selectedPortfolioContentType = null;
-        _selectedPortfolioIsImage = false;
-    }
-
-    private void CancelPasswordOtp()
-    {
-        _otpSentForPassword = false;
-        _otpCodePassword = string.Empty;
-    }
-
-    private async Task<string> TryCropImageDataUrlAsync(string originalDataUrl, int size, double quality)
-    {
-        try
-        {
-            using var timeoutCts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(10));
-
-            var croppedDataUrl = await JSRuntime.InvokeAsync<string>(
-                "profileSettingsCrop.cropCenter",
-                timeoutCts.Token,
-                new object?[] { originalDataUrl, size, quality });
-
-            if (!string.IsNullOrWhiteSpace(croppedDataUrl))
-            {
-                return croppedDataUrl;
-            }
-        }
-        catch
-        {
-            // If browser-side crop is cancelled or fails, keep the original image.
-        }
-
-        return originalDataUrl;
     }
 
     private async Task<byte[]> ReadFileBytesAsync(IBrowserFile file)
@@ -912,52 +897,84 @@
         return ms.ToArray();
     }
 
-    private static bool IsImageContentType(string? contentType)
+    private static bool IsSupportedAvatarFile(string? fileName, string? contentType)
     {
-        return contentType?.ToLowerInvariant() is
-            "image/png" or
-            "image/jpeg" or
-            "image/jpg" or
-            "image/webp";
+        if (contentType?.ToLowerInvariant() is "image/png" or "image/jpeg" or "image/jpg" or "image/webp")
+        {
+            return true;
+        }
+
+        var extension = Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant();
+
+        return extension is ".png" or ".jpg" or ".jpeg" or ".webp";
     }
 
-    private static bool IsDocumentContentType(string? contentType)
+    private static bool IsSupportedPortfolioFile(string? fileName, string? contentType)
     {
-        return contentType?.ToLowerInvariant() is
+        if (contentType?.ToLowerInvariant() is
             "application/pdf" or
             "application/msword" or
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        {
+            return true;
+        }
+
+        var extension = Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant();
+
+        return extension is ".pdf" or ".doc" or ".docx";
+    }
+
+    private static string NormalizeAvatarContentType(string? fileName, string? contentType)
+    {
+        var normalizedContentType = contentType?.ToLowerInvariant();
+
+        if (normalizedContentType is "image/png" or "image/webp" or "image/jpeg")
+        {
+            return normalizedContentType;
+        }
+
+        if (normalizedContentType == "image/jpg")
+        {
+            return "image/jpeg";
+        }
+
+        var extension = Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant();
+
+        return extension switch
+        {
+            ".png" => "image/png",
+            ".webp" => "image/webp",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            _ => "image/jpeg"
+        };
+    }
+
+    private static string NormalizePortfolioContentType(string? fileName, string? contentType)
+    {
+        var normalizedContentType = contentType?.ToLowerInvariant();
+
+        if (normalizedContentType is
+            "application/pdf" or
+            "application/msword" or
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        {
+            return normalizedContentType;
+        }
+
+        var extension = Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant();
+
+        return extension switch
+        {
+            ".pdf" => "application/pdf",
+            ".doc" => "application/msword",
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            _ => "application/pdf"
+        };
     }
 
     private static string BuildDataUrl(string contentType, byte[] bytes)
     {
         return $"data:{contentType};base64,{Convert.ToBase64String(bytes)}";
-    }
-
-    private static byte[] DataUrlToBytes(string dataUrl)
-    {
-        var commaIndex = dataUrl.IndexOf(',');
-
-        if (commaIndex < 0)
-        {
-            return Convert.FromBase64String(dataUrl);
-        }
-
-        return Convert.FromBase64String(dataUrl[(commaIndex + 1)..]);
-    }
-
-    private static string BuildCroppedFileName(string originalFileName, string prefix)
-    {
-        var safeName = Path.GetFileNameWithoutExtension(originalFileName)
-            .Replace(" ", "-", StringComparison.Ordinal)
-            .ToLowerInvariant();
-
-        if (string.IsNullOrWhiteSpace(safeName))
-        {
-            safeName = prefix;
-        }
-
-        return $"{safeName}_cropped_{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}.jpg";
     }
 
     private static string BuildInitial(string? displayName, string? username)
@@ -977,10 +994,68 @@
         return $"{url}{separator}v={fileResourceId:N}";
     }
 
+    private static string BuildUniqueStoredFileName(string originalFileName, string prefix)
+    {
+        var extension = Path.GetExtension(originalFileName);
+
+        if (string.IsNullOrWhiteSpace(extension))
+        {
+            extension = ".bin";
+        }
+
+        return $"{prefix}_{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
+    }
+
+    private static string BuildDocumentTypeLabel(string? fileName, string? contentType)
+    {
+        var extension = Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant();
+        var normalizedContentType = contentType?.ToLowerInvariant();
+
+        if (extension == ".pdf" || normalizedContentType == "application/pdf")
+        {
+            return "PDF";
+        }
+
+        if (extension == ".docx" ||
+            normalizedContentType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        {
+            return "DOCX";
+        }
+
+        if (extension == ".doc" || normalizedContentType == "application/msword")
+        {
+            return "DOC";
+        }
+
+        return "FILE";
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes >= 1024 * 1024)
+        {
+            return $"{bytes / 1024d / 1024d:0.##} MB";
+        }
+
+        if (bytes >= 1024)
+        {
+            return $"{bytes / 1024d:0.##} KB";
+        }
+
+        return $"{bytes} B";
+    }
+
     private void SetOperation(string message, Severity severity)
     {
         _operationMessage = message;
         _operationSeverity = severity;
+    }
+
+    private enum ProfileSettingsSection
+    {
+        Profile,
+        Portfolio,
+        Security
     }
 }
 
@@ -988,316 +1063,400 @@
     .mf-settings-page {
         width: 100%;
         padding: 18px 24px;
+        background: #f8fafc;
+        min-height: calc(100vh - 24px);
     }
 
-    .mf-profile-shell {
-        width: min(100%, 1500px);
+    .mf-settings-shell {
+        width: min(100%, 1320px);
         margin: 0 auto;
     }
 
-    .mf-profile-top {
-        min-height: 136px;
+    .mf-page-heading {
         display: flex;
+        align-items: center;
         justify-content: space-between;
-        align-items: center;
-        gap: 24px;
-        padding: 22px 26px;
-        border: 1px solid #e5e7eb;
-        border-radius: 22px;
-        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 60%, #eef2ff 100%);
-        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
         margin-bottom: 16px;
-    }
-
-    .mf-user-block {
-        display: flex;
-        align-items: center;
-        gap: 20px;
-        min-width: 0;
-    }
-
-    .mf-avatar-large {
-        width: 94px;
-        height: 94px;
-        border-radius: 24px;
-        overflow: hidden;
-        background: linear-gradient(135deg, #4f46e5, #7c3aed);
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 34px;
-        font-weight: 800;
-        border: 3px solid #ffffff;
-        box-shadow: 0 10px 22px rgba(79, 70, 229, 0.22);
-        flex: 0 0 auto;
-    }
-
-        .mf-avatar-large img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-        }
-
-    .mf-user-meta {
-        min-width: 0;
     }
 
     .mf-muted {
         color: #64748b;
     }
 
-    .mf-user-line {
+    .mf-account-panel {
+        display: grid;
+        grid-template-columns: 300px minmax(0, 1fr);
+        min-height: 610px;
+        border: 1px solid #e5e7eb;
+        border-radius: 24px;
+        overflow: hidden;
+        background: #ffffff;
+        box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08);
+    }
+
+    .mf-settings-menu {
+        padding: 22px;
+        border-right: 1px solid #e5e7eb;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    }
+
+    .mf-menu-user {
         display: flex;
         align-items: center;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-top: 10px;
-    }
-
-        .mf-user-line strong {
-            color: #0f172a;
-        }
-
-        .mf-user-line span {
-            color: #64748b;
-            font-size: 13px;
-        }
-
-    .mf-username-chip {
-        padding: 3px 8px;
-        border-radius: 999px;
-        background: #f1f5f9;
-        color: #334155 !important;
-        font-size: 12px !important;
-        font-weight: 700;
-    }
-
-    .mf-summary-grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 14px;
-        margin-bottom: 16px;
+        margin-bottom: 18px;
     }
 
-    .mf-summary-card {
-        min-height: 104px;
-        padding: 16px 18px;
-        border: 1px solid #e5e7eb;
-        border-radius: 18px;
-        background: #ffffff;
-        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.045);
+    .mf-menu-avatar {
+        width: 72px;
+        height: 72px;
+        border-radius: 50%;
+        overflow: hidden;
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        font-weight: 800;
+        border: 3px solid #ffffff;
+        box-shadow: 0 10px 20px rgba(79, 70, 229, 0.18);
+        flex: 0 0 auto;
+    }
+
+        .mf-menu-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+    .mf-menu-user-meta {
+        min-width: 0;
         display: flex;
         flex-direction: column;
-        justify-content: center;
-        gap: 4px;
+        gap: 2px;
     }
 
-        .mf-summary-card span {
+        .mf-menu-user-meta strong {
+            color: #0f172a;
+            font-size: 15px;
+            line-height: 1.2;
+            word-break: break-word;
+        }
+
+        .mf-menu-user-meta span {
             color: #64748b;
             font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: .06em;
-            font-weight: 800;
+            word-break: break-word;
         }
 
-        .mf-summary-card strong {
-            color: #0f172a;
-            font-size: 18px;
-            line-height: 1.2;
-        }
-
-        .mf-summary-card small {
-            color: #94a3b8;
-        }
-
-    .mf-main-panel {
-        border: 1px solid #e5e7eb;
-        border-radius: 20px;
-        overflow: hidden;
-        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+    .mf-menu-divider {
+        height: 1px;
+        background: #e5e7eb;
+        margin: 14px 0 18px;
     }
 
-    .mf-tab-content {
-        padding: 20px;
-    }
-
-    .mf-two-col {
-        display: grid;
-        grid-template-columns: minmax(360px, 0.95fr) minmax(360px, 1.05fr);
-        gap: 18px;
-        align-items: stretch;
-    }
-
-    .mf-upload-layout {
-        display: grid;
-        grid-template-columns: minmax(320px, 0.75fr) minmax(540px, 1.25fr);
-        gap: 18px;
-        align-items: stretch;
-    }
-
-    .mf-section-card,
-    .mf-help-card,
-    .mf-upload-control {
-        padding: 20px;
-        border: 1px solid #e5e7eb;
-        border-radius: 18px;
-        background: #ffffff;
-        min-height: 260px;
-    }
-
-    .mf-help-card {
-        background: #eff6ff;
-        border-color: #dbeafe;
-    }
-
-    .mf-empty-note {
-        min-height: 100px;
-        border: 1px dashed #bfdbfe;
+    .mf-menu-item {
+        width: 100%;
+        border: 0;
+        background: transparent;
+        text-align: left;
+        padding: 13px 14px;
         border-radius: 14px;
-        background: rgba(255, 255, 255, .65);
-        color: #64748b;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        text-align: center;
-        padding: 16px;
-        font-size: 14px;
-    }
-
-    .mf-upload-box {
+        margin-bottom: 8px;
+        cursor: pointer;
         display: flex;
         flex-direction: column;
-        justify-content: center;
-        gap: 4px;
-        min-height: 120px;
-        padding: 16px;
-        border: 1px dashed #94a3b8;
-        border-radius: 16px;
-        background: #f8fafc;
-        cursor: pointer;
-        transition: border-color .15s ease, background .15s ease;
+        gap: 3px;
+        transition: background .15s ease, color .15s ease, box-shadow .15s ease;
     }
 
-        .mf-upload-box:hover {
-            border-color: #4f46e5;
+        .mf-menu-item span {
+            color: #0f172a;
+            font-weight: 800;
+            font-size: 14px;
+        }
+
+        .mf-menu-item small {
+            color: #64748b;
+            font-size: 12px;
+        }
+
+        .mf-menu-item:hover {
             background: #eef2ff;
         }
 
-    .mf-upload-title {
-        color: #0f172a;
-        font-weight: 800;
+        .mf-menu-item.active {
+            background: #4f46e5;
+            box-shadow: 0 10px 18px rgba(79, 70, 229, 0.22);
+        }
+
+            .mf-menu-item.active span,
+            .mf-menu-item.active small {
+                color: #ffffff;
+            }
+
+    .mf-settings-content {
+        padding: 24px;
+        min-width: 0;
     }
 
-    .mf-upload-box small {
-        color: #64748b;
+    .mf-content-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        padding-bottom: 18px;
+        border-bottom: 1px solid #e5e7eb;
+        margin-bottom: 20px;
     }
+
+    .mf-status-line {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .mf-profile-grid,
+    .mf-security-grid,
+    .mf-portfolio-grid {
+        display: grid;
+        grid-template-columns: minmax(340px, .85fr) minmax(440px, 1.15fr);
+        gap: 18px;
+        align-items: stretch;
+    }
+
+    .mf-card {
+        border: 1px solid #e5e7eb;
+        border-radius: 20px;
+        background: #ffffff;
+        padding: 22px;
+        min-height: 285px;
+        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.035);
+    }
+
+    .mf-avatar-editor {
+        display: flex;
+        gap: 20px;
+        align-items: center;
+    }
+
+    .mf-avatar-preview {
+        width: 132px;
+        height: 132px;
+        border-radius: 50%;
+        overflow: hidden;
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        color: #ffffff;
+        border: 4px solid #eef2ff;
+        box-shadow: 0 10px 22px rgba(79, 70, 229, 0.18);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 44px;
+        font-weight: 900;
+        flex: 0 0 auto;
+    }
+
+        .mf-avatar-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+    .mf-avatar-actions {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        min-width: 0;
+    }
+
+    .mf-upload-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #4f46e5;
+        color: #4f46e5;
+        background: #ffffff;
+        font-weight: 800;
+        border-radius: 10px;
+        padding: 9px 14px;
+        cursor: pointer;
+        transition: background .15s ease, color .15s ease;
+    }
+
+        .mf-upload-button:hover {
+            background: #eef2ff;
+        }
 
     .mf-file-input-hidden {
         display: none;
     }
 
     .mf-selected-file {
-        margin-top: 12px;
+        width: 100%;
         padding: 10px 12px;
         border-radius: 12px;
         background: #f1f5f9;
         color: #334155;
         font-size: 13px;
-        word-break: break-all;
-    }
-
-    .mf-button-row {
+        word-break: break-word;
         display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 14px;
+        flex-direction: column;
+        gap: 2px;
     }
 
-    .mf-preview-grid {
+        .mf-selected-file span {
+            color: #64748b;
+            font-size: 12px;
+        }
+
+    .mf-form-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 16px;
-        padding: 20px;
-        border: 1px solid #e5e7eb;
-        border-radius: 18px;
-        background: #ffffff;
-        min-height: 260px;
+        gap: 14px;
     }
 
-    .mf-preview-box {
-        min-height: 250px;
+    .mf-form-full {
+        grid-column: 1 / -1;
+    }
+
+    .mf-document-current {
+        padding: 18px;
         border: 1px solid #e5e7eb;
+        border-radius: 18px;
+        background: #f8fafc;
+    }
+
+    .mf-document-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        min-width: 0;
+    }
+
+    .mf-document-badge {
+        min-width: 48px;
+        height: 32px;
+        padding: 0 10px;
+        border-radius: 999px;
+        background: #eef2ff;
+        color: #4f46e5;
+        border: 1px solid #c7d2fe;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: .04em;
+        flex: 0 0 auto;
+    }
+
+    .mf-document-body {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+        .mf-document-body strong {
+            color: #0f172a;
+            word-break: break-word;
+        }
+
+        .mf-document-body span {
+            color: #64748b;
+            font-size: 13px;
+        }
+
+    .mf-document-dropzone {
+        min-height: 140px;
+        border: 1px dashed #94a3b8;
+        border-radius: 18px;
+        background: #f8fafc;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        cursor: pointer;
+        gap: 6px;
+        transition: background .15s ease, border-color .15s ease;
+    }
+
+        .mf-document-dropzone:hover {
+            background: #eef2ff;
+            border-color: #4f46e5;
+        }
+
+        .mf-document-dropzone span {
+            color: #0f172a;
+            font-weight: 900;
+        }
+
+        .mf-document-dropzone small {
+            color: #64748b;
+        }
+
+    .mf-empty-note {
+        min-height: 120px;
+        border: 1px dashed #bfdbfe;
         border-radius: 16px;
         background: #f8fafc;
-        overflow: hidden;
-        color: #94a3b8;
+        color: #64748b;
         display: flex;
         align-items: center;
         justify-content: center;
         text-align: center;
     }
 
-        .mf-preview-box img {
-            width: 100%;
-            max-height: 280px;
-            object-fit: contain;
-            display: block;
-        }
-
-    .mf-preview-square {
-        aspect-ratio: 1 / 1;
-        min-height: 250px;
-    }
-
-        .mf-preview-square img {
-            height: 100%;
-            object-fit: cover;
-        }
-
     .mf-loading-box {
-        min-height: 260px;
+        min-height: 340px;
         border: 1px solid #e5e7eb;
-        border-radius: 18px;
+        border-radius: 20px;
         background: #ffffff;
         display: flex;
         gap: 12px;
         align-items: center;
         justify-content: center;
-        margin-top: 16px;
     }
 
-    @@media (max-width: 1100px) {
-        .mf-summary-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+    @@media (max-width: 1150px) {
+        .mf-account-panel {
+            grid-template-columns: 1fr;
         }
 
-        .mf-two-col,
-        .mf-upload-layout {
+        .mf-settings-menu {
+            border-right: 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .mf-profile-grid,
+        .mf-security-grid,
+        .mf-portfolio-grid {
             grid-template-columns: 1fr;
         }
     }
 
-    @@media (max-width: 700px) {
+    @@media (max-width: 720px) {
         .mf-settings-page {
             padding: 12px;
         }
 
-        .mf-profile-top {
+        .mf-content-header {
             flex-direction: column;
-            align-items: stretch;
         }
 
-        .mf-user-block {
+        .mf-avatar-editor,
+        .mf-document-row {
             align-items: flex-start;
+            flex-direction: column;
         }
 
-        .mf-summary-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .mf-preview-grid {
+        .mf-form-grid {
             grid-template-columns: 1fr;
         }
     }
