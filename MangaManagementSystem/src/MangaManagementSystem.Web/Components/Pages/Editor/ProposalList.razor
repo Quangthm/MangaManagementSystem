@@ -113,15 +113,15 @@
         }
     }
 
-    private void OpenProposal(long seriesId)
+    private void OpenProposal(Guid seriesId)
     {
         Nav.NavigateTo($"/editor/proposals/{seriesId}");
     }
 
-    private void RejectProposal(long proposalId)
+    private void RejectProposal(Guid proposalId)
     {
         Snackbar.Add($"Reject proposal {proposalId} - implement rejection dialog", Severity.Warning);
     }
 
-    private record ProposalRow(long SeriesId, string SeriesTitle, int Version, int SubmittedByUserId, DateTime SubmittedAt, string Status);
+    private record ProposalRow(Guid SeriesId, string SeriesTitle, int Version, Guid SubmittedByUserId, DateTime SubmittedAt, string Status);
 }

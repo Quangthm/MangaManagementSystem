@@ -1,4 +1,4 @@
-@page "/editor/series/{SeriesId:long}"
+@page "/editor/series/{SeriesId:guid}"
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "Tantou Editor")]
 @inject NavigationManager Nav
@@ -38,7 +38,7 @@
                     <MudItem xs="12" md="6">
                         <MudStack Spacing="1">
                             <MudText Typo="Typo.h5" Class="font-weight-bold mb-2">@_series.Title</MudText>
-                            <MudText Class="mf-muted"><strong>Series Code:</strong> @_series.SeriesCode</MudText>
+                            <MudText Class="mf-muted"><strong>Slug:</strong> @_series.Slug</MudText>
                             <MudText Class="mf-muted">
                                 <strong>Status:</strong>
                                 <MudChip T="string" Color="@GetStatusColor(_series.StatusCode)" Size="Size.Small" Class="ml-1">@_series.StatusCode</MudChip>
@@ -72,7 +72,7 @@
 </EditorLayout>
 
 @code {
-    [Parameter] public long SeriesId { get; set; }
+    [Parameter] public Guid SeriesId { get; set; }
 
     private bool _loading = true;
     private string? _error;

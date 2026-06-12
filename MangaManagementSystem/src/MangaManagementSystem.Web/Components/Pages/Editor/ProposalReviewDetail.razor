@@ -1,4 +1,4 @@
-@page "/editor/proposals/{SeriesId:long}"
+@page "/editor/proposals/{SeriesId:guid}"
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "Tantou Editor")]
 @inject NavigationManager Nav
@@ -121,7 +121,7 @@
 </EditorLayout>
 
 @code {
-    [Parameter] public long SeriesId { get; set; }
+    [Parameter] public Guid SeriesId { get; set; }
     private string ReviewComments { get; set; } = string.Empty;
 
     private bool _fileLoading = true;
@@ -188,7 +188,7 @@
                 }
 
                 // Resolve proposal file
-                if (latest.ProposalFileId > 0)
+                if (latest.ProposalFileId != Guid.Empty)
                 {
                     var file = await FileResourceService.GetFileResourceByIdAsync(latest.ProposalFileId);
                     if (file != null && !string.IsNullOrWhiteSpace(file.CloudinarySecureUrl))
@@ -281,7 +281,7 @@
         }
     }
 
-    private async Task<int?> GetCurrentUserIdAsync()
+    private async Task<Guid?> GetCurrentUserIdAsync()
     {
         var auth = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = auth.User;
@@ -291,6 +291,6 @@
         }
 
         var idClaim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
-        return int.TryParse(idClaim?.Value, out var uid) ? uid : null;
+        return Guid.TryParse(idClaim?.Value, out var uid) ? uid : null;
     }
 }

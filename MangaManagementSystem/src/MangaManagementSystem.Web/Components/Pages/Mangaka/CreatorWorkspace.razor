@@ -207,7 +207,7 @@
 
         // Best-effort: load the real series title for the header. Failure or a
         // missing id falls back silently to the demo title.
-        if (long.TryParse(SeriesId, out var parsedId))
+        if (Guid.TryParse(SeriesId, out var parsedId))
         {
             try
             {
