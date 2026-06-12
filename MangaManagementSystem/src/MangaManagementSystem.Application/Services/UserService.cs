@@ -48,7 +48,13 @@ namespace MangaManagementSystem.Application.Services
                 null);
 
             var created = await _unitOfWork.Users.GetByIdAsync(newUserId);
-            return MapToDto(created!);
+
+            if (created == null)
+            {
+                throw new InvalidOperationException("Created user could not be loaded.");
+            }
+
+            return MapToDto(created);
         }
 
         public async Task<UserDto?> GetUserByIdAsync(Guid id)
@@ -80,7 +86,13 @@ namespace MangaManagementSystem.Application.Services
                 "User registration approved.");
 
             var updated = await _unitOfWork.Users.GetByIdAsync(userId);
-            return MapToDto(updated!);
+
+            if (updated == null)
+            {
+                throw new InvalidOperationException($"User {userId} was not found after approval.");
+            }
+
+            return MapToDto(updated);
         }
 
         public async Task RejectUserAsync(Guid adminUserId, Guid userId, string? reason = null)
@@ -110,7 +122,13 @@ namespace MangaManagementSystem.Application.Services
                 "User account activated.");
 
             var updated = await _unitOfWork.Users.GetByIdAsync(userId);
-            return MapToDto(updated!);
+
+            if (updated == null)
+            {
+                throw new InvalidOperationException($"User {userId} was not found after activation.");
+            }
+
+            return MapToDto(updated);
         }
 
         public async Task<UserDto> DisableUserAsync(Guid adminUserId, Guid userId, string? reason = null)
@@ -129,7 +147,13 @@ namespace MangaManagementSystem.Application.Services
                 reason ?? "User account disabled.");
 
             var updated = await _unitOfWork.Users.GetByIdAsync(userId);
-            return MapToDto(updated!);
+
+            if (updated == null)
+            {
+                throw new InvalidOperationException($"User {userId} was not found after disabling.");
+            }
+
+            return MapToDto(updated);
         }
 
         public async Task<UserDto> UpdateDisplayNameAsync(Guid userId, string displayName)
@@ -148,13 +172,18 @@ namespace MangaManagementSystem.Application.Services
                 throw new InvalidOperationException("Display name cannot be empty.");
             }
 
-            user.DisplayName = trimmedDisplayName;
-
-            _unitOfWork.Users.Update(user);
-            await _unitOfWork.SaveChangesAsync();
+            await _unitOfWork.Users.UpdateDisplayNameViaProcAsync(
+                userId,
+                trimmedDisplayName);
 
             var updated = await _unitOfWork.Users.GetByIdAsync(userId);
-            return MapToDto(updated!);
+
+            if (updated == null)
+            {
+                throw new InvalidOperationException($"User {userId} was not found after display name update.");
+            }
+
+            return MapToDto(updated);
         }
 
         public async Task<UserDto> UpdateAvatarFileAsync(Guid userId, Guid avatarFileId)
@@ -166,13 +195,23 @@ namespace MangaManagementSystem.Application.Services
                 throw new InvalidOperationException($"User {userId} was not found.");
             }
 
-            user.AvatarFileId = avatarFileId;
+            if (avatarFileId == Guid.Empty)
+            {
+                throw new InvalidOperationException("Avatar file id is invalid.");
+            }
 
-            _unitOfWork.Users.Update(user);
-            await _unitOfWork.SaveChangesAsync();
+            await _unitOfWork.Users.UpdateAvatarFileViaProcAsync(
+                userId,
+                avatarFileId);
 
             var updated = await _unitOfWork.Users.GetByIdAsync(userId);
-            return MapToDto(updated!);
+
+            if (updated == null)
+            {
+                throw new InvalidOperationException($"User {userId} was not found after avatar update.");
+            }
+
+            return MapToDto(updated);
         }
 
         public async Task<UserDto> UpdatePortfolioFileAsync(Guid userId, Guid portfolioFileId)
@@ -184,13 +223,49 @@ namespace MangaManagementSystem.Application.Services
                 throw new InvalidOperationException($"User {userId} was not found.");
             }
 
-            user.PortfolioFileId = portfolioFileId;
+            if (portfolioFileId == Guid.Empty)
+            {
+                throw new InvalidOperationException("Portfolio file id is invalid.");
+            }
 
-            _unitOfWork.Users.Update(user);
-            await _unitOfWork.SaveChangesAsync();
+            await _unitOfWork.Users.UpdatePortfolioFileViaProcAsync(
+                userId,
+                portfolioFileId);
 
             var updated = await _unitOfWork.Users.GetByIdAsync(userId);
-            return MapToDto(updated!);
+
+            if (updated == null)
+            {
+                throw new InvalidOperationException($"User {userId} was not found after portfolio update.");
+            }
+
+            return MapToDto(updated);
+        }
+
+        public async Task ResetPasswordAsync(Guid userId, string newPassword)
+        {
+            var user = await _unitOfWork.Users.GetByIdAsync(userId);
+
+            if (user == null)
+            {
+                throw new InvalidOperationException($"User {userId} was not found.");
+            }
+
+            if (string.IsNullOrWhiteSpace(newPassword))
+            {
+                throw new InvalidOperationException("New password cannot be empty.");
+            }
+
+            if (newPassword.Length < 8)
+            {
+                throw new InvalidOperationException("New password must be at least 8 characters.");
+            }
+
+            var passwordHash = _passwordHasher.HashPassword(newPassword);
+
+            await _unitOfWork.Users.ResetPasswordViaProcAsync(
+                userId,
+                passwordHash);
         }
 
         private async Task<User> RequirePendingUserAsync(Guid userId)

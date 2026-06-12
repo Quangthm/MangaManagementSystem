@@ -1,107 +1,116 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
-@using MangaManagementSystem.Application.DTOs.Auth
+@using MangaManagementSystem.Application.Interfaces
 @using MangaManagementSystem.Web.Components.Shared
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IUserService UserService
 @inject IFileResourceService FileResourceService
 @inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
 
 <AuthorizeView>
-	<Authorized>
-		@if (_loading)
-		{
-			<MudSkeleton Width="36px" Height="36px" />
-		}
-		else
-		{
-			<MudMenu OffsetY="true">
-				<ActivatorContent>
-					<MudAvatar Size="Size.Medium" Image="@_avatarUrl" Class="mf-avatar" Color="Color.Primary">
-						@if (string.IsNullOrEmpty(_avatarUrl))
-						{
-							@(_initial ?? "?")
-						}
-					</MudAvatar>
-				</ActivatorContent>
-				<ChildContent>
-					<MudMenuItem OnClick="OpenProfile">View / Edit Profile</MudMenuItem>
-					<MudMenuItem OnClick="ChangePassword">Change Password</MudMenuItem>
-					<MudDivider />
-					<MudMenuItem>
-    <LogoutForm />
-</MudMenuItem>
-				</ChildContent>
-			</MudMenu>
-		}
-	</Authorized>
-	<NotAuthorized>
-		<MudButton Href="/login" Variant="Variant.Text">Sign in</MudButton>
-	</NotAuthorized>
+    <Authorized>
+        @if (_loading)
+        {
+            <MudSkeleton Width="36px" Height="36px" />
+        }
+        else
+        {
+            <MudMenu OffsetY="true">
+                <ActivatorContent>
+                    <MudAvatar Size="Size.Medium" Image="@_avatarUrl" Class="mf-avatar" Color="Color.Primary">
+                        @if (string.IsNullOrEmpty(_avatarUrl))
+                        {
+                            @(_initial ?? "?")
+                        }
+                    </MudAvatar>
+                </ActivatorContent>
+
+                <ChildContent>
+                    <MudMenuItem OnClick="OpenProfileSettings">Profile Settings</MudMenuItem>
+                    <MudMenuItem OnClick="OpenProfileSettings">Reset Password</MudMenuItem>
+                    <MudDivider />
+                    <MudMenuItem>
+                        <LogoutForm />
+                    </MudMenuItem>
+                </ChildContent>
+            </MudMenu>
+        }
+    </Authorized>
+
+    <NotAuthorized>
+        <MudButton Href="/login" Variant="Variant.Text">Sign in</MudButton>
+    </NotAuthorized>
 </AuthorizeView>
 
 @code {
-	private bool _loading = true;
-	private string? _avatarUrl;
-	private string? _initial;
-	private Guid? _userId;
+    private bool _loading = true;
+    private string? _avatarUrl;
+    private string? _initial;
 
-	protected override async Task OnInitializedAsync()
-	{
-		try
-		{
-			var auth = await AuthStateProvider.GetAuthenticationStateAsync();
-			var user = auth.User;
-			if (user?.Identity?.IsAuthenticated == true)
-			{
-				var idClaim = user.FindFirst(ClaimTypes.NameIdentifier);
-				if (Guid.TryParse(idClaim?.Value, out var uid))
-				{
-					_userId = uid;
-					var dto = await UserService.GetUserByIdAsync(uid);
-					if (dto != null)
-					{
-						_initial = string.IsNullOrWhiteSpace(dto.DisplayName) ? dto.Username?.Substring(0,1).ToUpper() : dto.DisplayName?.Substring(0,1).ToUpper();
-						if (dto.AvatarFileId.HasValue)
-						{
-							var file = await FileResourceService.GetFileResourceByIdAsync(dto.AvatarFileId.Value);
-							if (file != null && !string.IsNullOrWhiteSpace(file.CloudinarySecureUrl))
-							{
-								_avatarUrl = file.CloudinarySecureUrl;
-							}
-						}
-					}
-				}
-			}
-		}
-		catch (Exception ex)
-		{
-			// Non-fatal; show placeholder avatar
-			Snackbar.Add("Failed to load profile info.", Severity.Warning);
-		}
-		finally
-		{
-			_loading = false;
-		}
-	}
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = auth.User;
 
-	private void OpenProfile()
-	{
-		// Show a simple modal with profile info. For now this is a placeholder that
-		// shows read-only username/email/role/status and informs what update actions are available.
-		var title = "Profile";
-		var content = "Profile editing, avatar upload, and password change are temporarily unavailable in the current build.";
-		Snackbar.Add(content, Severity.Info);
-	}
+            if (user?.Identity?.IsAuthenticated == true)
+            {
+                var idClaim = user.FindFirst(ClaimTypes.NameIdentifier);
 
-	private void ChangePassword()
-	{
-		Snackbar.Add("Change password is temporarily unavailable.", Severity.Info);
-	}
+                if (Guid.TryParse(idClaim?.Value, out var uid))
+                {
+                    var dto = await UserService.GetUserByIdAsync(uid);
+
+                    if (dto != null)
+                    {
+                        _initial = BuildInitial(dto.DisplayName, dto.Username);
+
+                        if (dto.AvatarFileId.HasValue)
+                        {
+                            var file = await FileResourceService.GetFileResourceByIdAsync(dto.AvatarFileId.Value);
+
+                            if (file != null &&
+                                file.DeletedAtUtc == null &&
+                                !string.IsNullOrWhiteSpace(file.CloudinarySecureUrl))
+                            {
+                                _avatarUrl = file.CloudinarySecureUrl;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch
+        {
+            Snackbar.Add("Failed to load profile info.", Severity.Warning);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OpenProfileSettings()
+    {
+        NavigationManager.NavigateTo("/profile/settings");
+    }
+
+    private static string BuildInitial(string? displayName, string? username)
+    {
+        var source = !string.IsNullOrWhiteSpace(displayName)
+            ? displayName.Trim()
+            : username?.Trim();
+
+        return string.IsNullOrWhiteSpace(source)
+            ? "?"
+            : source[..1].ToUpperInvariant();
+    }
 }
 
 <style>
-	.mf-avatar {
-		cursor: pointer;
-	}
+    .mf-avatar {
+        cursor: pointer;
+    }
 </style>

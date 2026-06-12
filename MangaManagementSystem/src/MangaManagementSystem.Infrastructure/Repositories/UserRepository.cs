@@ -1,8 +1,11 @@
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
 using MangaManagementSystem.Infrastructure.Persistence;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -11,6 +14,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
     public class UserRepository : GenericRepository<User>, IUserRepository
     {
         private readonly ApplicationDbContext _context;
+
         public UserRepository(ApplicationDbContext context) : base(context)
         {
             _context = context;
@@ -49,82 +53,107 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         {
             var conn = _context.Database.GetDbConnection();
             await using var cmd = conn.CreateCommand();
-            cmd.CommandText = "auth.usp_Admin_ChangeUserStatus";
-            cmd.CommandType = System.Data.CommandType.StoredProcedure;
 
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@admin_user_id", System.Data.SqlDbType.UniqueIdentifier)
+            cmd.CommandText = "auth.usp_Admin_ChangeUserStatus";
+            cmd.CommandType = CommandType.StoredProcedure;
+
+            cmd.Parameters.Add(new SqlParameter("@admin_user_id", SqlDbType.UniqueIdentifier)
             {
                 Value = adminUserId
             });
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@target_user_id", System.Data.SqlDbType.UniqueIdentifier)
+
+            cmd.Parameters.Add(new SqlParameter("@target_user_id", SqlDbType.UniqueIdentifier)
             {
                 Value = targetUserId
             });
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@new_status_code", System.Data.SqlDbType.NVarChar, 30)
+
+            cmd.Parameters.Add(new SqlParameter("@new_status_code", SqlDbType.NVarChar, 30)
             {
                 Value = newStatusCode
             });
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@reason", System.Data.SqlDbType.NVarChar, 500)
+
+            cmd.Parameters.Add(new SqlParameter("@reason", SqlDbType.NVarChar, 500)
             {
-                Value = string.IsNullOrWhiteSpace(reason) ? System.DBNull.Value : reason.Trim()
+                Value = string.IsNullOrWhiteSpace(reason) ? DBNull.Value : reason.Trim()
             });
 
-            if (conn.State != System.Data.ConnectionState.Open)
+            if (conn.State != ConnectionState.Open)
             {
                 await conn.OpenAsync();
             }
 
             await cmd.ExecuteNonQueryAsync();
 
-            var trackedUser = _context.Users.Local.FirstOrDefault(u => u.UserId == targetUserId);
-            if (trackedUser != null)
-            {
-                await _context.Entry(trackedUser).ReloadAsync();
-            }
+            await ReloadTrackedUserAsync(targetUserId);
         }
 
         public async Task<Guid> CreateUserViaProcAsync(
-        string roleName,
-        string username,
-        string email,
-        string passwordHash,
-        string? displayName = null,
-        Guid? avatarFileId = null,
-        Guid? portfolioFileId = null,
-        Guid? createdByUserId = null)
-    {
-        // Use parameterized raw SQL to call stored procedure and return new_user_id
-        var conn = _context.Database.GetDbConnection();
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "auth.usp_User_Create";
-        cmd.CommandType = System.Data.CommandType.StoredProcedure;
+            string roleName,
+            string username,
+            string email,
+            string passwordHash,
+            string? displayName = null,
+            Guid? avatarFileId = null,
+            Guid? portfolioFileId = null,
+            Guid? createdByUserId = null)
+        {
+            var conn = _context.Database.GetDbConnection();
+            await using var cmd = conn.CreateCommand();
 
-        var pRole = new Microsoft.Data.SqlClient.SqlParameter("@role_name", System.Data.SqlDbType.NVarChar, 30) { Value = (object)roleName };
-        var pUsername = new Microsoft.Data.SqlClient.SqlParameter("@username", System.Data.SqlDbType.NVarChar, 50) { Value = (object)username };
-        var pEmail = new Microsoft.Data.SqlClient.SqlParameter("@email", System.Data.SqlDbType.NVarChar, 254) { Value = (object)email };
-        var pPasswordHash = new Microsoft.Data.SqlClient.SqlParameter("@password_hash", System.Data.SqlDbType.NVarChar, 255) { Value = (object)passwordHash };
-        var pDisplayName = new Microsoft.Data.SqlClient.SqlParameter("@display_name", System.Data.SqlDbType.NVarChar, 100) { Value = (object?)displayName ?? System.DBNull.Value };
-        var pAvatarFileId = new Microsoft.Data.SqlClient.SqlParameter("@avatar_file_id", System.Data.SqlDbType.UniqueIdentifier) { Value = (object?)avatarFileId ?? System.DBNull.Value };
+            cmd.CommandText = "auth.usp_User_Create";
+            cmd.CommandType = CommandType.StoredProcedure;
 
-        cmd.Parameters.Add(pRole);
-        cmd.Parameters.Add(pUsername);
-        cmd.Parameters.Add(pEmail);
-        cmd.Parameters.Add(pPasswordHash);
-        cmd.Parameters.Add(pDisplayName);
-        cmd.Parameters.Add(pAvatarFileId);
-        cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@portfolio_file_id", (object?)portfolioFileId ?? System.DBNull.Value));
+            cmd.Parameters.Add(new SqlParameter("@role_name", SqlDbType.NVarChar, 30)
+            {
+                Value = roleName
+            });
 
-        var outParam = new Microsoft.Data.SqlClient.SqlParameter("@new_user_id", System.Data.SqlDbType.UniqueIdentifier) { Direction = System.Data.ParameterDirection.Output };
-        cmd.Parameters.Add(outParam);
+            cmd.Parameters.Add(new SqlParameter("@username", SqlDbType.NVarChar, 50)
+            {
+                Value = username
+            });
 
-        if (conn.State != System.Data.ConnectionState.Open)
-            await conn.OpenAsync();
+            cmd.Parameters.Add(new SqlParameter("@email", SqlDbType.NVarChar, 254)
+            {
+                Value = email
+            });
 
-        await cmd.ExecuteNonQueryAsync();
+            cmd.Parameters.Add(new SqlParameter("@password_hash", SqlDbType.NVarChar, 255)
+            {
+                Value = passwordHash
+            });
 
-        var newUserId = outParam.Value == System.DBNull.Value ? Guid.Empty : (Guid)outParam.Value;
-        return newUserId;
-    }
+            cmd.Parameters.Add(new SqlParameter("@display_name", SqlDbType.NVarChar, 100)
+            {
+                Value = (object?)displayName ?? DBNull.Value
+            });
+
+            cmd.Parameters.Add(new SqlParameter("@avatar_file_id", SqlDbType.UniqueIdentifier)
+            {
+                Value = (object?)avatarFileId ?? DBNull.Value
+            });
+
+            cmd.Parameters.Add(new SqlParameter("@portfolio_file_id", SqlDbType.UniqueIdentifier)
+            {
+                Value = (object?)portfolioFileId ?? DBNull.Value
+            });
+
+            var outParam = new SqlParameter("@new_user_id", SqlDbType.UniqueIdentifier)
+            {
+                Direction = ParameterDirection.Output
+            };
+
+            cmd.Parameters.Add(outParam);
+
+            if (conn.State != ConnectionState.Open)
+            {
+                await conn.OpenAsync();
+            }
+
+            await cmd.ExecuteNonQueryAsync();
+
+            return outParam.Value == DBNull.Value ? Guid.Empty : (Guid)outParam.Value;
+        }
 
         public async Task<(Guid newUserId, Guid? portfolioFileResourceId)> CreateUserWithOptionalPortfolioAsync(
             string roleName,
@@ -143,48 +172,221 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         {
             var conn = _context.Database.GetDbConnection();
             await using var cmd = conn.CreateCommand();
+
             cmd.CommandText = "auth.usp_User_CreateWithOptionalPortfolio";
-            cmd.CommandType = System.Data.CommandType.StoredProcedure;
+            cmd.CommandType = CommandType.StoredProcedure;
 
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@role_name", roleName));
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@username", username));
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@email", email));
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@password_hash", passwordHash));
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@display_name", (object?)displayName ?? System.DBNull.Value));
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@avatar_file_id", (object?)avatarFileId ?? System.DBNull.Value));
+            cmd.Parameters.Add(new SqlParameter("@role_name", SqlDbType.NVarChar, 30)
+            {
+                Value = roleName
+            });
 
-            // portfolio metadata
-            var pPortfolioOriginalFileName = new Microsoft.Data.SqlClient.SqlParameter("@portfolio_original_file_name", System.Data.SqlDbType.NVarChar, 260) { Value = (object?)portfolioOriginalFileName ?? System.DBNull.Value };
-            var pPortfolioPublicId = new Microsoft.Data.SqlClient.SqlParameter("@portfolio_cloudinary_public_id", System.Data.SqlDbType.NVarChar, 255) { Value = (object?)portfolioCloudinaryPublicId ?? System.DBNull.Value };
-            var pPortfolioSecureUrl = new Microsoft.Data.SqlClient.SqlParameter("@portfolio_cloudinary_secure_url", System.Data.SqlDbType.NVarChar, 1000) { Value = (object?)portfolioCloudinarySecureUrl ?? System.DBNull.Value };
-            var pPortfolioContentType = new Microsoft.Data.SqlClient.SqlParameter("@portfolio_content_type", System.Data.SqlDbType.NVarChar, 100) { Value = (object?)portfolioContentType ?? System.DBNull.Value };
-            var pPortfolioFileSize = new Microsoft.Data.SqlClient.SqlParameter("@portfolio_file_size_bytes", System.Data.SqlDbType.BigInt) { Value = (object?)portfolioFileSizeBytes ?? System.DBNull.Value };
-            var pPortfolioSha256 = new Microsoft.Data.SqlClient.SqlParameter("@portfolio_sha256_hash", System.Data.SqlDbType.Char, 64) { Value = (object?)portfolioSha256Hash ?? System.DBNull.Value };
+            cmd.Parameters.Add(new SqlParameter("@username", SqlDbType.NVarChar, 50)
+            {
+                Value = username
+            });
 
-            cmd.Parameters.Add(pPortfolioOriginalFileName);
-            cmd.Parameters.Add(pPortfolioPublicId);
-            cmd.Parameters.Add(pPortfolioSecureUrl);
-            cmd.Parameters.Add(pPortfolioContentType);
-            cmd.Parameters.Add(pPortfolioFileSize);
-            cmd.Parameters.Add(pPortfolioSha256);
+            cmd.Parameters.Add(new SqlParameter("@email", SqlDbType.NVarChar, 254)
+            {
+                Value = email
+            });
 
-            var pCreatedBy = new Microsoft.Data.SqlClient.SqlParameter("@created_by_user_id", System.Data.SqlDbType.UniqueIdentifier) { Value = (object?)createdByUserId ?? System.DBNull.Value };
-            cmd.Parameters.Add(pCreatedBy);
+            cmd.Parameters.Add(new SqlParameter("@password_hash", SqlDbType.NVarChar, 255)
+            {
+                Value = passwordHash
+            });
 
-            var outUserId = new Microsoft.Data.SqlClient.SqlParameter("@new_user_id", System.Data.SqlDbType.UniqueIdentifier) { Direction = System.Data.ParameterDirection.Output };
+            cmd.Parameters.Add(new SqlParameter("@display_name", SqlDbType.NVarChar, 100)
+            {
+                Value = (object?)displayName ?? DBNull.Value
+            });
+
+            cmd.Parameters.Add(new SqlParameter("@avatar_file_id", SqlDbType.UniqueIdentifier)
+            {
+                Value = (object?)avatarFileId ?? DBNull.Value
+            });
+
+            cmd.Parameters.Add(new SqlParameter("@portfolio_original_file_name", SqlDbType.NVarChar, 260)
+            {
+                Value = (object?)portfolioOriginalFileName ?? DBNull.Value
+            });
+
+            cmd.Parameters.Add(new SqlParameter("@portfolio_cloudinary_public_id", SqlDbType.NVarChar, 255)
+            {
+                Value = (object?)portfolioCloudinaryPublicId ?? DBNull.Value
+            });
+
+            cmd.Parameters.Add(new SqlParameter("@portfolio_cloudinary_secure_url", SqlDbType.NVarChar, 1000)
+            {
+                Value = (object?)portfolioCloudinarySecureUrl ?? DBNull.Value
+            });
+
+            cmd.Parameters.Add(new SqlParameter("@portfolio_content_type", SqlDbType.NVarChar, 100)
+            {
+                Value = (object?)portfolioContentType ?? DBNull.Value
+            });
+
+            cmd.Parameters.Add(new SqlParameter("@portfolio_file_size_bytes", SqlDbType.BigInt)
+            {
+                Value = (object?)portfolioFileSizeBytes ?? DBNull.Value
+            });
+
+            cmd.Parameters.Add(new SqlParameter("@portfolio_sha256_hash", SqlDbType.Char, 64)
+            {
+                Value = (object?)portfolioSha256Hash ?? DBNull.Value
+            });
+
+            cmd.Parameters.Add(new SqlParameter("@created_by_user_id", SqlDbType.UniqueIdentifier)
+            {
+                Value = (object?)createdByUserId ?? DBNull.Value
+            });
+
+            var outUserId = new SqlParameter("@new_user_id", SqlDbType.UniqueIdentifier)
+            {
+                Direction = ParameterDirection.Output
+            };
+
+            var outFileResourceId = new SqlParameter("@portfolio_file_resource_id", SqlDbType.UniqueIdentifier)
+            {
+                Direction = ParameterDirection.Output
+            };
+
             cmd.Parameters.Add(outUserId);
-
-            var outFileResourceId = new Microsoft.Data.SqlClient.SqlParameter("@portfolio_file_resource_id", System.Data.SqlDbType.UniqueIdentifier) { Direction = System.Data.ParameterDirection.Output };
             cmd.Parameters.Add(outFileResourceId);
 
-            if (conn.State != System.Data.ConnectionState.Open)
+            if (conn.State != ConnectionState.Open)
+            {
                 await conn.OpenAsync();
+            }
 
             await cmd.ExecuteNonQueryAsync();
 
-            var newUserId = outUserId.Value == System.DBNull.Value ? Guid.Empty : (Guid)outUserId.Value;
-            var portfolioId = outFileResourceId.Value == System.DBNull.Value ? (Guid?)null : (Guid)outFileResourceId.Value;
+            var newUserId = outUserId.Value == DBNull.Value ? Guid.Empty : (Guid)outUserId.Value;
+            var portfolioId = outFileResourceId.Value == DBNull.Value ? (Guid?)null : (Guid)outFileResourceId.Value;
+
             return (newUserId, portfolioId);
+        }
+
+        public async Task UpdateDisplayNameViaProcAsync(Guid userId, string displayName)
+        {
+            var conn = _context.Database.GetDbConnection();
+            await using var cmd = conn.CreateCommand();
+
+            cmd.CommandText = "auth.usp_User_UpdateDisplayName";
+            cmd.CommandType = CommandType.StoredProcedure;
+
+            cmd.Parameters.Add(new SqlParameter("@user_id", SqlDbType.UniqueIdentifier)
+            {
+                Value = userId
+            });
+
+            cmd.Parameters.Add(new SqlParameter("@display_name", SqlDbType.NVarChar, 100)
+            {
+                Value = displayName.Trim()
+            });
+
+            if (conn.State != ConnectionState.Open)
+            {
+                await conn.OpenAsync();
+            }
+
+            await cmd.ExecuteNonQueryAsync();
+
+            await ReloadTrackedUserAsync(userId);
+        }
+
+        public async Task UpdateAvatarFileViaProcAsync(Guid userId, Guid avatarFileId)
+        {
+            var conn = _context.Database.GetDbConnection();
+            await using var cmd = conn.CreateCommand();
+
+            cmd.CommandText = "auth.usp_User_UpdateAvatarFile";
+            cmd.CommandType = CommandType.StoredProcedure;
+
+            cmd.Parameters.Add(new SqlParameter("@user_id", SqlDbType.UniqueIdentifier)
+            {
+                Value = userId
+            });
+
+            cmd.Parameters.Add(new SqlParameter("@avatar_file_id", SqlDbType.UniqueIdentifier)
+            {
+                Value = avatarFileId
+            });
+
+            if (conn.State != ConnectionState.Open)
+            {
+                await conn.OpenAsync();
+            }
+
+            await cmd.ExecuteNonQueryAsync();
+
+            await ReloadTrackedUserAsync(userId);
+        }
+
+        public async Task UpdatePortfolioFileViaProcAsync(Guid userId, Guid portfolioFileId)
+        {
+            var conn = _context.Database.GetDbConnection();
+            await using var cmd = conn.CreateCommand();
+
+            cmd.CommandText = "auth.usp_User_UpdatePortfolioFile";
+            cmd.CommandType = CommandType.StoredProcedure;
+
+            cmd.Parameters.Add(new SqlParameter("@user_id", SqlDbType.UniqueIdentifier)
+            {
+                Value = userId
+            });
+
+            cmd.Parameters.Add(new SqlParameter("@portfolio_file_id", SqlDbType.UniqueIdentifier)
+            {
+                Value = portfolioFileId
+            });
+
+            if (conn.State != ConnectionState.Open)
+            {
+                await conn.OpenAsync();
+            }
+
+            await cmd.ExecuteNonQueryAsync();
+
+            await ReloadTrackedUserAsync(userId);
+        }
+
+        public async Task ResetPasswordViaProcAsync(Guid userId, string passwordHash)
+        {
+            var conn = _context.Database.GetDbConnection();
+            await using var cmd = conn.CreateCommand();
+
+            cmd.CommandText = "auth.usp_User_ResetPassword";
+            cmd.CommandType = CommandType.StoredProcedure;
+
+            cmd.Parameters.Add(new SqlParameter("@user_id", SqlDbType.UniqueIdentifier)
+            {
+                Value = userId
+            });
+
+            cmd.Parameters.Add(new SqlParameter("@password_hash", SqlDbType.NVarChar, 255)
+            {
+                Value = passwordHash
+            });
+
+            if (conn.State != ConnectionState.Open)
+            {
+                await conn.OpenAsync();
+            }
+
+            await cmd.ExecuteNonQueryAsync();
+
+            await ReloadTrackedUserAsync(userId);
+        }
+
+        private async Task ReloadTrackedUserAsync(Guid userId)
+        {
+            var trackedUser = _context.Users.Local.FirstOrDefault(u => u.UserId == userId);
+
+            if (trackedUser != null)
+            {
+                await _context.Entry(trackedUser).ReloadAsync();
+            }
         }
     }
 }

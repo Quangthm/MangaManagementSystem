@@ -1,0 +1,807 @@
+﻿@page "/profile/settings"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using System.Security.Claims
+@using System.IO
+@using MangaManagementSystem.Application.DTOs.Auth
+@using MangaManagementSystem.Application.DTOs.Manga
+@using MangaManagementSystem.Application.Interfaces
+@attribute [Authorize]
+
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IUserService UserService
+@inject IFileResourceService FileResourceService
+@inject IFileStorageService FileStorageService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavigationManager
+
+<PageTitle>Profile Settings - MangaFlow</PageTitle>
+
+<div class="mf-page">
+    <div class="mf-page-header">
+        <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Profile Settings</MudText>
+        <MudText Typo="Typo.body1" Class="mf-muted">
+            Manage your display name, avatar, portfolio, and password.
+        </MudText>
+    </div>
+
+    @if (_isLoading)
+    {
+        <MudPaper Class="pa-6 mf-card" Elevation="0">
+            <MudProgressCircular Indeterminate="true" />
+            <MudText Class="mt-3">Loading profile...</MudText>
+        </MudPaper>
+    }
+    else if (_currentUser == null)
+    {
+        <MudAlert Severity="Severity.Error">
+            Unable to load current user. Please login again.
+        </MudAlert>
+    }
+    else
+    {
+        <MudGrid>
+            <MudItem xs="12" md="4">
+                <MudPaper Class="pa-5 mf-card" Elevation="0">
+                    <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                        <MudAvatar Size="Size.Large" Image="@_avatarUrl" Color="Color.Primary">
+                            @if (string.IsNullOrWhiteSpace(_avatarUrl))
+                            {
+                                @_avatarInitial
+                            }
+                        </MudAvatar>
+
+                        <MudText Typo="Typo.h6" Class="font-weight-bold">
+                            @_currentUser.DisplayName
+                        </MudText>
+
+                        <MudText Typo="Typo.body2" Class="mf-muted">
+                            @_currentUser.Email
+                        </MudText>
+
+                        <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined">
+                            @_currentUser.RoleName
+                        </MudChip>
+                    </MudStack>
+
+                    <MudDivider Class="my-4" />
+
+                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Account Status</MudText>
+                    <MudText Typo="Typo.body2" Class="mf-muted">@_currentUser.StatusCode</MudText>
+
+                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold mt-3">Username</MudText>
+                    <MudText Typo="Typo.body2" Class="mf-muted">@_currentUser.Username</MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="8">
+                <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">
+                        Display Name
+                    </MudText>
+
+                    <MudTextField T="string"
+                                  Label="Display Name"
+                                  @bind-Value="_displayName"
+                                  Variant="Variant.Outlined"
+                                  Immediate="true" />
+
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Class="mt-3"
+                               Disabled="@_isSavingDisplayName"
+                               OnClick="UpdateDisplayNameAsync">
+                        @(_isSavingDisplayName ? "Saving..." : "Update Display Name")
+                    </MudButton>
+                </MudPaper>
+
+                <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">
+                        Avatar
+                    </MudText>
+
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                        Select an image, preview the square crop, then confirm before uploading.
+                    </MudAlert>
+
+                    <InputFile OnChange="SelectAvatarForCropAsync"
+                               accept="image/png,image/jpeg,image/jpg,image/webp" />
+
+                    @if (!string.IsNullOrWhiteSpace(_avatarPreviewDataUrl))
+                    {
+                        <MudGrid Class="mt-4">
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2">
+                                    Original Preview
+                                </MudText>
+
+                                <img src="@_avatarPreviewDataUrl"
+                                     style="max-width:100%; max-height:260px; border-radius:12px; border:1px solid #ddd;" />
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2">
+                                    Crop Preview
+                                </MudText>
+
+                                <div style="width:220px;height:220px;border-radius:50%;overflow:hidden;border:1px solid #ddd;">
+                                    <img src="@_avatarPreviewDataUrl"
+                                         style="width:100%;height:100%;object-fit:cover;" />
+                                </div>
+                            </MudItem>
+                        </MudGrid>
+
+                        <MudStack Row="true" Spacing="2" Class="mt-4">
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       Disabled="@_isUploadingAvatar"
+                                       OnClick="ConfirmAndUploadAvatarAsync">
+                                @(_isUploadingAvatar ? "Uploading..." : "Confirm & Upload Avatar")
+                            </MudButton>
+
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Default"
+                                       Disabled="@_isUploadingAvatar"
+                                       OnClick="CancelAvatarSelection">
+                                Cancel
+                            </MudButton>
+                        </MudStack>
+                    }
+                </MudPaper>
+
+                <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">
+                        Portfolio
+                    </MudText>
+
+                    @if (!string.IsNullOrWhiteSpace(_portfolioUrl))
+                    {
+                        <MudAlert Severity="Severity.Success" Dense="true" Class="mb-3">
+                            Current portfolio: @_portfolioFileName
+                        </MudAlert>
+
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   Href="@_portfolioUrl"
+                                   Target="_blank"
+                                   Class="mb-3">
+                            Open Current Portfolio
+                        </MudButton>
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                            No portfolio file is available.
+                        </MudAlert>
+                    }
+
+                    <InputFile OnChange="SelectPortfolioAsync"
+                               accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,image/jpg,image/webp" />
+
+                    @if (_pendingPortfolioBytes != null)
+                    {
+                        <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">
+                            Pending portfolio: @_pendingPortfolioFileName. Please confirm before saving.
+                        </MudAlert>
+
+                        <MudStack Row="true" Spacing="2" Class="mt-3">
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       Disabled="@_isUploadingPortfolio"
+                                       OnClick="ConfirmAndUploadPortfolioAsync">
+                                @(_isUploadingPortfolio ? "Uploading..." : "Confirm & Upload Portfolio")
+                            </MudButton>
+
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Default"
+                                       OnClick="CancelPortfolioSelection">
+                                Cancel
+                            </MudButton>
+                        </MudStack>
+                    }
+                </MudPaper>
+
+                <MudPaper Class="pa-5 mf-card" Elevation="0">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">
+                        Reset Password
+                    </MudText>
+
+                    <MudTextField T="string"
+                                  Label="New Password"
+                                  @bind-Value="_newPassword"
+                                  InputType="InputType.Password"
+                                  Variant="Variant.Outlined" />
+
+                    <MudTextField T="string"
+                                  Label="Confirm New Password"
+                                  @bind-Value="_confirmPassword"
+                                  InputType="InputType.Password"
+                                  Variant="Variant.Outlined"
+                                  Class="mt-3" />
+
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Error"
+                               Class="mt-3"
+                               Disabled="@_isResettingPassword"
+                               OnClick="ResetPasswordAsync">
+                        @(_isResettingPassword ? "Resetting..." : "Reset Password")
+                    </MudButton>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+</div>
+
+@code {
+    private const long MaxUploadBytes = 10 * 1024 * 1024;
+
+    private bool _isLoading = true;
+    private bool _isSavingDisplayName;
+    private bool _isUploadingAvatar;
+    private bool _isUploadingPortfolio;
+    private bool _isResettingPassword;
+
+    private Guid _currentUserId;
+    private UserDto? _currentUser;
+
+    private string? _displayName;
+    private string? _avatarUrl;
+    private string _avatarInitial = "?";
+
+    private string? _portfolioUrl;
+    private string? _portfolioFileName;
+
+    private string? _avatarPreviewDataUrl;
+    private string? _pendingAvatarFileName;
+    private string? _pendingAvatarContentType;
+    private byte[]? _pendingAvatarBytes;
+
+    private byte[]? _pendingPortfolioBytes;
+    private string? _pendingPortfolioFileName;
+    private string? _pendingPortfolioContentType;
+
+    private string? _newPassword;
+    private string? _confirmPassword;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProfileAsync();
+    }
+
+    private async Task LoadProfileAsync()
+    {
+        try
+        {
+            _isLoading = true;
+
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var principal = authState.User;
+
+            var idClaim = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (!Guid.TryParse(idClaim, out _currentUserId))
+            {
+                Snackbar.Add("Unable to identify current user. Please login again.", Severity.Error);
+                _currentUser = null;
+                return;
+            }
+
+            _currentUser = await UserService.GetUserByIdAsync(_currentUserId);
+
+            if (_currentUser == null)
+            {
+                Snackbar.Add("Current user was not found. Please login again.", Severity.Error);
+                return;
+            }
+
+            _displayName = _currentUser.DisplayName;
+            _avatarInitial = BuildInitial(_currentUser.DisplayName, _currentUser.Username);
+
+            await LoadFileUrlsAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load profile: {ex.GetBaseException().Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task LoadFileUrlsAsync()
+    {
+        _avatarUrl = null;
+        _portfolioUrl = null;
+        _portfolioFileName = null;
+
+        if (_currentUser?.AvatarFileId.HasValue == true)
+        {
+            var avatarFile = await FileResourceService.GetFileResourceByIdAsync(_currentUser.AvatarFileId.Value);
+
+            if (avatarFile != null &&
+                avatarFile.DeletedAtUtc == null &&
+                !string.IsNullOrWhiteSpace(avatarFile.CloudinarySecureUrl))
+            {
+                _avatarUrl = avatarFile.CloudinarySecureUrl;
+            }
+        }
+
+        if (_currentUser?.PortfolioFileId.HasValue == true)
+        {
+            var portfolioFile = await FileResourceService.GetFileResourceByIdAsync(_currentUser.PortfolioFileId.Value);
+
+            if (portfolioFile != null &&
+                portfolioFile.DeletedAtUtc == null &&
+                !string.IsNullOrWhiteSpace(portfolioFile.CloudinarySecureUrl))
+            {
+                _portfolioUrl = $"/api/portfolio/{portfolioFile.FileResourceId}";
+                _portfolioFileName = portfolioFile.OriginalFileName;
+            }
+        }
+    }
+
+    private async Task UpdateDisplayNameAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_displayName))
+        {
+            Snackbar.Add("Display name cannot be empty.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            _isSavingDisplayName = true;
+
+            _currentUser = await UserService.UpdateDisplayNameAsync(
+                _currentUserId,
+                _displayName.Trim());
+
+            _displayName = _currentUser.DisplayName;
+            _avatarInitial = BuildInitial(_currentUser.DisplayName, _currentUser.Username);
+
+            Snackbar.Add("Display name updated successfully.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to update display name: {ex.GetBaseException().Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSavingDisplayName = false;
+        }
+    }
+
+    private async Task SelectAvatarForCropAsync(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+
+        if (file == null)
+        {
+            return;
+        }
+
+        var contentType = file.ContentType?.ToLowerInvariant() ?? string.Empty;
+
+        if (contentType is not ("image/png" or "image/jpeg" or "image/jpg" or "image/webp"))
+        {
+            Snackbar.Add("Avatar must be PNG, JPG, JPEG, or WEBP.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxUploadBytes);
+            using var memory = new MemoryStream();
+
+            await stream.CopyToAsync(memory);
+
+            _pendingAvatarBytes = memory.ToArray();
+            _pendingAvatarFileName = file.Name;
+            _pendingAvatarContentType = file.ContentType;
+
+            var base64 = Convert.ToBase64String(_pendingAvatarBytes);
+            _avatarPreviewDataUrl = $"data:{file.ContentType};base64,{base64}";
+
+            Snackbar.Add("Avatar selected. Please confirm before uploading.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to prepare avatar: {ex.GetBaseException().Message}", Severity.Error);
+        }
+    }
+
+    private async Task ConfirmAndUploadAvatarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_avatarPreviewDataUrl) ||
+            _pendingAvatarBytes == null ||
+            string.IsNullOrWhiteSpace(_pendingAvatarFileName) ||
+            string.IsNullOrWhiteSpace(_pendingAvatarContentType))
+        {
+            Snackbar.Add("Please select an avatar first.", Severity.Warning);
+            return;
+        }
+
+        var confirm = await JSRuntime.InvokeAsync<bool>(
+            "confirm",
+            "Do you want to replace your current avatar with this cropped image?");
+
+        if (!confirm)
+        {
+            Snackbar.Add("Avatar update cancelled.", Severity.Info);
+            return;
+        }
+
+        try
+        {
+            _isUploadingAvatar = true;
+            StateHasChanged();
+
+            Snackbar.Add("Avatar upload started...", Severity.Info);
+
+            byte[] avatarBytes = _pendingAvatarBytes;
+            string avatarFileName = BuildUniqueAvatarFileName(_pendingAvatarFileName, _pendingAvatarContentType);
+            string avatarContentType = _pendingAvatarContentType;
+
+            try
+            {
+                var cropTask = JSRuntime.InvokeAsync<string>(
+                    "profileSettingsCrop.cropCenter",
+                    _avatarPreviewDataUrl,
+                    512,
+                    0.92).AsTask();
+
+                var completedTask = await Task.WhenAny(
+                    cropTask,
+                    Task.Delay(TimeSpan.FromSeconds(3)));
+
+                if (completedTask == cropTask)
+                {
+                    var croppedDataUrl = await cropTask;
+                    var commaIndex = croppedDataUrl.IndexOf(',');
+
+                    if (commaIndex >= 0)
+                    {
+                        var base64 = croppedDataUrl[(commaIndex + 1)..];
+                        var croppedBytes = Convert.FromBase64String(base64);
+
+                        if (croppedBytes.Length > 0)
+                        {
+                            avatarBytes = croppedBytes;
+                            avatarFileName = BuildUniqueCroppedAvatarFileName(_pendingAvatarFileName);
+                            avatarContentType = "image/jpeg";
+
+                            Snackbar.Add("Avatar crop completed.", Severity.Info);
+                        }
+                        else
+                        {
+                            Snackbar.Add("Crop returned empty data. Uploading original avatar.", Severity.Warning);
+                        }
+                    }
+                    else
+                    {
+                        Snackbar.Add("Crop returned invalid data. Uploading original avatar.", Severity.Warning);
+                    }
+                }
+                else
+                {
+                    Snackbar.Add("Avatar crop timed out. Uploading original avatar.", Severity.Warning);
+                }
+            }
+            catch (Exception cropEx)
+            {
+                Snackbar.Add($"Avatar crop skipped: {cropEx.GetBaseException().Message}", Severity.Warning);
+            }
+
+            Snackbar.Add("Uploading avatar to Cloudinary...", Severity.Info);
+
+            var upload = await FileStorageService.UploadFileAsync(
+                avatarBytes,
+                avatarFileName,
+                avatarContentType,
+                "USER_AVATAR",
+                null).WaitAsync(TimeSpan.FromSeconds(30));
+
+            Snackbar.Add("Cloudinary upload completed.", Severity.Info);
+
+            var fileResource = await FileResourceService.CreateFileResourceAsync(new CreateFileResourceDto(
+                "USER_AVATAR",
+                upload.OriginalFileName,
+                upload.PublicId,
+                upload.SecureUrl,
+                upload.ContentType,
+                upload.FileSizeBytes,
+                upload.Sha256Hash,
+                _currentUserId
+            ));
+
+            Snackbar.Add("File resource created.", Severity.Info);
+
+            _currentUser = await UserService.UpdateAvatarFileAsync(
+                _currentUserId,
+                fileResource.FileResourceId);
+
+            Snackbar.Add("User avatar id updated.", Severity.Info);
+
+            _avatarUrl = fileResource.CloudinarySecureUrl;
+
+            if (_currentUser != null)
+            {
+                _avatarInitial = BuildInitial(_currentUser.DisplayName, _currentUser.Username);
+            }
+
+            _avatarPreviewDataUrl = null;
+            _pendingAvatarBytes = null;
+            _pendingAvatarFileName = null;
+            _pendingAvatarContentType = null;
+
+            Snackbar.Add("Avatar updated successfully.", Severity.Success);
+        }
+        catch (TimeoutException)
+        {
+            Snackbar.Add("Avatar upload timed out. Please try again with a smaller image.", Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Avatar update failed: {ex.GetBaseException().Message}", Severity.Error);
+        }
+        finally
+        {
+            _isUploadingAvatar = false;
+            StateHasChanged();
+        }
+    }
+
+    private void CancelAvatarSelection()
+    {
+        _avatarPreviewDataUrl = null;
+        _pendingAvatarBytes = null;
+        _pendingAvatarFileName = null;
+        _pendingAvatarContentType = null;
+
+        Snackbar.Add("Avatar change cancelled.", Severity.Info);
+    }
+
+    private async Task SelectPortfolioAsync(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+
+        if (file == null)
+        {
+            return;
+        }
+
+        var contentType = file.ContentType?.ToLowerInvariant() ?? string.Empty;
+
+        var allowed = contentType is
+            "application/pdf" or
+            "application/msword" or
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document" or
+            "image/png" or
+            "image/jpeg" or
+            "image/jpg" or
+            "image/webp";
+
+        if (!allowed)
+        {
+            Snackbar.Add("Portfolio must be PDF, DOC, DOCX, PNG, JPG, JPEG, or WEBP.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxUploadBytes);
+            using var memory = new MemoryStream();
+
+            await stream.CopyToAsync(memory);
+
+            _pendingPortfolioBytes = memory.ToArray();
+            _pendingPortfolioFileName = file.Name;
+            _pendingPortfolioContentType = file.ContentType;
+
+            Snackbar.Add("Portfolio selected. Please confirm before uploading.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to prepare portfolio: {ex.GetBaseException().Message}", Severity.Error);
+        }
+    }
+
+    private async Task ConfirmAndUploadPortfolioAsync()
+    {
+        if (_pendingPortfolioBytes == null ||
+            string.IsNullOrWhiteSpace(_pendingPortfolioFileName) ||
+            string.IsNullOrWhiteSpace(_pendingPortfolioContentType))
+        {
+            Snackbar.Add("Please select a portfolio file first.", Severity.Warning);
+            return;
+        }
+
+        var confirm = await JSRuntime.InvokeAsync<bool>(
+            "confirm",
+            $"Do you want to replace your current portfolio with '{_pendingPortfolioFileName}'?");
+
+        if (!confirm)
+        {
+            return;
+        }
+
+        try
+        {
+            _isUploadingPortfolio = true;
+
+            var uniquePortfolioFileName = BuildUniquePortfolioFileName(_pendingPortfolioFileName);
+
+            var upload = await FileStorageService.UploadFileAsync(
+                _pendingPortfolioBytes,
+                uniquePortfolioFileName,
+                _pendingPortfolioContentType,
+                "REGISTRATION_PORTFOLIO",
+                null);
+
+            var fileResource = await FileResourceService.CreateFileResourceAsync(new CreateFileResourceDto(
+                "REGISTRATION_PORTFOLIO",
+                upload.OriginalFileName,
+                upload.PublicId,
+                upload.SecureUrl,
+                upload.ContentType,
+                upload.FileSizeBytes,
+                upload.Sha256Hash,
+                _currentUserId
+            ));
+
+            _currentUser = await UserService.UpdatePortfolioFileAsync(
+                _currentUserId,
+                fileResource.FileResourceId);
+
+            _portfolioUrl = $"/api/portfolio/{fileResource.FileResourceId}";
+            _portfolioFileName = fileResource.OriginalFileName;
+
+            _pendingPortfolioBytes = null;
+            _pendingPortfolioFileName = null;
+            _pendingPortfolioContentType = null;
+
+            Snackbar.Add("Portfolio updated successfully.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Portfolio update failed: {ex.GetBaseException().Message}", Severity.Error);
+        }
+        finally
+        {
+            _isUploadingPortfolio = false;
+        }
+    }
+
+    private void CancelPortfolioSelection()
+    {
+        _pendingPortfolioBytes = null;
+        _pendingPortfolioFileName = null;
+        _pendingPortfolioContentType = null;
+
+        Snackbar.Add("Portfolio change cancelled.", Severity.Info);
+    }
+
+    private async Task ResetPasswordAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newPassword))
+        {
+            Snackbar.Add("New password cannot be empty.", Severity.Warning);
+            return;
+        }
+
+        if (_newPassword.Length < 8)
+        {
+            Snackbar.Add("New password must be at least 8 characters.", Severity.Warning);
+            return;
+        }
+
+        if (_newPassword != _confirmPassword)
+        {
+            Snackbar.Add("Password confirmation does not match.", Severity.Warning);
+            return;
+        }
+
+        var confirm = await JSRuntime.InvokeAsync<bool>(
+            "confirm",
+            "Do you want to reset your password?");
+
+        if (!confirm)
+        {
+            return;
+        }
+
+        try
+        {
+            _isResettingPassword = true;
+
+            await UserService.ResetPasswordAsync(_currentUserId, _newPassword);
+
+            _newPassword = null;
+            _confirmPassword = null;
+
+            Snackbar.Add("Password reset successfully.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Password reset failed: {ex.GetBaseException().Message}", Severity.Error);
+        }
+        finally
+        {
+            _isResettingPassword = false;
+        }
+    }
+
+    private static string BuildInitial(string? displayName, string? username)
+    {
+        var source = !string.IsNullOrWhiteSpace(displayName)
+            ? displayName.Trim()
+            : username?.Trim();
+
+        return string.IsNullOrWhiteSpace(source)
+            ? "?"
+            : source[..1].ToUpperInvariant();
+    }
+
+    private static string BuildUniqueAvatarFileName(string? originalFileName, string? contentType)
+    {
+        var extension = Path.GetExtension(originalFileName);
+
+        if (string.IsNullOrWhiteSpace(extension))
+        {
+            extension = contentType?.ToLowerInvariant() switch
+            {
+                "image/png" => ".png",
+                "image/webp" => ".webp",
+                _ => ".jpg"
+            };
+        }
+
+        var baseName = string.IsNullOrWhiteSpace(originalFileName)
+            ? "avatar"
+            : Path.GetFileNameWithoutExtension(originalFileName);
+
+        return $"{SanitizeFileName(baseName)}_{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
+    }
+
+    private static string BuildUniqueCroppedAvatarFileName(string? originalFileName)
+    {
+        var baseName = string.IsNullOrWhiteSpace(originalFileName)
+            ? "avatar"
+            : Path.GetFileNameWithoutExtension(originalFileName);
+
+        return $"{SanitizeFileName(baseName)}_cropped_{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}.jpg";
+    }
+
+    private static string BuildUniquePortfolioFileName(string? originalFileName)
+    {
+        var extension = Path.GetExtension(originalFileName);
+
+        if (string.IsNullOrWhiteSpace(extension))
+        {
+            extension = ".bin";
+        }
+
+        var baseName = string.IsNullOrWhiteSpace(originalFileName)
+            ? "portfolio"
+            : Path.GetFileNameWithoutExtension(originalFileName);
+
+        return $"{SanitizeFileName(baseName)}_{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
+    }
+
+    private static string SanitizeFileName(string value)
+    {
+        var invalidChars = Path.GetInvalidFileNameChars();
+        var cleaned = new string(value
+            .Where(ch => !invalidChars.Contains(ch))
+            .ToArray());
+
+        cleaned = cleaned.Replace(' ', '_');
+
+        return string.IsNullOrWhiteSpace(cleaned)
+            ? "file"
+            : cleaned;
+    }
+}

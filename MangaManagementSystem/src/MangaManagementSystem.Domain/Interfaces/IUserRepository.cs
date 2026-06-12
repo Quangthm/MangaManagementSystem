@@ -1,4 +1,5 @@
 using MangaManagementSystem.Domain.Entities;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -10,12 +11,14 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<User?> GetByUsernameAsync(string username);
         Task<User?> GetByUsernameOrEmailAsync(string usernameOrEmail);
         Task<IReadOnlyList<User>> GetByStatusAsync(string status);
+
         Task ChangeUserStatusViaProcAsync(
             Guid adminUserId,
             Guid targetUserId,
             string newStatusCode,
             string? reason = null
         );
+
         Task<Guid> CreateUserViaProcAsync(
             string roleName,
             string username,
@@ -34,7 +37,6 @@ namespace MangaManagementSystem.Domain.Interfaces
             string passwordHash,
             string? displayName = null,
             Guid? avatarFileId = null,
-            // portfolio metadata - all nullable; pass DBNull.Value for missing
             string? portfolioOriginalFileName = null,
             string? portfolioCloudinaryPublicId = null,
             string? portfolioCloudinarySecureUrl = null,
@@ -42,6 +44,26 @@ namespace MangaManagementSystem.Domain.Interfaces
             long? portfolioFileSizeBytes = null,
             string? portfolioSha256Hash = null,
             Guid? createdByUserId = null
+        );
+
+        Task UpdateDisplayNameViaProcAsync(
+            Guid userId,
+            string displayName
+        );
+
+        Task UpdateAvatarFileViaProcAsync(
+            Guid userId,
+            Guid avatarFileId
+        );
+
+        Task UpdatePortfolioFileViaProcAsync(
+            Guid userId,
+            Guid portfolioFileId
+        );
+
+        Task ResetPasswordViaProcAsync(
+            Guid userId,
+            string passwordHash
         );
     }
 }
