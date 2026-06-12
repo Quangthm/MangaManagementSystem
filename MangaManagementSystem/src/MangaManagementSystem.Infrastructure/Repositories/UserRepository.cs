@@ -18,24 +18,31 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
         public async Task<User?> GetByEmailAsync(string email)
         {
-            return await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+            return await _context.Users
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.Email == email);
         }
 
         public async Task<User?> GetByUsernameAsync(string username)
         {
-            return await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+            return await _context.Users
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.Username == username);
         }
 
         public async Task<User?> GetByUsernameOrEmailAsync(string usernameOrEmail)
         {
-            return await _context.Users.FirstOrDefaultAsync(u =>
-                u.Email == usernameOrEmail || u.Username == usernameOrEmail);
+            return await _context.Users
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u =>
+                    u.Email == usernameOrEmail || u.Username == usernameOrEmail);
         }
 
         public async Task<IReadOnlyList<User>> GetByStatusAsync(string status)
         {
             return await _context.Users
                 .AsNoTracking()
+                .Include(u => u.Role)
                 .Where(u => u.StatusCode == status)
                 .OrderBy(u => u.CreatedAtUtc)
                 .ToListAsync();

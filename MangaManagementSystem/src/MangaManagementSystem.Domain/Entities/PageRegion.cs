@@ -1,5 +1,6 @@
 using MangaManagementSystem.Domain.Common;
 using System;
+using System.Collections.Generic;
 
 namespace MangaManagementSystem.Domain.Entities
 {
@@ -24,5 +25,9 @@ public class PageRegion : BaseEntity
     public User? UpdatedByUser { get; set; }
     public User? DeletedByUser { get; set; }
     public Guid? DeletedByUserId { get; set; }
+
+    // Skip-navigation collections mapped through junction tables
+    public ICollection<ChapterPageTask> Tasks { get; set; } = new List<ChapterPageTask>();
+    public ICollection<ChapterPageAnnotation> Annotations { get; set; } = new List<ChapterPageAnnotation>();
     }
 }

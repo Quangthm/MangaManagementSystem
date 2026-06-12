@@ -18,7 +18,6 @@ namespace MangaManagementSystem.Application
             services.AddScoped<IChapterPageVersionService, ChapterPageVersionService>();
             services.AddScoped<IPageRegionService, PageRegionService>();
             services.AddScoped<IChapterPageTaskService, ChapterPageTaskService>();
-            services.AddScoped<IChapterPageTaskRegionService, ChapterPageTaskRegionService>();
             services.AddScoped<IChapterPageAnnotationService, ChapterPageAnnotationService>();
             services.AddScoped<IChapterEditorialReviewService, ChapterEditorialReviewService>();
             services.AddScoped<IRoleService, RoleService>();

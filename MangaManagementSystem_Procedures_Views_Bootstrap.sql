@@ -936,18 +936,18 @@ BEGIN
 END;
 GO
 CREATE OR ALTER PROCEDURE manga.usp_SeriesProposal_Submit
-    @series_id                    UNIQUEIDENTIFIER,
-    @submitted_by_user_id          UNIQUEIDENTIFIER,
+    @series_id                     UNIQUEIDENTIFIER,
+    @submitted_by_user_id           UNIQUEIDENTIFIER,
 
-    @original_file_name            NVARCHAR(260),
-    @cloudinary_public_id          NVARCHAR(255),
-    @cloudinary_secure_url         NVARCHAR(1000),
-    @content_type                  NVARCHAR(100),
-    @file_size_bytes               BIGINT,
-    @sha256_hash                   CHAR(64),
+    @original_file_name             NVARCHAR(260),
+    @cloudinary_public_id           NVARCHAR(255),
+    @cloudinary_secure_url          NVARCHAR(1000),
+    @content_type                   NVARCHAR(100),
+    @file_size_bytes                BIGINT,
+    @sha256_hash                    CHAR(64),
 
-    @series_proposal_id            UNIQUEIDENTIFIER OUTPUT,
-    @proposal_version_no           SMALLINT OUTPUT
+    @series_proposal_id             UNIQUEIDENTIFIER OUTPUT,
+    @proposal_version_no            SMALLINT OUTPUT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -964,6 +964,8 @@ BEGIN
     DECLARE @proposal_title NVARCHAR(200);
     DECLARE @synopsis_snapshot NVARCHAR(MAX);
     DECLARE @genre_snapshot NVARCHAR(100);
+    DECLARE @current_series_status_code NVARCHAR(50);
+    DECLARE @submitted_at_utc DATETIME2(0) = SYSUTCDATETIME();
 
     DECLARE @created_proposal TABLE
     (
@@ -977,9 +979,9 @@ BEGIN
             BEGIN TRAN;
         END;
 
-        /*
-            Serialize proposal version generation per series.
-        */
+        --------------------------------------------------------------------
+        -- 1. Serialize proposal version generation per series.
+        --------------------------------------------------------------------
         SET @lock_resource = N'series_proposal_submit_' + CONVERT(NVARCHAR(36), @series_id);
 
         EXEC @lock_result = sys.sp_getapplock
@@ -993,14 +995,15 @@ BEGIN
             ;THROW 57001, 'Could not acquire series proposal submit lock.', 1;
         END;
 
-        /*
-            Snapshot current Series values inside the database.
-            Backend should not pass these snapshot values.
-        */
+        --------------------------------------------------------------------
+        -- 2. Snapshot current Series values inside the database.
+        -- Backend should not pass these snapshot values.
+        --------------------------------------------------------------------
         SELECT
             @proposal_title = s.title,
             @synopsis_snapshot = s.synopsis,
-            @genre_snapshot = s.genre
+            @genre_snapshot = s.genre,
+            @current_series_status_code = s.status_code
         FROM manga.Series s WITH (UPDLOCK, HOLDLOCK)
         WHERE s.series_id = @series_id;
 
@@ -1009,11 +1012,47 @@ BEGIN
             ;THROW 57002, 'Series does not exist.', 1;
         END;
 
+        --------------------------------------------------------------------
+        -- 3. Only draft series can submit the first formal proposal.
+        -- This transition locks normal draft profile editing.
+        --------------------------------------------------------------------
+        IF @current_series_status_code <> N'PROPOSAL_DRAFT'
+        BEGIN
+            ;THROW 57003, 'Only a series in PROPOSAL_DRAFT status can submit a proposal.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 4. Submitter must be an ACTIVE Mangaka contributor of this series.
+        --------------------------------------------------------------------
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM manga.SeriesContributor sc
+            INNER JOIN auth.Users u
+                ON u.user_id = sc.user_id
+            INNER JOIN auth.Roles r
+                ON r.role_id = u.role_id
+            WHERE sc.series_id = @series_id
+              AND sc.user_id = @submitted_by_user_id
+              AND sc.end_date IS NULL
+              AND u.status_code = N'ACTIVE'
+              AND r.role_name = N'Mangaka'
+        )
+        BEGIN
+            ;THROW 57004, 'Submitter must be an active Mangaka contributor of this series.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 5. Generate next proposal version number.
+        --------------------------------------------------------------------
         SELECT
             @proposal_version_no = CONVERT(SMALLINT, ISNULL(MAX(sp.proposal_version_no), 0) + 1)
         FROM manga.SeriesProposal sp WITH (UPDLOCK, HOLDLOCK)
         WHERE sp.series_id = @series_id;
 
+        --------------------------------------------------------------------
+        -- 6. Create proposal file metadata.
+        --------------------------------------------------------------------
         EXEC manga.usp_FileResource_Create
             @file_purpose_code = N'SERIES_PROPOSAL',
             @original_file_name = @original_file_name,
@@ -1025,6 +1064,9 @@ BEGIN
             @uploaded_by_user_id = @submitted_by_user_id,
             @file_resource_id = @proposal_file_resource_id OUTPUT;
 
+        --------------------------------------------------------------------
+        -- 7. Create SeriesProposal row.
+        --------------------------------------------------------------------
         INSERT INTO manga.SeriesProposal
         (
             series_id,
@@ -1053,13 +1095,27 @@ BEGIN
             @proposal_file_resource_id,
             N'UNDER_EDITORIAL_REVIEW',
             @submitted_by_user_id,
-            SYSUTCDATETIME()
+            @submitted_at_utc
         );
 
         SELECT
             @series_proposal_id = series_proposal_id
         FROM @created_proposal;
 
+        --------------------------------------------------------------------
+        -- 8. Move Series out of PROPOSAL_DRAFT.
+        -- This locks normal draft profile editing.
+        --------------------------------------------------------------------
+        UPDATE manga.Series
+        SET
+            status_code = N'UNDER_EDITORIAL_REVIEW',
+            updated_at_utc = @submitted_at_utc,
+            updated_by_user_id = @submitted_by_user_id
+        WHERE series_id = @series_id;
+
+        --------------------------------------------------------------------
+        -- 9. Audit.
+        --------------------------------------------------------------------
         SELECT @detail_json =
         (
             SELECT
@@ -1068,7 +1124,9 @@ BEGIN
                 @proposal_version_no AS proposal_version_no,
                 @proposal_file_resource_id AS proposal_file_resource_id,
                 @proposal_title AS proposal_title_snapshot,
-                N'UNDER_EDITORIAL_REVIEW' AS status_code
+                N'PROPOSAL_DRAFT' AS old_series_status_code,
+                N'UNDER_EDITORIAL_REVIEW' AS new_series_status_code,
+                N'UNDER_EDITORIAL_REVIEW' AS proposal_status_code
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
         );
 
@@ -1093,7 +1151,7 @@ BEGIN
         END;
 
         ;THROW;
-    END CATCH
+    END CATCH;
 END;
 GO
 CREATE OR ALTER PROCEDURE manga.usp_Series_CancelDraft
@@ -2373,6 +2431,582 @@ END;
             @actor_user_id = @actor_user_id,
             @action_code = N'CHAPTER_PAGE_TASK_CREATED',
             @entity_type = N'ChapterPageTask',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH;
+END;
+GO
+CREATE OR ALTER PROCEDURE manga.usp_SeriesProposal_ClaimEditorialReview
+    @series_proposal_id UNIQUEIDENTIFIER,
+    @actor_user_id UNIQUEIDENTIFIER,
+    @notes NVARCHAR(500) = NULL,
+    @new_series_contributor_id UNIQUEIDENTIFIER OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        SET @new_series_contributor_id = NULL;
+
+        --------------------------------------------------------------------
+        -- 1. Lock this proposal claim workflow
+        --------------------------------------------------------------------
+        DECLARE @proposal_lock_resource NVARCHAR(200) =
+            N'manga_series_proposal_claim_' + CONVERT(NVARCHAR(36), @series_proposal_id);
+
+        DECLARE @lock_result INT;
+
+        EXEC @lock_result = sys.sp_getapplock
+            @Resource = @proposal_lock_resource,
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 10000;
+
+        IF @lock_result < 0
+        BEGIN
+            ;THROW 57301, 'Could not acquire proposal claim lock.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 2. Actor must be ACTIVE Tantou Editor
+        --------------------------------------------------------------------
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM auth.Users u
+            INNER JOIN auth.Roles r
+                ON r.role_id = u.role_id
+            WHERE u.user_id = @actor_user_id
+              AND u.status_code = N'ACTIVE'
+              AND r.role_name = N'Tantou Editor'
+        )
+        BEGIN
+            ;THROW 57302, 'Actor must be an active Tantou Editor.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 3. Read proposal and series
+        --------------------------------------------------------------------
+        DECLARE @series_id UNIQUEIDENTIFIER;
+        DECLARE @proposal_status_code NVARCHAR(50);
+        DECLARE @series_status_code NVARCHAR(50);
+        DECLARE @reviewed_by_user_id UNIQUEIDENTIFIER;
+
+        SELECT
+            @series_id = sp.series_id,
+            @proposal_status_code = sp.status_code,
+            @reviewed_by_user_id = sp.reviewed_by_user_id,
+            @series_status_code = s.status_code
+        FROM manga.SeriesProposal sp WITH (UPDLOCK, HOLDLOCK)
+        INNER JOIN manga.Series s WITH (UPDLOCK, HOLDLOCK)
+            ON s.series_id = sp.series_id
+        WHERE sp.series_proposal_id = @series_proposal_id;
+
+        IF @series_id IS NULL
+        BEGIN
+            ;THROW 57303, 'Series proposal does not exist.', 1;
+        END;
+
+        IF @proposal_status_code <> N'UNDER_EDITORIAL_REVIEW'
+        BEGIN
+            ;THROW 57304, 'Only proposals under editorial review can be claimed.', 1;
+        END;
+
+        IF @series_status_code <> N'UNDER_EDITORIAL_REVIEW'
+        BEGIN
+            ;THROW 57305, 'Series must be under editorial review before a Tantou Editor can claim it.', 1;
+        END;
+
+        IF @reviewed_by_user_id IS NOT NULL
+        BEGIN
+            ;THROW 57306, 'This proposal has already been reviewed.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 4. Lock contributor changes for this series
+        --------------------------------------------------------------------
+        DECLARE @contributor_lock_resource NVARCHAR(200) =
+            N'manga_series_contributor_add_' + CONVERT(NVARCHAR(36), @series_id);
+
+        EXEC @lock_result = sys.sp_getapplock
+            @Resource = @contributor_lock_resource,
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 10000;
+
+        IF @lock_result < 0
+        BEGIN
+            ;THROW 57307, 'Could not acquire series contributor lock.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 5. Insert claiming Tantou Editor as active SeriesContributor
+        --
+        -- Multiple Tantou Editors are allowed for the same series.
+        -- If the same editor is already an active contributor, the table's
+        -- active-duplicate constraint should reject it.
+        --------------------------------------------------------------------
+        DECLARE @created_contributor TABLE
+        (
+            series_contributor_id UNIQUEIDENTIFIER NOT NULL
+        );
+
+        INSERT INTO manga.SeriesContributor
+        (
+            series_id,
+            user_id,
+            notes
+        )
+        OUTPUT inserted.series_contributor_id
+        INTO @created_contributor(series_contributor_id)
+        VALUES
+        (
+            @series_id,
+            @actor_user_id,
+            @notes
+        );
+
+        SELECT
+            @new_series_contributor_id = series_contributor_id
+        FROM @created_contributor;
+
+        --------------------------------------------------------------------
+        -- 6. Audit
+        --------------------------------------------------------------------
+        DECLARE @audit_entity_id NVARCHAR(100) =
+            CONVERT(NVARCHAR(36), @series_proposal_id);
+
+        DECLARE @detail_json NVARCHAR(MAX) =
+        (
+            SELECT
+                @series_id AS series_id,
+                @series_proposal_id AS series_proposal_id,
+                @new_series_contributor_id AS series_contributor_id,
+                @actor_user_id AS tantou_editor_user_id,
+                @notes AS notes
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @actor_user_id,
+            @action_code = N'SERIES_PROPOSAL_EDITOR_CLAIMED',
+            @entity_type = N'SeriesProposal',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH;
+END;
+GO
+CREATE OR ALTER PROCEDURE manga.usp_SeriesProposal_RequestRevision
+    @series_proposal_id UNIQUEIDENTIFIER,
+    @actor_user_id UNIQUEIDENTIFIER,
+
+    @comments NVARCHAR(MAX),
+
+    @markup_original_file_name NVARCHAR(260) = NULL,
+    @markup_cloudinary_public_id NVARCHAR(255) = NULL,
+    @markup_cloudinary_secure_url NVARCHAR(1000) = NULL,
+    @markup_content_type NVARCHAR(100) = NULL,
+    @markup_file_size_bytes BIGINT = NULL,
+    @markup_sha256_hash CHAR(64) = NULL,
+
+    @markup_file_resource_id UNIQUEIDENTIFIER OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        SET @markup_file_resource_id = NULL;
+
+        --------------------------------------------------------------------
+        -- 1. Lock proposal review
+        --------------------------------------------------------------------
+        DECLARE @lock_resource NVARCHAR(200) =
+            N'manga_series_proposal_review_' + CONVERT(NVARCHAR(36), @series_proposal_id);
+
+        DECLARE @lock_result INT;
+
+        EXEC @lock_result = sys.sp_getapplock
+            @Resource = @lock_resource,
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 10000;
+
+        IF @lock_result < 0
+        BEGIN
+            ;THROW 57401, 'Could not acquire proposal review lock.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 2. Read proposal and series
+        --------------------------------------------------------------------
+        DECLARE @series_id UNIQUEIDENTIFIER;
+        DECLARE @old_proposal_status_code NVARCHAR(50);
+        DECLARE @old_series_status_code NVARCHAR(50);
+        DECLARE @reviewed_by_user_id UNIQUEIDENTIFIER;
+        DECLARE @reviewed_at_utc DATETIME2(0) = SYSUTCDATETIME();
+
+        SELECT
+            @series_id = sp.series_id,
+            @old_proposal_status_code = sp.status_code,
+            @reviewed_by_user_id = sp.reviewed_by_user_id,
+            @old_series_status_code = s.status_code
+        FROM manga.SeriesProposal sp WITH (UPDLOCK, HOLDLOCK)
+        INNER JOIN manga.Series s WITH (UPDLOCK, HOLDLOCK)
+            ON s.series_id = sp.series_id
+        WHERE sp.series_proposal_id = @series_proposal_id;
+
+        IF @series_id IS NULL
+        BEGIN
+            ;THROW 57402, 'Series proposal does not exist.', 1;
+        END;
+
+        IF @old_proposal_status_code <> N'UNDER_EDITORIAL_REVIEW'
+        BEGIN
+            ;THROW 57403, 'Only proposals under editorial review can request revision.', 1;
+        END;
+
+        IF @old_series_status_code <> N'UNDER_EDITORIAL_REVIEW'
+        BEGIN
+            ;THROW 57404, 'Series must be under editorial review before revision can be requested.', 1;
+        END;
+
+        IF @reviewed_by_user_id IS NOT NULL
+        BEGIN
+            ;THROW 57405, 'This proposal has already been reviewed.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 3. Actor must be the active Tantou Editor contributor for this series
+        --------------------------------------------------------------------
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM manga.SeriesContributor sc
+            INNER JOIN auth.Users u
+                ON u.user_id = sc.user_id
+            INNER JOIN auth.Roles r
+                ON r.role_id = u.role_id
+            WHERE sc.series_id = @series_id
+              AND sc.user_id = @actor_user_id
+              AND sc.end_date IS NULL
+              AND u.status_code = N'ACTIVE'
+              AND r.role_name = N'Tantou Editor'
+        )
+        BEGIN
+            ;THROW 57406, 'Only the active Tantou Editor contributor for this series can request revision.', 1;
+        END;
+
+     
+        --------------------------------------------------------------------
+        -- 5. Optional markup FileResource
+        --
+        -- No manual not-null verification.
+        -- If partial file metadata is passed, FileResource constraints throw.
+        --------------------------------------------------------------------
+        IF @markup_original_file_name IS NOT NULL
+            OR @markup_cloudinary_public_id IS NOT NULL
+            OR @markup_cloudinary_secure_url IS NOT NULL
+            OR @markup_content_type IS NOT NULL
+            OR @markup_file_size_bytes IS NOT NULL
+            OR @markup_sha256_hash IS NOT NULL
+        BEGIN
+            EXEC manga.usp_FileResource_Create
+                @file_purpose_code = N'EDITORIAL_ATTACHMENT',
+                @original_file_name = @markup_original_file_name,
+                @cloudinary_public_id = @markup_cloudinary_public_id,
+                @cloudinary_secure_url = @markup_cloudinary_secure_url,
+                @content_type = @markup_content_type,
+                @file_size_bytes = @markup_file_size_bytes,
+                @sha256_hash = @markup_sha256_hash,
+                @uploaded_by_user_id = @actor_user_id,
+                @file_resource_id = @markup_file_resource_id OUTPUT;
+        END;
+
+        --------------------------------------------------------------------
+        -- 6. Update proposal
+        --------------------------------------------------------------------
+        UPDATE manga.SeriesProposal
+        SET
+            status_code = N'REVISION_REQUESTED',
+            reviewed_by_user_id = @actor_user_id,
+            reviewed_at_utc = @reviewed_at_utc,
+            comments = @comments,
+            markup_file_id = @markup_file_resource_id
+        WHERE series_proposal_id = @series_proposal_id;
+
+        --------------------------------------------------------------------
+        -- 7. Move series back to PROPOSAL_DRAFT
+        --------------------------------------------------------------------
+        UPDATE manga.Series
+        SET
+            status_code = N'PROPOSAL_DRAFT',
+            updated_at_utc = @reviewed_at_utc,
+            updated_by_user_id = @actor_user_id
+        WHERE series_id = @series_id;
+
+        --------------------------------------------------------------------
+        -- 8. Audit
+        --------------------------------------------------------------------
+        DECLARE @audit_entity_id NVARCHAR(100) =
+            CONVERT(NVARCHAR(36), @series_proposal_id);
+
+        DECLARE @detail_json NVARCHAR(MAX) =
+        (
+            SELECT
+                @series_id AS series_id,
+                @series_proposal_id AS series_proposal_id,
+                @old_proposal_status_code AS old_proposal_status_code,
+                N'REVISION_REQUESTED' AS new_proposal_status_code,
+                @old_series_status_code AS old_series_status_code,
+                N'PROPOSAL_DRAFT' AS new_series_status_code,
+                @comments AS comments,
+                @markup_file_resource_id AS markup_file_resource_id
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @actor_user_id,
+            @action_code = N'SERIES_PROPOSAL_REVISION_REQUESTED',
+            @entity_type = N'SeriesProposal',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH;
+END;
+GO
+CREATE OR ALTER PROCEDURE manga.usp_SeriesProposal_PassToBoard
+    @series_proposal_id UNIQUEIDENTIFIER,
+    @actor_user_id UNIQUEIDENTIFIER,
+
+    @comments NVARCHAR(MAX) = NULL,
+
+    @markup_original_file_name NVARCHAR(260) = NULL,
+    @markup_cloudinary_public_id NVARCHAR(255) = NULL,
+    @markup_cloudinary_secure_url NVARCHAR(1000) = NULL,
+    @markup_content_type NVARCHAR(100) = NULL,
+    @markup_file_size_bytes BIGINT = NULL,
+    @markup_sha256_hash CHAR(64) = NULL,
+
+    @markup_file_resource_id UNIQUEIDENTIFIER OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        SET @markup_file_resource_id = NULL;
+
+        --------------------------------------------------------------------
+        -- 1. Lock proposal review
+        --------------------------------------------------------------------
+        DECLARE @lock_resource NVARCHAR(200) =
+            N'manga_series_proposal_review_' + CONVERT(NVARCHAR(36), @series_proposal_id);
+
+        DECLARE @lock_result INT;
+
+        EXEC @lock_result = sys.sp_getapplock
+            @Resource = @lock_resource,
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 10000;
+
+        IF @lock_result < 0
+        BEGIN
+            ;THROW 57501, 'Could not acquire proposal review lock.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 2. Read proposal and series
+        --------------------------------------------------------------------
+        DECLARE @series_id UNIQUEIDENTIFIER;
+        DECLARE @old_proposal_status_code NVARCHAR(50);
+        DECLARE @old_series_status_code NVARCHAR(50);
+        DECLARE @reviewed_by_user_id UNIQUEIDENTIFIER;
+        DECLARE @reviewed_at_utc DATETIME2(0) = SYSUTCDATETIME();
+
+        SELECT
+            @series_id = sp.series_id,
+            @old_proposal_status_code = sp.status_code,
+            @reviewed_by_user_id = sp.reviewed_by_user_id,
+            @old_series_status_code = s.status_code
+        FROM manga.SeriesProposal sp WITH (UPDLOCK, HOLDLOCK)
+        INNER JOIN manga.Series s WITH (UPDLOCK, HOLDLOCK)
+            ON s.series_id = sp.series_id
+        WHERE sp.series_proposal_id = @series_proposal_id;
+
+        IF @series_id IS NULL
+        BEGIN
+            ;THROW 57502, 'Series proposal does not exist.', 1;
+        END;
+
+        IF @old_proposal_status_code <> N'UNDER_EDITORIAL_REVIEW'
+        BEGIN
+            ;THROW 57503, 'Only proposals under editorial review can be passed to board.', 1;
+        END;
+
+        IF @old_series_status_code <> N'UNDER_EDITORIAL_REVIEW'
+        BEGIN
+            ;THROW 57504, 'Series must be under editorial review before it can be passed to board.', 1;
+        END;
+
+        IF @reviewed_by_user_id IS NOT NULL
+        BEGIN
+            ;THROW 57505, 'This proposal has already been reviewed.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 3. Actor must be the active Tantou Editor contributor for this series
+        --------------------------------------------------------------------
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM manga.SeriesContributor sc
+            INNER JOIN auth.Users u
+                ON u.user_id = sc.user_id
+            INNER JOIN auth.Roles r
+                ON r.role_id = u.role_id
+            WHERE sc.series_id = @series_id
+              AND sc.user_id = @actor_user_id
+              AND sc.end_date IS NULL
+              AND u.status_code = N'ACTIVE'
+              AND r.role_name = N'Tantou Editor'
+        )
+        BEGIN
+            ;THROW 57506, 'Only the active Tantou Editor contributor for this series can pass the proposal to board.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 4. Optional markup FileResource
+        --------------------------------------------------------------------
+        IF @markup_original_file_name IS NOT NULL
+            OR @markup_cloudinary_public_id IS NOT NULL
+            OR @markup_cloudinary_secure_url IS NOT NULL
+            OR @markup_content_type IS NOT NULL
+            OR @markup_file_size_bytes IS NOT NULL
+            OR @markup_sha256_hash IS NOT NULL
+        BEGIN
+            EXEC manga.usp_FileResource_Create
+                @file_purpose_code = N'EDITORIAL_ATTACHMENT',
+                @original_file_name = @markup_original_file_name,
+                @cloudinary_public_id = @markup_cloudinary_public_id,
+                @cloudinary_secure_url = @markup_cloudinary_secure_url,
+                @content_type = @markup_content_type,
+                @file_size_bytes = @markup_file_size_bytes,
+                @sha256_hash = @markup_sha256_hash,
+                @uploaded_by_user_id = @actor_user_id,
+                @file_resource_id = @markup_file_resource_id OUTPUT;
+        END;
+
+        --------------------------------------------------------------------
+        -- 5. Update proposal
+        --------------------------------------------------------------------
+        UPDATE manga.SeriesProposal
+        SET
+            status_code = N'UNDER_BOARD_REVIEW',
+            reviewed_by_user_id = @actor_user_id,
+            reviewed_at_utc = @reviewed_at_utc,
+            comments = @comments,
+            markup_file_id = @markup_file_resource_id
+        WHERE series_proposal_id = @series_proposal_id;
+
+        --------------------------------------------------------------------
+        -- 6. Update series
+        --------------------------------------------------------------------
+        UPDATE manga.Series
+        SET
+            status_code = N'UNDER_BOARD_REVIEW',
+            updated_at_utc = @reviewed_at_utc,
+            updated_by_user_id = @actor_user_id
+        WHERE series_id = @series_id;
+
+        --------------------------------------------------------------------
+        -- 7. Audit
+        --------------------------------------------------------------------
+        DECLARE @audit_entity_id NVARCHAR(100) =
+            CONVERT(NVARCHAR(36), @series_proposal_id);
+
+        DECLARE @detail_json NVARCHAR(MAX) =
+        (
+            SELECT
+                @series_id AS series_id,
+                @series_proposal_id AS series_proposal_id,
+                @old_proposal_status_code AS old_proposal_status_code,
+                N'UNDER_BOARD_REVIEW' AS new_proposal_status_code,
+                @old_series_status_code AS old_series_status_code,
+                N'UNDER_BOARD_REVIEW' AS new_series_status_code,
+                @comments AS comments,
+                @markup_file_resource_id AS markup_file_resource_id
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @actor_user_id,
+            @action_code = N'SERIES_PROPOSAL_PASSED_TO_BOARD',
+            @entity_type = N'SeriesProposal',
             @entity_id = @audit_entity_id,
             @detail_json = @detail_json;
 

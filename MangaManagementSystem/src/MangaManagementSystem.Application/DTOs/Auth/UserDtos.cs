@@ -17,7 +17,7 @@ namespace MangaManagementSystem.Application.DTOs.Auth
     );
 
     public record CreateUserDto(
-        [Required] Guid RoleId,
+        [Required][MaxLength(30)] string RoleName,
         [Required][MaxLength(50)] string Username,
         [MaxLength(100)] string? DisplayName,
         [Required][MaxLength(254)] string Email,
@@ -28,7 +28,7 @@ namespace MangaManagementSystem.Application.DTOs.Auth
 
     public record UpdateUserDto(
         [Required] Guid UserId,
-        [Required] Guid RoleId,
+        [Required][MaxLength(30)] string RoleName,
         [Required][MaxLength(50)] string Username,
         [MaxLength(100)] string? DisplayName,
         [Required][MaxLength(254)] string Email,

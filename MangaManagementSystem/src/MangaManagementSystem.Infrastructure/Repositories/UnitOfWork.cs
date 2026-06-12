@@ -19,7 +19,6 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         public IGenericRepository<ChapterPageVersion> ChapterPageVersions { get; }
         public IGenericRepository<PageRegion> PageRegions { get; }
         public IGenericRepository<ChapterPageTask> ChapterPageTasks { get; }
-        public IGenericRepository<ChapterPageTaskRegion> ChapterPageTaskRegions { get; }
         public IGenericRepository<ChapterPageAnnotation> ChapterPageAnnotations { get; }
         public IGenericRepository<ChapterEditorialReview> ChapterEditorialReviews { get; }
         public IGenericRepository<Role> Roles { get; }
@@ -42,7 +41,6 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             IGenericRepository<ChapterPageVersion> chapterPageVersions,
             IGenericRepository<PageRegion> pageRegions,
             IGenericRepository<ChapterPageTask> chapterPageTasks,
-            IGenericRepository<ChapterPageTaskRegion> chapterPageTaskRegions,
             IGenericRepository<ChapterPageAnnotation> chapterPageAnnotations,
             IGenericRepository<ChapterEditorialReview> chapterEditorialReviews,
             IGenericRepository<Role> roles,
@@ -64,7 +62,6 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             ChapterPageVersions = chapterPageVersions;
             PageRegions = pageRegions;
             ChapterPageTasks = chapterPageTasks;
-            ChapterPageTaskRegions = chapterPageTaskRegions;
             ChapterPageAnnotations = chapterPageAnnotations;
             ChapterEditorialReviews = chapterEditorialReviews;
             Roles = roles;

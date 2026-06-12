@@ -69,7 +69,7 @@
                         <MudTd DataLabel="Name">@(context.DisplayName ?? "-")</MudTd>
                         <MudTd DataLabel="Username">@context.Username</MudTd>
                         <MudTd DataLabel="Email">@context.Email</MudTd>
-                        <MudTd DataLabel="Role">@MapRoleName(context.RoleId)</MudTd>
+                        <MudTd DataLabel="Role">@(context.RoleName ?? "-")</MudTd>
                         <MudTd DataLabel="Portfolio">
                             @if (context.PortfolioFileId.HasValue)
                             {
@@ -143,11 +143,8 @@
     private const string PendingStatus = "PENDING_APPROVAL";
 
     private readonly List<UserDto> _pendingUsers = new();
-    private Dictionary<Guid, Guid> _selectedRolesByUserId = new();
     private bool _isLoading;
     private Guid? _processingUserId;
-
-    private string MapRoleName(Guid roleId) => roleId == Guid.Empty ? "Unknown" : "Member";
 
     private async Task LoadPendingUsersAsync()
     {
@@ -157,7 +154,6 @@
             var users = await UserService.GetUsersByStatusAsync(PendingStatus);
             _pendingUsers.Clear();
             _pendingUsers.AddRange(users);
-                _selectedRolesByUserId = users.ToDictionary(u => u.UserId, u => u.RoleId);
         }
         catch (Exception ex)
         {
@@ -167,21 +163,6 @@
         {
             _isLoading = false;
         }
-    }
-
-    private Guid GetSelectedRole(Guid userId)
-    {
-        if (_selectedRolesByUserId.TryGetValue(userId, out var roleId))
-        {
-            return roleId;
-        }
-
-        return _pendingUsers.FirstOrDefault(u => u.UserId == userId)?.RoleId ?? Guid.Empty;
-    }
-
-    private void SetSelectedRole(Guid userId, Guid roleId)
-    {
-        _selectedRolesByUserId[userId] = roleId;
     }
 
     private bool IsRowBusy(Guid userId) => _isLoading || _processingUserId == userId;

@@ -14,8 +14,16 @@ namespace MangaManagementSystem.Application.Services
         private const string StatusPendingApproval = "PENDING_APPROVAL";
         private const string StatusActive = "ACTIVE";
         private const string StatusDisabled = "DISABLED";
-        private static readonly Guid MinRoleId = new Guid("00000000-0000-0000-0000-000000000001");
-        private static readonly Guid MaxRoleId = new Guid("00000000-0000-0000-0000-000000000005");
+
+        private static readonly HashSet<string> AllowedRoleNames = new(StringComparer.Ordinal)
+        {
+            "Admin",
+            "Mangaka",
+            "Assistant",
+            "Tantou Editor",
+            "Editorial Board Member",
+            "Editorial Board Chief"
+        };
 
         private readonly IUnitOfWork _unitOfWork;
         private readonly IPasswordHasher _passwordHasher;
@@ -28,11 +36,10 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<UserDto> CreateUserAsync(CreateUserDto dto)
         {
-            var role = await _unitOfWork.Roles.GetByIdAsync(dto.RoleId);
-            var roleCode = role?.RoleName ?? string.Empty;
+            EnsureValidRoleName(dto.RoleName);
             var passwordHash = _passwordHasher.HashPassword(dto.Password);
             var newUserId = await _unitOfWork.Users.CreateUserViaProcAsync(
-                roleCode,
+                dto.RoleName,
                 dto.Username,
                 dto.Email,
                 passwordHash,
@@ -103,17 +110,12 @@ namespace MangaManagementSystem.Application.Services
             return user;
         }
 
-        private async Task EnsureValidRoleIdAsync(Guid roleId)
+        private static void EnsureValidRoleName(string roleName)
         {
-            if (roleId < MinRoleId || roleId > MaxRoleId)
+            if (string.IsNullOrWhiteSpace(roleName) || !AllowedRoleNames.Contains(roleName))
             {
                 throw new InvalidOperationException(
-                    $"Role id {roleId} is invalid. Allowed roles are {MinRoleId} through {MaxRoleId}.");
-            }
-
-            if (await _unitOfWork.Roles.GetByIdAsync(roleId) == null)
-            {
-                throw new InvalidOperationException($"Role id {roleId} does not exist.");
+                    $"Role '{roleName}' is invalid. Allowed roles are: {string.Join(", ", AllowedRoleNames)}.");
             }
         }
         public async Task<UserDto> ActivateUserAsync(Guid adminUserId, Guid userId)
@@ -163,7 +165,7 @@ namespace MangaManagementSystem.Application.Services
             u.PortfolioFileId,
             u.StatusCode,
             u.CreatedAtUtc,
-            null
+            u.Role?.RoleName
         );
     }
 }
