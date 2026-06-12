@@ -162,7 +162,7 @@
 | FR-SC-006 | The system shall treat a contributor as active when `end_date IS NULL`. | BR-SC-005 |
 | FR-SC-007 | The system shall preserve historical contributor rows after a contributor leaves a series. | BR-SC-006 |
 | FR-SC-008 | The system shall prevent a contributor `end_date` from being earlier than the contributor `start_date`. | BR-SC-007 |
-| FR-SC-009 | The system shall require at least one active Mangaka contributor and one active Editor contributor before a series proceeds beyond proposal draft into formal review or production workflow. | BR-SC-008 |
+| FR-SC-009 | The system shall require at least one active Mangaka contributor before a series is submitted from `PROPOSAL_DRAFT` into `UNDER_EDITORIAL_REVIEW`, but shall not require an active Tantou Editor contributor for first proposal submission. | BR-SC-008 |
 
 ---
 
@@ -185,7 +185,8 @@
 | FR-PROP-013 | The system shall prevent more than one editorial review decision from being recorded for the same submitted proposal version. | BR-PROP-012 |
 | FR-PROP-014 | The system shall use `UNDER_BOARD_REVIEW` to indicate that a proposal passed editorial review and is waiting for board voting/decision. | BR-PROP-013 |
 | FR-PROP-015 | The system shall mark a proposal as `APPROVED` only after board approval. | BR-PROP-014 |
-| FR-PROP-016 | The system shall require comments or a markup file when an editor requests revision or cancels a proposal. | BR-PROP-015 |
+| FR-PROP-016 | The system shall require non-empty comments when an editor requests revision, and shall allow an optional markup file for revision feedback. | BR-PROP-015 |
+| FR-PROP-016A | The system shall require both non-empty comments and a markup file when an editor cancels a proposal during editorial review. | BR-PROP-015A |
 | FR-PROP-017 | The system shall handle board rejection or board cancellation reasons through board poll and board vote records instead of editorial review comments. | BR-PROP-016 |
 | FR-PROP-018 | The system shall allow proposal lists to be retrieved by series, status, submitter, and reviewer. | BR-PROP-017 |
 | FR-PROP-019 | The system shall allow the latest proposal version for a series to be retrieved. | BR-PROP-018 |
@@ -194,7 +195,7 @@
 | FR-PROP-022 | The system shall treat the proposal file as supporting material for editor and board evaluation. | BR-PROP-021 |
 | FR-PROP-023 | The system shall not require a fixed minimum number of completed manga pages for proposal submission in MVP. | BR-PROP-022 |
 | FR-PROP-024 | The system shall treat any minimum page/sample requirement as editorial policy outside MVP database constraints. | BR-PROP-023 |
-
+| FR-PROP-025 | The system shall make newly submitted proposals visible in the editorial review queue for active Tantou Editors. | BR-PROP-024 |
 ---
 
 ## 3.8 Board Poll

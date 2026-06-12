@@ -16,7 +16,6 @@ namespace MangaManagementSystem.Domain.Interfaces
         IGenericRepository<ChapterPageVersion> ChapterPageVersions { get; }
         IGenericRepository<PageRegion> PageRegions { get; }
         IGenericRepository<ChapterPageTask> ChapterPageTasks { get; }
-        IGenericRepository<ChapterPageTaskRegion> ChapterPageTaskRegions { get; }
         IGenericRepository<ChapterPageAnnotation> ChapterPageAnnotations { get; }
         IGenericRepository<ChapterEditorialReview> ChapterEditorialReviews { get; }
         IGenericRepository<Role> Roles { get; }

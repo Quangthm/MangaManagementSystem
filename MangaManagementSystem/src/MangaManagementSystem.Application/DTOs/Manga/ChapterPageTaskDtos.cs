@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace MangaManagementSystem.Application.DTOs.Manga
@@ -10,7 +11,8 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         string StatusCode,
         int PriorityLevel,
         DateTime? DueAtUtc,
-        Guid? CompletedPageVersionId
+        Guid? CompletedPageVersionId,
+        IReadOnlyList<PageRegionDto> PageRegions
     );
 
     public record CreateChapterPageTaskDto(
@@ -19,7 +21,8 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         [Required][MaxLength(30)] string StatusCode,
         [Required] int PriorityLevel,
         DateTime? DueAtUtc,
-        Guid? CompletedPageVersionId
+        Guid? CompletedPageVersionId,
+        [Required] IReadOnlyList<Guid> PageRegionIds
     );
 
     public record UpdateChapterPageTaskDto(
@@ -29,6 +32,7 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         [Required][MaxLength(30)] string StatusCode,
         [Required] int PriorityLevel,
         DateTime? DueAtUtc,
-        Guid? CompletedPageVersionId
+        Guid? CompletedPageVersionId,
+        [Required] IReadOnlyList<Guid> PageRegionIds
     );
 }

@@ -29,6 +29,9 @@ namespace MangaManagementSystem.Application.Services
                 DueAtUtc = dto.DueAtUtc ?? DateTime.UtcNow,
                 CompletedPageVersionId = dto.CompletedPageVersionId,
             };
+
+            await AttachPageRegionsAsync(entity, dto.PageRegionIds);
+
             await _unitOfWork.ChapterPageTasks.AddAsync(entity);
             await _unitOfWork.SaveChangesAsync();
             return MapToDto(entity);
@@ -56,13 +59,16 @@ namespace MangaManagementSystem.Application.Services
                 return null;
             }
 
-            // Update fields from DTO
             entity.AssignedToUserId = dto.AssignedToUserId;
             entity.TypeCode = dto.TypeCode;
             entity.StatusCode = dto.StatusCode;
             entity.PriorityLevel = (byte)dto.PriorityLevel;
             entity.DueAtUtc = dto.DueAtUtc ?? entity.DueAtUtc;
             entity.CompletedPageVersionId = dto.CompletedPageVersionId;
+
+            entity.PageRegions.Clear();
+            await AttachPageRegionsAsync(entity, dto.PageRegionIds);
+
             _unitOfWork.ChapterPageTasks.Update(entity);
             await _unitOfWork.SaveChangesAsync();
             return MapToDto(entity);
@@ -81,6 +87,23 @@ namespace MangaManagementSystem.Application.Services
             return true;
         }
 
+        private async Task AttachPageRegionsAsync(ChapterPageTask entity, IReadOnlyList<Guid> pageRegionIds)
+        {
+            if (pageRegionIds == null)
+            {
+                return;
+            }
+
+            foreach (var pageRegionId in pageRegionIds.Distinct())
+            {
+                var region = await _unitOfWork.PageRegions.GetByIdAsync(pageRegionId);
+                if (region != null)
+                {
+                    entity.PageRegions.Add(region);
+                }
+            }
+        }
+
         private static ChapterPageTaskDto MapToDto(ChapterPageTask t)
         {
             return new ChapterPageTaskDto(
@@ -90,7 +113,21 @@ namespace MangaManagementSystem.Application.Services
                 t.StatusCode,
                 (int)t.PriorityLevel,
                 t.DueAtUtc,
-                t.CompletedPageVersionId
+                t.CompletedPageVersionId,
+                t.PageRegions.Select(r => new PageRegionDto(
+                    r.PageRegionId,
+                    r.ChapterPageVersionId,
+                    r.TypeCode,
+                    r.RegionLabel,
+                    r.X,
+                    r.Y,
+                    r.Width,
+                    r.Height,
+                    r.ConfidenceScore,
+                    r.SourceType,
+                    r.OriginalText,
+                    r.CreatedByUserId,
+                    r.UpdatedByUserId)).ToList()
             );
         }
     }

@@ -30,6 +30,8 @@
 |---|---|---|
 | `/mangaka/series/drafts` | Mangaka draft list and draft management entry point. | Mangaka |
 | `/mangaka/series/drafts/{seriesId}` | Optional full draft detail/edit page if modal is not enough. | Mangaka contributor |
+| `/editor/proposals` | Editorial proposal queue, prioritizing unclaimed submitted proposals. | Tantou Editor |
+| `/editor/proposals/{proposalId}` | Proposal review detail page for request revision, cancel, or pass to board. | Tantou Editor contributor / authorized Tantou Editor |
 | `/series/{slug}` | Stable main series page after serialization; future public reader URL can reuse it. | Authorized now; public in future |
 | `/workspace/chapters/{chapterId}` | Central authorized chapter workspace. | Authorized Page Workspace User |
 | `/workspace/chapters/{chapterId}?page={pageNumber}` | Workspace opened with selected page. | Authorized Page Workspace User |
@@ -63,7 +65,7 @@ Allow Mangaka to create, view, edit, and submit their own series drafts before f
 | Draft table/card grid | Shows series title, status, genre, language, proposed frequency, last updated time, and action buttons. |
 | Create Draft button | Opens the create draft modal. |
 | Edit button | Opens the edit draft modal for a `PROPOSAL_DRAFT` series. |
-| Submit Proposal button | Opens proposal submission flow for eligible draft. |
+| Submit Proposal button | Opens proposal submission flow for an eligible `PROPOSAL_DRAFT` series and requires a proposal file upload. |
 | Disabled edit state | If series is not `PROPOSAL_DRAFT`, edit controls are disabled and explain that profile is locked after draft. |
 
 ### Draft row/card fields
@@ -127,7 +129,43 @@ Mangaka clicks Save
 
 ---
 
-## 5. Main Series Page
+## 5. Proposal Submission Modal
+
+### Purpose
+
+Allow a Mangaka contributor to formally submit a `PROPOSAL_DRAFT` series for editorial review with a required proposal file.
+
+### Fields
+
+| Field | Required | Notes |
+|---|---:|---|
+| Proposal file | Yes | Stored as `FileResource` with purpose `SERIES_PROPOSAL`. |
+| Confirmation checkbox | Yes | Confirms the submitted proposal snapshot will be locked after submission. |
+
+### Submission behavior
+
+```text
+Mangaka clicks Submit Proposal
+→ UI opens proposal submission modal
+→ Mangaka selects required proposal file
+→ Backend validates actor is an active Mangaka contributor
+→ Backend uploads proposal file to Cloudinary and calculates SHA-256
+→ Backend calls proposal submission stored procedure with required file metadata
+→ Database creates FileResource and SeriesProposal
+→ Database updates Series.status_code to UNDER_EDITORIAL_REVIEW
+→ UI removes normal draft editing controls and shows submitted review status
+```
+
+### Important notes
+
+- First proposal submission does not require an active Tantou Editor contributor to already be assigned to the series.
+- Submitted proposals should appear in the editorial proposal queue for active Tantou Editors.
+- The queue may prioritize proposals that do not yet have any active Tantou Editor contributor, but the database should still allow multiple active Tantou Editor contributors for a series.
+- After submission, normal series profile editing is locked until revision returns the series to `PROPOSAL_DRAFT`.
+
+---
+
+## 6. Main Series Page
 
 ### Route
 
@@ -160,7 +198,32 @@ A unified series page that can later become the public reader-facing series URL.
 
 ---
 
-## 6. Authorized Chapter Workspace
+---
+
+## 7. Tantou Editor Proposal Queue
+
+### Purpose
+
+Allow active Tantou Editors to find newly submitted proposals and choose/claim proposals for editorial handling.
+
+### Main UI elements
+
+| Element | Behavior |
+|---|---|
+| Proposal queue table | Shows submitted proposals with status `UNDER_EDITORIAL_REVIEW`. |
+| Unclaimed priority filter | Prioritizes proposals without active Tantou Editor contributors, but does not hide already-claimed proposals. |
+| Claim / Join Review button | Adds the Tantou Editor as a `SeriesContributor` when permitted. Multiple Tantou Editors may contribute to the same series. |
+| Open Review button | Opens the proposal review detail page. |
+
+### Review actions
+
+| Action | Required input | Result |
+|---|---|---|
+| Request revision | Non-empty comments; optional markup file | Proposal becomes `REVISION_REQUESTED`; series returns to `PROPOSAL_DRAFT`. |
+| Cancel proposal | Non-empty comments and required markup file | Proposal and series become `CANCELLED`. |
+| Pass to board | Optional comments/markup depending on workflow | Proposal and series become `UNDER_BOARD_REVIEW`. |
+
+## 8. Authorized Chapter Workspace
 
 ### Route
 
