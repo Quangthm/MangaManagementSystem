@@ -22,6 +22,6 @@ namespace MangaManagementSystem.Application.Interfaces
         Task<UserDto> UpdateAvatarFileAsync(Guid userId, Guid avatarFileId);
         Task<UserDto> UpdatePortfolioFileAsync(Guid userId, Guid portfolioFileId);
 
-        Task ResetPasswordAsync(Guid userId, string newPassword);
+        Task ResetPasswordAsync(Guid userId, string currentPassword, string newPassword);
     }
 }

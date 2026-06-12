@@ -242,13 +242,23 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(updated);
         }
 
-        public async Task ResetPasswordAsync(Guid userId, string newPassword)
+        public async Task ResetPasswordAsync(Guid userId, string currentPassword, string newPassword)
         {
             var user = await _unitOfWork.Users.GetByIdAsync(userId);
 
             if (user == null)
             {
                 throw new InvalidOperationException($"User {userId} was not found.");
+            }
+
+            if (string.IsNullOrWhiteSpace(currentPassword))
+            {
+                throw new InvalidOperationException("Current password is required.");
+            }
+
+            if (!_passwordHasher.VerifyPassword(currentPassword, user.PasswordHash))
+            {
+                throw new InvalidOperationException("Current password is incorrect.");
             }
 
             if (string.IsNullOrWhiteSpace(newPassword))
@@ -259,6 +269,11 @@ namespace MangaManagementSystem.Application.Services
             if (newPassword.Length < 8)
             {
                 throw new InvalidOperationException("New password must be at least 8 characters.");
+            }
+
+            if (_passwordHasher.VerifyPassword(newPassword, user.PasswordHash))
+            {
+                throw new InvalidOperationException("New password must be different from the current password.");
             }
 
             var passwordHash = _passwordHasher.HashPassword(newPassword);

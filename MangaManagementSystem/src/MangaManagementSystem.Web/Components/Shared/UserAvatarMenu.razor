@@ -19,7 +19,7 @@
             <MudMenu OffsetY="true">
                 <ActivatorContent>
                     <MudAvatar Size="Size.Medium" Image="@_avatarUrl" Class="mf-avatar" Color="Color.Primary">
-                        @if (string.IsNullOrEmpty(_avatarUrl))
+                        @if (string.IsNullOrWhiteSpace(_avatarUrl))
                         {
                             @(_initial ?? "?")
                         }
@@ -28,7 +28,7 @@
 
                 <ChildContent>
                     <MudMenuItem OnClick="OpenProfileSettings">Profile Settings</MudMenuItem>
-                    <MudMenuItem OnClick="OpenProfileSettings">Reset Password</MudMenuItem>
+                    <MudMenuItem OnClick="OpenProfileSettings">Security / Password</MudMenuItem>
                     <MudDivider />
                     <MudMenuItem>
                         <LogoutForm />
@@ -50,41 +50,52 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadAvatarAsync();
+    }
+
+    private async Task LoadAvatarAsync()
+    {
         try
         {
             var auth = await AuthStateProvider.GetAuthenticationStateAsync();
             var user = auth.User;
 
-            if (user?.Identity?.IsAuthenticated == true)
+            if (user?.Identity?.IsAuthenticated != true)
             {
-                var idClaim = user.FindFirst(ClaimTypes.NameIdentifier);
+                return;
+            }
 
-                if (Guid.TryParse(idClaim?.Value, out var uid))
+            var idClaim = user.FindFirst(ClaimTypes.NameIdentifier);
+
+            if (!Guid.TryParse(idClaim?.Value, out var uid))
+            {
+                return;
+            }
+
+            var dto = await UserService.GetUserByIdAsync(uid);
+
+            if (dto == null)
+            {
+                return;
+            }
+
+            _initial = BuildInitial(dto.DisplayName, dto.Username);
+
+            if (dto.AvatarFileId.HasValue)
+            {
+                var file = await FileResourceService.GetFileResourceByIdAsync(dto.AvatarFileId.Value);
+
+                if (file != null &&
+                    file.DeletedAtUtc == null &&
+                    !string.IsNullOrWhiteSpace(file.CloudinarySecureUrl))
                 {
-                    var dto = await UserService.GetUserByIdAsync(uid);
-
-                    if (dto != null)
-                    {
-                        _initial = BuildInitial(dto.DisplayName, dto.Username);
-
-                        if (dto.AvatarFileId.HasValue)
-                        {
-                            var file = await FileResourceService.GetFileResourceByIdAsync(dto.AvatarFileId.Value);
-
-                            if (file != null &&
-                                file.DeletedAtUtc == null &&
-                                !string.IsNullOrWhiteSpace(file.CloudinarySecureUrl))
-                            {
-                                _avatarUrl = file.CloudinarySecureUrl;
-                            }
-                        }
-                    }
+                    _avatarUrl = BuildVersionedUrl(file.CloudinarySecureUrl, file.FileResourceId);
                 }
             }
         }
         catch
         {
-            Snackbar.Add("Failed to load profile info.", Severity.Warning);
+            _avatarUrl = null;
         }
         finally
         {
@@ -106,6 +117,12 @@
         return string.IsNullOrWhiteSpace(source)
             ? "?"
             : source[..1].ToUpperInvariant();
+    }
+
+    private static string BuildVersionedUrl(string url, Guid fileResourceId)
+    {
+        var separator = url.Contains('?') ? "&" : "?";
+        return $"{url}{separator}v={fileResourceId:N}";
     }
 }
 
