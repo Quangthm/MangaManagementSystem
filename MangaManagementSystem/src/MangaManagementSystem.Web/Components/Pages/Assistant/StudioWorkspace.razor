@@ -1,7 +1,9 @@
-@page "/assistant/studio/{TaskId}"
+@page "/assistant/studio/{TaskId:guid}"
 @using Microsoft.AspNetCore.Authorization
+@using MangaManagementSystem.Application.DTOs.Manga
 @attribute [Authorize(Roles = "Assistant")]
 @inject NavigationManager Nav
+@inject IChapterPageTaskService TaskService
 
 <AssistantLayout>
     <div class="mf-page">
@@ -10,26 +12,112 @@
             <MudText Typo="Typo.body1" Class="mf-muted">Work on assigned page regions and submit task output</MudText>
         </div>
 
-        <MudGrid>
-            <MudItem xs="12" md="8">
-                <MudPaper Class="pa-5 mf-card" Elevation="0">
-                    <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mb-3"><div><MudText Typo="Typo.h6">Page Review Canvas</MudText><MudText class="mf-muted">Shadow Blade Chronicles · Chapter 12 · Page 8</MudText></div><MudChip T="string" Color="Color.Info">@Zoom%</MudChip></MudStack>
-                    <div class="mf-canvas">Canvas area for tone shading / background character task</div>
-                    <MudStack Row="true" Class="mt-4"><MudButton Variant="Variant.Outlined" OnClick="@(() => Zoom = Math.Max(50, Zoom - 10))">- Zoom</MudButton><MudButton Variant="Variant.Outlined" OnClick="@(() => Zoom = Math.Min(200, Zoom + 10))">+ Zoom</MudButton></MudStack>
-                </MudPaper>
-            </MudItem>
-            <MudItem xs="12" md="4">
-                <MudPaper Class="pa-5 mf-card mb-4" Elevation="0"><MudText Typo="Typo.h6">Current Task</MudText><MudText>Tone Shading</MudText><MudText class="mf-muted">Panel 3 - Background Character</MudText><MudText>Deadline: May 22, 2026 — 6:00 PM JST</MudText></MudPaper>
-                <MudPaper Class="pa-5 mf-card" Elevation="0"><MudText Typo="Typo.h6">Submit Task</MudText><MudText class="mf-muted mb-3">Are you ready to submit this task? Once submitted, it will be sent to the mangaka for review.</MudText><MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"/assistant/task/{TaskId}/submit")">Submit Task</MudButton></MudPaper>
-            </MudItem>
-        </MudGrid>
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error">Failed to load task: @_error</MudAlert>
+        }
+        else if (_task is null)
+        {
+            <MudAlert Severity="Severity.Warning">Task not found.</MudAlert>
+        }
+        else
+        {
+            <MudGrid>
+                <MudItem xs="12" md="8">
+                    <MudPaper Class="pa-5 mf-card" Elevation="0">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
+                            <div>
+                                <MudText Typo="Typo.h6">Page Review Canvas</MudText>
+                                <MudText Class="mf-muted">@_task.TypeCode — Task @_task.ChapterPageTaskId</MudText>
+                            </div>
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <StatusBadge Status="@_task.StatusCode" />
+                                <MudChip T="string" Color="Color.Info" Size="Size.Small">@Zoom%</MudChip>
+                            </MudStack>
+                        </MudStack>
 
+                        <div class="mf-canvas" style="min-height:400px">
+                            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Large" Color="Color.Secondary" />
+                                <MudText Typo="Typo.h6" Class="mf-muted">Workspace Canvas</MudText>
+                                <MudText Class="mf-muted">Page image rendering requires FileResource/Cloudinary integration.</MudText>
+                            </MudStack>
+                        </div>
+
+                        <MudStack Row="true" Class="mt-4" Spacing="2">
+                            <MudButton Variant="Variant.Outlined" OnClick="@(() => Zoom = Math.Max(50, Zoom - 10))">- Zoom</MudButton>
+                            <MudButton Variant="Variant.Outlined" OnClick="@(() => Zoom = Math.Min(200, Zoom + 10))">+ Zoom</MudButton>
+                        </MudStack>
+                    </MudPaper>
+                </MudItem>
+
+                <MudItem xs="12" md="4">
+                    <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Current Task</MudText>
+                        <MudStack Spacing="1">
+                            <MudText><strong>Type:</strong> @_task.TypeCode</MudText>
+                            <MudText><strong>Priority:</strong> @_task.PriorityLevel</MudText>
+                            <MudText><strong>Due:</strong> <TimestampDisplay Value="@_task.DueAtUtc" EmptyText="No deadline set" /></MudText>
+                            @if (_task.CompletedPageVersionId.HasValue)
+                            {
+                                <MudText><strong>Completed Version:</strong> @_task.CompletedPageVersionId</MudText>
+                            }
+                        </MudStack>
+                    </MudPaper>
+
+                    <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Page Regions</MudText>
+                        <MudText Class="mf-muted">Page region data is not exposed by the current task DTO. Region visualization will be available once the DTO includes region details.</MudText>
+                    </MudPaper>
+
+                    <MudPaper Class="pa-5 mf-card" Elevation="0">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Actions</MudText>
+                        <MudText Class="mf-muted mb-3">Once your work is complete, submit it for editor review.</MudText>
+                        <MudStack Spacing="2">
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"/assistant/task/{TaskId}/submit")">Submit Work</MudButton>
+                            <MudButton Variant="Variant.Outlined" Href="@($"/assistant/task/{TaskId}")">Back to Task Detail</MudButton>
+                            <MudButton Variant="Variant.Text" Href="/assistant/tasks">All Tasks</MudButton>
+                        </MudStack>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        }
     </div>
 </AssistantLayout>
 
 @code {
+    [Parameter] public Guid TaskId { get; set; }
 
-    [Parameter] public string? TaskId { get; set; }
+    private bool _loading = true;
+    private string? _error;
+    private ChapterPageTaskDto? _task;
     private int Zoom { get; set; } = 100;
 
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTaskAsync();
+    }
+
+    private async Task LoadTaskAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _task = await TaskService.GetChapterPageTaskByIdAsync(TaskId);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
 }

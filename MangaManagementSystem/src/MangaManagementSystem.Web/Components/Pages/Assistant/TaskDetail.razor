@@ -1,7 +1,9 @@
-@page "/assistant/task/{TaskId}"
+@page "/assistant/task/{TaskId:guid}"
 @using Microsoft.AspNetCore.Authorization
+@using MangaManagementSystem.Application.DTOs.Manga
 @attribute [Authorize(Roles = "Assistant")]
 @inject NavigationManager Nav
+@inject IChapterPageTaskService TaskService
 
 <AssistantLayout>
     <div class="mf-page">
@@ -10,22 +12,130 @@
             <MudText Typo="Typo.body1" Class="mf-muted">Review assignment details and reference material</MudText>
         </div>
 
-        <MudGrid>
-            <MudItem xs="12" md="8">
-                <MudPaper Class="pa-5 mf-card" Elevation="0"><MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Page Preview - @TaskId</MudText><div class="mf-canvas">AI-assisted region suggestion preview</div></MudPaper>
-            </MudItem>
-            <MudItem xs="12" md="4">
-                <MudPaper Class="pa-5 mf-card mb-4" Elevation="0"><MudText Typo="Typo.h6">Task Description</MudText><MudText class="mf-muted">Apply tone shading to the highlighted regions. Please review AI-suggested areas and adjust as needed.</MudText></MudPaper>
-                <MudPaper Class="pa-5 mf-card mb-4" Elevation="0"><MudText Typo="Typo.h6">Task Notes</MudText><MudText>Assigned: Takahashi Yuki</MudText><MudText>Due: May 22, 2026</MudText><MudText>Estimated: 3 hours</MudText></MudPaper>
-                <MudPaper Class="pa-5 mf-card" Elevation="0"><MudText Typo="Typo.h6" Class="mb-3">Quick Actions</MudText><MudStack><MudButton Variant="Variant.Outlined">Download Reference Files</MudButton><MudButton Variant="Variant.Outlined">View Previous Chapter</MudButton><MudButton Variant="Variant.Outlined">Message Lead Artist</MudButton><MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"/assistant/studio/{TaskId}")">Open Studio Workspace</MudButton></MudStack></MudPaper>
-            </MudItem>
-        </MudGrid>
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error">Failed to load task: @_error</MudAlert>
+        }
+        else if (_task is null)
+        {
+            <MudAlert Severity="Severity.Warning">Task not found.</MudAlert>
+        }
+        else
+        {
+            <MudGrid>
+                <MudItem xs="12" md="8">
+                    <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
+                            <div>
+                                <MudText Typo="Typo.h6" Class="font-weight-bold">@GetTaskTitle()</MudText>
+                                <MudText Typo="Typo.body2" Class="mf-muted">Task Id: @_task.ChapterPageTaskId</MudText>
+                            </div>
+                            <StatusBadge Status="@_task.StatusCode" />
+                        </MudStack>
 
+                        <div class="mf-canvas">
+                            @if (_hasRegionData)
+                            {
+                                <MudText Typo="Typo.body2">This task has related page region data available below.</MudText>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.body2" Class="mf-muted">Preview/workspace data is not available from the current task DTO yet.</MudText>
+                            }
+                        </div>
+                    </MudPaper>
+
+                    <MudPaper Class="pa-5 mf-card" Elevation="0">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Task Description</MudText>
+                        <MudText Class="mf-muted">Detailed task description is not available from the current task service contract.</MudText>
+                    </MudPaper>
+                </MudItem>
+
+                <MudItem xs="12" md="4">
+                    <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Task Metadata</MudText>
+                        <MudStack Spacing="1">
+                            <MudText><strong>Type:</strong> @_task.TypeCode</MudText>
+                            <MudText><strong>Status:</strong> @_task.StatusCode</MudText>
+                            <MudText><strong>Priority:</strong> @_task.PriorityLevel</MudText>
+                            <MudText><strong>Due:</strong> <TimestampDisplay Value="@_task.DueAtUtc" /></MudText>
+                            <MudText><strong>Completed Page Version Id:</strong> @(FormatGuid(_task.CompletedPageVersionId))</MudText>
+                            <MudText><strong>Assigned User:</strong> Not available from current task DTO</MudText>
+                            <MudText><strong>Compensation:</strong> Not available from current task DTO</MudText>
+                            <MudText><strong>Chapter/Page:</strong> Not available from current task DTO</MudText>
+                        </MudStack>
+                    </MudPaper>
+
+                    <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Page Regions</MudText>
+                        @if (_hasRegionData)
+                        {
+                            <MudText>Region data exists in the loaded task payload.</MudText>
+                        }
+                        else
+                        {
+                            <MudText Class="mf-muted">Page region data is not exposed by the current task DTO.</MudText>
+                        }
+                    </MudPaper>
+
+                    <MudPaper Class="pa-5 mf-card" Elevation="0">
+                        <MudText Typo="Typo.h6" Class="mb-3">Quick Actions</MudText>
+                        <MudStack>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"/assistant/studio/{TaskId}")">Open Studio Workspace</MudButton>
+                            <MudButton Variant="Variant.Outlined" Href="@($"/assistant/task/{TaskId}/submit")">Open Submit Work</MudButton>
+                            <MudButton Variant="Variant.Text" Href="/assistant/tasks">Back to Tasks</MudButton>
+                        </MudStack>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        }
     </div>
 </AssistantLayout>
 
 @code {
+    [Parameter] public Guid TaskId { get; set; }
 
-    [Parameter] public string? TaskId { get; set; }
+    private bool _loading = true;
+    private string? _error;
+    private ChapterPageTaskDto? _task;
 
+    private bool _hasRegionData => false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTaskAsync();
+    }
+
+    private async Task LoadTaskAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _task = await TaskService.GetChapterPageTaskByIdAsync(TaskId);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string GetTaskTitle()
+    {
+        return _task is null ? "Task Detail" : _task.TypeCode;
+    }
+
+    private static string FormatGuid(Guid? value)
+    {
+        return value?.ToString() ?? "-";
+    }
 }
