@@ -1,4 +1,4 @@
-﻿using MangaManagementSystem.Application.Interfaces;
+using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Domain.Interfaces;
 using MangaManagementSystem.Infrastructure.Options;
 using MangaManagementSystem.Infrastructure.Persistence;
@@ -41,6 +41,7 @@ namespace MangaManagementSystem.Infrastructure
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IChapterPageTaskRepository, ChapterPageTaskRepository>();
             services.AddScoped<IChapterPageAnnotationRepository, ChapterPageAnnotationRepository>();
+            services.AddScoped<ISeriesProposalRepository, SeriesProposalRepository>();
 
             // Unit of Work
             services.AddScoped<IUnitOfWork, UnitOfWork>();
