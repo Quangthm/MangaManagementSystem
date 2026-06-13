@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="MangaManagementSystem.API/MangaManagementSystem.API.csproj" Id="4072b56f-3eff-4175-9cef-b8d9d1dd1c2b" />
   <Project Path="src/MangaManagementSystem.Application/MangaManagementSystem.Application.csproj" />
   <Project Path="src/MangaManagementSystem.Domain/MangaManagementSystem.Domain.csproj" />
   <Project Path="src/MangaManagementSystem.Infrastructure/MangaManagementSystem.Infrastructure.csproj" />

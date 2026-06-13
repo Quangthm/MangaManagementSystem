@@ -43,5 +43,6 @@ namespace MangaManagementSystem.Domain.Interfaces
             string? portfolioSha256Hash = null,
             Guid? createdByUserId = null
         );
+    
     }
 }
