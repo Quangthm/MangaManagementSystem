@@ -22,12 +22,29 @@
 @code {
 
     private readonly List<SeriesRow> Series = new()
-    {
-        new(1, "Crimson Moon Academy", 44),
-        new(2, "Neon Samurai Path", 18),
-        new(3, "Lunar Eclipse Academy", 12)
-    };
-    private record SeriesRow(int Id, string Title, int Chapters);
+{
+    new(
+        Guid.Parse("11111111-1111-1111-1111-111111111111"),
+        "Crimson Moon Academy",
+        "PROPOSAL_DRAFT",
+        new DateTime(2026, 6, 1, 9, 0, 0, DateTimeKind.Utc),
+        new DateTime(2026, 6, 5, 14, 30, 0, DateTimeKind.Utc)
+    ),
+    new(
+        Guid.Parse("22222222-2222-2222-2222-222222222222"),
+        "Neon Samurai Path",
+        "UNDER_EDITORIAL_REVIEW",
+        new DateTime(2026, 6, 3, 10, 15, 0, DateTimeKind.Utc),
+        new DateTime(2026, 6, 8, 16, 45, 0, DateTimeKind.Utc)
+    ),
+    new(
+        Guid.Parse("33333333-3333-3333-3333-333333333333"),
+        "Lunar Eclipse Academy",
+        "SERIALIZATION_APPROVED",
+        new DateTime(2026, 6, 6, 8, 45, 0, DateTimeKind.Utc),
+        null
+    )
+};
 
     private record SeriesRow(
         Guid SeriesId,
