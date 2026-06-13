@@ -77,6 +77,12 @@ namespace MangaManagementSystem.Application.Services
             return entities.Select(user => user.ToDto());
         }
 
+        public async Task<IEnumerable<UserDto>> GetUsersByRoleAsync(string roleName)
+        {
+            var entities = await _unitOfWork.Users.GetByRoleNameAsync(roleName);
+            return entities.Select(user => user.ToDto());
+        }
+
         public async Task<UserDto> ApproveUserAsync(Guid adminUserId, Guid userId)
         {
             await RequirePendingUserAsync(userId);

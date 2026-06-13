@@ -99,31 +99,8 @@
         _error = null;
         try
         {
-            var seriesList = await SeriesService.GetAllSeriesAsync();
-            var rows = new List<ProposalRow>();
-
-            // Load latest proposal version for each series in parallel
-            var tasks = seriesList.Select(async series =>
-            {
-                var proposals = await ProposalService.GetSeriesProposalsBySeriesIdAsync(series.SeriesId);
-                var latest = proposals.OrderByDescending(p => p.ProposalVersionNo).FirstOrDefault();
-                if (latest != null)
-                    return new ProposalRow(
-                        latest.SeriesProposalId,
-                        series.SeriesId,
-                        series.Title,
-                        latest.ProposalVersionNo,
-                        latest.SubmittedByUserId,
-                        latest.SubmittedAtUtc,
-                        latest.StatusCode);
-                return null;
-            });
-
-            var results = await Task.WhenAll(tasks);
-            _proposals = results
-                .Where(r => r != null)
-                .Cast<ProposalRow>()
-                .OrderByDescending(r => r.SubmittedAt);
+            var filter = new ProposalQueueFilterDto(StatusCode: _statusFilter);
+            _proposals = await ProposalService.GetEditorialQueueAsync(filter);
         }
         catch (Exception ex)
         {
@@ -136,7 +113,6 @@
     }
 
     private Color GetStatusColor(string status) => status switch
-    private void OpenProposal(Guid seriesId)
     {
         "UNDER_EDITORIAL_REVIEW" => Color.Warning,
         "UNDER_BOARD_REVIEW" => Color.Info,
@@ -154,6 +130,4 @@
     {
         Snackbar.Add($"Reject proposal {seriesProposalId} - implement rejection dialog", Severity.Warning);
     }
-
-    private record ProposalRow(Guid SeriesProposalId, Guid SeriesId, string SeriesTitle, int Version, Guid SubmittedByUserId, DateTime SubmittedAt, string Status);
 }

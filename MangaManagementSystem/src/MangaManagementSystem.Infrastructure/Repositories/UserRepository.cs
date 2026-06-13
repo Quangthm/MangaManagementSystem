@@ -48,6 +48,15 @@ public async Task<IReadOnlyList<User>> GetByStatusAsync(string status)
         .ToListAsync();
 }
 
+        public async Task<IReadOnlyList<User>> GetByRoleNameAsync(string roleName)
+        {
+            return await UsersWithRole()
+                .AsNoTracking()
+                .Where(u => u.Role != null && u.Role.RoleName == roleName)
+                .OrderBy(u => u.DisplayName)
+                .ToListAsync();
+        }
+
         public async Task ChangeUserStatusViaProcAsync(
             Guid adminUserId,
             Guid targetUserId,
