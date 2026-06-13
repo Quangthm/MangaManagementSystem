@@ -37,9 +37,9 @@
                 {
                     <MudItem xs="12" md="6">
                         <MudPaper Class="pa-5 mf-card" Elevation="0">
-                            <MudStack Row="true" Justify="Justify.SpaceBetween"><MudText Typo="Typo.h6" Class="font-weight-bold">@t.TypeCode</MudText><MudChip T="string" Color="Color.Info" Size="Size.Small">@t.StatusCode</MudChip></MudStack>
+                            <MudStack Row="true" Justify="Justify.SpaceBetween"><MudText Typo="Typo.h6" Class="font-weight-bold">@t.TypeCode</MudText><StatusBadge Status="@t.StatusCode" /></MudStack>
                             <MudText class="mf-muted">Task Id: @t.ChapterPageTaskId</MudText>
-                            <MudText Typo="Typo.body2" Class="mt-2">Priority: @t.PriorityLevel • Due: @FormatDate(t.DueAtUtc)</MudText>
+                            <MudText Typo="Typo.body2" Class="mt-2">Priority: @t.PriorityLevel • Due: <TimestampDisplay Value="@t.DueAtUtc" /></MudText>
                             <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"/assistant/task/{t.ChapterPageTaskId}")" Class="mt-3">Open Task</MudButton>
                         </MudPaper>
                     </MudItem>
@@ -95,6 +95,5 @@
         }
     }
 
-    private string FormatDate(DateTime? value) => value.HasValue ? value.Value.ToLocalTime().ToString("g") : "—";
 
 }
