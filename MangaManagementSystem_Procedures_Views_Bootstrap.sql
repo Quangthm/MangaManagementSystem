@@ -1172,8 +1172,11 @@ BEGIN
             BEGIN TRAN;
         END;
 
+        --------------------------------------------------------------------
+        -- 1. Lock cancellation workflow for this series
+        --------------------------------------------------------------------
         DECLARE @lock_resource NVARCHAR(200) =
-            N'manga_series_cancel_' + CONVERT(NVARCHAR(36), @series_id);
+            N'manga_series_cancel_draft_' + CONVERT(NVARCHAR(36), @series_id);
 
         DECLARE @lock_result INT;
 
@@ -1185,15 +1188,18 @@ BEGIN
 
         IF @lock_result < 0
         BEGIN
-            ;THROW 57101, 'Could not acquire series cancellation lock.', 1;
+            ;THROW 57101, 'Could not acquire draft series cancellation lock.', 1;
         END;
 
+        --------------------------------------------------------------------
+        -- 2. Series must exist and still be PROPOSAL_DRAFT
+        --------------------------------------------------------------------
         DECLARE @old_status_code NVARCHAR(50);
 
         SELECT
-            @old_status_code = status_code
-        FROM manga.Series
-        WHERE series_id = @series_id;
+            @old_status_code = s.status_code
+        FROM manga.Series s WITH (UPDLOCK, HOLDLOCK)
+        WHERE s.series_id = @series_id;
 
         IF @old_status_code IS NULL
         BEGIN
@@ -1202,9 +1208,12 @@ BEGIN
 
         IF @old_status_code <> N'PROPOSAL_DRAFT'
         BEGIN
-            ;THROW 57103, 'Only draft series can be cancelled by Mangaka through this procedure.', 1;
+            ;THROW 57103, 'Only a series in PROPOSAL_DRAFT can be cancelled through this procedure.', 1;
         END;
 
+        --------------------------------------------------------------------
+        -- 3. Actor must be an active Mangaka contributor of this series
+        --------------------------------------------------------------------
         IF NOT EXISTS
         (
             SELECT 1
@@ -1223,13 +1232,21 @@ BEGIN
             ;THROW 57104, 'Only an active Mangaka contributor can cancel this draft series.', 1;
         END;
 
+        --------------------------------------------------------------------
+        -- 4. Cancel draft series
+        --------------------------------------------------------------------
+        DECLARE @cancelled_at_utc DATETIME2(0) = SYSUTCDATETIME();
+
         UPDATE manga.Series
         SET
             status_code = N'CANCELLED',
-            updated_at_utc = SYSUTCDATETIME(),
+            updated_at_utc = @cancelled_at_utc,
             updated_by_user_id = @actor_user_id
         WHERE series_id = @series_id;
 
+        --------------------------------------------------------------------
+        -- 5. Audit
+        --------------------------------------------------------------------
         DECLARE @audit_entity_id NVARCHAR(100) =
             CONVERT(NVARCHAR(36), @series_id);
 
@@ -2718,7 +2735,10 @@ BEGIN
         BEGIN
             ;THROW 57405, 'This proposal has already been reviewed.', 1;
         END;
-
+        IF LTRIM(RTRIM(@comments)) = N''
+BEGIN
+    ;THROW 57607, 'Editorial proposal revision comments are required.', 1;
+END;
         --------------------------------------------------------------------
         -- 3. Actor must be the active Tantou Editor contributor for this series
         --------------------------------------------------------------------
@@ -3006,6 +3026,201 @@ BEGIN
         EXEC audit.usp_AuditEvent_Append
             @actor_user_id = @actor_user_id,
             @action_code = N'SERIES_PROPOSAL_PASSED_TO_BOARD',
+            @entity_type = N'SeriesProposal',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH;
+END;
+GO
+CREATE OR ALTER PROCEDURE manga.usp_SeriesProposal_CancelEditorialReview
+    @series_proposal_id UNIQUEIDENTIFIER,
+    @actor_user_id UNIQUEIDENTIFIER,
+
+    @comments NVARCHAR(MAX) = NULL,
+
+
+@markup_original_file_name NVARCHAR(260),
+@markup_cloudinary_public_id NVARCHAR(255),
+@markup_cloudinary_secure_url NVARCHAR(1000),
+@markup_content_type NVARCHAR(100),
+@markup_file_size_bytes BIGINT,
+@markup_sha256_hash CHAR(64),
+
+@markup_file_resource_id UNIQUEIDENTIFIER OUTPUT
+
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        SET @markup_file_resource_id = NULL;
+
+        --------------------------------------------------------------------
+        -- 1. Lock proposal editorial cancellation workflow
+        --------------------------------------------------------------------
+        DECLARE @lock_resource NVARCHAR(200) =
+            N'manga_series_proposal_cancel_editorial_' + CONVERT(NVARCHAR(36), @series_proposal_id);
+
+        DECLARE @lock_result INT;
+
+        EXEC @lock_result = sys.sp_getapplock
+            @Resource = @lock_resource,
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 10000;
+
+        IF @lock_result < 0
+        BEGIN
+            ;THROW 57601, 'Could not acquire proposal editorial cancellation lock.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 2. Read proposal and parent series
+        --------------------------------------------------------------------
+        DECLARE @series_id UNIQUEIDENTIFIER;
+        DECLARE @old_proposal_status_code NVARCHAR(50);
+        DECLARE @old_series_status_code NVARCHAR(50);
+        DECLARE @reviewed_by_user_id UNIQUEIDENTIFIER;
+        DECLARE @cancelled_at_utc DATETIME2(0) = SYSUTCDATETIME();
+
+        SELECT
+            @series_id = sp.series_id,
+            @old_proposal_status_code = sp.status_code,
+            @reviewed_by_user_id = sp.reviewed_by_user_id,
+            @old_series_status_code = s.status_code
+        FROM manga.SeriesProposal sp WITH (UPDLOCK, HOLDLOCK)
+        INNER JOIN manga.Series s WITH (UPDLOCK, HOLDLOCK)
+            ON s.series_id = sp.series_id
+        WHERE sp.series_proposal_id = @series_proposal_id;
+
+        IF @series_id IS NULL
+        BEGIN
+            ;THROW 57602, 'Series proposal does not exist.', 1;
+        END;
+
+        IF @old_proposal_status_code <> N'UNDER_EDITORIAL_REVIEW'
+        BEGIN
+            ;THROW 57603, 'Only proposals under editorial review can be cancelled by a Tantou Editor.', 1;
+        END;
+
+        IF @old_series_status_code <> N'UNDER_EDITORIAL_REVIEW'
+        BEGIN
+            ;THROW 57604, 'Series must be under editorial review before its proposal can be cancelled by a Tantou Editor.', 1;
+        END;
+
+        IF @reviewed_by_user_id IS NOT NULL
+        BEGIN
+            ;THROW 57605, 'This proposal has already received an editorial review decision.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 3. Actor must be an active Tantou Editor contributor of this series
+        --------------------------------------------------------------------
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM manga.SeriesContributor sc
+            INNER JOIN auth.Users u
+                ON u.user_id = sc.user_id
+            INNER JOIN auth.Roles r
+                ON r.role_id = u.role_id
+            WHERE sc.series_id = @series_id
+              AND sc.user_id = @actor_user_id
+              AND sc.end_date IS NULL
+              AND u.status_code = N'ACTIVE'
+              AND r.role_name = N'Tantou Editor'
+        )
+        BEGIN
+            ;THROW 57606, 'Only an active Tantou Editor contributor for this series can cancel the proposal during editorial review.', 1;
+        END;
+
+       IF LTRIM(RTRIM(@comments)) = N''
+BEGIN
+    ;THROW 57607, 'Editorial proposal cancellation comments are required.', 1;
+END;
+
+            EXEC manga.usp_FileResource_Create
+                @file_purpose_code = N'EDITORIAL_ATTACHMENT',
+                @original_file_name = @markup_original_file_name,
+                @cloudinary_public_id = @markup_cloudinary_public_id,
+                @cloudinary_secure_url = @markup_cloudinary_secure_url,
+                @content_type = @markup_content_type,
+                @file_size_bytes = @markup_file_size_bytes,
+                @sha256_hash = @markup_sha256_hash,
+                @uploaded_by_user_id = @actor_user_id,
+                @file_resource_id = @markup_file_resource_id OUTPUT;
+
+
+        --------------------------------------------------------------------
+        -- 6. Cancel proposal
+        --------------------------------------------------------------------
+        UPDATE manga.SeriesProposal
+        SET
+            status_code = N'CANCELLED',
+            reviewed_by_user_id = @actor_user_id,
+            reviewed_at_utc = @cancelled_at_utc,
+            comments = @comments,
+            markup_file_id = @markup_file_resource_id
+        WHERE series_proposal_id = @series_proposal_id;
+
+        --------------------------------------------------------------------
+        -- 7. Cancel parent series
+        --
+        -- Editorial cancellation means the proposal/series does not continue.
+        -- Unlike revision request, this does not return the series to draft.
+        --------------------------------------------------------------------
+        UPDATE manga.Series
+        SET
+            status_code = N'CANCELLED',
+            updated_at_utc = @cancelled_at_utc,
+            updated_by_user_id = @actor_user_id
+        WHERE series_id = @series_id;
+
+        --------------------------------------------------------------------
+        -- 8. Audit
+        --------------------------------------------------------------------
+        DECLARE @audit_entity_id NVARCHAR(100) =
+            CONVERT(NVARCHAR(36), @series_proposal_id);
+
+        DECLARE @detail_json NVARCHAR(MAX) =
+        (
+            SELECT
+                @series_id AS series_id,
+                @series_proposal_id AS series_proposal_id,
+                @old_proposal_status_code AS old_proposal_status_code,
+                N'CANCELLED' AS new_proposal_status_code,
+                @old_series_status_code AS old_series_status_code,
+                N'CANCELLED' AS new_series_status_code,
+                @comments AS comments,
+                @markup_file_resource_id AS markup_file_resource_id
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @actor_user_id,
+            @action_code = N'SERIES_PROPOSAL_EDITORIAL_CANCELLED',
             @entity_type = N'SeriesProposal',
             @entity_id = @audit_entity_id,
             @detail_json = @detail_json;

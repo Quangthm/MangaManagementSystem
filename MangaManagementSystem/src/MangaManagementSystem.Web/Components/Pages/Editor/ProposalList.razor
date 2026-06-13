@@ -1,5 +1,6 @@
 @page "/editor/proposals"
 @using Microsoft.AspNetCore.Authorization
+@using MangaManagementSystem.Application.DTOs.Manga
 @attribute [Authorize(Roles = "Tantou Editor")]
 @inject MangaManagementSystem.Application.Interfaces.ISeriesProposalService ProposalService
 @inject NavigationManager Nav
@@ -13,6 +14,19 @@
         </div>
 
         <MudPaper Class="pa-5 mf-card" Elevation="0">
+            <div class="d-flex align-center mb-4">
+                <MudSelect T="string" Label="Filter by Status" Value="@_statusFilter" ValueChanged="OnFilterChanged" Variant="Variant.Outlined" Class="max-w-xs">
+                    <MudSelectItem Value="@((string?)null)">All Proposals</MudSelectItem>
+                    <MudSelectItem Value="@("UNDER_EDITORIAL_REVIEW")">Under Editorial Review</MudSelectItem>
+                    <MudSelectItem Value="@("UNDER_BOARD_REVIEW")">Under Board Review</MudSelectItem>
+                    <MudSelectItem Value="@("REVISION_REQUESTED")">Revision Requested</MudSelectItem>
+                    <MudSelectItem Value="@("CANCELLED")">Cancelled</MudSelectItem>
+                    <MudSelectItem Value="@("APPROVED")">Approved</MudSelectItem>
+                </MudSelect>
+                <MudSpacer />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadProposals" StartIcon="mdi-refresh">Refresh</MudButton>
+            </div>
+
             @if (_loading)
             {
                 <MudProgressLinear Indeterminate="true" />
@@ -26,7 +40,7 @@
                 <MudPaper Class="pa-8 text-center mf-card" Elevation="0">
                     <MudIcon Icon="mdi-check-circle-outline" Size="Size.Large" Color="Color.Success" Class="mb-3" />
                     <MudText Typo="Typo.h6">All Caught Up!</MudText>
-                    <MudText Class="mf-muted">No pending proposals to review.</MudText>
+                    <MudText Class="mf-muted">No pending proposals match your filter.</MudText>
                 </MudPaper>
             }
             else
@@ -41,16 +55,16 @@
                         <MudTh>Actions</MudTh>
                     </HeaderContent>
                     <RowTemplate>
-                        <MudTd><MudLink Href="@($"/editor/proposals/{context.SeriesId}")">@context.SeriesTitle</MudLink></MudTd>
-                        <MudTd>v@context.Version</MudTd>
-                        <MudTd>@context.SubmittedBy</MudTd>
-                        <MudTd>@context.SubmittedAt.ToString("MMM d, yyyy")</MudTd>
-                        <MudTd><MudChip T="string" Color="@GetStatusColor(context.Status)" Size="Size.Small">@context.Status</MudChip></MudTd>
                         <MudTd>
-                            <MudStack Row="true" Spacing="2">
-                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => OpenProposal(context.SeriesId))">Review</MudButton>
-                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => RejectProposal(context.SeriesId))">Reject</MudButton>
-                            </MudStack>
+                            <MudText Typo="Typo.body1" Class="font-weight-bold">@context.SeriesTitle</MudText>
+                            <MudText Typo="Typo.caption" Class="mf-muted">@context.ProposalTitle</MudText>
+                        </MudTd>
+                        <MudTd>v@context.ProposalVersionNo</MudTd>
+                        <MudTd>@context.SubmitterDisplayName</MudTd>
+                        <MudTd>@context.SubmittedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</MudTd>
+                        <MudTd><MudChip T="string" Color="@GetStatusColor(context.StatusCode)" Size="Size.Small">@context.StatusCode.Replace("_", " ")</MudChip></MudTd>
+                        <MudTd>
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => OpenProposal(context.SeriesProposalId))">Review</MudButton>
                         </MudTd>
                     </RowTemplate>
                 </MudTable>
@@ -62,28 +76,28 @@
 @code {
     private bool _loading = true;
     private string? _error;
-    private IEnumerable<ProposalRow>? _proposals;
-
-    private Color GetStatusColor(string status) => status switch
-    {
-        "UNDER_EDITORIAL_REVIEW" => Color.Warning,
-        "UNDER_BOARD_REVIEW" => Color.Info,
-        "REVISION_REQUESTED" => Color.Error,
-        "APPROVED" => Color.Success,
-        _ => Color.Default
-    };
+    private IEnumerable<ProposalQueueItemDto>? _proposals;
+    private string? _statusFilter = "UNDER_EDITORIAL_REVIEW";
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadProposals();
+    }
+
+    private async Task OnFilterChanged(string? newStatus)
+    {
+        _statusFilter = newStatus;
+        await LoadProposals();
+    }
+
+    private async Task LoadProposals()
+    {
+        _loading = true;
+        _error = null;
         try
         {
-            // TODO: Call API to get proposals
-            _proposals = new List<ProposalRow>
-            {
-                new(1, "Crimson Moon Academy", 2, "Ken Sato", DateTime.UtcNow.AddDays(-2), "PROPOSAL_001", "UNDER_EDITORIAL_REVIEW"),
-                new(2, "Neon Samurai Path", 1, "Yuki Tanaka", DateTime.UtcNow.AddDays(-5), "PROPOSAL_002", "UNDER_EDITORIAL_REVIEW"),
-                new(3, "Lunar Eclipse Academy", 3, "Hiroshi Yamamoto", DateTime.UtcNow.AddDays(-10), "PROPOSAL_003", "UNDER_BOARD_REVIEW")
-            };
+            var filter = new ProposalQueueFilterDto(StatusCode: _statusFilter);
+            _proposals = await ProposalService.GetEditorialQueueAsync(filter);
         }
         catch (Exception ex)
         {
@@ -95,15 +109,18 @@
         }
     }
 
-    private void OpenProposal(long seriesId)
+    private Color GetStatusColor(string status) => status switch
     {
-        Nav.NavigateTo($"/editor/proposals/{seriesId}");
-    }
+        "UNDER_EDITORIAL_REVIEW" => Color.Warning,
+        "UNDER_BOARD_REVIEW" => Color.Info,
+        "REVISION_REQUESTED" => Color.Error,
+        "CANCELLED" => Color.Default,
+        "APPROVED" => Color.Success,
+        _ => Color.Default
+    };
 
-    private void RejectProposal(long proposalId)
+    private void OpenProposal(Guid proposalId)
     {
-        Snackbar.Add($"Reject proposal {proposalId} - implement rejection dialog", Severity.Warning);
+        Nav.NavigateTo($"/editor/proposals/{proposalId}");
     }
-
-    private record ProposalRow(long SeriesId, string SeriesTitle, int Version, string SubmittedBy, DateTime SubmittedAt, string ProposalCode, string Status);
 }
