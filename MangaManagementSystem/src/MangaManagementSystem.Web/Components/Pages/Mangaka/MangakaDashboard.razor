@@ -29,4 +29,10 @@
     };
     private record SeriesRow(int Id, string Title, int Chapters);
 
+    private record SeriesRow(
+        Guid SeriesId,
+        string Title,
+        string StatusCode,
+        DateTime CreatedAtUtc,
+        DateTime? UpdatedAtUtc);
 }

@@ -1,4 +1,4 @@
-@page "/mangaka/workspace/{SeriesId}"
+@page "/mangaka/workspace/{SeriesId:guid}"
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "Mangaka")]
 @inject NavigationManager Nav
@@ -20,11 +20,110 @@
 
 @code {
 
-    [Parameter] public string? SeriesId { get; set; }
-    private int SelectedChapter { get; set; } = 12;
+    [Parameter] public Guid SeriesId { get; set; }
+
+    private int SelectedChapterNo { get; set; }
     private int SelectedPage { get; set; } = 1;
     private string TaskType { get; set; } = "Tone Shading";
     private string Assistant { get; set; } = "";
     private string Instructions { get; set; } = "";
 
+    // Real series header context (loaded from ISeriesService when the id resolves).
+    // Chapter/page data below stays demo-only and is clearly labelled in the UI.
+    private string? _realSeriesTitle;
+    private string? _realSeriesStatus;
+
+    private string WorkspaceTitle => _realSeriesTitle ?? CurrentSeries.Title;
+
+    private string WorkspaceSubtitle => _realSeriesTitle != null
+        ? $"{_realSeriesStatus} · live series · demo workspace"
+        : CurrentSeries.Subtitle;
+
+    private SeriesDetail CurrentSeries { get; set; } = new();
+
+    private int CurrentChapterIndex =>
+        CurrentSeries.Chapters.FindIndex(c => c.Number == SelectedChapterNo);
+
+    private int SelectedChapterPageCount =>
+        CurrentSeries.Chapters.FirstOrDefault(c => c.Number == SelectedChapterNo)?.PageCount ?? 0;
+
+    private string SelectedChapterName =>
+        CurrentSeries.Chapters.FirstOrDefault(c => c.Number == SelectedChapterNo)?.Name is { Length: > 0 } name
+            ? $"· {name}"
+            : string.Empty;
+
+    private List<BreadcrumbItem> BreadcrumbItems => new()
+    {
+        new BreadcrumbItem(WorkspaceTitle, href: null, disabled: true),
+        new BreadcrumbItem($"Chapter {SelectedChapterNo}", href: null, disabled: true),
+        new BreadcrumbItem($"Page {SelectedPage}", href: null, disabled: true)
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        CurrentSeries = LoadDemoSeries();
+        SelectedChapterNo = CurrentSeries.Chapters.FirstOrDefault()?.Number ?? 1;
+        SelectedPage = 1;
+
+        // Best-effort: load the real series title for the header. Failure or a
+        // missing id falls back silently to the demo title.
+        try
+        {
+            var series = await SeriesService.GetSeriesByIdAsync(SeriesId);
+            if (series != null)
+            {
+                _realSeriesTitle = series.Title;
+                _realSeriesStatus = series.StatusCode;
+            }
+        }
+        catch
+        {
+            // Keep demo title; workspace must render regardless of DB state.
+        }
+    }
+
+    private void OnChapterSelected(int chapterNo)
+    {
+        SelectedChapterNo = chapterNo;
+        SelectedPage = 1;
+    }
+
+    private void PrevChapter()
+    {
+        var idx = CurrentChapterIndex;
+        if (idx > 0)
+            OnChapterSelected(CurrentSeries.Chapters[idx - 1].Number);
+    }
+
+    private void NextChapter()
+    {
+        var idx = CurrentChapterIndex;
+        if (idx < CurrentSeries.Chapters.Count - 1)
+            OnChapterSelected(CurrentSeries.Chapters[idx + 1].Number);
+    }
+
+    private void PrevPage() { if (SelectedPage > 1) SelectedPage--; }
+    private void NextPage() { if (SelectedPage < SelectedChapterPageCount) SelectedPage++; }
+
+    // Intentional demo data: named chapters illustrate the navigator/canvas flow.
+    private static SeriesDetail LoadDemoSeries() => new()
+    {
+        Title = "Demo Series",
+        Subtitle = "Demo workspace preview",
+        Chapters = new()
+        {
+            new ChapterInfo(1, "Opening Scene", 12),
+            new ChapterInfo(2, "First Conflict", 16),
+            new ChapterInfo(3, "Board Review Draft", 18)
+        }
+    };
+
+    private class SeriesDetail
+    {
+        public string Title { get; set; } = "";
+        public string Subtitle { get; set; } = "";
+        public List<ChapterInfo> Chapters { get; set; } = new();
+    }
+
+    private record ChapterInfo(int Number, string Name, int PageCount);
 }

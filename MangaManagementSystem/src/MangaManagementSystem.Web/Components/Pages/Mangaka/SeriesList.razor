@@ -30,4 +30,13 @@
     };
     private record SeriesCard(int Id, string Title, string Subtitle, string Status, int Chapters, int Pages, string Updated);
 
+    private record SeriesRow(
+        Guid SeriesId,
+        string Title,
+        string Genre,
+        string StatusCode,
+        string ContentLanguageCode,
+        string? PublicationFrequencyCode,
+        DateTime CreatedAtUtc,
+        DateTime? UpdatedAtUtc);
 }

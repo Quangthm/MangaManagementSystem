@@ -1,0 +1,110 @@
+@page "/editor/series"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Tantou Editor")]
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject ISeriesService SeriesService
+
+<EditorLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Series Library</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Manage and review series in your editorial pipeline</MudText>
+        </div>
+
+        <MudPaper Class="pa-5 mf-card" Elevation="0">
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" />
+            }
+            else if (_error != null)
+            {
+                <MudAlert Severity="Severity.Error">Failed to load series: @_error</MudAlert>
+            }
+            else if (_series == null || !_series.Any())
+            {
+                <MudPaper Class="pa-8 text-center mf-card" Elevation="0">
+                    <MudIcon Icon="mdi-book-open-page-variant" Size="Size.Large" Color="Color.Secondary" Class="mb-3" />
+                    <MudText Typo="Typo.h6">No series available yet</MudText>
+                    <MudText Class="mf-muted mt-1">New series will appear here once they enter the editorial pipeline.</MudText>
+                </MudPaper>
+            }
+            else
+            {
+                <MudTable Items="_series" Hover="true" Dense="true">
+                    <HeaderContent>
+                        <MudTh>Title</MudTh>
+                        <MudTh>Slug</MudTh>
+                        <MudTh>Status</MudTh>
+                        <MudTh>Created</MudTh>
+                        <MudTh>Actions</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.Title</MudTd>
+                        <MudTd>@context.Slug</MudTd>
+                        <MudTd><MudChip T="string" Color="@GetStatusColor(context.StatusCode)" Size="Size.Small">@context.StatusCode</MudChip></MudTd>
+                        <MudTd>@context.CreatedAtUtc.ToString("MMM d, yyyy")</MudTd>
+                        <MudTd>
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                       OnClick="@(() => ViewSeries(context.SeriesId))">
+                                Review
+                            </MudButton>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudPaper>
+    </div>
+</EditorLayout>
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private IEnumerable<SeriesRow>? _series;
+
+    private Color GetStatusColor(string status) => status switch
+    {
+        "SERIALIZED"              => Color.Success,
+        "HIATUS"                  => Color.Warning,
+        "CANCELLED"               => Color.Error,
+        "PROPOSAL_DRAFT"          => Color.Info,
+        "UNDER_EDITORIAL_REVIEW"  => Color.Warning,
+        "UNDER_BOARD_REVIEW"      => Color.Info,
+        _                         => Color.Default
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSeriesAsync();
+    }
+
+    private async Task LoadSeriesAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var series = await SeriesService.GetAllSeriesAsync();
+            _series = series.Select(s => new SeriesRow(
+                s.SeriesId,
+                s.Title,
+                s.Slug,
+                s.StatusCode,
+                s.CreatedAtUtc
+            ));
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ViewSeries(Guid seriesId) =>
+        Nav.NavigateTo($"/editor/series/{seriesId}");
+
+    private record SeriesRow(Guid SeriesId, string Title, string Slug, string StatusCode, DateTime CreatedAtUtc);
+}

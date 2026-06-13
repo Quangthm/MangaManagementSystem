@@ -1,4 +1,4 @@
-@page "/editor/proposals/{ProposalId:guid}"
+@page "/editor/proposals/{SeriesId:guid}"
 @using Microsoft.AspNetCore.Authorization
 @using MangaManagementSystem.Application.DTOs.Manga
 @using System.Security.Claims
@@ -149,7 +149,13 @@
 </EditorLayout>
 
 @code {
-    [Parameter] public Guid ProposalId { get; set; }
+    [Parameter] public Guid SeriesId { get; set; }
+    private string ReviewComments { get; set; } = string.Empty;
+
+    private bool _fileLoading = true;
+    private bool _submitting = false;
+    private string? _proposalFileUrl;
+
     private SeriesProposalDto? _proposal;
     private bool _loading = true;
     private bool _processing = false;
@@ -172,6 +178,30 @@
             if (Guid.TryParse(idClaim, out var userId))
             {
                 _currentUserId = userId;
+                _proposal = latest;
+                ReviewComments = latest.Comments ?? string.Empty;
+
+                // Resolve submitter display name
+                try
+                {
+                    var user = await UserService.GetUserByIdAsync(latest.SubmittedByUserId);
+                    if (user != null)
+                        _submitterDisplayName = !string.IsNullOrWhiteSpace(user.DisplayName)
+                            ? user.DisplayName
+                            : user.Username;
+                }
+                catch
+                {
+                    // Keep fallback
+                }
+
+                // Resolve proposal file
+                if (latest.ProposalFileId != Guid.Empty)
+                {
+                    var file = await FileResourceService.GetFileResourceByIdAsync(latest.ProposalFileId);
+                    if (file != null && !string.IsNullOrWhiteSpace(file.CloudinarySecureUrl))
+                        _proposalFileUrl = file.CloudinarySecureUrl;
+                }
             }
         }
         await LoadProposal();
@@ -207,6 +237,7 @@
     }
 
     private Color GetStatusColor(string status) => status switch
+    private async Task<Guid?> GetCurrentUserIdAsync()
     {
         "UNDER_EDITORIAL_REVIEW" => Color.Warning,
         "UNDER_BOARD_REVIEW" => Color.Info,
@@ -336,5 +367,7 @@
         {
             _processing = false;
         }
+        var idClaim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+        return Guid.TryParse(idClaim?.Value, out var uid) ? uid : null;
     }
 }

@@ -1,4 +1,4 @@
-@page "/assistant/task/{TaskId}"
+@page "/assistant/task/{TaskId:guid}"
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "Assistant")]
 @inject NavigationManager Nav
@@ -26,6 +26,6 @@
 
 @code {
 
-    [Parameter] public string? TaskId { get; set; }
+    [Parameter] public Guid TaskId { get; set; }
 
 }

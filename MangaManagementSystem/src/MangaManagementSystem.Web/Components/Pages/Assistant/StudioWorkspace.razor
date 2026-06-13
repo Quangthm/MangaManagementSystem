@@ -1,4 +1,4 @@
-@page "/assistant/studio/{TaskId}"
+@page "/assistant/studio/{TaskId:guid}"
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "Assistant")]
 @inject NavigationManager Nav
@@ -29,7 +29,7 @@
 
 @code {
 
-    [Parameter] public string? TaskId { get; set; }
+    [Parameter] public Guid TaskId { get; set; }
     private int Zoom { get; set; } = 100;
 
 }

@@ -74,11 +74,16 @@
 
     private readonly List<AnnotationRow> _annotations = new()
     {
-        new(101, "Crimson Moon Academy", "Ch.45 / Pg.03", "SPEECH_BUBBLE", "DIALOGUE_ERROR", "Dialogue text exceeds bubble area", false),
-        new(101, "Crimson Moon Academy", "Ch.45 / Pg.07", "BACKGROUND", "SHADING_ERROR", "Background shading breaks continuity", false),
-        new(102, "Neon Samurai Path", "Ch.19 / Pg.12", "PANEL", "PANEL_ORDER_ERROR", "Panel read order is ambiguous", false),
-        new(103, "Lunar Eclipse Academy", "Ch.13 / Pg.02", "CHARACTER", "CONTINUITY_ERROR", "Character outfit differs from previous page", true)
+        new(Guid.Parse("b1c2d3e4-1001-4000-8000-000000000065"), 3,  "Crimson Moon Academy", "Ch.45 / Pg.03", "SPEECH_BUBBLE", "DIALOGUE_ERROR",   "Dialogue text exceeds bubble area",               false),
+        new(Guid.Parse("b1c2d3e4-1002-4000-8000-000000000066"), 7,  "Crimson Moon Academy", "Ch.45 / Pg.07", "BACKGROUND",    "SHADING_ERROR",    "Background shading breaks continuity",            false),
+        new(Guid.Parse("b1c2d3e4-1003-4000-8000-000000000067"), 12, "Neon Samurai Path",    "Ch.19 / Pg.12", "PANEL",         "PANEL_ORDER_ERROR","Panel read order is ambiguous",                   false),
+        new(Guid.Parse("b1c2d3e4-1004-4000-8000-000000000068"), 2,  "Lunar Eclipse Academy","Ch.13 / Pg.02", "CHARACTER",     "CONTINUITY_ERROR", "Character outfit differs from previous page",     true)
     };
 
-    private record AnnotationRow(long ChapterId, string Series, string ChapterPage, string RegionType, string IssueType, string Text, bool IsResolved);
+    private IEnumerable<AnnotationRow> FilteredAnnotations =>
+        string.IsNullOrEmpty(_issueFilter) || _issueFilter == "all"
+            ? _annotations
+            : _annotations.Where(a => a.IssueType == _issueFilter);
+
+    private record AnnotationRow(Guid ChapterId, int PageNumber, string Series, string ChapterPage, string RegionType, string IssueType, string Text, bool IsResolved);
 }
