@@ -50,7 +50,7 @@
                         <MudTd>
                             <MudStack Row="true" Spacing="2">
                                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => OpenProposal(context.SeriesId))">Review</MudButton>
-                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => RejectProposal(context.SeriesId))">Reject</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => RejectProposal(context.SeriesProposalId))">Reject</MudButton>
                             </MudStack>
                         </MudTd>
                     </RowTemplate>
@@ -88,6 +88,7 @@
                 var latest = proposals.OrderByDescending(p => p.ProposalVersionNo).FirstOrDefault();
                 if (latest != null)
                     return new ProposalRow(
+                        latest.SeriesProposalId,
                         series.SeriesId,
                         series.Title,
                         latest.ProposalVersionNo,
@@ -118,10 +119,10 @@
         Nav.NavigateTo($"/editor/proposals/{seriesId}");
     }
 
-    private void RejectProposal(Guid proposalId)
+    private void RejectProposal(Guid seriesProposalId)
     {
-        Snackbar.Add($"Reject proposal {proposalId} - implement rejection dialog", Severity.Warning);
+        Snackbar.Add($"Reject proposal {seriesProposalId} - implement rejection dialog", Severity.Warning);
     }
 
-    private record ProposalRow(Guid SeriesId, string SeriesTitle, int Version, Guid SubmittedByUserId, DateTime SubmittedAt, string Status);
+    private record ProposalRow(Guid SeriesProposalId, Guid SeriesId, string SeriesTitle, int Version, Guid SubmittedByUserId, DateTime SubmittedAt, string Status);
 }

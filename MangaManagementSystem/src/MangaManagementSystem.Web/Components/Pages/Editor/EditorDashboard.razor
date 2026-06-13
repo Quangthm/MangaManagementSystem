@@ -128,16 +128,16 @@
 
     private readonly List<ProposalRow> Proposals = new()
     {
-        new(1, "Crimson Moon Academy", 2, "Ken Sato", DateTime.UtcNow.AddDays(-2), "UNDER_EDITORIAL_REVIEW"),
-        new(2, "Neon Samurai Path", 1, "Yuki Tanaka", DateTime.UtcNow.AddDays(-5), "UNDER_EDITORIAL_REVIEW"),
-        new(3, "Lunar Eclipse Academy", 3, "Hiroshi Yamamoto", DateTime.UtcNow.AddDays(-1), "UNDER_BOARD_REVIEW")
+        new(Guid.Parse("c1d2e3f4-2001-4000-8000-000000000001"), "Crimson Moon Academy", 2, "Ken Sato", DateTime.UtcNow.AddDays(-2), "UNDER_EDITORIAL_REVIEW"),
+        new(Guid.Parse("c1d2e3f4-2002-4000-8000-000000000002"), "Neon Samurai Path", 1, "Yuki Tanaka", DateTime.UtcNow.AddDays(-5), "UNDER_EDITORIAL_REVIEW"),
+        new(Guid.Parse("c1d2e3f4-2003-4000-8000-000000000003"), "Lunar Eclipse Academy", 3, "Hiroshi Yamamoto", DateTime.UtcNow.AddDays(-1), "UNDER_BOARD_REVIEW")
     };
 
     private readonly List<SeriesRow> RecentSeries = new()
     {
-        new(1, "Crimson Moon Academy", "SERIALIZED", "Ch. 44", DateTime.UtcNow.AddDays(-1)),
-        new(2, "Neon Samurai Path", "SERIALIZED", "Ch. 18", DateTime.UtcNow.AddDays(-3)),
-        new(3, "Shadow Garden Tales", "HIATUS", "Ch. 8", DateTime.UtcNow.AddDays(-7))
+        new(Guid.Parse("c1d2e3f4-3001-4000-8000-000000000001"), "Crimson Moon Academy", "SERIALIZED", "Ch. 44", DateTime.UtcNow.AddDays(-1)),
+        new(Guid.Parse("c1d2e3f4-3002-4000-8000-000000000002"), "Neon Samurai Path", "SERIALIZED", "Ch. 18", DateTime.UtcNow.AddDays(-3)),
+        new(Guid.Parse("c1d2e3f4-3003-4000-8000-000000000003"), "Shadow Garden Tales", "HIATUS", "Ch. 8", DateTime.UtcNow.AddDays(-7))
     };
 
     private Color GetStatusColor(string status) => status switch
@@ -149,11 +149,11 @@
         _ => Color.Default
     };
 
-    private void OpenProposal(long seriesId)
+    private void OpenProposal(Guid seriesId)
     {
         Nav.NavigateTo($"/editor/proposals/{seriesId}");
     }
 
-    private record ProposalRow(long SeriesId, string Title, int Version, string SubmittedBy, DateTime SubmittedAt, string Status);
-    private record SeriesRow(long SeriesId, string Title, string StatusCode, string LatestChapter, DateTime LastActivity);
+    private record ProposalRow(Guid SeriesId, string Title, int Version, string SubmittedBy, DateTime SubmittedAt, string Status);
+    private record SeriesRow(Guid SeriesId, string Title, string StatusCode, string LatestChapter, DateTime LastActivity);
 }

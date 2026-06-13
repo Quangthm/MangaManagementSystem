@@ -1,4 +1,4 @@
-@page "/mangaka/workspace/{SeriesId}"
+@page "/mangaka/workspace/{SeriesId:guid}"
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "Mangaka")]
 @inject NavigationManager Nav
@@ -159,7 +159,7 @@
 
 @code {
 
-    [Parameter] public string? SeriesId { get; set; }
+    [Parameter] public Guid SeriesId { get; set; }
 
     private int SelectedChapterNo { get; set; }
     private int SelectedPage { get; set; } = 1;
@@ -207,21 +207,18 @@
 
         // Best-effort: load the real series title for the header. Failure or a
         // missing id falls back silently to the demo title.
-        if (Guid.TryParse(SeriesId, out var parsedId))
+        try
         {
-            try
+            var series = await SeriesService.GetSeriesByIdAsync(SeriesId);
+            if (series != null)
             {
-                var series = await SeriesService.GetSeriesByIdAsync(parsedId);
-                if (series != null)
-                {
-                    _realSeriesTitle = series.Title;
-                    _realSeriesStatus = series.StatusCode;
-                }
+                _realSeriesTitle = series.Title;
+                _realSeriesStatus = series.StatusCode;
             }
-            catch
-            {
-                // Keep demo title; workspace must render regardless of DB state.
-            }
+        }
+        catch
+        {
+            // Keep demo title; workspace must render regardless of DB state.
         }
     }
 

@@ -1,4 +1,4 @@
-@page "/editor/chapters/{ChapterId:long}"
+@page "/editor/chapters/{ChapterId:guid}"
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "Tantou Editor")]
 @inject NavigationManager Nav
@@ -134,7 +134,7 @@
 </EditorLayout>
 
 @code {
-    [Parameter] public long ChapterId { get; set; }
+    [Parameter] public Guid ChapterId { get; set; }
 
     [SupplyParameterFromQuery(Name = "page")]
     public int? PageQuery { get; set; }

@@ -1,4 +1,4 @@
-@page "/assistant/task/{TaskId}/submit"
+@page "/assistant/task/{TaskId:guid}/submit"
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "Assistant")]
 @inject NavigationManager Nav
@@ -24,7 +24,7 @@
 
 @code {
 
-    [Parameter] public string? TaskId { get; set; }
+    [Parameter] public Guid TaskId { get; set; }
     private string Notes { get; set; } = string.Empty;
     private bool Submitted { get; set; }
 
