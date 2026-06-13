@@ -19,8 +19,11 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         [Required] Guid AssignedToUserId,
         [Required][MaxLength(50)] string TypeCode,
         [Required][MaxLength(30)] string StatusCode,
+        [Required][MaxLength(200)] string TaskTitle,
+        [Required] string TaskDescription,
         [Required] int PriorityLevel,
         DateTime? DueAtUtc,
+        decimal? CompensationAmount,
         Guid? CompletedPageVersionId,
         [Required] IReadOnlyList<Guid> PageRegionIds
     );
@@ -30,8 +33,11 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         [Required] Guid AssignedToUserId,
         [Required][MaxLength(50)] string TypeCode,
         [Required][MaxLength(30)] string StatusCode,
+        [Required][MaxLength(200)] string TaskTitle,
+        [Required] string TaskDescription,
         [Required] int PriorityLevel,
         DateTime? DueAtUtc,
+        decimal? CompensationAmount,
         Guid? CompletedPageVersionId,
         [Required] IReadOnlyList<Guid> PageRegionIds
     );

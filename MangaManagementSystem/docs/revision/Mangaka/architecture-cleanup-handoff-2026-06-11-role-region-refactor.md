@@ -160,3 +160,118 @@ Do not proceed until you have confirmed the handoff state and received direction
 - **EF skip navigations are only for reads/navigation convenience**. The `AttachPageRegionsAsync` method in the services fetches `PageRegion` entities individually and adds them to the `PageRegions` collection, which EF persists via the junction table on save. This is acceptable for small-scale updates but could be optimized if bulk region linking becomes a bottleneck.
 
 - **No database migration was needed** because the existing schema already matched the target model. This is a rare win and should be kept in mind for future schema decisions.
+
+---
+
+# Session — 2026-06-11 — Stored Procedure Workflow Alignment
+
+## 1. Session Summary
+
+Completed stored procedure workflow alignment for `ChapterPageTask` and `ChapterPageAnnotation` create operations. Both services now call stored procedures for create operations (`usp_ChapterPageTask_Create`, `usp_ChapterPageAnnotation_Create`), inheriting SQL permission checks, same-page-version validation, transactions, and audit trail behavior. EF skip navigations remain for read/query convenience. `ChapterPageAnnotation_Resolve` stored procedure is available for annotation resolution workflow.
+
+## 2. Completed Changes
+
+### New Infrastructure Repositories
+- `ChapterPageTaskRepository`: Implements `IChapterPageTaskRepository`
+  - `CreateChapterPageTaskAsync`: Calls `usp_ChapterPageTask_Create` with JSON-serialized `PageRegionIds`
+  - `GetByIdWithRegionsAsync`: Loads task with `PageRegions` via Include
+  - `GetByAssignedUserIdWithRegionsAsync`: Loads tasks with regions for assigned user
+- `ChapterPageAnnotationRepository`: Implements `IChapterPageAnnotationRepository`
+  - `CreateChapterPageAnnotationAsync`: Calls `usp_ChapterPageAnnotation_Create` with JSON-serialized `PageRegionIds`
+  - `GetByIdWithRegionsAsync`: Loads annotation with `PageRegions` via Include
+  - `GetByPageRegionIdAsync`: Loads annotations by PageRegionId (SQL-side filtering)
+  - `ResolveAnnotationAsync`: Calls `usp_ChapterPageAnnotation_Resolve` with lock and validation
+
+### Updated Domain Interfaces
+- `IChapterPageTaskRepository`: Extends `IGenericRepository<ChapterPageTask>` with stored procedure methods and Include-based reads
+- `IChapterPageAnnotationRepository`: Extends `IGenericRepository<ChapterPageAnnotation>` with stored procedure methods, SQL filtering, and resolve operation
+
+### Updated UnitOfWork
+- Changed `ChapterPageTasks` property from `IGenericRepository<ChapterPageTask>` to `IChapterPageTaskRepository`
+- Changed `ChapterPageAnnotations` property from `IGenericRepository<ChapterPageAnnotation>` to `IChapterPageAnnotationRepository`
+
+### Updated Service Layer
+- `ChapterPageTaskService.CreateChapterPageTaskAsync`: Now calls repository `CreateChapterPageTaskAsync`, then reloads with regions
+- `ChapterPageTaskService`: Added `GetChapterPageTaskByIdWithRegionsAsync` and `GetChapterPageTasksByAssignedUserIdWithRegionsAsync`
+- `ChapterPageAnnotationService.CreateChapterPageAnnotationAsync`: Now calls repository `CreateChapterPageAnnotationAsync`, then reloads with regions
+- `ChapterPageAnnotationService`: Added `GetChapterPageAnnotationByIdWithRegionsAsync` and `ResolveAnnotationAsync`
+
+### Updated DTOs
+- `CreateChapterPageTaskDto`: Added `TaskTitle`, `TaskDescription`, `CompensationAmount` to match stored procedure signature
+- `UpdateChapterPageTaskDto`: Added `TaskTitle`, `TaskDescription`, `CompensationAmount` to match stored procedure signature
+
+### Infrastructure Dependency Injection
+- Added registrations for `IChapterPageTaskRepository` and `IChapterPageAnnotationRepository`
+
+## 3. Files Changed
+
+| File | Change |
+|---|---|
+| `src/MangaManagementSystem.Domain/Interfaces/IUnitOfWork.cs` | Changed `ChapterPageTasks`/`ChapterPageAnnotations` to use new repository interfaces |
+| `src/MangaManagementSystem.Domain/Interfaces/IChapterPageTaskRepository.cs` | Created interface with stored procedure methods and Include-based reads |
+| `src/MangaManagementSystem.Domain/Interfaces/IChapterPageAnnotationRepository.cs` | Created interface with stored procedure methods, SQL filtering, and resolve |
+| `src/MangaManagementSystem.Infrastructure/Repositories/ChapterPageTaskRepository.cs` | Created repository calling `usp_ChapterPageTask_Create`, EF Include reads |
+| `src/MangaManagementSystem.Infrastructure/Repositories/ChapterPageAnnotationRepository.cs` | Created repository calling `usp_ChapterPageAnnotation_Create`/`_Resolve`, SQL filtering |
+| `src/MangaManagementSystem.Infrastructure/Repositories/UnitOfWork.cs` | Updated to use new repository interfaces |
+| `src/MangaManagementSystem.Infrastructure/DependencyInjection.cs` | Added DI registrations for new repositories |
+| `src/MangaManagementSystem.Application/Services/ChapterPageTaskService.cs` | Use stored procedure for create; added Include-based read methods |
+| `src/MangaManagementSystem.Application/Services/ChapterPageAnnotationService.cs` | Use stored procedure for create; added Include-based reads and ResolveAnnotation |
+| `src/MangaManagementSystem.Application/Interfaces/IChapterPageTaskService.cs` | Added new read methods |
+| `src/MangaManagementSystem.Application/Interfaces/IChapterPageAnnotationService.cs` | Added Include-based reads and ResolveAnnotation |
+| `src/MangaManagementSystem.Application/DTOs/Manga/ChapterPageTaskDtos.cs` | Added `TaskTitle`, `TaskDescription`, `CompensationAmount` to DTOs |
+| `src/MangaManagementSystem.Application/DTOs/Manga/ChapterPageAnnotationDtos.cs` | Updated to use `PageRegions` (read) / `PageRegionIds` (create/update) |
+
+## 4. Stored Procedure Usage
+
+| Workflow | Before | After |
+|---|---|---|
+| Task create | Direct EF insert | `usp_ChapterPageTask_Create` via repository |
+| Task update | Direct EF update (no SP exists) | Direct EF update (kept as-is) |
+| Annotation create | Direct EF insert | `usp_ChapterPageAnnotation_Create` via repository |
+| Annotation resolve | N/A | `usp_ChapterPageAnnotation_Resolve` via repository |
+| Annotation update | Direct EF update (no SP exists) | Direct EF update (kept as-is) |
+| Task by ID | Generic repo `FindAsync` (no Include) | Repository `GetByIdWithRegionsAsync` (Include) |
+| Task by assigned user | Generic repo `GetAllAsync` (no Include) | Repository `GetByAssignedUserIdWithRegionsAsync` (Include) |
+| Annotation by PageRegionId | In-memory filtering on all annotations | Repository `GetByPageRegionIdAsync` (SQL-side filtering) |
+
+## 5. Read Query Improvements
+
+| Query | Improvement |
+|---|---|
+| Task by ID | Uses `Include(t => t.PageRegions)` to eagerly load regions |
+| Task by assigned user | Uses `Include(t => t.PageRegions)` to eagerly load regions |
+| Annotation by PageRegionId | Uses SQL-side filtering (`Where(a => a.PageRegions.Any(...))`) instead of loading all annotations into memory |
+
+## 6. Build Result
+
+```
+Build succeeded.
+    6 Warning(s)
+    0 Error(s)
+```
+
+Warnings are pre-existing and unrelated (MailKit/MimeKit NuGet vulnerabilities, lowercase placeholder type names).
+
+## 7. Remaining Follow-up
+
+| Priority | Item | Recommendation |
+|---|---|
+| Low | Consider removing generic repository registration from DI | Infrastructure already has `GenericRepository<>` as base; new specialized repositories handle specific needs |
+| Low | Add comprehensive tests for stored procedure workflows | Verify permission checks, same-page-version validation, and audit trail behavior |
+| Low | Consider EF Core `ValueConverter` for PageRegionIds ↔ JSON serialization | Avoid manual serialization in service layer |
+| Medium | Ensure actor_user_id is correctly set for service calls | Currently defaults to `AssignedToUserId`/`AnnotatedByUserId`; should be actual workflow actor |
+| Medium | Consider updating UpdateChapterPageTaskAsync to use SP if/when it's added | No update SP exists yet; keep EF-based update for now |
+
+## 8. Notes / Risks
+
+- **Stored procedures inherit SQL permission checks** that EF bypasses. This is a key improvement for security and business rule enforcement.
+
+- **EF `Include` calls are necessary for read DTOs to include regions** since the generic repo uses `FindAsync` without navigation properties. The new specialized repositories solve this.
+
+- **SQL filtering in `GetByPageRegionIdAsync`** significantly reduces memory usage compared to loading all annotations and filtering in memory.
+
+- **Direct EF update paths remain unchanged** because no corresponding stored procedures exist yet. Consider adding update SPs if update workflows need the same validation/audit benefits.
+
+- **DTO `CompensationAmount` is nullable decimal** matching the stored procedure signature (has default value of 0). Services pass `null` when not set, which the stored procedure converts to 0.
+
+- **The `CreateChapterPageTaskAsync` service method now requires a `TaskTitle` and `TaskDescription`**. All callers must provide these fields.
