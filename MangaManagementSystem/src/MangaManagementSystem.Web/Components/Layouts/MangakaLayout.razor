@@ -3,44 +3,42 @@
 
 <div class="mf-shell">
     <aside class="mf-sidebar mf-mangaka-sidebar">
-        <button type="button" class="mf-sidebar-brand" @onclick="GoToMangakaDashboard">
-            <span class="mf-logo-box mf-mangaka-logo">MF</span>
 
-            <span class="mf-brand-text">
-                <span class="mf-brand-name">MangaFlow</span>
-                <span class="mf-brand-subtitle">Mangaka Workspace</span>
-            </span>
-        </button>
+        <div class="mf-sidebar-profile-area">
+            <UserAvatarMenu />
+        </div>
 
         <nav class="mf-nav-section">
             <div class="mf-nav-title">Main Menu</div>
 
-            <NavLink href="/mangaka" class="mf-nav-link" Match="NavLinkMatch.All">
+            <NavLink href="/mangaka"
+                     class="mf-nav-link"
+                     Match="NavLinkMatch.All">
                 Dashboard
             </NavLink>
 
-            <NavLink href="/mangaka/series" class="mf-nav-link" Match="NavLinkMatch.Prefix">
-                My Series & Chapters
+            <NavLink href="/mangaka/series"
+                     class="mf-nav-link"
+                     Match="NavLinkMatch.Prefix">
+                My Series &amp; Chapters
             </NavLink>
 
-            <NavLink href="/mangaka/assign-task" class="mf-nav-link" Match="NavLinkMatch.Prefix">
+            <NavLink href="/mangaka/assign-task"
+                     class="mf-nav-link"
+                     Match="NavLinkMatch.Prefix">
                 Assign Task
             </NavLink>
 
-            <NavLink href="/mangaka/review-submissions" class="mf-nav-link" Match="NavLinkMatch.Prefix">
+            <NavLink href="/mangaka/review-submissions"
+                     class="mf-nav-link"
+                     Match="NavLinkMatch.Prefix">
                 Review Submissions
-            </NavLink>
-
-            <div class="mf-nav-title mt-3">Account</div>
-
-            <NavLink href="/profile/settings" class="mf-nav-link" Match="NavLinkMatch.Prefix">
-                Profile Settings
             </NavLink>
 
             <div class="mf-nav-title mt-3">Publication</div>
 
             <div class="mf-nav-link disabled">
-                Ranking & Publication (Read-only)
+                Ranking &amp; Publication (Read-only)
             </div>
         </nav>
 
@@ -66,12 +64,8 @@
 </div>
 
 @code {
-    [Parameter] public RenderFragment? ChildContent { get; set; }
-
-    private void GoToMangakaDashboard()
-    {
-        Nav.NavigateTo("/mangaka");
-    }
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
 
     private void BackToOverview()
     {
@@ -80,39 +74,8 @@
 }
 
 <style>
-    .mf-sidebar-brand {
-        width: 100%;
-        border: 0;
-        background: transparent;
-        padding: 22px 18px 18px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        text-align: left;
-        cursor: pointer;
-    }
-
-        .mf-sidebar-brand:hover .mf-logo-box {
-            transform: translateY(-1px);
-            box-shadow: 0 10px 22px rgba(124, 58, 237, 0.35);
-        }
-
-    .mf-brand-text {
-        display: flex;
-        flex-direction: column;
-        min-width: 0;
-    }
-
-    .mf-brand-name {
-        color: #ffffff;
-        font-weight: 800;
-        font-size: 16px;
-        line-height: 1.2;
-    }
-
-    .mf-brand-subtitle {
-        color: #94a3b8;
-        font-size: 12px;
-        line-height: 1.2;
+    .mf-sidebar-profile-area {
+        padding: 18px 11px 14px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
     }
 </style>

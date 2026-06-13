@@ -3,34 +3,25 @@
 
 <div class="mf-shell">
     <aside class="mf-sidebar mf-assistant-sidebar">
-        <button type="button" class="mf-sidebar-brand" @onclick="GoToAssistantDashboard">
-            <span class="mf-logo-box mf-assistant-logo">MF</span>
 
-            <span class="mf-brand-text">
-                <span class="mf-brand-name">MangaFlow</span>
-                <span class="mf-brand-subtitle">Assistant Workspace</span>
-            </span>
-        </button>
+        <div class="mf-sidebar-profile-area">
+            <UserAvatarMenu />
+        </div>
 
         <nav class="mf-nav-section">
             <div class="mf-nav-title">Main Menu</div>
 
-            <NavLink href="/assistant" class="mf-nav-link" Match="NavLinkMatch.All">
+            <NavLink href="/assistant"
+                     class="mf-nav-link"
+                     Match="NavLinkMatch.All">
                 Dashboard
             </NavLink>
 
-            <NavLink href="/assistant/tasks" class="mf-nav-link" Match="NavLinkMatch.Prefix">
+            <NavLink href="/assistant/tasks"
+                     class="mf-nav-link"
+                     Match="NavLinkMatch.Prefix">
                 Assigned Tasks
             </NavLink>
-
-            <div class="mf-nav-title mt-3">Account</div>
-
-            <NavLink href="/profile/settings" class="mf-nav-link" Match="NavLinkMatch.Prefix">
-                Profile Settings
-            </NavLink>
-
-            <div class="mf-nav-link disabled">Notifications (Not available)</div>
-            <div class="mf-nav-link disabled">Settings (Not available)</div>
         </nav>
 
         <MudSpacer />
@@ -55,12 +46,8 @@
 </div>
 
 @code {
-    [Parameter] public RenderFragment? ChildContent { get; set; }
-
-    private void GoToAssistantDashboard()
-    {
-        Nav.NavigateTo("/assistant");
-    }
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
 
     private void BackToOverview()
     {
@@ -69,39 +56,8 @@
 }
 
 <style>
-    .mf-sidebar-brand {
-        width: 100%;
-        border: 0;
-        background: transparent;
-        padding: 22px 18px 18px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        text-align: left;
-        cursor: pointer;
-    }
-
-        .mf-sidebar-brand:hover .mf-logo-box {
-            transform: translateY(-1px);
-            box-shadow: 0 10px 22px rgba(139, 92, 246, 0.35);
-        }
-
-    .mf-brand-text {
-        display: flex;
-        flex-direction: column;
-        min-width: 0;
-    }
-
-    .mf-brand-name {
-        color: #ffffff;
-        font-weight: 800;
-        font-size: 16px;
-        line-height: 1.2;
-    }
-
-    .mf-brand-subtitle {
-        color: #94a3b8;
-        font-size: 12px;
-        line-height: 1.2;
+    .mf-sidebar-profile-area {
+        padding: 18px 11px 14px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
     }
 </style>

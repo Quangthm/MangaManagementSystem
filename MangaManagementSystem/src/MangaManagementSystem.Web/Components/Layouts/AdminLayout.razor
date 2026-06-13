@@ -3,46 +3,51 @@
 
 <div class="mf-shell">
     <aside class="mf-sidebar mf-admin-sidebar">
-        <button type="button" class="mf-sidebar-brand" @onclick="GoToAdminDashboard">
-            <span class="mf-logo-box mf-admin-logo">MF</span>
 
-            <span class="mf-brand-text">
-                <span class="mf-brand-name">MangaFlow</span>
-                <span class="mf-brand-subtitle">System Administrator</span>
-            </span>
-        </button>
+        <div class="mf-sidebar-profile-area">
+            <UserAvatarMenu />
+        </div>
 
         <nav class="mf-nav-section">
             <div class="mf-nav-title">Main Navigation</div>
 
-            <NavLink href="/admin" class="mf-nav-link" Match="NavLinkMatch.All">
+            <NavLink href="/admin"
+                     class="mf-nav-link"
+                     Match="NavLinkMatch.All">
                 Dashboard
             </NavLink>
 
-            <NavLink href="/admin/users" class="mf-nav-link" Match="NavLinkMatch.Prefix">
+            <NavLink href="/admin/users"
+                     class="mf-nav-link"
+                     Match="NavLinkMatch.Prefix">
                 User Accounts
             </NavLink>
 
             <AuthorizeView Roles="Admin">
                 <Authorized>
-                    <NavLink href="/admin/user-approval" class="mf-nav-link" Match="NavLinkMatch.Prefix">
+                    <NavLink href="/admin/user-approval"
+                             class="mf-nav-link"
+                             Match="NavLinkMatch.Prefix">
                         User Approval
                     </NavLink>
                 </Authorized>
             </AuthorizeView>
 
-            <NavLink href="/admin/board-polls" class="mf-nav-link" Match="NavLinkMatch.Prefix">
+            <NavLink href="/admin/board-polls"
+                     class="mf-nav-link"
+                     Match="NavLinkMatch.Prefix">
                 Board Polls
             </NavLink>
 
-            <div class="mf-nav-title mt-3">Account</div>
+            <div class="mf-nav-title mt-3">System</div>
 
-            <NavLink href="/profile/settings" class="mf-nav-link" Match="NavLinkMatch.Prefix">
-                Profile Settings
-            </NavLink>
+            <div class="mf-nav-link disabled">
+                Role &amp; Permissions (Not available)
+            </div>
 
-            <div class="mf-nav-link disabled">Role & Permissions (Not available)</div>
-            <div class="mf-nav-link disabled">System Settings (Not available)</div>
+            <div class="mf-nav-link disabled">
+                System Settings (Not available)
+            </div>
         </nav>
 
         <MudSpacer />
@@ -67,12 +72,8 @@
 </div>
 
 @code {
-    [Parameter] public RenderFragment? ChildContent { get; set; }
-
-    private void GoToAdminDashboard()
-    {
-        Nav.NavigateTo("/admin");
-    }
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
 
     private void BackToOverview()
     {
@@ -81,39 +82,8 @@
 }
 
 <style>
-    .mf-sidebar-brand {
-        width: 100%;
-        border: 0;
-        background: transparent;
-        padding: 22px 18px 18px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        text-align: left;
-        cursor: pointer;
-    }
-
-        .mf-sidebar-brand:hover .mf-logo-box {
-            transform: translateY(-1px);
-            box-shadow: 0 10px 22px rgba(14, 165, 233, 0.35);
-        }
-
-    .mf-brand-text {
-        display: flex;
-        flex-direction: column;
-        min-width: 0;
-    }
-
-    .mf-brand-name {
-        color: #ffffff;
-        font-weight: 800;
-        font-size: 16px;
-        line-height: 1.2;
-    }
-
-    .mf-brand-subtitle {
-        color: #94a3b8;
-        font-size: 12px;
-        line-height: 1.2;
+    .mf-sidebar-profile-area {
+        padding: 18px 11px 14px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
     }
 </style>

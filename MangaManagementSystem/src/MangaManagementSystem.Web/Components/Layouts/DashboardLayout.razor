@@ -2,39 +2,37 @@
 @inject NavigationManager Nav
 
 <div class="mf-shell">
-    <aside class="mf-sidebar">
-        <button type="button" class="mf-sidebar-brand" @onclick="GoToDashboard">
-            <span class="mf-logo-box">MF</span>
+    <aside class="mf-sidebar mf-dashboard-sidebar">
 
-            <span class="mf-brand-text">
-                <span class="mf-brand-name">MangaFlow</span>
-                <span class="mf-brand-subtitle">Editorial Platform</span>
-            </span>
-        </button>
+        <div class="mf-sidebar-profile-area">
+            <UserAvatarMenu />
+        </div>
 
         <nav class="mf-nav-section">
             <div class="mf-nav-title">Workspace</div>
 
-            <NavLink href="/dashboard" class="mf-nav-link" Match="NavLinkMatch.All">
+            <NavLink href="/dashboard"
+                     class="mf-nav-link"
+                     Match="NavLinkMatch.All">
                 Overview
             </NavLink>
 
-            <NavLink href="/dashboard/records" class="mf-nav-link" Match="NavLinkMatch.Prefix">
+            <NavLink href="/dashboard/records"
+                     class="mf-nav-link"
+                     Match="NavLinkMatch.Prefix">
                 Editorial Records
             </NavLink>
 
-            <NavLink href="/dashboard/studio" class="mf-nav-link" Match="NavLinkMatch.Prefix">
+            <NavLink href="/dashboard/studio"
+                     class="mf-nav-link"
+                     Match="NavLinkMatch.Prefix">
                 Studio Progress
             </NavLink>
 
-            <NavLink href="/dashboard/workspace" class="mf-nav-link" Match="NavLinkMatch.Prefix">
+            <NavLink href="/dashboard/workspace"
+                     class="mf-nav-link"
+                     Match="NavLinkMatch.Prefix">
                 Review Workspace
-            </NavLink>
-
-            <div class="mf-nav-title mt-3">Account</div>
-
-            <NavLink href="/profile/settings" class="mf-nav-link" Match="NavLinkMatch.Prefix">
-                Profile Settings
             </NavLink>
         </nav>
 
@@ -60,12 +58,8 @@
 </div>
 
 @code {
-    [Parameter] public RenderFragment? ChildContent { get; set; }
-
-    private void GoToDashboard()
-    {
-        Nav.NavigateTo("/dashboard");
-    }
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
 
     private void BackToOverview()
     {
@@ -74,39 +68,8 @@
 }
 
 <style>
-    .mf-sidebar-brand {
-        width: 100%;
-        border: 0;
-        background: transparent;
-        padding: 22px 18px 18px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        text-align: left;
-        cursor: pointer;
-    }
-
-        .mf-sidebar-brand:hover .mf-logo-box {
-            transform: translateY(-1px);
-            box-shadow: 0 10px 22px rgba(79, 70, 229, 0.35);
-        }
-
-    .mf-brand-text {
-        display: flex;
-        flex-direction: column;
-        min-width: 0;
-    }
-
-    .mf-brand-name {
-        color: #ffffff;
-        font-weight: 800;
-        font-size: 16px;
-        line-height: 1.2;
-    }
-
-    .mf-brand-subtitle {
-        color: #94a3b8;
-        font-size: 12px;
-        line-height: 1.2;
+    .mf-sidebar-profile-area {
+        padding: 18px 11px 14px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
     }
 </style>
