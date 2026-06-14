@@ -32,6 +32,10 @@ namespace MangaManagementSystem.Infrastructure
             services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
             services.AddScoped<IEmailService, EmailService>();
 
+            // OTP cache adapter (shared by Web and API hosts).
+            services.AddMemoryCache();
+            services.AddSingleton<IOtpCacheService, OtpCacheService>();
+
             // Generic repository
             services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
 

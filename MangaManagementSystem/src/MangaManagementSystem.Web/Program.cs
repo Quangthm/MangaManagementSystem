@@ -30,7 +30,6 @@ namespace MangaManagementSystem.Web
             builder.Services.AddHttpClient<RecaptchaService>();
 
             builder.Services.AddMemoryCache();
-            builder.Services.AddSingleton<IOtpCacheService, OtpCacheService>();
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddAntiforgery();
 
