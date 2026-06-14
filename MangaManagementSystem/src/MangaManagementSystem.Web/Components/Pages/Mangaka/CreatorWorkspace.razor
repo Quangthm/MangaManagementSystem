@@ -679,6 +679,7 @@
                 if (assignedUserId != Guid.Empty)
                 {
                     var dto = new CreateChapterPageTaskDto(
+                        ActorUserId: _currentUserId,
                         AssignedToUserId: assignedUserId,
                         TypeCode: TaskType,
                         StatusCode: "ASSIGNED",

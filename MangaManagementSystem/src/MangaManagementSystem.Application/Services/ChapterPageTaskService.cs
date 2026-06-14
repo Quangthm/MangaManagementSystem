@@ -20,10 +20,11 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<ChapterPageTaskDto> CreateChapterPageTaskAsync(CreateChapterPageTaskDto dto)
         {
-            // Use stored procedure for create
-            var actorUserId = dto.AssignedToUserId; // For now, use assigned user as actor - adjust as needed
+            // Workflow create goes through the stored procedure so permission checks,
+            // same-page-version validation, transaction handling, and audit logging
+            // are owned by SQL. The actor (task creator) is distinct from the assignee.
             var newTaskId = await _unitOfWork.ChapterPageTasks.CreateChapterPageTaskAsync(
-                actorUserId,
+                dto.ActorUserId,
                 dto.AssignedToUserId,
                 dto.TypeCode,
                 dto.TaskTitle,
@@ -40,21 +41,22 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<ChapterPageTaskDto?> GetChapterPageTaskByIdAsync(Guid id)
         {
-            var entity = await _unitOfWork.ChapterPageTasks.GetByIdAsync(id);
+            // Use the Include-based read so the DTO returns populated PageRegions.
+            var entity = await _unitOfWork.ChapterPageTasks.GetByIdWithRegionsAsync(id);
             return entity == null ? null : MapToDto(entity);
         }
 
         public async Task<IEnumerable<ChapterPageTaskDto>> GetChapterPageTasksByAssignedUserIdAsync(Guid assignedToUserId)
         {
-            var all = await _unitOfWork.ChapterPageTasks.GetAllAsync();
-            return all
-                .Where(t => t.AssignedToUserId == assignedToUserId)
-                .Select(MapToDto).ToList();
+            // Filter at the SQL level (with regions) instead of loading all tasks into memory.
+            var entities = await _unitOfWork.ChapterPageTasks.GetByAssignedUserIdWithRegionsAsync(assignedToUserId);
+            return entities.Select(MapToDto).ToList();
         }
 
         public async Task<ChapterPageTaskDto?> UpdateChapterPageTaskAsync(UpdateChapterPageTaskDto dto)
         {
-            var entity = await _unitOfWork.ChapterPageTasks.GetByIdAsync(dto.ChapterPageTaskId);
+            // Load with regions so EF can reconcile the linked PageRegions on save.
+            var entity = await _unitOfWork.ChapterPageTasks.GetByIdWithRegionsAsync(dto.ChapterPageTaskId);
             if (entity == null)
             {
                 return null;

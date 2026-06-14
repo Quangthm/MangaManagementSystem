@@ -20,6 +20,7 @@ namespace MangaManagementSystem.Application.DTOs.Manga
     );
 
     public record CreateChapterPageTaskDto(
+        [Required] Guid ActorUserId,
         [Required] Guid AssignedToUserId,
         [Required][MaxLength(50)] string TypeCode,
         [Required][MaxLength(30)] string StatusCode,

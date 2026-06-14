@@ -19,10 +19,11 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<ChapterPageAnnotationDto> CreateChapterPageAnnotationAsync(CreateChapterPageAnnotationDto dto)
         {
-            // Use stored procedure for create
-            var actorUserId = dto.AnnotatedByUserId; // For now, use annotated user as actor - adjust as needed
+            // Workflow create goes through the stored procedure so permission checks,
+            // same-page-version validation, transaction handling, and audit logging
+            // are owned by SQL. The annotation author is the workflow actor.
             var newAnnotationId = await _unitOfWork.ChapterPageAnnotations.CreateChapterPageAnnotationAsync(
-                actorUserId,
+                dto.AnnotatedByUserId,
                 dto.PageRegionIds,
                 dto.IssueTypeCode,
                 dto.AnnotationText);
@@ -34,7 +35,8 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<ChapterPageAnnotationDto?> GetChapterPageAnnotationByIdAsync(Guid id)
         {
-            var entity = await _unitOfWork.ChapterPageAnnotations.GetByIdAsync(id);
+            // Use the Include-based read so the DTO returns populated PageRegions.
+            var entity = await _unitOfWork.ChapterPageAnnotations.GetByIdWithRegionsAsync(id);
             return entity == null ? null : MapToDto(entity);
         }
 
@@ -52,7 +54,8 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<ChapterPageAnnotationDto?> UpdateChapterPageAnnotationAsync(UpdateChapterPageAnnotationDto dto)
         {
-            var entity = await _unitOfWork.ChapterPageAnnotations.GetByIdAsync(dto.ChapterPageAnnotationId);
+            // Load with regions so the existing PageRegions links are tracked and can be reconciled.
+            var entity = await _unitOfWork.ChapterPageAnnotations.GetByIdWithRegionsAsync(dto.ChapterPageAnnotationId);
             if (entity == null)
             {
                 return null;
