@@ -25,39 +25,61 @@
         }
         else
         {
-            <button type="button"
-                    class="mf-user-profile-card"
-                    title="Open Profile Settings"
-                    aria-label="Open Profile Settings"
-                    @onclick="OpenProfileSettings">
+            <MudMenu OffsetY="true">
+                <ActivatorContent>
+                    <button type="button"
+                            class="mf-user-profile-card"
+                            title="Open account menu"
+                            aria-label="Open account menu">
 
-                <span class="mf-user-profile-avatar" @key="_avatarUrl">
-                    @if (!string.IsNullOrWhiteSpace(_avatarUrl))
-                    {
-                        <img src="@_avatarUrl"
-                             alt="@($"{_displayName} avatar")" />
-                    }
-                    else
-                    {
-                        <span>@_initial</span>
-                    }
-                </span>
+                        <span class="mf-user-profile-avatar" @key="_avatarUrl">
+                            @if (!string.IsNullOrWhiteSpace(_avatarUrl))
+                            {
+                                <img src="@_avatarUrl"
+                                     alt="@($"{_displayName} avatar")" />
+                            }
+                            else
+                            {
+                                <span>@_initial</span>
+                            }
+                        </span>
 
-                <span class="mf-user-profile-text">
-                    <strong title="@_displayName">
-                        @_displayName
-                    </strong>
+                        <span class="mf-user-profile-text">
+                            <strong title="@_displayName">
+                                @_displayName
+                            </strong>
 
-                    <small title="@_roleName">
-                        @_roleName
-                    </small>
-                </span>
+                            <small title="@_roleName">
+                                @_roleName
+                            </small>
+                        </span>
 
-                <span class="mf-user-profile-chevron"
-                      aria-hidden="true">
-                    ›
-                </span>
-            </button>
+                        <span class="mf-user-profile-chevron"
+                              aria-hidden="true">
+                            ⌄
+                        </span>
+                    </button>
+                </ActivatorContent>
+
+                <ChildContent>
+                    <MudMenuItem OnClick="OpenProfileSettings">
+                        <div class="mf-account-menu-item">
+                            <span class="mf-account-menu-icon">⚙</span>
+
+                            <span class="mf-account-menu-copy">
+                                <strong>Profile Settings</strong>
+                                <small>Profile, portfolio and security</small>
+                            </span>
+                        </div>
+                    </MudMenuItem>
+
+                    <MudDivider />
+
+                    <div class="mf-profile-logout-row">
+                        <LogoutForm />
+                    </div>
+                </ChildContent>
+            </MudMenu>
         }
     </Authorized>
 
@@ -109,8 +131,6 @@
             return;
         }
 
-        // OnAfterRender runs after the interactive Blazor session
-        // has been established. This prevents avatar loss after refresh.
         await RefreshProfileAsync();
 
         if (!_disposed)
@@ -202,8 +222,6 @@
         }
         catch
         {
-            // Keep name and role from claims if the DB/file lookup
-            // temporarily fails. Do not show a broken image URL.
             _avatarUrl = null;
             _initial = BuildInitial(_displayName);
         }
@@ -428,7 +446,7 @@
     .mf-user-profile-chevron {
         flex: 0 0 auto;
         color: #94a3b8;
-        font-size: 22px;
+        font-size: 20px;
         line-height: 1;
         transition:
             color 0.16s ease,
@@ -437,7 +455,77 @@
 
     .mf-user-profile-card:hover .mf-user-profile-chevron {
         color: #ffffff;
-        transform: translateX(2px);
+        transform: translateY(2px);
+    }
+
+    .mf-account-menu-item {
+        min-width: 235px;
+        padding: 4px 2px;
+        display: flex;
+        align-items: center;
+        gap: 11px;
+    }
+
+    .mf-account-menu-icon {
+        width: 34px;
+        height: 34px;
+        flex: 0 0 34px;
+        border-radius: 10px;
+        background: #eef2ff;
+        color: #4f46e5;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 17px;
+        font-weight: 900;
+    }
+
+    .mf-account-menu-copy {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .mf-account-menu-copy strong {
+        color: #0f172a;
+        font-size: 13px;
+        font-weight: 800;
+    }
+
+    .mf-account-menu-copy small {
+        color: #64748b;
+        font-size: 11px;
+        line-height: 1.25;
+    }
+
+    .mf-profile-logout-row {
+        min-width: 235px;
+        padding: 6px 8px 8px;
+    }
+
+    .mf-profile-logout-row form {
+        width: 100%;
+    }
+
+    .mf-profile-logout-row button {
+        width: 100%;
+        min-height: 40px;
+        border: 0;
+        border-radius: 9px;
+        padding: 0 12px;
+        background: transparent;
+        color: #dc2626;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        font-size: 13px;
+        font-weight: 800;
+        cursor: pointer;
+    }
+
+    .mf-profile-logout-row button:hover {
+        background: #fef2f2;
     }
 
     .mf-user-profile-loading {

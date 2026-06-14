@@ -26,13 +26,27 @@
 <div class="mf-settings-page">
     <section class="mf-settings-shell">
         <div class="mf-page-heading">
-            <div>
-                <MudText Typo="Typo.h4" Class="font-weight-bold">Profile Settings</MudText>
-                <MudText Typo="Typo.body2" Class="mf-muted">
-                    Manage your account information, portfolio document, and password security.
-                </MudText>
-            </div>
+    <div class="mf-page-heading-content">
+        <MudButton Variant="Variant.Text"
+                   Color="Color.Primary"
+                   Class="mf-back-dashboard-button"
+                   OnClick="BackToDashboard">
+            ← Back to Dashboard
+        </MudButton>
+
+        <div>
+            <MudText Typo="Typo.h4"
+                     Class="font-weight-bold">
+                Profile Settings
+            </MudText>
+
+            <MudText Typo="Typo.body2"
+                     Class="mf-muted">
+                Manage your account information, portfolio document, and password security.
+            </MudText>
         </div>
+    </div>
+</div>
 
         @if (_isLoading)
         {
@@ -669,6 +683,33 @@
     }
 
     StateHasChanged();
+}
+private void BackToDashboard()
+{
+    var normalizedRole =
+        _currentRoleName?
+            .Trim()
+            .ToLowerInvariant()
+        ?? string.Empty;
+
+    var dashboardUrl = normalizedRole switch
+    {
+        "admin" => "/admin",
+
+        "mangaka" => "/mangaka",
+
+        "assistant" => "/assistant",
+
+        "tantou editor" => "/editor",
+
+        "editorial board member" => "/ranking",
+
+        "editorial board chief" => "/ranking",
+
+        _ => "/dashboard"
+    };
+
+    NavigationManager.NavigateTo(dashboardUrl);
 }
     private void SelectSection(ProfileSettingsSection section)
     {
@@ -1863,6 +1904,25 @@
         margin: 0 auto;
     }
 
+.mf-page-heading-content {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.mf-back-dashboard-button {
+    margin-left: -10px;
+    margin-bottom: 6px;
+    padding-left: 10px;
+    padding-right: 10px;
+    border-radius: 9px;
+    font-weight: 700;
+    text-transform: none;
+}
+
+.mf-back-dashboard-button:hover {
+    background: #eef2ff;
+}
     .mf-page-heading {
         display: flex;
         align-items: center;
