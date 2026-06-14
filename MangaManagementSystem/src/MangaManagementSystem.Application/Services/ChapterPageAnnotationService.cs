@@ -19,18 +19,17 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<ChapterPageAnnotationDto> CreateChapterPageAnnotationAsync(CreateChapterPageAnnotationDto dto)
         {
-            var entity = new ChapterPageAnnotation
-            {
-                IssueTypeCode = dto.IssueTypeCode,
-                AnnotatedByUserId = dto.AnnotatedByUserId,
-                AnnotationText = dto.AnnotationText
-            };
+            // Use stored procedure for create
+            var actorUserId = dto.AnnotatedByUserId; // For now, use annotated user as actor - adjust as needed
+            var newAnnotationId = await _unitOfWork.ChapterPageAnnotations.CreateChapterPageAnnotationAsync(
+                actorUserId,
+                dto.PageRegionIds,
+                dto.IssueTypeCode,
+                dto.AnnotationText);
 
-            await AttachPageRegionsAsync(entity, dto.PageRegionIds);
-
-            await _unitOfWork.ChapterPageAnnotations.AddAsync(entity);
-            await _unitOfWork.SaveChangesAsync();
-            return MapToDto(entity);
+            // Reload with regions
+            var entity = await _unitOfWork.ChapterPageAnnotations.GetByIdWithRegionsAsync(newAnnotationId);
+            return entity == null ? throw new InvalidOperationException("Failed to create annotation") : MapToDto(entity);
         }
 
         public async Task<ChapterPageAnnotationDto?> GetChapterPageAnnotationByIdAsync(Guid id)
@@ -39,12 +38,16 @@ namespace MangaManagementSystem.Application.Services
             return entity == null ? null : MapToDto(entity);
         }
 
+        public async Task<ChapterPageAnnotationDto?> GetChapterPageAnnotationByIdWithRegionsAsync(Guid id)
+        {
+            var entity = await _unitOfWork.ChapterPageAnnotations.GetByIdWithRegionsAsync(id);
+            return entity == null ? null : MapToDto(entity);
+        }
+
         public async Task<IEnumerable<ChapterPageAnnotationDto>> GetChapterPageAnnotationsByPageRegionIdAsync(Guid pageRegionId)
         {
-            var all = await _unitOfWork.ChapterPageAnnotations.GetAllAsync();
-            return all
-                .Where(a => a.PageRegions.Any(r => r.PageRegionId == pageRegionId))
-                .Select(MapToDto);
+            var annotations = await _unitOfWork.ChapterPageAnnotations.GetByPageRegionIdAsync(pageRegionId);
+            return annotations.Select(MapToDto).ToList();
         }
 
         public async Task<ChapterPageAnnotationDto?> UpdateChapterPageAnnotationAsync(UpdateChapterPageAnnotationDto dto)
@@ -79,6 +82,11 @@ namespace MangaManagementSystem.Application.Services
             _unitOfWork.ChapterPageAnnotations.Delete(entity);
             await _unitOfWork.SaveChangesAsync();
             return true;
+        }
+
+        public async Task<bool> ResolveAnnotationAsync(Guid actorUserId, Guid annotationId, string? resolutionNote = null)
+        {
+            return await _unitOfWork.ChapterPageAnnotations.ResolveAnnotationAsync(actorUserId, annotationId, resolutionNote);
         }
 
         private async Task AttachPageRegionsAsync(ChapterPageAnnotation entity, IReadOnlyList<Guid> pageRegionIds)

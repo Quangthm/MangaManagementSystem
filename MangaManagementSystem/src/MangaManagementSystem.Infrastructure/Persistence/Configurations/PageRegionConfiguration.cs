@@ -26,7 +26,7 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
             builder.HasIndex(r => new { r.ChapterPageVersionId, r.TypeCode }).HasDatabaseName("ix_page_region_version_type");
             builder.HasIndex(r => r.TypeCode).HasDatabaseName("ix_page_region_type");
             // check constraints moved into ToTable configuration above to avoid obsolete API usage
-            builder.HasOne<ChapterPageVersion>()
+            builder.HasOne(r => r.ChapterPageVersion)
                 .WithMany()
                 .HasForeignKey(r => r.ChapterPageVersionId);
             builder.HasOne(r => r.CreatedByUser)

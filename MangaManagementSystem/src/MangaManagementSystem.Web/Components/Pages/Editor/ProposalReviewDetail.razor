@@ -150,17 +150,19 @@
 
 @code {
     [Parameter] public Guid ProposalId { get; set; }
+    private string ReviewComments { get; set; } = string.Empty;
+
+    private string? _proposalFileUrl;
+
     private SeriesProposalDto? _proposal;
     private bool _loading = true;
     private bool _processing = false;
     private string? _error;
-    private string ReviewComments { get; set; } = string.Empty;
     private IBrowserFile? _markupFile;
-    private string? _proposalFileUrl;
     private Guid _currentUserId;
 
     [Inject] private MangaManagementSystem.Application.Interfaces.IFileStorageService FileStorageService { get; set; } = default!;
-    [Inject] private MangaManagementSystem.Domain.Interfaces.IUnitOfWork UnitOfWork { get; set; } = default!;
+    [Inject] private MangaManagementSystem.Application.Interfaces.IFileResourceService FileResourceService { get; set; } = default!;
 
     protected override async Task OnInitializedAsync()
     {
@@ -190,9 +192,11 @@
                 return;
             }
 
+            ReviewComments = _proposal.Comments ?? string.Empty;
+
             if (_proposal.ProposalFileId != Guid.Empty)
             {
-                var fileRes = await UnitOfWork.FileResources.GetByIdAsync(_proposal.ProposalFileId);
+                var fileRes = await FileResourceService.GetFileResourceByIdAsync(_proposal.ProposalFileId);
                 _proposalFileUrl = fileRes?.CloudinarySecureUrl;
             }
         }

@@ -64,7 +64,10 @@
                         <MudTd>@context.SubmittedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</MudTd>
                         <MudTd><MudChip T="string" Color="@GetStatusColor(context.StatusCode)" Size="Size.Small">@context.StatusCode.Replace("_", " ")</MudChip></MudTd>
                         <MudTd>
-                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => OpenProposal(context.SeriesProposalId))">Review</MudButton>
+                            <MudStack Row="true" Spacing="2">
+                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => OpenProposal(context.SeriesId))">Review</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => RejectProposal(context.SeriesProposalId))">Reject</MudButton>
+                            </MudStack>
                         </MudTd>
                     </RowTemplate>
                 </MudTable>
@@ -122,5 +125,9 @@
     private void OpenProposal(Guid proposalId)
     {
         Nav.NavigateTo($"/editor/proposals/{proposalId}");
+    }
+    private void RejectProposal(Guid seriesProposalId)
+    {
+        Snackbar.Add($"Reject proposal {seriesProposalId} - implement rejection dialog", Severity.Warning);
     }
 }

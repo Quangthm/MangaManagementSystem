@@ -66,6 +66,25 @@ namespace MangaManagementSystem.Application.Services
             ));
         }
 
+        public async Task<SeriesProposalDto> CreateProposalAsync(CreateProposalDto dto, CancellationToken ct = default)
+        {
+            var entity = new SeriesProposal
+            {
+                SeriesId = dto.SeriesId,
+                ProposalVersionNo = 1,
+                ProposalTitle = dto.ProposalTitle,
+                SynopsisSnapshot = dto.SynopsisSnapshot,
+                GenreSnapshot = dto.GenreSnapshot,
+                ProposalFileId = dto.ProposalFileId,
+                StatusCode = "UNDER_EDITORIAL_REVIEW",
+                SubmittedByUserId = dto.SubmittedByUserId,
+                SubmittedAtUtc = DateTime.UtcNow
+            };
+            await _unitOfWork.SeriesProposals.AddAsync(entity);
+            await _unitOfWork.SaveChangesAsync();
+            return MapToDto(entity);
+        }
+
         public async Task ClaimEditorialReviewAsync(Guid seriesProposalId, Guid actorUserId, string? notes, CancellationToken ct = default)
         {
             await _unitOfWork.SeriesProposals.ClaimEditorialReviewAsync(seriesProposalId, actorUserId, notes, ct);

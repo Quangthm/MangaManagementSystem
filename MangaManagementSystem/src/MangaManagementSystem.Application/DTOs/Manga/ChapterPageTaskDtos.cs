@@ -12,15 +12,22 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         int PriorityLevel,
         DateTime? DueAtUtc,
         Guid? CompletedPageVersionId,
-        IReadOnlyList<PageRegionDto> PageRegions
+        string TaskTitle,
+        string TaskDescription,
+        IReadOnlyList<PageRegionDto> PageRegions,
+        Guid? SeriesId = null,
+        string? AssignedToDisplayName = null
     );
 
     public record CreateChapterPageTaskDto(
         [Required] Guid AssignedToUserId,
         [Required][MaxLength(50)] string TypeCode,
         [Required][MaxLength(30)] string StatusCode,
+        [Required][MaxLength(200)] string TaskTitle,
+        [Required] string TaskDescription,
         [Required] int PriorityLevel,
         DateTime? DueAtUtc,
+        decimal? CompensationAmount,
         Guid? CompletedPageVersionId,
         [Required] IReadOnlyList<Guid> PageRegionIds
     );
@@ -30,8 +37,11 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         [Required] Guid AssignedToUserId,
         [Required][MaxLength(50)] string TypeCode,
         [Required][MaxLength(30)] string StatusCode,
+        [Required][MaxLength(200)] string TaskTitle,
+        [Required] string TaskDescription,
         [Required] int PriorityLevel,
         DateTime? DueAtUtc,
+        decimal? CompensationAmount,
         Guid? CompletedPageVersionId,
         [Required] IReadOnlyList<Guid> PageRegionIds
     );

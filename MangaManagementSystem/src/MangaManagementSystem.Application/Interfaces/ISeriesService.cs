@@ -9,5 +9,6 @@ namespace MangaManagementSystem.Application.Interfaces
         Task<SeriesDto> CreateSeriesAsync(CreateSeriesDto dto);
         Task<SeriesDto?> GetSeriesByIdAsync(Guid id);
         Task<IEnumerable<SeriesDto>> GetAllSeriesAsync();
+        Task<SeriesDto?> UpdateSeriesAsync(UpdateSeriesDto dto);
     }
 }

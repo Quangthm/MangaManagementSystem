@@ -2262,7 +2262,7 @@ CREATE OR ALTER PROCEDURE manga.usp_ChapterPageTask_Create
     @task_description NVARCHAR(MAX),
     @priority_level TINYINT = 3,
     @due_at_utc DATETIME2(0),
-    @compensation_amount DECIMAL(12, 2) = 0,
+    @compensation_amount DECIMAL(12, 2),
 
     @page_region_ids_json NVARCHAR(MAX),
 
@@ -2963,7 +2963,7 @@ BEGIN
     END CATCH;
 END;
 GO
-CREATE OR ALTER   PROCEDURE [manga].[usp_ChapterPageTask_MarkCompleted]
+CREATE OR ALTER PROCEDURE manga.usp_ChapterPageTask_MarkCompleted
     @actor_user_id UNIQUEIDENTIFIER,
     @chapter_page_task_id UNIQUEIDENTIFIER,
     @completion_note NVARCHAR(MAX) = NULL
