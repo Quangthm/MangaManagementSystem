@@ -100,6 +100,20 @@ namespace MangaManagementSystem.Application.Services
             return entities.Select(MapToDto).ToList();
         }
 
+        public async Task<IEnumerable<ChapterPageTaskDto>> GetChapterPageTasksByCreatorUserIdAsync(Guid creatorUserId)
+        {
+            var entities = await _unitOfWork.ChapterPageTasks.GetByCreatorUserIdWithSeriesAsync(creatorUserId);
+            return entities.Select(t =>
+            {
+                var seriesId = t.PageRegions
+                    .Select(r => r.ChapterPageVersion?.ChapterPage?.Chapter?.SeriesId)
+                    .FirstOrDefault(id => id.HasValue);
+                var assignedName = t.AssignedToUser?.DisplayName;
+                var dto = MapToDto(t);
+                return dto with { SeriesId = seriesId, AssignedToDisplayName = assignedName };
+            }).ToList();
+        }
+
         private async Task AttachPageRegionsAsync(ChapterPageTask entity, IReadOnlyList<Guid> pageRegionIds)
         {
             if (pageRegionIds == null)
@@ -127,6 +141,8 @@ namespace MangaManagementSystem.Application.Services
                 (int)t.PriorityLevel,
                 t.DueAtUtc,
                 t.CompletedPageVersionId,
+                t.TaskTitle,
+                t.TaskDescription,
                 t.PageRegions.Select(r => new PageRegionDto(
                     r.PageRegionId,
                     r.ChapterPageVersionId,

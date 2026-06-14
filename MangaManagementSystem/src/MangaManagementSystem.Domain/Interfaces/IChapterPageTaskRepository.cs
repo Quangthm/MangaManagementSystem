@@ -20,5 +20,7 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<ChapterPageTask?> GetByIdWithRegionsAsync(Guid id);
 
         Task<IReadOnlyList<ChapterPageTask>> GetByAssignedUserIdWithRegionsAsync(Guid assignedToUserId);
+
+        Task<IReadOnlyList<ChapterPageTask>> GetByCreatorUserIdWithSeriesAsync(Guid creatorUserId);
     }
 }

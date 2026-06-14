@@ -75,5 +75,18 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .OrderBy(t => t.CreatedAtUtc)
                 .ToListAsync();
         }
+
+        public async Task<IReadOnlyList<ChapterPageTask>> GetByCreatorUserIdWithSeriesAsync(Guid creatorUserId)
+        {
+            return await _context.ChapterPageTasks
+                .Include(t => t.PageRegions)
+                    .ThenInclude(r => r.ChapterPageVersion)
+                        .ThenInclude(v => v.ChapterPage)
+                            .ThenInclude(p => p.Chapter)
+                .Include(t => t.AssignedToUser)
+                .Where(t => t.CreatedByUserId == creatorUserId)
+                .OrderByDescending(t => t.CreatedAtUtc)
+                .ToListAsync();
+        }
     }
 }

@@ -12,7 +12,11 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         int PriorityLevel,
         DateTime? DueAtUtc,
         Guid? CompletedPageVersionId,
-        IReadOnlyList<PageRegionDto> PageRegions
+        string TaskTitle,
+        string TaskDescription,
+        IReadOnlyList<PageRegionDto> PageRegions,
+        Guid? SeriesId = null,
+        string? AssignedToDisplayName = null
     );
 
     public record CreateChapterPageTaskDto(

@@ -13,6 +13,9 @@ namespace MangaManagementSystem.Application.Interfaces
         Task<IEnumerable<ProposalQueueItemDto>> GetEditorialQueueAsync(ProposalQueueFilterDto filter, CancellationToken ct = default);
         Task<SeriesProposalDto?> GetLatestProposalBySeriesAsync(Guid seriesId, CancellationToken ct = default);
 
+        // Create
+        Task<SeriesProposalDto> CreateProposalAsync(CreateProposalDto dto, CancellationToken ct = default);
+
         // Commands (SPs)
         Task ClaimEditorialReviewAsync(Guid seriesProposalId, Guid actorUserId, string? notes, CancellationToken ct = default);
         Task RequestRevisionAsync(Guid seriesProposalId, Guid actorUserId, string comments, FileUploadResultDto? markupFile, CancellationToken ct = default);

@@ -53,6 +53,15 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         Guid? ReviewedByUserId = null
     );
 
+    public record CreateProposalDto(
+        [Required] Guid SeriesId,
+        [Required][MaxLength(200)] string ProposalTitle,
+        [Required] string SynopsisSnapshot,
+        [Required][MaxLength(100)] string GenreSnapshot,
+        [Required] Guid ProposalFileId,
+        [Required] Guid SubmittedByUserId
+    );
+
     public record ProposalReviewRequestDto(
         [Required] Guid SeriesProposalId,
         [Required] string Comments

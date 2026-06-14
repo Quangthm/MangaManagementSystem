@@ -8,6 +8,7 @@ public class PageRegion : BaseEntity
 {
     public Guid PageRegionId { get; set; }
     public Guid ChapterPageVersionId { get; set; }
+    public ChapterPageVersion? ChapterPageVersion { get; set; }
     public string TypeCode { get; set; } = "OTHER";
     public string? RegionLabel { get; set; }
     public decimal X { get; set; }
