@@ -2,7 +2,9 @@
 @using Microsoft.AspNetCore.WebUtilities
 @using MangaManagementSystem.Web.Options
 @using MangaManagementSystem.Web.Services
+@using MangaManagementSystem.Web.Services.Api
 @inject IAuthService AuthService
+@inject IRegistrationApiClient RegistrationClient
 @inject ISnackbar Snackbar
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
@@ -216,6 +218,7 @@
     private string _fileValidationError = string.Empty;
     private int? _recaptchaWidgetId;
     private bool _recaptchaRendered;
+    private bool _useApiClient;
 
     protected override void OnInitialized()
     {
@@ -262,13 +265,24 @@
                 return;
             }
 
-            // Build DTO including optional portfolio
-            var request = new RegisterDto(_username, _email, _password, _roleName, _displayName,
-                PortfolioFileName: _selectedFileName == string.Empty ? null : _selectedFileName,
-                PortfolioContentType: string.IsNullOrEmpty(_selectedFileContentType) ? null : _selectedFileContentType,
-                PortfolioFileBytes: _selectedFileBytes);
+            var hasPortfolio = _selectedFileBytes is not null;
+            _useApiClient = !hasPortfolio;
 
-            await AuthService.SendRegistrationOtpAsync(request);
+            if (_useApiClient)
+            {
+                await RegistrationClient.SendOtpAsync(_username, _email, _password, _roleName, _displayName);
+            }
+            else
+            {
+                // TODO: Replace with API multipart endpoint once available.
+                var request = new RegisterDto(_username, _email, _password, _roleName, _displayName,
+                    PortfolioFileName: _selectedFileName == string.Empty ? null : _selectedFileName,
+                    PortfolioContentType: string.IsNullOrEmpty(_selectedFileContentType) ? null : _selectedFileContentType,
+                    PortfolioFileBytes: _selectedFileBytes);
+
+                await AuthService.SendRegistrationOtpAsync(request);
+            }
+
             _isOtpSent = true;
             Snackbar.Add("Verification code sent. Enter the 6-digit OTP to complete registration.", Severity.Success);
         }
@@ -345,7 +359,15 @@
         _isVerifyingOtp = true;
         try
         {
-            var created = await AuthService.CompleteRegistrationWithOtpAsync(_email, _otpCode);
+            UserDto? created;
+            if (_useApiClient)
+            {
+                created = await RegistrationClient.CompleteRegistrationAsync(_email, _otpCode);
+            }
+            else
+            {
+                created = await AuthService.CompleteRegistrationWithOtpAsync(_email, _otpCode);
+            }
 
             // Determine portfolio presence using returned UserDto.PortfolioFileId
             if (created?.PortfolioFileId != null && created.PortfolioFileId != Guid.Empty)

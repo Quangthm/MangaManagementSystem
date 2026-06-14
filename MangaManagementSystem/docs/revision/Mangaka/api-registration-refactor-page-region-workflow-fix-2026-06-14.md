@@ -160,12 +160,53 @@ No manual input required. The script applies all 11 secrets (including `Connecti
 - Full solution build: **0 errors, 35 warnings** (pre-existing, unchanged).
 - Script only prints safe messages: project name, key names, "done". Never prints values.
 
+## Session 3: Web Registration UI → Typed API Client (2026-06-14)
+
+### Task
+Refactor the Web registration page to call the API through a typed `HttpClient` instead of calling `IAuthService` directly, while preserving portfolio upload via a temporary fallback.
+
+### API smoke-test result
+- Ran `src/MangaManagementSystem.API` project via `dotnet run --launch-profile http` on `http://localhost:5234`.
+- Swagger confirmed at `/swagger/v1/swagger.json` with both paths:
+  - `POST /api/registration/otp`
+  - `POST /api/registration/complete`
+- End-to-end test: `POST /api/registration/otp` with a valid body → **HTTP 200** `{"message":"A verification code has been sent to your email."}` — full pipeline (controller → Application → Infrastructure) works with user-secrets.
+
+### New files created
+- `src/MangaManagementSystem.Web/Services/Api/IRegistrationApiClient.cs` — interface with `SendOtpAsync` and `CompleteRegistrationAsync` methods.
+- `src/MangaManagementSystem.Web/Services/Api/RegistrationApiClient.cs` — implementation using `HttpClient.PostAsJsonAsync`. Deserializes `ApiErrorResponse` from 400/409 responses and throws `InvalidOperationException` (same exception type the page's catch blocks already handle). No business logic, no SP calls.
+- `src/MangaManagementSystem.Web/Options/ApiSettings.cs` — options class with `BaseUrl` property.
+
+### Config changes
+- `src/MangaManagementSystem.Web/appsettings.json` — added `ApiSettings:BaseUrl: "http://localhost:5234"`.
+- `src/MangaManagementSystem.Web/Program.cs` — registered `ApiSettings` binding, added `AddHttpClient<IRegistrationApiClient, RegistrationApiClient>` with base address from settings.
+
+### Web registration page changes
+- `RegisterPage.razor` now injects both `IAuthService` (retained for fallback) and `IRegistrationApiClient` (primary path).
+- `@using MangaManagementSystem.Web.Services.Api` added.
+- `_useApiClient` flag tracks which path was chosen during OTP send.
+- **Branching logic:**
+  - If **no portfolio file** selected → use `RegistrationApiClient` (API JSON endpoint).
+  - If **portfolio file** selected → use `IAuthService` directly (old path). Marked with `// TODO: Replace with API multipart endpoint once available.`
+- No other auth flows (login, Google, admin) were touched.
+
+### Build result
+- Full solution: **0 errors, 0 warnings** (incremental build).
+- Both Web and API projects compile cleanly.
+- No business logic added to Razor components; no SP logic exposed; no GUID changes.
+
+### Remaining design notes
+- Portfolio upload still needs a multipart API endpoint for full parity. The temporary dual-path (API for non-portfolio, direct service for portfolio) is safe because both paths use the same Application services underneath.
+- Login, Google OAuth, admin user management, and `verify-otp` page all still call `IAuthService` directly. They are deliberately not touched.
+- The `RegistrationApiClient` defines a private `ApiErrorResponse` record mirroring the API contract; no coupling to the API project's types.
+
 ## Updated Remaining Risks
-- ~~**API host configuration:**~~ **RESOLVED** — `.\setup-secrets.ps1 -Project Both` configures all required secrets for both Web and API.
-- **Portfolio upload not in API JSON contract** yet; Web still owns multipart portfolio registration.
-- **Web not yet calling the API** for registration; the API endpoints are additive.
-- **Task EF Update/Delete** still bypass SP workflow for status transitions.
+- ~~**API host configuration:**~~ **RESOLVED** (setup-secrets.ps1).
+- **Portfolio upload not in API JSON contract** yet; Web falls back to direct `IAuthService` when portfolio is selected. Needs a multipart API endpoint for full parity.
+- ~~**Web not yet calling the API:**~~ **RESOLVED** — registration flow uses typed API client when no portfolio is selected.
+- **Login, Google auth, admin users** still call `IAuthService` directly; not yet migrated.
+- **Task EF Update/Delete** still bypasses SP workflow for status transitions.
 - Stale top-level `MangaManagementSystem.API` project still on disk (unreferenced).
 
 ## Next Recommended Prompt
-> Run `.\setup-secrets.ps1 -Project Both` to configure secrets, then smoke-test the API registration endpoints with Swagger. Then switch the Blazor registration UI to call the API via a typed `HttpClient`. Add a multipart portfolio-upload endpoint to the API. Separately, replace `ChapterPageTaskService` EF status transitions with stored-procedure workflows, starting by wiring `manga.usp_ChapterPageTask_Cancel`. Finally, remove the stale top-level `MangaManagementSystem.API` project.
+> Add a multipart portfolio-upload endpoint to the API (`POST /api/registration/portfolio`), then remove the fallback `IAuthService` path from `RegisterPage.razor`. After that, migrate the login flow to the API with an `ILoginApiClient`. Separately, replace `ChapterPageTaskService` EF status transitions with stored-procedure workflows, starting by wiring `manga.usp_ChapterPageTask_Cancel`. Finally, remove the stale top-level `MangaManagementSystem.API` project.

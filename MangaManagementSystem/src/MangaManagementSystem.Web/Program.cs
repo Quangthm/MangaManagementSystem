@@ -5,6 +5,7 @@ using MangaManagementSystem.Infrastructure;
 using MangaManagementSystem.Web.Components;
 using MangaManagementSystem.Web.Helpers;
 using MangaManagementSystem.Web.Services;
+using MangaManagementSystem.Web.Services.Api;
 using MangaManagementSystem.Web.Options;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -30,6 +31,12 @@ namespace MangaManagementSystem.Web
             builder.Services.AddHttpClient<RecaptchaService>();
 
             builder.Services.AddMemoryCache();
+            builder.Services.Configure<ApiSettings>(builder.Configuration.GetSection(ApiSettings.SectionName));
+            builder.Services.AddHttpClient<IRegistrationApiClient, RegistrationApiClient>((sp, client) =>
+            {
+                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                client.BaseAddress = new Uri(settings.Value.BaseUrl);
+            });
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddAntiforgery();
 
