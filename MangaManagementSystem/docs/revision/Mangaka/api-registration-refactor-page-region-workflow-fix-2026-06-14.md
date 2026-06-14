@@ -119,12 +119,53 @@ Cloudinary upload + SQL compensation/cleanup for the optional portfolio stays in
 - `dotnet build MangaManagementSystem.slnx` => **Build succeeded, 0 Errors, 0 Warnings** (final incremental build).
 - Verified: solution builds; page task/annotation services compile; registration API compiles; API references Application + Infrastructure; DI for API resolves Application + Infrastructure (incl. shared OTP cache); no dangling references to the removed Web OTP class; no secrets/appsettings credentials changed; stale top-level API project left untouched.
 
-## Remaining Risks
-- **API host configuration:** `src/MangaManagementSystem.API/appsettings.json` has **no** `ConnectionStrings:DefaultConnection`, Cloudinary, or SMTP config. `AddInfrastructure` builds the DI graph but the API will fail at runtime for DB/Cloudinary/email until config is supplied via user-secrets/environment variables. Intentionally not added (no credentials in repo).
-- **Portfolio upload not in API JSON contract** yet; Web still owns multipart portfolio registration. Needs a multipart API endpoint for full parity.
-- **Web not yet calling the API** for registration; the API endpoints are additive. Switching Web to call the API is a deliberate later step.
-- **Task EF Update/Delete** still bypass SP workflow for status transitions; wire `manga.usp_ChapterPageTask_Cancel` and a status-transition SP next.
+## Session 2a: setup-secrets.ps1 — Restore Hard-Coded Secrets, Add API Support (2026-06-14)
+
+### Task
+The previous session's manual-input/interactive approach was reverted per team request. The team wants the committed convenience script to apply the existing hard-coded development secrets to both Web and API during this transition.
+
+### What was recovered from git history
+All 10 original secret values from `c732356` (`git show c732356:MangaManagementSystem/setup-secrets.ps1`):
+- SMTP username/password/from email
+- Google OAuth Client ID / Client Secret
+- Cloudinary cloud name, API key, API secret
+- reCAPTCHA site key, secret key
+
+### What was added
+- `ConnectionStrings:DefaultConnection` (was missing; required by API project's `AddInfrastructure` at runtime). Value taken from existing `src/MangaManagementSystem.Web/appsettings.json`.
+- `-Project` parameter (`Web` / `API` / `Both`), defaults to **`Both`** for the current transition state.
+- Reusable `Install-SecretsForProject` helper function that receives the shared `$secrets` hashtable and a target project path — no duplication between Web and API.
+- Path resolution via `$PSScriptRoot` (works from any CWD).
+- Placeholder validation: if any value matches `PUT_*` or `*_HERE*`, the script refuses to run unless `-AllowPlaceholders` is passed. This guards against accidentally applying template values.
+
+### What was removed
+- All interactive `Read-Host` logic, `-AsSecureString` prompts, per-secret parameters, and the `$secretDefs` metadata table from Session 2.
+
+### Projects supported
+- `src/MangaManagementSystem.Web/MangaManagementSystem.Web.csproj`
+- `src/MangaManagementSystem.API/MangaManagementSystem.API.csproj`
+- **Not** the stale top-level `MangaManagementSystem.API/` (not in solution).
+
+### Exact command to run
+```powershell
+.\setup-secrets.ps1 -Project Both
+```
+No manual input required. The script applies all 11 secrets (including `ConnectionStrings:DefaultConnection`) to both projects' user-secrets stores silently.
+
+### Verification
+- PowerShell syntax: **Syntax OK** (via `[System.Management.Automation.Language.Parser]::ParseFile`).
+- Git-recovered values are present; no placeholders remain in the committed file.
+- `dotnet user-secrets --help` confirmed available (v10.0.9).
+- Both `.csproj` files exist at resolved paths.
+- Full solution build: **0 errors, 35 warnings** (pre-existing, unchanged).
+- Script only prints safe messages: project name, key names, "done". Never prints values.
+
+## Updated Remaining Risks
+- ~~**API host configuration:**~~ **RESOLVED** — `.\setup-secrets.ps1 -Project Both` configures all required secrets for both Web and API.
+- **Portfolio upload not in API JSON contract** yet; Web still owns multipart portfolio registration.
+- **Web not yet calling the API** for registration; the API endpoints are additive.
+- **Task EF Update/Delete** still bypass SP workflow for status transitions.
 - Stale top-level `MangaManagementSystem.API` project still on disk (unreferenced).
 
 ## Next Recommended Prompt
-> Wire the Web registration UI to call the new `MangaManagementSystem.API` `api/registration/otp` and `api/registration/complete` endpoints via a typed `HttpClient`, keeping the existing Blazor flow as fallback. Add API host configuration (connection string, Cloudinary, SMTP) via user-secrets only — do not commit secrets. Then add a multipart portfolio-upload registration endpoint to reach parity with the Web flow. Separately, replace `ChapterPageTaskService` EF status transitions (cancel/complete/reassign) with stored-procedure workflows, starting by wiring the existing `manga.usp_ChapterPageTask_Cancel`. Finally, remove the stale top-level `MangaManagementSystem.API` project after confirming it is unreferenced.
+> Run `.\setup-secrets.ps1 -Project Both` to configure secrets, then smoke-test the API registration endpoints with Swagger. Then switch the Blazor registration UI to call the API via a typed `HttpClient`. Add a multipart portfolio-upload endpoint to the API. Separately, replace `ChapterPageTaskService` EF status transitions with stored-procedure workflows, starting by wiring `manga.usp_ChapterPageTask_Cancel`. Finally, remove the stale top-level `MangaManagementSystem.API` project.
