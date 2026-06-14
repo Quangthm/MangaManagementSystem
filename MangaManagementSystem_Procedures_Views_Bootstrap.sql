@@ -2466,6 +2466,795 @@ END;
     END CATCH;
 END;
 GO
+CREATE OR ALTER PROCEDURE [manga].[usp_ChapterPageTask_Cancel]
+    @actor_user_id UNIQUEIDENTIFIER,
+    @chapter_page_task_id UNIQUEIDENTIFIER,
+    @reason NVARCHAR(500)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        --------------------------------------------------------------------
+        -- 1. Lock task workflow
+        --------------------------------------------------------------------
+        DECLARE @lock_resource NVARCHAR(200) =
+            N'manga_chapter_page_task_cancel_' + CONVERT(NVARCHAR(36), @chapter_page_task_id);
+
+        DECLARE @lock_result INT;
+
+        EXEC @lock_result = sys.sp_getapplock
+            @Resource = @lock_resource,
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 10000;
+
+        IF @lock_result < 0
+        BEGIN
+            ;THROW 58301, 'Could not acquire chapter page task cancellation lock.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 2. Read task
+        --------------------------------------------------------------------
+        DECLARE @task_found BIT = 0;
+        DECLARE @old_status_code NVARCHAR(50);
+        DECLARE @assigned_to_user_id UNIQUEIDENTIFIER;
+        DECLARE @completed_page_version_id UNIQUEIDENTIFIER;
+
+        SELECT
+            @task_found = 1,
+            @old_status_code = t.status_code,
+            @assigned_to_user_id = t.assigned_to_user_id,
+            @completed_page_version_id = t.completed_page_version_id
+        FROM manga.ChapterPageTask t WITH (UPDLOCK, HOLDLOCK)
+        WHERE t.chapter_page_task_id = @chapter_page_task_id;
+
+        IF @task_found = 0
+        BEGIN
+            ;THROW 58302, 'Chapter page task does not exist.', 1;
+        END;
+
+        IF @old_status_code IN (N'COMPLETED', N'CANCELLED')
+        BEGIN
+            ;THROW 58303, 'Completed or cancelled tasks cannot be cancelled again.', 1;
+        END;
+
+        IF @reason IS NULL OR LTRIM(RTRIM(@reason)) = N''
+        BEGIN
+            ;THROW 58304, 'Task cancellation reason is required.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 4. Actor must be active Mangaka contributor
+        --------------------------------------------------------------------
+       IF NOT EXISTS
+(
+    SELECT 1
+    FROM manga.ChapterPageTaskRegion tr
+    INNER JOIN manga.PageRegion pr
+        ON pr.page_region_id = tr.page_region_id
+    INNER JOIN manga.ChapterPageVersion cpv
+        ON cpv.chapter_page_version_id = pr.chapter_page_version_id
+    INNER JOIN manga.ChapterPage cp
+        ON cp.chapter_page_id = cpv.chapter_page_id
+    INNER JOIN manga.Chapter ch
+        ON ch.chapter_id = cp.chapter_id
+    INNER JOIN manga.SeriesContributor sc
+        ON sc.series_id = ch.series_id
+    INNER JOIN auth.Users u
+        ON u.user_id = sc.user_id
+    INNER JOIN auth.Roles r
+        ON r.role_id = u.role_id
+    WHERE tr.chapter_page_task_id = @chapter_page_task_id
+      AND sc.user_id = @actor_user_id
+      AND sc.end_date IS NULL
+      AND u.status_code = N'ACTIVE'
+      AND r.role_name = N'Mangaka'
+)
+BEGIN
+    ;THROW 58306, 'Only an active Mangaka contributor can cancel this task.', 1;
+END;
+
+        --------------------------------------------------------------------
+        -- 5. Cancel task
+        --------------------------------------------------------------------
+        DECLARE @cancelled_at_utc DATETIME2(0) = SYSUTCDATETIME();
+
+        UPDATE manga.ChapterPageTask
+        SET
+            status_code = N'CANCELLED',
+            updated_at_utc = @cancelled_at_utc
+        WHERE chapter_page_task_id = @chapter_page_task_id;
+
+        --------------------------------------------------------------------
+        -- 6. Audit
+        --------------------------------------------------------------------
+        DECLARE @audit_entity_id NVARCHAR(100) =
+            CONVERT(NVARCHAR(36), @chapter_page_task_id);
+
+        DECLARE @detail_json NVARCHAR(MAX) =
+        (
+            SELECT
+                @old_status_code AS old_status_code,
+                N'CANCELLED' AS new_status_code,
+                @assigned_to_user_id AS assigned_to_user_id,
+                @completed_page_version_id AS completed_page_version_id,
+                @reason AS reason
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @actor_user_id,
+            @action_code = N'CHAPTER_PAGE_TASK_CANCELLED',
+            @entity_type = N'ChapterPageTask',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH;
+END;
+GO
+CREATE OR ALTER PROCEDURE [manga].[usp_ChapterPageTask_AssignToDifferentUser]
+    @actor_user_id UNIQUEIDENTIFIER,
+    @chapter_page_task_id UNIQUEIDENTIFIER,
+    @new_assigned_to_user_id UNIQUEIDENTIFIER,
+    @reason NVARCHAR(500),
+    @updated_task_description NVARCHAR(MAX),
+    @new_chapter_page_task_id UNIQUEIDENTIFIER OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        SET @new_chapter_page_task_id = NULL;
+
+        --------------------------------------------------------------------
+        -- 1. Lock different-user assignment workflow
+        --------------------------------------------------------------------
+        DECLARE @lock_resource NVARCHAR(200) =
+            N'manga_chapter_page_task_assign_different_user_' + CONVERT(NVARCHAR(36), @chapter_page_task_id);
+
+        DECLARE @lock_result INT;
+
+        EXEC @lock_result = sys.sp_getapplock
+            @Resource = @lock_resource,
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 10000;
+
+        IF @lock_result < 0
+        BEGIN
+            ;THROW 58501, 'Could not acquire chapter page task different-user assignment lock.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 2. Read old task data before cancellation
+        --------------------------------------------------------------------
+        DECLARE @task_found BIT = 0;
+
+        DECLARE @old_assigned_to_user_id UNIQUEIDENTIFIER;
+        DECLARE @old_status_code NVARCHAR(50);
+        DECLARE @type_code NVARCHAR(50);
+        DECLARE @task_title NVARCHAR(200);
+        DECLARE @old_task_description NVARCHAR(MAX);
+        DECLARE @priority_level TINYINT;
+        DECLARE @due_at_utc DATETIME2(0);
+        DECLARE @compensation_amount DECIMAL(12, 2);
+
+        SELECT
+            @task_found = 1,
+            @old_assigned_to_user_id = t.assigned_to_user_id,
+            @old_status_code = t.status_code,
+            @type_code = t.type_code,
+            @task_title = t.task_title,
+            @old_task_description = t.task_description,
+            @priority_level = t.priority_level,
+            @due_at_utc = t.due_at_utc,
+            @compensation_amount = t.compensation_amount
+        FROM manga.ChapterPageTask t WITH (UPDLOCK, HOLDLOCK)
+        WHERE t.chapter_page_task_id = @chapter_page_task_id;
+
+        IF @task_found = 0
+        BEGIN
+            ;THROW 58502, 'Chapter page task does not exist.', 1;
+        END;
+
+        IF @old_status_code IN (N'COMPLETED', N'CANCELLED')
+        BEGIN
+            ;THROW 58503, 'Completed or cancelled tasks cannot be assigned to a different user.', 1;
+        END;
+
+        IF @old_assigned_to_user_id = @new_assigned_to_user_id
+        BEGIN
+            ;THROW 58504, 'New assigned user must be different from the current assigned user.', 1;
+        END;
+
+        IF @reason IS NULL OR LTRIM(RTRIM(@reason)) = N''
+        BEGIN
+            ;THROW 58505, 'Different-user assignment reason is required.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 3. New assigned user must be active contributor of the same series
+        --
+        -- Derive series through the old task's existing PageRegion links.
+        --------------------------------------------------------------------
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM manga.ChapterPageTaskRegion tr
+            INNER JOIN manga.PageRegion pr
+                ON pr.page_region_id = tr.page_region_id
+            INNER JOIN manga.ChapterPageVersion cpv
+                ON cpv.chapter_page_version_id = pr.chapter_page_version_id
+            INNER JOIN manga.ChapterPage cp
+                ON cp.chapter_page_id = cpv.chapter_page_id
+            INNER JOIN manga.Chapter ch
+                ON ch.chapter_id = cp.chapter_id
+            INNER JOIN manga.SeriesContributor sc
+                ON sc.series_id = ch.series_id
+            INNER JOIN auth.Users u
+                ON u.user_id = sc.user_id
+            WHERE tr.chapter_page_task_id = @chapter_page_task_id
+              AND sc.user_id = @new_assigned_to_user_id
+              AND sc.end_date IS NULL
+              AND u.status_code = N'ACTIVE'
+        )
+        BEGIN
+            ;THROW 58508, 'New assigned user must be an active contributor of the same series as the existing task.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 4. Cancel old task
+        --------------------------------------------------------------------
+        EXEC manga.usp_ChapterPageTask_Cancel
+            @actor_user_id = @actor_user_id,
+            @chapter_page_task_id = @chapter_page_task_id,
+            @reason = @reason;
+
+        --------------------------------------------------------------------
+        -- 5. Create replacement task
+        --
+        -- Do not recreate PageRegion records.
+        -- The new task gets copied links in the next step.
+        --------------------------------------------------------------------
+        DECLARE @created_task TABLE
+        (
+            chapter_page_task_id UNIQUEIDENTIFIER NOT NULL
+        );
+
+        INSERT INTO manga.ChapterPageTask
+        (
+            assigned_to_user_id,
+            type_code,
+            status_code,
+            task_title,
+            task_description,
+            priority_level,
+            due_at_utc,
+            compensation_amount,
+            created_by_user_id
+        )
+        OUTPUT inserted.chapter_page_task_id
+        INTO @created_task(chapter_page_task_id)
+        VALUES
+        (
+            @new_assigned_to_user_id,
+            @type_code,
+            N'ASSIGNED',
+            @task_title,
+            @updated_task_description,
+            @priority_level,
+            @due_at_utc,
+            @compensation_amount,
+            @actor_user_id
+        );
+
+        SELECT
+            @new_chapter_page_task_id = chapter_page_task_id
+        FROM @created_task;
+
+        --------------------------------------------------------------------
+        -- 6. Reuse old PageRegion records by copying task-region links
+        --------------------------------------------------------------------
+        INSERT INTO manga.ChapterPageTaskRegion
+        (
+            chapter_page_task_id,
+            page_region_id
+        )
+        SELECT
+            @new_chapter_page_task_id,
+            tr.page_region_id
+        FROM manga.ChapterPageTaskRegion tr
+        WHERE tr.chapter_page_task_id = @chapter_page_task_id;
+
+        --------------------------------------------------------------------
+        -- 7. Audit reassignment relationship
+        --
+        -- Cancel already writes CHAPTER_PAGE_TASK_CANCELLED.
+        -- This event links the cancelled task to the replacement task.
+        --------------------------------------------------------------------
+        DECLARE @audit_entity_id NVARCHAR(100) =
+            CONVERT(NVARCHAR(36), @chapter_page_task_id);
+
+        DECLARE @detail_json NVARCHAR(MAX) =
+        (
+            SELECT
+                @chapter_page_task_id AS old_chapter_page_task_id,
+                @new_chapter_page_task_id AS new_chapter_page_task_id,
+                @old_assigned_to_user_id AS old_assigned_to_user_id,
+                @new_assigned_to_user_id AS new_assigned_to_user_id,
+                @old_status_code AS old_task_previous_status_code,
+                N'CANCELLED' AS old_task_new_status_code,
+                N'ASSIGNED' AS new_task_status_code,
+                @type_code AS type_code,
+                @task_title AS task_title,
+                @reason AS reason,
+                @old_task_description AS old_task_description,
+                @updated_task_description AS new_task_description
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @actor_user_id,
+            @action_code = N'CHAPTER_PAGE_TASK_ASSIGNED_TO_DIFFERENT_USER',
+            @entity_type = N'ChapterPageTask',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH;
+END;
+GO
+CREATE OR ALTER   PROCEDURE [manga].[usp_ChapterPageTask_SubmitForReview]
+    @actor_user_id UNIQUEIDENTIFIER,
+    @chapter_page_task_id UNIQUEIDENTIFIER,
+    @completed_page_version_id UNIQUEIDENTIFIER,
+    @submission_note NVARCHAR(MAX) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        --------------------------------------------------------------------
+        -- 1. Lock task workflow
+        --------------------------------------------------------------------
+        DECLARE @lock_resource NVARCHAR(200) =
+            N'manga_chapter_page_task_submit_' + CONVERT(NVARCHAR(36), @chapter_page_task_id);
+
+        DECLARE @lock_result INT;
+
+        EXEC @lock_result = sys.sp_getapplock
+            @Resource = @lock_resource,
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 10000;
+
+        IF @lock_result < 0
+        BEGIN
+            ;THROW 58101, 'Could not acquire chapter page task submission lock.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 2. Read task
+        --------------------------------------------------------------------
+        DECLARE @task_found BIT = 0;
+        DECLARE @assigned_to_user_id UNIQUEIDENTIFIER;
+        DECLARE @old_status_code NVARCHAR(50);
+
+        SELECT
+            @task_found = 1,
+            @assigned_to_user_id = t.assigned_to_user_id,
+            @old_status_code = t.status_code
+        FROM manga.ChapterPageTask t WITH (UPDLOCK, HOLDLOCK)
+        WHERE t.chapter_page_task_id = @chapter_page_task_id;
+
+        IF @task_found = 0
+        BEGIN
+            ;THROW 58102, 'Chapter page task does not exist.', 1;
+        END;
+
+        IF @old_status_code <> N'ASSIGNED'
+        BEGIN
+            ;THROW 58103, 'Only assigned tasks can be submitted for review.', 1;
+        END;
+
+        IF @assigned_to_user_id <> @actor_user_id
+        BEGIN
+            ;THROW 58104, 'Only the assigned user can submit this task for review.', 1;
+        END;
+        --------------------------------------------------------------------
+        -- 6. Move task to UNDER_REVIEW
+        --------------------------------------------------------------------
+        DECLARE @submitted_at_utc DATETIME2(0) = SYSUTCDATETIME();
+
+        UPDATE manga.ChapterPageTask
+        SET
+            status_code = N'UNDER_REVIEW',
+            completed_page_version_id = @completed_page_version_id,
+            updated_at_utc = @submitted_at_utc
+        WHERE chapter_page_task_id = @chapter_page_task_id;
+
+        --------------------------------------------------------------------
+        -- 7. Audit
+        --------------------------------------------------------------------
+        DECLARE @audit_entity_id NVARCHAR(100) =
+            CONVERT(NVARCHAR(36), @chapter_page_task_id);
+
+        DECLARE @detail_json NVARCHAR(MAX) =
+        (
+            SELECT
+                @old_status_code AS old_status_code,
+                N'UNDER_REVIEW' AS new_status_code,
+                @completed_page_version_id AS completed_page_version_id,
+                @submission_note AS submission_note
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @actor_user_id,
+            @action_code = N'CHAPTER_PAGE_TASK_SUBMITTED_FOR_REVIEW',
+            @entity_type = N'ChapterPageTask',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH;
+END;
+GO
+CREATE OR ALTER   PROCEDURE [manga].[usp_ChapterPageTask_MarkCompleted]
+    @actor_user_id UNIQUEIDENTIFIER,
+    @chapter_page_task_id UNIQUEIDENTIFIER,
+    @completion_note NVARCHAR(MAX) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        --------------------------------------------------------------------
+        -- 1. Lock task workflow
+        --------------------------------------------------------------------
+        DECLARE @lock_resource NVARCHAR(200) =
+            N'manga_chapter_page_task_complete_' + CONVERT(NVARCHAR(36), @chapter_page_task_id);
+
+        DECLARE @lock_result INT;
+
+        EXEC @lock_result = sys.sp_getapplock
+            @Resource = @lock_resource,
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 10000;
+
+        IF @lock_result < 0
+        BEGIN
+            ;THROW 58201, 'Could not acquire chapter page task completion lock.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 2. Read task
+        --------------------------------------------------------------------
+        DECLARE @task_found BIT = 0;
+        DECLARE @assigned_to_user_id UNIQUEIDENTIFIER;
+        DECLARE @old_status_code NVARCHAR(50);
+        DECLARE @completed_page_version_id UNIQUEIDENTIFIER;
+
+        SELECT
+            @task_found = 1,
+            @assigned_to_user_id = t.assigned_to_user_id,
+            @old_status_code = t.status_code,
+            @completed_page_version_id = t.completed_page_version_id
+        FROM manga.ChapterPageTask t WITH (UPDLOCK, HOLDLOCK)
+        WHERE t.chapter_page_task_id = @chapter_page_task_id;
+
+        IF @task_found = 0
+        BEGIN
+            ;THROW 58202, 'Chapter page task does not exist.', 1;
+        END;
+
+        IF @old_status_code <> N'UNDER_REVIEW'
+        BEGIN
+            ;THROW 58203, 'Only tasks under review can be marked completed.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 4. Actor must be active Mangaka contributor
+        --------------------------------------------------------------------
+       IF NOT EXISTS
+(
+    SELECT 1
+    FROM manga.ChapterPageTaskRegion tr
+    INNER JOIN manga.PageRegion pr
+        ON pr.page_region_id = tr.page_region_id
+    INNER JOIN manga.ChapterPageVersion cpv
+        ON cpv.chapter_page_version_id = pr.chapter_page_version_id
+    INNER JOIN manga.ChapterPage cp
+        ON cp.chapter_page_id = cpv.chapter_page_id
+    INNER JOIN manga.Chapter ch
+        ON ch.chapter_id = cp.chapter_id
+    INNER JOIN manga.SeriesContributor sc
+        ON sc.series_id = ch.series_id
+    INNER JOIN auth.Users u
+        ON u.user_id = sc.user_id
+    INNER JOIN auth.Roles r
+        ON r.role_id = u.role_id
+    WHERE tr.chapter_page_task_id = @chapter_page_task_id
+      AND sc.user_id = @actor_user_id
+      AND sc.end_date IS NULL
+      AND u.status_code = N'ACTIVE'
+      AND r.role_name = N'Mangaka'
+)
+BEGIN
+    ;THROW 58206, 'Only an active Mangaka contributor can mark this task complete.', 1;
+END;
+
+        --------------------------------------------------------------------
+        -- 5. Mark completed
+        --------------------------------------------------------------------
+        DECLARE @completed_at_utc DATETIME2(0) = SYSUTCDATETIME();
+
+        UPDATE manga.ChapterPageTask
+        SET
+            status_code = N'COMPLETED',
+            updated_at_utc = @completed_at_utc
+        WHERE chapter_page_task_id = @chapter_page_task_id;
+
+        --------------------------------------------------------------------
+        -- 6. Audit
+        --------------------------------------------------------------------
+        DECLARE @audit_entity_id NVARCHAR(100) =
+            CONVERT(NVARCHAR(36), @chapter_page_task_id);
+
+        DECLARE @detail_json NVARCHAR(MAX) =
+        (
+            SELECT
+                @old_status_code AS old_status_code,
+                N'COMPLETED' AS new_status_code,
+                @completed_page_version_id AS completed_page_version_id,
+                @completion_note AS completion_note
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @actor_user_id,
+            @action_code = N'CHAPTER_PAGE_TASK_COMPLETED',
+            @entity_type = N'ChapterPageTask',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH;
+END;
+GO
+CREATE OR ALTER   PROCEDURE [manga].[usp_ChapterPageTask_ReturnForRework]
+    @actor_user_id UNIQUEIDENTIFIER,
+    @chapter_page_task_id UNIQUEIDENTIFIER,
+    @updated_task_description NVARCHAR(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        --------------------------------------------------------------------
+        -- 1. Lock task workflow
+        --------------------------------------------------------------------
+        DECLARE @lock_resource NVARCHAR(200) =
+            N'manga_chapter_page_task_return_rework_' + CONVERT(NVARCHAR(36), @chapter_page_task_id);
+
+        DECLARE @lock_result INT;
+
+        EXEC @lock_result = sys.sp_getapplock
+            @Resource = @lock_resource,
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 10000;
+
+        IF @lock_result < 0
+        BEGIN
+            ;THROW 58401, 'Could not acquire chapter page task return-for-rework lock.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 2. Read task
+        --------------------------------------------------------------------
+        DECLARE @task_found BIT = 0;
+        DECLARE @old_status_code NVARCHAR(50);
+        DECLARE @assigned_to_user_id UNIQUEIDENTIFIER;
+        DECLARE @old_completed_page_version_id UNIQUEIDENTIFIER;
+        DECLARE @old_task_description NVARCHAR(MAX);
+
+        SELECT
+            @task_found = 1,
+            @old_status_code = t.status_code,
+            @assigned_to_user_id = t.assigned_to_user_id,
+            @old_completed_page_version_id = t.completed_page_version_id,
+            @old_task_description = t.task_description
+        FROM manga.ChapterPageTask t WITH (UPDLOCK, HOLDLOCK)
+        WHERE t.chapter_page_task_id = @chapter_page_task_id;
+
+        IF @task_found = 0
+        BEGIN
+            ;THROW 58402, 'Chapter page task does not exist.', 1;
+        END;
+
+        IF @old_status_code <> N'UNDER_REVIEW'
+        BEGIN
+            ;THROW 58403, 'Only tasks under review can be returned for rework.', 1;
+        END;
+           
+        --------------------------------------------------------------------
+        -- 5. Actor must be active Mangaka contributor
+        --------------------------------------------------------------------
+       IF NOT EXISTS
+(
+    SELECT 1
+    FROM manga.ChapterPageTaskRegion tr
+    INNER JOIN manga.PageRegion pr
+        ON pr.page_region_id = tr.page_region_id
+    INNER JOIN manga.ChapterPageVersion cpv
+        ON cpv.chapter_page_version_id = pr.chapter_page_version_id
+    INNER JOIN manga.ChapterPage cp
+        ON cp.chapter_page_id = cpv.chapter_page_id
+    INNER JOIN manga.Chapter ch
+        ON ch.chapter_id = cp.chapter_id
+    INNER JOIN manga.SeriesContributor sc
+        ON sc.series_id = ch.series_id
+    INNER JOIN auth.Users u
+        ON u.user_id = sc.user_id
+    INNER JOIN auth.Roles r
+        ON r.role_id = u.role_id
+    WHERE tr.chapter_page_task_id = @chapter_page_task_id
+      AND sc.user_id = @actor_user_id
+      AND sc.end_date IS NULL
+      AND u.status_code = N'ACTIVE'
+      AND r.role_name = N'Mangaka'
+)
+BEGIN
+    ;THROW 58406, 'Only an active Mangaka contributor can return this task for rework.', 1;
+END;
+
+        --------------------------------------------------------------------
+        -- 6. Return task to ASSIGNED for same assigned user
+        --------------------------------------------------------------------
+        DECLARE @returned_at_utc DATETIME2(0) = SYSUTCDATETIME();
+
+        UPDATE manga.ChapterPageTask
+        SET
+            status_code = N'ASSIGNED',
+            completed_page_version_id = NULL,
+            task_description = @updated_task_description,
+            updated_at_utc = @returned_at_utc
+        WHERE chapter_page_task_id = @chapter_page_task_id;
+
+        --------------------------------------------------------------------
+        -- 7. Audit
+        --------------------------------------------------------------------
+        DECLARE @audit_entity_id NVARCHAR(100) =
+            CONVERT(NVARCHAR(36), @chapter_page_task_id);
+
+        DECLARE @detail_json NVARCHAR(MAX) =
+        (
+            SELECT
+                @old_status_code AS old_status_code,
+                N'ASSIGNED' AS new_status_code,
+                @assigned_to_user_id AS assigned_to_user_id,
+                @old_completed_page_version_id AS rejected_completed_page_version_id,
+                @old_task_description AS old_task_description,
+                @updated_task_description AS new_task_description
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @actor_user_id,
+            @action_code = N'CHAPTER_PAGE_TASK_RETURNED_FOR_REWORK',
+            @entity_type = N'ChapterPageTask',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH;
+END;
+GO
 CREATE OR ALTER PROCEDURE manga.usp_SeriesProposal_ClaimEditorialReview
     @series_proposal_id UNIQUEIDENTIFIER,
     @actor_user_id UNIQUEIDENTIFIER,

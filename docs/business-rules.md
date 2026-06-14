@@ -115,7 +115,7 @@
 
 | Rule ID | Business Rule | Review Status |
 |---|---|---|
-| BR-SERIES-001 | Each series is identified internally by immutable `series_id` GUID; no separate a separate human-readable business identifier is used in the MVP schema. | Active draft |
+| BR-SERIES-001 | Each series is identified internally by immutable `series_id` GUID; no separate human-readable business identifier is used in the MVP schema. | Active draft |
 | BR-SERIES-002 | Each series must have a unique URL slug. | Active draft |
 | BR-SERIES-003 | Each series must have one lifecycle status from the approved status list. | Active draft |
 | BR-SERIES-004 | A series becomes `SERIALIZED` after it has passed proposal, editorial, and board approval and is accepted into the production/publication workflow. | Active draft |
