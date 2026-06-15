@@ -1,4 +1,7 @@
 @page "/demo/mangaflow/proposals"
+@using System.Globalization
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Authorization
 
 <MangaFlowShell Title="Proposal Reviews" Subtitle="Review and evaluate manga proposals submitted by authors." ActiveMenu="proposals">
     <section class="mf-filter-card">
@@ -38,7 +41,11 @@
                             <td>@proposal.Submitted</td>
                             <td><StatusBadge Status="@proposal.Status" /></td>
                             <td>@proposal.AssignedEditor</td>
-                            <td><button class="mf-btn mf-btn-soft" @onclick="() => OpenDetails(proposal)">View</button></td>
+                            <td>
+                                <button class="mf-btn mf-btn-soft" @onclick="() => OpenDetails(proposal)">
+                                    View
+                                </button>
+                            </td>
                         </tr>
                     }
                 </tbody>
@@ -58,19 +65,44 @@
                         </div>
                         <h2>@SelectedProposal.Title</h2>
                     </div>
+
                     <button class="mf-icon-btn" @onclick="CloseDetails">×</button>
                 </div>
 
                 <div class="mf-proposal-layout">
                     <div class="mf-proposal-main">
                         <h3>A. Proposal Information</h3>
+
                         <div class="mf-grid mf-grid-2">
-                            <div class="mf-info-tile"><span>Author</span><strong>@SelectedProposal.Author</strong></div>
-                            <div class="mf-info-tile"><span>Genre</span><strong>@SelectedProposal.Genre</strong></div>
-                            <div class="mf-info-tile"><span>Target Audience</span><strong>@SelectedProposal.TargetAudience</strong></div>
-                            <div class="mf-info-tile"><span>Est. Length</span><strong>@SelectedProposal.EstimatedLength</strong></div>
-                            <div class="mf-info-tile"><span>Submitted</span><strong>@SelectedProposal.Submitted</strong></div>
-                            <div class="mf-info-tile"><span>Version</span><strong>@SelectedProposal.Version</strong></div>
+                            <div class="mf-info-tile">
+                                <span>Author</span>
+                                <strong>@SelectedProposal.Author</strong>
+                            </div>
+
+                            <div class="mf-info-tile">
+                                <span>Genre</span>
+                                <strong>@SelectedProposal.Genre</strong>
+                            </div>
+
+                            <div class="mf-info-tile">
+                                <span>Target Audience</span>
+                                <strong>@SelectedProposal.TargetAudience</strong>
+                            </div>
+
+                            <div class="mf-info-tile">
+                                <span>Est. Length</span>
+                                <strong>@SelectedProposal.EstimatedLength</strong>
+                            </div>
+
+                            <div class="mf-info-tile">
+                                <span>Submitted</span>
+                                <strong>@SelectedProposal.Submitted</strong>
+                            </div>
+
+                            <div class="mf-info-tile">
+                                <span>Version</span>
+                                <strong>@SelectedProposal.Version</strong>
+                            </div>
                         </div>
 
                         <div class="mf-info-tile wide">
@@ -79,16 +111,19 @@
                         </div>
 
                         <h3>B. Version History</h3>
+
                         <div class="mf-timeline">
                             @foreach (var history in SelectedProposal.History)
                             {
                                 <div class="mf-timeline-row">
                                     <span class="mf-timeline-dot"></span>
+
                                     <div class="mf-timeline-card">
                                         <div class="mf-row">
                                             <strong>@history.Version</strong>
                                             <span>@history.Date</span>
                                         </div>
+
                                         <p>@history.Description</p>
                                     </div>
                                 </div>
@@ -96,48 +131,78 @@
                         </div>
 
                         <h3>D. Editorial Notes</h3>
-                        <textarea class="mf-textarea" @bind="EditorialNote" placeholder="Write internal editorial notes..."></textarea>
+
+                        <textarea class="mf-textarea"
+                                  @bind="EditorialNote"
+                                  placeholder="Write internal editorial notes..."></textarea>
                     </div>
 
                     <aside class="mf-proposal-side">
-                        <section class="mf-side-panel">
-                            <h3>E. Open Polls</h3>
-                            <div class="mf-open-poll-box">
-                                <div class="mf-panel-title">Open poll for @SelectedProposal.Code</div>
-                                <label class="mf-label">Poll type</label>
-                                <select class="mf-input" @bind="PollType">
-                                    <option value="START_SERIALIZATION">Serialization</option>
-                                    <option value="CONTINUATION">Continuation</option>
-                                    <option value="CANCEL_SERIALIZATION">Cancellation</option>
-                                </select>
+                        <AuthorizeView Roles="Editorial Board Chief">
+                            <Authorized>
+                                <section class="mf-side-panel">
+                                    <h3>E. Open Polls</h3>
 
-                                @if (ShowDeadlinePicker)
-                                {
-                                    <div class="mf-deadline-editor compact">
-                                        <label>Set deadline (optional)</label>
-                                        <input class="mf-input" type="date" @bind="OpenPollDeadlineDraft" />
-                                        <div class="mf-actions tight">
-                                            <button class="mf-btn mf-btn-primary" @onclick="ConfirmDeadline">Save</button>
-                                            <button class="mf-btn" @onclick="CancelDeadline">Cancel</button>
+                                    <div class="mf-open-poll-box">
+                                        <div class="mf-panel-title">
+                                            Open poll for @SelectedProposal.Code
                                         </div>
+
+                                        <label class="mf-label">Poll type</label>
+
+                                        <select class="mf-input" @bind="PollType">
+                                            <option value="START_SERIALIZATION">Serialization</option>
+                                            <option value="CANCEL_SERIALIZATION">Cancellation</option>
+                                        </select>
+
+                                        @if (ShowDeadlinePicker)
+                                        {
+                                            <div class="mf-deadline-editor compact">
+                                                <label>Set deadline <span>(optional)</span></label>
+
+                                                <input class="mf-input"
+                                                       type="date"
+                                                       value="@OpenPollDeadlineDraftText"
+                                                       @onchange="OnDeadlineInputChanged" />
+
+                                                <div class="mf-actions tight">
+                                                    <button class="mf-btn mf-btn-primary" @onclick="ConfirmDeadline">
+                                                        Save
+                                                    </button>
+
+                                                    <button class="mf-btn" @onclick="CancelDeadline">
+                                                        Cancel
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <button class="mf-btn mf-btn-soft full" @onclick="StartDeadlinePicker">
+                                                @(ConfirmedOpenPollDeadline is null
+                                                    ? "Set deadline (optional)"
+                                                    : $"Deadline set: {FormatDate(ConfirmedOpenPollDeadline)}")
+                                            </button>
+                                        }
+
+                                        <button class="mf-btn mf-btn-primary full" @onclick="ConfirmOpenPoll">
+                                            Confirm & Open Poll
+                                        </button>
+
+                                        @if (!string.IsNullOrWhiteSpace(OpenPollMessage))
+                                        {
+                                            <div class="mf-alert success">
+                                                @OpenPollMessage
+                                            </div>
+                                        }
                                     </div>
-                                }
-                                else
-                                {
-                                    <button class="mf-btn mf-btn-soft full" @onclick="StartDeadlinePicker">Set deadline (optional)</button>
-                                }
-
-                                <button class="mf-btn mf-btn-primary full" @onclick="ConfirmOpenPoll">Confirm & Open Poll</button>
-
-                                @if (!string.IsNullOrWhiteSpace(OpenPollMessage))
-                                {
-                                    <div class="mf-alert success">@OpenPollMessage</div>
-                                }
-                            </div>
-                        </section>
+                                </section>
+                            </Authorized>
+                        </AuthorizeView>
 
                         <section class="mf-side-panel attachments">
                             <h3>C. Attachments</h3>
+
                             @foreach (var attachment in SelectedProposal.Attachments)
                             {
                                 <div class="mf-attachment">@attachment</div>
@@ -154,18 +219,23 @@
     private string SearchText { get; set; } = string.Empty;
     private string? StatusFilter { get; set; }
     private ProposalItem? SelectedProposal { get; set; }
+
     private string PollType { get; set; } = "START_SERIALIZATION";
     private bool ShowDeadlinePicker { get; set; }
-  private DateTime? OpenPollDeadlineDraft { get; set; }
-private DateTime? ConfirmedOpenPollDeadline { get; set; }
+    private string OpenPollDeadlineDraftText { get; set; } = string.Empty;
+    private DateTime? ConfirmedOpenPollDeadline { get; set; }
     private string? OpenPollMessage { get; set; }
+
     private string EditorialNote { get; set; } = string.Empty;
 
-
     private void ClearStatusFilter() => StatusFilter = null;
+
     private void SetDraftFilter() => StatusFilter = "Draft";
+
     private void SetInReviewFilter() => StatusFilter = "In Review";
+
     private void SetApprovedFilter() => StatusFilter = "Approved";
+
     private void SetRejectedFilter() => StatusFilter = "Rejected";
 
     private IEnumerable<ProposalItem> FilteredProposals => Proposals.Where(proposal =>
@@ -180,7 +250,7 @@ private DateTime? ConfirmedOpenPollDeadline { get; set; }
         SelectedProposal = proposal;
         PollType = "START_SERIALIZATION";
         ShowDeadlinePicker = false;
-        OpenPollDeadlineDraft = null;
+        OpenPollDeadlineDraftText = string.Empty;
         ConfirmedOpenPollDeadline = null;
         OpenPollMessage = null;
         EditorialNote = string.Empty;
@@ -192,20 +262,34 @@ private DateTime? ConfirmedOpenPollDeadline { get; set; }
     }
 
     private void StartDeadlinePicker()
-{
-    ShowDeadlinePicker = true;
-    OpenPollDeadlineDraft ??= DateTime.Today.AddDays(7);
-}
+    {
+        ShowDeadlinePicker = true;
+        OpenPollDeadlineDraftText = ConfirmedOpenPollDeadline?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            ?? DateTime.Today.AddDays(7).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    }
+
+    private void OnDeadlineInputChanged(ChangeEventArgs args)
+    {
+        OpenPollDeadlineDraftText = args.Value?.ToString() ?? string.Empty;
+    }
 
     private void ConfirmDeadline()
     {
-        ConfirmedOpenPollDeadline = OpenPollDeadlineDraft;
+        ConfirmedOpenPollDeadline = DateTime.TryParse(
+            OpenPollDeadlineDraftText,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out var parsedDate)
+                ? parsedDate.Date
+                : null;
+
         ShowDeadlinePicker = false;
     }
 
     private void CancelDeadline()
     {
         ShowDeadlinePicker = false;
+        OpenPollDeadlineDraftText = ConfirmedOpenPollDeadline?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty;
     }
 
     private void ConfirmOpenPoll()
@@ -215,19 +299,26 @@ private DateTime? ConfirmedOpenPollDeadline { get; set; }
             return;
         }
 
-        var deadlineText = ConfirmedOpenPollDeadline is null
-    ? "without deadline"
-    : $"with deadline {FormatDate(ConfirmedOpenPollDeadline)}";
+        var pollTypeDisplay = PollType switch
+        {
+            "START_SERIALIZATION" => "START SERIALIZATION",
+            "CANCEL_SERIALIZATION" => "CANCEL SERIALIZATION",
+            _ => PollType.Replace("_", " ")
+        };
 
-        OpenPollMessage = $"Opened {PollType.Replace("_", " ")} poll for {SelectedProposal.Code} {deadlineText}.";
+        var deadlineText = ConfirmedOpenPollDeadline is null
+            ? "without deadline"
+            : $"with deadline {FormatDate(ConfirmedOpenPollDeadline)}";
+
+        OpenPollMessage = $"Opened {pollTypeDisplay} poll for {SelectedProposal.Code} {deadlineText}.";
     }
 
-   private static string FormatDate(DateTime? date)
-{
-    return date is null
-        ? "No deadline"
-        : date.Value.ToString("MMM dd, yyyy", CultureInfo.InvariantCulture);
-}
+    private static string FormatDate(DateTime? date)
+    {
+        return date is null
+            ? "No deadline"
+            : date.Value.ToString("MMM dd, yyyy", CultureInfo.InvariantCulture);
+    }
 
     private sealed class ProposalItem
     {
@@ -268,7 +359,12 @@ private DateTime? ConfirmedOpenPollDeadline { get; set; }
                 new("v3.0", "Jan 10, 2026", "Latest submission — complete rewrite of chapters 1-3"),
                 new("v1.0", "Mar 01, 2026", "Initial submission")
             },
-            Attachments = new List<string> { "proposal-outline.pdf", "character-designs.png", "chapter1-draft.pdf" }
+            Attachments = new List<string>
+            {
+                "proposal-outline.pdf",
+                "character-designs.png",
+                "chapter1-draft.pdf"
+            }
         },
         new()
         {
@@ -283,8 +379,15 @@ private DateTime? ConfirmedOpenPollDeadline { get; set; }
             TargetAudience = "Seinen 16+",
             EstimatedLength = "80 chapters",
             Synopsis = "A quiet romance unfolds inside a theater troupe haunted by an old family secret.",
-            History = new List<HistoryItem> { new("v2.1", "Apr 15, 2026", "Updated act structure and character motivation") },
-            Attachments = new List<string> { "lotus-outline.pdf", "visual-reference.png" }
+            History = new List<HistoryItem>
+            {
+                new("v2.1", "Apr 15, 2026", "Updated act structure and character motivation")
+            },
+            Attachments = new List<string>
+            {
+                "lotus-outline.pdf",
+                "visual-reference.png"
+            }
         },
         new()
         {
@@ -299,8 +402,15 @@ private DateTime? ConfirmedOpenPollDeadline { get; set; }
             TargetAudience = "Shonen 13+",
             EstimatedLength = "60 chapters",
             Synopsis = "Pilots fight a border war using relic mechs powered by unstable storm cores.",
-            History = new List<HistoryItem> { new("v1.5", "Mar 20, 2026", "Refined pilot team and first arc") },
-            Attachments = new List<string> { "mecha-proposal.pdf", "mech-designs.zip" }
+            History = new List<HistoryItem>
+            {
+                new("v1.5", "Mar 20, 2026", "Refined pilot team and first arc")
+            },
+            Attachments = new List<string>
+            {
+                "mecha-proposal.pdf",
+                "mech-designs.zip"
+            }
         },
         new()
         {
@@ -315,8 +425,14 @@ private DateTime? ConfirmedOpenPollDeadline { get; set; }
             TargetAudience = "All ages",
             EstimatedLength = "45 chapters",
             Synopsis = "A traveling sorcerer solves magical disputes across isolated villages.",
-            History = new List<HistoryItem> { new("v0.8", "May 20, 2026", "Draft pitch") },
-            Attachments = new List<string> { "pitch.pdf" }
+            History = new List<HistoryItem>
+            {
+                new("v0.8", "May 20, 2026", "Draft pitch")
+            },
+            Attachments = new List<string>
+            {
+                "pitch.pdf"
+            }
         }
     };
 }

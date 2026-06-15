@@ -1,4 +1,5 @@
 @page "/demo/mangaflow/decisions"
+@using Microsoft.AspNetCore.Components.Authorization
 
 <MangaFlowShell Title="Decision Center" Subtitle="Finalize publishing decisions based on board votes." ActiveMenu="decisions" Actions="@HeaderActions">
     <h2 class="mf-section-title">Awaiting Decision (@DecisionItems.Count)</h2>
@@ -12,14 +13,30 @@
                         <div class="mf-muted">@item.Code · Serialization</div>
                         <h3>@item.Title</h3>
                     </div>
+
                     <StatusBadge Status="Voting in Progress" />
                 </div>
 
                 <div class="mf-grid mf-grid-4 vote-summary-grid">
-                    <div class="mf-vote-summary"><strong>@item.TotalVotes/@item.TotalMembers</strong><span>Total Votes</span></div>
-                    <div class="mf-vote-summary"><strong class="approve">@item.Approve</strong><span>Approvals</span></div>
-                    <div class="mf-vote-summary"><strong class="reject">@item.Reject</strong><span>Rejections</span></div>
-                    <div class="mf-vote-summary"><strong class="abstain">@item.Abstain</strong><span>Abstentions</span></div>
+                    <div class="mf-vote-summary">
+                        <strong>@item.TotalVotes/@item.TotalMembers</strong>
+                        <span>Total Votes</span>
+                    </div>
+
+                    <div class="mf-vote-summary">
+                        <strong class="approve">@item.Approve</strong>
+                        <span>Approvals</span>
+                    </div>
+
+                    <div class="mf-vote-summary">
+                        <strong class="reject">@item.Reject</strong>
+                        <span>Rejections</span>
+                    </div>
+
+                    <div class="mf-vote-summary">
+                        <strong class="abstain">@item.Abstain</strong>
+                        <span>Abstentions</span>
+                    </div>
                 </div>
 
                 <div class="mf-progress segmented large">
@@ -34,11 +51,23 @@
                     <span class="abstain">@Percent(item.Abstain, item.TotalMembers)% Abstain (@item.Abstain)</span>
                 </div>
 
-                <div class="mf-grid mf-grid-3 mf-action-grid">
-                    <button class="mf-decision-action approve" @onclick="() => FinalApproval(item)">Final Approval</button>
-                    <button class="mf-decision-action return" @onclick="() => ReturnForReview(item)">Return for Review</button>
-                    <button class="mf-decision-action escalate" @onclick="() => EscalateDecision(item)">Escalate Decision</button>
-                </div>
+                <AuthorizeView Roles="Editorial Board Chief">
+                    <Authorized>
+                        <div class="mf-grid mf-grid-3 mf-action-grid">
+                            <button class="mf-decision-action approve" @onclick="() => FinalApproval(item)">
+                                Final Approval
+                            </button>
+
+                            <button class="mf-decision-action return" @onclick="() => ReturnForReview(item)">
+                                Return for Review
+                            </button>
+
+                            <button class="mf-decision-action escalate" @onclick="() => EscalateDecision(item)">
+                                Escalate Decision
+                            </button>
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
             </article>
         }
     </div>
@@ -52,16 +81,33 @@
 @code {
     private string? DecisionMessage { get; set; }
 
-    private RenderFragment HeaderActions => @<span class="mf-view-pill">Board Chief View</span>;
+    private RenderFragment HeaderActions => @<AuthorizeView Roles="Editorial Board Chief">
+        <Authorized>
+            <span class="mf-view-pill">Board Chief View</span>
+        </Authorized>
+    </AuthorizeView>;
 
     private static int Percent(int count, int total)
     {
-        return total <= 0 ? 0 : (int)Math.Round(count * 100m / total);
+        return total <= 0
+            ? 0
+            : (int)Math.Round(count * 100m / total);
     }
 
-    private void FinalApproval(DecisionItem item) => SetDecision(item, "Final Approval");
-    private void ReturnForReview(DecisionItem item) => SetDecision(item, "Return for Review");
-    private void EscalateDecision(DecisionItem item) => SetDecision(item, "Escalate Decision");
+    private void FinalApproval(DecisionItem item)
+    {
+        SetDecision(item, "Final Approval");
+    }
+
+    private void ReturnForReview(DecisionItem item)
+    {
+        SetDecision(item, "Return for Review");
+    }
+
+    private void EscalateDecision(DecisionItem item)
+    {
+        SetDecision(item, "Escalate Decision");
+    }
 
     private void SetDecision(DecisionItem item, string action)
     {
@@ -81,8 +127,29 @@
 
     private readonly IReadOnlyList<DecisionItem> DecisionItems = new List<DecisionItem>
     {
-        new() { Code = "MNG-003", Title = "Serialization Approval — Mecha Storm Zero", Approve = 5, Reject = 1, Abstain = 1 },
-        new() { Code = "MNG-002", Title = "Serialization Vote — Shadow of the Lotus", Approve = 3, Reject = 2, Abstain = 0 },
-        new() { Code = "MNG-015", Title = "Continuation — Velocity Kings", Approve = 4, Reject = 0, Abstain = 1 }
+        new()
+        {
+            Code = "MNG-003",
+            Title = "Serialization Approval — Mecha Storm Zero",
+            Approve = 5,
+            Reject = 1,
+            Abstain = 1
+        },
+        new()
+        {
+            Code = "MNG-002",
+            Title = "Serialization Vote — Shadow of the Lotus",
+            Approve = 3,
+            Reject = 2,
+            Abstain = 0
+        },
+        new()
+        {
+            Code = "MNG-015",
+            Title = "Continuation — Velocity Kings",
+            Approve = 4,
+            Reject = 0,
+            Abstain = 1
+        }
     };
 }

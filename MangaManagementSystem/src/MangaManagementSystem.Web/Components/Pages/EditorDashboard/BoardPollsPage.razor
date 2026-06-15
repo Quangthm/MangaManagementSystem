@@ -1,4 +1,7 @@
 @page "/demo/mangaflow/polls"
+@using System.Globalization
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Authorization
 
 <MangaFlowShell Title="Board Polls" Subtitle="Editorial board voting system — manage and track serialization votes." ActiveMenu="polls" Actions="@HeaderActions">
     <div class="mf-grid mf-grid-3">
@@ -8,6 +11,7 @@
     </div>
 
     <h2 class="mf-section-title">Open Polls</h2>
+
     <div class="mf-grid mf-grid-2">
         @foreach (var poll in Polls.Where(p => p.Status == "Open"))
         {
@@ -17,35 +21,64 @@
                         <h3>@poll.Name</h3>
                         <StatusBadge Status="@poll.Type" Dot="false" />
                     </div>
+
                     <StatusBadge Status="Open" />
                 </div>
 
-                <VoteBreakdown Approve="@poll.Approve" Reject="@poll.Reject" Abstain="@poll.Abstain" TotalMembers="@poll.TotalMembers" />
+                <VoteBreakdown Approve="@poll.Approve"
+                               Reject="@poll.Reject"
+                               Abstain="@poll.Abstain"
+                               TotalMembers="@poll.TotalMembers" />
 
-                @if (EditingDeadlinePollId == poll.Id)
-                {
-                    <div class="mf-deadline-editor">
-                        <label>Update deadline <span>(optional)</span></label>
-                        <div class="mf-deadline-row">
-                            <input class="mf-input" type="date" @bind="DeadlineDraft" />
-                            <button class="mf-btn mf-btn-primary" @onclick="() => SaveDeadline(poll)">✓ Save</button>
-                            <button class="mf-btn" @onclick="CancelDeadlineEdit">× Cancel</button>
-                        </div>
-                    </div>
-                }
-                else
-                {
-                    <div class="mf-row mf-gap-small">
-                        <div class="mf-muted">@DeadlineText(poll)</div>
-                        <button class="mf-btn mf-btn-soft" @onclick="() => StartDeadlineEdit(poll)">
-                            @(poll.Deadline is null ? "Add Deadline" : "Update Deadline")
-                        </button>
-                    </div>
-                }
+                <div class="mf-row mf-gap-small">
+                    <div class="mf-muted">@DeadlineText(poll)</div>
+
+                    <AuthorizeView Roles="Editorial Board Chief">
+                        <Authorized>
+                            @if (EditingDeadlinePollId != poll.Id)
+                            {
+                                <button class="mf-btn mf-btn-soft" @onclick="() => StartDeadlineEdit(poll)">
+                                    @(poll.Deadline is null ? "Add Deadline" : "Update Deadline")
+                                </button>
+                            }
+                        </Authorized>
+                    </AuthorizeView>
+                </div>
+
+                <AuthorizeView Roles="Editorial Board Chief">
+                    <Authorized>
+                        @if (EditingDeadlinePollId == poll.Id)
+                        {
+                            <div class="mf-deadline-editor">
+                                <label>Update deadline <span>(optional)</span></label>
+
+                                <div class="mf-deadline-row">
+                                    <input class="mf-input"
+                                           type="date"
+                                           value="@DeadlineDraftText"
+                                           @onchange="OnDeadlineInputChanged" />
+
+                                    <button class="mf-btn mf-btn-primary" @onclick="() => SaveDeadline(poll)">
+                                        ✓ Save
+                                    </button>
+
+                                    <button class="mf-btn" @onclick="CancelDeadlineEdit">
+                                        × Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    </Authorized>
+                </AuthorizeView>
 
                 <div class="mf-actions end">
-                    <button class="mf-btn mf-btn-primary" @onclick="() => OpenPollDetails(poll)">Open Poll</button>
-                    <button class="mf-btn" @onclick="() => OpenResults(poll)">Results</button>
+                    <button class="mf-btn mf-btn-primary" @onclick="() => OpenPollDetails(poll)">
+                        Open Poll
+                    </button>
+
+                    <button class="mf-btn" @onclick="() => OpenResults(poll)">
+                        Results
+                    </button>
                 </div>
             </article>
         }
@@ -57,13 +90,23 @@
             <div class="mf-modal compact-modal" @onclick:stopPropagation="true">
                 <div class="mf-modal-header">
                     <div>
-                        <div class="mf-modal-meta"><span class="mf-code">@SelectedPoll.Code</span><StatusBadge Status="@SelectedPoll.Status" /></div>
+                        <div class="mf-modal-meta">
+                            <span class="mf-code">@SelectedPoll.Code</span>
+                            <StatusBadge Status="@SelectedPoll.Status" />
+                        </div>
+
                         <h2>@SelectedPoll.Name</h2>
                         <p>@SelectedPoll.Type · @DeadlineText(SelectedPoll)</p>
                     </div>
+
                     <button class="mf-icon-btn" @onclick="ClosePollDialog">×</button>
                 </div>
-                <VoteBreakdown Approve="@SelectedPoll.Approve" Reject="@SelectedPoll.Reject" Abstain="@SelectedPoll.Abstain" TotalMembers="@SelectedPoll.TotalMembers" />
+
+                <VoteBreakdown Approve="@SelectedPoll.Approve"
+                               Reject="@SelectedPoll.Reject"
+                               Abstain="@SelectedPoll.Abstain"
+                               TotalMembers="@SelectedPoll.TotalMembers" />
+
                 <div class="mf-alert info">@PollDialogMessage</div>
             </div>
         </div>
@@ -72,7 +115,7 @@
 
 @code {
     private string? EditingDeadlinePollId { get; set; }
-    private DateTime? DeadlineDraft { get; set; }
+    private string DeadlineDraftText { get; set; } = string.Empty;
     private PollItem? SelectedPoll { get; set; }
     private string PollDialogMessage { get; set; } = string.Empty;
 
@@ -80,26 +123,44 @@
     private int ClosedCount => Polls.Count(p => p.Status == "Closed");
     private int UpcomingCount => Polls.Count(p => p.Status == "Upcoming");
 
-    private RenderFragment HeaderActions => @<button class="mf-btn mf-btn-primary" @onclick="CreatePollDemo">Create Poll</button>;
+    private RenderFragment HeaderActions => @<AuthorizeView Roles="Editorial Board Chief">
+        <Authorized>
+            <button class="mf-btn mf-btn-primary" @onclick="CreatePollDemo">
+                Create Poll
+            </button>
+        </Authorized>
+    </AuthorizeView>;
 
     private void StartDeadlineEdit(PollItem poll)
-{
-    EditingDeadlinePollId = poll.Id;
-    DeadlineDraft = poll.Deadline ?? DateTime.Today.AddDays(7);
-}
+    {
+        EditingDeadlinePollId = poll.Id;
+        DeadlineDraftText = poll.Deadline?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            ?? DateTime.Today.AddDays(7).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    }
 
-   private void SaveDeadline(PollItem poll)
-{
-    poll.Deadline = DeadlineDraft?.Date;
+    private void OnDeadlineInputChanged(ChangeEventArgs args)
+    {
+        DeadlineDraftText = args.Value?.ToString() ?? string.Empty;
+    }
 
-    EditingDeadlinePollId = null;
-    DeadlineDraft = null;
-}
+    private void SaveDeadline(PollItem poll)
+    {
+        poll.Deadline = DateTime.TryParse(
+            DeadlineDraftText,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out var parsedDate)
+                ? parsedDate.Date
+                : null;
+
+        EditingDeadlinePollId = null;
+        DeadlineDraftText = string.Empty;
+    }
 
     private void CancelDeadlineEdit()
     {
         EditingDeadlinePollId = null;
-        DeadlineDraft = null;
+        DeadlineDraftText = string.Empty;
     }
 
     private void OpenPollDetails(PollItem poll)
@@ -148,11 +209,77 @@
 
     private readonly List<PollItem> Polls = new()
     {
-        new() { Id = "poll-003", Code = "MNG-003", Name = "Serialization Approval — Mecha Storm Zero", Type = "START_SERIALIZATION", Deadline = new DateTime(2026, 6, 8), Approve = 5, Reject = 1, Abstain = 1, Status = "Open" },
-        new() { Id = "poll-002", Code = "MNG-002", Name = "Serialization Vote — Shadow of the Lotus", Type = "START_SERIALIZATION", Deadline = null, Approve = 3, Reject = 2, Abstain = 0, Status = "Open" },
-        new() { Id = "poll-015", Code = "MNG-015", Name = "Continuation — Velocity Kings", Type = "CONTINUATION", Deadline = new DateTime(2026, 6, 12), Approve = 4, Reject = 0, Abstain = 1, Status = "Open" },
-        new() { Id = "poll-001", Code = "MNG-001", Name = "Continuation Vote — Celestial Blade Chronicles", Type = "CONTINUATION", Deadline = new DateTime(2026, 6, 1), Approve = 8, Reject = 0, Abstain = 1, Status = "Closed" },
-        new() { Id = "poll-006", Code = "MNG-006", Name = "Cancellation Review — Eternal Spring", Type = "CANCEL_SERIALIZATION", Deadline = new DateTime(2026, 5, 22), Approve = 6, Reject = 2, Abstain = 1, Status = "Closed" },
-        new() { Id = "poll-005", Code = "MNG-005", Name = "Special Edition Approval — Neon Tokyo Nights", Type = "START_SERIALIZATION", Deadline = new DateTime(2026, 6, 17), Approve = 0, Reject = 0, Abstain = 0, Status = "Upcoming" }
+        new()
+        {
+            Id = "poll-003",
+            Code = "MNG-003",
+            Name = "Serialization Approval — Mecha Storm Zero",
+            Type = "START_SERIALIZATION",
+            Deadline = new DateTime(2026, 6, 8),
+            Approve = 5,
+            Reject = 1,
+            Abstain = 1,
+            Status = "Open"
+        },
+        new()
+        {
+            Id = "poll-002",
+            Code = "MNG-002",
+            Name = "Serialization Vote — Shadow of the Lotus",
+            Type = "START_SERIALIZATION",
+            Deadline = null,
+            Approve = 3,
+            Reject = 2,
+            Abstain = 0,
+            Status = "Open"
+        },
+        new()
+        {
+            Id = "poll-015",
+            Code = "MNG-015",
+            Name = "Cancellation Review — Velocity Kings",
+            Type = "CANCEL_SERIALIZATION",
+            Deadline = new DateTime(2026, 6, 12),
+            Approve = 4,
+            Reject = 0,
+            Abstain = 1,
+            Status = "Open"
+        },
+        new()
+        {
+            Id = "poll-001",
+            Code = "MNG-001",
+            Name = "Serialization Vote — Celestial Blade Chronicles",
+            Type = "START_SERIALIZATION",
+            Deadline = new DateTime(2026, 6, 1),
+            Approve = 8,
+            Reject = 0,
+            Abstain = 1,
+            Status = "Closed"
+        },
+        new()
+        {
+            Id = "poll-006",
+            Code = "MNG-006",
+            Name = "Cancellation Review — Eternal Spring",
+            Type = "CANCEL_SERIALIZATION",
+            Deadline = new DateTime(2026, 5, 22),
+            Approve = 6,
+            Reject = 2,
+            Abstain = 1,
+            Status = "Closed"
+        },
+        new()
+        {
+            Id = "poll-005",
+            Code = "MNG-005",
+            Name = "Serialization Approval — Neon Tokyo Nights",
+            Type = "START_SERIALIZATION",
+            Deadline = new DateTime(2026, 6, 17),
+            Approve = 0,
+            Reject = 0,
+            Abstain = 0,
+            Status = "Upcoming"
+        }
     };
 }
