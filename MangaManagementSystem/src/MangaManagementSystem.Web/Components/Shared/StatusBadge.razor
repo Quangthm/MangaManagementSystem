@@ -1,0 +1,30 @@
+<span class="mf-status @CssClass">
+    @if (Dot)
+    {
+        <span class="mf-status-dot"></span>
+    }
+    @Status
+</span>
+
+@code {
+    [Parameter] public string Status { get; set; } = string.Empty;
+    [Parameter] public bool Dot { get; set; } = true;
+
+    private string CssClass => Normalize(Status) switch
+    {
+        "published" or "open" or "approved" => "success",
+        "inreview" or "votinginprogress" or "pending" => "warning",
+        "rejected" or "closed" => "danger",
+        "draft" or "archived" or "upcoming" => "neutral",
+        "startserialization" or "serialization" or "continuation" => "info",
+        _ => "info"
+    };
+
+    private static string Normalize(string value)
+    {
+        return value.Replace(" ", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("_", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("-", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .ToLowerInvariant();
+    }
+}
