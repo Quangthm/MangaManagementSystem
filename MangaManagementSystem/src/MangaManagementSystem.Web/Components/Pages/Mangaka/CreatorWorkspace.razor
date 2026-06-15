@@ -347,46 +347,62 @@
 
         if (file == null)
         {
-            Snackbar.Add("No avatar file selected.", Severity.Warning);
+            Snackbar.Add(
+                "No avatar file selected.",
+                Severity.Warning);
+
             return;
         }
 
-        var contentType = file.ContentType?.ToLowerInvariant() ?? string.Empty;
+        var contentType =
+            file.ContentType?.ToLowerInvariant()
+            ?? string.Empty;
 
-        if (contentType is not ("image/png" or "image/jpeg" or "image/jpg" or "image/webp"))
+        if (contentType is not
+            ("image/png"
+            or "image/jpeg"
+            or "image/jpg"
+            or "image/webp"))
         {
-            Snackbar.Add("Avatar must be PNG, JPG, JPEG, or WEBP.", Severity.Warning);
+            Snackbar.Add(
+                "Avatar must be PNG, JPG, JPEG, or WEBP.",
+                Severity.Warning);
+
             return;
         }
 
         try
         {
-            var fileStorageService = ServiceProvider.GetRequiredService<IFileStorageService>();
-            var fileResourceService = ServiceProvider.GetRequiredService<IFileResourceService>();
+            var fileStorageService =
+                ServiceProvider.GetRequiredService<IFileStorageService>();
 
-            var upload = await UploadToCloudinaryAsync(fileStorageService, file, "USER_AVATAR");
+            var upload =
+                await UploadToCloudinaryAsync(
+                    fileStorageService,
+                    file,
+                    "USER_AVATAR");
 
-            var fileResource = await fileResourceService.CreateFileResourceAsync(new CreateFileResourceDto(
-                "USER_AVATAR",
-                upload.OriginalFileName,
-                upload.PublicId,
-                upload.SecureUrl,
-                upload.ContentType,
-                upload.FileSizeBytes,
-                upload.Sha256Hash,
-                _currentUserId
-            ));
+            _currentUser =
+                await UserService.UpdateAvatarFileAsync(
+                    _currentUserId,
+                    upload);
 
-            _currentUser = await UserService.UpdateAvatarFileAsync(_currentUserId, fileResource.FileResourceId);
-            _avatarUrl = fileResource.CloudinarySecureUrl;
+            _avatarUrl =
+                upload.SecureUrl;
 
-            Snackbar.Add("Avatar uploaded successfully.", Severity.Success);
+            Snackbar.Add(
+                "Avatar uploaded successfully.",
+                Severity.Success);
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Avatar upload failed: {ex.Message}", Severity.Error);
+            Snackbar.Add(
+                $"Avatar upload failed: {ex.Message}",
+                Severity.Error);
         }
+
     }
+
 
     private async Task UploadPortfolioAsync(InputFileChangeEventArgs e)
     {
@@ -394,56 +410,76 @@
 
         if (file == null)
         {
-            Snackbar.Add("No portfolio file selected.", Severity.Warning);
+            Snackbar.Add(
+                "No portfolio file selected.",
+                Severity.Warning);
+
             return;
         }
 
-        var contentType = file.ContentType?.ToLowerInvariant() ?? string.Empty;
+        var contentType =
+            file.ContentType?.ToLowerInvariant()
+            ?? string.Empty;
 
-        var allowed = contentType is
-            "application/pdf" or
-            "application/msword" or
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document" or
-            "image/png" or
-            "image/jpeg" or
-            "image/jpg" or
-            "image/webp";
+        var allowed =
+            contentType is
+                "application/pdf"
+                or "application/msword"
+                or "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                or "image/png"
+                or "image/jpeg"
+                or "image/jpg"
+                or "image/webp";
 
         if (!allowed)
         {
-            Snackbar.Add("Portfolio must be PDF, DOC, DOCX, PNG, JPG, JPEG, or WEBP.", Severity.Warning);
+            Snackbar.Add(
+                "Portfolio must be PDF, DOC, DOCX, PNG, JPG, JPEG, or WEBP.",
+                Severity.Warning);
+
             return;
         }
 
         try
         {
-            var fileStorageService = ServiceProvider.GetRequiredService<IFileStorageService>();
-            var fileResourceService = ServiceProvider.GetRequiredService<IFileResourceService>();
+            var fileStorageService =
+                ServiceProvider.GetRequiredService<IFileStorageService>();
 
-            var upload = await UploadToCloudinaryAsync(fileStorageService, file, "REGISTRATION_PORTFOLIO");
+            var upload =
+                await UploadToCloudinaryAsync(
+                    fileStorageService,
+                    file,
+                    "REGISTRATION_PORTFOLIO");
 
-            var fileResource = await fileResourceService.CreateFileResourceAsync(new CreateFileResourceDto(
-                "REGISTRATION_PORTFOLIO",
-                upload.OriginalFileName,
-                upload.PublicId,
-                upload.SecureUrl,
-                upload.ContentType,
-                upload.FileSizeBytes,
-                upload.Sha256Hash,
-                _currentUserId
-            ));
+            _currentUser =
+                await UserService.UpdatePortfolioFileAsync(
+                    _currentUserId,
+                    upload);
 
-            _currentUser = await UserService.UpdatePortfolioFileAsync(_currentUserId, fileResource.FileResourceId);
-            _portfolioUrl = $"/api/portfolio/{fileResource.FileResourceId}";
-            _portfolioFileName = fileResource.OriginalFileName;
+            var newPortfolioFileId =
+                _currentUser.PortfolioFileId
+                ?? throw new InvalidOperationException(
+                    "The updated portfolio FileResource id was not returned.");
 
-            Snackbar.Add("Portfolio uploaded successfully.", Severity.Success);
+            _portfolioUrl =
+                $"/api/portfolio/{newPortfolioFileId}";
+
+            _portfolioFileName =
+                upload.OriginalFileName;
+
+            Snackbar.Add(
+                "Portfolio uploaded successfully.",
+                Severity.Success);
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Portfolio upload failed: {ex.Message}", Severity.Error);
+            Snackbar.Add(
+                $"Portfolio upload failed: {ex.Message}",
+                Severity.Error);
         }
+
     }
+
 
     private static async Task<FileUploadResultDto> UploadToCloudinaryAsync(
         IFileStorageService fileStorageService,

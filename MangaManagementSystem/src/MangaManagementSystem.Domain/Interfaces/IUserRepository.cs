@@ -5,11 +5,32 @@ using System.Threading.Tasks;
 
 namespace MangaManagementSystem.Domain.Interfaces
 {
+    public sealed record UserFileReplacementRequest(
+        Guid TargetUserId,
+        Guid ActorUserId,
+        string OriginalFileName,
+        string CloudinaryPublicId,
+        string CloudinarySecureUrl,
+        string ContentType,
+        long FileSizeBytes,
+        string Sha256Hash
+    );
+
+    public sealed record UserFileReplacementResult(
+        Guid NewFileResourceId,
+        Guid? OldFileResourceId,
+        string? OldCloudinaryPublicId,
+        string? OldContentType
+    );
+
     public interface IUserRepository : IGenericRepository<User>
     {
         Task<User?> GetByEmailAsync(string email);
+
         Task<User?> GetByUsernameAsync(string username);
+
         Task<User?> GetByUsernameOrEmailAsync(string usernameOrEmail);
+
         Task<IReadOnlyList<User>> GetByStatusAsync(string status);
 
         Task ChangeUserStatusViaProcAsync(
@@ -30,35 +51,34 @@ namespace MangaManagementSystem.Domain.Interfaces
             Guid? createdByUserId = null
         );
 
-        Task<(Guid newUserId, Guid? portfolioFileResourceId)> CreateUserWithOptionalPortfolioAsync(
-            string roleName,
-            string username,
-            string email,
-            string passwordHash,
-            string? displayName = null,
-            Guid? avatarFileId = null,
-            string? portfolioOriginalFileName = null,
-            string? portfolioCloudinaryPublicId = null,
-            string? portfolioCloudinarySecureUrl = null,
-            string? portfolioContentType = null,
-            long? portfolioFileSizeBytes = null,
-            string? portfolioSha256Hash = null,
-            Guid? createdByUserId = null
-        );
+        Task<(Guid newUserId, Guid? portfolioFileResourceId)>
+            CreateUserWithOptionalPortfolioAsync(
+                string roleName,
+                string username,
+                string email,
+                string passwordHash,
+                string? displayName = null,
+                Guid? avatarFileId = null,
+                string? portfolioOriginalFileName = null,
+                string? portfolioCloudinaryPublicId = null,
+                string? portfolioCloudinarySecureUrl = null,
+                string? portfolioContentType = null,
+                long? portfolioFileSizeBytes = null,
+                string? portfolioSha256Hash = null,
+                Guid? createdByUserId = null
+            );
 
         Task UpdateDisplayNameViaProcAsync(
             Guid userId,
             string displayName
         );
 
-        Task UpdateAvatarFileViaProcAsync(
-            Guid userId,
-            Guid avatarFileId
+        Task<UserFileReplacementResult> UpdateAvatarFileViaProcAsync(
+            UserFileReplacementRequest request
         );
 
-        Task UpdatePortfolioFileViaProcAsync(
-            Guid userId,
-            Guid portfolioFileId
+        Task<UserFileReplacementResult> UpdatePortfolioFileViaProcAsync(
+            UserFileReplacementRequest request
         );
 
         Task ResetPasswordViaProcAsync(

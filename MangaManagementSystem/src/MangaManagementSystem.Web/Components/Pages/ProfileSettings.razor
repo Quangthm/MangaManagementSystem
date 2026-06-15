@@ -6,7 +6,6 @@
 @using Microsoft.AspNetCore.Components.Forms
 @using System.Security.Claims
 @using System.IO
-@using System.Text.Json
 @using MangaManagementSystem.Application.DTOs.Auth
 @using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Application.Interfaces
@@ -21,32 +20,33 @@
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
 
+
 <PageTitle>Profile Settings - MangaFlow</PageTitle>
 
 <div class="mf-settings-page">
     <section class="mf-settings-shell">
         <div class="mf-page-heading">
-    <div class="mf-page-heading-content">
-        <MudButton Variant="Variant.Text"
-                   Color="Color.Primary"
-                   Class="mf-back-dashboard-button"
-                   OnClick="BackToDashboard">
-            ← Back to Dashboard
-        </MudButton>
+            <div class="mf-page-heading-content">
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Primary"
+                           Class="mf-back-dashboard-button"
+                           OnClick="BackToDashboard">
+                    ← Back to Dashboard
+                </MudButton>
 
-        <div>
-            <MudText Typo="Typo.h4"
-                     Class="font-weight-bold">
-                Profile Settings
-            </MudText>
+                <div>
+                    <MudText Typo="Typo.h4"
+                             Class="font-weight-bold">
+                        Profile Settings
+                    </MudText>
 
-            <MudText Typo="Typo.body2"
-                     Class="mf-muted">
-                Manage your account information, portfolio document, and password security.
-            </MudText>
+                    <MudText Typo="Typo.body2"
+                             Class="mf-muted">
+                        Manage your account information, portfolio document, and password security.
+                    </MudText>
+                </div>
+            </div>
         </div>
-    </div>
-</div>
 
         @if (_isLoading)
         {
@@ -458,8 +458,8 @@
                 <div class="mf-crop-stage">
                     <canvas id="@AvatarCropCanvasId"
                             class="@(_avatarCropReady
-                                ? "mf-crop-canvas is-ready"
-                                : "mf-crop-canvas")"
+                                                        ? "mf-crop-canvas is-ready"
+                                                        : "mf-crop-canvas")"
                             width="480"
                             height="480">
                     </canvas>
@@ -545,18 +545,6 @@
 
     private const string ActionPasswordOtp = "PROFILE_PASSWORD_RESET";
 
-    private const string AuditDisplayNameUpdated =
-        "USER_PROFILE_DISPLAY_NAME_UPDATED";
-
-    private const string AuditAvatarUpdated =
-        "USER_PROFILE_AVATAR_UPDATED";
-
-    private const string AuditPortfolioUpdated =
-        "USER_PROFILE_PORTFOLIO_UPDATED";
-
-    private const string AuditPasswordReset =
-        "USER_PROFILE_PASSWORD_RESET";
-
     private const string AvatarCropCanvasId =
         "profile-settings-avatar-crop-canvas";
 
@@ -639,78 +627,78 @@
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
-{
-    if (!_showAvatarCropDialog ||
-        !_initializeAvatarCrop ||
-        string.IsNullOrWhiteSpace(
-            _avatarCropSourceDataUrl))
     {
-        return;
+        if (!_showAvatarCropDialog ||
+            !_initializeAvatarCrop ||
+            string.IsNullOrWhiteSpace(
+                _avatarCropSourceDataUrl))
+        {
+            return;
+        }
+
+        _initializeAvatarCrop = false;
+
+        try
+        {
+            /*
+             * Thêm version vào URL để trình duyệt không dùng
+             * lại module JavaScript lỗi đã lưu trong cache.
+             */
+            _avatarCropModule ??=
+                await JSRuntime.InvokeAsync<IJSObjectReference>(
+                    "import",
+                    "./js/profile-settings-crop.js?v=20260614-04");
+
+            await _avatarCropModule.InvokeVoidAsync(
+                "initialize",
+                AvatarCropCanvasId,
+                _avatarCropSourceDataUrl);
+
+            _avatarCropReady = true;
+        }
+        catch (Exception ex)
+        {
+            _showAvatarCropDialog = false;
+            _avatarCropReady = false;
+
+            SetOperation(
+                $"Unable to open avatar crop editor: {ex.Message}",
+                Severity.Error);
+
+            Snackbar.Add(
+                $"Unable to open avatar crop editor: {ex.Message}",
+                Severity.Error);
+        }
+
+        StateHasChanged();
     }
-
-    _initializeAvatarCrop = false;
-
-    try
+    private void BackToDashboard()
     {
-        /*
-         * Thêm version vào URL để trình duyệt không dùng
-         * lại module JavaScript lỗi đã lưu trong cache.
-         */
-        _avatarCropModule ??=
-            await JSRuntime.InvokeAsync<IJSObjectReference>(
-                "import",
-                "./js/profile-settings-crop.js?v=20260614-04");
+        var normalizedRole =
+            _currentRoleName?
+                .Trim()
+                .ToLowerInvariant()
+            ?? string.Empty;
 
-        await _avatarCropModule.InvokeVoidAsync(
-            "initialize",
-            AvatarCropCanvasId,
-            _avatarCropSourceDataUrl);
+        var dashboardUrl = normalizedRole switch
+        {
+            "admin" => "/admin",
 
-        _avatarCropReady = true;
+            "mangaka" => "/mangaka",
+
+            "assistant" => "/assistant",
+
+            "tantou editor" => "/editor",
+
+            "editorial board member" => "/ranking",
+
+            "editorial board chief" => "/ranking",
+
+            _ => "/dashboard"
+        };
+
+        NavigationManager.NavigateTo(dashboardUrl);
     }
-    catch (Exception ex)
-    {
-        _showAvatarCropDialog = false;
-        _avatarCropReady = false;
-
-        SetOperation(
-            $"Unable to open avatar crop editor: {ex.Message}",
-            Severity.Error);
-
-        Snackbar.Add(
-            $"Unable to open avatar crop editor: {ex.Message}",
-            Severity.Error);
-    }
-
-    StateHasChanged();
-}
-private void BackToDashboard()
-{
-    var normalizedRole =
-        _currentRoleName?
-            .Trim()
-            .ToLowerInvariant()
-        ?? string.Empty;
-
-    var dashboardUrl = normalizedRole switch
-    {
-        "admin" => "/admin",
-
-        "mangaka" => "/mangaka",
-
-        "assistant" => "/assistant",
-
-        "tantou editor" => "/editor",
-
-        "editorial board member" => "/ranking",
-
-        "editorial board chief" => "/ranking",
-
-        _ => "/dashboard"
-    };
-
-    NavigationManager.NavigateTo(dashboardUrl);
-}
     private void SelectSection(ProfileSettingsSection section)
     {
         _activeSection = section;
@@ -876,23 +864,10 @@ private void BackToDashboard()
 
         await RunBusyAsync(async () =>
         {
-            var oldDisplayName =
-                _currentUser.DisplayName;
-
             var updated =
                 await UserService.UpdateDisplayNameAsync(
                     _currentUserId,
                     trimmed);
-
-            await UserService.RecordProfileAuditAsync(
-                _currentUserId,
-                AuditDisplayNameUpdated,
-                JsonSerializer.Serialize(new
-                {
-                    oldDisplayName,
-                    newDisplayName = trimmed,
-                    confirmedBy = "AUTHENTICATED_SESSION"
-                }));
 
             _currentUser = updated;
             _displayName = updated.DisplayName;
@@ -1044,102 +1019,102 @@ private void BackToDashboard()
     }
 
     private async Task ConfirmAvatarCropAsync()
-{
-    if (!_avatarCropReady ||
-        _avatarCropModule == null ||
-        _avatarCropBusy)
     {
-        return;
-    }
-
-    _avatarCropBusy = true;
-
-    try
-    {
-        await using var croppedStreamReference =
-            await _avatarCropModule.InvokeAsync<IJSStreamReference>(
-                "exportCroppedImageStream",
-                AvatarCropCanvasId,
-                512);
-
-        await using var croppedStream =
-            await croppedStreamReference.OpenReadStreamAsync(
-                maxAllowedSize: MaxUploadBytes);
-
-        using var memoryStream =
-            new MemoryStream();
-
-        await croppedStream.CopyToAsync(
-            memoryStream);
-
-        var croppedBytes =
-            memoryStream.ToArray();
-
-        if (croppedBytes.Length == 0)
+        if (!_avatarCropReady ||
+            _avatarCropModule == null ||
+            _avatarCropBusy)
         {
-            throw new InvalidOperationException(
-                "The cropped avatar image is empty.");
+            return;
         }
 
-        var originalName =
-            string.IsNullOrWhiteSpace(
-                _pendingAvatarOriginalFileName)
-                ? "avatar"
-                : Path.GetFileNameWithoutExtension(
-                    _pendingAvatarOriginalFileName);
+        _avatarCropBusy = true;
 
-        var croppedFileName =
-            $"{originalName}_cropped.png";
+        try
+        {
+            await using var croppedStreamReference =
+                await _avatarCropModule.InvokeAsync<IJSStreamReference>(
+                    "exportCroppedImageStream",
+                    AvatarCropCanvasId,
+                    512);
 
-        _selectedAvatarBytes =
-            croppedBytes;
+            await using var croppedStream =
+                await croppedStreamReference.OpenReadStreamAsync(
+                    maxAllowedSize: MaxUploadBytes);
 
-        _selectedAvatarFileName =
-            croppedFileName;
+            using var memoryStream =
+                new MemoryStream();
 
-        _selectedAvatarUploadFileName =
-            BuildUniqueStoredFileName(
-                croppedFileName,
-                "avatar");
+            await croppedStream.CopyToAsync(
+                memoryStream);
 
-        _selectedAvatarSizeLabel =
-            FormatFileSize(
-                croppedBytes.LongLength);
+            var croppedBytes =
+                memoryStream.ToArray();
 
-        _selectedAvatarContentType =
-            "image/png";
+            if (croppedBytes.Length == 0)
+            {
+                throw new InvalidOperationException(
+                    "The cropped avatar image is empty.");
+            }
 
-        _avatarPreviewDataUrl =
-            BuildDataUrl(
-                "image/png",
-                croppedBytes);
+            var originalName =
+                string.IsNullOrWhiteSpace(
+                    _pendingAvatarOriginalFileName)
+                    ? "avatar"
+                    : Path.GetFileNameWithoutExtension(
+                        _pendingAvatarOriginalFileName);
 
-        await CloseAvatarCropDialogAsync();
+            var croppedFileName =
+                $"{originalName}_cropped.png";
 
-        _avatarInputKey++;
+            _selectedAvatarBytes =
+                croppedBytes;
 
-        SetOperation(
-            "Avatar crop completed. Upload when ready.",
-            Severity.Success);
+            _selectedAvatarFileName =
+                croppedFileName;
+
+            _selectedAvatarUploadFileName =
+                BuildUniqueStoredFileName(
+                    croppedFileName,
+                    "avatar");
+
+            _selectedAvatarSizeLabel =
+                FormatFileSize(
+                    croppedBytes.LongLength);
+
+            _selectedAvatarContentType =
+                "image/png";
+
+            _avatarPreviewDataUrl =
+                BuildDataUrl(
+                    "image/png",
+                    croppedBytes);
+
+            await CloseAvatarCropDialogAsync();
+
+            _avatarInputKey++;
+
+            SetOperation(
+                "Avatar crop completed. Upload when ready.",
+                Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            var message =
+                $"Unable to crop avatar: {ex.Message}";
+
+            SetOperation(
+                message,
+                Severity.Error);
+
+            Snackbar.Add(
+                message,
+                Severity.Error);
+        }
+        finally
+        {
+            _avatarCropBusy = false;
+        }
     }
-    catch (Exception ex)
-    {
-        var message =
-            $"Unable to crop avatar: {ex.Message}";
-
-        SetOperation(
-            message,
-            Severity.Error);
-
-        Snackbar.Add(
-            message,
-            Severity.Error);
-    }
-    finally
-    {
-        _avatarCropBusy = false;
-    }
-}
     private async Task CancelAvatarCropAsync()
     {
         if (_avatarCropBusy)
@@ -1226,9 +1201,6 @@ private void BackToDashboard()
 
         await RunBusyAsync(async () =>
         {
-            var oldAvatarFileId =
-                _currentUser?.AvatarFileId;
-
             var displayFileName =
                 _selectedAvatarFileName!;
 
@@ -1239,42 +1211,28 @@ private void BackToDashboard()
                     _selectedAvatarContentType,
                     "USER_AVATAR");
 
-            var fileResource =
-                await FileResourceService.CreateFileResourceAsync(
-                    new CreateFileResourceDto(
-                        "USER_AVATAR",
-                        displayFileName,
-                        upload.PublicId,
-                        upload.SecureUrl,
-                        upload.ContentType,
-                        upload.FileSizeBytes,
-                        upload.Sha256Hash,
-                        _currentUserId));
+            var workflowUpload =
+                upload with
+                {
+                    OriginalFileName = displayFileName
+                };
 
             var updated =
                 await UserService.UpdateAvatarFileAsync(
                     _currentUserId,
-                    fileResource.FileResourceId);
+                    workflowUpload);
 
-            await UserService.RecordProfileAuditAsync(
-                _currentUserId,
-                AuditAvatarUpdated,
-                JsonSerializer.Serialize(new
-                {
-                    oldAvatarFileId,
-                    newAvatarFileId =
-                        fileResource.FileResourceId,
-                    fileName = displayFileName,
-                    confirmedBy =
-                        "AUTHENTICATED_SESSION"
-                }));
+            var newAvatarFileId =
+                updated.AvatarFileId
+                ?? throw new InvalidOperationException(
+                    "The updated avatar FileResource id was not returned.");
 
             _currentUser = updated;
 
             _avatarUrl =
                 BuildVersionedUrl(
-                    fileResource.CloudinarySecureUrl,
-                    fileResource.FileResourceId);
+                    upload.SecureUrl,
+                    newAvatarFileId);
 
             ClearAvatarSelection();
 
@@ -1367,9 +1325,6 @@ private void BackToDashboard()
 
         await RunBusyAsync(async () =>
         {
-            var oldPortfolioFileId =
-                _currentUser?.PortfolioFileId;
-
             var displayFileName =
                 _selectedPortfolioFileName!;
 
@@ -1383,44 +1338,28 @@ private void BackToDashboard()
                     displayContentType,
                     "REGISTRATION_PORTFOLIO");
 
-            var fileResource =
-                await FileResourceService.CreateFileResourceAsync(
-                    new CreateFileResourceDto(
-                        "REGISTRATION_PORTFOLIO",
-                        displayFileName,
-                        upload.PublicId,
-                        upload.SecureUrl,
-                        upload.ContentType,
-                        upload.FileSizeBytes,
-                        upload.Sha256Hash,
-                        _currentUserId));
+            var workflowUpload =
+                upload with
+                {
+                    OriginalFileName = displayFileName
+                };
 
             var updated =
                 await UserService.UpdatePortfolioFileAsync(
                     _currentUserId,
-                    fileResource.FileResourceId);
+                    workflowUpload);
 
-            await UserService.RecordProfileAuditAsync(
-                _currentUserId,
-                AuditPortfolioUpdated,
-                JsonSerializer.Serialize(new
-                {
-                    oldPortfolioFileId,
-                    newPortfolioFileId =
-                        fileResource.FileResourceId,
-                    fileName = displayFileName,
-                    contentType =
-                        fileResource.ContentType,
-                    confirmedBy =
-                        "AUTHENTICATED_SESSION"
-                }));
+            var newPortfolioFileId =
+                updated.PortfolioFileId
+                ?? throw new InvalidOperationException(
+                    "The updated portfolio FileResource id was not returned.");
 
             _currentUser = updated;
 
             _portfolioUrl =
                 BuildVersionedUrl(
-                    fileResource.CloudinarySecureUrl,
-                    fileResource.FileResourceId);
+                    upload.SecureUrl,
+                    newPortfolioFileId);
 
             _portfolioFileName =
                 displayFileName;
@@ -1428,7 +1367,7 @@ private void BackToDashboard()
             _portfolioTypeLabel =
                 BuildDocumentTypeLabel(
                     displayFileName,
-                    fileResource.ContentType);
+                    upload.ContentType);
 
             ClearPortfolioSelection();
 
@@ -1528,15 +1467,6 @@ private void BackToDashboard()
             await UserService.ResetPasswordAsync(
                 _currentUserId,
                 _newPassword);
-
-            await UserService.RecordProfileAuditAsync(
-                _currentUserId,
-                AuditPasswordReset,
-                JsonSerializer.Serialize(new
-                {
-                    confirmedBy = "EMAIL_OTP",
-                    passwordChanged = true
-                }));
 
             _newPassword = string.Empty;
             _confirmPassword = string.Empty;
@@ -1904,25 +1834,26 @@ private void BackToDashboard()
         margin: 0 auto;
     }
 
-.mf-page-heading-content {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-}
+    .mf-page-heading-content {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+    }
 
-.mf-back-dashboard-button {
-    margin-left: -10px;
-    margin-bottom: 6px;
-    padding-left: 10px;
-    padding-right: 10px;
-    border-radius: 9px;
-    font-weight: 700;
-    text-transform: none;
-}
+    .mf-back-dashboard-button {
+        margin-left: -10px;
+        margin-bottom: 6px;
+        padding-left: 10px;
+        padding-right: 10px;
+        border-radius: 9px;
+        font-weight: 700;
+        text-transform: none;
+    }
 
-.mf-back-dashboard-button:hover {
-    background: #eef2ff;
-}
+        .mf-back-dashboard-button:hover {
+            background: #eef2ff;
+        }
+
     .mf-page-heading {
         display: flex;
         align-items: center;
@@ -1975,12 +1906,12 @@ private void BackToDashboard()
         flex: 0 0 auto;
     }
 
-    .mf-menu-avatar img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        display: block;
-    }
+        .mf-menu-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
 
     .mf-menu-user-meta {
         min-width: 0;
@@ -1989,18 +1920,18 @@ private void BackToDashboard()
         gap: 2px;
     }
 
-    .mf-menu-user-meta strong {
-        color: #0f172a;
-        font-size: 15px;
-        line-height: 1.2;
-        word-break: break-word;
-    }
+        .mf-menu-user-meta strong {
+            color: #0f172a;
+            font-size: 15px;
+            line-height: 1.2;
+            word-break: break-word;
+        }
 
-    .mf-menu-user-meta span {
-        color: #64748b;
-        font-size: 12px;
-        word-break: break-word;
-    }
+        .mf-menu-user-meta span {
+            color: #64748b;
+            font-size: 12px;
+            word-break: break-word;
+        }
 
     .mf-menu-divider {
         height: 1px;
@@ -2020,36 +1951,33 @@ private void BackToDashboard()
         display: flex;
         flex-direction: column;
         gap: 3px;
-        transition:
-            background .15s ease,
-            color .15s ease,
-            box-shadow .15s ease;
+        transition: background .15s ease, color .15s ease, box-shadow .15s ease;
     }
 
-    .mf-menu-item span {
-        color: #0f172a;
-        font-weight: 800;
-        font-size: 14px;
-    }
+        .mf-menu-item span {
+            color: #0f172a;
+            font-weight: 800;
+            font-size: 14px;
+        }
 
-    .mf-menu-item small {
-        color: #64748b;
-        font-size: 12px;
-    }
+        .mf-menu-item small {
+            color: #64748b;
+            font-size: 12px;
+        }
 
-    .mf-menu-item:hover {
-        background: #eef2ff;
-    }
+        .mf-menu-item:hover {
+            background: #eef2ff;
+        }
 
-    .mf-menu-item.active {
-        background: #4f46e5;
-        box-shadow: 0 10px 18px rgba(79, 70, 229, 0.22);
-    }
+        .mf-menu-item.active {
+            background: #4f46e5;
+            box-shadow: 0 10px 18px rgba(79, 70, 229, 0.22);
+        }
 
-    .mf-menu-item.active span,
-    .mf-menu-item.active small {
-        color: #ffffff;
-    }
+            .mf-menu-item.active span,
+            .mf-menu-item.active small {
+                color: #ffffff;
+            }
 
     .mf-settings-content {
         padding: 24px;
@@ -2077,9 +2005,7 @@ private void BackToDashboard()
     .mf-security-grid,
     .mf-portfolio-grid {
         display: grid;
-        grid-template-columns:
-            minmax(340px, .85fr)
-            minmax(440px, 1.15fr);
+        grid-template-columns: minmax(340px, .85fr) minmax(440px, 1.15fr);
         gap: 18px;
         align-items: stretch;
     }
@@ -2109,9 +2035,7 @@ private void BackToDashboard()
         background: linear-gradient(135deg, #4f46e5, #7c3aed);
         color: #ffffff;
         border: 5px solid #eef2ff;
-        box-shadow:
-            0 14px 30px rgba(79, 70, 229, 0.22),
-            0 0 0 1px rgba(79, 70, 229, 0.08);
+        box-shadow: 0 14px 30px rgba(79, 70, 229, 0.22), 0 0 0 1px rgba(79, 70, 229, 0.08);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -2119,13 +2043,13 @@ private void BackToDashboard()
         font-weight: 900;
     }
 
-    .mf-avatar-preview img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        object-position: center;
-        display: block;
-    }
+        .mf-avatar-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center;
+            display: block;
+        }
 
     .mf-avatar-actions {
         min-width: 220px;
@@ -2147,14 +2071,12 @@ private void BackToDashboard()
         border-radius: 10px;
         padding: 9px 14px;
         cursor: pointer;
-        transition:
-            background .15s ease,
-            color .15s ease;
+        transition: background .15s ease, color .15s ease;
     }
 
-    .mf-upload-button:hover {
-        background: #eef2ff;
-    }
+        .mf-upload-button:hover {
+            background: #eef2ff;
+        }
 
     .mf-file-input-hidden {
         display: none;
@@ -2173,15 +2095,14 @@ private void BackToDashboard()
         gap: 2px;
     }
 
-    .mf-selected-file span {
-        color: #64748b;
-        font-size: 12px;
-    }
+        .mf-selected-file span {
+            color: #64748b;
+            font-size: 12px;
+        }
 
     .mf-form-grid {
         display: grid;
-        grid-template-columns:
-            repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 14px;
     }
 
@@ -2227,15 +2148,15 @@ private void BackToDashboard()
         gap: 4px;
     }
 
-    .mf-document-body strong {
-        color: #0f172a;
-        word-break: break-word;
-    }
+        .mf-document-body strong {
+            color: #0f172a;
+            word-break: break-word;
+        }
 
-    .mf-document-body span {
-        color: #64748b;
-        font-size: 13px;
-    }
+        .mf-document-body span {
+            color: #64748b;
+            font-size: 13px;
+        }
 
     .mf-document-dropzone {
         min-height: 140px;
@@ -2248,24 +2169,22 @@ private void BackToDashboard()
         flex-direction: column;
         cursor: pointer;
         gap: 6px;
-        transition:
-            background .15s ease,
-            border-color .15s ease;
+        transition: background .15s ease, border-color .15s ease;
     }
 
-    .mf-document-dropzone:hover {
-        background: #eef2ff;
-        border-color: #4f46e5;
-    }
+        .mf-document-dropzone:hover {
+            background: #eef2ff;
+            border-color: #4f46e5;
+        }
 
-    .mf-document-dropzone span {
-        color: #0f172a;
-        font-weight: 900;
-    }
+        .mf-document-dropzone span {
+            color: #0f172a;
+            font-weight: 900;
+        }
 
-    .mf-document-dropzone small {
-        color: #64748b;
-    }
+        .mf-document-dropzone small {
+            color: #64748b;
+        }
 
     .mf-empty-note {
         min-height: 120px;
@@ -2310,8 +2229,7 @@ private void BackToDashboard()
         border: 1px solid #e2e8f0;
         border-radius: 22px;
         background: #ffffff;
-        box-shadow:
-            0 30px 80px rgba(15, 23, 42, 0.38);
+        box-shadow: 0 30px 80px rgba(15, 23, 42, 0.38);
     }
 
     .mf-crop-header {
@@ -2322,18 +2240,18 @@ private void BackToDashboard()
         gap: 20px;
     }
 
-    .mf-crop-header h2 {
-        margin: 0;
-        color: #0f172a;
-        font-size: 22px;
-        font-weight: 800;
-    }
+        .mf-crop-header h2 {
+            margin: 0;
+            color: #0f172a;
+            font-size: 22px;
+            font-weight: 800;
+        }
 
-    .mf-crop-header p {
-        margin: 5px 0 0;
-        color: #64748b;
-        font-size: 14px;
-    }
+        .mf-crop-header p {
+            margin: 5px 0 0;
+            color: #64748b;
+            font-size: 14px;
+        }
 
     .mf-crop-close {
         width: 38px;
@@ -2348,17 +2266,15 @@ private void BackToDashboard()
         cursor: pointer;
     }
 
-    .mf-crop-close:hover:not(:disabled) {
-        background: #e2e8f0;
-        color: #0f172a;
-    }
+        .mf-crop-close:hover:not(:disabled) {
+            background: #e2e8f0;
+            color: #0f172a;
+        }
 
     .mf-crop-body {
         padding: 24px;
         display: grid;
-        grid-template-columns:
-            minmax(0, 1fr)
-            250px;
+        grid-template-columns: minmax(0, 1fr) 250px;
         gap: 26px;
         align-items: start;
     }
@@ -2381,17 +2297,16 @@ private void BackToDashboard()
         touch-action: none;
         opacity: 0;
         transition: opacity .18s ease;
-        box-shadow:
-            0 14px 34px rgba(15, 23, 42, 0.25);
+        box-shadow: 0 14px 34px rgba(15, 23, 42, 0.25);
     }
 
-    .mf-crop-canvas.is-ready {
-        opacity: 1;
-    }
+        .mf-crop-canvas.is-ready {
+            opacity: 1;
+        }
 
-    .mf-crop-canvas.is-dragging {
-        cursor: grabbing;
-    }
+        .mf-crop-canvas.is-dragging {
+            cursor: grabbing;
+        }
 
     .mf-crop-loading {
         position: absolute;
@@ -2409,53 +2324,50 @@ private void BackToDashboard()
         gap: 14px;
     }
 
-    .mf-crop-controls strong {
-        color: #0f172a;
-    }
+        .mf-crop-controls strong {
+            color: #0f172a;
+        }
 
-    .mf-crop-controls p {
-        margin: 3px 0 0;
-        color: #64748b;
-        font-size: 12px;
-    }
+        .mf-crop-controls p {
+            margin: 3px 0 0;
+            color: #64748b;
+            font-size: 12px;
+        }
 
-    .mf-crop-controls label {
-        color: #334155;
-        font-size: 13px;
-        font-weight: 700;
-    }
+        .mf-crop-controls label {
+            color: #334155;
+            font-size: 13px;
+            font-weight: 700;
+        }
 
     .mf-crop-zoom-row {
         display: grid;
-        grid-template-columns:
-            40px
-            minmax(0, 1fr)
-            40px;
+        grid-template-columns: 40px minmax(0, 1fr) 40px;
         gap: 9px;
         align-items: center;
     }
 
-    .mf-crop-zoom-row input {
-        width: 100%;
-        accent-color: #4f46e5;
-    }
+        .mf-crop-zoom-row input {
+            width: 100%;
+            accent-color: #4f46e5;
+        }
 
-    .mf-crop-zoom-row button,
-    .mf-crop-reset {
-        min-height: 40px;
-        border: 1px solid #cbd5e1;
-        border-radius: 9px;
-        background: #ffffff;
-        color: #334155;
-        font-weight: 800;
-        cursor: pointer;
-    }
+        .mf-crop-zoom-row button,
+        .mf-crop-reset {
+            min-height: 40px;
+            border: 1px solid #cbd5e1;
+            border-radius: 9px;
+            background: #ffffff;
+            color: #334155;
+            font-weight: 800;
+            cursor: pointer;
+        }
 
-    .mf-crop-zoom-row button:hover:not(:disabled),
-    .mf-crop-reset:hover:not(:disabled) {
-        border-color: #6366f1;
-        color: #4f46e5;
-    }
+            .mf-crop-zoom-row button:hover:not(:disabled),
+            .mf-crop-reset:hover:not(:disabled) {
+                border-color: #6366f1;
+                color: #4f46e5;
+            }
 
     .mf-crop-help {
         padding: 14px;
@@ -2497,13 +2409,12 @@ private void BackToDashboard()
         border: 1px solid #4f46e5;
         background: #4f46e5;
         color: #ffffff;
-        box-shadow:
-            0 8px 18px rgba(79, 70, 229, 0.24);
+        box-shadow: 0 8px 18px rgba(79, 70, 229, 0.24);
     }
 
-    .mf-crop-confirm:hover:not(:disabled) {
-        background: #4338ca;
-    }
+        .mf-crop-confirm:hover:not(:disabled) {
+            background: #4338ca;
+        }
 
     .mf-crop-dialog button:disabled,
     .mf-crop-dialog input:disabled {
