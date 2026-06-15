@@ -80,6 +80,13 @@ namespace MangaManagementSystem.Web
             builder.Services.AddRazorComponents()
                 .AddInteractiveServerComponents();
 
+            // Register typed API clients
+            builder.Services.AddHttpClient<Services.Api.IAssistantTaskApiClient, Services.Api.AssistantTaskApiClient>(client =>
+            {
+                // Base address for the API - adjust as needed for deployment
+                client.BaseAddress = new Uri("https://localhost:7264"); // Default ASP.NET Core HTTPS port
+            });
+
             var app = builder.Build();
 
             if (!app.Environment.IsDevelopment())
