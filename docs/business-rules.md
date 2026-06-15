@@ -70,14 +70,13 @@
 | BR-FILE-004 | A file resource is considered active when `deleted_at_utc IS NULL`. Application queries must exclude deleted file resources unless the user is viewing historical or audit data. | Active draft |
 | BR-FILE-005 | A user avatar, when uploaded, is stored as a `FileResource` and referenced from the user account. | Active draft |
 | BR-FILE-006 | A user avatar file must use `file_purpose_code = USER_AVATAR`. | Active draft |
-| BR-FILE-007 | Series cover images, proposal files, chapter page-version files, editorial attachment/markup files, portfolio files, task reference files, and user avatars should all use `FileResource` instead of storing Cloudinary fields directly in business tables. | Active draft |
+| BR-FILE-007 | Series cover images, proposal files, chapter page-version files, editorial attachment/markup files, portfolio files, and user avatars should all use `FileResource` instead of storing Cloudinary fields directly in business tables. | Active draft |
 | BR-FILE-008 | In normal UI contexts, when a referenced file is deleted or unavailable, the system should display a safe placeholder instead of exposing a broken file reference. | Active draft |
 | BR-FILE-009 | Files used as `ChapterPageVersion` content, including accepted AI/translation output or accepted assistant output, must use `file_purpose_code = CHAPTER_PAGE_VERSION`. | Active draft |
-| BR-FILE-010 | Files attached only as task instructions, examples, or reference material must use `file_purpose_code = TASK_REFERENCE`. | Active draft |
 | BR-FILE-011 | Every `FileResource` must store a required `sha256_hash` calculated from the exact uploaded file bytes before the file metadata is saved. | Active draft |
 | BR-FILE-012 | `sha256_hash` may be used for file integrity checking, duplicate detection, and audit traceability, but it should not be treated as a global uniqueness rule because the same file may be validly reused in different workflow contexts. | Active draft |
 | BR-FILE-013 | The system may optionally check `sha256_hash` before creating a new `FileResource` to detect whether an active file with the same content already exists. | Optional MVP |
-| BR-FILE-014 | Optional duplicate-file warnings may be shown for repeated registration portfolios, repeated proposal files, repeated series covers, repeated chapter page-version files, repeated task references, repeated editorial attachments, or repeated avatars. | Optional MVP |
+| BR-FILE-014 | Optional duplicate-file warnings may be shown for repeated registration portfolios, repeated proposal files, repeated series covers, repeated chapter page-version files, repeated editorial attachments, or repeated avatars. | Optional MVP |
 | BR-FILE-015 | Duplicate-file warnings are advisory usability messages; they should not automatically block uploads unless a specific workflow later defines blocking behavior. | Optional MVP |
 | BR-FILE-016 | Some duplicate-file warnings may be omitted from the MVP UI when implementation time is limited, as long as `sha256_hash` is still stored for future detection, integrity checks, and audit traceability. | Optional MVP |
 

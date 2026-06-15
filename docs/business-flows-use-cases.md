@@ -412,7 +412,6 @@ User selects/uploads a file
 | `SERIES_PROPOSAL` | Warn strongly if the same proposal file was already submitted, especially for the same series. |
 | `SERIES_COVER` | Warn or skip update if the selected cover is identical to the current cover. |
 | `CHAPTER_PAGE_VERSION` | Warn strongly if the new page version is identical to the current page version. |
-| `TASK_REFERENCE` | Optional warning only; repeated reference files may be valid. |
 | `EDITORIAL_ATTACHMENT` | Optional warning if the same attachment already exists for the same review/context. |
 | `USER_AVATAR` | Low-priority warning; repeated avatars may be allowed or ignored. |
 

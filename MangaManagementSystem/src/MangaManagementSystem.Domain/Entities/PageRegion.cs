@@ -24,9 +24,6 @@ public class PageRegion : BaseEntity
     public DateTime? UpdatedAtUtc { get; set; }
     public Guid? UpdatedByUserId { get; set; }
     public User? UpdatedByUser { get; set; }
-    public User? DeletedByUser { get; set; }
-    public Guid? DeletedByUserId { get; set; }
-
     // Skip-navigation collections mapped through junction tables
     public ICollection<ChapterPageTask> Tasks { get; set; } = new List<ChapterPageTask>();
     public ICollection<ChapterPageAnnotation> Annotations { get; set; } = new List<ChapterPageAnnotation>();

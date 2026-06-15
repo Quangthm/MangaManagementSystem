@@ -73,7 +73,7 @@
 | FR-FILE-001 | The system shall store actual uploaded media files in Cloudinary. | BR-FILE-001 |
 | FR-FILE-002 | The system shall store file metadata and file relationships in SQL Server through `manga.FileResource`. | BR-FILE-001, BR-FILE-002 |
 | FR-FILE-003 | The system shall require uploaded or generated business files to be referenced through `manga.FileResource` instead of raw Cloudinary URLs. | BR-FILE-002, BR-FILE-007 |
-| FR-FILE-004 | The system shall reference chapter page-version files, proposal files, series cover images, user avatars, user portfolios, editorial attachment/markup files, and task reference files through `FileResource`. | BR-FILE-002, BR-FILE-007 |
+| FR-FILE-004 | The system shall reference chapter page-version files, proposal files, series cover images, user avatars, user portfolios, and editorial attachment/markup files through `FileResource`. | BR-FILE-002, BR-FILE-007 |
 | FR-FILE-005 | The system shall treat a file resource as active only when `deleted_at_utc IS NULL`. | BR-FILE-004 |
 | FR-FILE-006 | The system shall exclude deleted file resources from normal application queries unless the user is viewing historical or audit data. | BR-FILE-004 |
 | FR-FILE-007 | The system shall delete Cloudinary assets through the application workflow instead of requiring manual deletion from the Cloudinary console. | BR-FILE-003 |
@@ -81,11 +81,10 @@
 | FR-FILE-009 | The system shall require user avatar files to use `file_purpose_code = USER_AVATAR`. | BR-FILE-006 |
 | FR-FILE-010 | The system shall display a safe placeholder when a referenced file is unavailable or deleted in a normal UI context. | BR-FILE-008 |
 | FR-FILE-011 | The system shall require files used as `ChapterPageVersion` content to use `file_purpose_code = CHAPTER_PAGE_VERSION`. | BR-FILE-009 |
-| FR-FILE-012 | The system shall require files attached only as task instructions, examples, or reference material to use `file_purpose_code = TASK_REFERENCE`. | BR-FILE-010 |
 | FR-FILE-013 | The system shall store a required `sha256_hash` for each `FileResource`, calculated from the exact uploaded file bytes before file metadata is saved. | BR-FILE-011 |
 | FR-FILE-014 | The system shall allow `sha256_hash` to support file integrity checking, duplicate detection, and audit traceability without enforcing global file uniqueness. | BR-FILE-012 |
 | FR-FILE-015 | The system may optionally check for active `FileResource` records with the same `sha256_hash` before saving a new file resource. | BR-FILE-013 |
-| FR-FILE-016 | The system may optionally show advisory duplicate-file warnings for repeated registration portfolio, proposal, cover, page-version, task reference, editorial attachment, or avatar files. | BR-FILE-014, BR-FILE-015 |
+| FR-FILE-016 | The system may optionally show advisory duplicate-file warnings for repeated registration portfolio, proposal, cover, page-version, editorial attachment, or avatar files. | BR-FILE-014, BR-FILE-015 |
 | FR-FILE-017 | The system shall not require every duplicate-file warning UI to be implemented in MVP, provided that `sha256_hash` is still stored for future duplicate detection, integrity checking, and audit traceability. | BR-FILE-016 |
 
 ---

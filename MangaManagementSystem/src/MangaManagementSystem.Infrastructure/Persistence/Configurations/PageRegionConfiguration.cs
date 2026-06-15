@@ -33,10 +33,6 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
                 .WithMany()
                 .HasForeignKey(r => r.CreatedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
-            builder.HasOne(r => r.DeletedByUser)
-                .WithMany()
-                .HasForeignKey(r => r.DeletedByUserId)
-                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

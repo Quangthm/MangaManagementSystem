@@ -731,6 +731,7 @@ BEGIN
     DECLARE @detail_json NVARCHAR(MAX);
     DECLARE @action_code NVARCHAR(64);
     DECLARE @audit_entity_id NVARCHAR(100);
+    DECLARE @soft_delete_reason NVARCHAR(500);
 
     BEGIN TRY
         IF @@TRANCOUNT = 0
@@ -738,7 +739,6 @@ BEGIN
             SET @started_tran = 1;
             BEGIN TRAN;
         END;
-
         SET @lock_resource = N'auth_user_portfolio_update_' + CONVERT(NVARCHAR(36), @target_user_id);
 
         EXEC @lock_result = sys.sp_getapplock
@@ -805,6 +805,16 @@ BEGIN
             portfolio_file_id = @new_portfolio_file_id
         WHERE user_id = @target_user_id;
 
+        IF @old_portfolio_file_id IS NOT NULL
+        BEGIN
+            SET @soft_delete_reason = N'Replaced by user portfolio update.';
+
+            EXEC manga.usp_FileResource_SoftDelete
+                @file_resource_id = @old_portfolio_file_id,
+                @deleted_by_user_id = @actor_user_id,
+                @delete_reason = @soft_delete_reason;
+        END;
+
         SET @action_code =
             CASE
                 WHEN @old_portfolio_file_id IS NULL
@@ -842,7 +852,7 @@ BEGIN
         END;
 
         ;THROW;
-    END CATCH
+    END CATCH;
 END;
 GO
 CREATE OR ALTER PROCEDURE auth.usp_User_CreateWithOptionalPortfolio
