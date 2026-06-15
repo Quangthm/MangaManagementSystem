@@ -1,4 +1,4 @@
-﻿using MangaManagementSystem.Application.Interfaces;
+using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Domain.Interfaces;
 using MangaManagementSystem.Infrastructure.Options;
 using MangaManagementSystem.Infrastructure.Persistence;
@@ -29,6 +29,9 @@ namespace MangaManagementSystem.Infrastructure
                 var cloudinary = new CloudinaryDotNet.Cloudinary(account) { Api = { Secure = true } };
                 services.AddSingleton(cloudinary);
             }
+            services.AddMemoryCache();
+            services.AddSingleton<IOtpCacheService, OtpCacheService>();
+
             services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
             services.AddScoped<IEmailService, EmailService>();
 

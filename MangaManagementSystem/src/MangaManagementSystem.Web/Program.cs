@@ -6,6 +6,7 @@ using MangaManagementSystem.Web.Components;
 using MangaManagementSystem.Web.Helpers;
 using MangaManagementSystem.Web.Options;
 using MangaManagementSystem.Web.Services;
+using MangaManagementSystem.Web.Services.Api;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
@@ -32,8 +33,16 @@ namespace MangaManagementSystem.Web
 
             builder.Services.AddHttpClient<RecaptchaService>();
 
-            builder.Services.AddMemoryCache();
-            builder.Services.AddSingleton<IOtpCacheService, OtpCacheService>();
+            var apiBaseUrl =
+                builder.Configuration["ApiSettings:BaseUrl"]
+                ?? "https://localhost:7039";
+
+            builder.Services.AddHttpClient<
+                IProfilePasswordApiClient,
+                ProfilePasswordApiClient>(client =>
+                {
+                    client.BaseAddress = new Uri(apiBaseUrl);
+                });
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddAntiforgery();
 

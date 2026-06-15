@@ -4,10 +4,16 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dea7bcea-bd98-4d81-a419-b0d31545701b</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MangaManagementSystem.Application\MangaManagementSystem.Application.csproj" />
+    <ProjectReference Include="..\MangaManagementSystem.Infrastructure\MangaManagementSystem.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

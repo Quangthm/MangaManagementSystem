@@ -2,7 +2,7 @@ using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.Interfaces;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace MangaManagementSystem.Web.Services
+namespace MangaManagementSystem.Infrastructure.Services
 {
     public class OtpCacheService : IOtpCacheService
     {

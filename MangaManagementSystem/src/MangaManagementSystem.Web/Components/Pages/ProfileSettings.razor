@@ -9,11 +9,13 @@
 @using MangaManagementSystem.Application.DTOs.Auth
 @using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Application.Interfaces
+@using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize]
 @implements IAsyncDisposable
 
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IUserService UserService
+@inject IProfilePasswordApiClient ProfilePasswordApiClient
 @inject IFileResourceService FileResourceService
 @inject IFileStorageService FileStorageService
 @inject ISnackbar Snackbar
@@ -1517,9 +1519,7 @@
 
         await RunBusyAsync(async () =>
         {
-            await UserService.SendProfileOtpAsync(
-                _currentUserId,
-                ActionPasswordOtp);
+            await ProfilePasswordApiClient.SendOtpAsync(_currentUserId);
 
             _otpSentForPassword = true;
             _otpCodePassword = string.Empty;
@@ -1548,23 +1548,9 @@
 
         await RunBusyAsync(async () =>
         {
-            var verified =
-                await UserService.VerifyProfileOtpAsync(
-                    _currentUserId,
-                    ActionPasswordOtp,
-                    _otpCodePassword);
-
-            if (!verified)
-            {
-                SetOperation(
-                    "Invalid or expired OTP.",
-                    Severity.Error);
-
-                return;
-            }
-
-            await UserService.ResetPasswordAsync(
+            await ProfilePasswordApiClient.ResetPasswordAsync(
                 _currentUserId,
+                _otpCodePassword,
                 _newPassword);
 
             _newPassword = string.Empty;
