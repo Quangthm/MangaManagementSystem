@@ -18,11 +18,32 @@
 | Phase 2A (Backend DTOs & contracts) | ✅ Complete |
 | Phase 2B (Infrastructure & SQL) | ✅ Complete |
 | Phase 3 (Architecture correction) | ✅ Complete |
+| Phase 3.1 (API base address config) | ✅ Fixed |
 | Phase 4 (File upload UI) | ⏳ Pending |
 
 **Next exact step:** Test deployed API endpoint and Web UI integration. Verify `POST /api/assistant/tasks/{taskId}/submit-work` with multipart/form-data. Finalize after API/UX validation.
 
 > **Architecture correction:** Web pages now call API endpoints via typed clients instead of Application/Infrastructure services directly.
+
+## Architecture Correction Fix — 2026-06-13
+
+**Issue:** Hardcoded API base URL in Web API client registration (HIGH risk).
+
+**Fix:** Replaced hardcoded `"https://localhost:7264"` with configuration-driven base address:
+
+* Added `ApiBaseUrl` key to `appsettings.Development.json` and `appsettings.json`
+* Updated `AddHttpClient` registration to use `builder.Configuration["ApiBaseUrl"] ?? "https://localhost:7264"`
+* Fallback ensures development continues to work if configuration is missing
+
+**Files Changed:**
+* `src/MangaManagementSystem.Web/Program.cs` (line 87)
+* `src/MangaManagementSystem.Web/appsettings.Development.json` (added `ApiBaseUrl`)
+* `src/MangaManagementSystem.API/appsettings.json` (added `ApiBaseUrl`)
+
+**Impact:** 
+* No secrets added (API base URL is non-secret configuration)
+* Maintains backward compatibility with fallback value
+* Enables production deployment with correct API URL via configuration
 
 ---
 
@@ -112,7 +133,7 @@
 | **NuGet warnings** | `MailKit/MimeKit` warnings may appear if base branch does not include the package fix commit. |
 | **SQL syntax** | Stored procedure syntax is not validated by `dotnet build`. Test in SSMS/SQL Server before deployment. |
 | **Partial failure** | If Cloudinary upload succeeds but SQL submit fails, cleanup is *not* implemented unless an existing `IFileStorageService.DeleteAsync()` method is available. |
-| **API base address** | Web client uses hardcoded `https://localhost:7264` as base address. Adjust for deployment. |
+| **API base address** | ✅ Fixed - Now uses configuration key `ApiBaseUrl` with fallback for development. |
 | **Transaction scope** | SQL stored procedure owns the transaction; C# side cannot roll back Cloudinary upload. Plan error handling carefully. |
 
 ---
