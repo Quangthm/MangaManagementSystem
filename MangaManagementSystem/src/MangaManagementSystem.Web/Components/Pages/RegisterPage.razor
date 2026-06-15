@@ -248,6 +248,13 @@
         _isSendingOtp = true;
         try
         {
+            if (_recaptchaWidgetId is null)
+            {
+                Snackbar.Add("reCAPTCHA is not available. Please refresh the page and try again.", Severity.Error);
+                _isSendingOtp = false;
+                return;
+            }
+
             var token = await JSRuntime.InvokeAsync<string>("recaptchaInterop.getResponse", _recaptchaWidgetId);
             if (string.IsNullOrWhiteSpace(token))
             {
@@ -398,12 +405,24 @@
         }
     }
 
-    private void ResetRegistration()
+    private async Task ResetRegistration()
     {
         _isOtpSent = false;
         _otpCode = string.Empty;
-        _recaptchaRendered = false;
-        _recaptchaWidgetId = null;
+
+        if (_recaptchaWidgetId.HasValue)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("recaptchaInterop.reset", _recaptchaWidgetId.Value);
+            }
+            catch
+            {
+                // Widget may have been destroyed; fall through and re-render.
+                _recaptchaWidgetId = null;
+                _recaptchaRendered = false;
+            }
+        }
     }
 
     private void GoToLogin()
@@ -413,21 +432,28 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!_isOtpSent)
+        if (_recaptchaRendered || _isOtpSent)
         {
-            try
+            return;
+        }
+
+        try
+        {
+            var siteKey = RecaptchaOptions.Value.SiteKey;
+            var widgetId = await JSRuntime.InvokeAsync<int>("recaptchaInterop.render", "register-recaptcha", siteKey);
+            if (widgetId > -1)
             {
-                var siteKey = RecaptchaOptions.Value.SiteKey;
-                _recaptchaWidgetId = await JSRuntime.InvokeAsync<int?>("recaptchaInterop.render", "register-recaptcha", siteKey);
+                _recaptchaWidgetId = widgetId;
+                _recaptchaRendered = true;
             }
-            catch (Exception ex)
+            else
             {
-                Console.WriteLine("Error rendering register reCAPTCHA: " + ex.Message);
+                Console.WriteLine("Warning: reCAPTCHA could not be rendered (widgetId = {0})", widgetId);
             }
         }
-        else
+        catch (Exception ex)
         {
-            _recaptchaWidgetId = null;
+            Console.WriteLine("Warning: reCAPTCHA render failed: " + ex.Message);
         }
     }
 }
