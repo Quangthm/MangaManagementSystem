@@ -6,8 +6,7 @@ using System.Threading.Tasks;
 namespace MangaManagementSystem.Domain.Interfaces
 {
     public sealed record UserFileReplacementRequest(
-        Guid TargetUserId,
-        Guid ActorUserId,
+        Guid UserId,
         string OriginalFileName,
         string CloudinaryPublicId,
         string CloudinarySecureUrl,

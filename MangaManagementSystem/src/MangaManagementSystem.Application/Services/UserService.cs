@@ -250,7 +250,6 @@ namespace MangaManagementSystem.Application.Services
                 var request =
                     new UserFileReplacementRequest(
                         userId,
-                        userId,
                         upload.OriginalFileName,
                         upload.PublicId,
                         upload.SecureUrl,
@@ -311,7 +310,6 @@ namespace MangaManagementSystem.Application.Services
 
                 var request =
                     new UserFileReplacementRequest(
-                        userId,
                         userId,
                         upload.OriginalFileName,
                         upload.PublicId,

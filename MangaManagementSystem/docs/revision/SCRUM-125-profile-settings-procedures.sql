@@ -116,6 +116,7 @@ GO
 
 /* ============================================================
    SCRUM-125 - Replace user avatar
+   - Uses one user_id because Profile Settings is self-update.
    - Creates the new FileResource.
    - Locks the user's avatar update workflow.
    - Updates auth.Users.avatar_file_id.
@@ -124,8 +125,7 @@ GO
    - Returns old Cloudinary metadata for C# cleanup.
    ============================================================ */
 CREATE OR ALTER PROCEDURE auth.usp_User_UpdateAvatarFile
-    @target_user_id UNIQUEIDENTIFIER,
-    @actor_user_id UNIQUEIDENTIFIER,
+    @user_id UNIQUEIDENTIFIER,
 
     @original_file_name NVARCHAR(260),
     @cloudinary_public_id NVARCHAR(255),
@@ -160,15 +160,9 @@ BEGIN
         SET @old_cloudinary_public_id = NULL;
         SET @old_content_type = NULL;
 
-        IF @target_user_id IS NULL
-           OR @actor_user_id IS NULL
+        IF @user_id IS NULL
         BEGIN
-            ;THROW 54201, 'Target user and actor user are required.', 1;
-        END;
-
-        IF @target_user_id <> @actor_user_id
-        BEGIN
-            ;THROW 54202, 'A user may update only their own avatar.', 1;
+            ;THROW 54201, 'user_id is required.', 1;
         END;
 
         IF @@TRANCOUNT = 0
@@ -179,7 +173,7 @@ BEGIN
 
         SET @lock_resource =
             N'auth_user_avatar_update_'
-            + CONVERT(NVARCHAR(36), @target_user_id);
+            + CONVERT(NVARCHAR(36), @user_id);
 
         EXEC @lock_result = sys.sp_getapplock
             @Resource = @lock_resource,
@@ -189,17 +183,17 @@ BEGIN
 
         IF @lock_result < 0
         BEGIN
-            ;THROW 54203, 'Could not acquire avatar update lock.', 1;
+            ;THROW 54202, 'Could not acquire avatar update lock.', 1;
         END;
 
         SELECT
             @old_avatar_file_id = u.avatar_file_id
         FROM auth.Users u WITH (UPDLOCK, HOLDLOCK)
-        WHERE u.user_id = @target_user_id;
+        WHERE u.user_id = @user_id;
 
         IF @@ROWCOUNT = 0
         BEGIN
-            ;THROW 54204, 'Target user was not found.', 1;
+            ;THROW 54203, 'User was not found.', 1;
         END;
 
         EXEC manga.usp_FileResource_Create
@@ -210,17 +204,17 @@ BEGIN
             @content_type = @content_type,
             @file_size_bytes = @file_size_bytes,
             @sha256_hash = @sha256_hash,
-            @uploaded_by_user_id = @actor_user_id,
+            @uploaded_by_user_id = @user_id,
             @file_resource_id = @new_avatar_file_id OUTPUT;
 
         IF @new_avatar_file_id IS NULL
         BEGIN
-            ;THROW 54205, 'The new avatar FileResource could not be created.', 1;
+            ;THROW 54204, 'The new avatar FileResource could not be created.', 1;
         END;
 
         UPDATE auth.Users
         SET avatar_file_id = @new_avatar_file_id
-        WHERE user_id = @target_user_id;
+        WHERE user_id = @user_id;
 
         IF @old_avatar_file_id IS NOT NULL
         BEGIN
@@ -234,19 +228,19 @@ BEGIN
 
             IF @old_file_purpose_code IS NULL
             BEGIN
-                ;THROW 54206, 'The previous avatar FileResource was not found.', 1;
+                ;THROW 54205, 'The previous avatar FileResource was not found.', 1;
             END;
 
             IF @old_file_purpose_code <> N'USER_AVATAR'
             BEGIN
-                ;THROW 54207, 'The previous file is not a USER_AVATAR resource.', 1;
+                ;THROW 54206, 'The previous file is not a USER_AVATAR resource.', 1;
             END;
 
             IF @old_deleted_at_utc IS NULL
             BEGIN
                 EXEC manga.usp_FileResource_SoftDelete
                     @file_resource_id = @old_avatar_file_id,
-                    @deleted_by_user_id = @actor_user_id,
+                    @deleted_by_user_id = @user_id,
                     @delete_reason = N'Replaced by a new user avatar.';
             END;
         END;
@@ -254,7 +248,7 @@ BEGIN
         SELECT @detail_json =
         (
             SELECT
-                @target_user_id AS user_id,
+                @user_id AS user_id,
                 @old_avatar_file_id AS old_avatar_file_id,
                 @new_avatar_file_id AS new_avatar_file_id,
                 @old_cloudinary_public_id AS old_cloudinary_public_id,
@@ -266,10 +260,10 @@ BEGIN
         );
 
         SET @audit_entity_id =
-            CONVERT(NVARCHAR(36), @target_user_id);
+            CONVERT(NVARCHAR(36), @user_id);
 
         EXEC audit.usp_AuditEvent_Append
-            @actor_user_id = @actor_user_id,
+            @actor_user_id = @user_id,
             @action_code = N'USER_AVATAR_UPDATED',
             @entity_type = N'Users',
             @entity_id = @audit_entity_id,
@@ -293,6 +287,7 @@ GO
 
 /* ============================================================
    SCRUM-125 - Replace user portfolio
+   - Uses one user_id because Profile Settings is self-update.
    - Creates the new FileResource.
    - Locks the user's portfolio update workflow.
    - Updates auth.Users.portfolio_file_id.
@@ -301,8 +296,7 @@ GO
    - Returns old Cloudinary metadata for C# cleanup.
    ============================================================ */
 CREATE OR ALTER PROCEDURE auth.usp_User_UpdatePortfolioFile
-    @target_user_id UNIQUEIDENTIFIER,
-    @actor_user_id UNIQUEIDENTIFIER,
+    @user_id UNIQUEIDENTIFIER,
 
     @original_file_name NVARCHAR(260),
     @cloudinary_public_id NVARCHAR(255),
@@ -337,15 +331,9 @@ BEGIN
         SET @old_cloudinary_public_id = NULL;
         SET @old_content_type = NULL;
 
-        IF @target_user_id IS NULL
-           OR @actor_user_id IS NULL
+        IF @user_id IS NULL
         BEGIN
-            ;THROW 54301, 'Target user and actor user are required.', 1;
-        END;
-
-        IF @target_user_id <> @actor_user_id
-        BEGIN
-            ;THROW 54302, 'A user may update only their own portfolio.', 1;
+            ;THROW 54301, 'user_id is required.', 1;
         END;
 
         IF @@TRANCOUNT = 0
@@ -356,7 +344,7 @@ BEGIN
 
         SET @lock_resource =
             N'auth_user_portfolio_update_'
-            + CONVERT(NVARCHAR(36), @target_user_id);
+            + CONVERT(NVARCHAR(36), @user_id);
 
         EXEC @lock_result = sys.sp_getapplock
             @Resource = @lock_resource,
@@ -366,17 +354,17 @@ BEGIN
 
         IF @lock_result < 0
         BEGIN
-            ;THROW 54303, 'Could not acquire portfolio update lock.', 1;
+            ;THROW 54302, 'Could not acquire portfolio update lock.', 1;
         END;
 
         SELECT
             @old_portfolio_file_id = u.portfolio_file_id
         FROM auth.Users u WITH (UPDLOCK, HOLDLOCK)
-        WHERE u.user_id = @target_user_id;
+        WHERE u.user_id = @user_id;
 
         IF @@ROWCOUNT = 0
         BEGIN
-            ;THROW 54304, 'Target user was not found.', 1;
+            ;THROW 54303, 'User was not found.', 1;
         END;
 
         EXEC manga.usp_FileResource_Create
@@ -387,17 +375,17 @@ BEGIN
             @content_type = @content_type,
             @file_size_bytes = @file_size_bytes,
             @sha256_hash = @sha256_hash,
-            @uploaded_by_user_id = @actor_user_id,
+            @uploaded_by_user_id = @user_id,
             @file_resource_id = @new_portfolio_file_id OUTPUT;
 
         IF @new_portfolio_file_id IS NULL
         BEGIN
-            ;THROW 54305, 'The new portfolio FileResource could not be created.', 1;
+            ;THROW 54304, 'The new portfolio FileResource could not be created.', 1;
         END;
 
         UPDATE auth.Users
         SET portfolio_file_id = @new_portfolio_file_id
-        WHERE user_id = @target_user_id;
+        WHERE user_id = @user_id;
 
         IF @old_portfolio_file_id IS NOT NULL
         BEGIN
@@ -411,19 +399,19 @@ BEGIN
 
             IF @old_file_purpose_code IS NULL
             BEGIN
-                ;THROW 54306, 'The previous portfolio FileResource was not found.', 1;
+                ;THROW 54305, 'The previous portfolio FileResource was not found.', 1;
             END;
 
             IF @old_file_purpose_code <> N'REGISTRATION_PORTFOLIO'
             BEGIN
-                ;THROW 54307, 'The previous file is not a REGISTRATION_PORTFOLIO resource.', 1;
+                ;THROW 54306, 'The previous file is not a REGISTRATION_PORTFOLIO resource.', 1;
             END;
 
             IF @old_deleted_at_utc IS NULL
             BEGIN
                 EXEC manga.usp_FileResource_SoftDelete
                     @file_resource_id = @old_portfolio_file_id,
-                    @deleted_by_user_id = @actor_user_id,
+                    @deleted_by_user_id = @user_id,
                     @delete_reason = N'Replaced by a new user portfolio.';
             END;
         END;
@@ -431,7 +419,7 @@ BEGIN
         SELECT @detail_json =
         (
             SELECT
-                @target_user_id AS user_id,
+                @user_id AS user_id,
                 @old_portfolio_file_id AS old_portfolio_file_id,
                 @new_portfolio_file_id AS new_portfolio_file_id,
                 @old_cloudinary_public_id AS old_cloudinary_public_id,
@@ -443,10 +431,10 @@ BEGIN
         );
 
         SET @audit_entity_id =
-            CONVERT(NVARCHAR(36), @target_user_id);
+            CONVERT(NVARCHAR(36), @user_id);
 
         EXEC audit.usp_AuditEvent_Append
-            @actor_user_id = @actor_user_id,
+            @actor_user_id = @user_id,
             @action_code = N'USER_PORTFOLIO_UPDATED',
             @entity_type = N'Users',
             @entity_id = @audit_entity_id,

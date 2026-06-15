@@ -1,4 +1,4 @@
-﻿@using System.Globalization
+@using System.Globalization
 @using Microsoft.JSInterop
 @page "/profile/settings"
 @using Microsoft.AspNetCore.Authorization
@@ -283,12 +283,11 @@
                                             </div>
                                         </div>
 
-                                        <MudButton Href="@_portfolioUrl"
-                                                   Target="_blank"
-                                                   Variant="Variant.Outlined"
+                                        <MudButton Variant="Variant.Outlined"
                                                    Color="Color.Primary"
-                                                   Class="mt-3">
-                                            Open Current Portfolio
+                                                   Class="mt-3"
+                                                   OnClick="OpenCurrentPortfolioPreviewAsync">
+                                            Preview Current Portfolio
                                         </MudButton>
                                     }
                                     else
@@ -540,6 +539,51 @@
     </div>
 }
 
+@if (_showPortfolioPreview && _currentPortfolio != null)
+{
+    <MudDialog @bind-Visible="_showPortfolioPreview"
+               Options="_portfolioPreviewDialogOptions">
+        <TitleContent>
+            <MudText Typo="Typo.h6" Class="font-weight-bold">
+                <MudIcon Icon="@Icons.Material.Filled.Preview"
+                         Class="mr-2" />
+                Portfolio Preview - @_currentPortfolio.OriginalFileName
+            </MudText>
+        </TitleContent>
+
+        <DialogContent>
+            @if (_isImagePreview)
+            {
+                <div class="d-flex justify-center my-2">
+                    <MudImage Src="@_currentPortfolio.CloudinarySecureUrl"
+                              Alt="Portfolio Image"
+                              Fluid="true"
+                              Class="rounded"
+                              Style="max-height: 60vh; object-fit: contain;" />
+                </div>
+            }
+            else
+            {
+                <div style="height: 80vh;">
+                    <MudText Typo="Typo.caption"
+                             Class="mf-muted text-center mb-2">
+                        If the document does not load,
+                        <MudLink Href="@($"/api/portfolio/{_currentPortfolio.FileResourceId}")"
+                                 Target="_blank">
+                            click here to open it in a new tab
+                        </MudLink>.
+                    </MudText>
+
+                    <iframe src="@($"/api/portfolio/{_currentPortfolio.FileResourceId}")"
+                            width="100%"
+                            style="height: calc(80vh - 80px); border: none; border-radius: 4px; position: relative; z-index: 0;">
+                    </iframe>
+                </div>
+            }
+        </DialogContent>
+    </MudDialog>
+}
+
 @code {
     private const long MaxUploadBytes = 10 * 1024 * 1024;
 
@@ -561,6 +605,18 @@
     private string? _portfolioUrl;
     private string? _portfolioFileName;
     private string _portfolioTypeLabel = "FILE";
+
+    private FileResourceDto? _currentPortfolio;
+    private bool _showPortfolioPreview;
+    private bool _isImagePreview;
+
+    private readonly DialogOptions _portfolioPreviewDialogOptions =
+        new()
+        {
+            FullWidth = true,
+            MaxWidth = MaxWidth.ExtraLarge,
+            CloseButton = true
+        };
 
     private string? _operationMessage;
     private Severity _operationSeverity = Severity.Info;
@@ -829,6 +885,49 @@
                         portfolioFile.OriginalFileName,
                         portfolioFile.ContentType);
             }
+        }
+    }
+
+    private async Task OpenCurrentPortfolioPreviewAsync()
+    {
+        if (_currentUser?.PortfolioFileId is not Guid fileResourceId)
+        {
+            Snackbar.Add(
+                "No portfolio document is linked to this account.",
+                Severity.Warning);
+
+            return;
+        }
+
+        try
+        {
+            var file =
+                await FileResourceService.GetFileResourceByIdAsync(
+                    fileResourceId);
+
+            if (file == null || file.DeletedAtUtc != null)
+            {
+                Snackbar.Add(
+                    "Portfolio file was not found or is unavailable.",
+                    Severity.Error);
+
+                return;
+            }
+
+            _currentPortfolio = file;
+
+            _isImagePreview =
+                file.ContentType?.StartsWith(
+                    "image/",
+                    StringComparison.OrdinalIgnoreCase) == true;
+
+            _showPortfolioPreview = true;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(
+                $"Failed to load portfolio: {ex.Message}",
+                Severity.Error);
         }
     }
 

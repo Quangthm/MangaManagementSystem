@@ -523,7 +523,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 ReadNullableString(oldContentTypeParameter));
 
             await ReloadTrackedUserAsync(
-                request.TargetUserId);
+                request.UserId);
 
             return result;
         }
@@ -618,7 +618,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                         oldContentTypeParameter));
 
             await ReloadTrackedUserAsync(
-                request.TargetUserId);
+                request.UserId);
 
             return result;
         }
@@ -669,18 +669,10 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         {
             command.Parameters.Add(
                 new SqlParameter(
-                    "@target_user_id",
+                    "@user_id",
                     SqlDbType.UniqueIdentifier)
                 {
-                    Value = request.TargetUserId
-                });
-
-            command.Parameters.Add(
-                new SqlParameter(
-                    "@actor_user_id",
-                    SqlDbType.UniqueIdentifier)
-                {
-                    Value = request.ActorUserId
+                    Value = request.UserId
                 });
 
             command.Parameters.Add(
