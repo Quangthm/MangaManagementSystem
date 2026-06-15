@@ -68,22 +68,38 @@ namespace MangaManagementSystem.API.Controllers
 
         /// <summary>
         /// Step 2: complete registration using the emailed OTP code.
+        /// Accepts multipart/form-data so an optional portfolio file can be uploaded
+        /// alongside the email and OTP fields.
         /// </summary>
         [HttpPost("complete")]
+        [Consumes("multipart/form-data")]
         public async Task<IActionResult> CompleteAsync(
-            [FromBody] CompleteRegistrationRequest request,
-            CancellationToken cancellationToken)
+            [FromForm] string email,
+            [FromForm] string otp,
+            IFormFile? portfolioFile = null)
         {
-            if (!ModelState.IsValid)
+            if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(otp))
             {
-                return ValidationProblem(ModelState);
+                return BadRequest(new ApiErrorResponse("Email and OTP are required."));
+            }
+
+            byte[]? fileBytes = null;
+            string? fileName = null;
+            string? contentType = null;
+
+            if (portfolioFile is { Length: > 0 })
+            {
+                using var ms = new MemoryStream();
+                await portfolioFile.CopyToAsync(ms);
+                fileBytes = ms.ToArray();
+                fileName = portfolioFile.FileName;
+                contentType = portfolioFile.ContentType;
             }
 
             try
             {
                 var user = await _authService.CompleteRegistrationWithOtpAsync(
-                    request.Email,
-                    request.Otp);
+                    email, otp, fileBytes, fileName, contentType);
 
                 return Ok(user);
             }

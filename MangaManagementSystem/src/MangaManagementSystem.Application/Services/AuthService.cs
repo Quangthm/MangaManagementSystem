@@ -58,7 +58,12 @@ namespace MangaManagementSystem.Application.Services
             return true;
         }
 
-        public async Task<UserDto> CompleteRegistrationWithOtpAsync(string email, string otp)
+        public async Task<UserDto> CompleteRegistrationWithOtpAsync(
+            string email,
+            string otp,
+            byte[]? portfolioFileBytes = null,
+            string? portfolioFileName = null,
+            string? portfolioContentType = null)
         {
             var normalizedEmail = NormalizeEmail(email);
             var pendingRegistration = _otpCacheService.TryValidateAndRemoveRegistrationOtp(normalizedEmail, otp);
@@ -68,6 +73,18 @@ namespace MangaManagementSystem.Application.Services
                 throw new InvalidOperationException("The verification code is invalid or has expired.");
             }
 
+            // When the user uploads portfolio at step 2 (multipart complete), override the
+            // cached registration's portfolio fields so the existing upload/linking logic applies.
+            if (portfolioFileBytes is not null)
+            {
+                pendingRegistration = pendingRegistration with
+                {
+                    PortfolioFileBytes = portfolioFileBytes,
+                    PortfolioFileName = portfolioFileName,
+                    PortfolioContentType = portfolioContentType
+                };
+            }
+
             await EnsureEmailAndUsernameAvailableAsync(normalizedEmail, pendingRegistration.Username);
 
             var roleName = pendingRegistration.RoleName;
@@ -75,7 +92,7 @@ namespace MangaManagementSystem.Application.Services
 
             string? portfolioPublicId = null;
             string? portfolioSecureUrl = null;
-            string? portfolioContentType = null;
+            string? portfolioUploadContentType = null;
             long? portfolioFileSize = null;
             string? portfolioOriginalFileName = null;
             string? portfolioSha256 = null;
@@ -91,7 +108,7 @@ namespace MangaManagementSystem.Application.Services
 
                 portfolioPublicId = uploadResult.PublicId;
                 portfolioSecureUrl = uploadResult.SecureUrl;
-                portfolioContentType = uploadResult.ContentType;
+                portfolioUploadContentType = uploadResult.ContentType;
                 portfolioFileSize = uploadResult.FileSizeBytes;
                 portfolioOriginalFileName = uploadResult.OriginalFileName;
                 portfolioSha256 = uploadResult.Sha256Hash;
@@ -111,7 +128,7 @@ namespace MangaManagementSystem.Application.Services
                     portfolioOriginalFileName,
                     portfolioPublicId,
                     portfolioSecureUrl,
-                    portfolioContentType,
+                    portfolioUploadContentType,
                     portfolioFileSize,
                     portfolioSha256,
                     null);
@@ -125,7 +142,7 @@ namespace MangaManagementSystem.Application.Services
 
                 if (!string.IsNullOrEmpty(portfolioPublicId))
                 {
-                    await TryDeleteUploadedPortfolioAsync(portfolioPublicId, portfolioContentType);
+                    await TryDeleteUploadedPortfolioAsync(portfolioPublicId, portfolioUploadContentType);
                 }
 
                 throw;

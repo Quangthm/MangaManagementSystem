@@ -347,12 +347,91 @@ The old direct `IAuthService` path never exposed this because Blazor constructs 
 
 6. **Test the complete path**: If OTP was sent successfully, enter the 6-digit code and click **Verify & Register**. Should complete registration.
 
+## Session 6: Multipart Registration Complete — Portfolio Parity, Remove IAuthService Fallback (2026-06-14)
+
+### Task
+Finish registration API parity by changing `POST /api/registration/complete` to accept `multipart/form-data` with an optional portfolio file, and remove the direct `IAuthService` fallback from `RegisterPage.razor`.
+
+### Route design decision
+One endpoint handles both cases:
+
+`POST /api/registration/complete` (`multipart/form-data`)
+
+- Email and OTP are required form fields.
+- `portfolioFile` (IFormFile) is an optional file part.
+- No portfolio → complete registration normally.
+- Portfolio present → the AuthService's existing Cloudinary upload/linking workflow processes it.
+- No separate `POST /api/registration/portfolio` endpoint was created.
+
+### Why not JSON + a separate portfolio endpoint
+The registration OTP flow already caches the `RegisterDto` (including portfolio fields) in step 1. Adding the portfolio at step 2 is a natural fit — the controller reads the file, passes bytes to the existing `CompleteRegistrationWithOtpAsync`, and the service overrides the cached registration's portfolio fields before processing. No new endpoints, no new workflows.
+
+### Files changed
+
+**Application layer**
+- `src/MangaManagementSystem.Application/Interfaces/IAuthService.cs` — `CompleteRegistrationWithOtpAsync` now accepts optional `byte[]? portfolioFileBytes`, `string? portfolioFileName`, `string? portfolioContentType` parameters (defaults `null` for backward compat).
+- `src/MangaManagementSystem.Application/Services/AuthService.cs` — If `portfolioFileBytes` is provided, overrides the cached `pendingRegistration`'s portfolio fields via `with { ... }` so the existing upload/linking logic applies unchanged. Renamed local `portfolioContentType` variable to `portfolioUploadContentType` to avoid parameter name conflict.
+
+**API layer**
+- `src/MangaManagementSystem.API/Controllers/RegistrationController.cs` — `POST /api/registration/complete` changed from `[FromBody] CompleteRegistrationRequest` to `[FromForm]` string fields + `IFormFile? portfolioFile`. Controller reads file bytes if present, calls service with optional portfolio params. Stays thin — no Cloudinary, no SQL, no business rules.
+
+**Web client**
+- `src/MangaManagementSystem.Web/Services/Api/IRegistrationApiClient.cs` — `CompleteRegistrationAsync` now accepts optional portfolio parameters.
+- `src/MangaManagementSystem.Web/Services/Api/RegistrationApiClient.cs` — Always sends `multipart/form-data`. Adds `ByteArrayContent` file part only when `portfolioFileBytes` is not null.
+
+**Web registration page**
+- `src/MangaManagementSystem.Web/Components/Pages/RegisterPage.razor`:
+  - Removed `@inject IAuthService AuthService` (no longer needed).
+  - Removed `_useApiClient` field.
+  - `HandleSendOtp`: Always calls `RegistrationClient.SendOtpAsync` — no portfolio branching, no `RegisterDto` construction.
+  - `HandleVerifyOtp`: Always calls `RegistrationClient.CompleteRegistrationAsync` with optional portfolio bytes from `_selectedFileBytes`.
+
+### Build result
+- Full solution: **0 errors**.
+- OpenCode did not perform runtime testing.
+
+### Manual retest checklist (developer must run locally)
+
+1. **Start API** (terminal 1):
+   ```powershell
+   dotnet run --project src\MangaManagementSystem.API\MangaManagementSystem.API.csproj --launch-profile http
+   ```
+
+2. **Start Web** (terminal 2):
+   ```powershell
+   dotnet run --project src\MangaManagementSystem.Web\MangaManagementSystem.Web.csproj
+   ```
+
+3. **Test no-portfolio registration**:
+   - Navigate to `/register`.
+   - Fill form (no portfolio), complete reCAPTCHA, click **Send OTP**.
+   - **Expected**: OTP sent successfully. Snackbar shows "Verification code sent."
+   - Enter OTP, click **Verify & Register**.
+   - **Expected**: Registration completes. "Registration successful" message.
+
+4. **Test portfolio registration**:
+   - Navigate to `/register` again (new account).
+   - Fill form, select a portfolio file (PDF, DOCX, PNG, JPG, WEBP), complete reCAPTCHA.
+   - Click **Send OTP**.
+   - **Expected**: OTP sent successfully (portfolio is NOT sent in step 1 — it's cached locally in the page).
+   - Enter OTP, click **Verify & Register**.
+   - **Expected**: Registration completes with portfolio uploaded. Message includes "Your portfolio was uploaded for Admin review."
+
+5. **Check API console**: Should log the incoming requests. No secrets exposed.
+
+6. **Check Web console**: Should log only diagnostic messages. No secrets.
+
+7. **Test error cases**:
+   - Duplicate email/username → clean API error message shown.
+   - Invalid OTP → "verification code is invalid or has expired."
+   - Short password (at step 1) → validation error from API.
+
 ## Updated Remaining Risks
 - ~~**API host configuration:**~~ **RESOLVED** (setup-secrets.ps1).
 - ~~**reCAPTCHA JS interop error:**~~ **RESOLVED** (Session 4).
-- ~~**OTP error handling:**~~ **RESOLVED** (Session 5 — client parses all API error shapes).
-- **Portfolio upload not in API JSON contract** yet; Web falls back to direct `IAuthService` when portfolio is selected.
-- ~~**Web not yet calling the API:**~~ **RESOLVED** — registration flow uses typed API client when no portfolio.
+- ~~**OTP error handling:**~~ **RESOLVED** (Session 5).
+- ~~**Portfolio upload parity:**~~ **RESOLVED** — `POST /api/registration/complete` accepts multipart with optional file; `RegisterPage.razor` always uses API client.
+- ~~**Web not yet calling the API:**~~ **RESOLVED** — registration flow fully migrated to API client.
 - **Login, Google auth, admin users** still call `IAuthService` directly.
 - **Task EF Update/Delete** still bypasses SP workflow.
 - **EF `Chapter.SeriesId1` shadow FK** — backlog, not blocking.
@@ -360,4 +439,4 @@ The old direct `IAuthService` path never exposed this because Blazor constructs 
 - Stale top-level `MangaManagementSystem.API` project still on disk (unreferenced).
 
 ## Next Recommended Prompt
-> Manually retest no-portfolio registration after the error handling fix. Once confirmed working, add a multipart portfolio-upload endpoint to the API (`POST /api/registration/portfolio`) and remove the fallback `IAuthService` path from `RegisterPage.razor`. Then migrate the login flow to the API with an `ILoginApiClient`. Separately, wire `manga.usp_ChapterPageTask_Cancel` in `ChapterPageTaskService` and remove the stale top-level API project.
+> Manually retest both no-portfolio and portfolio registration after the multipart complete endpoint change. Once confirmed, migrate the login flow to the API with an `ILoginApiClient`. Separately, wire `manga.usp_ChapterPageTask_Cancel` in `ChapterPageTaskService` and remove the stale top-level API project.

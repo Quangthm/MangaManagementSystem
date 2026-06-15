@@ -6,7 +6,12 @@ namespace MangaManagementSystem.Application.Interfaces
     {
         Task<bool> SendRegistrationOtpAsync(RegisterDto request);
 
-        Task<UserDto> CompleteRegistrationWithOtpAsync(string email, string otp);
+        Task<UserDto> CompleteRegistrationWithOtpAsync(
+            string email,
+            string otp,
+            byte[]? portfolioFileBytes = null,
+            string? portfolioFileName = null,
+            string? portfolioContentType = null);
 
         Task<AuthResultDto> LoginAsync(LoginDto request);
 

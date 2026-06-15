@@ -43,15 +43,26 @@ namespace MangaManagementSystem.Web.Services.Api
             throw new InvalidOperationException(message);
         }
 
-        public async Task<UserDto> CompleteRegistrationAsync(string email, string otp)
+        public async Task<UserDto> CompleteRegistrationAsync(
+            string email,
+            string otp,
+            byte[]? portfolioFileBytes = null,
+            string? portfolioFileName = null,
+            string? portfolioContentType = null)
         {
-            var request = new
-            {
-                Email = email,
-                Otp = otp
-            };
+            using var form = new MultipartFormDataContent();
+            form.Add(new StringContent(email), "email");
+            form.Add(new StringContent(otp), "otp");
 
-            var response = await _httpClient.PostAsJsonAsync("api/registration/complete", request);
+            if (portfolioFileBytes is not null)
+            {
+                var fileContent = new ByteArrayContent(portfolioFileBytes);
+                fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(
+                    portfolioContentType ?? "application/octet-stream");
+                form.Add(fileContent, "portfolioFile", portfolioFileName ?? "portfolio");
+            }
+
+            var response = await _httpClient.PostAsync("api/registration/complete", form);
 
             if (response.IsSuccessStatusCode)
             {

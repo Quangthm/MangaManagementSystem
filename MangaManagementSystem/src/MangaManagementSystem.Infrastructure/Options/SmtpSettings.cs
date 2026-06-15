@@ -10,7 +10,7 @@ namespace MangaManagementSystem.Infrastructure.Options
         public string Password { get; set; } = string.Empty;
         public string FromEmail { get; set; } = "noreply@mangaflow.local";
         public string FromName { get; set; } = "MangaFlow";
-        public bool UseMock { get; set; } = true;
+        public bool UseMock { get; set; } = false;
         public bool UseSsl { get; set; }
     }
 }
