@@ -83,8 +83,9 @@ namespace MangaManagementSystem.Web
             // Register typed API clients
             builder.Services.AddHttpClient<Services.Api.IAssistantTaskApiClient, Services.Api.AssistantTaskApiClient>(client =>
             {
-                // Base address for the API - adjust as needed for deployment
-                client.BaseAddress = new Uri("https://localhost:7264"); // Default ASP.NET Core HTTPS port
+                // Base address for the API - get from configuration with fallback for development
+                var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? "https://localhost:7264";
+                client.BaseAddress = new Uri(apiBaseUrl);
             });
 
             var app = builder.Build();
