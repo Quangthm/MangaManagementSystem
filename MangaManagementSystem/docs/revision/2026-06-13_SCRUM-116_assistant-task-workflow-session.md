@@ -6,7 +6,7 @@
 **Date:** 2026-06-13  
 **Author:** Kiro AI Assistant  
 
-> **⚠️ Warning:** This work is local only. Do not push to remote until Phase 3 is complete and verified.
+> **⚠️ Warning:** This work is local only. Do not push to remote until all commits are verified and tested.
 
 ---
 
@@ -17,10 +17,12 @@
 | Phase 1 (Frontend integration) | ✅ Complete |
 | Phase 2A (Backend DTOs & contracts) | ✅ Complete |
 | Phase 2B (Infrastructure & SQL) | ✅ Complete |
-| Phase 2C (DI Registration) | ✅ Committed (ee560a2) |
-| Phase 3 (File upload UI) | ⏳ Pending |
+| Phase 3 (Architecture correction) | ✅ Complete |
+| Phase 4 (File upload UI) | ⏳ Pending |
 
-**Next exact step:** Implement `SubmitTaskWork.razor` file upload UI using `InputFile`, `IBrowserFile`, `IFileStorageService`, and `IAssistantTaskSubmissionService.SubmitTaskWorkAsync()`.
+**Next exact step:** Test deployed API endpoint and Web UI integration. Verify `POST /api/assistant/tasks/{taskId}/submit-work` with multipart/form-data. Finalize after API/UX validation.
+
+> **Architecture correction:** Web pages now call API endpoints via typed clients instead of Application/Infrastructure services directly.
 
 ---
 
@@ -28,6 +30,8 @@
 
 | Hash | Message | Purpose |
 |------|---------|---------|
+| `356522f` | add assistant task API client and register in DI | API client infrastructure (`IAssistantTaskApiClient`, `AssistantTaskApiClient`) and DI registration |
+| `ea207d7` | add assistant task submission API controller | `AssistantTaskController` with `/submit-work` endpoint, file upload orchestration |
 | `ee560a2` | Register assistant task submission service | DI registration for `IAssistantTaskSubmissionService` → `AssistantTaskSubmissionService` |
 | `79b7f56` | Implement assistant task submission infrastructure service | `AssistantTaskSubmissionService` implementation using ADO.NET to call SQL stored procedure |
 | `636164f` | Add assistant task submission contract | `IAssistantTaskSubmissionService` interface + DTOs (`AssistantTaskSubmitRequestDto`, `AssistantTaskSubmitResultDto`) |
@@ -51,10 +55,16 @@
 ### Infrastructure
 1. `src/MangaManagementSystem.Infrastructure/Services/AssistantTaskSubmissionService.cs`
 
-### Web/Razor (No changes in Phase 2 — only Phase 1 modified)
+### API (New)
+1. `src/MangaManagementSystem.API/Controllers/Assistant/AssistantTaskController.cs` (new)
+2. `src/MangaManagementSystem.API/Program.cs` (updated with AddInfrastructure)
+
+### Web/Razor
 1. `src/MangaManagementSystem.Web/Components/Pages/Assistant/TaskDetail.razor`
 2. `src/MangaManagementSystem.Web/Components/Pages/Assistant/StudioWorkspace.razor`
-3. `src/MangaManagementSystem.Web/Components/Pages/Assistant/SubmitTaskWork.razor`
+3. `src/MangaManagementSystem.Web/Components/Pages/Assistant/SubmitTaskWork.razor` (updated to use API client)
+4. `src/MangaManagementSystem.Web/Services/Api/IAssistantTaskApiClient.cs` (new)
+5. `src/MangaManagementSystem.Web/Services/Api/AssistantTaskApiClient.cs` (new)
 
 ### Docs
 1. `docs/revision/2026-06-13_SCRUM-116_assistant-task-workflow-phase1.md` (created)
@@ -77,25 +87,21 @@
 | Layer | Responsibility |
 |-------|----------------|
 | **SQL** | `manga.usp_AssistantTask_SubmitWork` owns transaction, state transitions, and `CompletedPageVersionId` linkage. |
-| **C# (Infrastructure)** | Uploads file to Cloudinary *first*, *then* calls SQL stored procedure. If Cloudinary succeeds but SQL fails, cleanup is not yet implemented. |
-| **Application** | Contains only DTOs (`AssistantTaskSubmitRequestDto`, `AssistantTaskSubmitResultDto`) and interface contract (`IAssistantTaskSubmissionService`). No business logic. |
-| **Infrastructure** | Uses ADO.NET/SqlClient to execute stored procedure with transaction scope. |
-| **Web/Razor** | `SubmitTaskWork.razor` will handle `InputFile`, `IBrowserFile`, and orchestrate upload → submission pipeline. |
+| **API Controller** | `AssistantTaskController.SubmitWorkAsync()` receives multipart/form-data, uploads file to Cloudinary, calls Application service. |
+| **Application** | `IAssistantTaskSubmissionService.SubmitTaskWorkAsync()` orchestrates submission DTO construction and calls Infrastructure. |
+| **Infrastructure** | `AssistantTaskSubmissionService` executes stored procedure with ADO.NET/SqlClient. |
+| **Web API Client** | `AssistantTaskApiClient` wraps HTTP calls with `MultipartFormDataContent` for IBrowserFile uploads. |
+| **Web/Razor** | `SubmitTaskWork.razor` uses `InputFile`, `IBrowserFile`, and `AssistantTaskApiClient` for submission. |
 
 ---
 
 ## Current Pending Work
 
-1. **Commit DI registration** — already committed (`ee560a2`), but verify no uncommitted changes exist.
-2. **Build verification** — not run per instructions (no `dotnet build`).
-3. **Implement `SubmitTaskWork.razor` file upload UI** — Phase 3:
-   - Add `InputFile` component
-   - Handle `IBrowserFile` selection
-   - Call `IFileStorageService.UploadFileAsync()` for Cloudinary
-   - Call `IAssistantTaskSubmissionService.SubmitTaskWorkAsync()` with Cloudinary metadata
-   - Handle success/failure states with user feedback
-4. **Create final revision note** after Phase 3 completion.
-5. **Clean old stash entries** — only after confirming all work is committed.
+1. **Build verification** — ✅ Completed (API and Web projects build successfully).
+2. **Deploy and test API endpoint** — Ensure `POST /api/assistant/tasks/{taskId}/submit-work` works with IIS Express/Kestrel.
+3. **Deploy and test Web UI** — Verify `SubmitTaskWork.razor` file upload flow through API.
+4. **Create final revision note** after Phase 4 (full file upload) completion.
+5. **Clean old stash entries** — only after confirming all work is committed and pushed.
 
 ---
 
@@ -106,13 +112,14 @@
 | **NuGet warnings** | `MailKit/MimeKit` warnings may appear if base branch does not include the package fix commit. |
 | **SQL syntax** | Stored procedure syntax is not validated by `dotnet build`. Test in SSMS/SQL Server before deployment. |
 | **Partial failure** | If Cloudinary upload succeeds but SQL submit fails, cleanup is *not* implemented unless an existing `IFileStorageService.DeleteAsync()` method is available. |
+| **API base address** | Web client uses hardcoded `https://localhost:7264` as base address. Adjust for deployment. |
 | **Transaction scope** | SQL stored procedure owns the transaction; C# side cannot roll back Cloudinary upload. Plan error handling carefully. |
 
 ---
 
 ## Next Prompt Suggestion for Future AI Session
 
-> "Continue SCRUM-116 Phase 3: implement SubmitTaskWork.razor file upload UI using InputFile/IBrowserFile, IFileStorageService, and IAssistantTaskSubmissionService. Inspect current git status first. Do not edit backend, SQL, DTOs, services, appsettings, packages, or docs unless explicitly asked."
+> "Continue SCRUM-116 Phase 4: implement full file upload flow in SubmitTaskWork.razor after API endpoint is deployed and tested. Verify API endpoint POST /api/assistant/tasks/{taskId}/submit-work works correctly. Test multipart/form-data upload with IBrowserFile. Update API client if needed. Do not edit SQL, DTOs, or Infrastructure unless explicitly asked."
 
 ---
 
@@ -120,11 +127,21 @@
 
 ```
 On branch feature/scrum-116-assistant-task-workflow-local
+Changes to be committed:
+  - src/MangaManagementSystem.API/Controllers/Assistant/AssistantTaskController.cs
+  - src/MangaManagementSystem.API/Program.cs
+  - src/MangaManagementSystem.Web/Services/Api/IAssistantTaskApiClient.cs
+  - src/MangaManagementSystem.Web/Services/Api/AssistantTaskApiClient.cs
+  - src/MangaManagementSystem.Web/Program.cs
+
+Changes not staged:
+  - src/MangaManagementSystem.Web/Components/Pages/Assistant/SubmitTaskWork.razor (modified)
+
 Untracked files:
-  docs/revision/
+  docs/revision/ (this file)
 ```
 
-> Note: `docs/revision/` folder is newly created (not committed). This file is untracked.
+> Note: Most changes are committed. `SubmitTaskWork.razor` requires staging and commit.
 
 ---
 
