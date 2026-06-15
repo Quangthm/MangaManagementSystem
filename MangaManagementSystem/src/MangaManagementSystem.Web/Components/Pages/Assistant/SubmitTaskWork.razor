@@ -1,9 +1,12 @@
 @page "/assistant/task/{TaskId:guid}/submit"
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
 @using MangaManagementSystem.Application.DTOs.Manga
+@using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Assistant")]
 @inject NavigationManager Nav
 @inject IChapterPageTaskService TaskService
+@inject IAssistantTaskApiClient AssistantTaskClient
 @inject ISnackbar Snackbar
 
 <AssistantLayout>
@@ -39,12 +42,27 @@
                         </MudStack>
 
                         <MudAlert Severity="Severity.Info" Class="mb-4">
-                            File/page-version upload is not integrated in this commit. Submitting this form will only move an assigned task to UNDER_REVIEW using the existing task update service.
+                            Submit your completed work for editor review.
                         </MudAlert>
 
                         <div class="mf-canvas" style="min-height:260px">
-                            Submission file upload placeholder<br />
-                            Full file → FileResource → ChapterPageVersion integration is pending.
+                            <InputFile OnChange="HandleFileSelected" />
+                            <MudText Typo="Typo.caption" Class="mf-muted mt-2 d-block">
+                                @if (_selectedFile != null)
+                                {
+                                    <span>Selected: @_selectedFile.Name (@_fileSizeDisplay)</span>
+                                }
+                                else
+                                {
+                                    <span>Click to select a file (PNG, JPEG, WebP)</span>
+                                }
+                            </MudText>
+                            @if (!string.IsNullOrWhiteSpace(_fileValidationError))
+                            {
+                                <MudAlert Severity="Severity.Error" Class="mt-2">
+                                    @_fileValidationError
+                                </MudAlert>
+                            }
                         </div>
 
                         <MudText Typo="Typo.caption" Class="mf-muted mt-4 d-block">
@@ -104,11 +122,19 @@
 @code {
     [Parameter] public Guid TaskId { get; set; }
 
+    private const long MaxFileSizeBytes = 10 * 1024 * 1024; // 10 MB
+    private readonly string[] AllowedFileTypes = new[] { "image/png", "image/jpeg", "image/jpg", "image/webp" };
+
     private string Notes { get; set; } = string.Empty;
     private bool _loading = true;
     private bool _submitting;
     private string? _error;
     private ChapterPageTaskDto? _task;
+
+    // File upload fields
+    private IBrowserFile? _selectedFile;
+    private string _fileSizeDisplay = string.Empty;
+    private string _fileValidationError = string.Empty;
 
     private bool CanSubmit => _task is not null && string.Equals(_task.StatusCode, "ASSIGNED", StringComparison.OrdinalIgnoreCase);
 
@@ -136,6 +162,36 @@
         }
     }
 
+    private void HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        _selectedFile = e.File;
+        _fileValidationError = string.Empty;
+
+        if (_selectedFile == null)
+        {
+            _fileSizeDisplay = string.Empty;
+            return;
+        }
+
+        if (_selectedFile.Size > MaxFileSizeBytes)
+        {
+            _fileValidationError = $"File is too large. Maximum allowed is {MaxFileSizeBytes / (1024 * 1024)} MB.";
+            _selectedFile = null;
+            _fileSizeDisplay = string.Empty;
+            return;
+        }
+
+        if (!AllowedFileTypes.Contains(_selectedFile.ContentType.ToLowerInvariant()))
+        {
+            _fileValidationError = "Unsupported file type. Allowed: PNG, JPEG, WebP.";
+            _selectedFile = null;
+            _fileSizeDisplay = string.Empty;
+            return;
+        }
+
+        _fileSizeDisplay = $"{_selectedFile.Size / 1024} KB";
+    }
+
     private async Task SubmitAsync()
     {
         if (_task is null)
@@ -150,30 +206,38 @@
             return;
         }
 
+        if (_selectedFile == null)
+        {
+            _error = "Please select a file to submit.";
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_fileValidationError))
+        {
+            _error = _fileValidationError;
+            return;
+        }
+
         _submitting = true;
         _error = null;
 
         try
         {
-            var dto = new UpdateChapterPageTaskDto(
-                _task.ChapterPageTaskId,
-                _task.AssignedToUserId,
-                _task.TypeCode,
-                "UNDER_REVIEW",
-                _task.PriorityLevel,
-                _task.DueAtUtc,
-                _task.CompletedPageVersionId,
-                _task.PageRegions.Select(r => r.PageRegionId).ToList());
+            var result = await AssistantTaskClient.SubmitTaskWorkAsync(TaskId, _selectedFile, Notes);
 
-            var updated = await TaskService.UpdateChapterPageTaskAsync(dto);
-            if (updated is null)
+            if (result != null)
             {
-                _error = "Task could not be updated. Please try again.";
-                return;
+                Snackbar.Add("Task submitted for review.", Severity.Success);
+                Nav.NavigateTo($"/assistant/task/{TaskId}");
             }
-
-            Snackbar.Add("Task submitted for review.", Severity.Success);
-            Nav.NavigateTo("/assistant/tasks");
+            else
+            {
+                _error = "Task submission failed. Please try again.";
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            _error = $"Submission failed: {ex.Message}";
         }
         catch (Exception ex)
         {
