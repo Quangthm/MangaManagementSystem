@@ -109,7 +109,11 @@ namespace MangaManagementSystem.Web
             builder.Services.AddScoped<ToastService>();
 
             builder.Services.AddRazorComponents()
-                .AddInteractiveServerComponents();
+                .AddInteractiveServerComponents()
+                .AddHubOptions(options =>
+                {
+                    options.MaximumReceiveMessageSize = 50 * 1024 * 1024; // 50MB
+                });
 
             var app = builder.Build();
 
