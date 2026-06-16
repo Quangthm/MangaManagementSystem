@@ -1,0 +1,26 @@
+<div class="mf-vote-block">
+    <div class="mf-vote-counts">
+        <div><strong class="approve">@Approve</strong><span>Approve</span></div>
+        <div><strong class="reject">@Reject</strong><span>Reject</span></div>
+        <div><strong class="abstain">@Abstain</strong><span>Abstain</span></div>
+        <div class="mf-vote-total"><strong>@CastVotes/@TotalMembers</strong><span>Participation</span></div>
+    </div>
+    <div class="mf-progress segmented">
+        <div class="mf-segment approve" style="@($"width:{ApprovePercent}%")"></div>
+        <div class="mf-segment reject" style="@($"width:{RejectPercent}%")"></div>
+        <div class="mf-segment abstain" style="@($"width:{AbstainPercent}%")"></div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int Approve { get; set; }
+    [Parameter] public int Reject { get; set; }
+    [Parameter] public int Abstain { get; set; }
+    [Parameter] public int TotalMembers { get; set; } = 9;
+
+    private int CastVotes => Approve + Reject + Abstain;
+    private int SafeTotal => TotalMembers <= 0 ? 1 : TotalMembers;
+    private int ApprovePercent => (int)Math.Round(Approve * 100m / SafeTotal);
+    private int RejectPercent => (int)Math.Round(Reject * 100m / SafeTotal);
+    private int AbstainPercent => Math.Max(0, (int)Math.Round(Abstain * 100m / SafeTotal));
+}

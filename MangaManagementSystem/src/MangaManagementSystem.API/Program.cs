@@ -1,5 +1,3 @@
-using MangaManagementSystem.Application;
-using MangaManagementSystem.Infrastructure;
 
 namespace MangaManagementSystem.API
 {
@@ -9,15 +7,42 @@ namespace MangaManagementSystem.API
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            // Application use-case services and Infrastructure (EF Core, stored procedure
-            // wrappers, Cloudinary, OTP cache) are reused as-is. The API only owns the
-            // HTTP boundary; it does not contain business logic or SQL details.
-            builder.Services.AddApplicationServices();
-            builder.Services.AddInfrastructure(builder.Configuration);
+            // Add services to the container.
 
             builder.Services.AddControllers();
+            // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
+
+            var jwtKey = builder.Configuration["Jwt:Key"];
+            var jwtIssuer = builder.Configuration["Jwt:Issuer"];
+            var jwtAudience = builder.Configuration["Jwt:Audience"];
+
+            if (string.IsNullOrWhiteSpace(jwtKey))
+            {
+                throw new InvalidOperationException("Jwt:Key is missing in appsettings.json.");
+            }
+
+            builder.Services
+                .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                .AddJwtBearer(options =>
+                {
+                    options.TokenValidationParameters = new TokenValidationParameters
+                    {
+                        ValidateIssuer = true,
+                        ValidateAudience = true,
+                        ValidateLifetime = true,
+                        ValidateIssuerSigningKey = true,
+
+                        ValidIssuer = jwtIssuer,
+                        ValidAudience = jwtAudience,
+                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+
+                        ClockSkew = TimeSpan.Zero
+                    };
+                });
+
+            builder.Services.AddAuthorization();
 
             var app = builder.Build();
 
@@ -29,6 +54,7 @@ namespace MangaManagementSystem.API
 
             app.UseHttpsRedirection();
 
+            app.UseAuthentication();
             app.UseAuthorization();
 
             app.MapControllers();
