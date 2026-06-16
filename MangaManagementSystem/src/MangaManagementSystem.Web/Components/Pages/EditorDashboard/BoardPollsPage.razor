@@ -1,0 +1,621 @@
+﻿@page "/demo/mangaflow/polls"
+@using System.Globalization
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Authorization
+
+<MangaFlowShell Title="Board Polls" Subtitle="Editorial board voting system — manage and track serialization votes." ActiveMenu="polls" Actions="@HeaderActions">
+    <div class="mf-grid mf-grid-3">
+        <KpiCard Label="Open Polls" Value="@OpenCount.ToString(CultureInfo.InvariantCulture)" Description="Active voting sessions" Icon="O" Tone="green" />
+        <KpiCard Label="Closed Polls" Value="@ClosedCount.ToString(CultureInfo.InvariantCulture)" Description="Completed this month" Icon="C" Tone="blue" />
+        <KpiCard Label="Upcoming Polls" Value="@UpcomingCount.ToString(CultureInfo.InvariantCulture)" Description="Scheduled to open" Icon="U" Tone="purple" />
+    </div>
+
+    <h2 class="mf-section-title">Open Polls</h2>
+
+    <div class="mf-grid mf-grid-2">
+        @foreach (var poll in Polls.Where(p => p.Status == "Open"))
+        {
+            <article class="mf-poll-card">
+                <div class="mf-row">
+                    <div>
+                        <h3>@poll.Name</h3>
+                        <StatusBadge Status="@poll.Type" Dot="false" />
+                    </div>
+
+                    <StatusBadge Status="Open" />
+                </div>
+
+                <VoteBreakdown Approve="@poll.Approve"
+                               Reject="@poll.Reject"
+                               Abstain="@poll.Abstain"
+                               TotalMembers="@poll.TotalMembers" />
+
+                <div class="mf-row mf-gap-small">
+                    <div class="mf-muted">@DeadlineText(poll)</div>
+
+                    <AuthorizeView Roles="Editorial Board Chief">
+                        <Authorized>
+                            @if (EditingDeadlinePollId != poll.Id)
+                            {
+                                <button class="mf-btn mf-btn-soft" @onclick="() => StartDeadlineEdit(poll)">
+                                    @(poll.Deadline is null ? "Add Deadline" : "Update Deadline")
+                                </button>
+                            }
+                        </Authorized>
+                    </AuthorizeView>
+                </div>
+
+                <AuthorizeView Roles="Editorial Board Chief">
+                    <Authorized>
+                        @if (EditingDeadlinePollId == poll.Id)
+                        {
+                            <div class="mf-deadline-editor">
+                                <label>Update deadline <span>(optional)</span></label>
+
+                                <div class="mf-deadline-row">
+                                    <input class="mf-input"
+                                           type="date"
+                                           value="@DeadlineDraftText"
+                                           @onchange="OnDeadlineInputChanged" />
+
+                                    <button class="mf-btn mf-btn-primary" @onclick="() => SaveDeadline(poll)">
+                                        ✓ Save
+                                    </button>
+
+                                    <button class="mf-btn" @onclick="CancelDeadlineEdit">
+                                        × Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    </Authorized>
+                </AuthorizeView>
+
+                <div class="mf-actions end">
+                    <button class="mf-btn mf-btn-primary" @onclick="() => OpenVotingCenter(poll)">
+                        Open Poll
+                    </button>
+
+                    <button class="mf-btn" @onclick="() => OpenVotingCenter(poll)">
+                        Results
+                    </button>
+                </div>
+            </article>
+        }
+    </div>
+
+    @if (VotingPoll is not null)
+    {
+        <div class="mf-modal-backdrop" @onclick="CloseVotingCenter">
+            <div class="mf-voting-modal" @onclick:stopPropagation="true">
+                <div class="mf-voting-header">
+                    <div>
+                        <h2>Voting Center</h2>
+                        <p>@VotingPoll.Code · @VotingPoll.Name</p>
+                    </div>
+
+                    <div class="mf-voting-header-actions">
+                        <span class="mf-deadline-pill">
+                            ⏱ @DeadlineText(VotingPoll)
+                        </span>
+
+                        <button class="mf-icon-btn" @onclick="CloseVotingCenter">×</button>
+                    </div>
+                </div>
+
+                @if (VoteSubmitted)
+                {
+                    <div class="mf-vote-submitted-wrap">
+                        <div class="mf-vote-submitted-card">
+                            <div class="mf-vote-check">✓</div>
+
+                            <h2>Vote Submitted</h2>
+
+                            <p>
+                                Your vote of <strong class="@SelectedVoteClass">@SelectedVote</strong>
+                                has been recorded for "@VotingPoll.Name".
+                            </p>
+
+                            <button class="mf-btn mf-btn-primary full" @onclick="CloseVotingCenter">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="mf-voting-body">
+                        <main class="mf-voting-main">
+                            <section class="mf-card">
+                                <div class="mf-row">
+                                    <div>
+                                        <span class="mf-code">@VotingPoll.Code</span>
+                                        <span class="mf-muted">@VotingPoll.TypeDisplay</span>
+                                    </div>
+
+                                    <StatusBadge Status="Open" />
+                                </div>
+
+                                <h2>@VotingPoll.Name</h2>
+
+                                <div class="mf-info-tile wide">
+                                    <span>Proposal Summary</span>
+                                    <p>@VotingPoll.ProposalSummary</p>
+                                </div>
+
+                                <div class="mf-recommendation-box">
+                                    <strong>Editor Recommendation — @VotingPoll.RecommendationAuthor</strong>
+                                    <p>@VotingPoll.RecommendationText</p>
+                                </div>
+
+                                <h3 class="mf-gap-top">Supporting Documents</h3>
+
+                                @foreach (var document in VotingPoll.Documents)
+                                {
+                                    <div class="mf-document-row">
+                                        <span>📄 @document</span>
+                                        <button class="mf-link-btn">View</button>
+                                    </div>
+                                }
+                            </section>
+
+                            <AuthorizeView Roles="Editorial Board Member,Editorial Board Chief">
+                                <Authorized>
+                                    <section class="mf-card mf-gap-top">
+                                        <h3>Cast Your Vote</h3>
+
+                                        <div class="mf-vote-options">
+                                            <button class="@VoteButtonClass("Approve")" @onclick="@(() => SelectVote("Approve"))">
+                                                <span>✓</span>
+                                                <strong>Approve</strong>
+                                            </button>
+
+                                            <button class="@VoteButtonClass("Reject")" @onclick="@(() => SelectVote("Reject"))">
+                                                <span>×</span>
+                                                <strong>Reject</strong>
+                                            </button>
+
+                                            <button class="@VoteButtonClass("Abstain")" @onclick="@(() => SelectVote("Abstain"))">
+                                                <span>−</span>
+                                                <strong>Abstain</strong>
+                                            </button>
+                                        </div>
+
+                                        <label class="mf-label">
+                                            @(SelectedVote == "Reject" ? "Comment required for rejection" : "Comment (optional)")
+                                        </label>
+
+                                        <textarea class="mf-textarea"
+                                                  @bind="VoteComment"
+                                                  placeholder="Add reasoning or notes for the board record..."></textarea>
+
+                                        @if (!string.IsNullOrWhiteSpace(VoteValidationMessage))
+                                        {
+                                            <div class="mf-alert danger">@VoteValidationMessage</div>
+                                        }
+
+                                        <button class="mf-btn mf-btn-primary full"
+                                                disabled="@string.IsNullOrWhiteSpace(SelectedVote)"
+                                                @onclick="SubmitVote">
+                                            @(string.IsNullOrWhiteSpace(SelectedVote)
+                                                ? "Select a vote option above"
+                                                : $"Submit {SelectedVote} Vote")
+                                        </button>
+                                    </section>
+                                </Authorized>
+
+                                <NotAuthorized>
+                                    <section class="mf-card mf-gap-top">
+                                        <h3>Cast Your Vote</h3>
+                                        <div class="mf-alert info">
+                                            Only Editorial Board Member and Editorial Board Chief accounts can vote.
+                                        </div>
+                                    </section>
+                                </NotAuthorized>
+                            </AuthorizeView>
+                        </main>
+
+                        <aside class="mf-voting-side">
+                            <section class="mf-card">
+                                <h3>Live Results</h3>
+
+                                <div class="mf-live-total">
+                                    <strong>@VotingPoll.TotalVotes</strong>
+                                    <span>of @VotingPoll.TotalMembers votes cast</span>
+                                </div>
+
+                                <div class="mf-progress">
+                                    <div class="mf-progress-fill" style="@($"width:{Percent(VotingPoll.TotalVotes, VotingPoll.TotalMembers)}%")"></div>
+                                </div>
+
+                                <div class="mf-result-row approve">
+                                    <div>
+                                        <strong>Approve</strong>
+                                        <span>@VotingPoll.Approve (@Percent(VotingPoll.Approve, VotingPoll.TotalMembers)%)</span>
+                                    </div>
+                                    <div class="mf-result-bar">
+                                        <div style="@($"width:{Percent(VotingPoll.Approve, VotingPoll.TotalMembers)}%")"></div>
+                                    </div>
+                                </div>
+
+                                <div class="mf-result-row reject">
+                                    <div>
+                                        <strong>Reject</strong>
+                                        <span>@VotingPoll.Reject (@Percent(VotingPoll.Reject, VotingPoll.TotalMembers)%)</span>
+                                    </div>
+                                    <div class="mf-result-bar">
+                                        <div style="@($"width:{Percent(VotingPoll.Reject, VotingPoll.TotalMembers)}%")"></div>
+                                    </div>
+                                </div>
+
+                                <div class="mf-result-row abstain">
+                                    <div>
+                                        <strong>Abstain</strong>
+                                        <span>@VotingPoll.Abstain (@Percent(VotingPoll.Abstain, VotingPoll.TotalMembers)%)</span>
+                                    </div>
+                                    <div class="mf-result-bar">
+                                        <div style="@($"width:{Percent(VotingPoll.Abstain, VotingPoll.TotalMembers)}%")"></div>
+                                    </div>
+                                </div>
+
+                                <div class="mf-trajectory-box">
+                                    <span>Current Trajectory</span>
+                                    <strong>@TrajectoryText(VotingPoll)</strong>
+                                    <p>Requires majority (5 votes)</p>
+                                </div>
+                            </section>
+
+                            <section class="mf-card mf-gap-top">
+                                <h3>Board Members</h3>
+
+                                @foreach (var member in VotingPoll.BoardMembers)
+                                {
+                                    <div class="mf-board-member-row">
+                                        <span>@member.Name</span>
+
+                                        @if (member.HasVoted)
+                                        {
+                                            <span class="mf-status success">Voted</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="mf-status neutral">Pending</span>
+                                        }
+                                    </div>
+                                }
+                            </section>
+                        </aside>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</MangaFlowShell>
+
+@code {
+    private string? EditingDeadlinePollId { get; set; }
+    private string DeadlineDraftText { get; set; } = string.Empty;
+
+    private PollItem? VotingPoll { get; set; }
+    private string? SelectedVote { get; set; }
+    private string VoteComment { get; set; } = string.Empty;
+    private string? VoteValidationMessage { get; set; }
+    private bool VoteSubmitted { get; set; }
+
+    private int OpenCount => Polls.Count(p => p.Status == "Open");
+    private int ClosedCount => Polls.Count(p => p.Status == "Closed");
+    private int UpcomingCount => Polls.Count(p => p.Status == "Upcoming");
+
+    private string SelectedVoteClass => SelectedVote switch
+    {
+        "Approve" => "approve",
+        "Reject" => "reject",
+        "Abstain" => "abstain",
+        _ => string.Empty
+    };
+
+    private RenderFragment HeaderActions => @<AuthorizeView Roles="Editorial Board Chief">
+        <Authorized>
+            <button class="mf-btn mf-btn-primary" @onclick="CreatePollDemo">
+                Create Poll
+            </button>
+        </Authorized>
+    </AuthorizeView>;
+
+    private void StartDeadlineEdit(PollItem poll)
+    {
+        EditingDeadlinePollId = poll.Id;
+        DeadlineDraftText = poll.Deadline?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            ?? DateTime.Today.AddDays(7).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    }
+
+    private void OnDeadlineInputChanged(ChangeEventArgs args)
+    {
+        DeadlineDraftText = args.Value?.ToString() ?? string.Empty;
+    }
+
+    private void SaveDeadline(PollItem poll)
+    {
+        poll.Deadline = DateTime.TryParse(
+            DeadlineDraftText,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out var parsedDate)
+                ? parsedDate.Date
+                : null;
+
+        EditingDeadlinePollId = null;
+        DeadlineDraftText = string.Empty;
+    }
+
+    private void CancelDeadlineEdit()
+    {
+        EditingDeadlinePollId = null;
+        DeadlineDraftText = string.Empty;
+    }
+
+    private void OpenVotingCenter(PollItem poll)
+    {
+        VotingPoll = poll;
+        SelectedVote = null;
+        VoteComment = string.Empty;
+        VoteValidationMessage = null;
+        VoteSubmitted = false;
+    }
+
+    private void CloseVotingCenter()
+    {
+        VotingPoll = null;
+        SelectedVote = null;
+        VoteComment = string.Empty;
+        VoteValidationMessage = null;
+        VoteSubmitted = false;
+    }
+
+    private void SelectVote(string vote)
+    {
+        SelectedVote = vote;
+        VoteValidationMessage = null;
+    }
+
+    private void SubmitVote()
+    {
+        if (VotingPoll is null || string.IsNullOrWhiteSpace(SelectedVote))
+        {
+            return;
+        }
+
+        if (SelectedVote == "Reject" && string.IsNullOrWhiteSpace(VoteComment))
+        {
+            VoteValidationMessage = "Reject vote requires a comment/reason.";
+            return;
+        }
+
+        switch (SelectedVote)
+        {
+            case "Approve":
+                VotingPoll.Approve++;
+                break;
+
+            case "Reject":
+                VotingPoll.Reject++;
+                break;
+
+            case "Abstain":
+                VotingPoll.Abstain++;
+                break;
+        }
+
+        VoteSubmitted = true;
+    }
+
+    private string VoteButtonClass(string vote)
+    {
+        var css = vote switch
+        {
+            "Approve" => "mf-vote-option approve",
+            "Reject" => "mf-vote-option reject",
+            "Abstain" => "mf-vote-option abstain",
+            _ => "mf-vote-option"
+        };
+
+        return SelectedVote == vote
+            ? $"{css} selected"
+            : css;
+    }
+
+    private void CreatePollDemo()
+    {
+        OpenVotingCenter(Polls.First(p => p.Status == "Open"));
+    }
+
+    private static int Percent(int count, int total)
+    {
+        return total <= 0
+            ? 0
+            : (int)Math.Round(count * 100m / total);
+    }
+
+    private static string DeadlineText(PollItem poll)
+    {
+        return poll.Deadline is null
+            ? "No deadline set"
+            : $"Deadline: {poll.Deadline.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}";
+    }
+
+    private static string TrajectoryText(PollItem poll)
+    {
+        return poll.Approve >= 5
+            ? $"✓ Likely to Pass ({Percent(poll.Approve, poll.TotalMembers)}% approve)"
+            : "Voting still in progress";
+    }
+
+    private sealed class PollItem
+    {
+        public string Id { get; init; } = string.Empty;
+        public string Code { get; init; } = string.Empty;
+        public string Name { get; init; } = string.Empty;
+        public string Type { get; init; } = string.Empty;
+        public string TypeDisplay { get; init; } = string.Empty;
+        public DateTime? Deadline { get; set; }
+        public int Approve { get; set; }
+        public int Reject { get; set; }
+        public int Abstain { get; set; }
+        public int TotalMembers { get; init; } = 9;
+        public int TotalVotes => Approve + Reject + Abstain;
+        public string Status { get; init; } = string.Empty;
+        public string ProposalSummary { get; init; } = string.Empty;
+        public string RecommendationAuthor { get; init; } = string.Empty;
+        public string RecommendationText { get; init; } = string.Empty;
+        public IReadOnlyList<string> Documents { get; init; } = Array.Empty<string>();
+        public IReadOnlyList<BoardMemberItem> BoardMembers { get; init; } = Array.Empty<BoardMemberItem>();
+    }
+
+    private sealed record BoardMemberItem(string Name, bool HasVoted);
+
+    private readonly List<PollItem> Polls = new()
+    {
+        new()
+        {
+            Id = "poll-003",
+            Code = "MNG-003",
+            Name = "Serialization Approval — Mecha Storm Zero",
+            Type = "START_SERIALIZATION",
+            TypeDisplay = "Serialization Vote",
+            Deadline = new DateTime(2026, 6, 8),
+            Approve = 5,
+            Reject = 1,
+            Abstain = 1,
+            Status = "Open",
+            ProposalSummary = "A compelling sci-fi action series following Earth's last defenders piloting giant mechs against a relentless alien invasion in 2087. The proposal demonstrates strong world-building, consistent character design, and a clear 80-chapter story arc with defined arcs.",
+            RecommendationAuthor = "Nao Yamamoto",
+            RecommendationText = "Strong market fit for the shonen demographic. Art quality is publication-ready. Story pacing in chapters 1-3 is excellent. Recommend approval for serialization starting July 2026 with bi-weekly release schedule.",
+            Documents = new List<string>
+            {
+                "Full Proposal PDF (42 pages)",
+                "Character Design Sheets",
+                "Chapter 1 Draft (28 pages)",
+                "Market Analysis Report"
+            },
+            BoardMembers = new List<BoardMemberItem>
+            {
+                new("Board Chief Yamamoto", true),
+                new("Nao Yamamoto", true),
+                new("Ryo Tanaka", true),
+                new("Keiko Sato", true),
+                new("Daisuke Ito", true),
+                new("Akira Mori", true),
+                new("Saki Kondo", true),
+                new("Hana Yoshida", false),
+                new("Ren Sato", false)
+            }
+        },
+        new()
+        {
+            Id = "poll-002",
+            Code = "MNG-002",
+            Name = "Serialization Vote — Shadow of the Lotus",
+            Type = "START_SERIALIZATION",
+            TypeDisplay = "Serialization Vote",
+            Deadline = null,
+            Approve = 3,
+            Reject = 2,
+            Abstain = 0,
+            Status = "Open",
+            ProposalSummary = "A romance drama centered on a theater troupe and family secrets. The proposal has strong emotional hooks but requires additional pacing review.",
+            RecommendationAuthor = "Ryo Tanaka",
+            RecommendationText = "Promising premise with strong readership potential. Recommend further board discussion before serialization.",
+            Documents = new List<string>
+            {
+                "Full Proposal PDF (31 pages)",
+                "Visual Reference Sheet",
+                "Character Relationship Map"
+            },
+            BoardMembers = new List<BoardMemberItem>
+            {
+                new("Board Chief Yamamoto", true),
+                new("Nao Yamamoto", true),
+                new("Ryo Tanaka", true),
+                new("Keiko Sato", true),
+                new("Daisuke Ito", true),
+                new("Akira Mori", false),
+                new("Saki Kondo", false),
+                new("Hana Yoshida", false),
+                new("Ren Sato", false)
+            }
+        },
+        new()
+        {
+            Id = "poll-015",
+            Code = "MNG-015",
+            Name = "Cancellation Review — Velocity Kings",
+            Type = "CANCEL_SERIALIZATION",
+            TypeDisplay = "Cancellation Vote",
+            Deadline = new DateTime(2026, 6, 12),
+            Approve = 4,
+            Reject = 0,
+            Abstain = 1,
+            Status = "Open",
+            ProposalSummary = "Cancellation review due to declining ranking performance and delayed production schedule.",
+            RecommendationAuthor = "Keiko Sato",
+            RecommendationText = "Recommend waiting one additional ranking period before final cancellation decision.",
+            Documents = new List<string>
+            {
+                "Ranking Snapshot Report",
+                "Production Delay Summary",
+                "Reader Vote Analysis"
+            },
+            BoardMembers = new List<BoardMemberItem>
+            {
+                new("Board Chief Yamamoto", true),
+                new("Nao Yamamoto", true),
+                new("Ryo Tanaka", true),
+                new("Keiko Sato", true),
+                new("Daisuke Ito", true),
+                new("Akira Mori", false),
+                new("Saki Kondo", false),
+                new("Hana Yoshida", false),
+                new("Ren Sato", false)
+            }
+        },
+        new()
+        {
+            Id = "poll-001",
+            Code = "MNG-001",
+            Name = "Serialization Vote — Celestial Blade Chronicles",
+            Type = "START_SERIALIZATION",
+            TypeDisplay = "Serialization Vote",
+            Deadline = new DateTime(2026, 6, 1),
+            Approve = 8,
+            Reject = 0,
+            Abstain = 1,
+            Status = "Closed"
+        },
+        new()
+        {
+            Id = "poll-006",
+            Code = "MNG-006",
+            Name = "Cancellation Review — Eternal Spring",
+            Type = "CANCEL_SERIALIZATION",
+            TypeDisplay = "Cancellation Vote",
+            Deadline = new DateTime(2026, 5, 22),
+            Approve = 6,
+            Reject = 2,
+            Abstain = 1,
+            Status = "Closed"
+        },
+        new()
+        {
+            Id = "poll-005",
+            Code = "MNG-005",
+            Name = "Serialization Approval — Neon Tokyo Nights",
+            Type = "START_SERIALIZATION",
+            TypeDisplay = "Serialization Vote",
+            Deadline = new DateTime(2026, 6, 17),
+            Approve = 0,
+            Reject = 0,
+            Abstain = 0,
+            Status = "Upcoming"
+        }
+    };
+}

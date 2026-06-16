@@ -447,8 +447,8 @@ app.MapGet("/signout", async (CustomAuthenticationStateProvider authStateProvide
             "Mangaka" => "/mangaka",
             "Assistant" => "/assistant",
             "Tantou Editor" => "/editor",
-            "Editorial Board Member" => "/board",
-            "Editorial Board Chief" => "/board-chief",
+            "Editorial Board Member" => "/demo/mangaflow/proposals",
+            "Editorial Board Chief" => "/demo/mangaflow/proposals",
             _ => "/login?error=InvalidCredentials"
         };
 

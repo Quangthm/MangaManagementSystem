@@ -1,0 +1,229 @@
+﻿@using System.Security.Claims
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.JSInterop
+
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+
+<div class="mf-app-shell">
+	<aside class="mf-sidebar">
+		<div class="mf-brand">
+			<div class="mf-brand-icon">◇</div>
+			<div>
+				<div class="mf-brand-title">MangaFlow</div>
+				<div class="mf-brand-subtitle">Editorial System</div>
+			</div>
+		</div>
+
+		<div class="mf-search">Quick search...</div>
+
+		<div class="mf-nav-group">
+			<div class="mf-nav-heading">
+				<span>◇</span>
+				<span>Editorial Board</span>
+				<span class="mf-nav-caret">⌄</span>
+			</div>
+
+			<a class='@MenuClass("dashboard")' href="/demo/mangaflow/editorial">
+				<span>Editorial Dashboard</span>
+			</a>
+
+			<a class='@MenuClass("proposals")' href="/demo/mangaflow/proposals">
+				<span>Proposal Reviews</span>
+				<span class="mf-side-count">4</span>
+			</a>
+
+			<a class='@MenuClass("polls")' href="/demo/mangaflow/polls">
+				<span>Board Polls</span>
+				<span class="mf-side-count">3</span>
+			</a>
+
+			<a class='@MenuClass("decisions")' href="/demo/mangaflow/decisions">
+				<span>Decision Center</span>
+			</a>
+		</div>
+
+		<AuthorizeView>
+			<Authorized Context="sideAuth">
+				@{
+				var sideUser = sideAuth.User;
+				var sideRoleDisplay = GetRoleDisplayName(sideUser);
+				var sideEmail = GetEmail(sideUser);
+				var sideInitials = GetInitials(sideRoleDisplay);
+				}
+
+				<div class="mf-user-card">
+					<div class="mf-avatar">@sideInitials</div>
+					<div>
+						<div class="mf-user-name">@sideRoleDisplay</div>
+						<div class="mf-user-email">@sideEmail</div>
+
+						<button type="button"
+                                class="mf-sidebar-logout"
+                                @onclick="LogoutAsync">
+							Logout
+						</button>
+					</div>
+				</div>
+			</Authorized>
+
+			<NotAuthorized>
+				<div class="mf-user-card">
+					<div class="mf-avatar">?</div>
+					<div>
+						<div class="mf-user-name">Guest</div>
+						<div class="mf-user-email">Not signed in</div>
+					</div>
+				</div>
+			</NotAuthorized>
+		</AuthorizeView>
+	</aside>
+
+	<main class="mf-main">
+		<header class="mf-topbar">
+			<div class="mf-breadcrumb">
+				MangaFlow / Editorial Board / <span>@Title</span>
+			</div>
+
+			<div class="mf-top-actions">
+				@if (Actions is not null)
+				{
+				@Actions
+				}
+
+				<div class="mf-help">?</div>
+				<div class="mf-notification">3</div>
+
+				<AuthorizeView>
+					<Authorized Context="topAuth">
+						@{
+						var topUser = topAuth.User;
+						var topRoleDisplay = GetRoleDisplayName(topUser);
+						var topInitials = GetInitials(topRoleDisplay);
+						}
+
+						<div class="mf-profile-pill">
+							<span class="mf-avatar small">@topInitials</span>
+							<span>@topRoleDisplay</span>
+						</div>
+
+						<button type="button"
+                                class="mf-btn mf-btn-soft"
+                                @onclick="LogoutAsync">
+							Logout
+						</button>
+					</Authorized>
+
+					<NotAuthorized>
+						<div class="mf-profile-pill">
+							<span class="mf-avatar small">?</span>
+							<span>Guest</span>
+						</div>
+					</NotAuthorized>
+				</AuthorizeView>
+			</div>
+		</header>
+
+		<section class="mf-page-title-area">
+			<div>
+				<h1>@Title</h1>
+				<p>@Subtitle</p>
+			</div>
+		</section>
+
+		<section class="mf-content">
+			@ChildContent
+		</section>
+	</main>
+</div>
+
+@code {
+[Parameter] public string Title { get; set; } = string.Empty;
+[Parameter] public string Subtitle { get; set; } = string.Empty;
+[Parameter] public string ActiveMenu { get; set; } = string.Empty;
+[Parameter] public RenderFragment? Actions { get; set; }
+[Parameter] public RenderFragment? ChildContent { get; set; }
+
+private string MenuClass(string key)
+{
+return ActiveMenu == key ? "mf-side-link active" : "mf-side-link";
+}
+
+private async Task LogoutAsync()
+{
+await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "authToken");
+await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "token");
+await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "jwt");
+await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "currentUser");
+await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "user");
+await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "role");
+await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "roleName");
+
+await JSRuntime.InvokeVoidAsync("sessionStorage.removeItem", "authToken");
+await JSRuntime.InvokeVoidAsync("sessionStorage.removeItem", "token");
+await JSRuntime.InvokeVoidAsync("sessionStorage.removeItem", "jwt");
+await JSRuntime.InvokeVoidAsync("sessionStorage.removeItem", "currentUser");
+await JSRuntime.InvokeVoidAsync("sessionStorage.removeItem", "user");
+await JSRuntime.InvokeVoidAsync("sessionStorage.removeItem", "role");
+await JSRuntime.InvokeVoidAsync("sessionStorage.removeItem", "roleName");
+
+NavigationManager.NavigateTo("/login", forceLoad: true);
+}
+
+private static string GetEmail(ClaimsPrincipal user)
+{
+return user.FindFirst(ClaimTypes.Email)?.Value
+?? user.FindFirst("email")?.Value
+?? "No email";
+}
+
+private static string GetRoleDisplayName(ClaimsPrincipal user)
+{
+var role = user.FindFirst(ClaimTypes.Role)?.Value
+?? user.FindFirst("role")?.Value
+?? user.FindFirst("role_name")?.Value
+?? user.FindFirst("Role")?.Value
+?? user.FindFirst("RoleName")?.Value
+?? "Viewer";
+
+return role switch
+{
+"Editorial Board Chief" => "Board Chief",
+"EditorialBoardChief" => "Board Chief",
+"Board Chief" => "Board Chief",
+
+"Editorial Board Member" => "Board Member",
+"EditorialBoardMember" => "Board Member",
+"Board Member" => "Board Member",
+
+"Tantou Editor" => "Tantou Editor",
+"Mangaka" => "Mangaka",
+"Assistant" => "Assistant",
+"Admin" => "Admin",
+
+_ => role
+};
+}
+
+private static string GetInitials(string value)
+{
+if (string.IsNullOrWhiteSpace(value))
+{
+return "?";
+}
+
+var parts = value.Split(
+' ',
+StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+if (parts.Length == 1)
+{
+return parts[0].Length >= 2
+? parts[0][..2].ToUpperInvariant()
+: parts[0].ToUpperInvariant();
+}
+
+return $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
+}
+}

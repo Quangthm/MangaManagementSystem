@@ -1,0 +1,21 @@
+﻿<div class="mf-kpi-card @CssClass">
+    <div class="mf-kpi-icon">@Icon</div>
+    <div>
+        <div class="mf-kpi-label">@Label</div>
+        <div class="mf-kpi-value">@Value</div>
+        @if (!string.IsNullOrWhiteSpace(Description))
+        {
+            <div class="mf-kpi-desc">@Description</div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = string.Empty;
+    [Parameter] public string Value { get; set; } = string.Empty;
+    [Parameter] public string Description { get; set; } = string.Empty;
+    [Parameter] public string Icon { get; set; } = "•";
+    [Parameter] public string Tone { get; set; } = "blue";
+
+    private string CssClass => $"tone-{Tone}";
+}
