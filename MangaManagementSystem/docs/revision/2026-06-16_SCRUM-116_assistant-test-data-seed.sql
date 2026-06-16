@@ -1,626 +1,582 @@
--- SCRUM-116 Assistant Test Data Seed Script
--- Run this script to create test data for the SCRUM-116 Assistant workflow
--- 
--- Instructions:
--- 1. Run with @CommitChanges = 0 (default) to preview what will be created
--- 2. Review the SELECT verification queries
--- 3. If satisfied, set @CommitChanges = 1 and run again to commit changes
--- 
--- This script is idempotent - it will reuse existing data where possible.
+USE [MangaManagementDB];
+GO
+
+/*
+    SCRUM-116 Assistant workflow local test data seed.
+
+    IMPORTANT:
+    - Select the correct MangaManagementDB database in SSMS.
+    - Do NOT run this script in master.
+    - Default mode is DRY RUN: @CommitChanges = 0, so changes are rolled back.
+    - Change @CommitChanges to 1 only after the dry run SELECT results look correct.
+
+    This script creates DATA only:
+    - It does not create roles.
+    - It does not create users.
+    - It does not create password hashes.
+    - It does not alter schema.
+*/
 
 SET NOCOUNT ON;
+SET XACT_ABORT ON;
 
-DECLARE @CommitChanges bit = 0;  -- Set to 1 to commit changes, 0 to rollback (dry run)
+IF DB_NAME() = N'master'
+    THROW 51000, 'Do not run this script in master database.', 1;
+
+DECLARE @CommitChanges bit = 0; -- 0 = dry run rollback, 1 = commit
+
+DECLARE @Now datetime2(0) = SYSUTCDATETIME();
+
+DECLARE @AssistantUserId uniqueidentifier;
+DECLARE @MangakaUserId uniqueidentifier;
+DECLARE @SeriesId uniqueidentifier;
+DECLARE @ChapterId uniqueidentifier;
+
+DECLARE @SeriesTitle nvarchar(200) = N'SCRUM-116 Test Series';
+DECLARE @SeriesSlug nvarchar(220) = N'scrum-116-test-series';
+DECLARE @ChapterNumberLabel nvarchar(20) = N'1';
+DECLARE @ChapterTitle nvarchar(200) = N'SCRUM-116 Test Chapter';
 
 BEGIN TRY
     BEGIN TRANSACTION;
 
-    -- ============================================
-    -- STEP 1: Locate existing users
-    -- ============================================
+    -------------------------------------------------------------------------
+    -- Validate existing Assistant user: troly
+    -------------------------------------------------------------------------
+    SELECT @AssistantUserId = u.user_id
+    FROM auth.Users u
+    INNER JOIN auth.Roles r ON r.role_id = u.role_id
+    WHERE u.username = N'troly'
+      AND r.role_name = N'Assistant'
+      AND u.status_code = N'ACTIVE';
 
-    -- Check if Assistant user 'troly' exists
-    DECLARE @TrolyUserId UNIQUEIDENTIFIER;
-    SELECT @TrolyUserId = [UserId] 
-    FROM [auth].[Users] 
-    WHERE [Username] = 'troly' AND [StatusCode] = 'ACTIVE';
+    IF @AssistantUserId IS NULL
+        THROW 51001, 'Required ACTIVE Assistant user "troly" was not found. Create/login/approve troly first; this seed script does not create users.', 1;
 
-    IF @TrolyUserId IS NULL
-    BEGIN
-        THROW 50001, 'ERROR: Assistant user "troly" does not exist or is not active. Please create the user first.', 1;
-    END
-
-    PRINT 'Found Assistant user: troly (UserId: ' + CAST(@TrolyUserId AS VARCHAR(36)) + ')';
-
-    -- Find an existing Mangaka user
-    DECLARE @MangakaUserId UNIQUEIDENTIFIER;
-
-    -- Try khoavq first
-    SELECT @MangakaUserId = [UserId] 
-    FROM [auth].[Users] 
-    WHERE [Username] = 'khoavq' AND [StatusCode] = 'ACTIVE';
-
-    -- If khoavq doesn't exist, find any other active Mangaka user
-    IF @MangakaUserId IS NULL
-    BEGIN
-        SELECT @MangakaUserId = [UserId] 
-        FROM [auth].[Users] 
-        WHERE [StatusCode] = 'ACTIVE'
-          AND [RoleId] = (SELECT [RoleId] FROM [auth].[Roles] WHERE [RoleName] = 'Mangaka')
-        ORDER BY [CreatedAtUtc] ASC;  -- Get the earliest created Mangaka
-    END
+    -------------------------------------------------------------------------
+    -- Locate existing Mangaka user, prefer khoavq
+    -------------------------------------------------------------------------
+    SELECT TOP (1) @MangakaUserId = u.user_id
+    FROM auth.Users u
+    INNER JOIN auth.Roles r ON r.role_id = u.role_id
+    WHERE r.role_name = N'Mangaka'
+      AND u.status_code = N'ACTIVE'
+      AND u.username = N'khoavq';
 
     IF @MangakaUserId IS NULL
     BEGIN
-        THROW 50002, 'ERROR: No active Mangaka user found. Please ensure at least one Mangaka user exists.', 1;
-    END
+        SELECT TOP (1) @MangakaUserId = u.user_id
+        FROM auth.Users u
+        INNER JOIN auth.Roles r ON r.role_id = u.role_id
+        WHERE r.role_name = N'Mangaka'
+          AND u.status_code = N'ACTIVE'
+        ORDER BY u.created_at_utc ASC;
+    END;
 
-    PRINT 'Found Mangaka user: ' + (SELECT [Username] FROM [auth].[Users] WHERE [UserId] = @MangakaUserId) + 
-          ' (UserId: ' + CAST(@MangakaUserId AS VARCHAR(36)) + ')';
+    IF @MangakaUserId IS NULL
+        THROW 51002, 'No ACTIVE Mangaka user was found. Create/approve a Mangaka user first; this seed script does not create users.', 1;
 
-    -- ============================================
-    -- STEP 2: Create or reuse existing Series
-    -- ============================================
-
-    DECLARE @SeriesId UNIQUEIDENTIFIER;
-    SELECT @SeriesId = [SeriesId] 
-    FROM [manga].[Series] 
-    WHERE [Title] = N'SCRUM-116 Test Series';
+    -------------------------------------------------------------------------
+    -- Create or reuse test series.
+    -- Note: manga.Series does not allow APPROVED. SERIALIZED is the closest
+    -- approved/live status for a series in the current schema.
+    -------------------------------------------------------------------------
+    SELECT @SeriesId = series_id
+    FROM manga.Series
+    WHERE slug = @SeriesSlug
+       OR title = @SeriesTitle;
 
     IF @SeriesId IS NULL
     BEGIN
         SET @SeriesId = NEWID();
-        INSERT INTO [manga].[Series] (
-            [SeriesId], [Title], [Slug], [Synopsis], [Genre], [StatusCode], 
-            [ContentLanguageCode], [CreatedAtUtc]
-        ) VALUES (
-            @SeriesId, 
-            N'SCRUM-116 Test Series', 
-            'scrum-116-test-series', 
-            N'This is a test series created for verifying SCRUM-116 Assistant task functionality.',
-            N'Manga, Action, Adventure',
-            'APPROVED',
-            'vi',
-            GETUTCDATE()
+
+        INSERT INTO manga.Series
+        (
+            series_id,
+            title,
+            slug,
+            synopsis,
+            genre,
+            status_code,
+            content_language_code,
+            created_at_utc,
+            publication_frequency_code
+        )
+        VALUES
+        (
+            @SeriesId,
+            @SeriesTitle,
+            @SeriesSlug,
+            N'Local SCRUM-116 test series for Assistant task workflow verification.',
+            N'Test',
+            N'SERIALIZED',
+            N'vi',
+            @Now,
+            N'WEEKLY'
         );
-        PRINT 'Created Series: SCRUM-116 Test Series (SeriesId: ' + CAST(@SeriesId AS VARCHAR(36)) + ')';
-    END
-    ELSE
+    END;
+
+    IF NOT EXISTS
+    (
+        SELECT 1
+        FROM manga.SeriesContributor
+        WHERE series_id = @SeriesId
+          AND user_id = @MangakaUserId
+          AND end_date IS NULL
+    )
     BEGIN
-        PRINT 'Reused existing Series: SCRUM-116 Test Series (SeriesId: ' + CAST(@SeriesId AS VARCHAR(36)) + ')';
-    END
+        INSERT INTO manga.SeriesContributor
+        (
+            series_id,
+            user_id,
+            start_date,
+            notes
+        )
+        VALUES
+        (
+            @SeriesId,
+            @MangakaUserId,
+            CONVERT(date, @Now),
+            N'SCRUM-116 local test data owner/contributor.'
+        );
+    END;
 
-    -- ============================================
-    -- STEP 3: Create or reuse existing Chapter
-    -- ============================================
-
-    DECLARE @ChapterId UNIQUEIDENTIFIER;
-    SELECT @ChapterId = [ChapterId] 
-    FROM [manga].[Chapter] 
-    WHERE [SeriesId] = @SeriesId AND [ChapterNumberLabel] = '1';
+    -------------------------------------------------------------------------
+    -- Create or reuse test chapter.
+    -------------------------------------------------------------------------
+    SELECT @ChapterId = chapter_id
+    FROM manga.Chapter
+    WHERE series_id = @SeriesId
+      AND chapter_number_label = @ChapterNumberLabel;
 
     IF @ChapterId IS NULL
     BEGIN
         SET @ChapterId = NEWID();
-        INSERT INTO [manga].[Chapter] (
-            [ChapterId], [SeriesId], [ChapterNumberLabel], [ChapterTitle], 
-            [StatusCode], [CreatedAtUtc], [CreatedByUserId]
-        ) VALUES (
-            @ChapterId, 
-            @SeriesId, 
-            '1', 
-            N'SCRUM-116 Test Chapter',
-            'APPROVED',
-            GETUTCDATE(),
+
+        INSERT INTO manga.Chapter
+        (
+            chapter_id,
+            series_id,
+            chapter_number_label,
+            chapter_title,
+            status_code,
+            created_at_utc,
+            created_by_user_id
+        )
+        VALUES
+        (
+            @ChapterId,
+            @SeriesId,
+            @ChapterNumberLabel,
+            @ChapterTitle,
+            N'APPROVED',
+            @Now,
             @MangakaUserId
         );
-        PRINT 'Created Chapter 1 for Series (ChapterId: ' + CAST(@ChapterId AS VARCHAR(36)) + ')';
-    END
-    ELSE
+    END;
+
+    -------------------------------------------------------------------------
+    -- Create/reuse 5 pages, file resources, page versions, regions, tasks,
+    -- task-region links, and task assignment notifications.
+    -------------------------------------------------------------------------
+    DECLARE @PageNo int = 1;
+
+    WHILE @PageNo <= 5
     BEGIN
-        PRINT 'Reused existing Chapter 1 (ChapterId: ' + CAST(@ChapterId AS VARCHAR(36)) + ')';
-    END
+        DECLARE @ChapterPageId uniqueidentifier = NULL;
+        DECLARE @FileResourceId uniqueidentifier = NULL;
+        DECLARE @PageVersionId uniqueidentifier = NULL;
+        DECLARE @PageRegionId uniqueidentifier = NULL;
+        DECLARE @TaskId uniqueidentifier = NULL;
 
-    -- ============================================
-    -- STEP 4: Create ChapterPageVersions (required for PageRegions)
-    -- ============================================
+        DECLARE @FilePublicId nvarchar(255) = CONCAT(N'local/scrum-116/', CONVERT(nvarchar(36), @ChapterId), N'/page-', @PageNo);
+        DECLARE @FileName nvarchar(260) = CONCAT(N'scrum-116-page-', @PageNo, N'.png');
+        DECLARE @TaskTitle nvarchar(200) = CONCAT(N'Coloring Task for Page ', @PageNo);
 
-    -- We need to create ChapterPageVersion records first, then create ChapterPages linked to them
-    -- Check if we already have 5 versions for this chapter
-    DECLARE @VersionCount INT;
-    SELECT @VersionCount = COUNT(*) 
-    FROM [manga].[ChapterPageVersion] 
-    WHERE [ChapterId] = @ChapterId;
+        ---------------------------------------------------------------------
+        -- Chapter page
+        ---------------------------------------------------------------------
+        SELECT @ChapterPageId = chapter_page_id
+        FROM manga.ChapterPage
+        WHERE chapter_id = @ChapterId
+          AND page_no = @PageNo
+          AND deleted_at_utc IS NULL;
 
-    IF @VersionCount < 5
-    BEGIN
-        PRINT 'Note: ChapterPageVersion records may need to be created for testing. ' +
-              'This script assumes pages exist. If pages are missing, create them manually first.';
-    END
-    ELSE
-    BEGIN
-        PRINT 'Found ' + CAST(@VersionCount AS VARCHAR(10)) + ' ChapterPageVersion records for Chapter.';
-    END
-
-    -- ============================================
-    -- STEP 5: Create ChapterPages if not exists
-    -- ============================================
-
-    DECLARE @Page1Id UNIQUEIDENTIFIER, @Page2Id UNIQUEIDENTIFIER, @Page3Id UNIQUEIDENTIFIER;
-    DECLARE @Page4Id UNIQUEIDENTIFIER, @Page5Id UNIQUEIDENTIFIER;
-
-    -- Create pages if they don't exist
-    SET @Page1Id = (SELECT [ChapterPageId] FROM [manga].[ChapterPage] WHERE [ChapterId] = @ChapterId AND [PageNo] = 1);
-    IF @Page1Id IS NULL
-    BEGIN
-        SET @Page1Id = NEWID();
-        INSERT INTO [manga].[ChapterPage] ([ChapterPageId], [ChapterId], [PageNo]) VALUES (@Page1Id, @ChapterId, 1);
-    END
-
-    SET @Page2Id = (SELECT [ChapterPageId] FROM [manga].[ChapterPage] WHERE [ChapterId] = @ChapterId AND [PageNo] = 2);
-    IF @Page2Id IS NULL
-    BEGIN
-        SET @Page2Id = NEWID();
-        INSERT INTO [manga].[ChapterPage] ([ChapterPageId], [ChapterId], [PageNo]) VALUES (@Page2Id, @ChapterId, 2);
-    END
-
-    SET @Page3Id = (SELECT [ChapterPageId] FROM [manga].[ChapterPage] WHERE [ChapterId] = @ChapterId AND [PageNo] = 3);
-    IF @Page3Id IS NULL
-    BEGIN
-        SET @Page3Id = NEWID();
-        INSERT INTO [manga].[ChapterPage] ([ChapterPageId], [ChapterId], [PageNo]) VALUES (@Page3Id, @ChapterId, 3);
-    END
-
-    SET @Page4Id = (SELECT [ChapterPageId] FROM [manga].[ChapterPage] WHERE [ChapterId] = @ChapterId AND [PageNo] = 4);
-    IF @Page4Id IS NULL
-    BEGIN
-        SET @Page4Id = NEWID();
-        INSERT INTO [manga].[ChapterPage] ([ChapterPageId], [ChapterId], [PageNo]) VALUES (@Page4Id, @ChapterId, 4);
-    END
-
-    SET @Page5Id = (SELECT [ChapterPageId] FROM [manga].[ChapterPage] WHERE [ChapterId] = @ChapterId AND [PageNo] = 5);
-    IF @Page5Id IS NULL
-    BEGIN
-        SET @Page5Id = NEWID();
-        INSERT INTO [manga].[ChapterPage] ([ChapterPageId], [ChapterId], [PageNo]) VALUES (@Page5Id, @ChapterId, 5);
-    END
-
-    PRINT 'Pages verified/created for Chapter.';
-
-    -- ============================================
-    -- STEP 6: Create PageRegions (if ChapterPageVersion exists)
-    -- ============================================
-
-    -- Get the current ChapterPageVersionId for each page
-    DECLARE @Page1VersionId UNIQUEIDENTIFIER, @Page2VersionId UNIQUEIDENTIFIER, @Page3VersionId UNIQUEIDENTIFIER;
-    DECLARE @Page4VersionId UNIQUEIDENTIFIER, @Page5VersionId UNIQUEIDENTIFIER;
-
-    SELECT @Page1VersionId = [ChapterPageVersionId] FROM [manga].[ChapterPageVersion] WHERE [ChapterPageId] = @Page1Id AND [IsCurrentVersion] = 1;
-    SELECT @Page2VersionId = [ChapterPageVersionId] FROM [manga].[ChapterPageVersion] WHERE [ChapterPageId] = @Page2Id AND [IsCurrentVersion] = 1;
-    SELECT @Page3VersionId = [ChapterPageVersionId] FROM [manga].[ChapterPageVersion] WHERE [ChapterPageId] = @Page3Id AND [IsCurrentVersion] = 1;
-    SELECT @Page4VersionId = [ChapterPageVersionId] FROM [manga].[ChapterPageVersion] WHERE [ChapterPageId] = @Page4Id AND [IsCurrentVersion] = 1;
-    SELECT @Page5VersionId = [ChapterPageVersionId] FROM [manga].[ChapterPageVersion] WHERE [ChapterPageId] = @Page5Id AND [IsCurrentVersion] = 1;
-
-    -- Create PageRegions for each page if they don't exist and version exists
-    DECLARE @Region1Id UNIQUEIDENTIFIER = NULL, @Region2Id UNIQUEIDENTIFIER = NULL, @Region3Id UNIQUEIDENTIFIER = NULL;
-    DECLARE @Region4Id UNIQUEIDENTIFIER = NULL, @Region5Id UNIQUEIDENTIFIER = NULL;
-
-    IF @Page1VersionId IS NOT NULL
-    BEGIN
-        SELECT @Region1Id = [PageRegionId] FROM [manga].[PageRegion] WHERE [ChapterPageVersionId] = @Page1VersionId;
-        IF @Region1Id IS NULL
+        IF @ChapterPageId IS NULL
         BEGIN
-            SET @Region1Id = NEWID();
-            INSERT INTO [manga].[PageRegion] (
-                [PageRegionId], [ChapterPageVersionId], [TypeCode], [SourceType], 
-                [X], [Y], [Width], [Height], [ConfidenceScore], [CreatedByUserId]
-            ) VALUES (
-                @Region1Id, @Page1VersionId, 'OTHER', 'MANUAL',
-                0.00, 0.00, 100.00, 100.00, 1.0000, @MangakaUserId
-            );
-        END
-    END
+            SET @ChapterPageId = NEWID();
 
-    IF @Page2VersionId IS NOT NULL
-    BEGIN
-        SELECT @Region2Id = [PageRegionId] FROM [manga].[PageRegion] WHERE [ChapterPageVersionId] = @Page2VersionId;
-        IF @Region2Id IS NULL
+            INSERT INTO manga.ChapterPage
+            (
+                chapter_page_id,
+                chapter_id,
+                page_no,
+                page_notes
+            )
+            VALUES
+            (
+                @ChapterPageId,
+                @ChapterId,
+                @PageNo,
+                N'SCRUM-116 local test page.'
+            );
+        END;
+
+        ---------------------------------------------------------------------
+        -- FileResource + current ChapterPageVersion.
+        -- A dummy Cloudinary file row is used only so ChapterPageVersion can
+        -- satisfy its NOT NULL page_file_id FK for local workflow testing.
+        ---------------------------------------------------------------------
+        SELECT TOP (1)
+            @PageVersionId = cpv.chapter_page_version_id,
+            @FileResourceId = cpv.page_file_id
+        FROM manga.ChapterPageVersion cpv
+        WHERE cpv.chapter_page_id = @ChapterPageId
+          AND cpv.is_current_version = 1
+        ORDER BY cpv.version_no DESC;
+
+        IF @PageVersionId IS NULL
         BEGIN
-            SET @Region2Id = NEWID();
-            INSERT INTO [manga].[PageRegion] (
-                [PageRegionId], [ChapterPageVersionId], [TypeCode], [SourceType], 
-                [X], [Y], [Width], [Height], [ConfidenceScore], [CreatedByUserId]
-            ) VALUES (
-                @Region2Id, @Page2VersionId, 'OTHER', 'MANUAL',
-                0.00, 0.00, 100.00, 100.00, 1.0000, @MangakaUserId
-            );
-        END
-    END
+            SELECT @FileResourceId = file_resource_id
+            FROM manga.FileResource
+            WHERE cloudinary_public_id = @FilePublicId
+              AND deleted_at_utc IS NULL;
 
-    IF @Page3VersionId IS NOT NULL
-    BEGIN
-        SELECT @Region3Id = [PageRegionId] FROM [manga].[PageRegion] WHERE [ChapterPageVersionId] = @Page3VersionId;
-        IF @Region3Id IS NULL
+            IF @FileResourceId IS NULL
+            BEGIN
+                SET @FileResourceId = NEWID();
+
+                INSERT INTO manga.FileResource
+                (
+                    file_resource_id,
+                    file_purpose_code,
+                    original_file_name,
+                    cloudinary_public_id,
+                    cloudinary_secure_url,
+                    content_type,
+                    file_size_bytes,
+                    sha256_hash,
+                    uploaded_by_user_id,
+                    uploaded_at_utc
+                )
+                VALUES
+                (
+                    @FileResourceId,
+                    N'CHAPTER_PAGE_VERSION',
+                    @FileName,
+                    @FilePublicId,
+                    CONCAT(N'https://example.local/mangaflow/scrum-116/page-', @PageNo, N'.png'),
+                    N'image/png',
+                    1,
+                    REPLICATE('0', 64),
+                    @MangakaUserId,
+                    @Now
+                );
+            END;
+
+            SET @PageVersionId = NEWID();
+
+            INSERT INTO manga.ChapterPageVersion
+            (
+                chapter_page_version_id,
+                chapter_page_id,
+                version_no,
+                page_file_id,
+                version_note,
+                is_current_version
+            )
+            VALUES
+            (
+                @PageVersionId,
+                @ChapterPageId,
+                1,
+                @FileResourceId,
+                N'SCRUM-116 local seed current page version.',
+                1
+            );
+        END;
+
+        ---------------------------------------------------------------------
+        -- Whole-page region on the current page version
+        ---------------------------------------------------------------------
+        SELECT TOP (1) @PageRegionId = page_region_id
+        FROM manga.PageRegion
+        WHERE chapter_page_version_id = @PageVersionId
+          AND region_label = CONCAT(N'SCRUM-116 Full Page Region ', @PageNo);
+
+        IF @PageRegionId IS NULL
         BEGIN
-            SET @Region3Id = NEWID();
-            INSERT INTO [manga].[PageRegion] (
-                [PageRegionId], [ChapterPageVersionId], [TypeCode], [SourceType], 
-                [X], [Y], [Width], [Height], [ConfidenceScore], [CreatedByUserId]
-            ) VALUES (
-                @Region3Id, @Page3VersionId, 'OTHER', 'MANUAL',
-                0.00, 0.00, 100.00, 100.00, 1.0000, @MangakaUserId
-            );
-        END
-    END
+            SET @PageRegionId = NEWID();
 
-    IF @Page4VersionId IS NOT NULL
-    BEGIN
-        SELECT @Region4Id = [PageRegionId] FROM [manga].[PageRegion] WHERE [ChapterPageVersionId] = @Page4VersionId;
-        IF @Region4Id IS NULL
+            INSERT INTO manga.PageRegion
+            (
+                page_region_id,
+                chapter_page_version_id,
+                type_code,
+                region_label,
+                x,
+                y,
+                width,
+                height,
+                confidence_score,
+                source_type,
+                original_text,
+                created_at_utc,
+                created_by_user_id
+            )
+            VALUES
+            (
+                @PageRegionId,
+                @PageVersionId,
+                N'PANEL',
+                CONCAT(N'SCRUM-116 Full Page Region ', @PageNo),
+                0,
+                0,
+                100,
+                100,
+                NULL,
+                N'MANUAL',
+                NULL,
+                @Now,
+                @MangakaUserId
+            );
+        END;
+
+        ---------------------------------------------------------------------
+        -- Assistant task.
+        -- Note: current DB check constraint does not allow COLORING.
+        -- SHADING is used as the closest valid task type for local testing.
+        ---------------------------------------------------------------------
+        SELECT TOP (1) @TaskId = chapter_page_task_id
+        FROM manga.ChapterPageTask
+        WHERE assigned_to_user_id = @AssistantUserId
+          AND task_title = @TaskTitle
+          AND status_code = N'ASSIGNED';
+
+        IF @TaskId IS NULL
         BEGIN
-            SET @Region4Id = NEWID();
-            INSERT INTO [manga].[PageRegion] (
-                [PageRegionId], [ChapterPageVersionId], [TypeCode], [SourceType], 
-                [X], [Y], [Width], [Height], [ConfidenceScore], [CreatedByUserId]
-            ) VALUES (
-                @Region4Id, @Page4VersionId, 'OTHER', 'MANUAL',
-                0.00, 0.00, 100.00, 100.00, 1.0000, @MangakaUserId
-            );
-        END
-    END
+            SET @TaskId = NEWID();
 
-    IF @Page5VersionId IS NOT NULL
-    BEGIN
-        SELECT @Region5Id = [PageRegionId] FROM [manga].[PageRegion] WHERE [ChapterPageVersionId] = @Page5VersionId;
-        IF @Region5Id IS NULL
+            INSERT INTO manga.ChapterPageTask
+            (
+                chapter_page_task_id,
+                assigned_to_user_id,
+                type_code,
+                status_code,
+                task_title,
+                task_description,
+                priority_level,
+                due_at_utc,
+                compensation_amount,
+                completed_page_version_id,
+                created_at_utc,
+                created_by_user_id,
+                updated_at_utc
+            )
+            VALUES
+            (
+                @TaskId,
+                @AssistantUserId,
+                N'SHADING',
+                N'ASSIGNED',
+                @TaskTitle,
+                CONCAT(N'Local SCRUM-116 test task for page ', @PageNo, N'. Upload a completed image to test ASSIGNED -> UNDER_REVIEW.'),
+                3,
+                DATEADD(day, 7, @Now),
+                100000.00,
+                NULL,
+                @Now,
+                @MangakaUserId,
+                NULL
+            );
+        END;
+
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM manga.ChapterPageTaskRegion
+            WHERE chapter_page_task_id = @TaskId
+              AND page_region_id = @PageRegionId
+        )
         BEGIN
-            SET @Region5Id = NEWID();
-            INSERT INTO [manga].[PageRegion] (
-                [PageRegionId], [ChapterPageVersionId], [TypeCode], [SourceType], 
-                [X], [Y], [Width], [Height], [ConfidenceScore], [CreatedByUserId]
-            ) VALUES (
-                @Region5Id, @Page5VersionId, 'OTHER', 'MANUAL',
-                0.00, 0.00, 100.00, 100.00, 1.0000, @MangakaUserId
+            INSERT INTO manga.ChapterPageTaskRegion
+            (
+                chapter_page_task_id,
+                page_region_id
+            )
+            VALUES
+            (
+                @TaskId,
+                @PageRegionId
             );
-        END
-    END
+        END;
 
-    PRINT 'PageRegions created/verified (requires ChapterPageVersion to exist first).';
-
-    -- ============================================
-    -- STEP 7: Create ChapterPageTasks
-    -- ============================================
-
-    DECLARE @Task1Id UNIQUEIDENTIFIER, @Task2Id UNIQUEIDENTIFIER, @Task3Id UNIQUEIDENTIFIER;
-    DECLARE @Task4Id UNIQUEIDENTIFIER, @Task5Id UNIQUEIDENTIFIER;
-
-    SET @Task1Id = (SELECT [ChapterPageTaskId] FROM [manga].[ChapterPageTask] WHERE [AssignedToUserId] = @TrolyUserId AND [TaskTitle] = N'Coloring Task for Page 1');
-    IF @Task1Id IS NULL AND @Region1Id IS NOT NULL
-    BEGIN
-        SET @Task1Id = NEWID();
-        INSERT INTO [manga].[ChapterPageTask] (
-            [ChapterPageTaskId], [AssignedToUserId], [TypeCode], [StatusCode], 
-            [TaskTitle], [TaskDescription], [PriorityLevel], [DueAtUtc], 
-            [CompensationAmount], [CreatedAtUtc], [CreatedByUserId]
-        ) VALUES (
-            @Task1Id, @TrolyUserId, 'COLORING', 'ASSIGNED',
-            N'Coloring Task for Page 1',
-            N'Please color page 1 of the series. Focus on the background elements.',
-            3, DATEADD(DAY, 7, GETUTCDATE()),
-            50.00, GETUTCDATE(), @MangakaUserId
-        );
-
-        -- Link task to page region
-        INSERT INTO [manga].[ChapterPageTaskRegion] ([ChapterPageTaskId], [PageRegionId])
-        VALUES (@Task1Id, @Region1Id);
-    END
-
-    SET @Task2Id = (SELECT [ChapterPageTaskId] FROM [manga].[ChapterPageTask] WHERE [AssignedToUserId] = @TrolyUserId AND [TaskTitle] = N'Coloring Task for Page 2');
-    IF @Task2Id IS NULL AND @Region2Id IS NOT NULL
-    BEGIN
-        SET @Task2Id = NEWID();
-        INSERT INTO [manga].[ChapterPageTask] (
-            [ChapterPageTaskId], [AssignedToUserId], [TypeCode], [StatusCode], 
-            [TaskTitle], [TaskDescription], [PriorityLevel], [DueAtUtc], 
-            [CompensationAmount], [CreatedAtUtc], [CreatedByUserId]
-        ) VALUES (
-            @Task2Id, @TrolyUserId, 'COLORING', 'ASSIGNED',
-            N'Coloring Task for Page 2',
-            N'Please color page 2 of the series. Focus on the background elements.',
-            3, DATEADD(DAY, 7, GETUTCDATE()),
-            50.00, GETUTCDATE(), @MangakaUserId
-        );
-
-        -- Link task to page region
-        INSERT INTO [manga].[ChapterPageTaskRegion] ([ChapterPageTaskId], [PageRegionId])
-        VALUES (@Task2Id, @Region2Id);
-    END
-
-    SET @Task3Id = (SELECT [ChapterPageTaskId] FROM [manga].[ChapterPageTask] WHERE [AssignedToUserId] = @TrolyUserId AND [TaskTitle] = N'Coloring Task for Page 3');
-    IF @Task3Id IS NULL AND @Region3Id IS NOT NULL
-    BEGIN
-        SET @Task3Id = NEWID();
-        INSERT INTO [manga].[ChapterPageTask] (
-            [ChapterPageTaskId], [AssignedToUserId], [TypeCode], [StatusCode], 
-            [TaskTitle], [TaskDescription], [PriorityLevel], [DueAtUtc], 
-            [CompensationAmount], [CreatedAtUtc], [CreatedByUserId]
-        ) VALUES (
-            @Task3Id, @TrolyUserId, 'COLORING', 'ASSIGNED',
-            N'Coloring Task for Page 3',
-            N'Please color page 3 of the series. Focus on the background elements.',
-            3, DATEADD(DAY, 7, GETUTCDATE()),
-            50.00, GETUTCDATE(), @MangakaUserId
-        );
-
-        -- Link task to page region
-        INSERT INTO [manga].[ChapterPageTaskRegion] ([ChapterPageTaskId], [PageRegionId])
-        VALUES (@Task3Id, @Region3Id);
-    END
-
-    SET @Task4Id = (SELECT [ChapterPageTaskId] FROM [manga].[ChapterPageTask] WHERE [AssignedToUserId] = @TrolyUserId AND [TaskTitle] = N'Coloring Task for Page 4');
-    IF @Task4Id IS NULL AND @Region4Id IS NOT NULL
-    BEGIN
-        SET @Task4Id = NEWID();
-        INSERT INTO [manga].[ChapterPageTask] (
-            [ChapterPageTaskId], [AssignedToUserId], [TypeCode], [StatusCode], 
-            [TaskTitle], [TaskDescription], [PriorityLevel], [DueAtUtc], 
-            [CompensationAmount], [CreatedAtUtc], [CreatedByUserId]
-        ) VALUES (
-            @Task4Id, @TrolyUserId, 'COLORING', 'ASSIGNED',
-            N'Coloring Task for Page 4',
-            N'Please color page 4 of the series. Focus on the background elements.',
-            3, DATEADD(DAY, 7, GETUTCDATE()),
-            50.00, GETUTCDATE(), @MangakaUserId
-        );
-
-        -- Link task to page region
-        INSERT INTO [manga].[ChapterPageTaskRegion] ([ChapterPageTaskId], [PageRegionId])
-        VALUES (@Task4Id, @Region4Id);
-    END
-
-    SET @Task5Id = (SELECT [ChapterPageTaskId] FROM [manga].[ChapterPageTask] WHERE [AssignedToUserId] = @TrolyUserId AND [TaskTitle] = N'Coloring Task for Page 5');
-    IF @Task5Id IS NULL AND @Region5Id IS NOT NULL
-    BEGIN
-        SET @Task5Id = NEWID();
-        INSERT INTO [manga].[ChapterPageTask] (
-            [ChapterPageTaskId], [AssignedToUserId], [TypeCode], [StatusCode], 
-            [TaskTitle], [TaskDescription], [PriorityLevel], [DueAtUtc], 
-            [CompensationAmount], [CreatedAtUtc], [CreatedByUserId]
-        ) VALUES (
-            @Task5Id, @TrolyUserId, 'COLORING', 'ASSIGNED',
-            N'Coloring Task for Page 5',
-            N'Please color page 5 of the series. Focus on the background elements.',
-            3, DATEADD(DAY, 7, GETUTCDATE()),
-            50.00, GETUTCDATE(), @MangakaUserId
-        );
-
-        -- Link task to page region
-        INSERT INTO [manga].[ChapterPageTaskRegion] ([ChapterPageTaskId], [PageRegionId])
-        VALUES (@Task5Id, @Region5Id);
-    END
-
-    PRINT 'ChapterPageTasks created/verified.';
-
-    -- ============================================
-    -- STEP 8: Create Notifications (if exists)
-    -- ============================================
-
-    -- Check if notifications table has data
-    IF EXISTS (SELECT 1 FROM [manga].[Notification] WHERE [RecipientUserId] = @TrolyUserId AND [RelatedEntityId] = @Task1Id)
-    BEGIN
-        PRINT 'Notifications already exist for these tasks.';
-    END
-    ELSE IF EXISTS (SELECT 1 FROM [manga].[Notification])
-    BEGIN
-        -- Create notifications for each task if they don't exist
-        IF NOT EXISTS (SELECT 1 FROM [manga].[Notification] WHERE [RecipientUserId] = @TrolyUserId AND [RelatedEntityId] = @Task1Id)
+        ---------------------------------------------------------------------
+        -- Notification
+        ---------------------------------------------------------------------
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM manga.Notification
+            WHERE recipient_user_id = @AssistantUserId
+              AND notification_type_code = N'TASK_ASSIGNMENT'
+              AND related_entity_type = N'ChapterPageTask'
+              AND related_entity_id = @TaskId
+        )
         BEGIN
-            INSERT INTO [manga].[Notification] (
-                [NotificationId], [RecipientUserId], [NotificationTypeCode], [Title], [Message], 
-                [RelatedEntityType], [RelatedEntityId], [CreatedAtUtc]
-            ) VALUES (
-                NEWID(), @TrolyUserId, 'NEW_TASK_ASSIGNED', N'New Task Assigned', 
-                N'You have been assigned a new coloring task: Coloring Task for Page 1',
-                'ChapterPageTask', @Task1Id, GETUTCDATE()
+            INSERT INTO manga.Notification
+            (
+                notification_id,
+                recipient_user_id,
+                notification_type_code,
+                title,
+                message,
+                related_entity_type,
+                related_entity_id,
+                read_at_utc,
+                created_at_utc
+            )
+            VALUES
+            (
+                NEWID(),
+                @AssistantUserId,
+                N'TASK_ASSIGNMENT',
+                CONCAT(N'New task assigned: Page ', @PageNo),
+                CONCAT(N'You have been assigned a SCRUM-116 local test task for page ', @PageNo, N'.'),
+                N'ChapterPageTask',
+                @TaskId,
+                NULL,
+                @Now
             );
-        END
+        END;
 
-        IF NOT EXISTS (SELECT 1 FROM [manga].[Notification] WHERE [RecipientUserId] = @TrolyUserId AND [RelatedEntityId] = @Task2Id)
-        BEGIN
-            INSERT INTO [manga].[Notification] (
-                [NotificationId], [RecipientUserId], [NotificationTypeCode], [Title], [Message], 
-                [RelatedEntityType], [RelatedEntityId], [CreatedAtUtc]
-            ) VALUES (
-                NEWID(), @TrolyUserId, 'NEW_TASK_ASSIGNED', N'New Task Assigned', 
-                N'You have been assigned a new coloring task: Coloring Task for Page 2',
-                'ChapterPageTask', @Task2Id, GETUTCDATE()
-            );
-        END
+        SET @PageNo += 1;
+    END;
 
-        IF NOT EXISTS (SELECT 1 FROM [manga].[Notification] WHERE [RecipientUserId] = @TrolyUserId AND [RelatedEntityId] = @Task3Id)
-        BEGIN
-            INSERT INTO [manga].[Notification] (
-                [NotificationId], [RecipientUserId], [NotificationTypeCode], [Title], [Message], 
-                [RelatedEntityType], [RelatedEntityId], [CreatedAtUtc]
-            ) VALUES (
-                NEWID(), @TrolyUserId, 'NEW_TASK_ASSIGNED', N'New Task Assigned', 
-                N'You have been assigned a new coloring task: Coloring Task for Page 3',
-                'ChapterPageTask', @Task3Id, GETUTCDATE()
-            );
-        END
+    -------------------------------------------------------------------------
+    -- Verification output
+    -------------------------------------------------------------------------
+    SELECT
+        DB_NAME() AS current_database,
+        @CommitChanges AS commit_changes;
 
-        IF NOT EXISTS (SELECT 1 FROM [manga].[Notification] WHERE [RecipientUserId] = @TrolyUserId AND [RelatedEntityId] = @Task4Id)
-        BEGIN
-            INSERT INTO [manga].[Notification] (
-                [NotificationId], [RecipientUserId], [NotificationTypeCode], [Title], [Message], 
-                [RelatedEntityType], [RelatedEntityId], [CreatedAtUtc]
-            ) VALUES (
-                NEWID(), @TrolyUserId, 'NEW_TASK_ASSIGNED', N'New Task Assigned', 
-                N'You have been assigned a new coloring task: Coloring Task for Page 4',
-                'ChapterPageTask', @Task4Id, GETUTCDATE()
-            );
-        END
+    SELECT
+        u.user_id,
+        u.username,
+        u.display_name,
+        u.status_code,
+        r.role_name
+    FROM auth.Users u
+    INNER JOIN auth.Roles r ON r.role_id = u.role_id
+    WHERE u.user_id IN (@AssistantUserId, @MangakaUserId)
+    ORDER BY r.role_name, u.username;
 
-        IF NOT EXISTS (SELECT 1 FROM [manga].[Notification] WHERE [RecipientUserId] = @TrolyUserId AND [RelatedEntityId] = @Task5Id)
-        BEGIN
-            INSERT INTO [manga].[Notification] (
-                [NotificationId], [RecipientUserId], [NotificationTypeCode], [Title], [Message], 
-                [RelatedEntityType], [RelatedEntityId], [CreatedAtUtc]
-            ) VALUES (
-                NEWID(), @TrolyUserId, 'NEW_TASK_ASSIGNED', N'New Task Assigned', 
-                N'You have been assigned a new coloring task: Coloring Task for Page 5',
-                'ChapterPageTask', @Task5Id, GETUTCDATE()
-            );
-        END
+    SELECT
+        series_id,
+        title,
+        slug,
+        status_code,
+        publication_frequency_code,
+        content_language_code
+    FROM manga.Series
+    WHERE series_id = @SeriesId;
 
-        PRINT 'Notifications created.';
-    END
-    ELSE
-    BEGIN
-        PRINT 'Notifications table exists but is empty. Notifications not created.';
-    END
+    SELECT
+        chapter_id,
+        series_id,
+        chapter_number_label,
+        chapter_title,
+        status_code
+    FROM manga.Chapter
+    WHERE chapter_id = @ChapterId;
 
-    -- ============================================
-    -- VERIFICATION QUERIES (Always run, regardless of @CommitChanges)
-    -- ============================================
+    SELECT
+        cp.chapter_page_id,
+        cp.chapter_id,
+        cp.page_no,
+        cpv.chapter_page_version_id,
+        cpv.version_no,
+        cpv.is_current_version,
+        fr.file_resource_id,
+        fr.cloudinary_public_id
+    FROM manga.ChapterPage cp
+    LEFT JOIN manga.ChapterPageVersion cpv ON cpv.chapter_page_id = cp.chapter_page_id
+    LEFT JOIN manga.FileResource fr ON fr.file_resource_id = cpv.page_file_id
+    WHERE cp.chapter_id = @ChapterId
+    ORDER BY cp.page_no, cpv.version_no;
 
-    PRINT '';
-    PRINT '=== VERIFICATION QUERIES ===';
-    PRINT '';
+    SELECT
+        cp.page_no,
+        pr.page_region_id,
+        pr.chapter_page_version_id,
+        pr.type_code,
+        pr.region_label,
+        pr.x,
+        pr.y,
+        pr.width,
+        pr.height
+    FROM manga.ChapterPage cp
+    INNER JOIN manga.ChapterPageVersion cpv ON cpv.chapter_page_id = cp.chapter_page_id
+    INNER JOIN manga.PageRegion pr ON pr.chapter_page_version_id = cpv.chapter_page_version_id
+    WHERE cp.chapter_id = @ChapterId
+      AND pr.region_label LIKE N'SCRUM-116 Full Page Region%'
+    ORDER BY cp.page_no;
 
-    PRINT '1. Assistant User (troly):';
-    SELECT [UserId], [Username], [Email], [DisplayName], [StatusCode], [RoleId]
-    FROM [auth].[Users] 
-    WHERE [UserId] = @TrolyUserId;
+    SELECT
+        cp.page_no,
+        t.chapter_page_task_id,
+        t.assigned_to_user_id,
+        t.type_code,
+        t.status_code,
+        t.task_title,
+        t.priority_level,
+        t.due_at_utc,
+        t.compensation_amount,
+        t.completed_page_version_id
+    FROM manga.ChapterPageTask t
+    INNER JOIN manga.ChapterPageTaskRegion tr ON tr.chapter_page_task_id = t.chapter_page_task_id
+    INNER JOIN manga.PageRegion pr ON pr.page_region_id = tr.page_region_id
+    INNER JOIN manga.ChapterPageVersion cpv ON cpv.chapter_page_version_id = pr.chapter_page_version_id
+    INNER JOIN manga.ChapterPage cp ON cp.chapter_page_id = cpv.chapter_page_id
+    WHERE cp.chapter_id = @ChapterId
+      AND t.assigned_to_user_id = @AssistantUserId
+      AND t.task_title LIKE N'Coloring Task for Page%'
+    ORDER BY cp.page_no;
 
-    PRINT '';
-    PRINT '2. Mangaka User:';
-    SELECT [UserId], [Username], [Email], [DisplayName], [StatusCode], [RoleId]
-    FROM [auth].[Users] 
-    WHERE [UserId] = @MangakaUserId;
-
-    PRINT '';
-    PRINT '3. Series:';
-    SELECT [SeriesId], [Title], [Slug], [StatusCode], [ContentLanguageCode], [CreatedAtUtc]
-    FROM [manga].[Series] 
-    WHERE [SeriesId] = @SeriesId;
-
-    PRINT '';
-    PRINT '4. Chapter:';
-    SELECT [ChapterId], [SeriesId], [ChapterNumberLabel], [ChapterTitle], [StatusCode], [CreatedAtUtc]
-    FROM [manga].[Chapter] 
-    WHERE [ChapterId] = @ChapterId;
-
-    PRINT '';
-    PRINT '5. Pages (ChapterPages):';
-    SELECT [ChapterPageId], [ChapterId], [PageNo]
-    FROM [manga].[ChapterPage] 
-    WHERE [ChapterId] = @ChapterId
-    ORDER BY [PageNo];
-
-    PRINT '';
-    PRINT '6. PageRegions (if ChapterPageVersion exists):';
-    IF @Page1VersionId IS NOT NULL
-        SELECT [PageRegionId], [ChapterPageVersionId], [TypeCode], [X], [Y], [Width], [Height]
-        FROM [manga].[PageRegion] 
-        WHERE [ChapterPageVersionId] = @Page1VersionId;
-    ELSE
-        PRINT 'ChapterPageVersion not found for Page 1. Create ChapterPageVersion records first.';
-
-    PRINT '';
-    PRINT '7. ChapterPageTasks assigned to troly:';
-    SELECT [ChapterPageTaskId], [AssignedToUserId], [TypeCode], [StatusCode], 
-           [TaskTitle], [TaskDescription], [PriorityLevel], [DueAtUtc], [CompensationAmount]
-    FROM [manga].[ChapterPageTask] 
-    WHERE [AssignedToUserId] = @TrolyUserId
-    ORDER BY [TaskTitle];
-
-    PRINT '';
-    PRINT '8. Task-Region Links:';
-    SELECT tr.[ChapterPageTaskId], tr.[PageRegionId], ct.[TaskTitle], pr.[PageRegionId] as [RegionId]
-    FROM [manga].[ChapterPageTaskRegion] tr
-    INNER JOIN [manga].[ChapterPageTask] ct ON tr.[ChapterPageTaskId] = ct.[ChapterPageTaskId]
-    LEFT JOIN [manga].[PageRegion] pr ON tr.[PageRegionId] = pr.[PageRegionId]
-    WHERE tr.[ChapterPageTaskId] IN (@Task1Id, @Task2Id, @Task3Id, @Task4Id, @Task5Id);
-
-    PRINT '';
-    PRINT '9. Notifications for troly:';
-    SELECT [NotificationId], [RecipientUserId], [NotificationTypeCode], [Title], [Message], 
-           [RelatedEntityType], [RelatedEntityId], [CreatedAtUtc], [ReadAtUtc]
-    FROM [manga].[Notification] 
-    WHERE [RecipientUserId] = @TrolyUserId
-    ORDER BY [CreatedAtUtc] DESC;
-
-    PRINT '';
-    PRINT '=== END OF VERIFICATION ===';
-    PRINT '';
-
-    -- ============================================
-    -- COMMIT OR ROLLBACK
-    -- ============================================
+    SELECT
+        n.notification_id,
+        n.recipient_user_id,
+        n.notification_type_code,
+        n.title,
+        n.related_entity_type,
+        n.related_entity_id,
+        n.read_at_utc,
+        n.created_at_utc
+    FROM manga.Notification n
+    WHERE n.recipient_user_id = @AssistantUserId
+      AND n.related_entity_type = N'ChapterPageTask'
+      AND n.title LIKE N'New task assigned: Page%'
+    ORDER BY n.created_at_utc DESC;
 
     IF @CommitChanges = 1
     BEGIN
         COMMIT TRANSACTION;
-        PRINT 'COMMIT: All changes have been committed successfully.';
+        PRINT 'SCRUM-116 assistant test data committed.';
     END
     ELSE
     BEGIN
         ROLLBACK TRANSACTION;
-        PRINT 'ROLLBACK: No changes were committed. This was a dry run.';
-        PRINT 'To commit changes, set @CommitChanges = 1 and run the script again.';
-    END
-
+        PRINT 'SCRUM-116 assistant test data dry run completed and rolled back. Change @CommitChanges to 1 to commit.';
+    END;
 END TRY
 BEGIN CATCH
-    IF XACT_STATE() <> 0
-    BEGIN
+    IF @@TRANCOUNT > 0
         ROLLBACK TRANSACTION;
-    END
 
-    DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
-    DECLARE @ErrorSeverity INT = ERROR_SEVERITY();
-    DECLARE @ErrorState INT = ERROR_STATE();
+    DECLARE @ErrorMessage nvarchar(4000) = ERROR_MESSAGE();
+    DECLARE @ErrorSeverity int = ERROR_SEVERITY();
+    DECLARE @ErrorState int = ERROR_STATE();
 
-    PRINT '';
-    PRINT '=== ERROR ===';
-    PRINT 'Error: ' + @ErrorMessage;
-    PRINT '';
-    PRINT 'ROLLBACK: Transaction was rolled back due to error.';
-    PRINT '';
-
-    THROW @ErrorSeverity, @ErrorMessage, @ErrorState;
+    RAISERROR(@ErrorMessage, @ErrorSeverity, @ErrorState);
 END CATCH;
-
--- ============================================
--- MANUAL TEST INSTRUCTIONS
--- ============================================
-PRINT '';
-PRINT '=== MANUAL TEST INSTRUCTIONS ===';
-PRINT '';
-PRINT 'After running this script with @CommitChanges = 1, perform the following tests:';
-PRINT '';
-PRINT '1. Log in as user "troly" with password "Password123!"';
-PRINT '   - Username: troly';
-PRINT '   - Password: Password123!';
-PRINT '';
-PRINT '2. Navigate to /assistant/tasks - verify you see 5 tasks assigned to you';
-PRINT '';
-PRINT '3. Check for notifications';
-PRINT '   - Verify you see 5 notifications about new tasks';
-PRINT '';
-PRINT '4. Verify task details';
-PRINT '   - Task titles should be: "Coloring Task for Page 1" through "Coloring Task for Page 5"';
-PRINT '   - Task status should be "ASSIGNED"';
-PRINT '   - Due date should be 7 days from today';
-PRINT '   - Compensation amount should be 50.00';
-PRINT '';
-PRINT '5. If pages exist with ChapterPageVersions:';
-PRINT '   - Each task should be linked to a PageRegion';
-PRINT '   - The task should show the page context correctly';
-PRINT '';
-PRINT '6. Test notification preferences and settings if implemented';
-PRINT '   - Navigate to notification/settings pages';
-PRINT '   - Verify UI renders correctly';
-PRINT '';
-PRINT '=== END OF INSTRUCTIONS ===';
+GO
