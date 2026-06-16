@@ -14,10 +14,8 @@
 @implements IAsyncDisposable
 
 @inject AuthenticationStateProvider AuthStateProvider
-@inject IUserService UserService
+@inject IProfileApiClient ProfileApiClient
 @inject IProfilePasswordApiClient ProfilePasswordApiClient
-@inject IFileResourceService FileResourceService
-@inject IFileStorageService FileStorageService
 @inject ISnackbar Snackbar
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
@@ -801,7 +799,7 @@
             }
 
             _currentUser =
-                await UserService.GetUserByIdAsync(_currentUserId);
+                await ProfileApiClient.GetProfileAsync(_currentUserId);
 
             if (_currentUser == null)
             {
@@ -848,7 +846,7 @@
         if (_currentUser?.AvatarFileId.HasValue == true)
         {
             var avatarFile =
-                await FileResourceService.GetFileResourceByIdAsync(
+                await ProfileApiClient.GetFileAsync(
                     _currentUser.AvatarFileId.Value);
 
             if (avatarFile != null &&
@@ -866,7 +864,7 @@
         if (_currentUser?.PortfolioFileId.HasValue == true)
         {
             var portfolioFile =
-                await FileResourceService.GetFileResourceByIdAsync(
+                await ProfileApiClient.GetFileAsync(
                     _currentUser.PortfolioFileId.Value);
 
             if (portfolioFile != null &&
@@ -904,7 +902,7 @@
         try
         {
             var file =
-                await FileResourceService.GetFileResourceByIdAsync(
+                await ProfileApiClient.GetFileAsync(
                     fileResourceId);
 
             if (file == null || file.DeletedAtUtc != null)
@@ -966,7 +964,7 @@
         await RunBusyAsync(async () =>
         {
             var updated =
-                await UserService.UpdateDisplayNameAsync(
+                await ProfileApiClient.UpdateDisplayNameAsync(
                     _currentUserId,
                     trimmed);
 
@@ -1305,34 +1303,29 @@
             var displayFileName =
                 _selectedAvatarFileName!;
 
-            var upload =
-                await FileStorageService.UploadFileAsync(
-                    _selectedAvatarBytes,
-                    _selectedAvatarUploadFileName,
-                    _selectedAvatarContentType,
-                    "USER_AVATAR");
-
-            var workflowUpload =
-                upload with
-                {
-                    OriginalFileName = displayFileName
-                };
-
             var updated =
-                await UserService.UpdateAvatarFileAsync(
+                await ProfileApiClient.UpdateAvatarAsync(
                     _currentUserId,
-                    workflowUpload);
+                    _selectedAvatarBytes,
+                    displayFileName,
+                    _selectedAvatarContentType);
 
             var newAvatarFileId =
                 updated.AvatarFileId
                 ?? throw new InvalidOperationException(
                     "The updated avatar FileResource id was not returned.");
 
+            var avatarFile =
+                await ProfileApiClient.GetFileAsync(
+                    newAvatarFileId)
+                ?? throw new InvalidOperationException(
+                    "The uploaded avatar file could not be loaded.");
+
             _currentUser = updated;
 
             _avatarUrl =
                 BuildVersionedUrl(
-                    upload.SecureUrl,
+                    avatarFile.CloudinarySecureUrl,
                     newAvatarFileId);
 
             ClearAvatarSelection();
@@ -1432,43 +1425,38 @@
             var displayContentType =
                 _selectedPortfolioContentType!;
 
-            var upload =
-                await FileStorageService.UploadFileAsync(
-                    _selectedPortfolioBytes,
-                    _selectedPortfolioUploadFileName,
-                    displayContentType,
-                    "REGISTRATION_PORTFOLIO");
-
-            var workflowUpload =
-                upload with
-                {
-                    OriginalFileName = displayFileName
-                };
-
             var updated =
-                await UserService.UpdatePortfolioFileAsync(
+                await ProfileApiClient.UpdatePortfolioAsync(
                     _currentUserId,
-                    workflowUpload);
+                    _selectedPortfolioBytes,
+                    displayFileName,
+                    displayContentType);
 
             var newPortfolioFileId =
                 updated.PortfolioFileId
                 ?? throw new InvalidOperationException(
                     "The updated portfolio FileResource id was not returned.");
 
+            var portfolioFile =
+                await ProfileApiClient.GetFileAsync(
+                    newPortfolioFileId)
+                ?? throw new InvalidOperationException(
+                    "The uploaded portfolio file could not be loaded.");
+
             _currentUser = updated;
 
             _portfolioUrl =
                 BuildVersionedUrl(
-                    upload.SecureUrl,
+                    portfolioFile.CloudinarySecureUrl,
                     newPortfolioFileId);
 
             _portfolioFileName =
-                displayFileName;
+                portfolioFile.OriginalFileName;
 
             _portfolioTypeLabel =
                 BuildDocumentTypeLabel(
-                    displayFileName,
-                    upload.ContentType);
+                    portfolioFile.OriginalFileName,
+                    portfolioFile.ContentType);
 
             ClearPortfolioSelection();
 
