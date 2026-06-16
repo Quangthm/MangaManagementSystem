@@ -5,7 +5,6 @@
 @using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Assistant")]
 @inject NavigationManager Nav
-@inject IChapterPageTaskService TaskService
 @inject IAssistantTaskApiClient AssistantTaskClient
 @inject ISnackbar Snackbar
 
@@ -26,7 +25,7 @@
         }
         else if (_task is null)
         {
-            <MudAlert Severity="Severity.Warning">Task not found.</MudAlert>
+            <MudAlert Severity="Severity.Warning">Task not found or not assigned to you.</MudAlert>
         }
         else
         {
@@ -79,6 +78,10 @@
                             <MudText><strong>Priority:</strong> @_task.PriorityLevel</MudText>
                             <MudText><strong>Status:</strong> @_task.StatusCode</MudText>
                             <MudText><strong>Due:</strong> <TimestampDisplay Value="@_task.DueAtUtc" EmptyText="No deadline set" /></MudText>
+                            @if (_task.CompensationAmount.HasValue)
+                            {
+                                <MudText><strong>Compensation:</strong> @_task.CompensationAmount.Value.ToString("C2")</MudText>
+                            }
                             @if (_task.CompletedPageVersionId.HasValue)
                             {
                                 <MudText><strong>Completed Version:</strong> @_task.CompletedPageVersionId</MudText>
@@ -150,7 +153,7 @@
 
         try
         {
-            _task = await TaskService.GetChapterPageTaskByIdAsync(TaskId);
+            _task = await AssistantTaskClient.GetTaskDetailAsync(TaskId);
         }
         catch (Exception ex)
         {

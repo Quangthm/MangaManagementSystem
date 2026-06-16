@@ -1,9 +1,10 @@
 @page "/assistant/studio/{TaskId:guid}"
 @using Microsoft.AspNetCore.Authorization
 @using MangaManagementSystem.Application.DTOs.Manga
+@using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Assistant")]
 @inject NavigationManager Nav
-@inject IChapterPageTaskService TaskService
+@inject IAssistantTaskApiClient AssistantTaskClient
 
 <AssistantLayout>
     <div class="mf-page">
@@ -22,7 +23,7 @@
         }
         else if (_task is null)
         {
-            <MudAlert Severity="Severity.Warning">Task not found.</MudAlert>
+            <MudAlert Severity="Severity.Warning">Task not found or not assigned to you.</MudAlert>
         }
         else
         {
@@ -40,19 +41,56 @@
                             </MudStack>
                         </MudStack>
 
-                        <div class="mf-canvas" style="min-height:400px">
-                            <MudStack AlignItems="AlignItems.Center" Spacing="2">
-                                <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Large" Color="Color.Secondary" />
-                                <MudText Typo="Typo.h6" Class="mf-muted">Workspace Canvas</MudText>
-                                <MudText Class="mf-muted">Page image rendering requires FileResource/Cloudinary integration.</MudText>
-                            </MudStack>
-                        </div>
+                        @if (!string.IsNullOrWhiteSpace(_task.PageImageUrl))
+                        {
+                            <div class="mf-canvas" style="min-height:400px">
+                                <MudImage Src="@_task.PageImageUrl" Class="mf-page-image" MaxHeight="400" Aspect="Aspect.Fill" />
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="mf-canvas" style="min-height:400px">
+                                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Large" Color="Color.Secondary" />
+                                    <MudText Typo="Typo.h6" Class="mf-muted">Page Image</MudText>
+                                    <MudText Class="mf-muted">Page image data not available.</MudText>
+                                </MudStack>
+                            </div>
+                        }
 
                         <MudStack Row="true" Class="mt-4" Spacing="2">
                             <MudButton Variant="Variant.Outlined" OnClick="@(() => Zoom = Math.Max(50, Zoom - 10))">- Zoom</MudButton>
                             <MudButton Variant="Variant.Outlined" OnClick="@(() => Zoom = Math.Min(200, Zoom + 10))">+ Zoom</MudButton>
                         </MudStack>
                     </MudPaper>
+
+                    @if (_task.PageRegions.Any())
+                    {
+                        <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Assigned Page Regions</MudText>
+                            <MudTable Items="@_task.PageRegions" Hover="true" RowsPerPage="5" Elevation="0">
+                                <Columns>
+                                    <MudColumn><MudText>Label</MudText></MudColumn>
+                                    <MudColumn><MudText>Type</MudText></MudColumn>
+                                    <MudColumn><MudText>X</MudText></MudColumn>
+                                    <MudColumn><MudText>Y</MudText></MudColumn>
+                                    <MudColumn><MudText>Width</MudText></MudColumn>
+                                    <MudColumn><MudText>Height</MudText></MudColumn>
+                                </Columns>
+                                <RowTemplate>
+                                    <MudTd>@context.RegionLabel</MudTd>
+                                    <MudTd>@context.TypeCode</MudTd>
+                                    <MudTd>@context.X</MudTd>
+                                    <MudTd>@context.Y</MudTd>
+                                    <MudTd>@context.Width</MudTd>
+                                    <MudTd>@context.Height</MudTd>
+                                </RowTemplate>
+                            </MudTable>
+                            <MudText Typo="Typo.caption" Class="mf-muted mt-2">
+                                Highlighted regions show the page areas you need to work on.
+                            </MudText>
+                        </MudPaper>
+                    }
                 </MudItem>
 
                 <MudItem xs="12" md="4">
@@ -62,6 +100,14 @@
                             <MudText><strong>Type:</strong> @_task.TypeCode</MudText>
                             <MudText><strong>Priority:</strong> @_task.PriorityLevel</MudText>
                             <MudText><strong>Due:</strong> <TimestampDisplay Value="@_task.DueAtUtc" EmptyText="No deadline set" /></MudText>
+                            @if (_task.CompensationAmount.HasValue)
+                            {
+                                <MudText><strong>Compensation:</strong> @_task.CompensationAmount.Value.ToString("C2")</MudText>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(_task.AssignedToDisplayName))
+                            {
+                                <MudText><strong>Assigned To:</strong> @_task.AssignedToDisplayName</MudText>
+                            }
                             @if (_task.CompletedPageVersionId.HasValue)
                             {
                                 <MudText><strong>Completed Version:</strong> @_task.CompletedPageVersionId</MudText>
@@ -69,17 +115,12 @@
                         </MudStack>
                     </MudPaper>
 
-                    <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
-                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Page Regions</MudText>
-                        <MudText Class="mf-muted">Page region data is not exposed by the current task DTO. Region visualization will be available once the DTO includes region details.</MudText>
-                    </MudPaper>
-
                     <MudPaper Class="pa-5 mf-card" Elevation="0">
                         <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Actions</MudText>
                         <MudText Class="mf-muted mb-3">Once your work is complete, submit it for editor review.</MudText>
                         <MudStack Spacing="2">
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"/assistant/task/{TaskId}/submit")">Submit Work</MudButton>
-                            <MudButton Variant="Variant.Outlined" Href="@($"/assistant/task/{TaskId}")">Back to Task Detail</MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"/assistant/task/{_task.ChapterPageTaskId}/submit")">Submit Work</MudButton>
+                            <MudButton Variant="Variant.Outlined" Href="@($"/assistant/task/{_task.ChapterPageTaskId}")">Back to Task Detail</MudButton>
                             <MudButton Variant="Variant.Text" Href="/assistant/tasks">All Tasks</MudButton>
                         </MudStack>
                     </MudPaper>
@@ -109,7 +150,7 @@
 
         try
         {
-            _task = await TaskService.GetChapterPageTaskByIdAsync(TaskId);
+            _task = await AssistantTaskClient.GetTaskDetailAsync(TaskId);
         }
         catch (Exception ex)
         {

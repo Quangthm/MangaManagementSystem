@@ -4,13 +4,13 @@
 @attribute [Authorize(Roles = "Assistant")]
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthStateProvider
-@inject MangaManagementSystem.Application.Interfaces.IChapterPageTaskService TaskService
+@inject MangaManagementSystem.Web.Services.Api.IAssistantTaskApiClient AssistantTaskClient
 
 <AssistantLayout>
     <div class="mf-page">
         <div class="mf-page-header">
             <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Assigned Tasks</MudText>
-            <MudText Typo="Typo.body1" Class="mf-muted">5 tasks requiring your attention</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Tasks assigned to you</MudText>
         </div>
 
         <MudGrid Class="mb-6"><MudItem xs="12" md="3"><StatCard Label="In Progress" Value="2" /></MudItem><MudItem xs="12" md="3"><StatCard Label="Not Started" Value="2" /></MudItem><MudItem xs="12" md="3"><StatCard Label="In Review" Value="1" /></MudItem><MudItem xs="12" md="3"><StatCard Label="Overdue" Value="1" /></MudItem></MudGrid>
@@ -37,9 +37,39 @@
                 {
                     <MudItem xs="12" md="6">
                         <MudPaper Class="pa-5 mf-card" Elevation="0">
-                            <MudStack Row="true" Justify="Justify.SpaceBetween"><MudText Typo="Typo.h6" Class="font-weight-bold">@t.TypeCode</MudText><StatusBadge Status="@t.StatusCode" /></MudStack>
-                            <MudText class="mf-muted">Task Id: @t.ChapterPageTaskId</MudText>
-                            <MudText Typo="Typo.body2" Class="mt-2">Priority: @t.PriorityLevel • Due: <TimestampDisplay Value="@t.DueAtUtc" /></MudText>
+                            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                <MudText Typo="Typo.h6" Class="font-weight-bold">@t.TypeCode</MudText>
+                                <StatusBadge Status="@t.StatusCode" />
+                            </MudStack>
+                            <MudText Typo="Typo.body2" Class="mt-2">
+                                @if (!string.IsNullOrWhiteSpace(t.SeriesTitle))
+                                {
+                                    <span class="mf-muted">@t.SeriesTitle</span>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(t.ChapterNumberLabel))
+                                {
+                                    <span class="mf-muted">@t.ChapterNumberLabel</span>
+                                }
+                                @if (t.PageNo.HasValue)
+                                {
+                                    <span class="mf-muted">• Page @t.PageNo.Value</span>
+                                }
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mt-1">
+                                Due: <TimestampDisplay Value="@t.DueAtUtc" EmptyText="No deadline set" />
+                            </MudText>
+                            @if (t.CompensationAmount.HasValue)
+                            {
+                                <MudText Typo="Typo.caption" Class="mt-1">
+                                    <span class="mf-muted">Compensation: @t.CompensationAmount.Value.ToString("C2")</span>
+                                </MudText>
+                            }
+                            @if (t.PageRegions.Any())
+                            {
+                                <MudText Typo="Typo.caption" Class="mt-1 mf-muted">
+                                    Regions: @t.PageRegions.Count
+                                </MudText>
+                            }
                             <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"/assistant/task/{t.ChapterPageTaskId}")" Class="mt-3">Open Task</MudButton>
                         </MudPaper>
                     </MudItem>
@@ -54,7 +84,7 @@
 
     private bool _loading = true;
     private string? _error;
-    private IEnumerable<MangaManagementSystem.Application.DTOs.Manga.ChapterPageTaskDto>? _tasks;
+    private IReadOnlyList<MangaManagementSystem.Application.DTOs.Manga.ChapterPageTaskDto>? _tasks;
 
     protected override async Task OnInitializedAsync()
     {
@@ -67,23 +97,7 @@
         _error = null;
         try
         {
-            var auth = await AuthStateProvider.GetAuthenticationStateAsync();
-            var user = auth.User;
-            if (user?.Identity?.IsAuthenticated != true)
-            {
-                _tasks = Array.Empty<MangaManagementSystem.Application.DTOs.Manga.ChapterPageTaskDto>();
-                return;
-            }
-
-            var idClaim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
-            if (!Guid.TryParse(idClaim?.Value, out var uid))
-            {
-                _tasks = Array.Empty<MangaManagementSystem.Application.DTOs.Manga.ChapterPageTaskDto>();
-                return;
-            }
-
-            var tasks = (await TaskService.GetChapterPageTasksByAssignedUserIdAsync(uid)).ToList();
-            _tasks = tasks;
+            _tasks = await AssistantTaskClient.GetAssignedTasksAsync();
         }
         catch (Exception ex)
         {
