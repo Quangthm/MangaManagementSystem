@@ -10,7 +10,7 @@
 @inject IFileStorageService FileStorageService
 @inject IFileResourceService FileResourceService
 @inject IMangakaSeriesApiClient MangakaSeriesApiClient
-@inject IUserService UserService
+@inject IProfileApiClient ProfileApiClient
 @inject AuthenticationStateProvider AuthStateProvider
 @using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Web.Services.Api
@@ -533,12 +533,7 @@
     private async Task LoadCurrentUserSummaryAsync(Guid userId)
     {
         var currentUser =
-            await UserService.GetUserByIdAsync(userId);
-
-        if (currentUser == null)
-        {
-            return;
-        }
+            await ProfileApiClient.GetProfileAsync(userId);
 
         _currentDisplayName =
             string.IsNullOrWhiteSpace(currentUser.DisplayName)
@@ -559,21 +554,22 @@
 
         _currentAvatarUrl = null;
 
-        if (currentUser.AvatarFileId.HasValue)
+        if (!currentUser.AvatarFileId.HasValue)
         {
-            var avatarFile =
-                await FileResourceService
-                    .GetFileResourceByIdAsync(
-                        currentUser.AvatarFileId.Value);
+            return;
+        }
 
-            if (avatarFile != null &&
-                avatarFile.DeletedAtUtc == null &&
-                !string.IsNullOrWhiteSpace(
-                    avatarFile.CloudinarySecureUrl))
-            {
-                _currentAvatarUrl =
-                    avatarFile.CloudinarySecureUrl;
-            }
+        var avatarFile =
+            await ProfileApiClient.GetFileAsync(
+                currentUser.AvatarFileId.Value);
+
+        if (avatarFile != null &&
+            avatarFile.DeletedAtUtc == null &&
+            !string.IsNullOrWhiteSpace(
+                avatarFile.CloudinarySecureUrl))
+        {
+            _currentAvatarUrl =
+                avatarFile.CloudinarySecureUrl;
         }
     }
     protected override async Task OnInitializedAsync()
