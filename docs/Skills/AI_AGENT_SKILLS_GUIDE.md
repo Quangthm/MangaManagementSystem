@@ -24,11 +24,183 @@ The system follows a **Distributed Monolith** style. The core business workflow 
 
 - **Technology:** ASP.NET Core Web API on .NET 8.
 - **Architecture pattern:** Clean Architecture with four layers:
-  1. **Domain** — entities, enums/value objects, and core business rules.
-  2. **Application** — use cases, commands, queries, DTOs, validators, service interfaces, and workflow orchestration.
-  3. **Infrastructure** — Entity Framework Core, SQL Server implementation, Cloudinary integration, and external service adapters.
-  4. **API** — controllers/endpoints, authentication/authorization boundaries, request/response models, and HTTP concerns.
-- **Rule:** Business logic must not be placed directly in UI components or database-specific classes when it belongs in Domain/Application.
+  1. **Domain** — entities, enums/value objects, and domain concepts that do not depend on Application, Infrastructure, Web, or API.
+  2. **Application** — use cases, commands/queries, DTOs, validators, service interfaces, workflow orchestration, and business validation. Application may depend on Domain, but must not depend on Infrastructure, API, or Web.
+  3. **Infrastructure** — EF Core, SQL Server stored-procedure wrappers, repository implementations, Cloudinary integration, SMTP/email, OTP cache, AI Hub adapters, and other external service adapters. Infrastructure may depend on Application and Domain.
+  4. **API** — thin ASP.NET Core controllers/endpoints, request/response contracts, authentication/authorization boundaries, HTTP status-code mapping, and HTTP-specific concerns. API may depend on Application and Infrastructure for dependency injection only.
+- **Rule:** Business logic must not be placed directly in UI components, API controllers, or database-specific classes when it belongs in Domain/Application.
+- **Rule:** SQL Server, EF Core, Cloudinary, SMTP, and AI Hub implementation details must stay in Infrastructure. They must not leak into Web UI components or API controllers.
+
+### Clean Architecture Dependency Rules
+
+AI Agents must preserve these dependency directions exactly:
+
+```text
+Domain           <- Application <- Infrastructure
+Application      <- API
+API              <- Web only through HTTP calls, not project references for business workflows
+Web              -> API through typed HTTP clients
+```
+
+Allowed project references and calls:
+
+| Source project | May depend on / call | Must not depend on / call |
+|---|---|---|
+| `MangaManagementSystem.Domain` | Nothing project-specific | Application, Infrastructure, API, Web |
+| `MangaManagementSystem.Application` | Domain | Infrastructure, API, Web, EF Core concrete DbContext, Cloudinary SDK, SMTP SDK |
+| `MangaManagementSystem.Infrastructure` | Application, Domain | Web, API controllers |
+| `MangaManagementSystem.API` | Application services/interfaces, Infrastructure DI registration | Web project, Razor components, UI services |
+| `MangaManagementSystem.Web` | Web UI code, typed API clients, local session/cookie helpers | Application services for migrated workflows, Infrastructure services, repositories, DbContext, stored procedures |
+
+Required flow for new business features:
+
+```text
+Blazor Web page / component
+→ typed Web API client, e.g. IMangakaSeriesApiClient
+→ ASP.NET Core API controller, e.g. MangakaSeriesController
+→ Application use-case service, e.g. ISeriesService.CreateSeriesDraftAsync
+→ Infrastructure repository / stored-procedure wrapper
+→ SQL Server stored procedure / EF read query
+```
+
+Do not implement new business workflows with this anti-pattern:
+
+```text
+Blazor Web page
+→ Application service directly
+→ Infrastructure / DbContext / stored procedure
+```
+
+The Web project may temporarily contain legacy direct Application service calls while migration is in progress, but AI Agents must not add new direct Web-to-Application business workflow calls. When touching a migrated or new workflow, route it through the API.
+
+### API Controller Rules
+
+Controllers must be thin HTTP adapters. They may:
+
+- accept route/query/body/form data,
+- bind `multipart/form-data` files when needed,
+- read the authenticated actor/user id from claims or the current transitional Web-to-API request pattern,
+- call one Application use-case method,
+- map known Application exceptions to safe HTTP responses,
+- return DTOs or response contracts.
+
+Controllers must not:
+
+- call EF Core `DbContext` directly,
+- call repositories directly unless the repository is explicitly an Application-facing abstraction and no service exists,
+- call stored procedures directly,
+- upload to Cloudinary directly,
+- compute workflow status transitions directly,
+- create audit records directly,
+- contain cross-table business rules,
+- expose raw SQL errors, stack traces, password hashes, OTP codes, API keys, or secrets.
+
+Example thin API controller shape:
+
+```csharp
+[ApiController]
+[Route("api/mangaka/series")]
+public sealed class MangakaSeriesController : ControllerBase
+{
+    private readonly ISeriesService _seriesService;
+
+    public MangakaSeriesController(ISeriesService seriesService)
+    {
+        _seriesService = seriesService;
+    }
+
+    [HttpPost("drafts")]
+    public async Task<ActionResult<SeriesDto>> CreateDraftAsync(
+        [FromForm] CreateSeriesDraftForm request,
+        CancellationToken cancellationToken)
+    {
+        var actorUserId = /* read from claims or transitional Web-to-API context */;
+
+        var result = await _seriesService.CreateSeriesDraftAsync(
+            actorUserId,
+            request.ToApplicationDto(),
+            cancellationToken);
+
+        return CreatedAtAction(nameof(GetByIdAsync), new { seriesId = result.SeriesId }, result);
+    }
+}
+```
+
+### Web Project API Client Rules
+
+The Web project must call the API through typed clients instead of scattering raw `HttpClient` calls across Razor components.
+
+Required Web pattern:
+
+```text
+Components/Pages/Mangaka/MangakaDashboard.razor
+→ Services/Api/IMangakaSeriesApiClient.cs
+→ Services/Api/MangakaSeriesApiClient.cs
+→ API endpoint
+```
+
+Typed API clients should:
+
+- use `HttpClient` registered through `AddHttpClient`,
+- use `ApiSettings:BaseUrl`,
+- centralize JSON/multipart request construction,
+- parse known `ApiErrorResponse`, `ProblemDetails`, and `ValidationProblemDetails`,
+- throw safe `InvalidOperationException` messages for UI snackbar/display handling,
+- avoid logging secrets, passwords, OTPs, tokens, or raw request bodies.
+
+Example Web registration:
+
+```csharp
+builder.Services.AddHttpClient<IMangakaSeriesApiClient, MangakaSeriesApiClient>((sp, client) =>
+{
+    var settings = sp.GetRequiredService<IOptions<ApiSettings>>().Value;
+    client.BaseAddress = new Uri(settings.BaseUrl);
+});
+```
+
+Razor components should inject typed clients:
+
+```csharp
+@inject IMangakaSeriesApiClient MangakaSeriesApiClient
+```
+
+Razor components should not inject Application services for new/migrated workflows:
+
+```csharp
+// Avoid for new API-migrated business workflows:
+@inject ISeriesService SeriesService
+@inject IChapterPageTaskService TaskService
+@inject ApplicationDbContext DbContext
+```
+
+### Feature-Based API Organization
+
+Do not create one centralized “God controller” or universal API endpoint. Use feature/resource-based controllers and clients.
+
+Good examples:
+
+```text
+API Controllers:
+- AuthController                 -> /api/auth/login
+- RegistrationController         -> /api/registration/otp, /api/registration/complete
+- MangakaSeriesController        -> /api/mangaka/series/drafts
+- AdminUsersController           -> /api/admin/users
+- ChapterPageTasksController     -> /api/chapter-page-tasks
+
+Web typed clients:
+- IAuthApiClient / AuthApiClient
+- IRegistrationApiClient / RegistrationApiClient
+- IMangakaSeriesApiClient / MangakaSeriesApiClient
+- IAdminUserApiClient / AdminUserApiClient
+```
+
+Bad examples:
+
+```text
+- CentralApiController.DoEverything()
+- POST /api/execute-action
+- UniversalApiClient.Call(string actionName, object payload)
+```
 
 ### AI Microservice / AI Hub
 
@@ -117,8 +289,8 @@ Never keep a SQL transaction open while uploading to Cloudinary.
 
 ### High-Level Communication Flow
 
-1. Blazor Server UI sends requests to ASP.NET Core API/application services.
-2. ASP.NET Core handles authorization, validation, workflow orchestration, Cloudinary upload integration, AI Hub calls, and calls SQL Server stored procedures for important database workflows.
+1. Blazor Server UI sends requests to the ASP.NET Core API through typed Web API clients. New or migrated business workflows must not call Application services directly from Web.
+2. ASP.NET Core API controllers handle HTTP binding and authorization boundaries, then call Application use cases. Application orchestrates validation/workflow rules and Infrastructure adapters handle Cloudinary, AI Hub, SMTP, EF Core, and stored-procedure calls.
 3. SQL Server stored procedures own important database transactions, multi-table writes, workflow state transitions, file metadata linking, and audit-event appends.
 4. Cloudinary stores the actual files/images and provides secure delivery URLs.
 5. For AI-assisted detection, the backend sends the page image or image URL to the FastAPI AI Hub.
@@ -180,8 +352,8 @@ AI Agents must follow this exact sequential pipeline when interpreting user requ
 * **System Prompt Constraint:** Break down complex Epics into technical checklist sub-tasks.
 * **Execution Rules:**
   - Every technical breakdown MUST generate four distinct layers formatted as a Markdown checklist (`- [ ]`):
-    1. **Frontend (FE):** MudBlazor `.razor` component placement in the Blazor Server web project under the appropriate actor/workspace page folder.
-    2. **Backend (BE):** MediatR Command/Query handlers in the `Application` layer, Domain rules in `Domain`, EF Core Fluent API configurations in `Infrastructure`, and Infrastructure repository methods that call SQL Server stored procedures for important database workflows.
+    1. **Frontend (FE):** MudBlazor `.razor` component placement in the Blazor Server Web project plus typed Web API client changes. Web pages must call API clients for new/migrated business workflows, not Application services directly.
+    2. **Backend (BE):** Feature-based API controller/endpoints, request/response contracts, Application use-case services/DTOs/validators, Domain rules, EF Core Fluent API configurations in `Infrastructure`, and Infrastructure repository methods that call SQL Server stored procedures for important database workflows.
     3. **AI Integration:** Async integration hooks to Python FastAPI (YOLO-based panel/region detection) if processing `ChapterPage` canvases.
     4. **Exceptions & Audit:** Custom middleware handling, stored-procedure audit calls through `audit.usp_AuditEvent_Append`, and compensation logic for external operations such as Cloudinary cleanup after SQL failure.
 
@@ -198,19 +370,81 @@ AI Agents must follow this exact sequential pipeline when interpreting user requ
   - Every generated workflow must explicitly state its transaction boundary, audit behavior, and rollback/compensation behavior.
 
 
-### 5. Skill Name: `calculate_priority_matrix`
+### 5. Skill Name: `enforce_clean_architecture`
+* **System Prompt Constraint:** Before generating or modifying code, verify that the proposed implementation preserves Clean Architecture dependency boundaries and the Web-to-API rule.
+* **Execution Rules:**
+  - For every feature, explicitly state which code belongs in `Domain`, `Application`, `Infrastructure`, `API`, and `Web`.
+  - Web must call the API via typed API clients for all new or migrated business workflows.
+  - API controllers must be thin and must delegate business work to Application services.
+  - Application services must not depend on API/Web/Infrastructure concrete implementation details.
+  - Infrastructure must hide EF Core, stored-procedure, Cloudinary, SMTP, and AI Hub details behind Application-facing interfaces.
+  - Do not add new direct injections of Application workflow services into Razor components. If an existing Web page already injects an Application service, either leave it untouched when out of scope or migrate that workflow to an API client when the page is modified.
+  - Do not create centralized all-purpose controllers or universal API clients. Use feature-based controllers and typed clients.
+  - When reviewing code, flag these violations explicitly:
+    - Razor component calls `DbContext`, repositories, stored procedures, or Infrastructure services.
+    - Razor component directly calls Application service for a new/migrated workflow.
+    - API controller contains Cloudinary upload logic, SQL/stored-procedure logic, audit writes, or workflow status rules.
+    - Application references Infrastructure, API, or Web.
+    - Infrastructure references Web.
+    - Controller returns password hashes, OTPs, secrets, raw SQL errors, or stack traces.
+  - Required output for each implementation plan:
+    ```text
+    Clean Architecture placement:
+    - Web: ...
+    - API: ...
+    - Application: ...
+    - Infrastructure: ...
+    - Domain: ...
+
+    Web-to-API flow:
+    Razor Page -> Typed API Client -> API Controller -> Application Service -> Infrastructure -> DB/SP
+    ```
+
+#### Example: Create Series Draft
+
+Correct implementation:
+
+```text
+Web:
+- MangakaDashboard.razor collects title/synopsis/genre/optional cover.
+- IMangakaSeriesApiClient sends multipart/form-data to API.
+
+API:
+- MangakaSeriesController exposes POST /api/mangaka/series/drafts.
+- Controller reads form fields and optional file bytes, resolves actor id, calls Application.
+
+Application:
+- ISeriesService.CreateSeriesDraftAsync validates draft input, slug rules, actor intent, and coordinates storage/SP workflow through interfaces.
+
+Infrastructure:
+- Uploads cover to Cloudinary if present.
+- Computes SHA256 hash.
+- Calls manga.usp_Series_Create with output parameters.
+- Cleans up Cloudinary asset if SQL workflow fails.
+
+Domain:
+- Series entity and domain constants/status concepts.
+```
+
+Incorrect implementation:
+
+```text
+MangakaDashboard.razor injects ISeriesService and IFileStorageService, uploads cover directly, creates FileResource manually, and calls EF SaveChanges.
+```
+
+### 6. Skill Name: `calculate_priority_matrix`
 * **System Prompt Constraint:** Rank requirements to protect the project deadline.
 * **Execution Rules:**
   - Score Business Value, Relative Cost, and Relative Risk from 1 to 9.
   - Automatically label anything with high cost/risk and low core value as `priority:low` or `out-of-scope`.
 
-### 6. Skill Name: `refine_functional_requirements`
+### 7. Skill Name: `refine_functional_requirements`
 * **System Prompt Constraint:** Enforce high-precision specification language.
 * **Execution Rules:**
   - Convert descriptions into `"The system shall..."` structures.
   - Replace ambiguous verbs with specific database/code operations. Specify exact C# data types, Cloudinary `secure_url` properties, stored-procedure/wrapper-procedure names when needed, SQL transaction boundaries, or coordinate ranges `(X, Y, Width, Height)` mapping to `PageRegion`.
 
-### 7. Skill Name: `generate_acceptance_criteria`
+### 8. Skill Name: `generate_acceptance_criteria`
 * **System Prompt Constraint:** Write comprehensive Behavioral-Driven Development (BDD) testing scenarios.
 * **Execution Rules:**
   - Use the Cucumber framework: `Given - When - Then`.
@@ -218,6 +452,43 @@ AI Agents must follow this exact sequential pipeline when interpreting user requ
   - Explicitly state the MudBlazor UI feedback state (e.g., `<MudProgressCircular>`, `<MudDialog>`, or `ISnackbar` toast notification).
 
 ---
+
+## ✅ CLEAN ARCHITECTURE REVIEW CHECKLIST
+
+Before accepting generated code, AI Agents and reviewers must check the following:
+
+### Web Project
+
+- [ ] Razor pages/components call typed API clients for new or migrated business workflows.
+- [ ] Razor pages do not directly call `DbContext`, repositories, stored procedures, Cloudinary, SMTP, or Infrastructure services.
+- [ ] Razor pages do not inject Application services for workflows that are already API-migrated.
+- [ ] UI-only concerns remain in Web: MudBlazor state, dialogs, snackbars, loading flags, validation display, local Blazor auth cookie/session creation.
+
+### API Project
+
+- [ ] Controllers are feature/resource-based, not centralized God controllers.
+- [ ] Controllers are thin and call one Application use case per business action.
+- [ ] Controllers map expected failures to safe HTTP responses.
+- [ ] Controllers do not expose raw exception text, SQL errors, stack traces, password hashes, OTPs, or secrets.
+
+### Application Project
+
+- [ ] Use-case methods own business validation and workflow orchestration.
+- [ ] Application depends on Domain and abstractions, not Infrastructure concrete classes.
+- [ ] Application DTOs do not expose database-only or security-sensitive fields.
+
+### Infrastructure Project
+
+- [ ] EF Core and stored-procedure details stay inside Infrastructure.
+- [ ] Stored procedures are used for workflow transactions, status transitions, multi-table writes, file-resource linking, and audit writes.
+- [ ] Cloudinary/SMTP/AI Hub details stay behind Application-facing interfaces.
+- [ ] Cloudinary uploads are compensated/cleaned up if SQL workflow fails after upload.
+
+### Database / Stored Procedure
+
+- [ ] No fake SQL columns are added just to satisfy EF.
+- [ ] EF mappings match the source-of-truth schema.
+- [ ] Stored-procedure output parameters and errors are handled safely.
 
 ## 🚀 COPILOT CLI AUTOMATION CHEATSHEET
 
