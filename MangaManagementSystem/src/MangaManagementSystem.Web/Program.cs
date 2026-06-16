@@ -14,7 +14,6 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MudBlazor.Services;
 using System.Security.Claims;
-using Microsoft.Extensions.Logging;
 
 namespace MangaManagementSystem.Web
 {
