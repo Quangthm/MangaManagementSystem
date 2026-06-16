@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MangaManagementSystem.API", "src\MangaManagementSystem.API\MangaManagementSystem.API.csproj", "{34BB674E-3811-C933-F239-0CF0CFD0EBDF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MangaManagementSystem.Web", "src\MangaManagementSystem.Web\MangaManagementSystem.Web.csproj", "{FAD055E0-4483-E27C-CFD4-15E957E7B486}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{34BB674E-3811-C933-F239-0CF0CFD0EBDF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{34BB674E-3811-C933-F239-0CF0CFD0EBDF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{34BB674E-3811-C933-F239-0CF0CFD0EBDF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{34BB674E-3811-C933-F239-0CF0CFD0EBDF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FAD055E0-4483-E27C-CFD4-15E957E7B486}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FAD055E0-4483-E27C-CFD4-15E957E7B486}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FAD055E0-4483-E27C-CFD4-15E957E7B486}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FAD055E0-4483-E27C-CFD4-15E957E7B486}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
