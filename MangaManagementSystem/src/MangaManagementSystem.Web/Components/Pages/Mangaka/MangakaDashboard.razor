@@ -60,10 +60,6 @@
                     </div>
                 </ActivatorContent>
                 <ChildContent>
-                    <MudMenuItem OnClick="@(() => Snackbar.Add("Theme toggle - not implemented", Severity.Info))">
-                        <MudIcon Icon="@Icons.Material.Filled.DarkMode" Size="Size.Small" Style="margin-right: 8px;" />
-                        Toggle Theme
-                    </MudMenuItem>
                     <MudMenuItem OnClick="@(() => Nav.NavigateTo("/profile/settings"))">
                         <MudIcon Icon="@Icons.Material.Filled.Settings" Size="Size.Small" Style="margin-right: 8px;" />
                         Account Settings
