@@ -105,7 +105,7 @@ namespace MangaManagementSystem.Web
 
             app.UseAuthentication();
             app.UseAuthorization();
-
+            app.UseRouting();   
             app.MapPost("/api/auth/login", async (
                 HttpContext context,
                 IAuthApiClient authApi,
