@@ -21,6 +21,58 @@ namespace MangaManagementSystem.Web.Services.Api
             };
         }
 
+        // === Read Operations ===
+
+        public async Task<IReadOnlyList<ChapterPageTaskDto>> GetAssignedTasksAsync(CancellationToken cancellationToken = default)
+        {
+            var response = await _httpClient.GetAsync("api/assistant/tasks", cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                throw new HttpRequestException(
+                    $"API returned {(int)response.StatusCode} ({response.StatusCode}): {errorContent}",
+                    null,
+                    response.StatusCode);
+            }
+
+            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            var result = JsonSerializer.Deserialize<IReadOnlyList<ChapterPageTaskDto>>(responseContent, _jsonOptions);
+
+            return result ?? new List<ChapterPageTaskDto>();
+        }
+
+        public async Task<ChapterPageTaskDto?> GetTaskDetailAsync(Guid taskId, CancellationToken cancellationToken = default)
+        {
+            if (taskId == Guid.Empty)
+            {
+                throw new ArgumentException("Invalid task ID.", nameof(taskId));
+            }
+
+            var response = await _httpClient.GetAsync($"api/assistant/tasks/{taskId}", cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    return null;
+                }
+
+                var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                throw new HttpRequestException(
+                    $"API returned {(int)response.StatusCode} ({response.StatusCode}): {errorContent}",
+                    null,
+                    response.StatusCode);
+            }
+
+            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            var result = JsonSerializer.Deserialize<ChapterPageTaskDto>(responseContent, _jsonOptions);
+
+            return result;
+        }
+
+        // === Submit Operation ===
+
         public async Task<AssistantTaskSubmitResultDto?> SubmitTaskWorkAsync(
             Guid taskId,
             IBrowserFile file,
