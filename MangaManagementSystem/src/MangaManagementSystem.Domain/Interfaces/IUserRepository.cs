@@ -10,6 +10,7 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<User?> GetByUsernameAsync(string username);
         Task<User?> GetByUsernameOrEmailAsync(string usernameOrEmail);
         Task<IReadOnlyList<User>> GetByStatusAsync(string status);
+        Task<IReadOnlyList<User>> GetByRoleNameAsync(string roleName);
         Task ChangeUserStatusViaProcAsync(
             Guid adminUserId,
             Guid targetUserId,
@@ -43,5 +44,6 @@ namespace MangaManagementSystem.Domain.Interfaces
             string? portfolioSha256Hash = null,
             Guid? createdByUserId = null
         );
+    
     }
 }

@@ -41,7 +41,7 @@ Basis: Verified MVP business rules, updated PageRegion segmentation rules, and p
 
 | Story ID | Source Rule(s) | User Story |
 |---|---|---|
-| US-USER-001 | BR-FILE-001, BR-FILE-002, BR-FILE-007, BR-FILE-009, BR-FILE-010 | As a General System User, I want uploaded and generated files to be managed through the system file workflow, so that proposals, covers, avatars, portfolios, page-version files, editorial attachments, and task reference files are handled consistently. |
+| US-USER-001 | BR-FILE-001, BR-FILE-002, BR-FILE-007, BR-FILE-009 | As a General System User, I want uploaded and generated files to be managed through the system file workflow, so that proposals, covers, avatars, portfolios, page-version files, and editorial attachments are handled consistently. |
 | US-USER-002 | BR-FILE-008 | As a General System User, I want deleted or unavailable files to show a safe placeholder, so that the page remains usable without exposing broken file references. |
 | US-USER-003 | BR-HIST-002, BR-HIST-006 | As a General System User, I want current workflow status to be visible on the main record, so that I can quickly understand the latest state without needing a separate status-history page. |
 | US-USER-004 | BR-HIST-007 | As a General System User, I want meaningful event timestamps to be visible where relevant, so that submitted, reviewed, voted, created, and released actions are understandable. |

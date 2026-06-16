@@ -1,30 +1,930 @@
-@page "/mangaka/workspace/{SeriesId}"
+@page "/mangaka/workspace/{SeriesId:guid}"
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components
 @attribute [Authorize(Roles = "Mangaka")]
 @inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthStateProvider
+@inject MangaManagementSystem.Application.Interfaces.ISeriesService SeriesService
+@inject MangaManagementSystem.Application.Interfaces.IChapterService ChapterService
+@inject MangaManagementSystem.Application.Interfaces.IChapterPageService ChapterPageService
+@inject MangaManagementSystem.Application.Interfaces.IUserService UserService
+@inject MangaManagementSystem.Application.Interfaces.IChapterPageTaskService ChapterPageTaskService
+@implements IAsyncDisposable
 
 <MangakaLayout>
     <div class="mf-page">
         <div class="mf-page-header">
-            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Crimson Moon Academy</MudText>
-            <MudText Typo="Typo.body1" Class="mf-muted">紅月学院</MudText>
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Size="Size.Small"
+                                   OnClick="@(() => Nav.NavigateTo("/mangaka"))" />
+                    <div>
+                        <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">@WorkspaceTitle</MudText>
+                        <MudText Typo="Typo.body1" Class="mf-muted">@WorkspaceSubtitle</MudText>
+                    </div>
+                </MudStack>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                    <MudChip T="string" Color="Color.Primary" Class="ml-2">Draft</MudChip>
+                    <MudText Typo="Typo.body2" Style="color: #64748b;">
+                        Ch. @SelectedChapterNo · Page @SelectedPage / @SelectedChapterPageCount
+                    </MudText>
+                    <MudIconButton Icon="@Icons.Material.Filled.Assignment" Size="Size.Small"
+                                   Color="@(_showTaskPanel ? Color.Primary : Color.Default)"
+                                   OnClick="@(() => _showTaskPanel = !_showTaskPanel)" />
+                </MudStack>
+            </MudStack>
         </div>
 
         <MudGrid>
-            <MudItem xs="12" md="8"><MudPaper Class="pa-5 mf-card" Elevation="0"><MudStack Row="true" Justify="Justify.SpaceBetween" Class="mb-3"><MudText Typo="Typo.h6">Chapter @SelectedChapter · Page @SelectedPage of 24</MudText><MudChip T="string" Color="Color.Primary">Draft</MudChip></MudStack><div class="mf-canvas">Manga page preview canvas<br/>Example dialogue text / More dialogue here...</div><MudStack Row="true" Class="mt-3">@foreach (var pageNo in Enumerable.Range(1, 5)) {<MudButton Variant="@(SelectedPage == pageNo ? Variant.Filled : Variant.Outlined)" OnClick="@(() => SelectedPage = pageNo)">Page @pageNo</MudButton>}</MudStack></MudPaper></MudItem>
-            <MudItem xs="12" md="4"><MudPaper Class="pa-5 mf-card" Elevation="0"><MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Task Assignment</MudText><MudText class="mf-muted mb-3">Current selection: Chapter @SelectedChapter, Page @SelectedPage. The task will be assigned for this specific page.</MudText><MudSelect T="string" Label="Task Type" @bind-Value="TaskType" Variant="Variant.Outlined"><MudSelectItem Value="@("Tone Shading")">Tone Shading</MudSelectItem><MudSelectItem Value="@("Background Drawing")">Background Drawing</MudSelectItem><MudSelectItem Value="@("Cleanup")">Cleanup</MudSelectItem></MudSelect><MudTextField Label="Assign to" @bind-Value="Assistant" Variant="Variant.Outlined" Class="mt-3" /><MudTextField Label="Instructions" Lines="4" @bind-Value="Instructions" Variant="Variant.Outlined" Class="mt-3" /><MudAlert Severity="Severity.Warning" Class="my-3"><MudText Typo="Typo.caption" Class="font-weight-bold">Coming Soon</MudText><MudText Class="mt-1">Task assignment requires backend implementation.</MudText></MudAlert><MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" Disabled="true">Assign Task (Disabled)</MudButton><MudButton FullWidth="true" Variant="Variant.Text" Class="mt-2" Disabled="true">Save Draft (Disabled)</MudButton></MudPaper></MudItem>
-        </MudGrid>
+            @* ── Left sidebar: Chapters / Assistants ── *@
+            <MudItem xs="12" md="3" Class="d-flex flex-column">
+                <MudPaper Class="pa-3 mf-card" Elevation="0" Style="flex: 1; overflow-y: auto;">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-3">
+                        <MudText Typo="Typo.subtitle1" Class="font-weight-bold" Style="white-space: nowrap;">@WorkspaceTitle</MudText>
+                    </MudStack>
 
+                    <MudTabs>
+                        <MudTabPanel Text="Chapters">
+                            <MudStack Spacing="2" Class="mt-2">
+                                <MudButton FullWidth="true" Variant="Variant.Outlined" Color="Color.Primary"
+                                           OnClick="@(() => _newChapterDialogOpen = true)">
+                                    + New Chapter
+                                </MudButton>
+
+                                @if (_chapters.Count == 0)
+                                {
+                                    <MudText Typo="Typo.caption" Class="mf-muted">No chapters yet.</MudText>
+                                }
+                                else
+                                {
+                                    <MudList T="ChapterInfo" Class="mud-list-compact">
+                                        @foreach (var ch in _chapters)
+                                        {
+                                            var isActive = ch.Number == SelectedChapterNo;
+                                            var chStatus = ch.Number < SelectedChapterNo ? "done" : (isActive ? "active" : "draft");
+                                            <MudListItem T="ChapterInfo"
+                                                         Value="@ch"
+                                                         Class="@(isActive ? "mud-selected-item" : "")"
+                                                         OnClick="@(() => OnChapterSelected(ch.Number))">
+                                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                                    @if (chStatus == "done")
+                                                    {
+                                                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" Style="color: #059669; font-size: 16px;" />
+                                                    }
+                                                    else if (chStatus == "active")
+                                                    {
+                                                        <span style="width: 10px; height: 10px; border-radius: 50%; background: #4f46e5; display: inline-block; flex-shrink: 0;"></span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <MudIcon Icon="@Icons.Material.Filled.RadioButtonUnchecked" Size="Size.Small" Style="color: #94a3b8; font-size: 16px;" />
+                                                    }
+                                                    <div style="flex: 1; min-width: 0;">
+                                                        <MudText Typo="Typo.body2">Ch. @ch.Number — @ch.Name</MudText>
+                                                        <MudText Typo="Typo.caption" Class="mf-muted">@ch.PageCount pages</MudText>
+                                                    </div>
+                                                    @if (isActive)
+                                                    {
+                                                        <MudChip T="string" Size="Size.Small" Color="Color.Primary">Active</MudChip>
+                                                    }
+                                                    else if (chStatus == "draft")
+                                                    {
+                                                        <MudChip T="string" Size="Size.Small" Color="Color.Default">Draft</MudChip>
+                                                    }
+                                                </MudStack>
+                                            </MudListItem>
+                                        }
+                                    </MudList>
+                                }
+                            </MudStack>
+                        </MudTabPanel>
+
+                        <MudTabPanel Text="Assistants">
+                            @if (_assistants.Count == 0)
+                            {
+                                <MudText Typo="Typo.caption" Class="mf-muted mt-2">No assistants available.</MudText>
+                            }
+                            else
+                            {
+                                <MudStack Spacing="2" Class="mt-2">
+                                    @foreach (var asst in _assistants)
+                                    {
+                                        var a = asst;
+                                        <MudPaper Class="pa-2 mf-card" Elevation="0">
+                                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                                <MudAvatar Color="Color.Primary" Size="Size.Small">@a.Initials</MudAvatar>
+                                                <div style="flex: 1; min-width: 0;">
+                                                    <MudText Typo="Typo.body2" Class="font-weight-bold">@a.Name</MudText>
+                                                    <MudText Typo="Typo.caption" Class="mf-muted">@a.Specialty</MudText>
+                                                </div>
+                                                <div class="text-right">
+                                                    <div style="color: #f59e0b; font-size: 14px;">★ @a.Rating.ToString("F1")</div>
+                                                    <MudChip T="string" Size="Size.Small" Color="Color.Default">@a.TasksCount task(s)</MudChip>
+                                                </div>
+                                            </MudStack>
+                                        </MudPaper>
+                                    }
+                                </MudStack>
+                            }
+                        </MudTabPanel>
+                    </MudTabs>
+                </MudPaper>
+            </MudItem>
+
+            @* ── Center: toolbar + canvas + page navigator ── *@
+            <MudItem xs="12" md="@(_showTaskPanel ? 6 : 9)">
+                <MudStack Spacing="2">
+                    @* Floating toolbar *@
+                    <MudPaper Class="pa-2 mf-card" Elevation="0">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                            <MudStack Row="true" Spacing="1">
+                                @foreach (var tool in _availableTools)
+                                {
+                                    var shortcut = _toolShortcuts.GetValueOrDefault(tool, "");
+                                    <MudTooltip Text="@($"{tool} ({shortcut})")">
+                                        <MudButton Variant="@(SelectedTool == tool ? Variant.Filled : Variant.Outlined)"
+                                                   Color="@(SelectedTool == tool ? Color.Primary : Color.Default)"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => _selectedTool = tool)">
+                                            @tool
+                                        </MudButton>
+                                    </MudTooltip>
+                                }
+                            </MudStack>
+                            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                <MudIconButton Icon="@Icons.Material.Filled.ZoomIn" Size="Size.Small"
+                                               OnClick="@(() => _zoomLevel = Math.Min(3.0, _zoomLevel + 0.1))" />
+                                <MudText Typo="Typo.caption" Class="mf-muted" Style="min-width: 40px; text-align: center;">
+                                    @($"{_zoomLevel:P0}")
+                                </MudText>
+                                <MudIconButton Icon="@Icons.Material.Filled.ZoomOut" Size="Size.Small"
+                                               OnClick="@(() => _zoomLevel = Math.Max(0.25, _zoomLevel - 0.1))" />
+                            </MudStack>
+                        </MudStack>
+                    </MudPaper>
+
+                    @* Canvas container *@
+                    <MudPaper Class="pa-4 mf-card text-center" Elevation="0">
+                        <div style="position: relative; display: inline-block;">
+                            <canvas @ref="_canvasRef"
+                                    @onclick="HandleCanvasClick"
+                                    style="cursor: @(SelectedTool == "Select" ? "pointer" : "crosshair");
+                                           border: 1px solid #ddd; border-radius: 4px;" />
+
+                            @* Panel inspector overlay *@
+                            @if (ShowInspector)
+                            {
+                                var panel = _currentPanels.FirstOrDefault(p => p.Id == SelectedPanelId);
+                                if (panel != null)
+                                {
+                                    <MudCard Class="pa-2" Elevation="2"
+                                             Style="position: absolute; top: 4px; right: 4px; width: 150px; background: rgba(255,255,255,0.95);">
+                                        <MudText Typo="Typo.caption" Class="font-weight-bold mb-1">Panel @panel.Id</MudText>
+                                        <MudText Typo="Typo.caption">X: @panel.X · Y: @panel.Y</MudText>
+                                        <MudText Typo="Typo.caption">W: @panel.Width · H: @panel.Height</MudText>
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Primary" Class="mt-1">Z: 0</MudChip>
+                                    </MudCard>
+                                }
+                            }
+                        </div>
+
+                        @* Page navigator *@
+                        <MudStack Row="true" Justify="Justify.Center" AlignItems="AlignItems.Center" Class="mt-3" Spacing="1">
+                            <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                       Disabled="@(SelectedPage <= 1)" OnClick="PrevPage">
+                                <MudIcon Icon="@Icons.Material.Filled.ChevronLeft" />
+                            </MudButton>
+                            @for (int pg = 1; pg <= SelectedChapterPageCount; pg++)
+                            {
+                                var pageNo = pg;
+                                <MudButton Variant="@(SelectedPage == pageNo ? Variant.Filled : Variant.Outlined)"
+                                           Color="@(SelectedPage == pageNo ? Color.Primary : Color.Default)"
+                                           Size="Size.Small"
+                                           OnClick="@(() => GoToPage(pageNo))">@pageNo</MudButton>
+                            }
+                            <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                       Disabled="@(SelectedPage >= SelectedChapterPageCount)" OnClick="NextPage">
+                                <MudIcon Icon="@Icons.Material.Filled.ChevronRight" />
+                            </MudButton>
+                        </MudStack>
+                    </MudPaper>
+                </MudStack>
+            </MudItem>
+
+            @* ── Task panel (toggle with toolbar button) ── *@
+            @if (_showTaskPanel)
+            {
+                <MudItem xs="12" md="3" Class="d-flex flex-column">
+                    <MudPaper Class="pa-3 mf-card" Elevation="0" Style="flex: 1; overflow-y: auto;">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold" Style="flex: 1;">Task Panel</MudText>
+                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                                           OnClick="@(() => _showTaskPanel = false)" />
+                        </MudStack>
+
+                        @* Focused task detail (when a task is selected) *@
+                        @if (_focusedTask != null)
+                        {
+                            <MudCard Class="pa-3 mb-4" Elevation="0"
+                                     Style="background: var(--mud-palette-table-hover); border-radius: 6px;">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+                                    <MudText Typo="Typo.subtitle2" Style="flex: 1;">@_focusedTask.TaskTitle</MudText>
+                                    <MudChip T="string" Size="Size.Small"
+                                             Color="@GetTaskStatusColor(_focusedTask.StatusCode)">@_focusedTask.StatusCode</MudChip>
+                                </MudStack>
+                                <MudText Typo="Typo.caption" Class="mf-muted">@_focusedTask.TypeCode</MudText>
+                                @if (_focusedTask.DueAtUtc.HasValue)
+                                {
+                                    <MudText Typo="Typo.caption" Class="mf-muted mt-1">Due: @_focusedTask.DueAtUtc.Value.ToString("MMM dd, yyyy")</MudText>
+                                }
+                                <MudText Typo="Typo.body2" Class="mt-2">@_focusedTask.TaskDescription</MudText>
+
+                                @* Action buttons *@
+                                <MudStack Row="true" Spacing="1" Class="mt-3">
+                                    @if (_focusedTask.StatusCode is "ASSIGNED" or "UNDER_REVIEW")
+                                    {
+                                        <MudButton Variant="Variant.Outlined" Color="Color.Warning" Size="Size.Small"
+                                                   Disabled="@_taskActionLoading"
+                                                   OnClick="@(() => CancelTask(_focusedTask.ChapterPageTaskId))">
+                                            Cancel
+                                        </MudButton>
+                                        @if (!_showReassignSelect)
+                                        {
+                                            <MudButton Variant="Variant.Outlined" Color="Color.Info" Size="Size.Small"
+                                                       Disabled="@_taskActionLoading"
+                                                       OnClick="@(() => _showReassignSelect = true)">
+                                                Reassign
+                                            </MudButton>
+                                        }
+                                    }
+                                    @if (_focusedTask.StatusCode == "UNDER_REVIEW")
+                                    {
+                                        <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                                   Disabled="@_taskActionLoading"
+                                                   OnClick="@(() => MarkTaskDone(_focusedTask.ChapterPageTaskId))">
+                                            Mark Done
+                                        </MudButton>
+                                    }
+                                </MudStack>
+                                @if (_showReassignSelect)
+                                {
+                                    <MudSelect T="string" Label="Assign to" @bind-Value="_reassignTarget"
+                                               Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true" Class="mt-2">
+                                        @foreach (var a in _assistants)
+                                        {
+                                            <MudSelectItem Value="@a.Name">@a.Name</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                    <MudStack Row="true" Spacing="1" Class="mt-1">
+                                        <MudButton Variant="Variant.Text" Size="Size.Small"
+                                                   OnClick="@(() => _showReassignSelect = false)">Cancel</MudButton>
+                                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                                   Disabled="@(string.IsNullOrEmpty(_reassignTarget))"
+                                                   OnClick="@(() => ConfirmReassign(_focusedTask.ChapterPageTaskId, _reassignTarget))">
+                                            Confirm Reassign
+                                        </MudButton>
+                                    </MudStack>
+                                }
+                            </MudCard>
+                        }
+
+                        @* New task form *@
+                        <MudCard Class="pa-3 mb-4" Elevation="0"
+                                 Style="background: var(--mud-palette-table-hover); border-radius: 6px;">
+                            <MudText Typo="Typo.subtitle2" Class="mb-2">New Task</MudText>
+                            <MudSelect T="string" Label="Task Type" @bind-Value="TaskType"
+                                       Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true" Class="mb-2">
+                                <MudSelectItem Value="@("Tone Shading")">Tone Shading</MudSelectItem>
+                                <MudSelectItem Value="@("Background Drawing")">Background Drawing</MudSelectItem>
+                                <MudSelectItem Value="@("Effects")">Effects</MudSelectItem>
+                                <MudSelectItem Value="@("Cleanup")">Cleanup</MudSelectItem>
+                                <MudSelectItem Value="@("Dialogue")">Dialogue</MudSelectItem>
+                                <MudSelectItem Value="@("Typesetting")">Typesetting</MudSelectItem>
+                                <MudSelectItem Value="@("Review")">Review</MudSelectItem>
+                                <MudSelectItem Value="@("Other")">Other</MudSelectItem>
+                            </MudSelect>
+                            <MudSelect T="string" Label="Assign to" @bind-Value="TaskAssistant"
+                                       Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true" Class="mb-2">
+                                @foreach (var a in _assistants)
+                                {
+                                    <MudSelectItem Value="@a.Name">@a.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                            <MudTextField Label="Description" @bind-Value="TaskDescription" Lines="3"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true" Class="mb-2" />
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-2">
+                                @if (SelectedPanelId.HasValue)
+                                {
+                                    <MudChip T="string" Color="Color.Secondary" Size="Size.Small">Panel @SelectedPanelId selected</MudChip>
+                                }
+                                <MudSpacer />
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                           OnClick="CreateTask"
+                                           Disabled="@(string.IsNullOrEmpty(TaskAssistant))">Create Task</MudButton>
+                            </MudStack>
+                        </MudCard>
+
+                        @* Active tasks list *@
+                        <MudText Typo="Typo.subtitle2" Class="mb-2">Active Tasks (@_tasks.Count)</MudText>
+                        @if (_tasks.Count == 0)
+                        {
+                            <MudText Typo="Typo.caption" Class="mf-muted">No tasks yet. Use the form above to create one.</MudText>
+                        }
+                        else
+                        {
+                            <MudList T="MangaTask"  Class="mud-list-compact">
+                                @foreach (var task in _tasks)
+                                {
+                                    var t = task;
+                                    <MudListItem T="MangaTask" Value="@t">
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                            <MudAvatar Size="Size.Small" Color="Color.Secondary">@t.AssignedTo[..1]</MudAvatar>
+                                            <div Style="flex: 1; min-width: 0;">
+                                                <MudText Typo="Typo.caption" Class="font-weight-bold">@t.TaskType</MudText>
+                                                <MudText Typo="Typo.caption" Class="mf-muted">@t.AssignedTo</MudText>
+                                            </div>
+                                            <MudChip T="string" Size="Size.Small"
+                                                      Color="@GetTaskStatusColor(t.Status)">@t.Status</MudChip>
+                                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Error"
+                                                           OnClick="@(() => DeleteTask(t))" />
+                                        </MudStack>
+                                    </MudListItem>
+                                }
+                            </MudList>
+                        }
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
     </div>
+
+    @* New Chapter Dialog *@
+    <MudOverlay Visible="@_newChapterDialogOpen" OnClick="@(() => _newChapterDialogOpen = false)">
+        <MudCard Class="pa-6" Style="width: 480px; margin: 8% auto 0;" @onclick:stopPropagation>
+            <MudCardContent>
+                <MudText Typo="Typo.h6" Class="font-weight-bold mb-4">New Chapter</MudText>
+
+                <MudTextField Label="Chapter Number" @bind-Value="_newChapterNo"
+                              Variant="Variant.Outlined" FullWidth="true"
+                              InputType="InputType.Number" Class="mb-3"
+                              HelperText="Leave blank for auto-increment" />
+
+                <MudTextField Label="Chapter Title" @bind-Value="_newChapterName"
+                              Variant="Variant.Outlined" FullWidth="true" Class="mb-3" />
+
+                <MudTextField Label="Page Count" @bind-Value="_newChapterPages"
+                              Variant="Variant.Outlined" FullWidth="true" InputType="InputType.Number" Class="mb-4" />
+            </MudCardContent>
+            <MudCardActions>
+                <MudSpacer />
+                <MudButton Variant="Variant.Text" OnClick="@(() => _newChapterDialogOpen = false)">Cancel</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ConfirmNewChapter">Create</MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudOverlay>
 </MangakaLayout>
 
 @code {
+    [Parameter] public Guid SeriesId { get; set; }
 
-    [Parameter] public string? SeriesId { get; set; }
-    private int SelectedChapter { get; set; } = 12;
+    [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
+
+    [SupplyParameterFromQuery(Name = "taskId")]
+    private Guid? FocusedTaskId { get; set; }
+
+    private ChapterPageTaskDto? _focusedTask;
+    private bool _taskActionLoading;
+    private bool _disposed;
+    private bool _showReassignSelect;
+    private string _reassignTarget = "";
+
+    // ── Canvas interop ──
+    private IJSObjectReference? _canvasModule;
+    private ElementReference _canvasRef;
+    private double _zoomLevel = 1.0;
+    private static readonly string[] _availableTools = ["Select", "Draw", "Erase", "Note"];
+    private static readonly Dictionary<string, string> _toolShortcuts = new()
+    {
+        ["Select"] = "V",
+        ["Draw"] = "B",
+        ["Erase"] = "E",
+        ["Note"] = "N",
+    };
+    private string _selectedTool = "Select";
+    private string SelectedTool => _selectedTool;
+
+    // ── Navigation ──
+    private string _seriesTitle = "";
+    private string _seriesStatus = "";
+    private List<ChapterInfo> _chapters { get; set; } = [];
+    private List<AssistantInfo> _assistants { get; set; } = [];
+    private List<MangaTask> _tasks { get; set; } = [];
+    private Guid _currentUserId;
+
+    // lookup
+    private Dictionary<string, Guid> _assistantUserIdMap { get; set; } = [];
+    private Dictionary<Guid, int> _chapterPageCounts { get; set; } = [];
+
+    private int SelectedChapterNo { get; set; }
+    private Guid? SelectedChapterId { get; set; }
     private int SelectedPage { get; set; } = 1;
-    private string TaskType { get; set; } = "Tone Shading";
-    private string Assistant { get; set; } = "";
-    private string Instructions { get; set; } = "";
+    private int? SelectedPanelId { get; set; }
+    private List<PanelInfo> _currentPanels { get; set; } = [];
 
+    // ── Task panel toggle ──
+    private bool _showTaskPanel;
+
+    // ── Task form ──
+    private string TaskType { get; set; } = "Tone Shading";
+    private string TaskAssistant { get; set; } = "";
+    private string TaskDescription { get; set; } = "";
+
+    // ── New chapter dialog ──
+    private bool _newChapterDialogOpen;
+    private int? _newChapterNo;
+    private string _newChapterName = "";
+    private int _newChapterPages = 20;
+    private byte[]? _newChapterFileBytes;
+    private string? _newChapterFileName;
+    private long _newChapterFileSize;
+
+    // ── Fallback mode (true when backend is unavailable) ──
+    private bool _demoMode;
+    private string _currentSubtitle = "";
+
+    // ── Computed ──
+    private bool ShowInspector => SelectedTool == "Select" && SelectedPanelId.HasValue;
+    private int SelectedChapterPageCount =>
+        _chapters.FirstOrDefault(c => c.Number == SelectedChapterNo)?.PageCount ?? 0;
+    private string WorkspaceTitle => _seriesTitle.Length > 0 ? _seriesTitle : "Crimson Moon Academy";
+    private string WorkspaceSubtitle => _currentSubtitle;
+
+    // ── Lifecycle ──
+
+    protected override async Task OnInitializedAsync()
+    {
+        // 1. Current user (for task creation)
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            var idClaim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (Guid.TryParse(idClaim, out var uid))
+                _currentUserId = uid;
+        }
+        catch { }
+
+        // 2. Load assistants
+        try
+        {
+            var dtos = await UserService.GetUsersByRoleAsync("Assistant");
+            var list = new List<AssistantInfo>();
+            var map = new Dictionary<string, Guid>();
+            foreach (var d in dtos)
+            {
+                var initials = d.DisplayName.Length >= 2
+                    ? d.DisplayName[..2].ToUpperInvariant()
+                    : d.DisplayName[..1].ToUpperInvariant();
+                list.Add(new AssistantInfo(d.DisplayName, initials, "Assistant", 0, 0));
+                map[d.DisplayName] = d.UserId;
+            }
+            _assistants = list;
+            _assistantUserIdMap = map;
+        }
+        catch
+        {
+            _assistants = LoadDemoAssistants();
+        }
+
+        // 3. Load series & chapters
+        try
+        {
+            var series = await SeriesService.GetSeriesByIdAsync(SeriesId);
+            if (series != null)
+            {
+                _seriesTitle = series.Title;
+                _seriesStatus = series.StatusCode;
+            }
+
+            var chapterDtos = (await ChapterService.GetChaptersBySeriesIdAsync(SeriesId)).ToList();
+            var chapters = new List<ChapterInfo>();
+            foreach (var ch in chapterDtos)
+            {
+                if (!int.TryParse(ch.ChapterNumberLabel, out var num))
+                    num = chapters.Count + 1;
+                chapters.Add(new ChapterInfo(num, ch.ChapterTitle ?? ch.ChapterNumberLabel, 0));
+                _chapterPageCounts[ch.ChapterId] = 0;
+            }
+            _chapters = chapters.OrderBy(c => c.Number).ToList();
+        }
+        catch
+        {
+            _chapters = LoadDemoSeries();
+            _demoMode = true;
+        }
+
+        if (_chapters.Count == 0)
+        {
+            _chapters = LoadDemoSeries();
+            _demoMode = true;
+        }
+
+        SelectedChapterNo = _chapters.FirstOrDefault()?.Number ?? 1;
+        SelectedPage = 1;
+
+        // 4. Load pages for the selected chapter
+        await LoadSelectedChapterPages();
+
+        // 5. Load focused task from query param if present
+        if (FocusedTaskId.HasValue)
+        {
+            try
+            {
+                _focusedTask = await ChapterPageTaskService.GetChapterPageTaskByIdWithRegionsAsync(FocusedTaskId.Value);
+                _showTaskPanel = true;
+            }
+            catch { }
+        }
+
+        UpdateSubtitle();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_disposed) return;
+        if (firstRender)
+        {
+            _canvasModule = await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./js/canvas.js");
+        }
+        if (_canvasModule != null)
+        {
+            await RenderCanvas();
+        }
+    }
+
+    // ── Data loading helpers ──
+
+    private async Task LoadSelectedChapterPages()
+    {
+        if (_demoMode) return;
+        try
+        {
+            var chapterDto = (await ChapterService.GetChaptersBySeriesIdAsync(SeriesId))
+                .FirstOrDefault(c =>
+                {
+                    int.TryParse(c.ChapterNumberLabel, out var num);
+                    return num == SelectedChapterNo;
+                });
+            if (chapterDto == null) return;
+
+            SelectedChapterId = chapterDto.ChapterId;
+            var pages = await ChapterPageService.GetChapterPagesByChapterIdAsync(chapterDto.ChapterId);
+            var count = pages.Count();
+            var idx = _chapters.FindIndex(c => c.Number == SelectedChapterNo);
+            if (idx >= 0)
+            {
+                _chapters[idx] = _chapters[idx] with { PageCount = count };
+            }
+            _chapterPageCounts[chapterDto.ChapterId] = count;
+        }
+        catch { }
+    }
+
+    private void UpdateSubtitle()
+    {
+        var ch = _chapters.FirstOrDefault(c => c.Number == SelectedChapterNo);
+        var chName = ch?.Name ?? "";
+        var chLabel = chName.Length > 0 ? $"Ch.{SelectedChapterNo} — {chName}" : $"Chapter {SelectedChapterNo}";
+        _currentSubtitle = _seriesStatus.Length > 0 && _seriesTitle.Length > 0
+            ? $"{_seriesStatus} · {chLabel} · P.{SelectedPage}/{SelectedChapterPageCount}"
+            : $"{chLabel} · P.{SelectedPage}/{SelectedChapterPageCount}";
+    }
+
+    // ── Canvas ──
+
+    private async Task RenderCanvas()
+    {
+        if (_canvasModule == null || _disposed) return;
+        _currentPanels = await _canvasModule.InvokeAsync<List<PanelInfo>>("createPanelsForPage", SelectedPage);
+        await _canvasModule.InvokeVoidAsync("drawCanvas", _canvasRef, _currentPanels, SelectedPage, SelectedPanelId, ShowInspector);
+    }
+
+    private async Task HandleCanvasClick(MouseEventArgs e)
+    {
+        if (SelectedTool != "Select" || _canvasModule == null) return;
+
+        var rect = await _canvasModule.InvokeAsync<BoundingRect>("getCanvasRect", _canvasRef);
+        var x = e.ClientX - rect.Left;
+        var y = e.ClientY - rect.Top;
+
+        var panelId = await _canvasModule.InvokeAsync<int?>("getPanelAtPosition", _currentPanels, x, y);
+        SelectedPanelId = panelId;
+        await RenderCanvas();
+    }
+
+    // ── Navigation ──
+
+    private async Task OnChapterSelected(int chapterNo)
+    {
+        SelectedChapterNo = chapterNo;
+        SelectedPage = 1;
+        SelectedPanelId = null;
+        await LoadSelectedChapterPages();
+        UpdateSubtitle();
+    }
+
+    private async Task PrevChapter()
+    {
+        var idx = _chapters.FindIndex(c => c.Number == SelectedChapterNo);
+        if (idx > 0) await OnChapterSelected(_chapters[idx - 1].Number);
+    }
+
+    private async Task NextChapter()
+    {
+        var idx = _chapters.FindIndex(c => c.Number == SelectedChapterNo);
+        if (idx < _chapters.Count - 1) await OnChapterSelected(_chapters[idx + 1].Number);
+    }
+
+    private void PrevPage()
+    {
+        if (SelectedPage > 1) { SelectedPage--; SelectedPanelId = null; }
+        UpdateSubtitle();
+    }
+
+    private void NextPage()
+    {
+        if (SelectedPage < SelectedChapterPageCount) { SelectedPage++; SelectedPanelId = null; }
+        UpdateSubtitle();
+    }
+
+    private void GoToPage(int p) { SelectedPage = p; SelectedPanelId = null; UpdateSubtitle(); }
+
+    // ── Tasks ──
+
+    private async Task CreateTask()
+    {
+        if (string.IsNullOrEmpty(TaskAssistant)) return;
+
+        string? errorMsg = null;
+        if (!_demoMode && SelectedChapterId.HasValue)
+        {
+            try
+            {
+                _assistantUserIdMap.TryGetValue(TaskAssistant, out var assignedUserId);
+                if (assignedUserId == Guid.Empty && _assistants.Count > 0)
+                    assignedUserId = _assistantUserIdMap.Values.FirstOrDefault();
+
+                if (assignedUserId != Guid.Empty)
+                {
+                    var dto = new CreateChapterPageTaskDto(
+                        ActorUserId: _currentUserId,
+                        AssignedToUserId: assignedUserId,
+                        TypeCode: TaskType,
+                        StatusCode: "ASSIGNED",
+                        TaskTitle: TaskType,
+                        TaskDescription: TaskDescription.Length > 0 ? TaskDescription : TaskType,
+                        PriorityLevel: 3,
+                        DueAtUtc: null,
+                        CompensationAmount: null,
+                        CompletedPageVersionId: null,
+                        PageRegionIds: []
+                    );
+                    await ChapterPageTaskService.CreateChapterPageTaskAsync(dto);
+                    Snackbar.Add($"Task created: {TaskType} → {TaskAssistant}", Severity.Success);
+                    _tasks.Add(new MangaTask(Guid.NewGuid(), TaskType, TaskAssistant, TaskDescription, SelectedPanelId, "In Progress"));
+                    TaskDescription = "";
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                errorMsg = ex.Message;
+            }
+        }
+
+        // fallback: in-memory
+        _tasks.Add(new MangaTask(Guid.NewGuid(), TaskType, TaskAssistant, TaskDescription, SelectedPanelId, "In Progress"));
+        TaskDescription = "";
+        if (errorMsg != null)
+            Snackbar.Add($"Task saved locally: {errorMsg}", Severity.Warning);
+        else
+            Snackbar.Add($"Task saved locally: {TaskType} → {TaskAssistant}", Severity.Info);
+    }
+
+    private void DeleteTask(MangaTask task)
+    {
+        _tasks.Remove(task);
+        Snackbar.Add("Task removed", Severity.Normal);
+    }
+
+    private static Color GetTaskStatusColor(string status) => status switch
+    {
+        "Done" => Color.Success,
+        "COMPLETED" => Color.Success,
+        "Review" => Color.Warning,
+        "UNDER_REVIEW" => Color.Warning,
+        "ASSIGNED" => Color.Primary,
+        "CANCELLED" => Color.Error,
+        _ => Color.Info
+    };
+
+    // ── Focused task actions ──
+
+    private async Task CancelTask(Guid taskId)
+    {
+        _taskActionLoading = true;
+        try
+        {
+            var dto = new UpdateChapterPageTaskDto(
+                ChapterPageTaskId: taskId,
+                AssignedToUserId: _focusedTask?.AssignedToUserId ?? Guid.Empty,
+                TypeCode: _focusedTask?.TypeCode ?? "",
+                StatusCode: "CANCELLED",
+                TaskTitle: _focusedTask?.TaskTitle ?? "",
+                TaskDescription: _focusedTask?.TaskDescription ?? "",
+                PriorityLevel: _focusedTask?.PriorityLevel ?? 3,
+                DueAtUtc: _focusedTask?.DueAtUtc,
+                CompensationAmount: null,
+                CompletedPageVersionId: null,
+                PageRegionIds: []
+            );
+            await ChapterPageTaskService.UpdateChapterPageTaskAsync(dto);
+            Snackbar.Add("Task cancelled", Severity.Success);
+            _focusedTask = null;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Cancel failed: {ex.Message}", Severity.Error);
+        }
+        _taskActionLoading = false;
+    }
+
+    private async Task ConfirmReassign(Guid taskId, string targetName)
+    {
+        if (string.IsNullOrEmpty(targetName)) return;
+        _taskActionLoading = true;
+        try
+        {
+            _assistantUserIdMap.TryGetValue(targetName, out var newUserId);
+            if (newUserId == Guid.Empty) { _taskActionLoading = false; return; }
+
+            var dto = new UpdateChapterPageTaskDto(
+                ChapterPageTaskId: taskId,
+                AssignedToUserId: newUserId,
+                TypeCode: _focusedTask?.TypeCode ?? "",
+                StatusCode: _focusedTask?.StatusCode ?? "ASSIGNED",
+                TaskTitle: _focusedTask?.TaskTitle ?? "",
+                TaskDescription: _focusedTask?.TaskDescription ?? "",
+                PriorityLevel: _focusedTask?.PriorityLevel ?? 3,
+                DueAtUtc: _focusedTask?.DueAtUtc,
+                CompensationAmount: null,
+                CompletedPageVersionId: null,
+                PageRegionIds: []
+            );
+            await ChapterPageTaskService.UpdateChapterPageTaskAsync(dto);
+            Snackbar.Add($"Task reassigned to {targetName}", Severity.Success);
+            _focusedTask = null;
+            _showReassignSelect = false;
+            _reassignTarget = "";
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Reassign failed: {ex.Message}", Severity.Error);
+        }
+        _taskActionLoading = false;
+    }
+
+    private async Task MarkTaskDone(Guid taskId)
+    {
+        _taskActionLoading = true;
+        try
+        {
+            var dto = new UpdateChapterPageTaskDto(
+                ChapterPageTaskId: taskId,
+                AssignedToUserId: _focusedTask?.AssignedToUserId ?? Guid.Empty,
+                TypeCode: _focusedTask?.TypeCode ?? "",
+                StatusCode: "COMPLETED",
+                TaskTitle: _focusedTask?.TaskTitle ?? "",
+                TaskDescription: _focusedTask?.TaskDescription ?? "",
+                PriorityLevel: _focusedTask?.PriorityLevel ?? 3,
+                DueAtUtc: _focusedTask?.DueAtUtc,
+                CompensationAmount: null,
+                CompletedPageVersionId: null,
+                PageRegionIds: []
+            );
+            await ChapterPageTaskService.UpdateChapterPageTaskAsync(dto);
+            Snackbar.Add("Task marked as completed", Severity.Success);
+            _focusedTask = null;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Mark done failed: {ex.Message}", Severity.Error);
+        }
+        _taskActionLoading = false;
+    }
+
+    // ── New chapter ──
+
+    private void OnNewChapterFileSelected(IBrowserFile file)
+    {
+        if (file == null) return;
+        _newChapterFileName = file.Name;
+        _newChapterFileSize = file.Size;
+        using var s = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+        using var ms = new MemoryStream();
+        s.CopyTo(ms);
+        _newChapterFileBytes = ms.ToArray();
+        StateHasChanged();
+    }
+
+    private async Task ConfirmNewChapter()
+    {
+        if (string.IsNullOrWhiteSpace(_newChapterName)) return;
+
+        var newNo = _newChapterNo ?? (_chapters.MaxBy(c => c.Number)?.Number ?? 0) + 1;
+
+        if (!_demoMode)
+        {
+            try
+            {
+                var dto = new CreateChapterDto(
+                    SeriesId: SeriesId,
+                    ChapterNumberLabel: newNo.ToString(),
+                    ChapterTitle: _newChapterName.Trim(),
+                    StatusCode: "DRAFT",
+                    PlannedReleaseDate: null
+                );
+                var created = await ChapterService.CreateChapterAsync(dto);
+
+                for (int p = 1; p <= _newChapterPages; p++)
+                {
+                    await ChapterPageService.CreateChapterPageAsync(
+                        new CreateChapterPageDto(
+                            ChapterId: created.ChapterId,
+                            PageNo: p,
+                            PageNotes: null
+                        )
+                    );
+                }
+
+                Snackbar.Add($"Chapter {newNo} created with {_newChapterPages} pages", Severity.Success);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Failed to create chapter on server: {ex.Message}", Severity.Warning);
+            }
+        }
+
+        _chapters.Add(new ChapterInfo(newNo, _newChapterName.Trim(), _newChapterPages));
+        _newChapterDialogOpen = false;
+        _newChapterNo = null;
+        _newChapterName = "";
+        _newChapterPages = 20;
+        _newChapterFileBytes = null;
+        _newChapterFileName = null;
+        _newChapterFileSize = 0;
+        StateHasChanged();
+    }
+
+    // ── Dispose ──
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        if (_canvasModule != null)
+        {
+            await _canvasModule.DisposeAsync();
+        }
+    }
+
+    // ──────────────────────────────────────────────
+    // Demo data (fallback)
+    // ──────────────────────────────────────────────
+
+    private static List<ChapterInfo> LoadDemoSeries() =>
+    [
+        new ChapterInfo(1, "Opening Scene", 4),
+        new ChapterInfo(2, "First Conflict", 4),
+        new ChapterInfo(3, "Board Review Draft", 4),
+    ];
+
+    private static List<AssistantInfo> LoadDemoAssistants() =>
+    [
+        new AssistantInfo("Ken Sato", "KS", "Backgrounds", 4.9, 3),
+        new AssistantInfo("Yuki Tanaka", "YT", "Tone Shading", 4.7, 5),
+        new AssistantInfo("Rin Hayashi", "RH", "Cleanup", 4.8, 2),
+        new AssistantInfo("Moe Kobayashi", "MK", "Effects", 4.5, 1),
+    ];
+
+    // ──────────────────────────────────────────────
+    // Internal types
+    // ──────────────────────────────────────────────
+
+    private record BoundingRect(double Left, double Top, double Width, double Height);
+    private record PanelInfo(int Id, int X, int Y, int Width, int Height, bool Selected);
+    private record MangaTask(Guid Id, string TaskType, string AssignedTo, string Description, int? PanelTarget, string Status);
+    private record AssistantInfo(string Name, string Initials, string Specialty, double Rating, int TasksCount);
+    private record ChapterInfo(int Number, string Name, int PageCount);
 }

@@ -1,8 +1,12 @@
-@page "/editor/proposals/{SeriesId:long}"
+@page "/editor/proposals/{ProposalId:guid}"
 @using Microsoft.AspNetCore.Authorization
+@using MangaManagementSystem.Application.DTOs.Manga
+@using System.Security.Claims
 @attribute [Authorize(Roles = "Tantou Editor")]
+@inject MangaManagementSystem.Application.Interfaces.ISeriesProposalService ProposalService
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthStateProvider
 
 <EditorLayout>
     <div class="mf-page">
@@ -11,80 +15,330 @@
             <MudText Typo="Typo.body1" Class="mf-muted">Review proposal material, add feedback, and move it to the next workflow step</MudText>
         </div>
 
-        <MudGrid>
-            <MudItem xs="12" md="8">
-                <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
-                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Class="mb-4">
-                        <div>
-                            <MudText Typo="Typo.h5" Class="font-weight-bold">Crimson Moon Academy</MudText>
-                            <MudText Class="mf-muted">Proposal v2 • Submitted by Ken Sato • Japanese</MudText>
-                        </div>
-                        <MudChip T="string" Color="Color.Warning">UNDER_EDITORIAL_REVIEW</MudChip>
-                    </MudStack>
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (_error != null)
+        {
+            <MudAlert Severity="Severity.Error">@_error</MudAlert>
+        }
+        else if (_proposal != null)
+        {
+            <MudGrid>
+                <MudItem xs="12" md="8">
+                    <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Class="mb-4">
+                            <div>
+                                <MudText Typo="Typo.h5" Class="font-weight-bold">@_proposal.ProposalTitle</MudText>
+                                <MudText Class="mf-muted">Proposal v@_proposal.ProposalVersionNo</MudText>
+                            </div>
+                            <MudChip T="string" Color="@GetStatusColor(_proposal.StatusCode)">@_proposal.StatusCode.Replace("_", " ")</MudChip>
+                        </MudStack>
 
-                    <MudTabs>
-                        <MudTabPanel Text="Synopsis">
-                            <MudText Typo="Typo.h6" Class="mb-2">Story Summary</MudText>
-                            <MudText Class="mf-muted">
-                                A group of young artists enter a mysterious academy where every manga panel they draw can alter the real world. The editorial focus is on pacing, character motivation, and whether the serialization premise can sustain multiple arcs.
-                            </MudText>
-                        </MudTabPanel>
-                        <MudTabPanel Text="Proposal File">
-                            <MudPaper Class="pa-6 text-center mf-card" Elevation="0">
-                                <MudIcon Icon="mdi-file-document-outline" Size="Size.Large" Color="Color.Primary" Class="mb-3" />
-                                <MudText Typo="Typo.h6">Proposal document preview</MudText>
-                                <MudText Class="mf-muted mb-3">File preview/download will use FileResource when the backend workflow is connected.</MudText>
-                                <MudButton Variant="Variant.Outlined" Color="Color.Primary">Open Proposal File</MudButton>
-                            </MudPaper>
-                        </MudTabPanel>
-                        <MudTabPanel Text="Review Criteria">
-                            <MudList T="string">
-                                <MudListItem T="string" Text="Series premise is clear and suitable for serialization" />
-                                <MudListItem T="string" Text="Chapter direction has enough production detail" />
-                                <MudListItem T="string" Text="Art references and portfolio evidence are sufficient" />
-                                <MudListItem T="string" Text="Potential ranking/publication risk is documented" />
-                            </MudList>
-                        </MudTabPanel>
-                    </MudTabs>
-                </MudPaper>
+                        <MudTabs>
+                            <MudTabPanel Text="Synopsis">
+                                <MudText Typo="Typo.h6" Class="mb-2">Story Summary</MudText>
+                                <MudText Class="mf-muted">
+                                    @_proposal.SynopsisSnapshot
+                                </MudText>
+                                
+                                <MudText Typo="Typo.h6" Class="mt-4 mb-2">Genres</MudText>
+                                <MudText Class="mf-muted">
+                                    @_proposal.GenreSnapshot
+                                </MudText>
+                            </MudTabPanel>
+                            <MudTabPanel Text="Proposal File">
+                                <MudPaper Class="pa-6 text-center mf-card" Elevation="0">
+                                    <MudIcon Icon="mdi-file-document-outline" Size="Size.Large" Color="Color.Primary" Class="mb-3" />
+                                    <MudText Typo="Typo.h6">Proposal document</MudText>
+                                    <MudText Class="mf-muted mb-3">Download the proposal manuscript for review.</MudText>
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="@_proposalFileUrl" Target="_blank" Disabled="@string.IsNullOrEmpty(_proposalFileUrl)">Download Proposal File</MudButton>
+                                </MudPaper>
+                            </MudTabPanel>
+                            <MudTabPanel Text="Review Criteria">
+                                <MudList T="string">
+                                    <MudListItem T="string" Text="Series premise is clear and suitable for serialization" />
+                                    <MudListItem T="string" Text="Chapter direction has enough production detail" />
+                                    <MudListItem T="string" Text="Art references and portfolio evidence are sufficient" />
+                                    <MudListItem T="string" Text="Potential ranking/publication risk is documented" />
+                                </MudList>
+                            </MudTabPanel>
+                        </MudTabs>
+                    </MudPaper>
 
-                <MudPaper Class="pa-5 mf-card" Elevation="0">
-                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Editorial Feedback</MudText>
-                    <MudTextField Label="Review comments" @bind-Value="ReviewComments" Lines="6" Variant="Variant.Outlined" FullWidth="true" />
-                    <MudAlert Severity="Severity.Info" Class="mt-4">
-                        Revision or cancellation decisions should include clear comments or markup according to the MVP workflow.
-                    </MudAlert>
-                </MudPaper>
-            </MudItem>
+                    @if (_proposal.StatusCode == "UNDER_EDITORIAL_REVIEW" && !_proposal.HasActiveTantouEditor)
+                    {
+                        <MudPaper Class="pa-5 mf-card" Elevation="0" Style="border: 2px dashed var(--mud-palette-warning);">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Unclaimed Proposal</MudText>
+                            <MudText Class="mb-4">This proposal has not been claimed by a Tantou Editor. You must claim it before you can review it.</MudText>
+                            <MudButton Variant="Variant.Filled" Color="Color.Warning" OnClick="ClaimProposal" Disabled="_processing">Claim Proposal for Review</MudButton>
+                        </MudPaper>
+                    }
+                    else if (_proposal.StatusCode == "UNDER_EDITORIAL_REVIEW")
+                    {
+                        <MudPaper Class="pa-5 mf-card" Elevation="0">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Editorial Feedback</MudText>
+                            <MudTextField Label="Review comments (Required for Revision/Cancellation)" @bind-Value="ReviewComments" Lines="6" Variant="Variant.Outlined" FullWidth="true" />
+                            
+                            <MudText Typo="Typo.subtitle1" Class="font-weight-bold mt-4 mb-2">Markup File Attachment (Optional for Pass, Required for Cancel)</MudText>
+                            <MudFileUpload T="IBrowserFile" FilesChanged="UploadFiles" Disabled="_processing">
+                                <ActivatorContent>
+                                    <MudButton Variant="Variant.Outlined"
+                                               Color="Color.Primary"
+                                               StartIcon="@Icons.Material.Filled.CloudUpload">
+                                        Select Markup File
+                                    </MudButton>
+                                </ActivatorContent>
+                            </MudFileUpload>
+                            @if (_markupFile != null)
+                            {
+                                <MudText Typo="Typo.body2" Class="mt-2">Selected file: @_markupFile.Name</MudText>
+                            }
+                            
+                            <MudAlert Severity="Severity.Info" Class="mt-4">
+                                Cancellation decisions require BOTH comments AND a markup file. Revision requests require comments.
+                            </MudAlert>
+                        </MudPaper>
+                    }
+                    else if (!string.IsNullOrEmpty(_proposal.Comments))
+                    {
+                        <MudPaper Class="pa-5 mf-card" Elevation="0">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Review Decision Feedback</MudText>
+                            <MudText>@_proposal.Comments</MudText>
+                        </MudPaper>
+                    }
+                </MudItem>
 
-            <MudItem xs="12" md="4">
-                <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
-                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Decision Actions</MudText>
-                    <MudStack Spacing="2">
-                        <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="PassToBoard">Pass to Board Review</MudButton>
-                        <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="RequestRevision">Request Revision</MudButton>
-                        <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="CancelProposal">Cancel Proposal</MudButton>
-                    </MudStack>
-                </MudPaper>
+                <MudItem xs="12" md="4">
+                    @if (_proposal.StatusCode == "UNDER_EDITORIAL_REVIEW" && _proposal.HasActiveTantouEditor)
+                    {
+                        <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Decision Actions</MudText>
+                            <MudStack Spacing="2">
+                                <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="PassToBoard" Disabled="_processing">Pass to Board Review</MudButton>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="RequestRevision" Disabled="_processing">Request Revision</MudButton>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="CancelProposal" Disabled="_processing">Cancel Proposal</MudButton>
+                            </MudStack>
+                        </MudPaper>
+                    }
 
-                <MudPaper Class="pa-5 mf-card" Elevation="0">
-                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Workflow Trace</MudText>
-                    <MudTimeline>
-                        <MudTimelineItem Color="Color.Success">Proposal submitted</MudTimelineItem>
-                        <MudTimelineItem Color="Color.Warning">Editorial review in progress</MudTimelineItem>
-                        <MudTimelineItem Color="Color.Default">Board review pending</MudTimelineItem>
-                    </MudTimeline>
-                </MudPaper>
-            </MudItem>
-        </MudGrid>
+                    <MudPaper Class="pa-5 mf-card" Elevation="0">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Workflow Trace</MudText>
+                        <MudTimeline>
+                            <MudTimelineItem Color="Color.Success">Proposal submitted</MudTimelineItem>
+                            <MudTimelineItem Color="@(_proposal.StatusCode == "UNDER_EDITORIAL_REVIEW" ? Color.Warning : Color.Success)">Editorial review @(_proposal.StatusCode == "UNDER_EDITORIAL_REVIEW" ? "in progress" : "completed")</MudTimelineItem>
+                            @if (_proposal.StatusCode == "UNDER_BOARD_REVIEW")
+                            {
+                                <MudTimelineItem Color="Color.Warning">Board review pending</MudTimelineItem>
+                            }
+                            else if (_proposal.StatusCode == "REVISION_REQUESTED")
+                            {
+                                <MudTimelineItem Color="Color.Error">Revision requested</MudTimelineItem>
+                            }
+                            else if (_proposal.StatusCode == "CANCELLED")
+                            {
+                                <MudTimelineItem Color="Color.Error">Cancelled</MudTimelineItem>
+                            }
+                        </MudTimeline>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        }
     </div>
 </EditorLayout>
 
 @code {
-    [Parameter] public long SeriesId { get; set; }
+    [Parameter] public Guid ProposalId { get; set; }
     private string ReviewComments { get; set; } = string.Empty;
 
-    private void PassToBoard() => Snackbar.Add("Proposal marked for board review UI flow.", Severity.Success);
-    private void RequestRevision() => Snackbar.Add("Revision request captured in UI draft.", Severity.Warning);
-    private void CancelProposal() => Snackbar.Add("Cancellation decision captured in UI draft.", Severity.Error);
+    private string? _proposalFileUrl;
+
+    private SeriesProposalDto? _proposal;
+    private bool _loading = true;
+    private bool _processing = false;
+    private string? _error;
+    private IBrowserFile? _markupFile;
+    private Guid _currentUserId;
+
+    [Inject] private MangaManagementSystem.Application.Interfaces.IFileStorageService FileStorageService { get; set; } = default!;
+    [Inject] private MangaManagementSystem.Application.Interfaces.IFileResourceService FileResourceService { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (Guid.TryParse(idClaim, out var userId))
+            {
+                _currentUserId = userId;
+            }
+        }
+        await LoadProposal();
+    }
+
+    private async Task LoadProposal()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _proposal = await ProposalService.GetProposalByIdAsync(ProposalId);
+            if (_proposal == null)
+            {
+                _error = "Proposal not found.";
+                return;
+            }
+
+            ReviewComments = _proposal.Comments ?? string.Empty;
+
+            if (_proposal.ProposalFileId != Guid.Empty)
+            {
+                var fileRes = await FileResourceService.GetFileResourceByIdAsync(_proposal.ProposalFileId);
+                _proposalFileUrl = fileRes?.CloudinarySecureUrl;
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Color GetStatusColor(string status) => status switch
+    {
+        "UNDER_EDITORIAL_REVIEW" => Color.Warning,
+        "UNDER_BOARD_REVIEW" => Color.Info,
+        "REVISION_REQUESTED" => Color.Error,
+        "CANCELLED" => Color.Default,
+        "APPROVED" => Color.Success,
+        _ => Color.Default
+    };
+
+    private void UploadFiles(IBrowserFile file)
+    {
+        _markupFile = file;
+    }
+
+    private async Task ClaimProposal()
+    {
+        _processing = true;
+        try
+        {
+            await ProposalService.ClaimEditorialReviewAsync(ProposalId, _currentUserId, "Claimed via Editor UI");
+            Snackbar.Add("Proposal claimed successfully.", Severity.Success);
+            await LoadProposal();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error claiming proposal: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+
+    private async Task<FileUploadResultDto?> UploadMarkupIfNeeded()
+    {
+        if (_markupFile == null) return null;
+        
+        using var stream = _markupFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+        using var memoryStream = new System.IO.MemoryStream();
+        await stream.CopyToAsync(memoryStream);
+        var bytes = memoryStream.ToArray();
+        var result = await FileStorageService.UploadFileAsync(bytes, _markupFile.Name, _markupFile.ContentType, "EDITORIAL_ATTACHMENT");
+        
+        return new FileUploadResultDto(
+            result.PublicId,
+            result.SecureUrl,
+            _markupFile.ContentType,
+            _markupFile.Size,
+            _markupFile.Name,
+            null
+        );
+    }
+
+    private async Task PassToBoard()
+    {
+        _processing = true;
+        try
+        {
+            var markup = await UploadMarkupIfNeeded();
+            await ProposalService.PassToBoardAsync(ProposalId, _currentUserId, ReviewComments, markup);
+            Snackbar.Add("Proposal passed to board review.", Severity.Success);
+            await LoadProposal();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error passing to board: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+
+    private async Task RequestRevision()
+    {
+        if (string.IsNullOrWhiteSpace(ReviewComments))
+        {
+            Snackbar.Add("Comments are required to request a revision.", Severity.Warning);
+            return;
+        }
+
+        _processing = true;
+        try
+        {
+            var markup = await UploadMarkupIfNeeded();
+            await ProposalService.RequestRevisionAsync(ProposalId, _currentUserId, ReviewComments, markup);
+            Snackbar.Add("Revision requested.", Severity.Success);
+            await LoadProposal();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error requesting revision: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+
+    private async Task CancelProposal()
+    {
+        if (string.IsNullOrWhiteSpace(ReviewComments))
+        {
+            Snackbar.Add("Comments are required to cancel a proposal.", Severity.Warning);
+            return;
+        }
+        
+        if (_markupFile == null)
+        {
+            Snackbar.Add("A markup file attachment is required to cancel a proposal.", Severity.Warning);
+            return;
+        }
+
+        _processing = true;
+        try
+        {
+            var markup = await UploadMarkupIfNeeded();
+            await ProposalService.CancelProposalAsync(ProposalId, _currentUserId, ReviewComments, markup!);
+            Snackbar.Add("Proposal cancelled.", Severity.Success);
+            await LoadProposal();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error cancelling proposal: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
 }

@@ -1,4 +1,4 @@
-﻿using MangaManagementSystem.Application.Interfaces;
+using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Domain.Interfaces;
 using MangaManagementSystem.Infrastructure.Options;
 using MangaManagementSystem.Infrastructure.Persistence;
@@ -32,6 +32,10 @@ namespace MangaManagementSystem.Infrastructure
             services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
             services.AddScoped<IEmailService, EmailService>();
 
+            // OTP cache adapter (shared by Web and API hosts).
+            services.AddMemoryCache();
+            services.AddSingleton<IOtpCacheService, OtpCacheService>();
+
             // Generic repository
             services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
 
@@ -39,6 +43,9 @@ namespace MangaManagementSystem.Infrastructure
             services.AddScoped<ISeriesRepository, SeriesRepository>();
             services.AddScoped<IChapterRepository, ChapterRepository>();
             services.AddScoped<IUserRepository, UserRepository>();
+            services.AddScoped<IChapterPageTaskRepository, ChapterPageTaskRepository>();
+            services.AddScoped<IChapterPageAnnotationRepository, ChapterPageAnnotationRepository>();
+            services.AddScoped<ISeriesProposalRepository, SeriesProposalRepository>();
 
             // Unit of Work
             services.AddScoped<IUnitOfWork, UnitOfWork>();

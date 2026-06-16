@@ -11,40 +11,49 @@ namespace MangaManagementSystem.Infrastructure.Repositories
     public class UserRepository : GenericRepository<User>, IUserRepository
     {
         private readonly ApplicationDbContext _context;
+        private IQueryable<User> UsersWithRole()
+        {
+            return _context.Users.Include(u => u.Role);
+        }
         public UserRepository(ApplicationDbContext context) : base(context)
         {
             _context = context;
         }
 
         public async Task<User?> GetByEmailAsync(string email)
-        {
-            return await _context.Users
-                .Include(u => u.Role)
-                .FirstOrDefaultAsync(u => u.Email == email);
-        }
+{
+    return await UsersWithRole()
+        .FirstOrDefaultAsync(u => u.Email == email);
+}
 
-        public async Task<User?> GetByUsernameAsync(string username)
-        {
-            return await _context.Users
-                .Include(u => u.Role)
-                .FirstOrDefaultAsync(u => u.Username == username);
-        }
+public async Task<User?> GetByUsernameAsync(string username)
+{
+    return await UsersWithRole()
+        .FirstOrDefaultAsync(u => u.Username == username);
+}
 
-        public async Task<User?> GetByUsernameOrEmailAsync(string usernameOrEmail)
-        {
-            return await _context.Users
-                .Include(u => u.Role)
-                .FirstOrDefaultAsync(u =>
-                    u.Email == usernameOrEmail || u.Username == usernameOrEmail);
-        }
+public async Task<User?> GetByUsernameOrEmailAsync(string usernameOrEmail)
+{
+    return await UsersWithRole()
+        .FirstOrDefaultAsync(u =>
+            u.Email == usernameOrEmail || u.Username == usernameOrEmail);
+}
 
-        public async Task<IReadOnlyList<User>> GetByStatusAsync(string status)
+public async Task<IReadOnlyList<User>> GetByStatusAsync(string status)
+{
+    return await UsersWithRole()
+        .AsNoTracking()
+        .Where(u => u.StatusCode == status)
+        .OrderBy(u => u.CreatedAtUtc)
+        .ToListAsync();
+}
+
+        public async Task<IReadOnlyList<User>> GetByRoleNameAsync(string roleName)
         {
-            return await _context.Users
+            return await UsersWithRole()
                 .AsNoTracking()
-                .Include(u => u.Role)
-                .Where(u => u.StatusCode == status)
-                .OrderBy(u => u.CreatedAtUtc)
+                .Where(u => u.Role != null && u.Role.RoleName == roleName)
+                .OrderBy(u => u.DisplayName)
                 .ToListAsync();
         }
 

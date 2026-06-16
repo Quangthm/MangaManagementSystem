@@ -5,7 +5,6 @@ namespace MangaManagementSystem.Application.DTOs.Auth
 {
     public record UserDto(
         Guid UserId,
-        Guid RoleId,
         string Username,
         string DisplayName,
         string Email,

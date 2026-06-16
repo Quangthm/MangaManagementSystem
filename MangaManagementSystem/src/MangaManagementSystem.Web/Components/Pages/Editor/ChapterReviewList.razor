@@ -97,11 +97,11 @@
 
     private readonly List<ChapterRow> _chapters = new()
     {
-        new(101, "Crimson Moon Academy", "Ch. 45", "The Shadow Rises", 24, DateTime.UtcNow.AddDays(-1), "UNDER_REVIEW"),
-        new(102, "Crimson Moon Academy", "Ch. 44", "Before the Dawn", 22, DateTime.UtcNow.AddDays(-3), "UNDER_REVIEW"),
-        new(103, "Neon Samurai Path", "Ch. 19", "Blade of Light", 20, DateTime.UtcNow.AddDays(-2), "UNDER_REVIEW"),
-        new(104, "Lunar Eclipse Academy", "Ch. 13", "New Moon Festival", 18, DateTime.UtcNow.AddDays(-5), "REVISION_REQUESTED"),
-        new(105, "Shadow Garden Tales", "Ch. 9", null, 16, DateTime.UtcNow.AddDays(-7), "ON_HOLD")
+        new(Guid.Parse("a1b2c3d4-0001-4000-8000-000000000065"), "Crimson Moon Academy", "Ch. 45", "The Shadow Rises", 24, DateTime.UtcNow.AddDays(-1), "UNDER_REVIEW"),
+        new(Guid.Parse("a1b2c3d4-0002-4000-8000-000000000066"), "Crimson Moon Academy", "Ch. 44", "Before the Dawn", 22, DateTime.UtcNow.AddDays(-3), "UNDER_REVIEW"),
+        new(Guid.Parse("a1b2c3d4-0003-4000-8000-000000000067"), "Neon Samurai Path", "Ch. 19", "Blade of Light", 20, DateTime.UtcNow.AddDays(-2), "UNDER_REVIEW"),
+        new(Guid.Parse("a1b2c3d4-0004-4000-8000-000000000068"), "Lunar Eclipse Academy", "Ch. 13", "New Moon Festival", 18, DateTime.UtcNow.AddDays(-5), "REVISION_REQUESTED"),
+        new(Guid.Parse("a1b2c3d4-0005-4000-8000-000000000069"), "Shadow Garden Tales", "Ch. 9", null, 16, DateTime.UtcNow.AddDays(-7), "ON_HOLD")
     };
 
     private Color GetStatusColor(string status) => status switch
@@ -113,10 +113,10 @@
         _ => Color.Default
     };
 
-    private void OpenChapter(long chapterId)
+    private void OpenChapter(Guid chapterId)
     {
         Nav.NavigateTo($"/editor/chapters/{chapterId}");
     }
 
-    private record ChapterRow(long ChapterId, string SeriesTitle, string ChapterLabel, string? ChapterTitle, int PageCount, DateTime SubmittedAt, string StatusCode);
+    private record ChapterRow(Guid ChapterId, string SeriesTitle, string ChapterLabel, string? ChapterTitle, int PageCount, DateTime SubmittedAt, string StatusCode);
 }

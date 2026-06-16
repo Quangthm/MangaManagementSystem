@@ -5,6 +5,7 @@ using MangaManagementSystem.Infrastructure;
 using MangaManagementSystem.Web.Components;
 using MangaManagementSystem.Web.Helpers;
 using MangaManagementSystem.Web.Services;
+using MangaManagementSystem.Web.Services.Api;
 using MangaManagementSystem.Web.Options;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -30,7 +31,17 @@ namespace MangaManagementSystem.Web
             builder.Services.AddHttpClient<RecaptchaService>();
 
             builder.Services.AddMemoryCache();
-            builder.Services.AddSingleton<IOtpCacheService, OtpCacheService>();
+            builder.Services.Configure<ApiSettings>(builder.Configuration.GetSection(ApiSettings.SectionName));
+            builder.Services.AddHttpClient<IRegistrationApiClient, RegistrationApiClient>((sp, client) =>
+            {
+                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                client.BaseAddress = new Uri(settings.Value.BaseUrl);
+            });
+            builder.Services.AddHttpClient<IAuthApiClient, AuthApiClient>((sp, client) =>
+            {
+                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                client.BaseAddress = new Uri(settings.Value.BaseUrl);
+            });
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddAntiforgery();
 
@@ -105,7 +116,7 @@ namespace MangaManagementSystem.Web
 
             app.MapPost("/api/auth/login", async (
                 HttpContext context,
-                IAuthService authService,
+                IAuthApiClient authApi,
                 RecaptchaService recaptchaService,
                 [FromForm] string username,
                 [FromForm] string password) =>
@@ -123,13 +134,21 @@ namespace MangaManagementSystem.Web
                     return Results.Redirect("/login?error=InvalidCredentials");
                 }
 
-                var result = await authService.LoginAsync(new LoginDto(username, password));
-
-                // Map common server-side messages to browser-friendly error codes so the UI
-                // can show helpful but non-revealing messages.
-                if (!result.Succeeded || result.User is null || string.IsNullOrWhiteSpace(result.RoleName))
+                try
                 {
-                    var error = (result.ErrorMessage ?? string.Empty).ToLowerInvariant();
+                    var user = await authApi.LoginAsync(username, password);
+
+                    if (string.IsNullOrWhiteSpace(user.RoleName))
+                    {
+                        return Results.Redirect("/login?error=InvalidCredentials");
+                    }
+
+                    await SignInApplicationUserAsync(context, user, user.RoleName);
+                    return Results.Redirect(GetDashboardRedirectUrl(user.RoleName));
+                }
+                catch (InvalidOperationException ex)
+                {
+                    var error = (ex.Message ?? string.Empty).ToLowerInvariant();
 
                     if (error.Contains("pending"))
                     {
@@ -149,9 +168,6 @@ namespace MangaManagementSystem.Web
                     // Generic fallback for wrong username/password or other authentication failures.
                     return Results.Redirect("/login?error=InvalidCredentials");
                 }
-
-                await SignInApplicationUserAsync(context, result.User, result.RoleName);
-                return Results.Redirect(GetDashboardRedirectUrl(result.RoleName));
             }).DisableAntiforgery();
 
             app.MapPost("/api/auth/google-login", () =>

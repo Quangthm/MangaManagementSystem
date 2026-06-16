@@ -41,7 +41,7 @@ window.recaptchaInterop = {
                     var element = document.getElementById(elementId);
                     if (element) {
                         if (element.querySelector('iframe') || element.querySelector('.grecaptcha-logo')) {
-                            return null;
+                            return -1;
                         }
                         element.innerHTML = ""; // Clear existing contents
                         return grecaptcha.render(elementId, {
@@ -52,10 +52,10 @@ window.recaptchaInterop = {
                     console.error("reCAPTCHA render error: ", e);
                 }
             }
-            return null;
+            return -1;
         }).catch(err => {
             console.error("reCAPTCHA script load failed: ", err);
-            return null;
+            return -1;
         });
     },
     getResponse: function (widgetId) {

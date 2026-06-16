@@ -140,16 +140,15 @@ The project uses **permission-based actor grouping** for shared features and rol
 - File resources are active when `deleted_at_utc IS NULL`.
 - Normal application queries should exclude deleted files unless viewing historical/audit data.
 - File deletion should happen through the application workflow, not directly in Cloudinary.
-- User avatars, portfolios, series covers, proposal files, chapter page-version files, editorial attachment/markup files, and task reference files should use `FileResource`.
-- Supported `file_purpose_code` values for MVP are `SERIES_PROPOSAL`, `SERIES_COVER`, `CHAPTER_PAGE_VERSION`, `TASK_REFERENCE`, `EDITORIAL_ATTACHMENT`, `REGISTRATION_PORTFOLIO`, and `USER_AVATAR`.
+- User avatars, portfolios, series covers, proposal files, chapter page-version files, and editorial attachment/markup files should use `FileResource`.
+- Supported `file_purpose_code` values for MVP are `SERIES_PROPOSAL`, `SERIES_COVER`, `CHAPTER_PAGE_VERSION`, `EDITORIAL_ATTACHMENT`, `REGISTRATION_PORTFOLIO`, and `USER_AVATAR`.
 - Every `FileResource` must store a required `sha256_hash`.
 - `sha256_hash` should be calculated by the backend from the exact uploaded file bytes before file metadata is saved.
 - `sha256_hash` supports file integrity checking, duplicate detection, and audit traceability.
 - `sha256_hash` should not be treated as a global uniqueness rule because the same exact file may be validly reused in different workflow contexts.
-- The system may optionally check `sha256_hash` before saving a file and show advisory duplicate warnings for repeated registration portfolio, proposal, cover, chapter page-version, task reference, editorial attachment, or avatar files.
+- The system may optionally check `sha256_hash` before saving a file and show advisory duplicate warnings for repeated registration portfolio, proposal, cover, chapter page-version, editorial attachment, or avatar files.
 - Duplicate-file warnings are optional MVP usability behavior; some UI warnings may be omitted when implementation time is limited.
 - Accepted AI/translation output or assistant task output that becomes an official page file should be saved as a new `ChapterPageVersion` and use `file_purpose_code = CHAPTER_PAGE_VERSION`.
-- Files attached only as task instructions, examples, or reference material should use `file_purpose_code = TASK_REFERENCE`.
 - In normal UI contexts, unavailable or deleted files should show a safe placeholder instead of a broken file reference.
 
 ## 4.4 Users and Accounts

@@ -18,35 +18,52 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         Guid? ReviewedByUserId,
         DateTime? ReviewedAtUtc,
         string? Comments,
-        Guid? MarkupFileId
+        Guid? MarkupFileId,
+        bool HasActiveTantouEditor = false
     );
 
-    public record CreateSeriesProposalDto(
-        [Required] Guid SeriesId,
-        [Required] short ProposalVersionNo,
-        [Required][MaxLength(200)] string ProposalTitle,
-        [Required] string SynopsisSnapshot,
-        [Required][MaxLength(100)] string GenreSnapshot,
-        [Required] Guid ProposalFileId,
-        [Required][MaxLength(50)] string StatusCode,
-        [Required] Guid SubmittedByUserId,
-        string? Comments,
-        Guid? MarkupFileId
-    );
-
-    public record UpdateSeriesProposalDto(
-        [Required] Guid SeriesProposalId,
-        [Required] Guid SeriesId,
-        [Required] short ProposalVersionNo,
-        [Required][MaxLength(200)] string ProposalTitle,
-        [Required] string SynopsisSnapshot,
-        [Required][MaxLength(100)] string GenreSnapshot,
-        [Required] Guid ProposalFileId,
-        [Required][MaxLength(50)] string StatusCode,
-        [Required] Guid SubmittedByUserId,
+    public record ProposalQueueItemDto(
+        Guid SeriesProposalId,
+        Guid SeriesId,
+        string SeriesTitle,
+        string SeriesSlug,
+        short ProposalVersionNo,
+        string ProposalTitle,
+        string SynopsisSnapshot,
+        string GenreSnapshot,
+        string StatusCode,
+        Guid SubmittedByUserId,
+        string SubmitterDisplayName,
+        DateTime SubmittedAtUtc,
         Guid? ReviewedByUserId,
+        string? ReviewerDisplayName,
         DateTime? ReviewedAtUtc,
         string? Comments,
-        Guid? MarkupFileId
+        Guid ProposalFileId,
+        string? ProposalFileUrl,
+        string? ProposalFileName,
+        Guid? MarkupFileId,
+        string? MarkupFileUrl
+    );
+
+    public record ProposalQueueFilterDto(
+        string? StatusCode = null,
+        Guid? SeriesId = null,
+        Guid? SubmittedByUserId = null,
+        Guid? ReviewedByUserId = null
+    );
+
+    public record CreateProposalDto(
+        [Required] Guid SeriesId,
+        [Required][MaxLength(200)] string ProposalTitle,
+        [Required] string SynopsisSnapshot,
+        [Required][MaxLength(100)] string GenreSnapshot,
+        [Required] Guid ProposalFileId,
+        [Required] Guid SubmittedByUserId
+    );
+
+    public record ProposalReviewRequestDto(
+        [Required] Guid SeriesProposalId,
+        [Required] string Comments
     );
 }

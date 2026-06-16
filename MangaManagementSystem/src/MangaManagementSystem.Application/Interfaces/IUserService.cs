@@ -10,6 +10,7 @@ namespace MangaManagementSystem.Application.Interfaces
     Task<UserDto?> GetUserByIdAsync(Guid id);
     Task<UserDto?> GetUserByEmailAsync(string email);
     Task<IEnumerable<UserDto>> GetUsersByStatusAsync(string status);
+    Task<IEnumerable<UserDto>> GetUsersByRoleAsync(string roleName);
 
     Task<UserDto> ApproveUserAsync(Guid adminUserId, Guid userId);
     Task RejectUserAsync(Guid adminUserId, Guid userId, string? reason = null);
