@@ -138,6 +138,15 @@
                     </div>
 
                     <aside class="mf-proposal-side">
+                        <section class="mf-side-panel">
+                            <h3>C. Attachments</h3>
+
+                            @foreach (var attachment in SelectedProposal.Attachments)
+                            {
+                                <div class="mf-attachment">@attachment</div>
+                            }
+                        </section>
+
                         <AuthorizeView Roles="Editorial Board Chief">
                             <Authorized>
                                 <section class="mf-side-panel">
@@ -199,15 +208,6 @@
                                 </section>
                             </Authorized>
                         </AuthorizeView>
-
-                        <section class="mf-side-panel attachments">
-                            <h3>C. Attachments</h3>
-
-                            @foreach (var attachment in SelectedProposal.Attachments)
-                            {
-                                <div class="mf-attachment">@attachment</div>
-                            }
-                        </section>
                     </aside>
                 </div>
             </div>
