@@ -10,9 +10,10 @@ namespace MangaManagementSystem.Application.Services
     public class AuthService : IAuthService
     {
         /// <summary>
-        /// auth.Roles seed order: 1 = Mangaka, 2 = Assistant, 3 = Tantou Editor, 4 = Editorial Board Member, 5 = Admin.
+        /// Default role name assigned to new registrations (Google signup and standard OTP signup).
+        /// Resolved by name from auth.Roles at runtime.
         /// </summary>
-        private const short DefaultRegistrationRoleId = 1;
+        private const string DefaultRegistrationRoleName = "Mangaka";
 
         private readonly IUnitOfWork _unitOfWork;
         private readonly IPasswordHasher _passwordHasher;
@@ -33,8 +34,8 @@ namespace MangaManagementSystem.Application.Services
         {
             _unitOfWork = unitOfWork;
             _passwordHasher = passwordHasher;
-            _email_service: _emailService = emailService;
-            _otp_cache_service: _otpCacheService = otpCacheService;
+            _emailService = emailService;
+            _otpCacheService = otpCacheService;
             _logger = logger;
             _fileStorageService = fileStorageService;
             _fileResourceService = fileResourceService;
@@ -88,8 +89,8 @@ namespace MangaManagementSystem.Application.Services
             }
 
             // create via wrapper stored procedure that can atomically create the user and optional portfolio
-            var role = await _unitOfWork.Roles.GetByIdAsync(pendingRegistration.RoleId);
-            var roleName = role?.RoleName ?? string.Empty;
+            // RoleName is passed directly — the stored procedure resolves role_id from role_name internally.
+            var roleName = pendingRegistration.RoleName;
             var passwordHash = _passwordHasher.HashPassword(pendingRegistration.Password);
 
             // If a portfolio was provided in the cached registration, upload to Cloudinary first
@@ -200,6 +201,15 @@ namespace MangaManagementSystem.Application.Services
                 return new AuthResultDto(false, null, null, "Account pending admin approval.");
             }
 
+            if (user.StatusCode == "REJECTED")
+            {
+                _logger.LogWarning(
+                    "Login failed: Account rejected for user {UserId} ({Username})",
+                    user.UserId,
+                    user.Username);
+                return new AuthResultDto(false, null, null, "Account registration was rejected.");
+            }
+
             if (user.StatusCode == "DISABLED")
             {
                 _logger.LogWarning(
@@ -284,8 +294,8 @@ namespace MangaManagementSystem.Application.Services
             {
                 var username = await GenerateUniqueUsernameAsync(googleDisplayName, normalizedEmail);
                 var passwordHash = _passwordHasher.HashPassword(Guid.NewGuid().ToString("N") + "!Aa1");
-                var role = await _unitOfWork.Roles.GetByIdAsync(DefaultRegistrationRoleId);
-                var roleName = role?.RoleName ?? string.Empty;
+                // Use the role name constant directly — the stored procedure resolves role_id from role_name internally.
+                var roleName = DefaultRegistrationRoleName;
                 var newUserId = await _unitOfWork.Users.CreateUserViaProcAsync(
                     roleName,
                     username,

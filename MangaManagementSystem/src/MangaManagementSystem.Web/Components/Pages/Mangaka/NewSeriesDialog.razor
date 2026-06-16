@@ -1,0 +1,63 @@
+@using Microsoft.AspNetCore.Components
+@using MudBlazor
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <div class="d-flex flex-column">
+            <MudText Typo="Typo.h6" Class="font-weight-bold">New Series Proposal</MudText>
+            <MudText Typo="Typo.body2" Class="mf-muted">Submit your manga concept for review</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <div class="pa-2">
+            <MudTextField T="string" Label="Series Title" Variant="Variant.Outlined" Class="mb-4" />
+            
+            <MudTextField T="string" Label="Synopsis / Description" Variant="Variant.Outlined" Lines="4" Class="mb-4" />
+            
+            <MudSelect T="string" Label="Genre" Variant="Variant.Outlined" Class="mb-4">
+                <MudSelectItem Value="@("Tiên hiệp")" />
+                <MudSelectItem Value="@("Wuxia")" />
+                <MudSelectItem Value="@("Xianxia")" />
+                <MudSelectItem Value="@("Action")" />
+                <MudSelectItem Value="@("Fantasy")" />
+                <MudSelectItem Value="@("Romance")" />
+                <MudSelectItem Value="@("Horror")" />
+                <MudSelectItem Value="@("Slice of Life")" />
+            </MudSelect>
+            
+            <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2">Cover Thumbnail</MudText>
+            <div class="upload-zone mb-2 d-flex flex-column justify-center align-center">
+                <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Color="Color.Primary" Style="font-size: 2rem;" Class="mb-2" />
+                <MudText Typo="Typo.body2" Color="Color.Primary">Click to upload cover art</MudText>
+                <MudText Typo="Typo.caption" Class="mf-muted mt-1">PNG, JPG, WEBP - Max 5MB</MudText>
+            </div>
+            
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large" Class="mt-4 rounded-lg" OnClick="Submit">Submit Proposal</MudButton>
+        </div>
+    </DialogContent>
+</MudDialog>
+
+<style>
+    .upload-zone {
+        border: 1px dashed var(--mud-palette-primary);
+        border-radius: 8px;
+        padding: 32px 24px;
+        background-color: var(--mud-palette-background-grey);
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .upload-zone:hover {
+        background-color: var(--mud-palette-primary-hover);
+    }
+</style>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private void Submit()
+    {
+        Snackbar.Add("Proposal submitted successfully!", Severity.Success);
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+}

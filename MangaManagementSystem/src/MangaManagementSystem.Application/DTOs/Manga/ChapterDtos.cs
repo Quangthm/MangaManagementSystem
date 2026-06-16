@@ -4,19 +4,19 @@ using System.ComponentModel.DataAnnotations;
 namespace MangaManagementSystem.Application.DTOs.Manga
 {
     public record ChapterDto(
-        long ChapterId,
-        long SeriesId,
+        Guid ChapterId,
+        Guid SeriesId,
         string ChapterNumberLabel,
         string? ChapterTitle,
         string StatusCode,
         DateTime? PlannedReleaseDate,
         DateTime? ReleasedAtUtc,
         DateTime CreatedAtUtc,
-        int? CreatedByUserId
+        Guid? CreatedByUserId
     );
 
     public record CreateChapterDto(
-        [Required] long SeriesId,
+        [Required] Guid SeriesId,
         [Required][MaxLength(20)] string ChapterNumberLabel,
         [MaxLength(100)] string? ChapterTitle,
         [MaxLength(50)] string StatusCode,
@@ -24,8 +24,8 @@ namespace MangaManagementSystem.Application.DTOs.Manga
     );
 
     public record UpdateChapterDto(
-        [Required] long ChapterId,
-        [Required] long SeriesId,
+        [Required] Guid ChapterId,
+        [Required] Guid SeriesId,
         [Required][MaxLength(20)] string ChapterNumberLabel,
         [MaxLength(100)] string? ChapterTitle,
         [MaxLength(50)] string StatusCode,

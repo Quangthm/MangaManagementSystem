@@ -4,49 +4,57 @@ using System.ComponentModel.DataAnnotations;
 namespace MangaManagementSystem.Application.DTOs.Manga
 {
     public record SeriesProposalDto(
-        long SeriesProposalId,
-        long SeriesId,
+        Guid SeriesProposalId,
+        Guid SeriesId,
         short ProposalVersionNo,
         string ProposalTitle,
         string SynopsisSnapshot,
         string GenreSnapshot,
-        long ProposalFileId,
+        Guid ProposalFileId,
         string StatusCode,
-        int SubmittedByUserId,
+        Guid SubmittedByUserId,
         DateTime SubmittedAtUtc,
         DateTime? WithdrawnAtUtc,
-        int? ReviewedByUserId,
+        Guid? ReviewedByUserId,
         DateTime? ReviewedAtUtc,
         string? Comments,
-        long? MarkupFileId
+        Guid? MarkupFileId,
+        bool HasActiveTantouEditor = false
     );
 
-    public record CreateSeriesProposalDto(
-        [Required] long SeriesId,
-        [Required] short ProposalVersionNo,
-        [Required][MaxLength(200)] string ProposalTitle,
-        [Required] string SynopsisSnapshot,
-        [Required][MaxLength(100)] string GenreSnapshot,
-        [Required] long ProposalFileId,
-        [Required][MaxLength(50)] string StatusCode,
-        [Required] int SubmittedByUserId,
-        string? Comments,
-        long? MarkupFileId
-    );
-
-    public record UpdateSeriesProposalDto(
-        [Required] long SeriesProposalId,
-        [Required] long SeriesId,
-        [Required] short ProposalVersionNo,
-        [Required][MaxLength(200)] string ProposalTitle,
-        [Required] string SynopsisSnapshot,
-        [Required][MaxLength(100)] string GenreSnapshot,
-        [Required] long ProposalFileId,
-        [Required][MaxLength(50)] string StatusCode,
-        [Required] int SubmittedByUserId,
-        int? ReviewedByUserId,
+    public record ProposalQueueItemDto(
+        Guid SeriesProposalId,
+        Guid SeriesId,
+        string SeriesTitle,
+        string SeriesSlug,
+        short ProposalVersionNo,
+        string ProposalTitle,
+        string SynopsisSnapshot,
+        string GenreSnapshot,
+        string StatusCode,
+        Guid SubmittedByUserId,
+        string SubmitterDisplayName,
+        DateTime SubmittedAtUtc,
+        Guid? ReviewedByUserId,
+        string? ReviewerDisplayName,
         DateTime? ReviewedAtUtc,
         string? Comments,
-        long? MarkupFileId
+        Guid ProposalFileId,
+        string? ProposalFileUrl,
+        string? ProposalFileName,
+        Guid? MarkupFileId,
+        string? MarkupFileUrl
+    );
+
+    public record ProposalQueueFilterDto(
+        string? StatusCode = null,
+        Guid? SeriesId = null,
+        Guid? SubmittedByUserId = null,
+        Guid? ReviewedByUserId = null
+    );
+
+    public record ProposalReviewRequestDto(
+        [Required] Guid SeriesProposalId,
+        [Required] string Comments
     );
 }

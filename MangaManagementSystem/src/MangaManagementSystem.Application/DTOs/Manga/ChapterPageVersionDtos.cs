@@ -3,26 +3,26 @@ using System.ComponentModel.DataAnnotations;
 namespace MangaManagementSystem.Application.DTOs.Manga
 {
     public record ChapterPageVersionDto(
-        long ChapterPageVersionId,
-        long ChapterPageId,
+        Guid ChapterPageVersionId,
+        Guid ChapterPageId,
         short VersionNo,
-        long PageFileId,
+        Guid PageFileId,
         string? VersionNote,
         bool IsCurrentVersion
     );
 
     public record CreateChapterPageVersionDto(
-        [Required] long ChapterPageId,
+        [Required] Guid ChapterPageId,
         [Required] short VersionNo,
-        [Required] long PageFileId,
+        [Required] Guid PageFileId,
         string? VersionNote
     );
 
     public record UpdateChapterPageVersionDto(
-        [Required] long ChapterPageVersionId,
-        [Required] long ChapterPageId,
+        [Required] Guid ChapterPageVersionId,
+        [Required] Guid ChapterPageId,
         [Required] short VersionNo,
-        [Required] long PageFileId,
+        [Required] Guid PageFileId,
         string? VersionNote,
         [Required] bool IsCurrentVersion
     );

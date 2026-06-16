@@ -16,7 +16,6 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
             });
             builder.HasKey(s => s.SeriesId);
             builder.Property(s => s.SeriesId).ValueGeneratedOnAdd();
-            builder.Property(s => s.SeriesCode).IsRequired().HasMaxLength(50);
             builder.Property(s => s.Title).IsRequired().HasMaxLength(200);
             builder.Property(s => s.Slug).IsRequired().HasMaxLength(220);
             builder.Property(s => s.Synopsis).IsRequired();
@@ -25,7 +24,6 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
             builder.Property(s => s.ContentLanguageCode).HasMaxLength(10).HasDefaultValue("ja");
             builder.Property(s => s.PublicationFrequencyCode).HasMaxLength(20);
             builder.Property(s => s.CreatedAtUtc).IsRequired();
-            builder.HasIndex(s => s.SeriesCode).IsUnique();
             builder.HasIndex(s => s.Slug).IsUnique();
             builder.HasIndex(s => s.StatusCode).HasDatabaseName("ix_series_current_status_code");
             // Check constraints moved to ToTable above per EF Core guidance

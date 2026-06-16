@@ -7,7 +7,7 @@ namespace MangaManagementSystem.Application.Interfaces
     public interface IChapterReaderVoteSnapshotService
     {
         Task<ChapterReaderVoteSnapshotDto> CreateChapterReaderVoteSnapshotAsync(CreateChapterReaderVoteSnapshotDto dto);
-        Task<ChapterReaderVoteSnapshotDto?> GetChapterReaderVoteSnapshotByIdAsync(long id);
-        Task<IEnumerable<ChapterReaderVoteSnapshotDto>> GetChapterReaderVoteSnapshotsByChapterIdAsync(long chapterId);
+        Task<ChapterReaderVoteSnapshotDto?> GetChapterReaderVoteSnapshotByIdAsync(Guid id);
+        Task<IEnumerable<ChapterReaderVoteSnapshotDto>> GetChapterReaderVoteSnapshotsByChapterIdAsync(Guid chapterId);
     }
 }

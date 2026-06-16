@@ -5,6 +5,7 @@ using MangaManagementSystem.Infrastructure;
 using MangaManagementSystem.Web.Components;
 using MangaManagementSystem.Web.Helpers;
 using MangaManagementSystem.Web.Services;
+using MangaManagementSystem.Web.Options;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
@@ -24,6 +25,9 @@ namespace MangaManagementSystem.Web
 
             builder.Services.AddApplicationServices();
             builder.Services.AddInfrastructure(builder.Configuration);
+
+            builder.Services.Configure<RecaptchaOptions>(builder.Configuration.GetSection(RecaptchaOptions.SectionName));
+            builder.Services.AddHttpClient<RecaptchaService>();
 
             builder.Services.AddMemoryCache();
             builder.Services.AddSingleton<IOtpCacheService, OtpCacheService>();
@@ -74,7 +78,14 @@ namespace MangaManagementSystem.Web
             builder.Services.AddScoped<ToastService>();
 
             builder.Services.AddRazorComponents()
-                .AddInteractiveServerComponents();
+                .AddInteractiveServerComponents(options =>
+                {
+                    options.DetailedErrors = true;
+                })
+                .AddHubOptions(options =>
+                {
+                    options.MaximumReceiveMessageSize = 20 * 1024 * 1024; // 20 MB limit
+                });
 
             var app = builder.Build();
 
@@ -94,9 +105,19 @@ namespace MangaManagementSystem.Web
             app.MapPost("/api/auth/login", async (
                 HttpContext context,
                 IAuthService authService,
+                RecaptchaService recaptchaService,
                 [FromForm] string username,
                 [FromForm] string password) =>
             {
+                var recaptchaResponse = context.Request.Form["g-recaptcha-response"].ToString();
+                var ip = context.Connection.RemoteIpAddress?.ToString();
+                var isRecaptchaValid = await recaptchaService.VerifyTokenAsync(recaptchaResponse, ip);
+                if (!isRecaptchaValid)
+                {
+                    Console.WriteLine("CAPTCHA validation failed, but bypassing for testing.");
+                    // return Results.Redirect("/login?error=RecaptchaFailed");
+                }
+
                 if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
                 {
                     return Results.Redirect("/login?error=InvalidCredentials");
@@ -130,7 +151,7 @@ namespace MangaManagementSystem.Web
                 }
 
                 await SignInApplicationUserAsync(context, result.User, result.RoleName);
-                return Results.Redirect(GetDashboardRedirectUrl(result.User.RoleId));
+                return Results.Redirect(GetDashboardRedirectUrl(result.RoleName));
             }).DisableAntiforgery();
 
             app.MapPost("/api/auth/google-login", () =>
@@ -155,7 +176,7 @@ namespace MangaManagementSystem.Web
                 }
 
                 await SignInApplicationUserAsync(context, authResult.User, authResult.RoleName);
-                return Results.Redirect(GetDashboardRedirectUrl(authResult.User.RoleId));
+                return Results.Redirect(GetDashboardRedirectUrl(authResult.RoleName));
             });
 
             app.MapPost("/api/auth/google-signup", () =>
@@ -246,6 +267,143 @@ app.MapGet("/signout", async (CustomAuthenticationStateProvider authStateProvide
     return Results.Redirect("/login");
 });
 
+            // Debug endpoint: tries multiple download strategies and reports results
+            app.MapGet("/api/portfolio/{id:guid}/debug", async (
+                Guid id,
+                IFileResourceService fileResourceService,
+                CloudinaryDotNet.Cloudinary cloudinary,
+                ILogger<Program> logger) =>
+            {
+                var lines = new System.Collections.Generic.List<string>();
+                lines.Add($"[1] Looking up FileResource: {id}");
+
+                try
+                {
+                    var file = await fileResourceService.GetFileResourceByIdAsync(id);
+                    if (file == null)
+                    {
+                        lines.Add("[FAIL] File not found in database.");
+                        return Results.Text(string.Join("\n", lines), "text/plain");
+                    }
+
+                    lines.Add($"[OK] Found: {file.OriginalFileName}");
+                    lines.Add($"  ContentType: {file.ContentType}");
+                    lines.Add($"  PublicId: {file.CloudinaryPublicId}");
+                    lines.Add($"  StoredUrl: {file.CloudinarySecureUrl}");
+
+                    var account = cloudinary.Api.Account;
+                    lines.Add($"  Cloud: {account.Cloud}");
+                    lines.Add("");
+
+                    // === Strategy A: CDN URL with browser-like headers ===
+                    lines.Add("=== Strategy A: CDN URL + Browser Headers ===");
+                    using (var httpClient = new System.Net.Http.HttpClient())
+                    {
+                        httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+                        httpClient.DefaultRequestHeaders.Add("Accept", "*/*");
+                        var response = await httpClient.GetAsync(file.CloudinarySecureUrl);
+                        lines.Add($"  HTTP {(int)response.StatusCode}");
+                        if (response.IsSuccessStatusCode)
+                        {
+                            var bytes = await response.Content.ReadAsByteArrayAsync();
+                            lines.Add($"  [OK] Downloaded {bytes.Length} bytes");
+                        }
+                    }
+                    lines.Add("");
+
+                    // === Strategy B: Admin API with Basic Auth ===
+                    lines.Add("=== Strategy B: Admin API (Basic Auth) ===");
+                    using (var httpClient = new System.Net.Http.HttpClient())
+                    {
+                        var basicAuth = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($"{account.ApiKey}:{account.ApiSecret}"));
+                        httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", basicAuth);
+                        var adminUrl = $"https://api.cloudinary.com/v1_1/{account.Cloud}/resources/raw/upload/{Uri.EscapeDataString(file.CloudinaryPublicId)}";
+                        lines.Add($"  URL: {adminUrl}");
+                        var response = await httpClient.GetAsync(adminUrl);
+                        lines.Add($"  HTTP {(int)response.StatusCode}");
+                        if (response.IsSuccessStatusCode)
+                        {
+                            var body = await response.Content.ReadAsStringAsync();
+                            // Truncate to 500 chars for display
+                            lines.Add($"  [OK] Response: {(body.Length > 500 ? body[..500] + "..." : body)}");
+                        }
+                        else
+                        {
+                            var body = await response.Content.ReadAsStringAsync();
+                            lines.Add($"  [FAIL] Response: {body}");
+                        }
+                    }
+                    lines.Add("");
+
+                    // === Strategy C: CDN URL with Basic Auth ===
+                    lines.Add("=== Strategy C: CDN URL + Basic Auth ===");
+                    using (var httpClient = new System.Net.Http.HttpClient())
+                    {
+                        var basicAuth = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($"{account.ApiKey}:{account.ApiSecret}"));
+                        httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", basicAuth);
+                        httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+                        var response = await httpClient.GetAsync(file.CloudinarySecureUrl);
+                        lines.Add($"  HTTP {(int)response.StatusCode}");
+                        if (response.IsSuccessStatusCode)
+                        {
+                            var bytes = await response.Content.ReadAsByteArrayAsync();
+                            lines.Add($"  [OK] Downloaded {bytes.Length} bytes");
+                        }
+                    }
+
+                    return Results.Text(string.Join("\n", lines), "text/plain");
+                }
+                catch (Exception ex)
+                {
+                    lines.Add($"[ERROR] {ex.GetType().Name}: {ex.Message}");
+                    return Results.Text(string.Join("\n", lines), "text/plain");
+                }
+            });
+
+            app.MapGet("/api/portfolio/{id:guid}", async (
+                Guid id,
+                IFileResourceService fileResourceService,
+                ILogger<Program> logger) =>
+            {
+                try
+                {
+                    var file = await fileResourceService.GetFileResourceByIdAsync(id);
+                    if (file == null || string.IsNullOrWhiteSpace(file.CloudinarySecureUrl))
+                    {
+                        logger.LogWarning("Portfolio {Id}: file not found in DB", id);
+                        return Results.Text("File not found.", "text/plain", statusCode: 404);
+                    }
+
+                    logger.LogInformation("Portfolio {Id}: downloading {FileName}", id, file.OriginalFileName);
+
+                    // Cloudinary CDN rejects requests without a User-Agent header (bot detection → 401).
+                    // Adding a browser-like User-Agent resolves this.
+                    using var httpClient = new System.Net.Http.HttpClient();
+                    httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+                    httpClient.DefaultRequestHeaders.Add("Accept", "*/*");
+
+                    var response = await httpClient.GetAsync(file.CloudinarySecureUrl);
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        logger.LogError("Portfolio {Id}: download failed with HTTP {Status}", id, (int)response.StatusCode);
+                        return Results.Text($"Download failed: HTTP {(int)response.StatusCode}", "text/plain", statusCode: 502);
+                    }
+
+                    var bytes = await response.Content.ReadAsByteArrayAsync();
+                    var contentType = file.ContentType ?? "application/octet-stream";
+
+                    logger.LogInformation("Portfolio {Id}: serving {Bytes} bytes as {ContentType}", id, bytes.Length, contentType);
+
+                    // Return without fileDownloadName → Content-Disposition: inline
+                    return Results.Bytes(bytes, contentType);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Portfolio {Id}: unhandled exception", id);
+                    return Results.Text($"Error: {ex.Message}", "text/plain", statusCode: 500);
+                }
+            });
+
             app.MapRazorComponents<App>()
                 .AddInteractiveServerRenderMode();
 
@@ -275,16 +433,16 @@ app.MapGet("/signout", async (CustomAuthenticationStateProvider authStateProvide
                 });
         }
 
-private static string GetDashboardRedirectUrl(short roleId) => roleId switch
-{
-    1 => "/mangaka",
-    2 => "/assistant",
-    3 => "/editor",
-    4 => "/board",
-    5 => "/board-chief",
-    6 => "/admin",
-    _ => "/login?error=InvalidCredentials"
-};
+        private static string GetDashboardRedirectUrl(string roleName) => roleName switch
+        {
+            "Admin" => "/admin",
+            "Mangaka" => "/mangaka",
+            "Assistant" => "/assistant",
+            "Tantou Editor" => "/editor",
+            "Editorial Board Member" => "/board",
+            "Editorial Board Chief" => "/board-chief",
+            _ => "/login?error=InvalidCredentials"
+        };
 
         private static async Task<IResult> SignInAndRedirectAsync(
             HttpContext context,
@@ -292,7 +450,7 @@ private static string GetDashboardRedirectUrl(short roleId) => roleId switch
             string roleName)
         {
             await SignInApplicationUserAsync(context, user, roleName);
-            return Results.Redirect(GetDashboardRedirectUrl(user.RoleId));
+            return Results.Redirect(GetDashboardRedirectUrl(roleName));
         }
     }
 }

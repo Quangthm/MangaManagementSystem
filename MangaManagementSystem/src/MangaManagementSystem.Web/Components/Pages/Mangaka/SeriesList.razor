@@ -2,32 +2,187 @@
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "Mangaka")]
 @inject NavigationManager Nav
+@inject IDialogService DialogService
 
 <MangakaLayout>
     <div class="mf-page">
-        <div class="mf-page-header">
-            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Current Series</MudText>
-            <MudText Typo="Typo.body1" Class="mf-muted">Active projects in your catalog</MudText>
+        <div class="mf-page-header d-flex justify-space-between align-center mb-6">
+            <div>
+                <MudText Typo="Typo.h4" Class="font-weight-bold mb-1">Current Series</MudText>
+                <MudText Typo="Typo.body2" Class="mf-muted">@Series.Count active projects in your catalog</MudText>
+            </div>
         </div>
 
-        <MudGrid>
+        <MudGrid Spacing="4">
             @foreach (var item in Series)
             {
-                <MudItem xs="12" md="4"><MudPaper Class="pa-5 mf-card h-100" Elevation="0"><MudText Typo="Typo.h6" Class="font-weight-bold">@item.Title</MudText><MudText class="mf-muted">@item.Subtitle</MudText><MudChip T="string" Color="Color.Success" Size="Size.Small" Class="my-3">@item.Status</MudChip><MudText>Chapters: @item.Chapters</MudText><MudText>Pages: @item.Pages</MudText><MudText Typo="Typo.caption" class="mf-muted">Updated @item.Updated</MudText><MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"/mangaka/workspace/{item.Id}")" Class="mt-3">Open Workspace</MudButton></MudPaper></MudItem>
-            }
-        </MudGrid>
+                <MudItem xs="12" md="6" lg="4">
+                    <div class="series-card @item.ColorClass" @onclick="() => NavigateToWorkspace(item.Id)">
+                        <div class="series-card-top">
+                            <div class="d-flex align-start w-100">
+                                <div class="series-icon-box mr-3">
+                                    <MudIcon Icon="@Icons.Material.Filled.MenuBook" Color="Color.Primary" />
+                                </div>
+                                <div class="flex-grow-1">
+                                    <MudText Typo="Typo.subtitle1" Class="font-weight-bold" Style="line-height: 1.2;">@item.Title</MudText>
+                                    <MudText Typo="Typo.caption" Class="mf-muted mt-1 d-block">@item.Subtitle</MudText>
+                                </div>
+                                <MudIconButton Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Class="mf-muted ml-1" @onclick:stopPropagation="true" />
+                            </div>
+                            
+                            <div class="d-flex align-center gap-2 mt-4 mb-2">
+                                <MudChip T="string" Size="Size.Small" Class="genre-chip">@item.Genre</MudChip>
+                                <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(item.Status)" Variant="Variant.Text" Class="status-chip">@item.Status</MudChip>
+                            </div>
 
+                            <div class="d-flex mt-4 gap-6">
+                                <div>
+                                    <MudText Typo="Typo.h5" Class="@($"font-weight-bold {item.ColorTextClass}")">@item.Chapters</MudText>
+                                    <MudText Typo="Typo.caption" Class="mf-muted">Chapters</MudText>
+                                </div>
+                                <div>
+                                    <MudText Typo="Typo.h5" Class="@($"font-weight-bold {item.ColorTextClass}")">@item.Pages</MudText>
+                                    <MudText Typo="Typo.caption" Class="mf-muted">Pages</MudText>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="series-card-footer mt-auto pt-4 d-flex align-center">
+                            <div class="status-dot mr-2"></div>
+                            <MudText Typo="Typo.caption" Class="mf-muted">Updated @item.Updated</MudText>
+                        </div>
+                    </div>
+                </MudItem>
+            }
+            
+            <MudItem xs="12" md="6" lg="4">
+                <div class="new-series-card h-100 d-flex flex-column justify-center align-center" @onclick="OpenNewSeriesDialog">
+                    <div class="add-icon-circle mb-3">
+                        <MudIcon Icon="@Icons.Material.Filled.Add" Color="Color.Primary" />
+                    </div>
+                    <MudText Typo="Typo.subtitle1" Color="Color.Primary" Class="font-weight-bold">New Series</MudText>
+                    <MudText Typo="Typo.caption" Class="mf-muted mt-1">Submit a new manga proposal</MudText>
+                </div>
+            </MudItem>
+        </MudGrid>
     </div>
 </MangakaLayout>
 
-@code {
+<style>
+    .series-card {
+        background-color: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+        padding: 24px;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+        border: 1px solid #f1f5f9;
+        border-top-width: 4px;
+    }
 
+    .series-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    }
+
+    .series-icon-box {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        background-color: #f0fdf4; /* default, overriden below if needed, but primary is purple so #f3f4f6 or #ede9fe */
+        background-color: #ede9fe;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .genre-chip {
+        background-color: #f1f5f9 !important;
+        color: #64748b !important;
+        font-weight: 500;
+    }
+    
+    .status-chip {
+        font-weight: 600;
+        background-color: rgba(var(--mud-palette-success-rgb), 0.1) !important;
+    }
+
+    .status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background-color: var(--mud-palette-success);
+    }
+
+    /* Card Top Border Colors */
+    .border-top-primary { border-top-color: var(--mud-palette-primary); }
+    .border-top-error { border-top-color: var(--mud-palette-error); }
+    .border-top-success { border-top-color: var(--mud-palette-success); }
+    
+    .text-primary-custom { color: var(--mud-palette-primary); }
+    .text-error-custom { color: var(--mud-palette-error); }
+    .text-success-custom { color: var(--mud-palette-success); }
+
+    /* New Series Dashed Card */
+    .new-series-card {
+        border: 1px dashed #cbd5e1;
+        border-radius: 12px;
+        background-color: #f8fafc;
+        cursor: pointer;
+        transition: all 0.2s;
+        padding: 24px;
+    }
+    .new-series-card:hover {
+        background-color: #f1f5f9;
+        border-color: var(--mud-palette-primary);
+    }
+    .add-icon-circle {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background-color: #e2e8f0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .new-series-card:hover .add-icon-circle {
+        background-color: #ede9fe;
+    }
+</style>
+
+@code {
     private readonly List<SeriesCard> Series = new()
     {
-        new(1, "Crimson Moon Academy", "紅月学院", "Active", 44, 528, "2 hours ago"),
-        new(2, "Neon Samurai Path", "ネオンサムライ", "Active", 18, 216, "1 day ago"),
-        new(3, "Lunar Eclipse Academy", "月食学院", "Active", 12, 144, "3 days ago")
+        new(1, "The Supreme Cultivation Manual", "修仙至尊", "Active", "Tiên hiệp", 44, 528, "2 hours ago", "border-top-primary", "text-primary-custom"),
+        new(2, "Demon Slayer Chronicles", "斩妖记", "Active", "Action", 38, 456, "1 day ago", "border-top-error", "text-error-custom"),
+        new(3, "Heavenly Sword Path", "天剑道", "On Hold", "Wuxia", 52, 624, "3 days ago", "border-top-success", "text-success-custom")
     };
-    private record SeriesCard(int Id, string Title, string Subtitle, string Status, int Chapters, int Pages, string Updated);
+    
+    private record SeriesCard(int Id, string Title, string Subtitle, string Status, string Genre, int Chapters, int Pages, string Updated, string ColorClass, string ColorTextClass);
 
+    private void NavigateToWorkspace(int id)
+    {
+        Nav.NavigateTo($"/mangaka/workspace/{id}");
+    }
+
+    private Color GetStatusColor(string status)
+    {
+        return status switch
+        {
+            "Active" => Color.Success,
+            "On Hold" => Color.Warning,
+            "Completed" => Color.Info,
+            _ => Color.Default
+        };
+    }
+
+    private async Task OpenNewSeriesDialog()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        await DialogService.ShowAsync<NewSeriesDialog>("", options);
+    }
 }

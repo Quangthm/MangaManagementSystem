@@ -20,7 +20,7 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
             builder.Property(f => f.CloudinarySecureUrl).IsRequired().HasMaxLength(1000);
             builder.Property(f => f.ContentType).IsRequired().HasMaxLength(100);
             builder.Property(f => f.FileSizeBytes).IsRequired();
-            builder.Property(f => f.Sha256Hash).HasMaxLength(64);
+            builder.Property(f => f.Sha256Hash).HasColumnName("sha256_hash").HasMaxLength(64);
             builder.Property(f => f.UploadedAtUtc).HasDefaultValueSql("SYSUTCDATETIME()");
             builder.HasIndex(f => f.FilePurposeCode).HasDatabaseName("ix_file_resource_purpose_code");
             builder.HasIndex(f => f.UploadedByUserId).HasDatabaseName("ix_file_resource_uploaded_by");

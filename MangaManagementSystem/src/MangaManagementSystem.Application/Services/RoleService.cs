@@ -17,7 +17,7 @@ namespace MangaManagementSystem.Application.Services
             _unitOfWork = unitOfWork;
         }
 
-        public async Task<RoleDto?> GetRoleByIdAsync(short id)
+        public async Task<RoleDto?> GetRoleByIdAsync(Guid id)
         {
             var entity = await _unitOfWork.Roles.GetByIdAsync(id);
             return entity == null ? null : MapToDto(entity);

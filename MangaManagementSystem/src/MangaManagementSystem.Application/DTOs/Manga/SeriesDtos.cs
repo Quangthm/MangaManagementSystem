@@ -4,46 +4,43 @@ using System.ComponentModel.DataAnnotations;
 namespace MangaManagementSystem.Application.DTOs.Manga
 {
     public record SeriesDto(
-        long SeriesId,
-        string SeriesCode,
+        Guid SeriesId,
         string Title,
         string Slug,
         string Synopsis,
         string Genre,
-        long? CoverFileId,
+        Guid? CoverFileId,
         string StatusCode,
         string ContentLanguageCode,
-        long? SourceSeriesId,
+        Guid? SourceSeriesId,
         DateTime CreatedAtUtc,
         DateTime? UpdatedAtUtc,
-        int? UpdatedByUserId,
+        Guid? UpdatedByUserId,
         string? PublicationFrequencyCode
     );
 
     public record CreateSeriesDto(
-        [Required][MaxLength(50)] string SeriesCode,
         [Required][MaxLength(200)] string Title,
         [Required][MaxLength(220)] string Slug,
         [Required] string Synopsis,
         [Required][MaxLength(100)] string Genre,
-        long? CoverFileId,
+        Guid? CoverFileId,
         [MaxLength(50)] string StatusCode,
         [MaxLength(10)] string ContentLanguageCode,
-        long? SourceSeriesId,
+        Guid? SourceSeriesId,
         [MaxLength(20)] string? PublicationFrequencyCode
     );
 
     public record UpdateSeriesDto(
-        [Required] long SeriesId,
-        [Required][MaxLength(50)] string SeriesCode,
+        [Required] Guid SeriesId,
         [Required][MaxLength(200)] string Title,
         [Required][MaxLength(220)] string Slug,
         [Required] string Synopsis,
         [Required][MaxLength(100)] string Genre,
-        long? CoverFileId,
+        Guid? CoverFileId,
         [MaxLength(50)] string StatusCode,
         [MaxLength(10)] string ContentLanguageCode,
-        long? SourceSeriesId,
+        Guid? SourceSeriesId,
         [MaxLength(20)] string? PublicationFrequencyCode
     );
 }

@@ -37,7 +37,7 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<AuditEventDto?> GetAuditEventByIdAsync(long id)
         {
-            var entity = await _unitOfWork.AuditEvents.GetByIdAsync(id);
+            var entity = await _unitOfWork.AuditEvents.GetByIdAsync(id).ConfigureAwait(false);
             return entity == null ? null : MapToDto(entity);
         }
 

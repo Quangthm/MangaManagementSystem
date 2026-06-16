@@ -28,10 +28,10 @@
             <MudForm @ref="_form">
                 <MudGrid Class="mb-4">
                     <MudItem xs="12" md="6">
-                        <MudSelect T="long" Label="Series" @bind-Value="_selectedSeriesId" Required="true" Error="_validationErrors.ContainsKey(nameof(_selectedSeriesId))">
+                        <MudSelect T="Guid" Label="Series" @bind-Value="_selectedSeriesId" Required="true" Error="_validationErrors.ContainsKey(nameof(_selectedSeriesId))">
                             @foreach (var series in _seriesList)
                             {
-                                <MudSelectItem T="long" Value="@series.SeriesId">@series.Title</MudSelectItem>
+                                <MudSelectItem T="Guid" Value="@series.SeriesId">@series.Title</MudSelectItem>
                             }
                         </MudSelect>
                         @if (_validationErrors.ContainsKey(nameof(_selectedSeriesId)))
@@ -159,62 +159,59 @@
             }
         </MudPaper>
 
-        @if (_showCloseConfirm)
-        {
-            <MudDialog Open="true">
-                <DialogContent>
-                    <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Close Poll</MudText>
-                    <MudText Class="mt-2">Are you sure you want to close the poll for <strong>@_closeTargetSeries</strong>?</MudText>
-                    <MudText Class="mt-2">Closing the poll will compute the vote result and apply it to the series.</MudText>
-                </DialogContent>
-                <DialogActions>
-                    <MudButton Variant="Variant.Text" OnClick="CancelClosePoll">Cancel</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ConfirmClosePollAsync">Close Poll</MudButton>
-                </DialogActions>
-            </MudDialog>
-        }
+        <MudDialog @bind-Visible="_showCloseConfirm">
+            <TitleContent>
+                <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Close Poll</MudText>
+            </TitleContent>
+            <DialogContent>
+                <MudText Class="mt-2">Are you sure you want to close the poll for <strong>@_closeTargetSeries</strong>?</MudText>
+                <MudText Class="mt-2">Closing the poll will compute the vote result and apply it to the series.</MudText>
+            </DialogContent>
+            <DialogActions>
+                <MudButton Variant="Variant.Text" OnClick="CancelClosePoll">Cancel</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ConfirmClosePollAsync">Close Poll</MudButton>
+            </DialogActions>
+        </MudDialog>
 
-        @if (_showCancelConfirm)
-        {
-            <MudDialog Open="true">
-                <DialogContent>
-                    <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Cancel Poll</MudText>
-                    <MudText Class="mt-2">Are you sure you want to cancel the poll for <strong>@_cancelTargetSeries</strong>?</MudText>
-                    <MudText Class="mt-2">Cancelled polls preserve votes for audit but do not affect series status.</MudText>
-                </DialogContent>
-                <DialogActions>
-                    <MudButton Variant="Variant.Text" OnClick="CancelCancelPoll">Cancel</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="ConfirmCancelPollAsync">Cancel Poll</MudButton>
-                </DialogActions>
-            </MudDialog>
-        }
+        <MudDialog @bind-Visible="_showCancelConfirm">
+            <TitleContent>
+                <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Cancel Poll</MudText>
+            </TitleContent>
+            <DialogContent>
+                <MudText Class="mt-2">Are you sure you want to cancel the poll for <strong>@_cancelTargetSeries</strong>?</MudText>
+                <MudText Class="mt-2">Cancelled polls preserve votes for audit but do not affect series status.</MudText>
+            </DialogContent>
+            <DialogActions>
+                <MudButton Variant="Variant.Text" OnClick="CancelCancelPoll">Cancel</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="ConfirmCancelPollAsync">Cancel Poll</MudButton>
+            </DialogActions>
+        </MudDialog>
 
-        @if (_showOpenConfirm)
-        {
-            <MudDialog Open="true">
-                <DialogContent>
-                    <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Create Poll</MudText>
-                    <MudText Class="mt-2">Open this board poll for members to vote?</MudText>
-                    <MudText Class="mt-2">
-                        <strong>Poll Type:</strong> @_pollTypeCode<br />
-                        @if (!string.IsNullOrEmpty(_publicationFrequencyCode))
-                        {
-                            <strong>Frequency:</strong> @_publicationFrequencyCode<br />
-                        }
-                        <strong>Series:</strong> @(_seriesList.FirstOrDefault(s => s.SeriesId == _selectedSeriesId)?.Title ?? "Unknown")
-                    </MudText>
-                </DialogContent>
-                <DialogActions>
-                    <MudButton Variant="Variant.Text" OnClick="CancelOpenPoll">Cancel</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ConfirmOpenPollAsync">Open Poll</MudButton>
-                </DialogActions>
-            </MudDialog>
-        }
+        <MudDialog @bind-Visible="_showOpenConfirm">
+            <TitleContent>
+                <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Create Poll</MudText>
+            </TitleContent>
+            <DialogContent>
+                <MudText Class="mt-2">Open this board poll for members to vote?</MudText>
+                <MudText Class="mt-2">
+                    <strong>Poll Type:</strong> @_pollTypeCode<br />
+                    @if (!string.IsNullOrEmpty(_publicationFrequencyCode))
+                    {
+                        <strong>Frequency:</strong> @_publicationFrequencyCode<br />
+                    }
+                    <strong>Series:</strong> @(_seriesList.FirstOrDefault(s => s.SeriesId == _selectedSeriesId)?.Title ?? "Unknown")
+                </MudText>
+            </DialogContent>
+            <DialogActions>
+                <MudButton Variant="Variant.Text" OnClick="CancelOpenPoll">Cancel</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ConfirmOpenPollAsync">Open Poll</MudButton>
+            </DialogActions>
+        </MudDialog>
     </div>
 </AdminLayout>
 
 @code {
-    private record BoardPollRow(long SeriesBoardPollId, string SeriesTitle, string PollTypeCode, string? BoardPublicationFrequencyCode, string PollStatusCode, string CreatedByName, DateTime? EndsAtUtc);
+    private record BoardPollRow(Guid SeriesBoardPollId, string SeriesTitle, string PollTypeCode, string? BoardPublicationFrequencyCode, string PollStatusCode, string CreatedByName, DateTime? EndsAtUtc);
 
     private MudForm? _form;
     private Dictionary<string, string> _validationErrors = new();
@@ -222,7 +219,7 @@
     private List<SeriesDto> _seriesList = new();
     private List<BoardPollRow> _openPolls = new();
 
-    private long _selectedSeriesId;
+    private Guid _selectedSeriesId;
     private string _pollTypeCode = "START_SERIALIZATION";
     private string? _publicationFrequencyCode;
     private string _pollReason = "";
@@ -231,11 +228,11 @@
     private bool _isLoading;
 
     private bool _showCloseConfirm;
-    private long _closeTargetPollId;
+    private Guid _closeTargetPollId;
     private string _closeTargetSeries = "";
 
     private bool _showCancelConfirm;
-    private long _cancelTargetPollId;
+    private Guid _cancelTargetPollId;
     private string _cancelTargetSeries = "";
 
     private bool _showOpenConfirm;
@@ -246,8 +243,8 @@
         // Mock data - replace with actual API call when backend is ready
         _openPolls = new List<BoardPollRow>
         {
-            new(1, "Crimson Moon Academy", "START_SERIALIZATION", "WEEKLY", "OPEN", "Admin", DateTime.UtcNow.AddDays(7)),
-            new(2, "Neon Samurai Path", "CANCEL_SERIALIZATION", null, "OPEN", "Editor Tanaka", DateTime.UtcNow.AddDays(3))
+            new(Guid.NewGuid(), "Crimson Moon Academy", "START_SERIALIZATION", "WEEKLY", "OPEN", "Admin", DateTime.UtcNow.AddDays(7)),
+            new(Guid.NewGuid(), "Neon Samurai Path", "CANCEL_SERIALIZATION", null, "OPEN", "Editor Tanaka", DateTime.UtcNow.AddDays(3))
         };
     }
 
@@ -266,7 +263,7 @@
     private void CancelCreate()
     {
         _form?.Validate();
-        _selectedSeriesId = 0;
+        _selectedSeriesId = Guid.Empty;
         _pollTypeCode = "START_SERIALIZATION";
         _publicationFrequencyCode = null;
         _pollReason = "";
@@ -277,7 +274,7 @@
     {
         _validationErrors.Clear();
 
-        if (_selectedSeriesId == 0)
+        if (_selectedSeriesId == Guid.Empty)
         {
             _validationErrors.Add(nameof(_selectedSeriesId), "Please select a series.");
         }
@@ -318,13 +315,13 @@
 
     private async Task ConfirmOpenPollAsync()
     {
-        if (_selectedSeriesId == 0) return;
+        if (_selectedSeriesId == Guid.Empty) return;
 
         try
         {
             // Mock - replace with actual API call when backend is ready
             _openPolls.Add(new BoardPollRow(
-                _openPolls.Count + 1,
+                Guid.NewGuid(),
                 _seriesList.FirstOrDefault(s => s.SeriesId == _selectedSeriesId)?.Title ?? "Unknown Series",
                 _pollTypeCode,
                 _pollTypeCode == "START_SERIALIZATION" ? _publicationFrequencyCode : null,
@@ -347,7 +344,7 @@
         }
     }
 
-    private void ConfirmClosePoll(long pollId, string seriesTitle)
+    private void ConfirmClosePoll(Guid pollId, string seriesTitle)
     {
         _closeTargetPollId = pollId;
         _closeTargetSeries = seriesTitle;
@@ -357,7 +354,7 @@
     private void CancelClosePoll()
     {
         _showCloseConfirm = false;
-        _closeTargetPollId = 0;
+        _closeTargetPollId = Guid.Empty;
         _closeTargetSeries = "";
     }
 
@@ -377,12 +374,12 @@
         finally
         {
             _showCloseConfirm = false;
-            _closeTargetPollId = 0;
+            _closeTargetPollId = Guid.Empty;
             _closeTargetSeries = "";
         }
     }
 
-    private void ConfirmCancelPoll(long pollId, string seriesTitle)
+    private void ConfirmCancelPoll(Guid pollId, string seriesTitle)
     {
         _cancelTargetPollId = pollId;
         _cancelTargetSeries = seriesTitle;
@@ -392,7 +389,7 @@
     private void CancelCancelPoll()
     {
         _showCancelConfirm = false;
-        _cancelTargetPollId = 0;
+        _cancelTargetPollId = Guid.Empty;
         _cancelTargetSeries = "";
     }
 
@@ -412,7 +409,7 @@
         finally
         {
             _showCancelConfirm = false;
-            _cancelTargetPollId = 0;
+            _cancelTargetPollId = Guid.Empty;
             _cancelTargetSeries = "";
         }
     }

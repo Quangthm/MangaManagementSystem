@@ -32,13 +32,13 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(entity);
         }
 
-        public async Task<SeriesContributorDto?> GetSeriesContributorByIdAsync(long id)
+        public async Task<SeriesContributorDto?> GetSeriesContributorByIdAsync(Guid id)
         {
             var entity = await _unitOfWork.SeriesContributors.GetByIdAsync(id);
             return entity == null ? null : MapToDto(entity);
         }
 
-        public async Task<IEnumerable<SeriesContributorDto>> GetSeriesContributorsBySeriesIdAsync(long seriesId)
+        public async Task<IEnumerable<SeriesContributorDto>> GetSeriesContributorsBySeriesIdAsync(Guid seriesId)
         {
             var all = await _unitOfWork.SeriesContributors.GetAllAsync();
             return all.Where(c => c.SeriesId == seriesId).Select(MapToDto);
@@ -62,13 +62,10 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(entity);
         }
 
-        public async Task<bool> DeleteSeriesContributorAsync(long id)
+        public async Task<bool> DeleteSeriesContributorAsync(Guid id)
         {
             var entity = await _unitOfWork.SeriesContributors.GetByIdAsync(id);
-            if (entity == null)
-            {
-                return false;
-            }
+            if (entity == null) return false;
 
             _unitOfWork.SeriesContributors.Delete(entity);
             await _unitOfWork.SaveChangesAsync();

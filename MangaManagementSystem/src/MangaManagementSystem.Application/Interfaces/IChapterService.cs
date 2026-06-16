@@ -7,7 +7,7 @@ namespace MangaManagementSystem.Application.Interfaces
     public interface IChapterService
     {
         Task<ChapterDto> CreateChapterAsync(CreateChapterDto dto);
-        Task<ChapterDto?> GetChapterByIdAsync(long id);
-        Task<IEnumerable<ChapterDto>> GetChaptersBySeriesIdAsync(long seriesId);
+        Task<ChapterDto?> GetChapterByIdAsync(Guid id);
+        Task<IEnumerable<ChapterDto>> GetChaptersBySeriesIdAsync(Guid seriesId);
     }
 }

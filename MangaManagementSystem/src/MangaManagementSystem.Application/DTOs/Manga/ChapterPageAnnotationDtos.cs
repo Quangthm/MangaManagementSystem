@@ -1,29 +1,31 @@
+using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace MangaManagementSystem.Application.DTOs.Manga
 {
     public record ChapterPageAnnotationDto(
-        long ChapterPageAnnotationId,
-        long PageRegionId,
+        Guid ChapterPageAnnotationId,
         string IssueTypeCode,
-        int AnnotatedByUserId,
+        Guid AnnotatedByUserId,
         string? AnnotationText,
-        int? ResolvedByUserId
+        Guid? ResolvedByUserId,
+        IReadOnlyList<PageRegionDto> PageRegions
     );
 
     public record CreateChapterPageAnnotationDto(
-        [Required] long PageRegionId,
         [Required][MaxLength(50)] string IssueTypeCode,
-        [Required] int AnnotatedByUserId,
-        string? AnnotationText
+        [Required] Guid AnnotatedByUserId,
+        string? AnnotationText,
+        [Required] IReadOnlyList<Guid> PageRegionIds
     );
 
     public record UpdateChapterPageAnnotationDto(
-        [Required] long ChapterPageAnnotationId,
-        [Required] long PageRegionId,
+        [Required] Guid ChapterPageAnnotationId,
         [Required][MaxLength(50)] string IssueTypeCode,
-        [Required] int AnnotatedByUserId,
+        [Required] Guid AnnotatedByUserId,
         string? AnnotationText,
-        int? ResolvedByUserId
+        Guid? ResolvedByUserId,
+        [Required] IReadOnlyList<Guid> PageRegionIds
     );
 }

@@ -7,9 +7,9 @@ namespace MangaManagementSystem.Application.Interfaces
     public interface IChapterPageService
     {
         Task<ChapterPageDto> CreateChapterPageAsync(CreateChapterPageDto dto);
-        Task<ChapterPageDto?> GetChapterPageByIdAsync(long id);
-        Task<IEnumerable<ChapterPageDto>> GetChapterPagesByChapterIdAsync(long chapterId);
+        Task<ChapterPageDto?> GetChapterPageByIdAsync(Guid id);
+        Task<IEnumerable<ChapterPageDto>> GetChapterPagesByChapterIdAsync(Guid chapterId);
         Task<ChapterPageDto?> UpdateChapterPageAsync(UpdateChapterPageDto dto);
-        Task<bool> DeleteChapterPageAsync(long id, int? deletedByUserId = null);
+        Task<bool> DeleteChapterPageAsync(Guid id, Guid? deletedByUserId = null);
     }
 }

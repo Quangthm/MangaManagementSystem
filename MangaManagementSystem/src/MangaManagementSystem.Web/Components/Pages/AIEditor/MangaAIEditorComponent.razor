@@ -1,0 +1,501 @@
+
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@using MudBlazor
+@using Microsoft.AspNetCore.Components.Forms
+
+<div class="mf-gradient-bg d-flex flex-column rounded-lg overflow-hidden" style="min-height: 800px; height: 100%;">
+    <!-- Top Toolbar -->
+    <MudToolBar Class="mf-card mx-4 mt-4 rounded-lg d-flex gap-4 align-center" Elevation="4">
+        <MudText Typo="Typo.h6" Class="font-weight-bold" Color="Color.Primary">
+            <MudIcon Icon="@Icons.Material.Filled.AutoFixHigh" Class="mr-2" /> AI Editor
+        </MudText>
+        
+        <MudDivider Vertical="true" FlexItem="true" Class="mx-2" />
+
+        <MudButton Variant="Variant.Text" Color="Color.Default" StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="ExitAiMode">
+            Exit
+        </MudButton>
+        <MudDivider Vertical="true" FlexItem="true" Class="mx-2" />
+
+        
+        <InputFile id="fileInput" OnChange="HandleFileUpload" hidden accept="image/*" />
+        <MudButton HtmlTag="label" for="fileInput" Variant="Variant.Filled" Color="Color.Dark" StartIcon="@Icons.Material.Filled.Upload">
+            Upload Image
+        </MudButton>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.ImageSearch" OnClick="RunSegmentAI" Disabled="@IsProcessing">
+            Auto Segment
+        </MudButton>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Info" StartIcon="@Icons.Material.Filled.Translate" OnClick="RunTranslateAI" Disabled="@IsProcessing">
+            Auto Translate
+        </MudButton>
+
+        <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteSelectedRegions" Disabled="@(!Regions.Any(r => r.Selected))">
+            Delete Selected
+        </MudButton>
+
+        <MudSpacer />
+
+        <MudButton Variant="Variant.Text" Color="Color.Default" StartIcon="@Icons.Material.Filled.Undo" OnClick="Undo" Disabled="@(!CanUndo)">Undo</MudButton>
+        <MudButton Variant="Variant.Text" Color="Color.Default" StartIcon="@Icons.Material.Filled.Redo" OnClick="Redo" Disabled="@(!CanRedo)">Redo</MudButton>
+        <MudDivider Vertical="true" FlexItem="true" Class="mx-2" />
+        
+        <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveToBackend" Disabled="@IsProcessing">
+            Save Changes
+        </MudButton>
+    </MudToolBar>
+
+    <div class="d-flex flex-grow-1 pa-4 gap-4 overflow-hidden">
+        <!-- Canvas Area -->
+        <MudPaper Class="flex-grow-1 d-flex flex-column mf-card overflow-hidden" Elevation="4">
+            <div class="d-flex align-center pa-2 border-b-1 mud-border-lines-default bg-dark">
+                <MudTooltip Text="Select (V)"><MudIconButton Icon="@Icons.Material.Filled.NearMe" Color="@(CurrentTool == "select" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("select"))" /></MudTooltip>
+                <MudTooltip Text="Draw Region (D)"><MudIconButton Icon="@Icons.Material.Filled.Create" Color="@(CurrentTool == "draw" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("draw"))" /></MudTooltip>
+                <MudTooltip Text="Pan (Space)"><MudIconButton Icon="@Icons.Material.Filled.PanTool" Color="@(CurrentTool == "pan" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("pan"))" /></MudTooltip>
+                <MudTooltip Text="Brush Tool (B)"><MudIconButton Icon="@Icons.Material.Filled.Brush" Color="@(CurrentTool == "brush" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("brush"))" /></MudTooltip>
+                @if(CurrentTool == "brush") {
+                    <input type="color" @bind="BrushColor" @bind:after="UpdateBrushSettings" class="mx-2" style="width: 32px; height: 32px; border: none; padding: 0; background: transparent; cursor: pointer;" />
+                    <MudSlider T="int" @bind-Value="BrushSize" @bind-Value:after="UpdateBrushSettings" Min="1" Max="100" Class="mx-2" Style="width: 100px;" Color="Color.Primary" />
+                }
+                
+                <MudDivider Vertical="true" FlexItem="true" Class="mx-2" />
+                <MudText Typo="Typo.body2" Class="mf-muted">Zoom (Scroll) &bull; Pan (Middle Mouse/Space)</MudText>
+                <MudSpacer />
+                <MudIconButton Icon="@Icons.Material.Filled.ZoomIn" OnClick="ZoomIn" />
+                <MudIconButton Icon="@Icons.Material.Filled.ZoomOut" OnClick="ZoomOut" />
+                <MudIconButton Icon="@Icons.Material.Filled.FitScreen" OnClick="ResetZoom" />
+            </div>
+            
+            <div id="canvas-container" class="flex-grow-1" style="position: relative; background: #1e1e1e; overflow: hidden; cursor: crosshair;" tabindex="0">
+                <canvas id="mangaCanvas" style="position: absolute; top:0; left:0; transform-origin: top left;"></canvas>
+            </div>
+        </MudPaper>
+
+        <!-- Sidebar -->
+        <MudPaper Width="380px" Class="d-flex flex-column mf-card overflow-hidden" Elevation="4">
+            <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4 d-flex flex-column flex-grow-1 overflow-y-auto">
+                
+                <!-- Regions Tab -->
+                <MudTabPanel Text="Text Regions">
+                    @if (Regions.Count == 0)
+                    {
+                        <div class="text-center pa-8 mf-muted">
+                            <MudIcon Icon="@Icons.Material.Filled.ImageNotSupported" Size="Size.Large" Class="mb-4" />
+                            <MudText>No text regions found.</MudText>
+                            <MudText Typo="Typo.body2">Upload an image and click Auto Segment.</MudText>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="d-flex flex-column gap-3">
+                            @foreach (var region in Regions)
+                            {
+                                <MudCard Elevation="0" Class="@($"border-1 {(region.Selected ? "border-primary bg-primary-hover" : "mud-border-lines-default")} rounded-lg")" @onclick="() => SelectRegion(region.Id)">
+                                    <MudCardContent Class="pa-3">
+                                        <div class="d-flex justify-space-between align-center mb-2">
+                                            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Region #@region.Id</MudText>
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="() => DeleteRegion(region.Id)" />
+                                        </div>
+                                        <div class="d-flex gap-2 mb-2">
+                                            <MudSelect T="string" Label="Type" Value="@region.Type" ValueChanged="@(v => UpdateRegionType(region.Id, v))" Variant="Variant.Outlined" Margin="Margin.Dense">
+                                                <MudSelectItem Value="@("Dialogue")">Dialogue</MudSelectItem>
+                                                <MudSelectItem Value="@("Thought")">Thought</MudSelectItem>
+                                                <MudSelectItem Value="@("SFX")">SFX</MudSelectItem>
+                                            </MudSelect>
+                                            <MudSelect T="string" Label="Status" Value="@region.Status" ValueChanged="@(v => UpdateRegionStatus(region.Id, v))" Variant="Variant.Outlined" Margin="Margin.Dense">
+                                                <MudSelectItem Value="@("Todo")">Todo</MudSelectItem>
+                                                <MudSelectItem Value="@("InProgress")">In Progress</MudSelectItem>
+                                                <MudSelectItem Value="@("Done")">Done</MudSelectItem>
+                                            </MudSelect>
+                                        </div>
+                                        <MudSwitch T="bool" Label="Vertical Text" Value="@region.IsVertical" ValueChanged="@(v => UpdateRegionVertical(region.Id, v))" Color="Color.Primary" Class="mb-2" />
+
+                                        <MudTextField T="string" Label="OCR (Raw Text)" Value="@region.OriginalText" ValueChanged="@(v => UpdateRegionOCR(region.Id, v))" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2" />
+                                        <MudTextField T="string" Label="Translation" Value="@region.TranslatedText" ValueChanged="@(v => UpdateRegionTranslation(region.Id, v))" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" />
+                                        <MudTextField T="string" Label="Notes / Task" Value="@region.Note" ValueChanged="@(v => UpdateRegionNote(region.Id, v))" Variant="Variant.Filled" Margin="Margin.Dense" Lines="2" Class="mt-2" Style="background-color: #fff3cd; color: #856404;" />
+                                        <div class="d-flex align-center mt-2">
+                                            <MudText Typo="Typo.caption" Class="mr-2">Custom Size:</MudText>
+                                            <MudSlider T="int" Value="@region.FontSize" ValueChanged="@(v => UpdateRegionFontSize(region.Id, v))" Min="0" Max="72" Color="Color.Secondary" />
+                                            <MudText Typo="Typo.caption" Class="ml-2">@(region.FontSize > 0 ? region.FontSize.ToString() : "Default")</MudText>
+                                        </div>
+                                    </MudCardContent>
+                                </MudCard>
+                            }
+                        </div>
+                    }
+                </MudTabPanel>
+
+                <!-- Typography Tab -->
+                <MudTabPanel Text="Typography Settings">
+                    <MudText Typo="Typo.subtitle1" Class="mb-4 font-weight-bold">Typography Settings</MudText>
+                    
+                    <MudSelect T="string" Label="Font Family" @bind-Value="SelectedFont" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4">
+                        <MudSelectItem Value="@("Inter, sans-serif")">Inter (Default)</MudSelectItem>
+                        <MudSelectItem Value="@("Comic Sans MS, cursive")">Comic Sans (Comic)</MudSelectItem>
+                        <MudSelectItem Value="@("Arial, sans-serif")">Arial</MudSelectItem>
+                    </MudSelect>
+
+                    <div class="mb-4">
+                        <MudText Typo="Typo.caption">Font Size (px)</MudText>
+                        <div class="d-flex align-center gap-4">
+                            <MudSlider @bind-Value="FontSize" Min="8" Max="72" Color="Color.Primary" />
+                            <MudText Typo="Typo.body2">@FontSize</MudText>
+                        </div>
+                    </div>
+
+                    <MudColorPicker Label="Font Color" @bind-Text="FontColor" Style="Display.Color" Variant="Variant.Outlined" Class="mb-4" />
+                    
+                    <MudSelect T="string" Label="Text Align" @bind-Value="TextAlign" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4">
+                        <MudSelectItem Value="@("center")">Center</MudSelectItem>
+                        <MudSelectItem Value="@("left")">Left</MudSelectItem>
+                        <MudSelectItem Value="@("right")">Right</MudSelectItem>
+                    </MudSelect>
+
+                    <MudSwitch T="bool" @bind-Value="EnableTextStroke" Label="Text Stroke (Outline)" Color="Color.Secondary" Class="mb-4" />
+                    
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" OnClick="ApplyTypography">Apply to All</MudButton>
+                </MudTabPanel>
+
+            </MudTabs>
+        </MudPaper>
+    </div>
+
+    <!-- Edit Modal -->
+    <MudOverlay Visible="IsEditModalVisible" DarkBackground="true" ZIndex="9999" AutoClose="false">
+        <MudPaper Class="pa-6 rounded-lg d-flex flex-column" Style="width: 500px; max-width: 90vw;" @onclick:stopPropagation="true">
+            <div class="d-flex justify-space-between align-center mb-4">
+                <MudText Typo="Typo.h5" Class="font-weight-bold" Color="Color.Primary">Edit Region #@EditingRegion?.Id</MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" Color="Color.Default" OnClick="CloseModalEdit" />
+            </div>
+            
+            @if (EditingRegion != null)
+            {
+                <MudTextField Label="OCR (Raw Text)" @bind-Value="EditingRegion.OriginalText" Lines="2" Variant="Variant.Outlined" Class="mb-4" />
+                <MudTextField Label="Translation" @bind-Value="EditingRegion.TranslatedText" Lines="3" Variant="Variant.Outlined" Class="mb-4" />
+                
+                <div class="d-flex gap-4 mb-4">
+                    <MudSelect T="string" Label="Type" @bind-Value="EditingRegion.Type" Variant="Variant.Outlined" Margin="Margin.Dense">
+                        <MudSelectItem Value="@("Dialogue")">Dialogue</MudSelectItem>
+                        <MudSelectItem Value="@("Thought")">Thought</MudSelectItem>
+                        <MudSelectItem Value="@("SFX")">SFX</MudSelectItem>
+                    </MudSelect>
+                    <MudSelect T="string" Label="Status" @bind-Value="EditingRegion.Status" Variant="Variant.Outlined" Margin="Margin.Dense">
+                        <MudSelectItem Value="@("Todo")">Todo</MudSelectItem>
+                        <MudSelectItem Value="@("InProgress")">In Progress</MudSelectItem>
+                        <MudSelectItem Value="@("Done")">Done</MudSelectItem>
+                    </MudSelect>
+                </div>
+                
+                <MudTextField Label="Notes / Task" @bind-Value="EditingRegion.Note" Lines="2" Variant="Variant.Filled" Style="background-color: #fff3cd; color: #856404;" Class="mb-4" />
+                
+                <div class="d-flex justify-end gap-2 mt-2">
+                    <MudButton OnClick="CloseModalEdit" Color="Color.Default">Cancel</MudButton>
+                    <MudButton OnClick="SaveModalEdit" Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Save">Save Changes</MudButton>
+                </div>
+            }
+        </MudPaper>
+    </MudOverlay>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnExitAiMode { get; set; }
+
+    private IJSObjectReference _module = null!;
+    private bool IsProcessing = false;
+    private string CurrentTool = "select";
+    private bool CanUndo = false;
+    private bool CanRedo = false;
+
+    public class RegionData
+    {
+        public int Id { get; set; }
+        public bool Selected { get; set; }
+        public string OriginalText { get; set; } = "";
+        public string TranslatedText { get; set; } = "";
+        public int FontSize { get; set; } // 0 means use global font size
+        public string Note { get; set; } = "";
+        public string Type { get; set; } = "Dialogue";
+        public string Status { get; set; } = "Todo";
+        public bool IsVertical { get; set; } = false;
+    }
+
+    private List<RegionData> Regions = new();
+
+    private string SelectedFont = "Comic Sans MS, cursive";
+    private int FontSize = 18;
+    private string FontColor = "#000000";
+    private string TextAlign = "center";
+    private bool EnableTextStroke = false;
+
+    private string BrushColor = "#ffffff";
+    private int BrushSize = 20;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var version = Guid.NewGuid().ToString("N");
+            _module = await JS.InvokeAsync<IJSObjectReference>("import", $"/js/mangaAiCanvas.js?v={version}");
+            var dotNetRef = DotNetObjectReference.Create(this);
+            await _module.InvokeVoidAsync("initCanvas", "mangaCanvas", "canvas-container", dotNetRef);
+        }
+    }
+
+    private async Task ExitAiMode()
+    {
+        if (OnExitAiMode.HasDelegate)
+        {
+            await OnExitAiMode.InvokeAsync();
+        }
+    }
+
+    private async Task HandleFileUpload(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+        
+        using var stream = file.OpenReadStream(maxAllowedSize: 10485760); 
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        var base64 = Convert.ToBase64String(ms.ToArray());
+        var dataUrl = $"data:{file.ContentType};base64,{base64}";
+
+        await _module.InvokeVoidAsync("loadImage", dataUrl);
+        Regions.Clear();
+        Snackbar.Add("Image loaded successfully!", Severity.Success);
+    }
+
+    private async Task SetTool(string tool)
+    {
+        CurrentTool = tool;
+        await _module.InvokeVoidAsync("setTool", tool);
+    }
+
+    private async Task ZoomIn() => await _module.InvokeVoidAsync("zoom", 1.2);
+    private async Task ZoomOut() => await _module.InvokeVoidAsync("zoom", 0.8);
+    private async Task ResetZoom() => await _module.InvokeVoidAsync("resetZoom");
+
+    private async Task Undo() => await _module.InvokeVoidAsync("undo");
+    private async Task Redo() => await _module.InvokeVoidAsync("redo");
+
+    private async Task ApplyTypography()
+    {
+        await _module.InvokeVoidAsync("setTypography", new {
+            font = SelectedFont,
+            fontSize = FontSize,
+            color = FontColor,
+            align = TextAlign,
+            stroke = EnableTextStroke
+        });
+        Snackbar.Add("Typography applied!", Severity.Info);
+    }
+
+    private async Task RunSegmentAI()
+    {
+        IsProcessing = true;
+        StateHasChanged();
+        
+        var success = await _module.InvokeAsync<bool>("callSegmentAPI");
+        
+        IsProcessing = false;
+        if (success) {
+            Snackbar.Add("AI Segmentation complete!", Severity.Success);
+        } else {
+            Snackbar.Add("Error calling Segmentation API. Ensure Python server is running.", Severity.Error);
+        }
+    }
+
+    private async Task RunTranslateAI()
+    {
+        IsProcessing = true;
+        StateHasChanged();
+        
+        var success = await _module.InvokeAsync<bool>("callTranslateAPI");
+        
+        IsProcessing = false;
+        if (success) {
+            Snackbar.Add("Translation complete!", Severity.Success);
+        } else {
+            Snackbar.Add("Error calling Translation API.", Severity.Error);
+        }
+    }
+
+    private async Task SaveToBackend()
+    {
+        IsProcessing = true;
+        StateHasChanged();
+        
+        try
+        {
+            var resultBase64 = await _module.InvokeAsync<string>("exportImage");
+            await Task.Delay(1000); 
+            Snackbar.Add("Saved successfully to Database & Cloudinary! (Mocked)", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error saving: " + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            IsProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable]
+    public void OnRegionsUpdated(List<RegionData> newRegions, bool canUndo, bool canRedo)
+    {
+        Regions = newRegions;
+        CanUndo = canUndo;
+        CanRedo = canRedo;
+        StateHasChanged();
+    }
+
+    private async Task SelectRegion(int id)
+    {
+        await _module.InvokeVoidAsync("selectRegion", id);
+        // Toggle selected state in C# model
+        var region = Regions.FirstOrDefault(r => r.Id == id);
+        if (region != null) {
+            region.Selected = !region.Selected;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DeleteRegion(int id)
+    {
+        await _module.InvokeVoidAsync("deleteRegion", id);
+    }
+    
+    private async Task DeleteSelectedRegions()
+    {
+        await _module.InvokeVoidAsync("deleteSelectedRegions");
+    }
+
+    private async Task UpdateRegionOCR(int id, string text)
+    {
+        var r = Regions.FirstOrDefault(x => x.Id == id);
+        if (r != null) {
+            r.OriginalText = text;
+            await _module.InvokeVoidAsync("updateRegionData", id, r);
+        }
+    }
+
+    private async Task UpdateRegionTranslation(int id, string text)
+    {
+        var r = Regions.FirstOrDefault(x => x.Id == id);
+        if (r != null) {
+            r.TranslatedText = text;
+            await _module.InvokeVoidAsync("updateRegionData", id, r);
+        }
+    }
+
+    private async Task UpdateRegionFontSize(int id, int fontSize)
+    {
+        var r = Regions.FirstOrDefault(x => x.Id == id);
+        if (r != null) {
+            r.FontSize = fontSize;
+            await _module.InvokeVoidAsync("updateRegionData", id, r);
+        }
+    }
+
+    private async Task UpdateRegionNote(int id, string note)
+    {
+        var r = Regions.FirstOrDefault(x => x.Id == id);
+        if (r != null) {
+            r.Note = note;
+            await _module.InvokeVoidAsync("updateRegionData", id, r);
+        }
+    }
+
+    private async Task UpdateRegionType(int id, string type)
+    {
+        var r = Regions.FirstOrDefault(x => x.Id == id);
+        if (r != null) {
+            r.Type = type;
+            await _module.InvokeVoidAsync("updateRegionData", id, r);
+        }
+    }
+
+    private async Task UpdateRegionStatus(int id, string status)
+    {
+        var r = Regions.FirstOrDefault(x => x.Id == id);
+        if (r != null) {
+            r.Status = status;
+            await _module.InvokeVoidAsync("updateRegionData", id, r);
+        }
+    }
+
+    private async Task UpdateRegionVertical(int id, bool isVertical)
+    {
+        var r = Regions.FirstOrDefault(x => x.Id == id);
+        if (r != null) {
+            r.IsVertical = isVertical;
+            await _module.InvokeVoidAsync("updateRegionData", id, r);
+        }
+    }
+
+    private async Task UpdateBrushSettings()
+    {
+        await _module.InvokeVoidAsync("setBrushSettings", BrushColor, BrushSize);
+    }
+
+
+    private bool IsEditModalVisible = false;
+    private RegionData EditingRegion = null;
+
+    [JSInvokable]
+    public void OnRegionDoubleClicked(int id)
+    {
+        var r = Regions.FirstOrDefault(x => x.Id == id);
+        if (r != null)
+        {
+            // Clone the object so we can cancel without modifying the original immediately
+            EditingRegion = new RegionData
+            {
+                Id = r.Id,
+                OriginalText = r.OriginalText,
+                TranslatedText = r.TranslatedText,
+                Note = r.Note,
+                Type = r.Type,
+                Status = r.Status,
+                Selected = r.Selected,
+                FontSize = r.FontSize,
+                IsVertical = r.IsVertical
+            };
+            IsEditModalVisible = true;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveModalEdit()
+    {
+        if (EditingRegion != null)
+        {
+            var r = Regions.FirstOrDefault(x => x.Id == EditingRegion.Id);
+            if (r != null)
+            {
+                r.OriginalText = EditingRegion.OriginalText;
+                r.TranslatedText = EditingRegion.TranslatedText;
+                r.Note = EditingRegion.Note;
+                r.Type = EditingRegion.Type;
+                r.Status = EditingRegion.Status;
+                r.FontSize = EditingRegion.FontSize;
+                r.IsVertical = EditingRegion.IsVertical;
+                
+                await _module.InvokeVoidAsync("updateRegionData", r.Id, r);
+            }
+        }
+        IsEditModalVisible = false;
+        EditingRegion = null;
+        StateHasChanged();
+    }
+
+    private void CloseModalEdit()
+    {
+        IsEditModalVisible = false;
+        EditingRegion = null;
+    }
+}

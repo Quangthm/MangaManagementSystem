@@ -3,7 +3,7 @@
 @inject IUserService UserService
 @inject IFileResourceService _fileResourceService
 @inject ISnackbar Snackbar
-@inject AuthenticationStateProvider AuthStateProvider
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>User Approval - MangaFlow</PageTitle>
 
@@ -26,9 +26,9 @@
                 <MudProgressLinear Indeterminate="true" Class="mb-4" />
             }
 
-            @if (_showRejectConfirm && _rejectTarget != null)
+            @if (_rejectTarget != null)
             {
-                <MudDialog Open="true">
+                <MudDialog @bind-Visible="_showRejectConfirm">
                     <DialogContent>
                         <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Reject User</MudText>
                         <MudText Class="mt-2">Are you sure you want to reject this user registration?</MudText>
@@ -66,8 +66,10 @@
                         <MudTh>Actions</MudTh>
                     </HeaderContent>
                     <RowTemplate>
+                        <MudTd DataLabel="Name">@(context.DisplayName ?? "-")</MudTd>
                         <MudTd DataLabel="Username">@context.Username</MudTd>
                         <MudTd DataLabel="Email">@context.Email</MudTd>
+                        <MudTd DataLabel="Role">@(context.RoleName ?? "-")</MudTd>
                         <MudTd DataLabel="Portfolio">
                             @if (context.PortfolioFileId.HasValue)
                             {
@@ -78,7 +80,6 @@
                                 <MudText Typo="Typo.caption" Class="mf-muted">No portfolio</MudText>
                             }
                         </MudTd>
-                        <MudTd DataLabel="Role">@MapRoleName(context.RoleId)</MudTd>
                         <MudTd DataLabel="Created At">@context.CreatedAtUtc.ToLocalTime().ToString("g")</MudTd>
                         <MudTd DataLabel="Actions">
                             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
@@ -104,25 +105,32 @@
 
             @if (_showPortfolioPreview && _currentPortfolio != null)
             {
-                <MudDialog Open="true" MaxWidth="MaxWidth.Medium" KeepContentMounted="true">
+                <MudDialog @bind-Visible="_showPortfolioPreview" Options="_dialogOptions">
+                    <TitleContent>
+                        <MudText Typo="Typo.h6" Class="font-weight-bold">
+                            <MudIcon Icon="@Icons.Material.Filled.Preview" Class="mr-2" />
+                            Portfolio Preview - @_currentPortfolio.OriginalFileName
+                        </MudText>
+                    </TitleContent>
                     <DialogContent>
-                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">Portfolio Preview</MudText>
                         @if (_isImagePreview)
                         {
-                            <ImageWithFallback Src="@_currentPortfolio.CloudinarySecureUrl" Alt="Portfolio Image" />
-                        }
-                        else if (!string.IsNullOrWhiteSpace(_currentPortfolio.CloudinarySecureUrl))
-                        {
-                            <MudText Class="mb-2">File: @_currentPortfolio.OriginalFileName</MudText>
-                            <MudButton Href="@_currentPortfolio.CloudinarySecureUrl" Target="_blank">Open file</MudButton>
+                            <div class="d-flex justify-center my-2">
+                                <MudImage Src="@_currentPortfolio.CloudinarySecureUrl" Alt="Portfolio Image" Fluid="true" Class="rounded" Style="max-height: 60vh; object-fit: contain;" />
+                            </div>
                         }
                         else
                         {
-                            <MudText class="mf-muted">File unavailable or has been removed.</MudText>
+                            <div style="height: 80vh;">
+                                <MudText Typo="Typo.caption" Class="mf-muted text-center mb-2">
+                                    If the document does not load, <MudLink Href="@($"/api/portfolio/{_currentPortfolio.FileResourceId}")" Target="_blank">click here to open in a new tab</MudLink>.
+                                </MudText>
+                                <iframe src="@($"/api/portfolio/{_currentPortfolio.FileResourceId}")" width="100%" style="height: calc(80vh - 30px); border: none; border-radius: 4px;"></iframe>
+                            </div>
                         }
                     </DialogContent>
                     <DialogActions>
-                        <MudButton Variant="Variant.Text" OnClick="ClosePortfolioPreview">Close</MudButton>
+                        <MudButton Variant="Variant.Text" Color="Color.Secondary" OnClick="ClosePortfolioPreview">Close</MudButton>
                     </DialogActions>
                 </MudDialog>
             }
@@ -131,31 +139,12 @@
 </AdminLayout>
 
 @code {
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.ExtraLarge, FullWidth = true, CloseButton = true };
     private const string PendingStatus = "PENDING_APPROVAL";
 
     private readonly List<UserDto> _pendingUsers = new();
-    private Dictionary<int, short> _selectedRolesByUserId = new();
     private bool _isLoading;
-    private int? _processingUserId;
-
-    private static readonly (short Id, string Label)[] RoleOptions =
-    {
-        (1, "Mangaka"),
-        (2, "Assistant"),
-        (3, "Tantou Editor"),
-        (4, "Editorial Board Member"),
-        (5, "Admin")
-    };
-
-    private string MapRoleName(short roleId) => roleId switch
-    {
-        1 => "Mangaka",
-        2 => "Assistant",
-        3 => "Tantou Editor",
-        4 => "Editorial Board Member",
-        5 => "Admin",
-        _ => "Unknown"
-    };
+    private Guid? _processingUserId;
 
     private async Task LoadPendingUsersAsync()
     {
@@ -165,7 +154,6 @@
             var users = await UserService.GetUsersByStatusAsync(PendingStatus);
             _pendingUsers.Clear();
             _pendingUsers.AddRange(users);
-                _selectedRolesByUserId = users.ToDictionary(u => u.UserId, u => u.RoleId);
         }
         catch (Exception ex)
         {
@@ -177,28 +165,26 @@
         }
     }
 
-    private short GetSelectedRole(int userId)
+    private bool IsRowBusy(Guid userId) => _isLoading || _processingUserId == userId;
+
+    private async Task<Guid> GetCurrentAdminUserIdAsync()
     {
-        if (_selectedRolesByUserId.TryGetValue(userId, out var roleId))
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var userIdClaim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+        if (!Guid.TryParse(userIdClaim, out var adminUserId))
         {
-            return roleId;
+            throw new InvalidOperationException("Current admin user id is not available.");
         }
 
-        return _pendingUsers.FirstOrDefault(u => u.UserId == userId)?.RoleId ?? 1;
+        return adminUserId;
     }
-
-    private void SetSelectedRole(int userId, short roleId)
-    {
-        _selectedRolesByUserId[userId] = roleId;
-    }
-
-    private bool IsRowBusy(int userId) => _isLoading || _processingUserId == userId;
 
     private MangaManagementSystem.Application.DTOs.Manga.FileResourceDto? _currentPortfolio;
     private bool _showPortfolioPreview;
     private bool _isImagePreview;
 
-    private async Task ViewPortfolioAsync(long fileResourceId)
+    private async Task ViewPortfolioAsync(Guid fileResourceId)
     {
         try
         {
@@ -229,7 +215,7 @@
 
     private async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
-        return await AuthStateProvider.GetAuthenticationStateAsync();
+        return await AuthenticationStateProvider.GetAuthenticationStateAsync();
     }
 
     protected override async Task OnInitializedAsync()
@@ -253,7 +239,8 @@
         _processingUserId = user.UserId;
         try
         {
-            await UserService.ApproveUserAsync(user.UserId);
+            var adminUserId = await GetCurrentAdminUserIdAsync();
+            await UserService.ApproveUserAsync(adminUserId, user.UserId);
             Snackbar.Add($"Approved {user.Username}.", Severity.Success);
             await LoadPendingUsersAsync();
         }
@@ -292,7 +279,8 @@
         _showRejectConfirm = false;
         try
         {
-            await UserService.RejectUserAsync(user.UserId);
+            var adminUserId = await GetCurrentAdminUserIdAsync();
+            await UserService.RejectUserAsync(adminUserId, user.UserId);
             Snackbar.Add($"Rejected {user.Username}.", Severity.Warning);
             await LoadPendingUsersAsync();
         }

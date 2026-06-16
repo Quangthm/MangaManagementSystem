@@ -24,7 +24,6 @@ namespace MangaManagementSystem.Infrastructure.Persistence
         public DbSet<PageRegion> PageRegions => Set<PageRegion>();
         public DbSet<ChapterPageAnnotation> ChapterPageAnnotations => Set<ChapterPageAnnotation>();
         public DbSet<ChapterPageTask> ChapterPageTasks => Set<ChapterPageTask>();
-        public DbSet<ChapterPageTaskRegion> ChapterPageTaskRegions => Set<ChapterPageTaskRegion>();
         public DbSet<ChapterEditorialReview> ChapterEditorialReviews => Set<ChapterEditorialReview>();
         public DbSet<SeriesRankingSnapshot> SeriesRankingSnapshots => Set<SeriesRankingSnapshot>();
         public DbSet<ChapterReaderVoteSnapshot> ChapterReaderVoteSnapshots => Set<ChapterReaderVoteSnapshot>();
@@ -59,7 +58,6 @@ namespace MangaManagementSystem.Infrastructure.Persistence
         DbSet<PageRegion> PageRegions { get; }
         DbSet<ChapterPageAnnotation> ChapterPageAnnotations { get; }
         DbSet<ChapterPageTask> ChapterPageTasks { get; }
-        DbSet<ChapterPageTaskRegion> ChapterPageTaskRegions { get; }
         DbSet<ChapterEditorialReview> ChapterEditorialReviews { get; }
         DbSet<SeriesRankingSnapshot> SeriesRankingSnapshots { get; }
         DbSet<ChapterReaderVoteSnapshot> ChapterReaderVoteSnapshots { get; }

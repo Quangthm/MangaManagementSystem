@@ -5,6 +5,7 @@ using MangaManagementSystem.Domain.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace MangaManagementSystem.Application.Services
@@ -18,81 +19,85 @@ namespace MangaManagementSystem.Application.Services
             _unitOfWork = unitOfWork;
         }
 
-        public async Task<SeriesProposalDto> CreateSeriesProposalAsync(CreateSeriesProposalDto dto)
+        public async Task<SeriesProposalDto?> GetProposalByIdAsync(Guid seriesProposalId, CancellationToken ct = default)
         {
-            var entity = new SeriesProposal
-            {
-                SeriesId = dto.SeriesId,
-                ProposalVersionNo = dto.ProposalVersionNo,
-                ProposalTitle = dto.ProposalTitle,
-                SynopsisSnapshot = dto.SynopsisSnapshot,
-                GenreSnapshot = dto.GenreSnapshot,
-                ProposalFileId = dto.ProposalFileId,
-                StatusCode = dto.StatusCode,
-                SubmittedByUserId = dto.SubmittedByUserId,
-                SubmittedAtUtc = DateTime.UtcNow,
-                Comments = dto.Comments,
-                MarkupFileId = dto.MarkupFileId
-            };
-            await _unitOfWork.SeriesProposals.AddAsync(entity);
-            await _unitOfWork.SaveChangesAsync();
-            return MapToDto(entity);
+            var entity = await _unitOfWork.SeriesProposals.GetByIdWithDetailsAsync(seriesProposalId, ct);
+            if (entity == null) return null;
+
+            var allContributors = await _unitOfWork.SeriesContributors.GetAllAsync();
+            var hasTantou = allContributors.Any(c => c.SeriesId == entity.SeriesId && c.EndDate == null && c.User?.Role?.RoleName == "Tantou Editor");
+
+            return MapToDto(entity, hasTantou);
         }
 
-        public async Task<SeriesProposalDto?> GetSeriesProposalByIdAsync(long id)
+        public async Task<SeriesProposalDto?> GetLatestProposalBySeriesAsync(Guid seriesId, CancellationToken ct = default)
         {
-            var entity = await _unitOfWork.SeriesProposals.GetByIdAsync(id);
+            var entity = await _unitOfWork.SeriesProposals.GetLatestBySeriesIdAsync(seriesId, ct);
             return entity == null ? null : MapToDto(entity);
         }
 
-        public async Task<IEnumerable<SeriesProposalDto>> GetSeriesProposalsBySeriesIdAsync(long seriesId)
+        public async Task<IEnumerable<ProposalQueueItemDto>> GetEditorialQueueAsync(ProposalQueueFilterDto filter, CancellationToken ct = default)
         {
-            var all = await _unitOfWork.SeriesProposals.GetAllAsync();
-            return all
-                .Where(p => p.SeriesId == seriesId)
-                .OrderBy(p => p.ProposalVersionNo)
-                .Select(MapToDto);
+            var entities = await _unitOfWork.SeriesProposals.GetEditorialQueueAsync(
+                filter.StatusCode, filter.SeriesId, filter.SubmittedByUserId, filter.ReviewedByUserId, ct);
+
+            return entities.Select(p => new ProposalQueueItemDto(
+                p.SeriesProposalId,
+                p.SeriesId,
+                p.Series?.Title ?? string.Empty,
+                p.Series?.Slug ?? string.Empty,
+                p.ProposalVersionNo,
+                p.ProposalTitle,
+                p.SynopsisSnapshot,
+                p.GenreSnapshot,
+                p.StatusCode,
+                p.SubmittedByUserId,
+                p.SubmittedByUser?.DisplayName ?? string.Empty,
+                p.SubmittedAtUtc,
+                p.ReviewedByUserId,
+                p.ReviewedByUser?.DisplayName,
+                p.ReviewedAtUtc,
+                p.Comments,
+                p.ProposalFileId,
+                p.ProposalFile?.CloudinarySecureUrl,
+                p.ProposalFile?.OriginalFileName,
+                p.MarkupFileId,
+                p.MarkupFile?.CloudinarySecureUrl
+            ));
         }
 
-        public async Task<SeriesProposalDto?> UpdateSeriesProposalAsync(UpdateSeriesProposalDto dto)
+        public async Task ClaimEditorialReviewAsync(Guid seriesProposalId, Guid actorUserId, string? notes, CancellationToken ct = default)
         {
-            var entity = await _unitOfWork.SeriesProposals.GetByIdAsync(dto.SeriesProposalId);
-            if (entity == null)
-            {
-                return null;
-            }
-
-            entity.SeriesId = dto.SeriesId;
-            entity.ProposalVersionNo = dto.ProposalVersionNo;
-            entity.ProposalTitle = dto.ProposalTitle;
-            entity.SynopsisSnapshot = dto.SynopsisSnapshot;
-            entity.GenreSnapshot = dto.GenreSnapshot;
-            entity.ProposalFileId = dto.ProposalFileId;
-            entity.StatusCode = dto.StatusCode;
-            entity.SubmittedByUserId = dto.SubmittedByUserId;
-            entity.ReviewedByUserId = dto.ReviewedByUserId;
-            entity.ReviewedAtUtc = dto.ReviewedAtUtc;
-            entity.Comments = dto.Comments;
-            entity.MarkupFileId = dto.MarkupFileId;
-            _unitOfWork.SeriesProposals.Update(entity);
-            await _unitOfWork.SaveChangesAsync();
-            return MapToDto(entity);
+            await _unitOfWork.SeriesProposals.ClaimEditorialReviewAsync(seriesProposalId, actorUserId, notes, ct);
         }
 
-        public async Task<bool> DeleteSeriesProposalAsync(long id)
+        public async Task RequestRevisionAsync(Guid seriesProposalId, Guid actorUserId, string comments, FileUploadResultDto? markupFile, CancellationToken ct = default)
         {
-            var entity = await _unitOfWork.SeriesProposals.GetByIdAsync(id);
-            if (entity == null)
-            {
-                return false;
-            }
-
-            _unitOfWork.SeriesProposals.Delete(entity);
-            await _unitOfWork.SaveChangesAsync();
-            return true;
+            await _unitOfWork.SeriesProposals.RequestRevisionAsync(
+                seriesProposalId, actorUserId, comments,
+                markupFile?.OriginalFileName, markupFile?.PublicId, markupFile?.SecureUrl,
+                markupFile?.ContentType, markupFile?.FileSizeBytes, markupFile?.Sha256Hash, ct);
         }
 
-        private static SeriesProposalDto MapToDto(SeriesProposal p) => new(
+        public async Task PassToBoardAsync(Guid seriesProposalId, Guid actorUserId, string? comments, FileUploadResultDto? markupFile, CancellationToken ct = default)
+        {
+            await _unitOfWork.SeriesProposals.PassToBoardAsync(
+                seriesProposalId, actorUserId, comments,
+                markupFile?.OriginalFileName, markupFile?.PublicId, markupFile?.SecureUrl,
+                markupFile?.ContentType, markupFile?.FileSizeBytes, markupFile?.Sha256Hash, ct);
+        }
+
+        public async Task CancelProposalAsync(Guid seriesProposalId, Guid actorUserId, string comments, FileUploadResultDto markupFile, CancellationToken ct = default)
+        {
+            if (markupFile == null) throw new ArgumentNullException(nameof(markupFile), "Markup file is required for cancellation.");
+            
+            await _unitOfWork.SeriesProposals.CancelProposalAsync(
+                seriesProposalId, actorUserId, comments,
+                markupFile.OriginalFileName, markupFile.PublicId, markupFile.SecureUrl,
+                markupFile.ContentType, markupFile.FileSizeBytes, markupFile.Sha256Hash, ct);
+        }
+
+        private static SeriesProposalDto MapToDto(SeriesProposal p, bool hasTantou = false) => new(
             p.SeriesProposalId,
             p.SeriesId,
             p.ProposalVersionNo,
@@ -107,7 +112,8 @@ namespace MangaManagementSystem.Application.Services
             p.ReviewedByUserId,
             p.ReviewedAtUtc,
             p.Comments,
-            p.MarkupFileId
+            p.MarkupFileId,
+            hasTantou
         );
     }
 }

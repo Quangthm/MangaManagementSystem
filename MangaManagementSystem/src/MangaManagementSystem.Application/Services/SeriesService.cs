@@ -5,6 +5,7 @@ using MangaManagementSystem.Domain.Interfaces;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System;
 
 namespace MangaManagementSystem.Application.Services
 {
@@ -20,7 +21,6 @@ namespace MangaManagementSystem.Application.Services
         {
             var entity = new Series
             {
-                SeriesCode = dto.SeriesCode,
                 Title = dto.Title,
                 Slug = dto.Slug,
                 Synopsis = dto.Synopsis,
@@ -37,7 +37,7 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(entity);
         }
 
-        public async Task<SeriesDto?> GetSeriesByIdAsync(long id)
+        public async Task<SeriesDto?> GetSeriesByIdAsync(Guid id)
         {
             var entity = await _unitOfWork.Series.GetByIdAsync(id);
             return entity == null ? null : MapToDto(entity);
@@ -51,7 +51,6 @@ namespace MangaManagementSystem.Application.Services
 
         private static SeriesDto MapToDto(Series s) => new(
             s.SeriesId,
-            s.SeriesCode,
             s.Title,
             s.Slug,
             s.Synopsis,

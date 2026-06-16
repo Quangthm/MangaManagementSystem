@@ -27,25 +27,28 @@ namespace MangaManagementSystem.Application.Services
                 StatusCode = dto.StatusCode,
                 PriorityLevel = (byte)dto.PriorityLevel,
                 DueAtUtc = dto.DueAtUtc ?? DateTime.UtcNow,
-                CompletedPageVersionId = dto.CompletedPageVersionId
+                CompletedPageVersionId = dto.CompletedPageVersionId,
             };
+
+            await AttachPageRegionsAsync(entity, dto.PageRegionIds);
+
             await _unitOfWork.ChapterPageTasks.AddAsync(entity);
             await _unitOfWork.SaveChangesAsync();
             return MapToDto(entity);
         }
 
-        public async Task<ChapterPageTaskDto?> GetChapterPageTaskByIdAsync(long id)
+        public async Task<ChapterPageTaskDto?> GetChapterPageTaskByIdAsync(Guid id)
         {
             var entity = await _unitOfWork.ChapterPageTasks.GetByIdAsync(id);
             return entity == null ? null : MapToDto(entity);
         }
 
-        public async Task<IEnumerable<ChapterPageTaskDto>> GetChapterPageTasksByAssignedUserIdAsync(int assignedToUserId)
+        public async Task<IEnumerable<ChapterPageTaskDto>> GetChapterPageTasksByAssignedUserIdAsync(Guid assignedToUserId)
         {
             var all = await _unitOfWork.ChapterPageTasks.GetAllAsync();
             return all
                 .Where(t => t.AssignedToUserId == assignedToUserId)
-                .Select(MapToDto);
+                .Select(MapToDto).ToList();
         }
 
         public async Task<ChapterPageTaskDto?> UpdateChapterPageTaskAsync(UpdateChapterPageTaskDto dto)
@@ -62,12 +65,16 @@ namespace MangaManagementSystem.Application.Services
             entity.PriorityLevel = (byte)dto.PriorityLevel;
             entity.DueAtUtc = dto.DueAtUtc ?? entity.DueAtUtc;
             entity.CompletedPageVersionId = dto.CompletedPageVersionId;
+
+            entity.PageRegions.Clear();
+            await AttachPageRegionsAsync(entity, dto.PageRegionIds);
+
             _unitOfWork.ChapterPageTasks.Update(entity);
             await _unitOfWork.SaveChangesAsync();
             return MapToDto(entity);
         }
 
-        public async Task<bool> DeleteChapterPageTaskAsync(long id)
+        public async Task<bool> DeleteChapterPageTaskAsync(Guid id)
         {
             var entity = await _unitOfWork.ChapterPageTasks.GetByIdAsync(id);
             if (entity == null)
@@ -80,14 +87,48 @@ namespace MangaManagementSystem.Application.Services
             return true;
         }
 
-        private static ChapterPageTaskDto MapToDto(ChapterPageTask t) => new(
-            t.ChapterPageTaskId,
-            t.AssignedToUserId,
-            t.TypeCode,
-            t.StatusCode,
-            (int)t.PriorityLevel,
-            t.DueAtUtc,
-            t.CompletedPageVersionId
-        );
+        private async Task AttachPageRegionsAsync(ChapterPageTask entity, IReadOnlyList<Guid> pageRegionIds)
+        {
+            if (pageRegionIds == null)
+            {
+                return;
+            }
+
+            foreach (var pageRegionId in pageRegionIds.Distinct())
+            {
+                var region = await _unitOfWork.PageRegions.GetByIdAsync(pageRegionId);
+                if (region != null)
+                {
+                    entity.PageRegions.Add(region);
+                }
+            }
+        }
+
+        private static ChapterPageTaskDto MapToDto(ChapterPageTask t)
+        {
+            return new ChapterPageTaskDto(
+                t.ChapterPageTaskId,
+                t.AssignedToUserId,
+                t.TypeCode,
+                t.StatusCode,
+                (int)t.PriorityLevel,
+                t.DueAtUtc,
+                t.CompletedPageVersionId,
+                t.PageRegions.Select(r => new PageRegionDto(
+                    r.PageRegionId,
+                    r.ChapterPageVersionId,
+                    r.TypeCode,
+                    r.RegionLabel,
+                    r.X,
+                    r.Y,
+                    r.Width,
+                    r.Height,
+                    r.ConfidenceScore,
+                    r.SourceType,
+                    r.OriginalText,
+                    r.CreatedByUserId,
+                    r.UpdatedByUserId)).ToList()
+            );
+        }
     }
 }

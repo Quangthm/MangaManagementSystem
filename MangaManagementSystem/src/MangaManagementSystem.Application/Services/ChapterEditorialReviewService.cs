@@ -32,13 +32,13 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(entity);
         }
 
-        public async Task<ChapterEditorialReviewDto?> GetChapterEditorialReviewByIdAsync(long id)
+        public async Task<ChapterEditorialReviewDto?> GetChapterEditorialReviewByIdAsync(Guid id)
         {
             var entity = await _unitOfWork.ChapterEditorialReviews.GetByIdAsync(id);
             return entity == null ? null : MapToDto(entity);
         }
 
-        public async Task<IEnumerable<ChapterEditorialReviewDto>> GetChapterEditorialReviewsByChapterIdAsync(long chapterId)
+        public async Task<IEnumerable<ChapterEditorialReviewDto>> GetChapterEditorialReviewsByChapterIdAsync(Guid chapterId)
         {
             var all = await _unitOfWork.ChapterEditorialReviews.GetAllAsync();
             return all
@@ -64,7 +64,7 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(entity);
         }
 
-        public async Task<bool> DeleteChapterEditorialReviewAsync(long id)
+        public async Task<bool> DeleteChapterEditorialReviewAsync(Guid id)
         {
             var entity = await _unitOfWork.ChapterEditorialReviews.GetByIdAsync(id);
             if (entity == null)

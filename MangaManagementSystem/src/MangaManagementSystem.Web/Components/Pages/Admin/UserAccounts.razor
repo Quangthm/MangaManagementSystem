@@ -99,9 +99,9 @@
                 }
             }
 
-            @if (_showDeleteConfirm && _deleteTarget != null && !_deleteTarget.Username.Equals(_currentUserUsername, StringComparison.OrdinalIgnoreCase))
+            @if (_deleteTarget != null && !_deleteTarget.Username.Equals(_currentUserUsername, StringComparison.OrdinalIgnoreCase))
             {
-                <MudDialog Open="true">
+                <MudDialog @bind-Visible="_showDeleteConfirm">
                     <DialogContent>
                         <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Disable Account</MudText>
                         <MudText Class="mt-2">Are you sure you want to disable this account? The account will be marked as DISABLED and cannot log in.</MudText>
@@ -122,7 +122,7 @@
     private List<MangaManagementSystem.Application.DTOs.Auth.UserDto> _users = new();
     private bool _isLoading;
     private string? _loadError;
-    private int? _processingUserId;
+    private Guid? _processingUserId;
 
     private bool _showDeleteConfirm;
     private MangaManagementSystem.Application.DTOs.Auth.UserDto? _deleteTarget;
@@ -163,7 +163,7 @@
             var rejected = (await UserService.GetUsersByStatusAsync("REJECTED")).ToList();
 
             // Combine distinct users by id
-            var map = new Dictionary<int, MangaManagementSystem.Application.DTOs.Auth.UserDto>();
+            var map = new Dictionary<Guid, MangaManagementSystem.Application.DTOs.Auth.UserDto>();
             foreach (var u in pending.Concat(active).Concat(disabled).Concat(rejected))
             {
                 if (!map.ContainsKey(u.UserId)) map[u.UserId] = u;
@@ -193,6 +193,18 @@
         _deleteTarget = null;
     }
 
+    private async Task<Guid> GetCurrentAdminIdAsync()
+    {
+        var authState = await GetAuthenticationStateAsync();
+        var claim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(claim?.Value, out var adminId))
+        {
+            throw new InvalidOperationException("Current admin user id is not available.");
+        }
+
+        return adminId;
+    }
+
     private async Task ConfirmDisableAsync()
     {
         if (_deleteTarget == null) return;
@@ -203,7 +215,8 @@
         _showDeleteConfirm = false;
         try
         {
-            await UserService.DisableUserAsync(user.UserId);
+            var adminId = await GetCurrentAdminIdAsync();
+            await UserService.DisableUserAsync(adminId, user.UserId);
             Snackbar.Add($"Disabled {user.Username}.", Severity.Success);
             await LoadAllUsersAsync();
         }

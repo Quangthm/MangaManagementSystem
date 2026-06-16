@@ -5,8 +5,8 @@ namespace MangaManagementSystem.Domain.Entities
 {
     public class SeriesRankingSnapshot : BaseEntity
     {
-        public long SeriesRankingSnapshotId { get; set; }
-        public long SeriesId { get; set; }
+        public Guid SeriesRankingSnapshotId { get; set; }
+        public Guid SeriesId { get; set; }
         public Series? Series { get; set; }
         public string RankingPeriodTypeCode { get; set; } = null!;
         public DateTime PeriodStartDate { get; set; }
@@ -14,7 +14,7 @@ namespace MangaManagementSystem.Domain.Entities
         public int RankPosition { get; set; }
         public decimal RankingScore { get; set; }
         public decimal? CancellationRiskScore { get; set; }
-        public int? GeneratedByUserId { get; set; }
+        public Guid? GeneratedByUserId { get; set; }
         public User? GeneratedByUser { get; set; }
     }
 }

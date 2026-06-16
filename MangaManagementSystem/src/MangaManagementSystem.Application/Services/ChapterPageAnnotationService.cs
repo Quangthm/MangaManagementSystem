@@ -21,27 +21,29 @@ namespace MangaManagementSystem.Application.Services
         {
             var entity = new ChapterPageAnnotation
             {
-                PageRegionId = dto.PageRegionId,
                 IssueTypeCode = dto.IssueTypeCode,
                 AnnotatedByUserId = dto.AnnotatedByUserId,
                 AnnotationText = dto.AnnotationText
             };
+
+            await AttachPageRegionsAsync(entity, dto.PageRegionIds);
+
             await _unitOfWork.ChapterPageAnnotations.AddAsync(entity);
             await _unitOfWork.SaveChangesAsync();
             return MapToDto(entity);
         }
 
-        public async Task<ChapterPageAnnotationDto?> GetChapterPageAnnotationByIdAsync(long id)
+        public async Task<ChapterPageAnnotationDto?> GetChapterPageAnnotationByIdAsync(Guid id)
         {
             var entity = await _unitOfWork.ChapterPageAnnotations.GetByIdAsync(id);
             return entity == null ? null : MapToDto(entity);
         }
 
-        public async Task<IEnumerable<ChapterPageAnnotationDto>> GetChapterPageAnnotationsByPageRegionIdAsync(long pageRegionId)
+        public async Task<IEnumerable<ChapterPageAnnotationDto>> GetChapterPageAnnotationsByPageRegionIdAsync(Guid pageRegionId)
         {
             var all = await _unitOfWork.ChapterPageAnnotations.GetAllAsync();
             return all
-                .Where(a => a.PageRegionId == pageRegionId)
+                .Where(a => a.PageRegions.Any(r => r.PageRegionId == pageRegionId))
                 .Select(MapToDto);
         }
 
@@ -53,17 +55,20 @@ namespace MangaManagementSystem.Application.Services
                 return null;
             }
 
-            entity.PageRegionId = dto.PageRegionId;
             entity.IssueTypeCode = dto.IssueTypeCode;
             entity.AnnotatedByUserId = dto.AnnotatedByUserId;
             entity.AnnotationText = dto.AnnotationText;
             entity.ResolvedByUserId = dto.ResolvedByUserId;
+
+            entity.PageRegions.Clear();
+            await AttachPageRegionsAsync(entity, dto.PageRegionIds);
+
             _unitOfWork.ChapterPageAnnotations.Update(entity);
             await _unitOfWork.SaveChangesAsync();
             return MapToDto(entity);
         }
 
-        public async Task<bool> DeleteChapterPageAnnotationAsync(long id)
+        public async Task<bool> DeleteChapterPageAnnotationAsync(Guid id)
         {
             var entity = await _unitOfWork.ChapterPageAnnotations.GetByIdAsync(id);
             if (entity == null)
@@ -76,13 +81,43 @@ namespace MangaManagementSystem.Application.Services
             return true;
         }
 
+        private async Task AttachPageRegionsAsync(ChapterPageAnnotation entity, IReadOnlyList<Guid> pageRegionIds)
+        {
+            if (pageRegionIds == null)
+            {
+                return;
+            }
+
+            foreach (var pageRegionId in pageRegionIds.Distinct())
+            {
+                var region = await _unitOfWork.PageRegions.GetByIdAsync(pageRegionId);
+                if (region != null)
+                {
+                    entity.PageRegions.Add(region);
+                }
+            }
+        }
+
         private static ChapterPageAnnotationDto MapToDto(ChapterPageAnnotation a) => new(
             a.ChapterPageAnnotationId,
-            a.PageRegionId,
             a.IssueTypeCode,
             a.AnnotatedByUserId,
             a.AnnotationText,
-            a.ResolvedByUserId
+            a.ResolvedByUserId,
+            a.PageRegions.Select(r => new PageRegionDto(
+                r.PageRegionId,
+                r.ChapterPageVersionId,
+                r.TypeCode,
+                r.RegionLabel,
+                r.X,
+                r.Y,
+                r.Width,
+                r.Height,
+                r.ConfidenceScore,
+                r.SourceType,
+                r.OriginalText,
+                r.CreatedByUserId,
+                r.UpdatedByUserId)).ToList()
         );
     }
 }
