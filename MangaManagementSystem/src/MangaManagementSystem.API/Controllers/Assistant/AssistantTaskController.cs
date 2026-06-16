@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using System.Threading.Tasks;
 
 namespace MangaManagementSystem.API.Controllers
 {
@@ -16,14 +17,72 @@ namespace MangaManagementSystem.API.Controllers
         private readonly IAssistantTaskSubmissionService _submissionService;
         private readonly IFileStorageService _fileStorageService;
         private readonly CloudinaryFileStorageFormAdapter _formAdapter;
+        private readonly IChapterPageTaskService _chapterPageTaskService;
 
         public AssistantTaskController(
             IAssistantTaskSubmissionService submissionService,
-            IFileStorageService fileStorageService)
+            IFileStorageService fileStorageService,
+            IChapterPageTaskService chapterPageTaskService)
         {
             _submissionService = submissionService ?? throw new ArgumentNullException(nameof(submissionService));
             _fileStorageService = fileStorageService ?? throw new ArgumentNullException(nameof(fileStorageService));
             _formAdapter = new CloudinaryFileStorageFormAdapter(fileStorageService);
+            _chapterPageTaskService = chapterPageTaskService ?? throw new ArgumentNullException(nameof(chapterPageTaskService));
+        }
+
+        /// <summary>
+        /// Get all tasks assigned to the current Assistant user.
+        /// Assistant can only see tasks assigned to themselves.
+        /// </summary>
+        /// <returns>List of assigned tasks with full context.</returns>
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<ChapterPageTaskDto>>> GetAssignedTasksAsync()
+        {
+            // Get actor user ID from authenticated claims
+            var actorUserIdClaim = User.FindFirst("sub") ?? User.FindFirst(ClaimTypes.NameIdentifier);
+            if (actorUserIdClaim == null || !Guid.TryParse(actorUserIdClaim.Value, out var actorUserId))
+            {
+                return Unauthorized("User identity could not be resolved.");
+            }
+
+            // Get tasks assigned to this assistant
+            var tasks = await _chapterPageTaskService.GetAssignedTasksForAssistantAsync(actorUserId);
+
+            return Ok(tasks);
+        }
+
+        /// <summary>
+        /// Get detail of a specific task assigned to the current Assistant user.
+        /// Assistant can only view tasks assigned to themselves.
+        /// Returns 404 if task not found or not assigned to actor.
+        /// </summary>
+        /// <param name="taskId">The task ID.</param>
+        /// <returns>Task detail with full context including page image and regions.</returns>
+        [HttpGet("{taskId:guid}")]
+        public async Task<ActionResult<ChapterPageTaskDto>> GetAssignedTaskDetailAsync(Guid taskId)
+        {
+            // Validate task ID
+            if (taskId == Guid.Empty)
+            {
+                return BadRequest("Invalid task ID.");
+            }
+
+            // Get actor user ID from authenticated claims
+            var actorUserIdClaim = User.FindFirst("sub") ?? User.FindFirst(ClaimTypes.NameIdentifier);
+            if (actorUserIdClaim == null || !Guid.TryParse(actorUserIdClaim.Value, out var actorUserId))
+            {
+                return Unauthorized("User identity could not be resolved.");
+            }
+
+            // Get task detail with ownership validation
+            var task = await _chapterPageTaskService.GetAssignedTaskDetailForAssistantAsync(actorUserId, taskId);
+
+            if (task == null)
+            {
+                return NotFound("Task not found or not assigned to current user.");
+            }
+
+            return Ok(task);
         }
 
         /// <summary>
