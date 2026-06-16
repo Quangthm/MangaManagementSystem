@@ -1,5 +1,6 @@
 using MangaManagementSystem.Domain.Common;
 using System;
+using System.Collections.Generic;
 
 namespace MangaManagementSystem.Domain.Entities
 {
@@ -7,6 +8,7 @@ public class PageRegion : BaseEntity
 {
     public Guid PageRegionId { get; set; }
     public Guid ChapterPageVersionId { get; set; }
+    public ChapterPageVersion? ChapterPageVersion { get; set; }
     public string TypeCode { get; set; } = "OTHER";
     public string? RegionLabel { get; set; }
     public decimal X { get; set; }
@@ -22,7 +24,8 @@ public class PageRegion : BaseEntity
     public DateTime? UpdatedAtUtc { get; set; }
     public Guid? UpdatedByUserId { get; set; }
     public User? UpdatedByUser { get; set; }
-    public User? DeletedByUser { get; set; }
-    public Guid? DeletedByUserId { get; set; }
+    // Skip-navigation collections mapped through junction tables
+    public ICollection<ChapterPageTask> Tasks { get; set; } = new List<ChapterPageTask>();
+    public ICollection<ChapterPageAnnotation> Annotations { get; set; } = new List<ChapterPageAnnotation>();
     }
 }

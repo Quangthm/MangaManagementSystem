@@ -41,6 +41,7 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         [MaxLength(50)] string StatusCode,
         [MaxLength(10)] string ContentLanguageCode,
         Guid? SourceSeriesId,
-        [MaxLength(20)] string? PublicationFrequencyCode
+        [MaxLength(20)] string? PublicationFrequencyCode,
+        Guid? UpdatedByUserId
     );
 }

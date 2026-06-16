@@ -32,6 +32,8 @@ namespace MangaManagementSystem.Domain.Interfaces
 
         Task<IReadOnlyList<User>> GetByStatusAsync(string status);
 
+        Task<IReadOnlyList<User>> GetByRoleNameAsync(string roleName);
+
         Task ChangeUserStatusViaProcAsync(
             Guid adminUserId,
             Guid targetUserId,

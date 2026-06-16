@@ -1,14 +1,13 @@
+
 using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.DTOs.Manga;
+using Microsoft.Extensions.Logging;
+using System.Security.Cryptography;
 using MangaManagementSystem.Application.Interfaces;
+using MangaManagementSystem.Application.Mappers;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
-using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Cryptography;
-using System.Threading.Tasks;
+
 
 namespace MangaManagementSystem.Application.Services
 {
@@ -17,12 +16,17 @@ namespace MangaManagementSystem.Application.Services
         private const string StatusPendingApproval = "PENDING_APPROVAL";
         private const string StatusActive = "ACTIVE";
         private const string StatusDisabled = "DISABLED";
+        private const string StatusRejected = "REJECTED";
 
-        private static readonly Guid MinRoleId =
-            new("00000000-0000-0000-0000-000000000001");
-
-        private static readonly Guid MaxRoleId =
-            new("00000000-0000-0000-0000-000000000005");
+        private static readonly HashSet<string> AllowedRoleNames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "Admin",
+            "Mangaka",
+            "Assistant",
+            "Tantou Editor",
+            "Editorial Board Member",
+            "Editorial Board Chief"
+        };
 
         private readonly IUnitOfWork _unitOfWork;
         private readonly IPasswordHasher _passwordHasher;
@@ -49,72 +53,54 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<UserDto> CreateUserAsync(CreateUserDto dto)
         {
-            var role = await _unitOfWork.Roles.GetByIdAsync(dto.RoleId);
-            var roleCode = role?.RoleName ?? string.Empty;
-            var passwordHash =
-                _passwordHasher.HashPassword(dto.Password);
+            var roleName = NormalizeRoleName(dto.RoleName);
+            EnsureValidRoleName(roleName);
 
-            var displayName =
-                string.IsNullOrWhiteSpace(dto.DisplayName)
-                    ? dto.Username
-                    : dto.DisplayName.Trim();
+            var username = dto.Username.Trim();
+            var email = dto.Email.Trim().ToLowerInvariant();
+            var passwordHash = _passwordHasher.HashPassword(dto.Password);
 
-            var newUserId =
-                await _unitOfWork.Users.CreateUserViaProcAsync(
-                    roleCode,
-                    dto.Username,
-                    dto.Email,
-                    passwordHash,
-                    displayName,
-                    dto.AvatarFileId,
-                    dto.PortfolioFileId,
-                    null);
+            var newUserId = await _unitOfWork.Users.CreateUserViaProcAsync(
+                roleName,
+                username,
+                email,
+                passwordHash,
+                dto.DisplayName,
+                dto.AvatarFileId,
+                dto.PortfolioFileId,
+                null);
 
-            var created =
-                await _unitOfWork.Users.GetByIdAsync(newUserId);
-
-            if (created == null)
-            {
-                throw new InvalidOperationException(
-                    "Created user could not be loaded.");
-            }
-
-            return MapToDto(created);
+            var created = await GetRequiredUserByIdForDtoAsync(newUserId);
+            return created.ToDto();
         }
 
         public async Task<UserDto?> GetUserByIdAsync(Guid id)
         {
-            var entity =
-                await _unitOfWork.Users.GetByIdAsync(id);
-
-            return entity == null
-                ? null
-                : MapToDto(entity);
+            var entity = await GetUserByIdForDtoAsync(id);
+            return entity is null ? null : entity.ToDto();
         }
 
-        public async Task<UserDto?> GetUserByEmailAsync(
-            string email)
+        public async Task<UserDto?> GetUserByEmailAsync(string email)
         {
-            var entity =
-                await _unitOfWork.Users.GetByEmailAsync(email);
+            var normalizedEmail = email.Trim().ToLowerInvariant();
+            var entity = await _unitOfWork.Users.GetByEmailAsync(normalizedEmail);
 
-            return entity == null
-                ? null
-                : MapToDto(entity);
+            return entity is null ? null : entity.ToDto();
         }
 
-        public async Task<IEnumerable<UserDto>>
-            GetUsersByStatusAsync(string status)
+        public async Task<IEnumerable<UserDto>> GetUsersByStatusAsync(string status)
         {
-            var entities =
-                await _unitOfWork.Users.GetByStatusAsync(status);
-
-            return entities.Select(MapToDto);
+            var entities = await _unitOfWork.Users.GetByStatusAsync(status);
+            return entities.Select(user => user.ToDto());
         }
 
-        public async Task<UserDto> ApproveUserAsync(
-            Guid adminUserId,
-            Guid userId)
+        public async Task<IEnumerable<UserDto>> GetUsersByRoleAsync(string roleName)
+        {
+            var entities = await _unitOfWork.Users.GetByRoleNameAsync(roleName);
+            return entities.Select(user => user.ToDto());
+        }
+
+        public async Task<UserDto> ApproveUserAsync(Guid adminUserId, Guid userId)
         {
             await RequirePendingUserAsync(userId);
 
@@ -124,38 +110,26 @@ namespace MangaManagementSystem.Application.Services
                 StatusActive,
                 "User registration approved.");
 
-            var updated =
-                await _unitOfWork.Users.GetByIdAsync(userId);
-
-            if (updated == null)
-            {
-                throw new InvalidOperationException(
-                    $"User {userId} was not found after approval.");
-            }
-
-            return MapToDto(updated);
+            var updated = await GetRequiredUserByIdForDtoAsync(userId);
+            return updated.ToDto();
         }
 
-        public async Task RejectUserAsync(
-            Guid adminUserId,
-            Guid userId,
-            string? reason = null)
+        public async Task RejectUserAsync(Guid adminUserId, Guid userId, string? reason = null)
         {
             await RequirePendingUserAsync(userId);
 
             await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
                 adminUserId,
                 userId,
-                "REJECTED",
-                reason ?? "User registration rejected.");
+                StatusRejected,
+                string.IsNullOrWhiteSpace(reason)
+                    ? "User registration rejected."
+                    : reason.Trim());
         }
 
-        public async Task<UserDto> ActivateUserAsync(
-            Guid adminUserId,
-            Guid userId)
+        public async Task<UserDto> ActivateUserAsync(Guid adminUserId, Guid userId)
         {
-            var user =
-                await RequireExistingUserAsync(userId);
+            await GetRequiredUserByIdAsync(userId);
 
             await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
                 adminUserId,
@@ -163,43 +137,97 @@ namespace MangaManagementSystem.Application.Services
                 StatusActive,
                 "User account activated.");
 
-            var updated =
-                await _unitOfWork.Users.GetByIdAsync(user.UserId);
-
-            if (updated == null)
-            {
-                throw new InvalidOperationException(
-                    $"User {userId} was not found after activation.");
-            }
-
-            return MapToDto(updated);
+            var updated = await GetRequiredUserByIdForDtoAsync(userId);
+            return updated.ToDto();
         }
 
-        public async Task<UserDto> DisableUserAsync(
-            Guid adminUserId,
-            Guid userId,
-            string? reason = null)
+        public async Task<UserDto> DisableUserAsync(Guid adminUserId, Guid userId, string? reason = null)
         {
-            var user =
-                await RequireExistingUserAsync(userId);
+            await GetRequiredUserByIdAsync(userId);
 
             await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
                 adminUserId,
                 userId,
                 StatusDisabled,
-                reason ?? "User account disabled.");
+                string.IsNullOrWhiteSpace(reason)
+                    ? "User account disabled."
+                    : reason.Trim());
 
-            var updated =
-                await _unitOfWork.Users.GetByIdAsync(user.UserId);
+            var updated = await GetRequiredUserByIdForDtoAsync(userId);
+            return updated.ToDto();
+        }
 
-            if (updated == null)
+        private async Task<User> RequirePendingUserAsync(Guid userId)
+        {
+            var user = await GetRequiredUserByIdAsync(userId);
+
+            if (!string.Equals(user.StatusCode, StatusPendingApproval, StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(
-                    $"User {userId} was not found after disabling.");
+                    $"User {userId} cannot be processed because their status is '{user.StatusCode}', not '{StatusPendingApproval}'.");
             }
 
-            return MapToDto(updated);
+            return user;
         }
+
+        private async Task<User> GetRequiredUserByIdAsync(Guid userId)
+        {
+            var user = await _unitOfWork.Users.GetByIdAsync(userId);
+
+            if (user is null)
+            {
+                throw new InvalidOperationException($"User {userId} was not found.");
+            }
+
+            return user;
+        }
+
+        private async Task<User?> GetUserByIdForDtoAsync(Guid userId)
+        {
+            var user = await _unitOfWork.Users.GetByIdAsync(userId);
+
+            if (user is null)
+            {
+                return null;
+            }
+
+            if (user.Role is not null)
+            {
+                return user;
+            }
+
+            /*
+                Generic GetByIdAsync usually does not Include Role.
+                Current UserRepository.GetByEmailAsync does Include Role, so we reload through email
+                before mapping to UserDto.
+            */
+            var userWithRole = await _unitOfWork.Users.GetByEmailAsync(user.Email);
+            return userWithRole ?? user;
+        }
+
+        private async Task<User> GetRequiredUserByIdForDtoAsync(Guid userId)
+        {
+            var user = await GetUserByIdForDtoAsync(userId);
+
+            if (user is null)
+            {
+                throw new InvalidOperationException($"User {userId} was not found.");
+            }
+
+            return user;
+        }
+
+        private static void EnsureValidRoleName(string roleName)
+        {
+            if (string.IsNullOrWhiteSpace(roleName) || !AllowedRoleNames.Contains(roleName))
+            {
+                throw new InvalidOperationException(
+                    $"Role '{roleName}' is invalid. Allowed roles are: {string.Join(", ", AllowedRoleNames)}.");
+            }
+        }
+
+        private static string NormalizeRoleName(string roleName)
+            => roleName.Trim();
 
         public async Task<UserDto> UpdateDisplayNameAsync(
             Guid userId,
@@ -222,15 +250,9 @@ namespace MangaManagementSystem.Application.Services
                     trimmedDisplayName);
 
             var updated =
-                await _unitOfWork.Users.GetByIdAsync(userId);
+                await GetRequiredUserByIdForDtoAsync(userId);
 
-            if (updated == null)
-            {
-                throw new InvalidOperationException(
-                    $"User {userId} was not found after display name update.");
-            }
-
-            return MapToDto(updated);
+            return updated.ToDto();
         }
 
         public async Task<UserDto> UpdateAvatarFileAsync(
@@ -283,15 +305,9 @@ namespace MangaManagementSystem.Application.Services
             }
 
             var updated =
-                await _unitOfWork.Users.GetByIdAsync(userId);
+                await GetRequiredUserByIdForDtoAsync(userId);
 
-            if (updated == null)
-            {
-                throw new InvalidOperationException(
-                    $"User {userId} was not found after avatar update.");
-            }
-
-            return MapToDto(updated);
+            return updated.ToDto();
         }
 
         public async Task<UserDto> UpdatePortfolioFileAsync(
@@ -344,15 +360,9 @@ namespace MangaManagementSystem.Application.Services
             }
 
             var updated =
-                await _unitOfWork.Users.GetByIdAsync(userId);
+                await GetRequiredUserByIdForDtoAsync(userId);
 
-            if (updated == null)
-            {
-                throw new InvalidOperationException(
-                    $"User {userId} was not found after portfolio update.");
-            }
-
-            return MapToDto(updated);
+            return updated.ToDto();
         }
 
         public async Task ResetPasswordAsync(
@@ -496,40 +506,54 @@ namespace MangaManagementSystem.Application.Services
             return user;
         }
 
-        private async Task<User> RequirePendingUserAsync(
-            Guid userId)
+        private static string GenerateOtp()
         {
-            var user =
-                await RequireExistingUserAsync(userId);
+            var value =
+                RandomNumberGenerator.GetInt32(
+                    100000,
+                    1000000);
 
-            if (user.StatusCode != StatusPendingApproval)
-            {
-                throw new InvalidOperationException(
-                    $"User {userId} cannot be processed because "
-                    + $"their status is '{user.StatusCode}', "
-                    + $"not '{StatusPendingApproval}'.");
-            }
-
-            return user;
+            return value.ToString();
         }
 
-        private async Task EnsureValidRoleIdAsync(
-            Guid roleId)
+        private static string ResolveCloudinaryResourceType(
+            string? contentType)
         {
-            if (roleId.CompareTo(MinRoleId) < 0
-                || roleId.CompareTo(MaxRoleId) > 0)
+            return !string.IsNullOrWhiteSpace(contentType)
+                   && contentType.StartsWith(
+                       "image/",
+                       StringComparison.OrdinalIgnoreCase)
+                ? "image"
+                : "raw";
+        }
+
+        private async Task TryDeleteCloudinaryAssetAsync(
+            string? publicId,
+            string? contentType,
+            string cleanupContext)
+        {
+            if (string.IsNullOrWhiteSpace(publicId))
             {
-                throw new InvalidOperationException(
-                    $"Role id {roleId} is invalid. "
-                    + $"Allowed roles are {MinRoleId} "
-                    + $"through {MaxRoleId}.");
+                return;
             }
 
-            if (await _unitOfWork.Roles
-                    .GetByIdAsync(roleId) == null)
+            var resourceType =
+                ResolveCloudinaryResourceType(contentType);
+
+            try
             {
-                throw new InvalidOperationException(
-                    $"Role id {roleId} does not exist.");
+                await _fileStorageService.DeleteFileAsync(
+                    publicId,
+                    resourceType);
+            }
+            catch (Exception cleanupException)
+            {
+                _logger.LogError(
+                    cleanupException,
+                    "Failed to clean up Cloudinary asset "
+                    + "{PublicId} ({CleanupContext}).",
+                    publicId,
+                    cleanupContext);
             }
         }
 
@@ -574,68 +598,5 @@ namespace MangaManagementSystem.Application.Services
             }
         }
 
-        private async Task TryDeleteCloudinaryAssetAsync(
-            string? publicId,
-            string? contentType,
-            string cleanupContext)
-        {
-            if (string.IsNullOrWhiteSpace(publicId))
-            {
-                return;
-            }
-
-            var resourceType =
-                ResolveCloudinaryResourceType(contentType);
-
-            try
-            {
-                await _fileStorageService.DeleteFileAsync(
-                    publicId,
-                    resourceType);
-            }
-            catch (Exception cleanupException)
-            {
-                _logger.LogError(
-                    cleanupException,
-                    "Failed to clean up Cloudinary asset "
-                    + "{PublicId} ({CleanupContext}).",
-                    publicId,
-                    cleanupContext);
-            }
-        }
-
-        private static string ResolveCloudinaryResourceType(
-            string? contentType)
-        {
-            return !string.IsNullOrWhiteSpace(contentType)
-                   && contentType.StartsWith(
-                       "image/",
-                       StringComparison.OrdinalIgnoreCase)
-                ? "image"
-                : "raw";
-        }
-
-        private static string GenerateOtp()
-        {
-            var value =
-                RandomNumberGenerator.GetInt32(
-                    100000,
-                    1000000);
-
-            return value.ToString();
-        }
-
-        private static UserDto MapToDto(User user) => new(
-            user.UserId,
-            user.RoleId,
-            user.Username,
-            user.DisplayName,
-            user.Email,
-            user.AvatarFileId,
-            user.PortfolioFileId,
-            user.StatusCode,
-            user.CreatedAtUtc,
-            user.Role?.RoleName
-        );
     }
 }

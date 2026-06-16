@@ -70,14 +70,13 @@
 | BR-FILE-004 | A file resource is considered active when `deleted_at_utc IS NULL`. Application queries must exclude deleted file resources unless the user is viewing historical or audit data. | Active draft |
 | BR-FILE-005 | A user avatar, when uploaded, is stored as a `FileResource` and referenced from the user account. | Active draft |
 | BR-FILE-006 | A user avatar file must use `file_purpose_code = USER_AVATAR`. | Active draft |
-| BR-FILE-007 | Series cover images, proposal files, chapter page-version files, editorial attachment/markup files, portfolio files, task reference files, and user avatars should all use `FileResource` instead of storing Cloudinary fields directly in business tables. | Active draft |
+| BR-FILE-007 | Series cover images, proposal files, chapter page-version files, editorial attachment/markup files, portfolio files, and user avatars should all use `FileResource` instead of storing Cloudinary fields directly in business tables. | Active draft |
 | BR-FILE-008 | In normal UI contexts, when a referenced file is deleted or unavailable, the system should display a safe placeholder instead of exposing a broken file reference. | Active draft |
 | BR-FILE-009 | Files used as `ChapterPageVersion` content, including accepted AI/translation output or accepted assistant output, must use `file_purpose_code = CHAPTER_PAGE_VERSION`. | Active draft |
-| BR-FILE-010 | Files attached only as task instructions, examples, or reference material must use `file_purpose_code = TASK_REFERENCE`. | Active draft |
 | BR-FILE-011 | Every `FileResource` must store a required `sha256_hash` calculated from the exact uploaded file bytes before the file metadata is saved. | Active draft |
 | BR-FILE-012 | `sha256_hash` may be used for file integrity checking, duplicate detection, and audit traceability, but it should not be treated as a global uniqueness rule because the same file may be validly reused in different workflow contexts. | Active draft |
 | BR-FILE-013 | The system may optionally check `sha256_hash` before creating a new `FileResource` to detect whether an active file with the same content already exists. | Optional MVP |
-| BR-FILE-014 | Optional duplicate-file warnings may be shown for repeated registration portfolios, repeated proposal files, repeated series covers, repeated chapter page-version files, repeated task references, repeated editorial attachments, or repeated avatars. | Optional MVP |
+| BR-FILE-014 | Optional duplicate-file warnings may be shown for repeated registration portfolios, repeated proposal files, repeated series covers, repeated chapter page-version files, repeated editorial attachments, or repeated avatars. | Optional MVP |
 | BR-FILE-015 | Duplicate-file warnings are advisory usability messages; they should not automatically block uploads unless a specific workflow later defines blocking behavior. | Optional MVP |
 | BR-FILE-016 | Some duplicate-file warnings may be omitted from the MVP UI when implementation time is limited, as long as `sha256_hash` is still stored for future detection, integrity checks, and audit traceability. | Optional MVP |
 
@@ -115,7 +114,7 @@
 
 | Rule ID | Business Rule | Review Status |
 |---|---|---|
-| BR-SERIES-001 | Each series is identified internally by immutable `series_id` GUID; no separate a separate human-readable business identifier is used in the MVP schema. | Active draft |
+| BR-SERIES-001 | Each series is identified internally by immutable `series_id` GUID; no separate human-readable business identifier is used in the MVP schema. | Active draft |
 | BR-SERIES-002 | Each series must have a unique URL slug. | Active draft |
 | BR-SERIES-003 | Each series must have one lifecycle status from the approved status list. | Active draft |
 | BR-SERIES-004 | A series becomes `SERIALIZED` after it has passed proposal, editorial, and board approval and is accepted into the production/publication workflow. | Active draft |
@@ -160,7 +159,7 @@
 | BR-SC-005 | A contributor with `end_date IS NULL` is considered an active contributor. | Active draft |
 | BR-SC-006 | Historical contributor rows should be preserved after a contributor leaves a series. | Active draft |
 | BR-SC-007 | A contributor’s `end_date` cannot be earlier than their `start_date`. | Active draft |
-| BR-SC-008 | Before a series can proceed beyond proposal draft into formal review or production workflow, it should have at least one active Mangaka contributor and one active Tantou Editor contributor, determined from the contributors’ `auth.Users.role_id`. | Active draft |
+| BR-SC-008 | A series submitted from `PROPOSAL_DRAFT` into `UNDER_EDITORIAL_REVIEW` must have at least one active Mangaka contributor, but it does not require an active Tantou Editor contributor at first submission. Submitted proposals appear in the editorial review queue for active Tantou Editors to claim or handle later. | Active draft |
 
 ---
 
@@ -182,7 +181,8 @@
 | BR-PROP-012 | Editorial review information may be stored directly in `SeriesProposal` because each proposal version receives at most one editorial review. | Active draft |
 | BR-PROP-013 | `UNDER_BOARD_REVIEW` means the proposal passed editorial review and is waiting for board voting/decision. | Active draft |
 | BR-PROP-014 | `APPROVED` means the proposal was approved by the board, not merely by the editor. | Active draft |
-| BR-PROP-015 | Editorial revision or editorial cancellation requires comments or a markup file, enforced by the application workflow. | Active draft |
+| BR-PROP-015 | Editorial revision requires non-empty comments and may optionally include a markup file. | Active draft |
+| BR-PROP-015A | Editorial cancellation requires both non-empty comments and a markup file. | Active draft |
 | BR-PROP-016 | Board rejection or board cancellation reasons are handled by board poll/vote records, not by editorial review comments. | Active draft |
 | BR-PROP-017 | Proposal lists should support retrieval by series, status, submitter, and reviewer. | Active draft |
 | BR-PROP-018 | The latest proposal version for a series should be quickly retrievable. | Active draft |
@@ -191,7 +191,7 @@
 | BR-PROP-021 | The proposal file represents the supporting material used by editors and board members to evaluate the series concept. | Active draft |
 | BR-PROP-022 | The system does not require a fixed minimum number of completed manga pages for proposal submission in MVP. | Active draft |
 | BR-PROP-023 | Any minimum page/sample requirement is treated as an editorial policy outside the MVP database constraints. | Active draft |
-
+| BR-PROP-024 | First proposal submission does not require an assigned active Tantou Editor. The submitted proposal must become visible in the editorial review queue for active Tantou Editors. | Active draft |
 ---
 
 ## 8. Board Poll

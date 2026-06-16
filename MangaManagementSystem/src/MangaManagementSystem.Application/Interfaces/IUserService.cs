@@ -16,6 +16,8 @@ namespace MangaManagementSystem.Application.Interfaces
 
         Task<IEnumerable<UserDto>> GetUsersByStatusAsync(string status);
 
+        Task<IEnumerable<UserDto>> GetUsersByRoleAsync(
+            string roleName);
         Task<UserDto> ApproveUserAsync(
             Guid adminUserId,
             Guid userId);

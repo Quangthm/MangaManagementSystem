@@ -15,6 +15,11 @@ namespace MangaManagementSystem.Infrastructure.Repositories
     {
         private readonly ApplicationDbContext _context;
 
+        private IQueryable<User> UsersWithRole()
+        {
+            return _context.Users.Include(user => user.Role);
+        }
+
         public UserRepository(ApplicationDbContext context)
             : base(context)
         {
@@ -23,20 +28,20 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
         public async Task<User?> GetByEmailAsync(string email)
         {
-            return await _context.Users
+            return await UsersWithRole()
                 .FirstOrDefaultAsync(user => user.Email == email);
         }
 
         public async Task<User?> GetByUsernameAsync(string username)
         {
-            return await _context.Users
+            return await UsersWithRole()
                 .FirstOrDefaultAsync(user => user.Username == username);
         }
 
         public async Task<User?> GetByUsernameOrEmailAsync(
             string usernameOrEmail)
         {
-            return await _context.Users
+            return await UsersWithRole()
                 .FirstOrDefaultAsync(user =>
                     user.Email == usernameOrEmail
                     || user.Username == usernameOrEmail);
@@ -45,10 +50,22 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         public async Task<IReadOnlyList<User>> GetByStatusAsync(
             string status)
         {
-            return await _context.Users
+            return await UsersWithRole()
                 .AsNoTracking()
                 .Where(user => user.StatusCode == status)
                 .OrderBy(user => user.CreatedAtUtc)
+                .ToListAsync();
+        }
+
+        public async Task<IReadOnlyList<User>> GetByRoleNameAsync(
+            string roleName)
+        {
+            return await UsersWithRole()
+                .AsNoTracking()
+                .Where(user =>
+                    user.Role != null
+                    && user.Role.RoleName == roleName)
+                .OrderBy(user => user.DisplayName)
                 .ToListAsync();
         }
 

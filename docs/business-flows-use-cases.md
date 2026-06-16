@@ -412,7 +412,6 @@ User selects/uploads a file
 | `SERIES_PROPOSAL` | Warn strongly if the same proposal file was already submitted, especially for the same series. |
 | `SERIES_COVER` | Warn or skip update if the selected cover is identical to the current cover. |
 | `CHAPTER_PAGE_VERSION` | Warn strongly if the new page version is identical to the current page version. |
-| `TASK_REFERENCE` | Optional warning only; repeated reference files may be valid. |
 | `EDITORIAL_ATTACHMENT` | Optional warning if the same attachment already exists for the same review/context. |
 | `USER_AVATAR` | Low-priority warning; repeated avatars may be allowed or ignored. |
 
@@ -543,6 +542,67 @@ audit.usp_AuditEvent_Append
 
 ---
 
+
+
+## BF-SERIES-003 — Submit Series Proposal for Editorial Review
+
+**Status:** Agreed  
+**Primary actor:** Mangaka  
+**Goal:** Formally submit a draft series proposal with a required proposal file so active Tantou Editors can review it from the editorial queue.
+
+### Main Flow
+
+```text
+Mangaka opens /mangaka/series/drafts
+→ Mangaka selects a series with status_code = PROPOSAL_DRAFT
+→ Mangaka clicks Submit Proposal
+→ UI opens proposal submission modal
+→ Mangaka selects the required proposal file
+→ Backend validates the actor/session and request shape
+→ Backend uploads the proposal file to Cloudinary
+→ Backend calculates SHA-256 from the exact uploaded file bytes
+→ Backend calls manga.usp_SeriesProposal_Submit with the series ID, actor user ID, and required proposal file metadata
+→ Database locks proposal submission for the series
+→ Database verifies the series exists and status_code = PROPOSAL_DRAFT
+→ Database verifies the submitter is an active Mangaka contributor of the series
+→ Database does not require an active Tantou Editor contributor for first submission
+→ Database creates manga.FileResource with file_purpose_code = SERIES_PROPOSAL
+→ Database creates manga.SeriesProposal with the next proposal_version_no and submission-time snapshots
+→ Database sets manga.SeriesProposal.status_code = UNDER_EDITORIAL_REVIEW
+→ Database sets manga.Series.status_code = UNDER_EDITORIAL_REVIEW
+→ Database writes SERIES_PROPOSAL_SUBMITTED audit event
+→ Backend returns success
+→ UI locks normal draft editing and shows the series/proposal as under editorial review
+→ Proposal becomes visible in the Tantou Editor editorial review queue
+```
+
+### Database Procedure(s)
+
+```text
+manga.usp_SeriesProposal_Submit
+manga.usp_FileResource_Create
+audit.usp_AuditEvent_Append
+```
+
+### Important Notes
+
+- Proposal file is required for formal proposal submission.
+- The proposal file must be stored as `FileResource` with `file_purpose_code = SERIES_PROPOSAL`.
+- First submission requires an active Mangaka contributor but does not require an active Tantou Editor contributor already assigned to the series.
+- Submitted proposals appear in the editorial review queue for active Tantou Editors.
+- The UI may prioritize unclaimed proposals first, but the database should not block multiple Tantou Editors from becoming active contributors to the same series.
+- Submitted proposal snapshot fields should remain locked.
+- Revision later creates a new `SeriesProposal` version instead of overwriting the submitted proposal.
+- If Cloudinary upload succeeds but SQL fails, the backend should attempt to delete the uploaded Cloudinary asset.
+
+### System Should Try To
+
+- Keep proposal submission as one database business workflow after Cloudinary upload succeeds.
+- Keep FileResource creation, proposal creation, series status update, and audit event in the same SQL transaction.
+- Avoid requiring a Tantou Editor before first submission, because the submission itself creates the review queue item.
+- Make the newly submitted proposal easy for active Tantou Editors to find.
+
+---
 
 # 5. Board Poll and Publication Frequency Flows
 

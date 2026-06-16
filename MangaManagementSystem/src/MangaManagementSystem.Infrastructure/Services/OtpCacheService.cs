@@ -1,9 +1,14 @@
 using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.Interfaces;
 using Microsoft.Extensions.Caching.Memory;
+using System;
 
 namespace MangaManagementSystem.Infrastructure.Services
 {
+    /// <summary>
+    /// In-memory OTP cache adapter. Lives in Infrastructure so any host
+    /// (Web or API) can reuse the same implementation through <see cref="IOtpCacheService"/>.
+    /// </summary>
     public class OtpCacheService : IOtpCacheService
     {
         private const string RegistrationKeyPrefix = "registration-otp:";

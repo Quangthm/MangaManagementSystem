@@ -49,6 +49,28 @@ namespace MangaManagementSystem.Application.Services
             return entities.Select(MapToDto);
         }
 
+        public async Task<SeriesDto?> UpdateSeriesAsync(UpdateSeriesDto dto)
+        {
+            var entity = await _unitOfWork.Series.GetByIdAsync(dto.SeriesId);
+            if (entity == null) return null;
+
+            entity.Title = dto.Title;
+            entity.Slug = dto.Slug;
+            entity.Synopsis = dto.Synopsis;
+            entity.Genre = dto.Genre;
+            entity.CoverFileId = dto.CoverFileId;
+            entity.StatusCode = dto.StatusCode;
+            entity.ContentLanguageCode = dto.ContentLanguageCode;
+            entity.SourceSeriesId = dto.SourceSeriesId;
+            entity.PublicationFrequencyCode = dto.PublicationFrequencyCode;
+            entity.UpdatedAtUtc = DateTime.UtcNow;
+            entity.UpdatedByUserId = dto.UpdatedByUserId;
+
+            _unitOfWork.Series.Update(entity);
+            await _unitOfWork.SaveChangesAsync();
+            return MapToDto(entity);
+        }
+
         private static SeriesDto MapToDto(Series s) => new(
             s.SeriesId,
             s.Title,

@@ -1,79 +1,11 @@
-﻿@namespace MangaManagementSystem.Web.Components.Layouts
-@inject NavigationManager Nav
+@namespace MangaManagementSystem.Web.Components.Layouts
 
 <div class="mf-shell">
-    <aside class="mf-sidebar mf-mangaka-sidebar">
-
-        <div class="mf-sidebar-profile-area">
-            <UserAvatarMenu />
-        </div>
-
-        <nav class="mf-nav-section">
-            <div class="mf-nav-title">Main Menu</div>
-
-            <NavLink href="/mangaka"
-                     class="mf-nav-link"
-                     Match="NavLinkMatch.All">
-                Dashboard
-            </NavLink>
-
-            <NavLink href="/mangaka/series"
-                     class="mf-nav-link"
-                     Match="NavLinkMatch.Prefix">
-                My Series &amp; Chapters
-            </NavLink>
-
-            <NavLink href="/mangaka/assign-task"
-                     class="mf-nav-link"
-                     Match="NavLinkMatch.Prefix">
-                Assign Task
-            </NavLink>
-
-            <NavLink href="/mangaka/review-submissions"
-                     class="mf-nav-link"
-                     Match="NavLinkMatch.Prefix">
-                Review Submissions
-            </NavLink>
-
-            <div class="mf-nav-title mt-3">Publication</div>
-
-            <div class="mf-nav-link disabled">
-                Ranking &amp; Publication (Read-only)
-            </div>
-        </nav>
-
-        <MudSpacer />
-
-        <div class="pa-4">
-            <MudButton FullWidth="true"
-                       Variant="Variant.Outlined"
-                       Color="Color.Default"
-                       OnClick="BackToOverview">
-                Back to Overview
-            </MudButton>
-
-        </div>
-    </aside>
-
     <main class="mf-main">
         @ChildContent
     </main>
 </div>
 
 @code {
-    [Parameter]
-    public RenderFragment? ChildContent { get; set; }
-
-    private void BackToOverview()
-    {
-        Nav.NavigateTo("/dashboard");
-    }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
 }
-
-<style>
-    .mf-sidebar-profile-area {
-        padding: 18px 11px 14px;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-    }
-</style>
-

@@ -73,7 +73,7 @@
 | FR-FILE-001 | The system shall store actual uploaded media files in Cloudinary. | BR-FILE-001 |
 | FR-FILE-002 | The system shall store file metadata and file relationships in SQL Server through `manga.FileResource`. | BR-FILE-001, BR-FILE-002 |
 | FR-FILE-003 | The system shall require uploaded or generated business files to be referenced through `manga.FileResource` instead of raw Cloudinary URLs. | BR-FILE-002, BR-FILE-007 |
-| FR-FILE-004 | The system shall reference chapter page-version files, proposal files, series cover images, user avatars, user portfolios, editorial attachment/markup files, and task reference files through `FileResource`. | BR-FILE-002, BR-FILE-007 |
+| FR-FILE-004 | The system shall reference chapter page-version files, proposal files, series cover images, user avatars, user portfolios, and editorial attachment/markup files through `FileResource`. | BR-FILE-002, BR-FILE-007 |
 | FR-FILE-005 | The system shall treat a file resource as active only when `deleted_at_utc IS NULL`. | BR-FILE-004 |
 | FR-FILE-006 | The system shall exclude deleted file resources from normal application queries unless the user is viewing historical or audit data. | BR-FILE-004 |
 | FR-FILE-007 | The system shall delete Cloudinary assets through the application workflow instead of requiring manual deletion from the Cloudinary console. | BR-FILE-003 |
@@ -81,11 +81,10 @@
 | FR-FILE-009 | The system shall require user avatar files to use `file_purpose_code = USER_AVATAR`. | BR-FILE-006 |
 | FR-FILE-010 | The system shall display a safe placeholder when a referenced file is unavailable or deleted in a normal UI context. | BR-FILE-008 |
 | FR-FILE-011 | The system shall require files used as `ChapterPageVersion` content to use `file_purpose_code = CHAPTER_PAGE_VERSION`. | BR-FILE-009 |
-| FR-FILE-012 | The system shall require files attached only as task instructions, examples, or reference material to use `file_purpose_code = TASK_REFERENCE`. | BR-FILE-010 |
 | FR-FILE-013 | The system shall store a required `sha256_hash` for each `FileResource`, calculated from the exact uploaded file bytes before file metadata is saved. | BR-FILE-011 |
 | FR-FILE-014 | The system shall allow `sha256_hash` to support file integrity checking, duplicate detection, and audit traceability without enforcing global file uniqueness. | BR-FILE-012 |
 | FR-FILE-015 | The system may optionally check for active `FileResource` records with the same `sha256_hash` before saving a new file resource. | BR-FILE-013 |
-| FR-FILE-016 | The system may optionally show advisory duplicate-file warnings for repeated registration portfolio, proposal, cover, page-version, task reference, editorial attachment, or avatar files. | BR-FILE-014, BR-FILE-015 |
+| FR-FILE-016 | The system may optionally show advisory duplicate-file warnings for repeated registration portfolio, proposal, cover, page-version, editorial attachment, or avatar files. | BR-FILE-014, BR-FILE-015 |
 | FR-FILE-017 | The system shall not require every duplicate-file warning UI to be implemented in MVP, provided that `sha256_hash` is still stored for future duplicate detection, integrity checking, and audit traceability. | BR-FILE-016 |
 
 ---
@@ -162,7 +161,7 @@
 | FR-SC-006 | The system shall treat a contributor as active when `end_date IS NULL`. | BR-SC-005 |
 | FR-SC-007 | The system shall preserve historical contributor rows after a contributor leaves a series. | BR-SC-006 |
 | FR-SC-008 | The system shall prevent a contributor `end_date` from being earlier than the contributor `start_date`. | BR-SC-007 |
-| FR-SC-009 | The system shall require at least one active Mangaka contributor and one active Editor contributor before a series proceeds beyond proposal draft into formal review or production workflow. | BR-SC-008 |
+| FR-SC-009 | The system shall require at least one active Mangaka contributor before a series is submitted from `PROPOSAL_DRAFT` into `UNDER_EDITORIAL_REVIEW`, but shall not require an active Tantou Editor contributor for first proposal submission. | BR-SC-008 |
 
 ---
 
@@ -185,7 +184,8 @@
 | FR-PROP-013 | The system shall prevent more than one editorial review decision from being recorded for the same submitted proposal version. | BR-PROP-012 |
 | FR-PROP-014 | The system shall use `UNDER_BOARD_REVIEW` to indicate that a proposal passed editorial review and is waiting for board voting/decision. | BR-PROP-013 |
 | FR-PROP-015 | The system shall mark a proposal as `APPROVED` only after board approval. | BR-PROP-014 |
-| FR-PROP-016 | The system shall require comments or a markup file when an editor requests revision or cancels a proposal. | BR-PROP-015 |
+| FR-PROP-016 | The system shall require non-empty comments when an editor requests revision, and shall allow an optional markup file for revision feedback. | BR-PROP-015 |
+| FR-PROP-016A | The system shall require both non-empty comments and a markup file when an editor cancels a proposal during editorial review. | BR-PROP-015A |
 | FR-PROP-017 | The system shall handle board rejection or board cancellation reasons through board poll and board vote records instead of editorial review comments. | BR-PROP-016 |
 | FR-PROP-018 | The system shall allow proposal lists to be retrieved by series, status, submitter, and reviewer. | BR-PROP-017 |
 | FR-PROP-019 | The system shall allow the latest proposal version for a series to be retrieved. | BR-PROP-018 |
@@ -194,7 +194,7 @@
 | FR-PROP-022 | The system shall treat the proposal file as supporting material for editor and board evaluation. | BR-PROP-021 |
 | FR-PROP-023 | The system shall not require a fixed minimum number of completed manga pages for proposal submission in MVP. | BR-PROP-022 |
 | FR-PROP-024 | The system shall treat any minimum page/sample requirement as editorial policy outside MVP database constraints. | BR-PROP-023 |
-
+| FR-PROP-025 | The system shall make newly submitted proposals visible in the editorial review queue for active Tantou Editors. | BR-PROP-024 |
 ---
 
 ## 3.8 Board Poll

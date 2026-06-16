@@ -79,7 +79,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 | Authorized Page Workspace User | A user permitted to access page-level editing, annotation, segmentation, translation-support, or page-version feedback tools. Normally includes Mangaka and Tantou Editor; Assistants may access assigned task/page work only. Editorial Board Members are excluded unless explicitly granted page workspace permissions. |
 | Mangaka | Creates and manages series, proposals, chapters, pages, page versions, regions for production, task assignments, assistant task review, chapter submission, ranking monitoring, and response to editorial feedback. |
 | Assistant | Views assigned page tasks, sees linked regions, uploads completed output as a new page version, and tracks task history. |
-| Tantou Editor | Reviews proposals and chapters, uses page regions and annotations for feedback, records chapter-level editorial decisions, may review translation-related issues, and monitors publication/ranking context. |
+| Tantou Editor | Reviews proposals and chapters, views/claims proposals from the editorial review queue, uses page regions and annotations for feedback, records chapter-level editorial decisions, may review translation-related issues, and monitors publication/ranking context. |
 | Editorial Board Member | Views board polls, votes approve/reject/abstain, provides rejection reasons, enters simulated/aggregated reader vote input, and views ranking/cancellation-risk evidence. |
 | Editorial Board Chief | Opens, closes, and cancels board polls; specifies publication frequency when opening `START_SERIALIZATION` polls; may directly change official series publication frequency with a required audit reason; may also vote approve/reject/abstain; provides rejection reasons when voting reject; and views ranking/cancellation-risk evidence. |
 | Admin | Manages accounts, file deletion workflow, audit visibility, traceability, and system-level management. Admin does not own chapter cancellation overrides, publication scheduling, or simulated reader vote input in MVP. |
@@ -140,16 +140,15 @@ The project uses **permission-based actor grouping** for shared features and rol
 - File resources are active when `deleted_at_utc IS NULL`.
 - Normal application queries should exclude deleted files unless viewing historical/audit data.
 - File deletion should happen through the application workflow, not directly in Cloudinary.
-- User avatars, portfolios, series covers, proposal files, chapter page-version files, editorial attachment/markup files, and task reference files should use `FileResource`.
-- Supported `file_purpose_code` values for MVP are `SERIES_PROPOSAL`, `SERIES_COVER`, `CHAPTER_PAGE_VERSION`, `TASK_REFERENCE`, `EDITORIAL_ATTACHMENT`, `REGISTRATION_PORTFOLIO`, and `USER_AVATAR`.
+- User avatars, portfolios, series covers, proposal files, chapter page-version files, and editorial attachment/markup files should use `FileResource`.
+- Supported `file_purpose_code` values for MVP are `SERIES_PROPOSAL`, `SERIES_COVER`, `CHAPTER_PAGE_VERSION`, `EDITORIAL_ATTACHMENT`, `REGISTRATION_PORTFOLIO`, and `USER_AVATAR`.
 - Every `FileResource` must store a required `sha256_hash`.
 - `sha256_hash` should be calculated by the backend from the exact uploaded file bytes before file metadata is saved.
 - `sha256_hash` supports file integrity checking, duplicate detection, and audit traceability.
 - `sha256_hash` should not be treated as a global uniqueness rule because the same exact file may be validly reused in different workflow contexts.
-- The system may optionally check `sha256_hash` before saving a file and show advisory duplicate warnings for repeated registration portfolio, proposal, cover, chapter page-version, task reference, editorial attachment, or avatar files.
+- The system may optionally check `sha256_hash` before saving a file and show advisory duplicate warnings for repeated registration portfolio, proposal, cover, chapter page-version, editorial attachment, or avatar files.
 - Duplicate-file warnings are optional MVP usability behavior; some UI warnings may be omitted when implementation time is limited.
 - Accepted AI/translation output or assistant task output that becomes an official page file should be saved as a new `ChapterPageVersion` and use `file_purpose_code = CHAPTER_PAGE_VERSION`.
-- Files attached only as task instructions, examples, or reference material should use `file_purpose_code = TASK_REFERENCE`.
 - In normal UI contexts, unavailable or deleted files should show a safe placeholder instead of a broken file reference.
 
 ## 4.4 Users and Accounts
@@ -173,7 +172,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 
 ## 4.5 Series and Contributors
 
-- Each series must have a unique system code and URL slug.
+- Each series uses immutable `series_id` as the internal identity and a unique URL slug as the stable URL identity; no separate `series_code` is used in MVP.
 - Each series has one lifecycle status from the approved list.
 - A series becomes `SERIALIZED` after passing proposal, editorial, and board approval.
 - Each series declares one primary content language.
@@ -188,7 +187,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 - A user cannot be an active contributor to the same series more than once at the same time.
 - `end_date IS NULL` means the contributor is active.
 - Historical contributor rows are preserved.
-- Before formal review or production workflow, the series should have at least one active Mangaka contributor and one active Editor contributor.
+- First proposal submission from `PROPOSAL_DRAFT` into `UNDER_EDITORIAL_REVIEW` requires at least one active Mangaka contributor, but does not require an active Tantou Editor contributor yet. Submitted proposals appear in the editorial review queue for active Tantou Editors to claim or handle later.
 
 ## 4.6 Series Proposal
 
@@ -197,6 +196,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 - Proposal version numbers must be positive and unique within the same series.
 - A submitted proposal preserves snapshots of proposal title, synopsis, genre, and proposal file.
 - A submitted proposal must include a `FileResource` with purpose `SERIES_PROPOSAL`.
+- First proposal submission does not require an already assigned Tantou Editor; the submitted proposal becomes visible in the editorial review queue for active Tantou Editors.
 - `SeriesProposal` does not store draft proposal editing.
 - Once created, submitted snapshot fields should remain locked.
 - If revision is requested, the corrected proposal is submitted as a new proposal version.
@@ -205,7 +205,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 - Editorial review information may be stored directly in `SeriesProposal` because each proposal version receives at most one editorial review.
 - `UNDER_BOARD_REVIEW` means the proposal passed editorial review and is waiting for board voting.
 - `APPROVED` means board approval, not merely editor approval.
-- Editorial revision or cancellation requires comments or markup.
+- Editorial revision requires non-empty comments and may optionally include a markup file. Editorial cancellation requires both non-empty comments and a markup file.
 - Board rejection/cancellation reasons are handled through board poll/vote records.
 - Proposal lists should be retrievable/filterable by series, status, submitter, reviewer, and queue needs.
 - MVP does not require a fixed minimum number of completed manga pages for proposal submission.

@@ -100,7 +100,6 @@ CREATE TABLE manga.FileResource (
 			N'SERIES_PROPOSAL',
 			N'SERIES_COVER',
 			N'CHAPTER_PAGE_VERSION',
-			N'TASK_REFERENCE',
 			N'EDITORIAL_ATTACHMENT',
 			N'REGISTRATION_PORTFOLIO',
 			N'USER_AVATAR'
@@ -818,7 +817,8 @@ CREATE TABLE manga.ChapterPageTask (
 			)
 		),
 	CONSTRAINT fk_chapter_page_task_assigned_to FOREIGN KEY (assigned_to_user_id) REFERENCES auth.Users(user_id),
-	CONSTRAINT fk_chapter_page_task_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id)
+	CONSTRAINT fk_chapter_page_task_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id),
+	CONSTRAINT fk_chapter_page_task_completed_page_version FOREIGN KEY (completed_page_version_id) REFERENCES manga.ChapterPageVersion(chapter_page_version_id)
 	);
 
 
