@@ -1,6 +1,10 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.JSInterop
+
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
 
 <div class="mf-app-shell">
 	<aside class="mf-sidebar">
@@ -21,21 +25,21 @@
 				<span class="mf-nav-caret">⌄</span>
 			</div>
 
-			<a class="@MenuClass("dashboard=""")" href="/demo/mangaflow/editorial">
+			<a class='@MenuClass("dashboard")' href="/demo/mangaflow/editorial">
 				<span>Editorial Dashboard</span>
 			</a>
 
-			<a class="@MenuClass("proposals=""")" href="/demo/mangaflow/proposals">
+			<a class='@MenuClass("proposals")' href="/demo/mangaflow/proposals">
 				<span>Proposal Reviews</span>
 				<span class="mf-side-count">4</span>
 			</a>
 
-			<a class="@MenuClass("polls=""")" href="/demo/mangaflow/polls">
+			<a class='@MenuClass("polls")' href="/demo/mangaflow/polls">
 				<span>Board Polls</span>
 				<span class="mf-side-count">3</span>
 			</a>
 
-			<a class="@MenuClass("decisions=""")" href="/demo/mangaflow/decisions">
+			<a class='@MenuClass("decisions")' href="/demo/mangaflow/decisions">
 				<span>Decision Center</span>
 			</a>
 		</div>
@@ -54,6 +58,12 @@
 					<div>
 						<div class="mf-user-name">@sideRoleDisplay</div>
 						<div class="mf-user-email">@sideEmail</div>
+
+						<button type="button"
+                                class="mf-sidebar-logout"
+                                @onclick="LogoutAsync">
+							Logout
+						</button>
 					</div>
 				</div>
 			</Authorized>
@@ -97,6 +107,12 @@
 							<span class="mf-avatar small">@topInitials</span>
 							<span>@topRoleDisplay</span>
 						</div>
+
+						<button type="button"
+                                class="mf-btn mf-btn-soft"
+                                @onclick="LogoutAsync">
+							Logout
+						</button>
 					</Authorized>
 
 					<NotAuthorized>
@@ -132,6 +148,27 @@
 private string MenuClass(string key)
 {
 return ActiveMenu == key ? "mf-side-link active" : "mf-side-link";
+}
+
+private async Task LogoutAsync()
+{
+await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "authToken");
+await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "token");
+await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "jwt");
+await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "currentUser");
+await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "user");
+await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "role");
+await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "roleName");
+
+await JSRuntime.InvokeVoidAsync("sessionStorage.removeItem", "authToken");
+await JSRuntime.InvokeVoidAsync("sessionStorage.removeItem", "token");
+await JSRuntime.InvokeVoidAsync("sessionStorage.removeItem", "jwt");
+await JSRuntime.InvokeVoidAsync("sessionStorage.removeItem", "currentUser");
+await JSRuntime.InvokeVoidAsync("sessionStorage.removeItem", "user");
+await JSRuntime.InvokeVoidAsync("sessionStorage.removeItem", "role");
+await JSRuntime.InvokeVoidAsync("sessionStorage.removeItem", "roleName");
+
+NavigationManager.NavigateTo("/login", forceLoad: true);
 }
 
 private static string GetEmail(ClaimsPrincipal user)

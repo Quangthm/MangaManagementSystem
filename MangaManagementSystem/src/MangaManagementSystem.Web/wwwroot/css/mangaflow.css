@@ -1647,3 +1647,17 @@ a { text-decoration: none; }
     padding: 18px;
   }
 }
+
+.mf-sidebar-logout {
+  border: 0;
+  background: transparent;
+  color: var(--mf-slate-400);
+  padding: 4px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mf-sidebar-logout:hover {
+  color: white;
+}
