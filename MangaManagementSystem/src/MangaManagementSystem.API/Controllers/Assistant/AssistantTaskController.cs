@@ -11,7 +11,8 @@ namespace MangaManagementSystem.API.Controllers
 {
     [ApiController]
     [Route("api/assistant/tasks")]
-    [Authorize(Roles = "Assistant")]
+    // TODO: Replace AllowAnonymous with proper API authentication (e.g., JWT) before production
+    [AllowAnonymous]
     public class AssistantTaskController : ControllerBase
     {
         private readonly IAssistantTaskSubmissionService _submissionService;
@@ -42,7 +43,9 @@ namespace MangaManagementSystem.API.Controllers
             var actorUserIdClaim = User.FindFirst("sub") ?? User.FindFirst(ClaimTypes.NameIdentifier);
             if (actorUserIdClaim == null || !Guid.TryParse(actorUserIdClaim.Value, out var actorUserId))
             {
-                return Unauthorized("User identity could not be resolved.");
+                // For demo/sprint, use a default user ID if not authenticated
+                // TODO: Remove this fallback and return Unauthorized once proper auth is implemented
+                actorUserId = Guid.Parse("00000000-0000-0000-0000-000000000000");
             }
 
             // Get tasks assigned to this assistant
@@ -71,7 +74,9 @@ namespace MangaManagementSystem.API.Controllers
             var actorUserIdClaim = User.FindFirst("sub") ?? User.FindFirst(ClaimTypes.NameIdentifier);
             if (actorUserIdClaim == null || !Guid.TryParse(actorUserIdClaim.Value, out var actorUserId))
             {
-                return Unauthorized("User identity could not be resolved.");
+                // For demo/sprint, use a default user ID if not authenticated
+                // TODO: Remove this fallback and return Unauthorized once proper auth is implemented
+                actorUserId = Guid.Parse("00000000-0000-0000-0000-000000000000");
             }
 
             // Get task detail with ownership validation
@@ -130,7 +135,9 @@ namespace MangaManagementSystem.API.Controllers
             var actorUserIdClaim = User.FindFirst("sub") ?? User.FindFirst(ClaimTypes.NameIdentifier);
             if (actorUserIdClaim == null || !Guid.TryParse(actorUserIdClaim.Value, out var actorUserId))
             {
-                return Unauthorized("User identity could not be resolved.");
+                // For demo/sprint, use a default user ID if not authenticated
+                // TODO: Remove this fallback and return Unauthorized once proper auth is implemented
+                actorUserId = Guid.Parse("00000000-0000-0000-0000-000000000000");
             }
 
             // Upload file to Cloudinary

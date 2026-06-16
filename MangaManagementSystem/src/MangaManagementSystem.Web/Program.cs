@@ -95,7 +95,7 @@ namespace MangaManagementSystem.Web
             builder.Services.AddHttpClient<Services.Api.IAssistantTaskApiClient, Services.Api.AssistantTaskApiClient>(client =>
             {
                 // Base address for the API - get from configuration with fallback for development
-                var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? "https://localhost:7264";
+                var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? "https://localhost:7256";
                 client.BaseAddress = new Uri(apiBaseUrl);
             });
 
