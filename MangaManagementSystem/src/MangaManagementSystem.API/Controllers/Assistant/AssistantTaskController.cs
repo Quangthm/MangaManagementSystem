@@ -38,7 +38,7 @@ namespace MangaManagementSystem.API.Controllers
         [Consumes("multipart/form-data")]
         public async Task<ActionResult<AssistantTaskSubmitResultDto>> SubmitWorkAsync(
             [FromRoute] Guid taskId,
-            [FromForm] IFormFile file,
+            IFormFile file,
             [FromForm] string? versionNote = null)
         {
             // Validate task ID
