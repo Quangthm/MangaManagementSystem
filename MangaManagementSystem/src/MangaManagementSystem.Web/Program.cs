@@ -46,6 +46,22 @@ namespace MangaManagementSystem.Web
                 var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
                 client.BaseAddress = new Uri(settings.Value.BaseUrl);
             });
+            builder.Services.AddHttpClient<IProfilePasswordApiClient, ProfilePasswordApiClient>((sp, client) =>
+            {
+                var settings =
+                    sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+
+                client.BaseAddress =
+                    new Uri(settings.Value.BaseUrl);
+            });
+            builder.Services.AddHttpClient<IProfileApiClient, ProfileApiClient>((sp, client) =>
+            {
+                var settings =
+                    sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+
+                client.BaseAddress =
+                    new Uri(settings.Value.BaseUrl);
+            });
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddAntiforgery();
 
