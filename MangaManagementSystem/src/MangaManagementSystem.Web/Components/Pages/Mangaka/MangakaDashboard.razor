@@ -18,35 +18,8 @@
 <div class="mf-dashboard-shell" style="display: flex; height: 100vh; overflow: hidden; background: #f8fafc;">
     @* ── Left Sidebar (260px) ── *@
     <aside style="width: 260px; flex-shrink: 0; background: #fff; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column;">
-        @* Logo Header *@
-        <div style="padding: 24px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #f1f5f9;">
-            <div style="width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(135deg, #4f46e5, #7c3aed); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Small" Style="color: #fff; font-size: 18px;" />
-            </div>
-            <div>
-                <div style="font-weight: 800; font-size: 0.95rem; color: #111827; letter-spacing: -0.02em; line-height: 1;">MangaFlow</div>
-                <div style="color: #94a3b8; font-size: 0.65rem;">Mangaka Workspace</div>
-            </div>
-        </div>
-
-        @* Navigation Tabs *@
-        <div style="flex: 1; overflow: auto; padding: 16px 12px;">
-            <div style="color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.65rem; padding: 0 12px; margin-bottom: 8px;">Main Menu</div>
-            <div style="display: flex; flex-direction: column; gap: 4px;">
-                @foreach (var nav in _navItems)
-                {
-                    var isActive = _activeTab == nav.Id;
-                    <button @onclick="() => _activeTab = nav.Id"
-                            style="display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: none; border-radius: 8px; cursor: pointer; width: 100%; text-align: left; font-size: 0.85rem; font-weight: @(isActive ? 600 : 500); background: @(isActive ? "#eef2ff" : "transparent"); color: @(isActive ? "#4f46e5" : "#64748b");">
-                        <MudIcon Icon="@nav.Icon" Size="Size.Small" Style="font-size: 18px; flex-shrink: 0;" />
-                        <span>@nav.Label</span>
-                    </button>
-                }
-            </div>
-        </div>
-
-        @* Profile Widget *@
-        <div style="padding: 12px 16px; border-top: 1px solid #f1f5f9;">
+        @* Profile Header *@
+        <div style="padding: 16px; border-bottom: 1px solid #f1f5f9;">
             <MudMenu FullWidth="true" Style="cursor: pointer;">
                 <ActivatorContent>
                     <div style="display: flex; align-items: center; gap: 12px; padding: 4px; border-radius: 8px; width: 100%; min-width: 0;">
@@ -103,6 +76,23 @@
                 </ChildContent>
             </MudMenu>
         </div>
+
+        @* Navigation Tabs *@
+        <div style="flex: 1; overflow: auto; padding: 16px 12px;">
+            <div style="color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.65rem; padding: 0 12px; margin-bottom: 8px;">Main Menu</div>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+                @foreach (var nav in _navItems)
+                {
+                    var isActive = _activeTab == nav.Id;
+                    <button @onclick="() => _activeTab = nav.Id"
+                            style="display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: none; border-radius: 8px; cursor: pointer; width: 100%; text-align: left; font-size: 0.85rem; font-weight: @(isActive ? 600 : 500); background: @(isActive ? "#eef2ff" : "transparent"); color: @(isActive ? "#4f46e5" : "#64748b");">
+                        <MudIcon Icon="@nav.Icon" Size="Size.Small" Style="font-size: 18px; flex-shrink: 0;" />
+                        <span>@nav.Label</span>
+                    </button>
+                }
+            </div>
+        </div>
+
     </aside>
 
     @* ── Main Content Area ── *@
