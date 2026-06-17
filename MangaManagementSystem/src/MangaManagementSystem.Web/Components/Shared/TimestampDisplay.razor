@@ -1,0 +1,24 @@
+@namespace MangaManagementSystem.Web.Components.Shared
+
+@if (ShowValue)
+{
+    <MudText Typo="Typo.body2">@FormattedValue</MudText>
+}
+else
+{
+    <MudText Typo="Typo.body2" Color="Color.Secondary">@EmptyText</MudText>
+}
+
+@code {
+    [Parameter] public DateTime? Value { get; set; }
+    [Parameter] public string EmptyText { get; set; } = "-";
+    [Parameter] public bool ShowTime { get; set; } = true;
+
+    private bool ShowValue => Value.HasValue;
+
+    private string FormattedValue => Value.HasValue
+        ? ShowTime
+            ? Value.Value.ToLocalTime().ToString("g")
+            : Value.Value.ToLocalTime().ToString("d")
+        : EmptyText;
+}

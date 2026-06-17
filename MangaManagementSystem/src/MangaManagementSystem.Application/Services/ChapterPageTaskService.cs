@@ -116,6 +116,22 @@ namespace MangaManagementSystem.Application.Services
             }).ToList();
         }
 
+        public async Task<IEnumerable<ChapterPageTaskDto>> GetAssignedTasksForAssistantAsync(Guid assistantUserId)
+        {
+            var entities = await _unitOfWork.ChapterPageTasks.GetByAssignedUserIdWithFullContextAsync(assistantUserId);
+            return entities.Select(MapToDtoWithAssistantContext).ToList();
+        }
+
+        public async Task<ChapterPageTaskDto?> GetAssignedTaskDetailForAssistantAsync(Guid assistantUserId, Guid taskId)
+        {
+            var entity = await _unitOfWork.ChapterPageTasks.GetByIdWithFullContextAsync(taskId);
+            if (entity == null || entity.AssignedToUserId != assistantUserId)
+            {
+                return null;
+            }
+            return MapToDtoWithAssistantContext(entity);
+        }
+
         private async Task AttachPageRegionsAsync(ChapterPageTask entity, IReadOnlyList<Guid> pageRegionIds)
         {
             if (pageRegionIds == null)
@@ -159,6 +175,52 @@ namespace MangaManagementSystem.Application.Services
                     r.OriginalText,
                     r.CreatedByUserId,
                     r.UpdatedByUserId)).ToList()
+            );
+        }
+
+        private static ChapterPageTaskDto MapToDtoWithAssistantContext(ChapterPageTask t)
+        {
+            // Extract page context from first page region (task is for one page)
+            var firstRegion = t.PageRegions.FirstOrDefault();
+            var pageVersion = firstRegion?.ChapterPageVersion;
+            var page = pageVersion?.ChapterPage;
+            var chapter = page?.Chapter;
+            var series = chapter?.Series;
+            var pageFile = pageVersion?.PageFile;
+
+            return new ChapterPageTaskDto(
+                t.ChapterPageTaskId,
+                t.AssignedToUserId,
+                t.TypeCode,
+                t.StatusCode,
+                (int)t.PriorityLevel,
+                t.DueAtUtc,
+                t.CompletedPageVersionId,
+                t.TaskTitle,
+                t.TaskDescription,
+                t.PageRegions.Select(r => new PageRegionDto(
+                    r.PageRegionId,
+                    r.ChapterPageVersionId,
+                    r.TypeCode,
+                    r.RegionLabel,
+                    r.X,
+                    r.Y,
+                    r.Width,
+                    r.Height,
+                    r.ConfidenceScore,
+                    r.SourceType,
+                    r.OriginalText,
+                    r.CreatedByUserId,
+                    r.UpdatedByUserId)).ToList(),
+                SeriesId: series?.SeriesId ?? null,
+                AssignedToDisplayName: t.AssignedToUser?.DisplayName,
+                SeriesTitle: series?.Title,
+                ChapterNumberLabel: chapter?.ChapterNumberLabel,
+                ChapterTitle: chapter?.ChapterTitle,
+                PageNo: page?.PageNo ?? null,
+                PageImageUrl: pageFile?.CloudinarySecureUrl,
+                CompensationAmount: t.CompensationAmount,
+                AssignedUsername: t.AssignedToUser?.Username
             );
         }
     }
