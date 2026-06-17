@@ -18,6 +18,33 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<IReadOnlyList<Series>> GetAllWithCoverAsync();
 
         /// <summary>
+        /// Updates a series draft profile through <c>manga.usp_Series_UpdateProfile</c>.
+        /// Only series with status <c>PROPOSAL_DRAFT</c> can be updated.
+        /// The stored procedure: validates actor is active Mangaka contributor, enforces
+        /// PROPOSAL_DRAFT status guard, soft-deletes the old cover FileResource when a new
+        /// cover is supplied, creates a new SERIES_COVER FileResource, updates manga.Series,
+        /// and writes the audit event.
+        /// Cover metadata is all-or-nothing: pass all six cover params or all nulls.
+        /// Returns the new cover FileResource id (null when cover was not changed).
+        /// </summary>
+        Task<Guid?> UpdateSeriesDraftViaProcAsync(
+            Guid actorUserId,
+            Guid seriesId,
+            string title,
+            string slug,
+            string synopsis,
+            string genre,
+            string contentLanguageCode,
+            string? publicationFrequencyCode,
+            string? coverOriginalFileName,
+            string? coverCloudinaryPublicId,
+            string? coverCloudinarySecureUrl,
+            string? coverContentType,
+            long? coverFileSizeBytes,
+            string? coverSha256Hash,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Creates a series draft through the <c>manga.usp_Series_Create</c> stored procedure.
         /// The procedure enforces actor permission, creates the optional SERIES_COVER FileResource,
         /// inserts the Series (status PROPOSAL_DRAFT), seeds the creator contributor, and writes the audit event.

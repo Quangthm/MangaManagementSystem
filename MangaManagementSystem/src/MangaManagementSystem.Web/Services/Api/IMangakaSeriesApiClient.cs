@@ -41,5 +41,25 @@ namespace MangaManagementSystem.Web.Services.Api
             string proposalFileName,
             string proposalContentType,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Updates a PROPOSAL_DRAFT series profile (BF-SERIES-002).
+        /// Cover image is optional — omit to keep the existing cover.
+        /// Cover editing is locked once the series leaves PROPOSAL_DRAFT.
+        /// Returns the updated profile data including the new cover URL if a cover was replaced.
+        /// </summary>
+        Task<SeriesDraftUpdatedDto> UpdateDraftAsync(
+            Guid actorUserId,
+            Guid seriesId,
+            string title,
+            string synopsis,
+            string genre,
+            string contentLanguageCode,
+            string? publicationFrequencyCode = null,
+            string? slug = null,
+            byte[]? coverFileBytes = null,
+            string? coverFileName = null,
+            string? coverContentType = null,
+            CancellationToken cancellationToken = default);
     }
 }

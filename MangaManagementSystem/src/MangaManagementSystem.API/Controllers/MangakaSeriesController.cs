@@ -4,6 +4,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.API.Contracts;
 using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.Application.Features.Mangaka.Series.Commands.UpdateSeriesDraft;
+
 using MangaManagementSystem.Application.Features.Mangaka.SeriesProposals.Commands.SubmitSeriesProposal;
 using MangaManagementSystem.Application.Interfaces;
 using MediatR;
@@ -173,8 +175,80 @@ namespace MangaManagementSystem.API.Controllers
             }
         }
 
-        private bool TryResolveActorUserId(out Guid actorUserId)
+        /// <summary>
+        /// Updates a PROPOSAL_DRAFT series profile (BF-SERIES-002).
+        /// Accepts optional cover image in multipart/form-data.
+        /// Cover editing is locked once the series leaves PROPOSAL_DRAFT; the stored procedure
+        /// enforces this. Uses MediatR/CQRS — all orchestration is in UpdateSeriesDraftCommandHandler.
+        /// </summary>
+        [HttpPut("{seriesId:guid}/draft-profile")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> UpdateDraftProfileAsync(
+            Guid seriesId,
+            [FromForm] UpdateSeriesDraftForm request,
+            CancellationToken cancellationToken)
         {
+            if (!TryResolveActorUserId(out Guid actorUserId))
+            {
+                return BadRequest(new ApiErrorResponse(
+                    "Could not identify the requesting user. Please sign in again."));
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Title))
+            {
+                return BadRequest(new ApiErrorResponse("A title is required."));
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Genre))
+            {
+                return BadRequest(new ApiErrorResponse("A genre is required."));
+            }
+
+            byte[]? coverBytes = null;
+            string? coverFileName = null;
+            string? coverContentType = null;
+
+            if (request.CoverFile is { Length: > 0 })
+            {
+                using var ms = new MemoryStream();
+                await request.CoverFile.CopyToAsync(ms, cancellationToken);
+                coverBytes = ms.ToArray();
+                coverFileName = request.CoverFile.FileName;
+                coverContentType = request.CoverFile.ContentType;
+            }
+
+            var command = new UpdateSeriesDraftCommand(
+                ActorUserId: actorUserId,
+                SeriesId: seriesId,
+                Title: request.Title,
+                Synopsis: request.Synopsis,
+                Genre: request.Genre,
+                ContentLanguageCode: request.ContentLanguageCode,
+                PublicationFrequencyCode: request.PublicationFrequencyCode,
+                Slug: request.Slug,
+                CoverFileBytes: coverBytes,
+                CoverFileName: coverFileName,
+                CoverContentType: coverContentType);
+
+            try
+            {
+                SeriesDraftUpdatedDto result = await _mediator.Send(command, cancellationToken);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new ApiErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error updating series draft profile for series {SeriesId}.", seriesId);
+                return Problem(
+                    detail: "We could not update the series draft right now. Please try again later.",
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
+        }
+
+        private bool TryResolveActorUserId(out Guid actorUserId)        {
             actorUserId = Guid.Empty;
 
             if (Request.Headers.TryGetValue(ActorUserIdHeader, out var headerValues))

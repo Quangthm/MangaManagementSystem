@@ -149,6 +149,77 @@ namespace MangaManagementSystem.Web.Services.Api
             throw new InvalidOperationException(message);
         }
 
+        public async Task<SeriesDraftUpdatedDto> UpdateDraftAsync(
+            Guid actorUserId,
+            Guid seriesId,
+            string title,
+            string synopsis,
+            string genre,
+            string contentLanguageCode,
+            string? publicationFrequencyCode = null,
+            string? slug = null,
+            byte[]? coverFileBytes = null,
+            string? coverFileName = null,
+            string? coverContentType = null,
+            CancellationToken cancellationToken = default)
+        {
+            using var form = new MultipartFormDataContent();
+            form.Add(new StringContent(title), "Title");
+            form.Add(new StringContent(synopsis), "Synopsis");
+            form.Add(new StringContent(genre), "Genre");
+            form.Add(new StringContent(contentLanguageCode), "ContentLanguageCode");
+
+            if (!string.IsNullOrWhiteSpace(publicationFrequencyCode))
+            {
+                form.Add(new StringContent(publicationFrequencyCode), "PublicationFrequencyCode");
+            }
+
+            if (!string.IsNullOrWhiteSpace(slug))
+            {
+                form.Add(new StringContent(slug), "Slug");
+            }
+
+            if (coverFileBytes is { Length: > 0 })
+            {
+                var fileContent = new ByteArrayContent(coverFileBytes);
+                fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(
+                    coverContentType ?? "application/octet-stream");
+                form.Add(fileContent, "CoverFile", coverFileName ?? "cover");
+            }
+
+            var route = $"api/mangaka/series/{seriesId}/draft-profile";
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Put, route)
+            {
+                Content = form
+            };
+            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var updated = await response.Content.ReadFromJsonAsync<SeriesDraftUpdatedDto>(
+                    cancellationToken: cancellationToken);
+
+                if (updated is null)
+                {
+                    throw new InvalidOperationException(
+                        "The draft was updated but no confirmation was returned. Please refresh to see the latest data.");
+                }
+
+                return updated;
+            }
+
+            var message = await ExtractErrorMessageAsync(response);
+            _logger.LogWarning(
+                "Update series draft profile failed for series {SeriesId}: {StatusCode} {ReasonPhrase}",
+                seriesId,
+                (int)response.StatusCode,
+                response.ReasonPhrase);
+
+            throw new InvalidOperationException(message);
+        }
+
         private static async Task<string> ExtractErrorMessageAsync(HttpResponseMessage response)
         {
             try

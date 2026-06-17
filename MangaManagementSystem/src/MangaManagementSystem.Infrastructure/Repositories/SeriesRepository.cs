@@ -139,5 +139,100 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     return new InvalidOperationException("We could not create the series draft right now. Please try again.", ex);
             }
         }
+
+        // ── Custom error numbers raised by manga.usp_Series_UpdateProfile ────────
+        private const int ErrUpdateLockFailed           = 57401;
+        private const int ErrUpdateSeriesNotFound       = 57402;
+        private const int ErrUpdateNotProposalDraft     = 57403;
+        private const int ErrUpdateNotActiveMangaka     = 57404;
+        private const int ErrUpdateIncompleteCoverMeta  = 57405;
+
+        /// <summary>
+        /// Updates a PROPOSAL_DRAFT series profile through <c>manga.usp_Series_UpdateProfile</c>.
+        /// Uses ADO.NET CommandType.StoredProcedure with strongly-typed SqlParameters.
+        /// Maps known custom error numbers to user-safe InvalidOperationException messages.
+        /// </summary>
+        public async Task<Guid?> UpdateSeriesDraftViaProcAsync(
+            Guid actorUserId,
+            Guid seriesId,
+            string title,
+            string slug,
+            string synopsis,
+            string genre,
+            string contentLanguageCode,
+            string? publicationFrequencyCode,
+            string? coverOriginalFileName,
+            string? coverCloudinaryPublicId,
+            string? coverCloudinarySecureUrl,
+            string? coverContentType,
+            long? coverFileSizeBytes,
+            string? coverSha256Hash,
+            CancellationToken cancellationToken = default)
+        {
+            var conn = _context.Database.GetDbConnection();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "manga.usp_Series_UpdateProfile";
+            cmd.CommandType = CommandType.StoredProcedure;
+
+            cmd.Parameters.Add(new SqlParameter("@actor_user_id", SqlDbType.UniqueIdentifier) { Value = actorUserId });
+            cmd.Parameters.Add(new SqlParameter("@series_id", SqlDbType.UniqueIdentifier) { Value = seriesId });
+            cmd.Parameters.Add(new SqlParameter("@title", SqlDbType.NVarChar, 200) { Value = title });
+            cmd.Parameters.Add(new SqlParameter("@slug", SqlDbType.NVarChar, 220) { Value = slug });
+            cmd.Parameters.Add(new SqlParameter("@synopsis", SqlDbType.NVarChar, -1) { Value = synopsis });
+            cmd.Parameters.Add(new SqlParameter("@genre", SqlDbType.NVarChar, 100) { Value = genre });
+            cmd.Parameters.Add(new SqlParameter("@content_language_code", SqlDbType.NVarChar, 10) { Value = contentLanguageCode });
+            cmd.Parameters.Add(new SqlParameter("@publication_frequency_code", SqlDbType.NVarChar, 50) { Value = (object?)publicationFrequencyCode ?? DBNull.Value });
+
+            cmd.Parameters.Add(new SqlParameter("@cover_original_file_name", SqlDbType.NVarChar, 260) { Value = (object?)coverOriginalFileName ?? DBNull.Value });
+            cmd.Parameters.Add(new SqlParameter("@cover_cloudinary_public_id", SqlDbType.NVarChar, 255) { Value = (object?)coverCloudinaryPublicId ?? DBNull.Value });
+            cmd.Parameters.Add(new SqlParameter("@cover_cloudinary_secure_url", SqlDbType.NVarChar, 1000) { Value = (object?)coverCloudinarySecureUrl ?? DBNull.Value });
+            cmd.Parameters.Add(new SqlParameter("@cover_content_type", SqlDbType.NVarChar, 100) { Value = (object?)coverContentType ?? DBNull.Value });
+            cmd.Parameters.Add(new SqlParameter("@cover_file_size_bytes", SqlDbType.BigInt) { Value = (object?)coverFileSizeBytes ?? DBNull.Value });
+            cmd.Parameters.Add(new SqlParameter("@cover_sha256_hash", SqlDbType.Char, 64) { Value = (object?)coverSha256Hash ?? DBNull.Value });
+
+            var outNewCoverFileResourceId = new SqlParameter("@new_cover_file_resource_id", SqlDbType.UniqueIdentifier)
+            {
+                Direction = ParameterDirection.Output
+            };
+            cmd.Parameters.Add(outNewCoverFileResourceId);
+
+            if (conn.State != System.Data.ConnectionState.Open)
+            {
+                await conn.OpenAsync(cancellationToken);
+            }
+
+            try
+            {
+                await cmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+            catch (SqlException ex)
+            {
+                throw MapUpdateSqlException(ex);
+            }
+
+            var rawValue = outNewCoverFileResourceId.Value;
+            return rawValue is DBNull || rawValue == null ? null : (Guid)rawValue;
+        }
+
+        private static InvalidOperationException MapUpdateSqlException(SqlException ex) =>
+            ex.Number switch
+            {
+                ErrUpdateLockFailed =>
+                    new InvalidOperationException("Could not process the profile update right now. Please try again.", ex),
+                ErrUpdateSeriesNotFound =>
+                    new InvalidOperationException("The selected series could not be found.", ex),
+                ErrUpdateNotProposalDraft =>
+                    new InvalidOperationException("Only a series in draft status can have its profile updated here.", ex),
+                ErrUpdateNotActiveMangaka =>
+                    new InvalidOperationException("Only an active Mangaka contributor can update this series profile.", ex),
+                ErrUpdateIncompleteCoverMeta =>
+                    new InvalidOperationException("The cover file information is incomplete. Please re-select the image and try again.", ex),
+                ErrDuplicateKey or ErrUniqueIndex =>
+                    new InvalidOperationException("A series with this title or slug already exists. Please choose a different title.", ex),
+                ErrCheckConstraint =>
+                    new InvalidOperationException("Some of the series details are not valid. Please check the language and frequency values.", ex),
+                _ =>
+                    new InvalidOperationException("We could not update the series draft right now. Please try again.", ex)
+            };
     }
 }
