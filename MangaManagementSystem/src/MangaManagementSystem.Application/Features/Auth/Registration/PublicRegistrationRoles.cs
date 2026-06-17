@@ -5,8 +5,11 @@
         public const string Mangaka = "Mangaka";
         public const string Assistant = "Assistant";
         public const string TantouEditor = "Tantou Editor";
-        public const string EditorialBoardMember = "Editorial Board Member";
-        public const string EditorialBoardChief = "Editorial Board Chief";
+        public const string EditorialBoardMember =
+            "Editorial Board Member";
+        public const string EditorialBoardChief =
+            "Editorial Board Chief";
+        public const string Admin = "Admin";
 
         private static readonly IReadOnlyDictionary<string, string>
             CanonicalRoleNames =
@@ -16,8 +19,11 @@
                     [Mangaka] = Mangaka,
                     [Assistant] = Assistant,
                     [TantouEditor] = TantouEditor,
-                    [EditorialBoardMember] = EditorialBoardMember,
-                    [EditorialBoardChief] = EditorialBoardChief
+                    [EditorialBoardMember] =
+                        EditorialBoardMember,
+                    [EditorialBoardChief] =
+                        EditorialBoardChief,
+                    [Admin] = Admin
                 };
 
         public static IReadOnlyCollection<string> All =>
@@ -41,13 +47,18 @@
                 return false;
             }
 
-            normalizedRoleName = canonicalRoleName;
+            normalizedRoleName =
+                canonicalRoleName;
+
             return true;
         }
 
-        public static string NormalizeOrThrow(string? roleName)
+        public static string NormalizeOrThrow(
+            string? roleName)
         {
-            if (TryNormalize(roleName, out var normalizedRoleName))
+            if (TryNormalize(
+                    roleName,
+                    out var normalizedRoleName))
             {
                 return normalizedRoleName;
             }

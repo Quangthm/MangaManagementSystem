@@ -18,7 +18,7 @@ This session implemented the confirmed registration and Google Signup requiremen
 
 
 
-* Public users may register for all operational roles except `Admin`.
+* Public users may register for all supported roles, including `Admin`.
 
 * Google Signup uses the role selected on the registration UI.
 
@@ -54,9 +54,11 @@ Added a server-side public registration whitelist containing:
 
 * Editorial Board Chief
 
+* Admin
 
 
-`Admin` is intentionally excluded.
+
+`Admin` is included based on the updated leader requirement. A newly registered Admin account remains `PENDING_APPROVAL` until it is approved by an active Admin.
 
 
 
@@ -81,6 +83,8 @@ Updated the registration role dropdown to include:
 * Editorial Board Member
 
 * Editorial Board Chief
+
+* Admin
 
 
 
@@ -258,44 +262,22 @@ There were no compilation errors. Remaining warnings existed in other project ar
 
 
 
-### Public Admin role rejection
+### Public Admin registration and approval lifecycle
 
+Public registration was tested using role `Admin`.
 
+The following lifecycle was verified:
 
-Sent a registration request using:
+1. The public Register page displayed `Admin` in the role dropdown.
+2. The user submitted an Admin registration request.
+3. The system sent a six-digit email OTP.
+4. After successful OTP verification, the Admin account was created with status `PENDING_APPROVAL`.
+5. The pending Admin account could not log in before approval.
+6. An existing active Admin reviewed the account in Admin User Approval.
+7. After approval, the account status changed from `PENDING_APPROVAL` to `ACTIVE`.
+8. The newly activated Admin account logged in successfully and accessed the System Administration Dashboard.
 
-
-
-```json
-
-{
-
-&#x20; "roleName": "Admin"
-
-}
-
-```
-
-
-
-Result:
-
-
-
-```text
-
-400 Bad Request
-
-The selected role is not available for public registration.
-
-```
-
-
-
-This confirmed that directly modifying the request cannot create an Admin account.
-
-
-
+This confirmed that public users may register for the Admin role according to the updated leader requirement, while activation remains controlled by an existing active Admin.
 ### Google Signup role test
 
 
