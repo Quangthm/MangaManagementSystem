@@ -645,6 +645,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             string passwordHash)
         {
             var conn = _context.Database.GetDbConnection();
+
             await using var cmd = conn.CreateCommand();
 
             cmd.CommandText =
@@ -655,7 +656,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
             cmd.Parameters.Add(
                 new SqlParameter(
-                    "@user_id",
+                    "@target_user_id",
                     SqlDbType.UniqueIdentifier)
                 {
                     Value = userId
@@ -663,11 +664,37 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
             cmd.Parameters.Add(
                 new SqlParameter(
-                    "@password_hash",
+                    "@new_password_hash",
                     SqlDbType.NVarChar,
                     255)
                 {
                     Value = passwordHash
+                });
+
+            cmd.Parameters.Add(
+                new SqlParameter(
+                    "@actor_user_id",
+                    SqlDbType.UniqueIdentifier)
+                {
+                    Value = DBNull.Value
+                });
+
+            cmd.Parameters.Add(
+                new SqlParameter(
+                    "@reset_mode",
+                    SqlDbType.NVarChar,
+                    30)
+                {
+                    Value = "TOKEN_RESET"
+                });
+
+            cmd.Parameters.Add(
+                new SqlParameter(
+                    "@reset_reason",
+                    SqlDbType.NVarChar,
+                    500)
+                {
+                    Value = "Password reset verified by OTP."
                 });
 
             if (conn.State != ConnectionState.Open)
