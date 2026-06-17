@@ -12,6 +12,13 @@
 </head>
 
 <body>
+    <form id="global-logout-form"
+          action="/api/auth/logout"
+          method="post"
+          data-enhance="false"
+          style="display: none;">
+        <AntiforgeryToken />
+    </form>
     <MudThemeProvider @rendermode="InteractiveServer" />
     <MudPopoverProvider @rendermode="InteractiveServer" />
     <MudDialogProvider @rendermode="InteractiveServer" />

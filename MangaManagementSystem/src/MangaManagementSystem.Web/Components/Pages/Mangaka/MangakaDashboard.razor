@@ -66,10 +66,10 @@
                         Account Settings
                     </MudMenuItem>
                     <MudDivider />
-                    <MudMenuItem Style="color: #dc2626;" OnClick="@(() => Nav.NavigateTo("/signout", true))">
-                        <MudIcon Icon="@Icons.Material.Filled.Logout" Size="Size.Small" Style="margin-right: 8px; color: #dc2626;" />
-                        Logout
-                    </MudMenuItem>
+
+                    <div class="mangaka-logout-row">
+                        <LogoutForm />
+                    </div>
                 </ChildContent>
             </MudMenu>
         </div>

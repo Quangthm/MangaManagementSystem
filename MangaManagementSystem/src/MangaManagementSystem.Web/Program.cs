@@ -146,10 +146,10 @@ namespace MangaManagementSystem.Web
 
             app.UseHttpsRedirection();
             app.UseStaticFiles();
-            app.UseAntiforgery();
 
             app.UseAuthentication();
             app.UseAuthorization();
+            app.UseAntiforgery();
 
             app.MapPost("/api/auth/login", async (
                 HttpContext context,
@@ -468,19 +468,50 @@ namespace MangaManagementSystem.Web
                 }
             }).DisableAntiforgery();
 
-            app.MapPost("/api/auth/logout", async (HttpContext context, ILogger<Program> logger) =>
-            {
-                logger.LogInformation("Logout requested for user {Name}", context.User.Identity?.Name ?? "(anonymous)");
-                await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-                return Results.Redirect("/login");
-            }).DisableAntiforgery();
+            app.MapPost(
+    "/api/auth/logout",
+    async (
+        HttpContext context,
+        Microsoft.AspNetCore.Antiforgery
+            .IAntiforgery antiforgery,
+        ILogger<Program> logger) =>
+    {
+        try
+        {
+            await antiforgery
+                .ValidateRequestAsync(context);
+        }
+        catch (
+            Microsoft.AspNetCore.Antiforgery
+                .AntiforgeryValidationException)
+        {
+            logger.LogWarning(
+                "Rejected logout request because the antiforgery token was invalid.");
 
-app.MapGet("/signout", async (CustomAuthenticationStateProvider authStateProvider, HttpContext context) =>
-{
-    await authStateProvider.MarkUserAsLoggedOut();
-    await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-    return Results.Redirect("/login");
-});
+            return Results.BadRequest(
+                new
+                {
+                    message =
+                        "Invalid logout request."
+                });
+        }
+
+        var username =
+            context.User.Identity?.Name
+            ?? "(anonymous)";
+
+        await context.SignOutAsync(
+            CookieAuthenticationDefaults
+                .AuthenticationScheme);
+
+        logger.LogInformation(
+            "User {Name} logged out.",
+            username);
+
+        return Results.Redirect("/login");
+    })
+    .RequireAuthorization();
+
 
 
 
