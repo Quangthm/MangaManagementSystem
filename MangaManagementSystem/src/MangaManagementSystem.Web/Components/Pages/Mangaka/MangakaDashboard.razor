@@ -824,7 +824,7 @@
         _editSynopsis = series.Synopsis ?? "";
         _editGenre = series.Genre;
         _editLanguage = series.ContentLanguageCode ?? "ja";
-        _editFrequency = null; // not currently stored in SeriesCardData; defaults to null
+        _editFrequency = series.PublicationFrequencyCode;
         _draftSavingEdit = false;
         ClearEditCover();
         _draftDetailsOpen = true;
@@ -937,6 +937,7 @@
                     Synopsis = result.Synopsis,
                     ContentLanguageCode = result.ContentLanguageCode,
                     Slug = result.Slug,
+                    PublicationFrequencyCode = result.PublicationFrequencyCode,
                     // Use the new cover URL if one was uploaded; otherwise keep the existing one
                     CoverUrl = result.NewCoverUrl ?? _seriesData[idx].CoverUrl
                 };
@@ -1176,7 +1177,8 @@
                 ContentLanguageCode: s.ContentLanguageCode,
                 CoverUrl: s.CoverUrl,
                 CreatedAtUtc: s.CreatedAtUtc,
-                UpdatedAtUtc: s.UpdatedAtUtc
+                UpdatedAtUtc: s.UpdatedAtUtc,
+                PublicationFrequencyCode: s.PublicationFrequencyCode
             )).ToList();
         }
         catch
@@ -1225,7 +1227,8 @@
                 ContentLanguageCode: _newDraftLanguage,
                 CoverUrl: null, // cover URL requires a DB round-trip; will show on next full load
                 CreatedAtUtc: DateTime.UtcNow,
-                UpdatedAtUtc: null
+                UpdatedAtUtc: null,
+                PublicationFrequencyCode: null // new drafts are created without a frequency
             ));
 
             _draftCreated = true;
@@ -1267,7 +1270,8 @@
         string? ContentLanguageCode,
         string? CoverUrl,
         DateTime CreatedAtUtc,
-        DateTime? UpdatedAtUtc)
+        DateTime? UpdatedAtUtc,
+        string? PublicationFrequencyCode)
     {
         public string Color => StatusCode switch
         {
