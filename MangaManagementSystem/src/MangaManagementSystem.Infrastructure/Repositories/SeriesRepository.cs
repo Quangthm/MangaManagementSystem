@@ -37,6 +37,18 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .FirstOrDefaultAsync(s => s.SeriesId == seriesId);
         }
 
+        /// <summary>
+        /// Returns all series with CoverFile eagerly loaded so the dashboard can render
+        /// cover thumbnails in a single query. Display-only — not for update workflows.
+        /// </summary>
+        public async Task<IReadOnlyList<Series>> GetAllWithCoverAsync()
+        {
+            return await _context.Series
+                .Include(s => s.CoverFile)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+
         public async Task<(Guid newSeriesId, Guid? coverFileResourceId)> CreateSeriesDraftViaProcAsync(
             Guid actorUserId,
             string title,

@@ -7,8 +7,6 @@
 @inject ISnackbar Snackbar
 @inject ISeriesService SeriesService
 @inject IChapterPageTaskService TaskService
-@inject IFileStorageService FileStorageService
-@inject IFileResourceService FileResourceService
 @inject IMangakaSeriesApiClient MangakaSeriesApiClient
 @inject IProfileApiClient ProfileApiClient
 @inject AuthenticationStateProvider AuthStateProvider
@@ -128,63 +126,57 @@
                 <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px;">
                     @foreach (var series in _seriesData)
                     {
-                        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); position: relative; overflow: hidden; cursor: pointer;"
-                             @onclick="() => OpenWorkspace(series.Id)">
-                            @* Kebab menu *@
-                            <div style="position: absolute; top: 12px; right: 12px; z-index: 10;" @onclick:stopPropagation>
-                                <MudMenu FullWidth="true">
+                        @* ── Series Card ── *@
+                        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); position: relative; overflow: hidden; cursor: pointer; display: flex; flex-direction: column;"
+                             @onclick="() => OpenSeriesCard(series)">
+
+                            @* Cover thumbnail / placeholder *@
+                            @if (!string.IsNullOrWhiteSpace(series.CoverUrl))
+                            {
+                                <div style="height: 130px; overflow: hidden; flex-shrink: 0;">
+                                    <img src="@series.CoverUrl"
+                                         alt="Cover for @series.Title"
+                                         style="width: 100%; height: 100%; object-fit: cover; display: block;" />
+                                </div>
+                            }
+                            else
+                            {
+                                <div style="height: 130px; background: @(series.Color + "12"); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                    <MudIcon Icon="@Icons.Material.Filled.MenuBook"
+                                             Style="@($"font-size: 48px; color: {series.Color}; opacity: 0.35;")" />
+                                </div>
+                            }
+
+                            @* Kebab menu — top-right over thumbnail *@
+                            <div style="position: absolute; top: 8px; right: 8px; z-index: 10;" @onclick:stopPropagation>
+                                <MudMenu>
                                     <ActivatorContent>
-                                        <MudIconButton Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" />
+                                        <MudIconButton Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small"
+                                                       Style="background: rgba(255,255,255,0.85); border-radius: 50%;" />
                                     </ActivatorContent>
                                     <ChildContent>
-                                        <MudMenuItem OnClick="@(() => OpenEditCover(series.Id, series.Title))">
-                                            <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" Style="margin-right: 8px; color: #4f46e5;" />
-                                            Upload Cover
-                                        </MudMenuItem>
-                                        <MudMenuItem OnClick="@(() => ToggleFavorite(series.Id))">
-                                            <MudIcon Icon="@(IsFavorite(series.Id) ? Icons.Material.Filled.Favorite : Icons.Material.Outlined.FavoriteBorder)" Size="Size.Small" Style="margin-right: 8px; color: #e11d48;" />
-                                            @(IsFavorite(series.Id) ? "Unfavorite" : "Favorite")
-                                        </MudMenuItem>
-                                        <MudDivider />
-                                         <MudMenuItem Style="color: #dc2626;" OnClick="@(() => Snackbar.Add("Delete Series - not implemented", Severity.Warning))">
-                                             <MudIcon Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Style="margin-right: 8px; color: #dc2626;" />
-                                             Delete
-                                         </MudMenuItem>
-                                         @if (series.StatusCode == "PROPOSAL_DRAFT")
-                                         {
-                                             <MudDivider />
-                                             <MudMenuItem OnClick="@(() => OpenSubmitProposal(series.Id, series.Title))">
-                                                 <MudIcon Icon="@Icons.Material.Filled.Send" Size="Size.Small" Style="margin-right: 8px; color: #059669;" />
-                                                 Submit Proposal
-                                             </MudMenuItem>
-                                         }
-                                         @if (series.StatusCode == "SERIALIZED")
+                                        @* Cancel Draft — PROPOSAL_DRAFT only, disabled (no backend yet) *@
+                                        @if (series.StatusCode == "PROPOSAL_DRAFT")
                                         {
-                                            <MudDivider />
-                                            <MudMenuItem Style="cursor: default; opacity: 0.8;" Disabled="true">
-                                                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: @SeriesStatusHelper.TextColor(series.StatusCode); margin-right: 8px; flex-shrink: 0;"></span>
-                                                <span style="color: #64748b;">@SeriesStatusHelper.DisplayName(series.StatusCode)</span>
-                                            </MudMenuItem>
+                                            <MudTooltip Text="Cancel workflow will be available in a future update.">
+                                                <MudMenuItem Disabled="true">
+                                                    <MudIcon Icon="@Icons.Material.Filled.Cancel" Size="Size.Small" Style="margin-right: 8px; color: #94a3b8;" />
+                                                    <span style="color: #94a3b8;">Cancel Draft</span>
+                                                </MudMenuItem>
+                                            </MudTooltip>
                                         }
                                     </ChildContent>
                                 </MudMenu>
                             </div>
 
                             @* Accent bar *@
-                            <div style="height: 4px; background: @series.Color;"></div>
+                            <div style="height: 3px; background: @series.Color; flex-shrink: 0;"></div>
 
                             @* Card body *@
-                            <div style="padding: 20px;">
-                                <div style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px;">
-                                    <div style="width: 44px; height: 44px; border-radius: 10px; background: @(series.Color + "18"); border: 1px solid @(series.Color + "30"); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                                        <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Small" Style="@($"font-size: 24px; color: {series.Color};")" />
-                                    </div>
-                                    <div style="flex: 1; min-width: 0;">
-                                        <div style="color: #111827; font-weight: 700; font-size: 0.9rem; line-height: 1.3; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@series.Title</div>
-                                    </div>
-                                </div>
+                            <div style="padding: 16px; flex: 1; display: flex; flex-direction: column; gap: 10px;">
+                                <div style="color: #111827; font-weight: 700; font-size: 0.9rem; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@series.Title</div>
 
-                                <div style="display: flex; gap: 6px; margin-bottom: 16px;">
+                                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
                                     <span style="background: #f1f5f9; color: #475569; font-size: 0.65rem; padding: 2px 8px; border-radius: 12px; font-weight: 500; height: 22px; display: flex; align-items: center;">@series.Genre</span>
                                     <span style="background: @SeriesStatusHelper.BadgeColor(series.StatusCode); color: @SeriesStatusHelper.TextColor(series.StatusCode); font-size: 0.65rem; padding: 2px 8px; border-radius: 12px; font-weight: 600; height: 22px; display: flex; align-items: center;">@SeriesStatusHelper.DisplayName(series.StatusCode)</span>
                                 </div>
@@ -194,6 +186,31 @@
                                     <span style="color: #94a3b8; font-size: 0.7rem;">Updated @series.LastUpdated</span>
                                 </div>
                             </div>
+
+                            @* Card action row — visible primary actions for PROPOSAL_DRAFT *@
+                            @if (series.StatusCode == "PROPOSAL_DRAFT")
+                            {
+                                <div style="padding: 0 16px 14px; display: flex; gap: 8px;" @onclick:stopPropagation>
+                                    <MudButton Variant="Variant.Outlined" Size="Size.Small" FullWidth="true"
+                                               OnClick="@(() => OpenDraftDetails(series))">
+                                        View Draft
+                                    </MudButton>
+                                    <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" FullWidth="true"
+                                               StartIcon="@Icons.Material.Filled.Send"
+                                               OnClick="@(() => OpenSubmitProposal(series.Id, series.Title))">
+                                        Submit
+                                    </MudButton>
+                                </div>
+                            }
+                            else if (series.StatusCode is "UNDER_EDITORIAL_REVIEW" or "UNDER_BOARD_REVIEW")
+                            {
+                                <div style="padding: 0 16px 14px;" @onclick:stopPropagation>
+                                    <MudButton Variant="Variant.Outlined" Size="Size.Small" FullWidth="true"
+                                               OnClick="@(() => OpenReviewStatus(series))">
+                                        View Status
+                                    </MudButton>
+                                </div>
+                            }
                         </div>
                     }
 
@@ -399,38 +416,131 @@
     </MudCard>
 </MudOverlay>
 
-@* ── Edit Cover Modal (for SERIALIZED / COMPLETED / CANCELLED) ── *@
-<MudOverlay Visible="@_editCoverDialogOpen" OnClick="@(() => _editCoverDialogOpen = false)">
-    <MudCard Style="width: 420px; max-width: 90vw; margin: 10% auto 0; border-radius: 14px;" @onclick:stopPropagation>
+@* ── Draft Details Modal shell (read-only; Edit Draft backend is BF-SERIES-002) ── *@
+<MudOverlay Visible="@_draftDetailsOpen" OnClick="@(() => _draftDetailsOpen = false)">
+    <MudCard Style="width: 520px; max-width: 92vw; margin: 5% auto 0; border-radius: 14px;" @onclick:stopPropagation>
         <MudCardContent Style="padding: 0;">
             <div style="padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between;">
                 <div>
-                    <div style="font-weight: 700; font-size: 1rem; color: #111827;">Update Cover</div>
-                    <div style="color: #94a3b8; font-size: 0.72rem;">@(_editingSeriesTitle ?? "Series")</div>
+                    <div style="font-weight: 700; font-size: 1rem; color: #111827;">Draft Details</div>
+                    <div style="color: #94a3b8; font-size: 0.72rem;">Status: @SeriesStatusHelper.DisplayName("PROPOSAL_DRAFT")</div>
                 </div>
                 <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
-                               OnClick="@(() => _editCoverDialogOpen = false)" />
+                               OnClick="@(() => _draftDetailsOpen = false)" />
             </div>
-            <div style="padding: 24px; display: flex; flex-direction: column; gap: 16px;">
-                @if (_coverPreview != null)
+
+            <div style="padding: 24px; display: flex; flex-direction: column; gap: 14px;">
+                @* Cover thumbnail *@
+                @if (!string.IsNullOrWhiteSpace(_detailSeries?.CoverUrl))
                 {
-                    <div style="display: flex; justify-content: center;">
-                        <img src="@_coverPreview" alt="Cover preview" style="width: 120px; height: 170px; object-fit: cover; border-radius: 8px; border: 1px solid #e2e8f0;" />
+                    <div style="display: flex; justify-content: center; margin-bottom: 4px;">
+                        <img src="@_detailSeries.CoverUrl" alt="Series cover"
+                             style="width: 90px; height: 128px; object-fit: cover; border-radius: 8px; border: 1px solid #e2e8f0;" />
                     </div>
                 }
-                <MudFileUpload T="IBrowserFile" FilesChanged="@(async (IBrowserFile f) => { if (f == null) return; _editCoverFileName = f.Name; _editCoverContentType = f.ContentType; using var s = f.OpenReadStream(5*1024*1024); using var ms = new MemoryStream(); await s.CopyToAsync(ms); _editCoverBytes = ms.ToArray(); _coverPreview = $"data:{f.ContentType};base64,{Convert.ToBase64String(_editCoverBytes)}"; })">
-                    <ActivatorContent>
-                        <div style="border: 1.5px dashed #c7d2fe; border-radius: 8px; padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; background: #fafafe;">
-                            <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" Style="font-size: 28px; color: #a5b4fc;" />
-                            <div style="color: #64748b; font-size: 0.75rem; font-weight: 500;">Click to upload cover art</div>
-                            <div style="color: #94a3b8; font-size: 0.65rem;">PNG, JPG, WEBP · Max 5MB</div>
-                        </div>
-                    </ActivatorContent>
-                </MudFileUpload>
-                <MudButton Variant="Variant.Filled" FullWidth="true"
-                           Disabled="@(_editCoverBytes == null)"
-                           OnClick="SaveCoverUpload">
-                    Save Cover
+
+                <div>
+                    <div style="font-size: 0.72rem; color: #94a3b8; margin-bottom: 2px;">Title</div>
+                    <div style="font-weight: 700; font-size: 1rem; color: #111827;">@_detailSeries?.Title</div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(_detailSeries?.Synopsis))
+                {
+                    <div>
+                        <div style="font-size: 0.72rem; color: #94a3b8; margin-bottom: 2px;">Synopsis</div>
+                        <div style="font-size: 0.85rem; color: #374151; line-height: 1.5;">@_detailSeries.Synopsis</div>
+                    </div>
+                }
+
+                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <div>
+                        <div style="font-size: 0.72rem; color: #94a3b8; margin-bottom: 2px;">Genre</div>
+                        <span style="background: #f1f5f9; color: #475569; font-size: 0.75rem; padding: 3px 10px; border-radius: 12px;">@_detailSeries?.Genre</span>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.72rem; color: #94a3b8; margin-bottom: 2px;">Language</div>
+                        <span style="background: #f1f5f9; color: #475569; font-size: 0.75rem; padding: 3px 10px; border-radius: 12px;">@LanguageLabel(_detailSeries?.ContentLanguageCode)</span>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(_detailSeries?.Slug))
+                {
+                    <div>
+                        <div style="font-size: 0.72rem; color: #94a3b8; margin-bottom: 2px;">URL Slug</div>
+                        <div style="font-size: 0.8rem; color: #6366f1; font-family: monospace;">@_detailSeries.Slug</div>
+                    </div>
+                }
+
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Style="font-size: 0.78rem;">
+                    Full draft editing (title, synopsis, genre, cover) will be available in a future update (BF-SERIES-002).
+                </MudAlert>
+
+                <div style="display: flex; gap: 10px; padding-top: 4px;">
+                    <MudButton Variant="Variant.Outlined" FullWidth="true"
+                               OnClick="@(() => _draftDetailsOpen = false)">
+                        Close
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true"
+                               StartIcon="@Icons.Material.Filled.Send"
+                               OnClick="@(() => { _draftDetailsOpen = false; if (_detailSeries != null) OpenSubmitProposal(_detailSeries.Id, _detailSeries.Title); })">
+                        Submit Proposal
+                    </MudButton>
+                </div>
+            </div>
+        </MudCardContent>
+    </MudCard>
+</MudOverlay>
+
+@* ── Review Status Modal (read-only — UNDER_EDITORIAL_REVIEW / UNDER_BOARD_REVIEW / etc.) ── *@
+<MudOverlay Visible="@_reviewStatusOpen" OnClick="@(() => _reviewStatusOpen = false)">
+    <MudCard Style="width: 440px; max-width: 92vw; margin: 8% auto 0; border-radius: 14px;" @onclick:stopPropagation>
+        <MudCardContent Style="padding: 0;">
+            <div style="padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between;">
+                <div>
+                    <div style="font-weight: 700; font-size: 1rem; color: #111827;">Series Status</div>
+                    <div style="color: #94a3b8; font-size: 0.72rem; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+                         title="@_reviewSeries?.Title">
+                        @_reviewSeries?.Title
+                    </div>
+                </div>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                               OnClick="@(() => _reviewStatusOpen = false)" />
+            </div>
+
+            <div style="padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+                @* Cover *@
+                @if (!string.IsNullOrWhiteSpace(_reviewSeries?.CoverUrl))
+                {
+                    <div style="display: flex; justify-content: center;">
+                        <img src="@_reviewSeries.CoverUrl" alt="Series cover"
+                             style="width: 70px; height: 100px; object-fit: cover; border-radius: 6px; border: 1px solid #e2e8f0;" />
+                    </div>
+                }
+
+                <div style="display: flex; align-items: center; gap: 10px; justify-content: center;">
+                    <span style="background: @SeriesStatusHelper.BadgeColor(_reviewSeries?.StatusCode ?? ""); color: @SeriesStatusHelper.TextColor(_reviewSeries?.StatusCode ?? ""); font-size: 0.8rem; padding: 4px 14px; border-radius: 12px; font-weight: 600;">
+                        @SeriesStatusHelper.DisplayName(_reviewSeries?.StatusCode ?? "")
+                    </span>
+                </div>
+
+                @{
+                    var statusMsg = _reviewSeries?.StatusCode switch
+                    {
+                        "UNDER_EDITORIAL_REVIEW" => "This series is currently under editorial review. Normal draft editing is locked until the editor returns it for revision or it advances to board review.",
+                        "UNDER_BOARD_REVIEW" => "This series is under board review. Editing is locked while the board evaluates it for serialization.",
+                        "HIATUS" => "This series is on hiatus. It is not accepting new chapter submissions at this time.",
+                        "CANCELLED" => "This series has been cancelled.",
+                        "COMPLETED" => "This series is completed. The story has concluded.",
+                        _ => "This series is locked from normal editing in its current status."
+                    };
+                }
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Style="font-size: 0.82rem;">
+                    @statusMsg
+                </MudAlert>
+
+                <MudButton Variant="Variant.Outlined" FullWidth="true"
+                           OnClick="@(() => _reviewStatusOpen = false)">
+                    Close
                 </MudButton>
             </div>
         </MudCardContent>
@@ -515,7 +625,6 @@
     private bool _newSeriesDialogOpen;
     private bool _draftCreated;
     private bool _draftSaving;
-    private bool _loading = true;
 
     private string _newDraftTitle = "";
     private string _newDraftSynopsis = "";
@@ -525,18 +634,15 @@
     private string? _draftCoverFileName;
     private string? _draftCoverContentType;
 
-    private bool _editCoverDialogOpen;
-    private Guid _editingSeriesId;
-    private string? _editingSeriesTitle;
-    private byte[]? _editCoverBytes;
-    private string? _editCoverFileName;
-    private string? _editCoverContentType;
-    private string? _coverPreview;
+    // ── Draft Details modal state ────────────────────────────────────────────
+    private bool _draftDetailsOpen;
+    private SeriesCardData? _detailSeries;
+
+    // ── Review Status modal state ────────────────────────────────────────────
+    private bool _reviewStatusOpen;
+    private SeriesCardData? _reviewSeries;
 
     private Guid? _currentUserId;
-    private readonly HashSet<Guid> _favoriteIds = [];
-    private bool IsFavorite(Guid id) => _favoriteIds.Contains(id);
-    private void ToggleFavorite(Guid id) { if (!_favoriteIds.Remove(id)) _favoriteIds.Add(id); }
 
     private string _rankingWeek = "Week 21 - May 2026";
     private bool _showRankingUpdate;
@@ -566,6 +672,14 @@
     };
 
     private static string FormatDate(DateTime? dt) => dt?.ToString("MMM dd") ?? "—";
+
+    private static string LanguageLabel(string? code) => code switch
+    {
+        "ja" => "Japanese",
+        "en" => "English",
+        "vi" => "Vietnamese",
+        _ => code ?? "—"
+    };
 
     private async Task LoadTasksAsync()
     {
@@ -613,6 +727,45 @@
 
     private const long MaxProposalFileSizeBytes = 10 * 1024 * 1024; // 10 MB
 
+    // ── Navigation dispatcher ─────────────────────────────────────────────────────
+    /// <summary>
+    /// Routes card clicks to the correct behaviour based on status.
+    /// PROPOSAL_DRAFT → Draft Details modal (not workspace).
+    /// UNDER_EDITORIAL_REVIEW / UNDER_BOARD_REVIEW → Review Status modal.
+    /// SERIALIZED → navigate to /series/{slug}.
+    /// HIATUS / CANCELLED / COMPLETED → Review Status modal (read-only).
+    /// </summary>
+    private void OpenSeriesCard(SeriesCardData series)
+    {
+        switch (series.StatusCode)
+        {
+            case "PROPOSAL_DRAFT":
+                OpenDraftDetails(series);
+                break;
+            case "SERIALIZED":
+                if (!string.IsNullOrWhiteSpace(series.Slug))
+                    Nav.NavigateTo($"/series/{series.Slug}");
+                else
+                    Snackbar.Add("Series page is not available yet.", Severity.Info);
+                break;
+            default:
+                OpenReviewStatus(series);
+                break;
+        }
+    }
+
+    private void OpenDraftDetails(SeriesCardData series)
+    {
+        _detailSeries = series;
+        _draftDetailsOpen = true;
+    }
+
+    private void OpenReviewStatus(SeriesCardData series)
+    {
+        _reviewSeries = series;
+        _reviewStatusOpen = true;
+    }
+
     private void OpenSubmitProposal(Guid seriesId, string title)
     {
         _submitProposalSeriesId = seriesId;
@@ -644,7 +797,6 @@
     {
         if (file == null) return;
 
-        // Extension check
         var ext = Path.GetExtension(file.Name);
         if (!AllowedProposalExtensions.Contains(ext))
         {
@@ -652,14 +804,12 @@
             return;
         }
 
-        // Content type check
         if (!AllowedProposalContentTypes.Contains(file.ContentType))
         {
             Snackbar.Add("The selected file type is not accepted. Please upload a PDF, DOC, or DOCX document.", Severity.Warning);
             return;
         }
 
-        // Size check
         if (file.Size > MaxProposalFileSizeBytes)
         {
             Snackbar.Add("The proposal file exceeds the maximum allowed size of 10 MB.", Severity.Warning);
@@ -755,8 +905,7 @@
 
     private async Task LoadCurrentUserSummaryAsync(Guid userId)
     {
-        var currentUser =
-            await ProfileApiClient.GetProfileAsync(userId);
+        var currentUser = await ProfileApiClient.GetProfileAsync(userId);
 
         _currentDisplayName =
             string.IsNullOrWhiteSpace(currentUser.DisplayName)
@@ -771,30 +920,21 @@
         _currentAvatarInitial =
             string.IsNullOrWhiteSpace(_currentDisplayName)
                 ? "?"
-                : _currentDisplayName
-                    .Substring(0, 1)
-                    .ToUpperInvariant();
+                : _currentDisplayName.Substring(0, 1).ToUpperInvariant();
 
         _currentAvatarUrl = null;
 
-        if (!currentUser.AvatarFileId.HasValue)
-        {
-            return;
-        }
+        if (!currentUser.AvatarFileId.HasValue) return;
 
-        var avatarFile =
-            await ProfileApiClient.GetFileAsync(
-                currentUser.AvatarFileId.Value);
+        var avatarFile = await ProfileApiClient.GetFileAsync(currentUser.AvatarFileId.Value);
 
-        if (avatarFile != null &&
-            avatarFile.DeletedAtUtc == null &&
-            !string.IsNullOrWhiteSpace(
-                avatarFile.CloudinarySecureUrl))
+        if (avatarFile?.DeletedAtUtc == null &&
+            !string.IsNullOrWhiteSpace(avatarFile?.CloudinarySecureUrl))
         {
-            _currentAvatarUrl =
-                avatarFile.CloudinarySecureUrl;
+            _currentAvatarUrl = avatarFile.CloudinarySecureUrl;
         }
     }
+
     protected override async Task OnInitializedAsync()
     {
         try
@@ -812,7 +952,6 @@
 
         await LoadSeriesAsync();
         await LoadTasksAsync();
-        _loading = false;
     }
 
     private async Task LoadSeriesAsync()
@@ -821,129 +960,21 @@
         {
             var dtos = await SeriesService.GetAllSeriesAsync();
             _seriesData = dtos.Select(s => new SeriesCardData(
-                s.SeriesId,
-                s.Title,
-                s.Genre,
-                s.StatusCode,
-                s.CreatedAtUtc,
-                s.UpdatedAtUtc
+                Id: s.SeriesId,
+                Title: s.Title,
+                Genre: s.Genre,
+                StatusCode: s.StatusCode,
+                Slug: s.Slug,
+                Synopsis: s.Synopsis,
+                ContentLanguageCode: s.ContentLanguageCode,
+                CoverUrl: s.CoverUrl,
+                CreatedAtUtc: s.CreatedAtUtc,
+                UpdatedAtUtc: s.UpdatedAtUtc
             )).ToList();
         }
         catch
         {
             _seriesData = [];
-        }
-    }
-
-    private async Task ChangeSeriesStatus(Guid seriesId, string newStatusCode)
-    {
-        try
-        {
-            var series = _seriesData.FirstOrDefault(s => s.Id == seriesId);
-            if (series == null) return;
-
-            var dto = new UpdateSeriesDto(
-                SeriesId: seriesId,
-                Title: series.Title,
-                Slug: series.Title.ToLower().Replace(' ', '-'),
-                Synopsis: "",
-                Genre: series.Genre,
-                CoverFileId: null,
-                StatusCode: newStatusCode,
-                ContentLanguageCode: "ja",
-                SourceSeriesId: null,
-                PublicationFrequencyCode: null,
-                UpdatedByUserId: _currentUserId
-            );
-
-            var updated = await SeriesService.UpdateSeriesAsync(dto);
-            if (updated != null)
-            {
-                var idx = _seriesData.FindIndex(s => s.Id == seriesId);
-                if (idx >= 0)
-                {
-                    _seriesData[idx] = _seriesData[idx] with { StatusCode = newStatusCode };
-                }
-                Snackbar.Add($"Status changed to {SeriesStatusHelper.DisplayName(newStatusCode)}", Severity.Success);
-            }
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Failed to update status: {ex.Message}", Severity.Error);
-        }
-    }
-
-    private void OpenWorkspace(Guid seriesId)
-    {
-        Nav.NavigateTo($"/mangaka/workspace/{seriesId}");
-    }
-
-    private void OpenEditCover(Guid seriesId, string title)
-    {
-        _editingSeriesId = seriesId;
-        _editingSeriesTitle = title;
-        _editCoverBytes = null;
-        _editCoverFileName = null;
-        _editCoverContentType = null;
-        _coverPreview = null;
-        _editCoverDialogOpen = true;
-    }
-
-    private async Task SaveCoverUpload()
-    {
-        if (_editCoverBytes == null) return;
-
-        try
-        {
-            var uploadResult = await FileStorageService.UploadFileAsync(
-                _editCoverBytes,
-                _editCoverFileName ?? "cover.png",
-                _editCoverContentType ?? "image/png",
-                "SERIES_COVER",
-                null
-            );
-
-            var fileResource = await FileResourceService.CreateFileResourceAsync(
-                new CreateFileResourceDto(
-                    FilePurposeCode: "SERIES_COVER",
-                    OriginalFileName: uploadResult.OriginalFileName,
-                    CloudinaryPublicId: uploadResult.PublicId,
-                    CloudinarySecureUrl: uploadResult.SecureUrl,
-                    ContentType: uploadResult.ContentType,
-                    FileSizeBytes: uploadResult.FileSizeBytes,
-                    Sha256Hash: uploadResult.Sha256Hash,
-                    UploadedByUserId: _currentUserId
-                )
-            );
-
-            var series = _seriesData.FirstOrDefault(s => s.Id == _editingSeriesId);
-            if (series == null) return;
-
-            var updateDto = new UpdateSeriesDto(
-                SeriesId: _editingSeriesId,
-                Title: series.Title,
-                Slug: series.Title.ToLower().Replace(' ', '-'),
-                Synopsis: "",
-                Genre: series.Genre,
-                CoverFileId: fileResource.FileResourceId,
-                StatusCode: series.StatusCode,
-                ContentLanguageCode: "ja",
-                SourceSeriesId: null,
-                PublicationFrequencyCode: null,
-                UpdatedByUserId: _currentUserId
-            );
-
-            var updated = await SeriesService.UpdateSeriesAsync(updateDto);
-            if (updated != null)
-            {
-                Snackbar.Add("Cover updated successfully", Severity.Success);
-            }
-
-            _editCoverDialogOpen = false;
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Failed to update cover: {ex.Message}", Severity.Error);
         }
     }
 
@@ -978,12 +1009,16 @@
                 coverContentType: _draftCoverContentType);
 
             _seriesData.Add(new SeriesCardData(
-                created.SeriesId,
-                created.Title,
-                _newDraftGenre,
-                created.StatusCode,
-                DateTime.UtcNow,
-                null
+                Id: created.SeriesId,
+                Title: created.Title,
+                Genre: _newDraftGenre,
+                StatusCode: created.StatusCode,
+                Slug: created.Slug,
+                Synopsis: string.IsNullOrWhiteSpace(_newDraftSynopsis) ? created.Title : _newDraftSynopsis.Trim(),
+                ContentLanguageCode: _newDraftLanguage,
+                CoverUrl: null, // cover URL requires a DB round-trip; will show on next full load
+                CreatedAtUtc: DateTime.UtcNow,
+                UpdatedAtUtc: null
             ));
 
             _draftCreated = true;
@@ -1014,18 +1049,30 @@
     private record NavItem(string Id, string Label, string Icon);
     private record RankingRow(int Rank, string Series, string Votes, int Performance, string Risk, Color Color);
     private record TaskStats(int Total, int Assigned, int UnderReview, int Completed);
-    private record SeriesCardData(Guid Id, string Title, string Genre, string StatusCode, DateTime CreatedAtUtc, DateTime? UpdatedAtUtc)
+
+    private record SeriesCardData(
+        Guid Id,
+        string Title,
+        string Genre,
+        string StatusCode,
+        string Slug,
+        string? Synopsis,
+        string? ContentLanguageCode,
+        string? CoverUrl,
+        DateTime CreatedAtUtc,
+        DateTime? UpdatedAtUtc)
     {
         public string Color => StatusCode switch
         {
+            "PROPOSAL_DRAFT" => "#6366f1",
+            "UNDER_EDITORIAL_REVIEW" => "#0ea5e9",
+            "UNDER_BOARD_REVIEW" => "#8b5cf6",
             "SERIALIZED" => "#059669",
             "HIATUS" => "#d97706",
             "CANCELLED" => "#dc2626",
             "COMPLETED" => "#4f46e5",
             _ => "#64748b",
         };
-
-        public string ColorHex => Color;
 
         public string LastUpdated
         {

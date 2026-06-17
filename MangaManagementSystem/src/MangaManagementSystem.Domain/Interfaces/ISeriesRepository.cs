@@ -10,6 +10,14 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<Series?> GetSeriesWithChaptersAsync(Guid seriesId);
 
         /// <summary>
+        /// Returns all series with the <c>CoverFile</c> navigation property eagerly loaded.
+        /// Used by the Mangaka dashboard to render cover thumbnails without a per-card N+1 query.
+        /// Display-only; the URL is read from <c>FileResource.CloudinarySecureUrl</c>.
+        /// Non-deleted cover files are returned; a null CloudinarySecureUrl means no cover.
+        /// </summary>
+        Task<IReadOnlyList<Series>> GetAllWithCoverAsync();
+
+        /// <summary>
         /// Creates a series draft through the <c>manga.usp_Series_Create</c> stored procedure.
         /// The procedure enforces actor permission, creates the optional SERIES_COVER FileResource,
         /// inserts the Series (status PROPOSAL_DRAFT), seeds the creator contributor, and writes the audit event.
