@@ -127,6 +127,13 @@ namespace MangaManagementSystem.Web
                     options.MaximumReceiveMessageSize = 50 * 1024 * 1024; // 50MB
                 });
 
+            // Register typed API clients
+            builder.Services.AddHttpClient<Services.Api.IAssistantTaskApiClient, Services.Api.AssistantTaskApiClient>((sp, client) =>
+            {
+                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                client.BaseAddress = new Uri(settings.Value.BaseUrl);
+            });
+
             var app = builder.Build();
 
             if (!app.Environment.IsDevelopment())

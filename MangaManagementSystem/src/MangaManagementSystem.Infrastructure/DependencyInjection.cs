@@ -57,6 +57,9 @@ namespace MangaManagementSystem.Infrastructure
             services.AddScoped<MangaManagementSystem.Application.Interfaces.IFileStorageService, Services.CloudinaryFileStorageService>();
             services.AddScoped<Services.CloudinaryFileStorageFormAdapter>();
 
+            // Assistant task submission
+            services.AddScoped<MangaManagementSystem.Application.Interfaces.IAssistantTaskSubmissionService, Services.AssistantTaskSubmissionService>();
+
             return services;
         }
     }
