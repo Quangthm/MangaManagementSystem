@@ -5,10 +5,9 @@ using System.Threading.Tasks;
 using MangaManagementSystem.API.Contracts;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Features.Mangaka.Series.Commands.CancelSeriesDraft;
+using MangaManagementSystem.Application.Features.Mangaka.Series.Commands.CreateSeriesDraft;
 using MangaManagementSystem.Application.Features.Mangaka.Series.Commands.UpdateSeriesDraft;
-
 using MangaManagementSystem.Application.Features.Mangaka.SeriesProposals.Commands.SubmitSeriesProposal;
-using MangaManagementSystem.Application.Interfaces;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -17,11 +16,14 @@ namespace MangaManagementSystem.API.Controllers
 {
     /// <summary>
     /// Thin HTTP boundary for Mangaka series workflows. Controllers only read the request,
-    /// resolve the actor, call one Application use case, and map known failures to safe HTTP
-    /// responses. No Cloudinary, SQL, repository, or business logic lives here.
+    /// resolve the actor, call one Application use case via IMediator, and map known failures
+    /// to safe HTTP responses. No Cloudinary, SQL, repository, or business logic lives here.
     ///
-    /// CreateDraftAsync uses the transitional ISeriesService path (to be migrated to MediatR
-    /// in a later dedicated task). SubmitProposalAsync introduces the MediatR/CQRS pattern.
+    /// All four Mangaka series workflows now use the MediatR/CQRS pattern:
+    ///   CreateDraftAsync       → CreateSeriesDraftCommand
+    ///   SubmitProposalAsync    → SubmitSeriesProposalCommand
+    ///   UpdateDraftProfileAsync → UpdateSeriesDraftCommand
+    ///   CancelDraftAsync       → CancelSeriesDraftCommand
     /// </summary>
     [ApiController]
     [Route("api/mangaka/series")]
@@ -32,24 +34,24 @@ namespace MangaManagementSystem.API.Controllers
         // documented temporary server-to-server pattern, not a final auth design.
         private const string ActorUserIdHeader = "X-Actor-User-Id";
 
-        private readonly ISeriesService _seriesService;
         private readonly IMediator _mediator;
         private readonly ILogger<MangakaSeriesController> _logger;
 
         public MangakaSeriesController(
-            ISeriesService seriesService,
             IMediator mediator,
             ILogger<MangakaSeriesController> logger)
         {
-            _seriesService = seriesService;
             _mediator = mediator;
-            _logger = logger;
+            _logger   = logger;
         }
 
         /// <summary>
         /// Creates a new series draft (status PROPOSAL_DRAFT) with an optional cover image.
         /// Accepts multipart/form-data because the cover file is optional.
-        /// Uses transitional ISeriesService path; MediatR migration is a future task.
+        /// Uses MediatR/CQRS — all orchestration is in CreateSeriesDraftCommandHandler.
+        /// The stored procedure creates the Series, optional SERIES_COVER FileResource,
+        /// active SeriesContributor, and audit event.
+        /// Must NOT create a SeriesProposal — proposal submission is a separate workflow.
         /// </summary>
         [HttpPost("drafts")]
         [Consumes("multipart/form-data")]
@@ -68,42 +70,42 @@ namespace MangaManagementSystem.API.Controllers
                     "Could not identify the requesting user. Please sign in again."));
             }
 
-            byte[]? coverBytes = null;
-            string? coverFileName = null;
+            byte[]? coverBytes       = null;
+            string? coverFileName    = null;
             string? coverContentType = null;
 
             if (request.CoverFile is { Length: > 0 })
             {
                 using var ms = new MemoryStream();
                 await request.CoverFile.CopyToAsync(ms, cancellationToken);
-                coverBytes = ms.ToArray();
-                coverFileName = request.CoverFile.FileName;
+                coverBytes       = ms.ToArray();
+                coverFileName    = request.CoverFile.FileName;
                 coverContentType = request.CoverFile.ContentType;
             }
 
-            var draftDto = new CreateSeriesDraftDto(
-                Title: request.Title,
-                Synopsis: request.Synopsis,
-                Genre: request.Genre,
-                ContentLanguageCode: request.ContentLanguageCode,
-                Slug: request.Slug,
+            var command = new CreateSeriesDraftCommand(
+                ActorUserId:              actorUserId,
+                Title:                    request.Title,
+                Synopsis:                 request.Synopsis,
+                Genre:                    request.Genre,
+                ContentLanguageCode:      request.ContentLanguageCode,
+                Slug:                     request.Slug,
                 PublicationFrequencyCode: request.PublicationFrequencyCode,
-                SourceSeriesId: request.SourceSeriesId,
-                CoverFileBytes: coverBytes,
-                CoverFileName: coverFileName,
-                CoverContentType: coverContentType);
+                SourceSeriesId:           request.SourceSeriesId,
+                CoverFileBytes:           coverBytes,
+                CoverFileName:            coverFileName,
+                CoverContentType:         coverContentType);
 
             try
             {
-                SeriesDraftCreatedDto result = await _seriesService.CreateSeriesDraftAsync(
-                    actorUserId, draftDto, cancellationToken);
-
+                SeriesDraftCreatedDto result = await _mediator.Send(command, cancellationToken);
                 return Created($"/api/mangaka/series/{result.SeriesId}", result);
             }
             catch (InvalidOperationException ex)
             {
-                // Application/Infrastructure surface friendly, user-safe messages here:
-                // only-active-Mangaka, incomplete cover metadata, duplicate slug, invalid code.
+                // Handler surfaces friendly messages: invalid actor, title/genre missing,
+                // slug derivation failure, cover type/size rejection, SHA-256 failure,
+                // duplicate slug, active-Mangaka permission, constraint violations.
                 return BadRequest(new ApiErrorResponse(ex.Message));
             }
             catch (Exception ex)
@@ -149,10 +151,10 @@ namespace MangaManagementSystem.API.Controllers
             }
 
             var command = new SubmitSeriesProposalCommand(
-                ActorUserId: actorUserId,
-                SeriesId: seriesId,
-                ProposalFileBytes: proposalBytes,
-                ProposalFileName: request.ProposalFile.FileName,
+                ActorUserId:        actorUserId,
+                SeriesId:           seriesId,
+                ProposalFileBytes:  proposalBytes,
+                ProposalFileName:   request.ProposalFile.FileName,
                 ProposalContentType: request.ProposalFile.ContentType);
 
             try
@@ -162,14 +164,12 @@ namespace MangaManagementSystem.API.Controllers
             }
             catch (InvalidOperationException ex)
             {
-                // Application/Infrastructure surface friendly, user-safe messages:
-                // not-PROPOSAL_DRAFT, not-active-Mangaka-contributor, series-not-found,
-                // file type/size rejection, SHA-256 failure, lock failure.
                 return BadRequest(new ApiErrorResponse(ex.Message));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unexpected error submitting series proposal for series {SeriesId}.", seriesId);
+                _logger.LogError(ex,
+                    "Unexpected error submitting series proposal for series {SeriesId}.", seriesId);
                 return Problem(
                     detail: "We could not submit the series proposal right now. Please try again later.",
                     statusCode: StatusCodes.Status500InternalServerError);
@@ -205,31 +205,31 @@ namespace MangaManagementSystem.API.Controllers
                 return BadRequest(new ApiErrorResponse("A genre is required."));
             }
 
-            byte[]? coverBytes = null;
-            string? coverFileName = null;
+            byte[]? coverBytes       = null;
+            string? coverFileName    = null;
             string? coverContentType = null;
 
             if (request.CoverFile is { Length: > 0 })
             {
                 using var ms = new MemoryStream();
                 await request.CoverFile.CopyToAsync(ms, cancellationToken);
-                coverBytes = ms.ToArray();
-                coverFileName = request.CoverFile.FileName;
+                coverBytes       = ms.ToArray();
+                coverFileName    = request.CoverFile.FileName;
                 coverContentType = request.CoverFile.ContentType;
             }
 
             var command = new UpdateSeriesDraftCommand(
-                ActorUserId: actorUserId,
-                SeriesId: seriesId,
-                Title: request.Title,
-                Synopsis: request.Synopsis,
-                Genre: request.Genre,
-                ContentLanguageCode: request.ContentLanguageCode,
+                ActorUserId:              actorUserId,
+                SeriesId:                 seriesId,
+                Title:                    request.Title,
+                Synopsis:                 request.Synopsis,
+                Genre:                    request.Genre,
+                ContentLanguageCode:      request.ContentLanguageCode,
                 PublicationFrequencyCode: request.PublicationFrequencyCode,
-                Slug: request.Slug,
-                CoverFileBytes: coverBytes,
-                CoverFileName: coverFileName,
-                CoverContentType: coverContentType);
+                Slug:                     request.Slug,
+                CoverFileBytes:           coverBytes,
+                CoverFileName:            coverFileName,
+                CoverContentType:         coverContentType);
 
             try
             {
@@ -242,7 +242,8 @@ namespace MangaManagementSystem.API.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unexpected error updating series draft profile for series {SeriesId}.", seriesId);
+                _logger.LogError(ex,
+                    "Unexpected error updating series draft profile for series {SeriesId}.", seriesId);
                 return Problem(
                     detail: "We could not update the series draft right now. Please try again later.",
                     statusCode: StatusCodes.Status500InternalServerError);
@@ -269,8 +270,10 @@ namespace MangaManagementSystem.API.Controllers
                     "Could not identify the requesting user. Please sign in again."));
             }
 
-            // Reason is optional; null is valid and passed straight to the SP @reason param.
-            string? reason = string.IsNullOrWhiteSpace(request?.Reason) ? null : request.Reason.Trim();
+            string? reason = string.IsNullOrWhiteSpace(request?.Reason)
+                ? null
+                : request.Reason.Trim();
+
             if (reason?.Length > 500)
             {
                 return BadRequest(new ApiErrorResponse(
@@ -279,8 +282,8 @@ namespace MangaManagementSystem.API.Controllers
 
             var command = new CancelSeriesDraftCommand(
                 ActorUserId: actorUserId,
-                SeriesId: seriesId,
-                Reason: reason);
+                SeriesId:    seriesId,
+                Reason:      reason);
 
             try
             {
@@ -293,14 +296,16 @@ namespace MangaManagementSystem.API.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unexpected error cancelling series draft {SeriesId}.", seriesId);
+                _logger.LogError(ex,
+                    "Unexpected error cancelling series draft {SeriesId}.", seriesId);
                 return Problem(
                     detail: "We could not cancel the series draft right now. Please try again later.",
                     statusCode: StatusCodes.Status500InternalServerError);
             }
         }
 
-        private bool TryResolveActorUserId(out Guid actorUserId)        {
+        private bool TryResolveActorUserId(out Guid actorUserId)
+        {
             actorUserId = Guid.Empty;
 
             if (Request.Headers.TryGetValue(ActorUserIdHeader, out var headerValues))
