@@ -1,33 +1,35 @@
 using MangaManagementSystem.API.Contracts;
-using MangaManagementSystem.Application.DTOs.Auth;
+using MangaManagementSystem.Application.Features.Auth.Registration;
 using MangaManagementSystem.Application.Interfaces;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 
 namespace MangaManagementSystem.API.Controllers
 {
     /// <summary>
-    /// Thin HTTP boundary for the registration workflow. Controllers only:
-    /// receive the request, validate its shape, call the Application service,
-    /// and return a clean HTTP response. No business logic or SQL lives here.
+    /// HTTP boundary for the public registration workflow.
+    /// Commands are dispatched through MediatR.
     /// </summary>
     [ApiController]
     [Route("api/registration")]
     public class RegistrationController : ControllerBase
     {
+        private readonly ISender _sender;
         private readonly IAuthService _authService;
         private readonly ILogger<RegistrationController> _logger;
 
         public RegistrationController(
+            ISender sender,
             IAuthService authService,
             ILogger<RegistrationController> logger)
         {
+            _sender = sender;
             _authService = authService;
             _logger = logger;
         }
 
         /// <summary>
-        /// Step 1: validate the registration request and send an OTP to the email.
+        /// Step 1: validate the public role and send an OTP to the email.
         /// </summary>
         [HttpPost("otp")]
         public async Task<IActionResult> SendOtpAsync(
@@ -39,7 +41,7 @@ namespace MangaManagementSystem.API.Controllers
                 return ValidationProblem(ModelState);
             }
 
-            var registerDto = new RegisterDto(
+            var command = new SendRegistrationOtpCommand(
                 request.Username,
                 request.Email,
                 request.Password,
@@ -48,28 +50,37 @@ namespace MangaManagementSystem.API.Controllers
 
             try
             {
-                await _authService.SendRegistrationOtpAsync(registerDto);
-                return Ok(new ApiMessageResponse(
-                    "A verification code has been sent to your email."));
+                await _sender.Send(
+                    command,
+                    cancellationToken);
+
+                return Ok(
+                    new ApiMessageResponse(
+                        "A verification code has been sent to your email."));
             }
             catch (InvalidOperationException ex)
             {
-                // Application throws friendly, user-safe messages (e.g. duplicate email/username).
-                return Conflict(new ApiErrorResponse(ex.Message));
+                return Conflict(
+                    new ApiErrorResponse(ex.Message));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unexpected error sending registration OTP.");
+                _logger.LogError(
+                    ex,
+                    "Unexpected error sending registration OTP.");
+
                 return Problem(
-                    detail: "We could not start registration right now. Please try again later.",
-                    statusCode: StatusCodes.Status500InternalServerError);
+                    detail:
+                        "We could not start registration right now. Please try again later.",
+                    statusCode:
+                        StatusCodes.Status500InternalServerError);
             }
         }
 
         /// <summary>
         /// Step 2: complete registration using the emailed OTP code.
-        /// Accepts multipart/form-data so an optional portfolio file can be uploaded
-        /// alongside the email and OTP fields.
+        /// Accepts multipart/form-data so an optional portfolio file can be
+        /// uploaded alongside the email and OTP fields.
         /// </summary>
         [HttpPost("complete")]
         [Consumes("multipart/form-data")]
@@ -78,9 +89,12 @@ namespace MangaManagementSystem.API.Controllers
             [FromForm] string otp,
             IFormFile? portfolioFile = null)
         {
-            if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(otp))
+            if (string.IsNullOrWhiteSpace(email)
+                || string.IsNullOrWhiteSpace(otp))
             {
-                return BadRequest(new ApiErrorResponse("Email and OTP are required."));
+                return BadRequest(
+                    new ApiErrorResponse(
+                        "Email and OTP are required."));
             }
 
             byte[]? fileBytes = null;
@@ -89,31 +103,51 @@ namespace MangaManagementSystem.API.Controllers
 
             if (portfolioFile is { Length: > 0 })
             {
-                using var ms = new MemoryStream();
-                await portfolioFile.CopyToAsync(ms);
-                fileBytes = ms.ToArray();
-                fileName = portfolioFile.FileName;
-                contentType = portfolioFile.ContentType;
+                using var memoryStream =
+                    new MemoryStream();
+
+                await portfolioFile.CopyToAsync(
+                    memoryStream);
+
+                fileBytes =
+                    memoryStream.ToArray();
+
+                fileName =
+                    portfolioFile.FileName;
+
+                contentType =
+                    portfolioFile.ContentType;
             }
 
             try
             {
-                var user = await _authService.CompleteRegistrationWithOtpAsync(
-                    email, otp, fileBytes, fileName, contentType);
+                var user =
+                    await _authService
+                        .CompleteRegistrationWithOtpAsync(
+                            email,
+                            otp,
+                            fileBytes,
+                            fileName,
+                            contentType);
 
                 return Ok(user);
             }
             catch (InvalidOperationException ex)
             {
-                // Invalid/expired OTP, duplicate account, or load failure -> friendly message.
-                return BadRequest(new ApiErrorResponse(ex.Message));
+                return BadRequest(
+                    new ApiErrorResponse(ex.Message));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unexpected error completing registration.");
+                _logger.LogError(
+                    ex,
+                    "Unexpected error completing registration.");
+
                 return Problem(
-                    detail: "We could not complete registration right now. Please try again later.",
-                    statusCode: StatusCodes.Status500InternalServerError);
+                    detail:
+                        "We could not complete registration right now. Please try again later.",
+                    statusCode:
+                        StatusCodes.Status500InternalServerError);
             }
         }
     }

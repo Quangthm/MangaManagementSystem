@@ -1,4 +1,5 @@
 using MangaManagementSystem.Application.DTOs.Auth;
+using MangaManagementSystem.Application.Features.Auth.Registration;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Application.Mappers;
 using MangaManagementSystem.Domain.Entities;
@@ -9,11 +10,6 @@ namespace MangaManagementSystem.Application.Services
 {
     public class AuthService : IAuthService
     {
-        /// <summary>
-        /// Default role name assigned to new registrations (Google signup and standard OTP signup).
-        /// Resolved by name from auth.Roles at runtime.
-        /// </summary>
-        private const string DefaultRegistrationRoleName = "Mangaka";
 
         private readonly IUnitOfWork _unitOfWork;
         private readonly IPasswordHasher _passwordHasher;
@@ -253,62 +249,119 @@ namespace MangaManagementSystem.Application.Services
             return authResult;
         }
 
-        public async Task<GoogleSignupCallbackResult> ProcessGoogleSignupCallbackAsync(
-            string email,
-            string? googleDisplayName)
+        public async Task<GoogleSignupCallbackResult>
+            ProcessGoogleSignupCallbackAsync(
+        string email,
+        string? googleDisplayName,
+        string roleName)
         {
-            var normalizedEmail = NormalizeEmail(email);
-            var existingUser = await _unitOfWork.Users.GetByEmailAsync(normalizedEmail);
+            var normalizedEmail =
+                NormalizeEmail(email);
+
+            var normalizedRoleName =
+                PublicRegistrationRoles.NormalizeOrThrow(
+                    roleName);
+
+            var existingUser =
+                await _unitOfWork.Users.GetByEmailAsync(
+                    normalizedEmail);
 
             if (existingUser is null)
             {
-                var username = await GenerateUniqueUsernameAsync(googleDisplayName, normalizedEmail);
-                var passwordHash = _passwordHasher.HashPassword(Guid.NewGuid().ToString("N") + "!Aa1");
+                var username =
+                    await GenerateUniqueUsernameAsync(
+                        googleDisplayName,
+                        normalizedEmail);
 
-                var newUserId = await _unitOfWork.Users.CreateUserViaProcAsync(
-                    DefaultRegistrationRoleName,
-                    username,
-                    normalizedEmail,
-                    passwordHash,
-                    googleDisplayName,
-                    null,
-                    null,
-                    null);
+                var passwordHash =
+                    _passwordHasher.HashPassword(
+                        Guid.NewGuid().ToString("N") + "!Aa1");
 
-                await SendEmailVerificationOtpAsync(normalizedEmail);
+                var newUserId =
+                    await _unitOfWork.Users.CreateUserViaProcAsync(
+                        normalizedRoleName,
+                        username,
+                        normalizedEmail,
+                        passwordHash,
+                        googleDisplayName,
+                        null,
+                        null,
+                        null);
 
                 _logger.LogInformation(
-                    "Google sign-up created pending user {UserId} ({Email}) with username {Username}",
+                    "Google sign-up created pending user {UserId} ({Email}) with username {Username} and role {RoleName}",
                     newUserId,
                     normalizedEmail,
-                    username);
+                    username,
+                    normalizedRoleName);
 
                 return new GoogleSignupCallbackResult(
-                    GoogleSignupFlow.NewUserVerifyOtp,
-                    normalizedEmail);
+                    GoogleSignupFlow.PendingApproval,
+                    normalizedEmail,
+                    RoleName: normalizedRoleName);
             }
 
-            if (string.Equals(existingUser.StatusCode, "PENDING_APPROVAL", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(
+                    existingUser.StatusCode,
+                    "PENDING_APPROVAL",
+                    StringComparison.OrdinalIgnoreCase))
             {
-                await SendEmailVerificationOtpAsync(normalizedEmail);
-
                 _logger.LogInformation(
-                    "Google sign-up resumed OTP verification for pending user {UserId} ({Email})",
+                    "Google sign-up found pending user {UserId} ({Email})",
                     existingUser.UserId,
                     normalizedEmail);
 
                 return new GoogleSignupCallbackResult(
-                    GoogleSignupFlow.PendingApprovalVerifyOtp,
+                    GoogleSignupFlow.PendingApproval,
                     normalizedEmail);
             }
 
-            if (string.Equals(existingUser.StatusCode, "ACTIVE", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(
+                    existingUser.StatusCode,
+                    "ACTIVE",
+                    StringComparison.OrdinalIgnoreCase))
             {
-                return BuildActiveGoogleSignupLoginResult(existingUser, normalizedEmail);
+                return BuildActiveGoogleSignupLoginResult(
+                    existingUser,
+                    normalizedEmail);
+            }
+
+            if (string.Equals(
+                    existingUser.StatusCode,
+                    "REJECTED",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning(
+                    "Google sign-up rejected for user {UserId} ({Email})",
+                    existingUser.UserId,
+                    normalizedEmail);
+
+                return new GoogleSignupCallbackResult(
+                    GoogleSignupFlow.Rejected,
+                    normalizedEmail,
+                    ErrorMessage:
+                        "Account registration was rejected.");
+            }
+
+            if (string.Equals(
+                    existingUser.StatusCode,
+                    "DISABLED",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning(
+                    "Google sign-up blocked for disabled user {UserId} ({Email})",
+                    existingUser.UserId,
+                    normalizedEmail);
+
+                return new GoogleSignupCallbackResult(
+                    GoogleSignupFlow.Disabled,
+                    normalizedEmail,
+                    ErrorMessage:
+                        "Account is disabled.");
             }
 
             _logger.LogWarning(
-                "Google sign-up rejected for user {UserId} ({Email}) with status {StatusCode}",
+                "Google sign-up rejected for user {UserId} ({Email}) with unsupported status {StatusCode}",
                 existingUser.UserId,
                 normalizedEmail,
                 existingUser.StatusCode);
@@ -316,7 +369,8 @@ namespace MangaManagementSystem.Application.Services
             return new GoogleSignupCallbackResult(
                 GoogleSignupFlow.Rejected,
                 normalizedEmail,
-                ErrorMessage: "This account cannot be used for sign-up. Contact support.");
+                ErrorMessage:
+                    "Account configuration is invalid. Contact support.");
         }
 
         public async Task<bool> SendEmailVerificationOtpAsync(string email)

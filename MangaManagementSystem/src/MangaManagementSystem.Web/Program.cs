@@ -31,6 +31,18 @@ namespace MangaManagementSystem.Web
 
             builder.Services.AddMemoryCache();
             builder.Services.Configure<ApiSettings>(builder.Configuration.GetSection(ApiSettings.SectionName));
+
+            builder.Services
+                .AddOptions<InternalApiOptions>()
+                .Bind(
+                    builder.Configuration.GetSection(
+                        InternalApiOptions.SectionName))
+                .Validate(
+                    options =>
+                        !string.IsNullOrWhiteSpace(
+                            options.Key),
+                    "InternalApi:Key is required.")
+                .ValidateOnStart();
             builder.Services.AddHttpClient<IRegistrationApiClient, RegistrationApiClient>((sp, client) =>
             {
                 var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
@@ -188,60 +200,198 @@ namespace MangaManagementSystem.Web
 
             app.MapPost("/api/auth/google-login", () =>
             {
-                var properties = new AuthenticationProperties { RedirectUri = "/api/auth/google-callback" };
-                return Results.Challenge(properties, [GoogleDefaults.AuthenticationScheme]);
+                var properties =
+                    new AuthenticationProperties
+                    {
+                        RedirectUri =
+                            "/api/auth/google-callback"
+                    };
+
+                return Results.Challenge(
+                    properties,
+                    [GoogleDefaults.AuthenticationScheme]);
             }).DisableAntiforgery();
 
-            app.MapGet("/api/auth/google-callback", async (HttpContext context, IAuthService authService) =>
-            {
-                var (_, email, _) = await GoogleAuthHelper.ResolveGoogleIdentityAsync(context);
-
-                if (string.IsNullOrWhiteSpace(email))
+            app.MapGet(
+                "/api/auth/google-callback",
+                async (
+                    HttpContext context,
+                    IAuthService authService) =>
                 {
-                    return Results.Redirect("/login?error=GoogleEmailMissing");
-                }
+                    var (_, email, _, _) =
+                        await GoogleAuthHelper
+                            .ResolveGoogleIdentityAsync(context);
 
-                var authResult = await authService.GetUserByEmailAsync(email);
-                if (!authResult.Succeeded || authResult.User is null || string.IsNullOrWhiteSpace(authResult.RoleName))
+                    if (string.IsNullOrWhiteSpace(email))
+                    {
+                        await context.SignOutAsync(
+                            CookieAuthenticationDefaults
+                                .AuthenticationScheme);
+
+                        return Results.Redirect(
+                            "/login?error=GoogleEmailMissing");
+                    }
+
+                    var authResult =
+                        await authService.GetUserByEmailAsync(email);
+
+                    if (!authResult.Succeeded
+                        || authResult.User is null
+                        || string.IsNullOrWhiteSpace(
+                            authResult.RoleName))
+                    {
+                        await context.SignOutAsync(
+                            CookieAuthenticationDefaults
+                                .AuthenticationScheme);
+
+                        return Results.Redirect(
+                            "/login?error=UserNotInDatabase");
+                    }
+
+                    await SignInApplicationUserAsync(
+                        context,
+                        authResult.User,
+                        authResult.RoleName);
+
+                    return Results.Redirect(
+                        GetDashboardRedirectUrl(
+                            authResult.RoleName));
+                });
+
+            app.MapPost(
+                "/api/auth/google-signup",
+                ([FromForm] string roleName) =>
                 {
-                    return Results.Redirect("/login?error=UserNotInDatabase");
-                }
+                    var properties =
+                        new AuthenticationProperties
+                        {
+                            RedirectUri =
+                                "/api/auth/google-signup-callback"
+                        };
 
-                await SignInApplicationUserAsync(context, authResult.User, authResult.RoleName);
-                return Results.Redirect(GetDashboardRedirectUrl(authResult.RoleName));
-            });
+                    properties.Items[
+                        GoogleAuthHelper.RegistrationRoleProperty] =
+                            roleName;
 
-            app.MapPost("/api/auth/google-signup", () =>
-            {
-                var properties = new AuthenticationProperties { RedirectUri = "/api/auth/google-signup-callback" };
-                return Results.Challenge(properties, [GoogleDefaults.AuthenticationScheme]);
-            }).DisableAntiforgery();
+                    return Results.Challenge(
+                        properties,
+                        [GoogleDefaults.AuthenticationScheme]);
+                })
+                .DisableAntiforgery();
 
-            app.MapGet("/api/auth/google-signup-callback", async (HttpContext context, IAuthService authService) =>
-            {
-                var (_, email, displayName) = await GoogleAuthHelper.ResolveGoogleIdentityAsync(context);
-
-                if (string.IsNullOrWhiteSpace(email))
+            app.MapGet(
+                "/api/auth/google-signup-callback",
+                async (
+                    HttpContext context,
+                    IAuthApiClient authApi,
+                    ILogger<Program> logger) =>
                 {
-                    return Results.Redirect("/register?error=GoogleEmailMissing");
-                }
+                    var (
+                        _,
+                        email,
+                        displayName,
+                        registrationRole) =
+                            await GoogleAuthHelper
+                                .ResolveGoogleIdentityAsync(context);
 
-                var signupResult = await authService.ProcessGoogleSignupCallbackAsync(email, displayName);
+                    if (string.IsNullOrWhiteSpace(email))
+                    {
+                        await context.SignOutAsync(
+                            CookieAuthenticationDefaults
+                                .AuthenticationScheme);
 
-                return signupResult.Flow switch
-                {
-                    GoogleSignupFlow.NewUserVerifyOtp or GoogleSignupFlow.PendingApprovalVerifyOtp
-                        => Results.Redirect($"/verify-otp?email={Uri.EscapeDataString(signupResult.Email)}"),
-                    GoogleSignupFlow.ActiveUserLogin when signupResult.User is not null && signupResult.RoleName is not null
-                        => await SignInAndRedirectAsync(context, signupResult.User, signupResult.RoleName),
-                    GoogleSignupFlow.Rejected when signupResult.ErrorMessage?.Contains("pending", StringComparison.OrdinalIgnoreCase) == true
-                        => Results.Redirect($"/login?error=account_pending"),
-                    GoogleSignupFlow.Rejected
-                        => Results.Redirect($"/register?error=account_disabled"),
-                    _
-                        => Results.Redirect("/register?error=GoogleSignupFailed")
-                };
-            });
+                        return Results.Redirect(
+                            "/register?error=GoogleEmailMissing");
+                    }
+
+                    if (!MangaManagementSystem
+                            .Application
+                            .Features
+                            .Auth
+                            .Registration
+                            .PublicRegistrationRoles
+                            .TryNormalize(
+                                registrationRole,
+                                out var normalizedRoleName))
+                    {
+                        await context.SignOutAsync(
+                            CookieAuthenticationDefaults
+                                .AuthenticationScheme);
+
+                        return Results.Redirect(
+                            "/register?error=InvalidRole");
+                    }
+
+                    try
+                    {
+                        var signupResult =
+                            await authApi.ProcessGoogleSignupAsync(
+                                email,
+                                displayName,
+                                normalizedRoleName);
+
+                        if (signupResult.Flow
+                                == GoogleSignupFlow.ActiveUserLogin
+                            && signupResult.User is not null
+                            && !string.IsNullOrWhiteSpace(
+                                signupResult.RoleName))
+                        {
+                            return await SignInAndRedirectAsync(
+                                context,
+                                signupResult.User,
+                                signupResult.RoleName);
+                        }
+
+                        await context.SignOutAsync(
+                            CookieAuthenticationDefaults
+                                .AuthenticationScheme);
+
+                        return signupResult.Flow switch
+                        {
+                            GoogleSignupFlow.PendingApproval =>
+                                Results.Redirect(
+                                    "/pending-approval"),
+
+                            GoogleSignupFlow.Rejected =>
+                                Results.Redirect(
+                                    "/login?error=account_rejected"),
+
+                            GoogleSignupFlow.Disabled =>
+                                Results.Redirect(
+                                    "/login?error=account_disabled"),
+
+                            _ =>
+                                Results.Redirect(
+                                    "/register?error=GoogleSignupFailed")
+                        };
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        logger.LogWarning(
+                            ex,
+                            "Google sign-up API request was rejected.");
+
+                        await context.SignOutAsync(
+                            CookieAuthenticationDefaults
+                                .AuthenticationScheme);
+
+                        return Results.Redirect(
+                            "/register?error=GoogleSignupFailed");
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(
+                            ex,
+                            "Unexpected Google sign-up callback failure.");
+
+                        await context.SignOutAsync(
+                            CookieAuthenticationDefaults
+                                .AuthenticationScheme);
+
+                        return Results.Redirect(
+                            "/register?error=GoogleSignupFailed");
+                    }
+                });
 
             app.MapPost("/api/auth/verify-email-otp", async (
                 HttpContext context,

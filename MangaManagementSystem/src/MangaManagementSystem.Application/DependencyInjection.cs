@@ -6,8 +6,13 @@ namespace MangaManagementSystem.Application
 {
     public static class DependencyInjection
     {
-        public static IServiceCollection AddApplicationServices(this IServiceCollection services)
+        public static IServiceCollection AddApplicationServices(
+            this IServiceCollection services)
         {
+            services.AddMediatR(configuration =>
+                configuration.RegisterServicesFromAssembly(
+                    typeof(DependencyInjection).Assembly));
+
             services.AddScoped<ISeriesService, SeriesService>();
             services.AddScoped<IChapterService, ChapterService>();
             services.AddScoped<IUserService, UserService>();
@@ -28,6 +33,7 @@ namespace MangaManagementSystem.Application
             services.AddScoped<INotificationService, NotificationService>();
             services.AddScoped<IAuditEventService, AuditEventService>();
             services.AddScoped<ISeriesBoardVoteService, SeriesBoardVoteService>();
+
             return services;
         }
     }

@@ -17,10 +17,15 @@ namespace MangaManagementSystem.Application.Interfaces
 
         Task<AuthResultDto> GetUserByEmailAsync(string email);
 
-        Task<GoogleSignupCallbackResult> ProcessGoogleSignupCallbackAsync(string email, string? googleDisplayName);
+        Task<GoogleSignupCallbackResult> ProcessGoogleSignupCallbackAsync(
+            string email,
+            string? googleDisplayName,
+            string roleName);
 
         Task<bool> SendEmailVerificationOtpAsync(string email);
 
-        Task<bool> CompleteEmailVerificationOtpAsync(string email, string otp);
+        Task<bool> CompleteEmailVerificationOtpAsync(
+            string email,
+            string otp);
     }
 }

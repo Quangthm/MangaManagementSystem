@@ -61,9 +61,21 @@
                                    Variant="Variant.Outlined"
                                    Required="true"
                                    Disabled="_isSendingOtp">
-                            <MudSelectItem T="string" Value="@("Mangaka")">Mangaka</MudSelectItem>
-                            <MudSelectItem T="string" Value="@("Assistant")">Assistant</MudSelectItem>
-                            <MudSelectItem T="string" Value="@("Tantou Editor")">Tantou Editor</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Mangaka")">
+                                Mangaka
+                            </MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Assistant")">
+                                Assistant
+                            </MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Tantou Editor")">
+                                Tantou Editor
+                            </MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Editorial Board Member")">
+                                Editorial Board Member
+                            </MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Editorial Board Chief")">
+                                Editorial Board Chief
+                            </MudSelectItem>
                         </MudSelect>
                         <MudTextField Label="Email"
                                       @bind-Value="_email"
@@ -139,8 +151,15 @@
                 }
 
                 <MudDivider Class="my-4" />
-                <form action="/api/auth/google-signup" method="post" data-enhance="false">
-                    <button type="submit" class="google-auth-button">
+                <form action="/api/auth/google-signup"
+                      method="post"
+                      data-enhance="false">
+                    <input type="hidden"
+                           name="roleName"
+                           value="@_roleName" />
+
+                    <button type="submit"
+                            class="google-auth-button">
                         <span class="google-auth-button__content">
                             <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
                                  alt=""
