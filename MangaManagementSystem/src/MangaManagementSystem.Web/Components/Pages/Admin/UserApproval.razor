@@ -116,7 +116,11 @@
                         @if (_isImagePreview)
                         {
                             <div class="d-flex justify-center my-2">
-                                <MudImage Src="@_currentPortfolio.CloudinarySecureUrl" Alt="Portfolio Image" Fluid="true" Class="rounded" Style="max-height: 60vh; object-fit: contain;" />
+                                <MudImage Src="@($"/api/portfolio/{_currentPortfolio.FileResourceId}")"
+                                          Alt="Portfolio Image"
+                                          Fluid="true"
+                                          Class="rounded"
+                                          Style="max-height: 60vh; object-fit: contain;" />
                             </div>
                         }
                         else

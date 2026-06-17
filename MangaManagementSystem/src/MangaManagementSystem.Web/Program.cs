@@ -449,142 +449,222 @@ app.MapGet("/signout", async (CustomAuthenticationStateProvider authStateProvide
     return Results.Redirect("/login");
 });
 
-            // Debug endpoint: tries multiple download strategies and reports results
-            app.MapGet("/api/portfolio/{id:guid}/debug", async (
-                Guid id,
-                IFileResourceService fileResourceService,
-                CloudinaryDotNet.Cloudinary cloudinary,
-                ILogger<Program> logger) =>
+
+
+            app.MapGet(
+    "/api/portfolio/{id:guid}",
+    async (
+        Guid id,
+        HttpContext context,
+        IUserService userService,
+        IFileResourceService fileResourceService,
+        ILogger<Program> logger) =>
+    {
+        if (id == Guid.Empty)
+        {
+            return Results.BadRequest(
+                new
+                {
+                    message =
+                        "Portfolio file id is required."
+                });
+        }
+
+        if (context.User.Identity?.IsAuthenticated
+            != true)
+        {
+            return Results.Json(
+                new
+                {
+                    message =
+                        "Authentication is required."
+                },
+                statusCode:
+                    StatusCodes.Status401Unauthorized);
+        }
+
+        var actorUserIdValue =
+            context.User.FindFirst(
+                ClaimTypes.NameIdentifier)?.Value;
+
+        if (!Guid.TryParse(
+                actorUserIdValue,
+                out var actorUserId)
+            || actorUserId == Guid.Empty)
+        {
+            return Results.Json(
+                new
+                {
+                    message =
+                        "Authenticated user information is invalid."
+                },
+                statusCode:
+                    StatusCodes.Status401Unauthorized);
+        }
+
+        var actor =
+            await userService.GetUserByIdAsync(
+                actorUserId);
+
+        if (actor is null)
+        {
+            return Results.Json(
+                new
+                {
+                    message =
+                        "Authenticated user was not found."
+                },
+                statusCode:
+                    StatusCodes.Status401Unauthorized);
+        }
+
+        if (!string.Equals(
+                actor.StatusCode,
+                "ACTIVE",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return Results.Json(
+                new
+                {
+                    message =
+                        "The account is not active."
+                },
+                statusCode:
+                    StatusCodes.Status403Forbidden);
+        }
+
+        var portfolioOwner =
+            await userService
+                .GetUserByPortfolioFileIdAsync(id);
+
+        if (portfolioOwner is null)
+        {
+            return Results.NotFound(
+                new
+                {
+                    message =
+                        "Portfolio file was not found."
+                });
+        }
+
+        var actorIsOwner =
+            actor.UserId ==
+            portfolioOwner.UserId;
+
+        var actorIsAdmin =
+            string.Equals(
+                actor.RoleName,
+                "Admin",
+                StringComparison.OrdinalIgnoreCase);
+
+        if (!actorIsOwner && !actorIsAdmin)
+        {
+            logger.LogWarning(
+                "User {ActorUserId} attempted to access portfolio {PortfolioFileId} owned by user {OwnerUserId}.",
+                actor.UserId,
+                id,
+                portfolioOwner.UserId);
+
+            return Results.Json(
+                new
+                {
+                    message =
+                        "You do not have permission to access this portfolio."
+                },
+                statusCode:
+                    StatusCodes.Status403Forbidden);
+        }
+
+        try
+        {
+            var file =
+                await fileResourceService
+                    .GetFileResourceByIdAsync(id);
+
+            if (file is null
+                || file.DeletedAtUtc is not null
+                || string.IsNullOrWhiteSpace(
+                    file.CloudinarySecureUrl))
             {
-                var lines = new System.Collections.Generic.List<string>();
-                lines.Add($"[1] Looking up FileResource: {id}");
-
-                try
-                {
-                    var file = await fileResourceService.GetFileResourceByIdAsync(id);
-                    if (file == null)
+                return Results.NotFound(
+                    new
                     {
-                        lines.Add("[FAIL] File not found in database.");
-                        return Results.Text(string.Join("\n", lines), "text/plain");
-                    }
+                        message =
+                            "Portfolio file was not found."
+                    });
+            }
 
-                    lines.Add($"[OK] Found: {file.OriginalFileName}");
-                    lines.Add($"  ContentType: {file.ContentType}");
-                    lines.Add($"  PublicId: {file.CloudinaryPublicId}");
-                    lines.Add($"  StoredUrl: {file.CloudinarySecureUrl}");
+            logger.LogInformation(
+                "User {ActorUserId} is loading portfolio {PortfolioFileId}.",
+                actor.UserId,
+                id);
 
-                    var account = cloudinary.Api.Account;
-                    lines.Add($"  Cloud: {account.Cloud}");
-                    lines.Add("");
+            using var httpClient =
+                new HttpClient();
 
-                    // === Strategy A: CDN URL with browser-like headers ===
-                    lines.Add("=== Strategy A: CDN URL + Browser Headers ===");
-                    using (var httpClient = new System.Net.Http.HttpClient())
-                    {
-                        httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-                        httpClient.DefaultRequestHeaders.Add("Accept", "*/*");
-                        var response = await httpClient.GetAsync(file.CloudinarySecureUrl);
-                        lines.Add($"  HTTP {(int)response.StatusCode}");
-                        if (response.IsSuccessStatusCode)
-                        {
-                            var bytes = await response.Content.ReadAsByteArrayAsync();
-                            lines.Add($"  [OK] Downloaded {bytes.Length} bytes");
-                        }
-                    }
-                    lines.Add("");
+            httpClient.DefaultRequestHeaders.Add(
+                "User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
 
-                    // === Strategy B: Admin API with Basic Auth ===
-                    lines.Add("=== Strategy B: Admin API (Basic Auth) ===");
-                    using (var httpClient = new System.Net.Http.HttpClient())
-                    {
-                        var basicAuth = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($"{account.ApiKey}:{account.ApiSecret}"));
-                        httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", basicAuth);
-                        var adminUrl = $"https://api.cloudinary.com/v1_1/{account.Cloud}/resources/raw/upload/{Uri.EscapeDataString(file.CloudinaryPublicId)}";
-                        lines.Add($"  URL: {adminUrl}");
-                        var response = await httpClient.GetAsync(adminUrl);
-                        lines.Add($"  HTTP {(int)response.StatusCode}");
-                        if (response.IsSuccessStatusCode)
-                        {
-                            var body = await response.Content.ReadAsStringAsync();
-                            // Truncate to 500 chars for display
-                            lines.Add($"  [OK] Response: {(body.Length > 500 ? body[..500] + "..." : body)}");
-                        }
-                        else
-                        {
-                            var body = await response.Content.ReadAsStringAsync();
-                            lines.Add($"  [FAIL] Response: {body}");
-                        }
-                    }
-                    lines.Add("");
+            httpClient.DefaultRequestHeaders.Add(
+                "Accept",
+                "*/*");
 
-                    // === Strategy C: CDN URL with Basic Auth ===
-                    lines.Add("=== Strategy C: CDN URL + Basic Auth ===");
-                    using (var httpClient = new System.Net.Http.HttpClient())
-                    {
-                        var basicAuth = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($"{account.ApiKey}:{account.ApiSecret}"));
-                        httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", basicAuth);
-                        httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
-                        var response = await httpClient.GetAsync(file.CloudinarySecureUrl);
-                        lines.Add($"  HTTP {(int)response.StatusCode}");
-                        if (response.IsSuccessStatusCode)
-                        {
-                            var bytes = await response.Content.ReadAsByteArrayAsync();
-                            lines.Add($"  [OK] Downloaded {bytes.Length} bytes");
-                        }
-                    }
+            using var response =
+                await httpClient.GetAsync(
+                    file.CloudinarySecureUrl);
 
-                    return Results.Text(string.Join("\n", lines), "text/plain");
-                }
-                catch (Exception ex)
-                {
-                    lines.Add($"[ERROR] {ex.GetType().Name}: {ex.Message}");
-                    return Results.Text(string.Join("\n", lines), "text/plain");
-                }
-            });
-
-            app.MapGet("/api/portfolio/{id:guid}", async (
-                Guid id,
-                IFileResourceService fileResourceService,
-                ILogger<Program> logger) =>
+            if (!response.IsSuccessStatusCode)
             {
-                try
-                {
-                    var file = await fileResourceService.GetFileResourceByIdAsync(id);
-                    if (file == null || string.IsNullOrWhiteSpace(file.CloudinarySecureUrl))
+                logger.LogError(
+                    "Portfolio {PortfolioFileId} download failed with HTTP {StatusCode}.",
+                    id,
+                    (int)response.StatusCode);
+
+                return Results.Json(
+                    new
                     {
-                        logger.LogWarning("Portfolio {Id}: file not found in DB", id);
-                        return Results.Text("File not found.", "text/plain", statusCode: 404);
-                    }
+                        message =
+                            "The portfolio file could not be loaded."
+                    },
+                    statusCode:
+                        StatusCodes
+                            .Status502BadGateway);
+            }
 
-                    logger.LogInformation("Portfolio {Id}: downloading {FileName}", id, file.OriginalFileName);
+            var bytes =
+                await response.Content
+                    .ReadAsByteArrayAsync();
 
-                    // Cloudinary CDN rejects requests without a User-Agent header (bot detection → 401).
-                    // Adding a browser-like User-Agent resolves this.
-                    using var httpClient = new System.Net.Http.HttpClient();
-                    httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-                    httpClient.DefaultRequestHeaders.Add("Accept", "*/*");
+            var contentType =
+                string.IsNullOrWhiteSpace(
+                    file.ContentType)
+                    ? "application/octet-stream"
+                    : file.ContentType;
 
-                    var response = await httpClient.GetAsync(file.CloudinarySecureUrl);
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        logger.LogError("Portfolio {Id}: download failed with HTTP {Status}", id, (int)response.StatusCode);
-                        return Results.Text($"Download failed: HTTP {(int)response.StatusCode}", "text/plain", statusCode: 502);
-                    }
+            return Results.Bytes(
+                bytes,
+                contentType);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Unexpected error loading portfolio {PortfolioFileId} for user {ActorUserId}.",
+                id,
+                actor.UserId);
 
-                    var bytes = await response.Content.ReadAsByteArrayAsync();
-                    var contentType = file.ContentType ?? "application/octet-stream";
-
-                    logger.LogInformation("Portfolio {Id}: serving {Bytes} bytes as {ContentType}", id, bytes.Length, contentType);
-
-                    // Return without fileDownloadName → Content-Disposition: inline
-                    return Results.Bytes(bytes, contentType);
-                }
-                catch (Exception ex)
+            return Results.Json(
+                new
                 {
-                    logger.LogError(ex, "Portfolio {Id}: unhandled exception", id);
-                    return Results.Text($"Error: {ex.Message}", "text/plain", statusCode: 500);
-                }
-            });
+                    message =
+                        "The portfolio file could not be loaded."
+                },
+                statusCode:
+                    StatusCodes
+                        .Status500InternalServerError);
+        }
+    });
 
             app.MapRazorComponents<App>()
                 .AddInteractiveServerRenderMode();

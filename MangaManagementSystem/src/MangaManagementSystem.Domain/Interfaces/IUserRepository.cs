@@ -1,7 +1,4 @@
 using MangaManagementSystem.Domain.Entities;
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace MangaManagementSystem.Domain.Interfaces
 {
@@ -22,24 +19,32 @@ namespace MangaManagementSystem.Domain.Interfaces
         string? OldContentType
     );
 
-    public interface IUserRepository : IGenericRepository<User>
+    public interface IUserRepository
+        : IGenericRepository<User>
     {
-        Task<User?> GetByEmailAsync(string email);
+        Task<User?> GetByEmailAsync(
+            string email);
 
-        Task<User?> GetByUsernameAsync(string username);
+        Task<User?> GetByUsernameAsync(
+            string username);
 
-        Task<User?> GetByUsernameOrEmailAsync(string usernameOrEmail);
+        Task<User?> GetByUsernameOrEmailAsync(
+            string usernameOrEmail);
 
-        Task<IReadOnlyList<User>> GetByStatusAsync(string status);
+        Task<IReadOnlyList<User>> GetByStatusAsync(
+            string status);
 
-        Task<IReadOnlyList<User>> GetByRoleNameAsync(string roleName);
+        Task<IReadOnlyList<User>> GetByRoleNameAsync(
+            string roleName);
+
+        Task<User?> GetByPortfolioFileIdAsync(
+            Guid portfolioFileId);
 
         Task ChangeUserStatusViaProcAsync(
             Guid adminUserId,
             Guid targetUserId,
             string newStatusCode,
-            string? reason = null
-        );
+            string? reason = null);
 
         Task<Guid> CreateUserViaProcAsync(
             string roleName,
@@ -49,10 +54,11 @@ namespace MangaManagementSystem.Domain.Interfaces
             string? displayName = null,
             Guid? avatarFileId = null,
             Guid? portfolioFileId = null,
-            Guid? createdByUserId = null
-        );
+            Guid? createdByUserId = null);
 
-        Task<(Guid newUserId, Guid? portfolioFileResourceId)>
+        Task<(
+            Guid newUserId,
+            Guid? portfolioFileResourceId)>
             CreateUserWithOptionalPortfolioAsync(
                 string roleName,
                 string username,
@@ -66,25 +72,22 @@ namespace MangaManagementSystem.Domain.Interfaces
                 string? portfolioContentType = null,
                 long? portfolioFileSizeBytes = null,
                 string? portfolioSha256Hash = null,
-                Guid? createdByUserId = null
-            );
+                Guid? createdByUserId = null);
 
         Task UpdateDisplayNameViaProcAsync(
             Guid userId,
-            string displayName
-        );
+            string displayName);
 
-        Task<UserFileReplacementResult> UpdateAvatarFileViaProcAsync(
-            UserFileReplacementRequest request
-        );
+        Task<UserFileReplacementResult>
+            UpdateAvatarFileViaProcAsync(
+                UserFileReplacementRequest request);
 
-        Task<UserFileReplacementResult> UpdatePortfolioFileViaProcAsync(
-            UserFileReplacementRequest request
-        );
+        Task<UserFileReplacementResult>
+            UpdatePortfolioFileViaProcAsync(
+                UserFileReplacementRequest request);
 
         Task ResetPasswordViaProcAsync(
             Guid userId,
-            string passwordHash
-        );
+            string passwordHash);
     }
 }

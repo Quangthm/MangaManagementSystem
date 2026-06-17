@@ -88,6 +88,25 @@ namespace MangaManagementSystem.Application.Services
             return entity is null ? null : entity.ToDto();
         }
 
+        public async Task<UserDto?>
+            GetUserByPortfolioFileIdAsync(
+                Guid portfolioFileId)
+        {
+            if (portfolioFileId == Guid.Empty)
+            {
+                return null;
+            }
+
+            var entity =
+                await _unitOfWork.Users
+                    .GetByPortfolioFileIdAsync(
+                        portfolioFileId);
+
+            return entity is null
+                ? null
+                : entity.ToDto();
+        }
+
         public async Task<IEnumerable<UserDto>> GetUsersByStatusAsync(string status)
         {
             var entities = await _unitOfWork.Users.GetByStatusAsync(status);

@@ -69,6 +69,22 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .ToListAsync();
         }
 
+        public async Task<User?> GetByPortfolioFileIdAsync(
+            Guid portfolioFileId)
+        {
+            if (portfolioFileId == Guid.Empty)
+            {
+                return null;
+            }
+
+            return await UsersWithRole()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    user =>
+                        user.PortfolioFileId ==
+                        portfolioFileId);
+        }
+
         public async Task ChangeUserStatusViaProcAsync(
             Guid adminUserId,
             Guid targetUserId,

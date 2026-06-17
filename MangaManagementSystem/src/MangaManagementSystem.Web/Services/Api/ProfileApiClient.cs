@@ -1,9 +1,13 @@
-using MangaManagementSystem.Application.DTOs.Auth;
-using MangaManagementSystem.Application.DTOs.Manga;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Claims;
 using System.Text.Json;
+using MangaManagementSystem.Application.DTOs.Auth;
+using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.Web.Options;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.Extensions.Options;
 
 namespace MangaManagementSystem.Web.Services.Api
 {
@@ -18,21 +22,34 @@ namespace MangaManagementSystem.Web.Services.Api
 
         private readonly HttpClient _httpClient;
         private readonly ILogger<ProfileApiClient> _logger;
+        private readonly AuthenticationStateProvider
+            _authenticationStateProvider;
+        private readonly InternalApiOptions _internalApiOptions;
 
         public ProfileApiClient(
             HttpClient httpClient,
-            ILogger<ProfileApiClient> logger)
+            ILogger<ProfileApiClient> logger,
+            AuthenticationStateProvider authenticationStateProvider,
+            IOptions<InternalApiOptions> internalApiOptions)
         {
             _httpClient = httpClient;
             _logger = logger;
+            _authenticationStateProvider =
+                authenticationStateProvider;
+            _internalApiOptions =
+                internalApiOptions.Value;
         }
 
         public async Task<UserDto> GetProfileAsync(
             Guid userId)
         {
-            using var response =
-                await _httpClient.GetAsync(
+            using var request =
+                await CreateAuthorizedRequestAsync(
+                    HttpMethod.Get,
                     $"api/profile/{userId:D}");
+
+            using var response =
+                await _httpClient.SendAsync(request);
 
             return await ReadRequiredAsync<UserDto>(
                 response,
@@ -42,9 +59,13 @@ namespace MangaManagementSystem.Web.Services.Api
         public async Task<FileResourceDto?> GetFileAsync(
             Guid fileResourceId)
         {
-            using var response =
-                await _httpClient.GetAsync(
+            using var request =
+                await CreateAuthorizedRequestAsync(
+                    HttpMethod.Get,
                     $"api/profile/files/{fileResourceId:D}");
+
+            using var response =
+                await _httpClient.SendAsync(request);
 
             if (response.StatusCode ==
                 HttpStatusCode.NotFound)
@@ -62,13 +83,20 @@ namespace MangaManagementSystem.Web.Services.Api
                 Guid userId,
                 string displayName)
         {
-            using var response =
-                await _httpClient.PutAsJsonAsync(
-                    $"api/profile/{userId:D}/display-name",
+            using var request =
+                await CreateAuthorizedRequestAsync(
+                    HttpMethod.Put,
+                    $"api/profile/{userId:D}/display-name");
+
+            request.Content =
+                JsonContent.Create(
                     new
                     {
                         DisplayName = displayName
                     });
+
+            using var response =
+                await _httpClient.SendAsync(request);
 
             return await ReadRequiredAsync<UserDto>(
                 response,
@@ -147,14 +175,80 @@ namespace MangaManagementSystem.Web.Services.Api
                 "file",
                 safeFileName);
 
+            using var request =
+                await CreateAuthorizedRequestAsync(
+                    HttpMethod.Post,
+                    requestUri);
+
+            request.Content = form;
+
             using var response =
-                await _httpClient.PostAsync(
-                    requestUri,
-                    form);
+                await _httpClient.SendAsync(request);
 
             return await ReadRequiredAsync<UserDto>(
                 response,
                 defaultErrorMessage);
+        }
+
+        private async Task<HttpRequestMessage>
+            CreateAuthorizedRequestAsync(
+                HttpMethod method,
+                string requestUri)
+        {
+            var authenticationState =
+                await _authenticationStateProvider
+                    .GetAuthenticationStateAsync();
+
+            var principal =
+                authenticationState.User;
+
+            if (principal.Identity?.IsAuthenticated != true)
+            {
+                throw new InvalidOperationException(
+                    "You must be logged in to manage a profile.");
+            }
+
+            var actorUserId =
+                principal.FindFirst(
+                    ClaimTypes.NameIdentifier)?.Value;
+
+            var actorRole =
+                principal.FindFirst(
+                    ClaimTypes.Role)?.Value
+                ?? principal.FindFirst("role")?.Value;
+
+            if (!Guid.TryParse(
+                    actorUserId,
+                    out var parsedActorUserId))
+            {
+                throw new InvalidOperationException(
+                    "The current user id is invalid.");
+            }
+
+            if (string.IsNullOrWhiteSpace(actorRole))
+            {
+                throw new InvalidOperationException(
+                    "The current user role is unavailable.");
+            }
+
+            var request =
+                new HttpRequestMessage(
+                    method,
+                    requestUri);
+
+            request.Headers.TryAddWithoutValidation(
+                InternalApiOptions.HeaderName,
+                _internalApiOptions.Key);
+
+            request.Headers.TryAddWithoutValidation(
+                InternalApiOptions.ActorUserIdHeaderName,
+                parsedActorUserId.ToString("D"));
+
+            request.Headers.TryAddWithoutValidation(
+                InternalApiOptions.ActorRoleHeaderName,
+                actorRole);
+
+            return request;
         }
 
         private async Task<T> ReadRequiredAsync<T>(
@@ -210,12 +304,17 @@ namespace MangaManagementSystem.Web.Services.Api
                     document.RootElement;
 
                 foreach (var propertyName in
-                    new[] { "message", "detail", "title" })
+                    new[]
+                    {
+                        "message",
+                        "detail",
+                        "title"
+                    })
                 {
                     if (root.TryGetProperty(
                             propertyName,
-                            out var property) &&
-                        property.ValueKind ==
+                            out var property)
+                        && property.ValueKind ==
                             JsonValueKind.String)
                     {
                         var value =
