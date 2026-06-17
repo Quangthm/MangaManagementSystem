@@ -838,7 +838,7 @@ BEGIN
 
     DECLARE @audit_entity_id NVARCHAR(100);
     DECLARE @detail_json NVARCHAR(MAX);
-
+    DECLARE @action_code NVARCHAR(64);
     BEGIN TRY
         IF @@TRANCOUNT = 0
         BEGIN
@@ -882,10 +882,7 @@ BEGIN
             @uploaded_by_user_id = @user_id,
             @file_resource_id = @new_portfolio_file_id OUTPUT;
 
-        IF @new_portfolio_file_id IS NULL
-        BEGIN
-            ;THROW 54304, 'The new portfolio FileResource could not be created.', 1;
-        END;
+       
 
         UPDATE auth.Users
         SET portfolio_file_id = @new_portfolio_file_id
@@ -937,12 +934,19 @@ BEGIN
         SET @audit_entity_id =
             CONVERT(NVARCHAR(36), @user_id);
 
-        EXEC audit.usp_AuditEvent_Append
-            @actor_user_id = @user_id,
-            @action_code = N'USER_PORTFOLIO_UPDATED',
-            @entity_type = N'Users',
-            @entity_id = @audit_entity_id,
-            @detail_json = @detail_json;
+        SET @action_code =
+    CASE
+        WHEN @old_portfolio_file_id IS NULL
+            THEN N'REGISTRATION_PORTFOLIO_ATTACHED'
+        ELSE N'USER_PORTFOLIO_UPDATED'
+    END;
+
+EXEC audit.usp_AuditEvent_Append
+    @actor_user_id = @user_id,
+    @action_code = @action_code,
+    @entity_type = N'Users',
+    @entity_id = @audit_entity_id,
+    @detail_json = @detail_json;
 
         IF @started_tran = 1
         BEGIN
@@ -1023,7 +1027,7 @@ BEGIN
         IF @has_portfolio = 1
         BEGIN
             EXEC auth.usp_User_UpdatePortfolioFile
-                @actor_user_id = @new_user_id,
+                @user_id = @new_user_id,
                 @original_file_name = @portfolio_original_file_name,
                 @cloudinary_public_id = @portfolio_cloudinary_public_id,
                 @cloudinary_secure_url = @portfolio_cloudinary_secure_url,
@@ -2263,9 +2267,12 @@ END;
         (
             SELECT 1
             FROM manga.SeriesContributor sc
-            WHERE sc.series_id = @owning_series_id
-              AND sc.user_id = @actor_user_id
-              AND sc.end_date IS NULL
+INNER JOIN auth.Users u
+    ON u.user_id = sc.user_id
+WHERE sc.series_id = @owning_series_id
+  AND sc.user_id = @actor_user_id
+  AND sc.end_date IS NULL
+  AND u.status_code = N'ACTIVE'
         )
         BEGIN
             ;THROW 57504, 'User is not an active contributor for the series that owns these page regions.', 1;
@@ -2422,10 +2429,13 @@ BEGIN
     INNER JOIN manga.Chapter ch
         ON ch.chapter_id = cp.chapter_id
     INNER JOIN manga.SeriesContributor sc
-        ON sc.series_id = ch.series_id
-    WHERE cpar.chapter_page_annotation_id = @chapter_page_annotation_id
-      AND sc.user_id = @actor_user_id
-      AND sc.end_date IS NULL
+    ON sc.series_id = ch.series_id
+INNER JOIN auth.Users u
+    ON u.user_id = sc.user_id
+WHERE cpar.chapter_page_annotation_id = @chapter_page_annotation_id
+  AND sc.user_id = @actor_user_id
+  AND sc.end_date IS NULL
+  AND u.status_code = N'ACTIVE'
 )
 BEGIN
     ;THROW 57807, 'User is not an active contributor for the series that owns this annotation.', 1;
@@ -2613,10 +2623,13 @@ END;
 IF NOT EXISTS
 (
     SELECT 1
-    FROM manga.SeriesContributor sc
-    WHERE sc.series_id = @owning_series_id
-      AND sc.user_id = @actor_user_id
-      AND sc.end_date IS NULL
+FROM manga.SeriesContributor sc
+INNER JOIN auth.Users u
+    ON u.user_id = sc.user_id
+WHERE sc.series_id = @owning_series_id
+  AND sc.user_id = @actor_user_id
+  AND sc.end_date IS NULL
+  AND u.status_code = N'ACTIVE'
 )
 OR NOT EXISTS
 (
@@ -3177,6 +3190,33 @@ BEGIN
         BEGIN
             ;THROW 58104, 'Only the assigned user can submit this task for review.', 1;
         END;
+        DECLARE @task_chapter_page_id UNIQUEIDENTIFIER;
+DECLARE @submitted_chapter_page_id UNIQUEIDENTIFIER;
+
+SELECT TOP (1)
+    @task_chapter_page_id = cpv.chapter_page_id
+FROM manga.ChapterPageTaskRegion tr
+INNER JOIN manga.PageRegion pr
+    ON pr.page_region_id = tr.page_region_id
+INNER JOIN manga.ChapterPageVersion cpv
+    ON cpv.chapter_page_version_id = pr.chapter_page_version_id
+WHERE tr.chapter_page_task_id = @chapter_page_task_id;
+
+SELECT
+    @submitted_chapter_page_id = cpv.chapter_page_id
+FROM manga.ChapterPageVersion cpv
+WHERE cpv.chapter_page_version_id = @completed_page_version_id;
+
+IF @submitted_chapter_page_id IS NULL
+BEGIN
+    ;THROW 58105, 'Submitted page version does not exist.', 1;
+END;
+
+IF @task_chapter_page_id IS NULL
+   OR @task_chapter_page_id <> @submitted_chapter_page_id
+BEGIN
+    ;THROW 58106, 'Submitted page version must belong to the same logical chapter page as the task.', 1;
+END;
         --------------------------------------------------------------------
         -- 6. Move task to UNDER_REVIEW
         --------------------------------------------------------------------
