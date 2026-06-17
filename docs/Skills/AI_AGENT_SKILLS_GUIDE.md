@@ -25,7 +25,7 @@ The system follows a **Distributed Monolith** style. The core business workflow 
 - **Technology:** ASP.NET Core Web API on .NET 8.
 - **Architecture pattern:** Clean Architecture with four layers:
   1. **Domain** — entities, enums/value objects, and domain concepts that do not depend on Application, Infrastructure, Web, or API.
-  2. **Application** — use cases, commands/queries, DTOs, validators, service interfaces, workflow orchestration, and business validation. Application may depend on Domain, but must not depend on Infrastructure, API, or Web.
+  2. **Application** — use cases expressed through CQRS commands/queries, MediatR request/handler types, DTOs, validators, service interfaces when still needed, workflow orchestration, and business validation. Application may depend on Domain, but must not depend on Infrastructure, API, or Web.
   3. **Infrastructure** — EF Core, SQL Server stored-procedure wrappers, repository implementations, Cloudinary integration, SMTP/email, OTP cache, AI Hub adapters, and other external service adapters. Infrastructure may depend on Application and Domain.
   4. **API** — thin ASP.NET Core controllers/endpoints, request/response contracts, authentication/authorization boundaries, HTTP status-code mapping, and HTTP-specific concerns. API may depend on Application and Infrastructure for dependency injection only.
 - **Rule:** Business logic must not be placed directly in UI components, API controllers, or database-specific classes when it belongs in Domain/Application.
@@ -58,7 +58,7 @@ Required flow for new business features:
 Blazor Web page / component
 → typed Web API client, e.g. IMangakaSeriesApiClient
 → ASP.NET Core API controller, e.g. MangakaSeriesController
-→ Application use-case service, e.g. ISeriesService.CreateSeriesDraftAsync
+→ Application command/query handler through MediatR, e.g. CreateSeriesDraftCommandHandler
 → Infrastructure repository / stored-procedure wrapper
 → SQL Server stored procedure / EF read query
 ```
@@ -73,6 +73,137 @@ Blazor Web page
 
 The Web project may temporarily contain legacy direct Application service calls while migration is in progress, but AI Agents must not add new direct Web-to-Application business workflow calls. When touching a migrated or new workflow, route it through the API.
 
+
+### CQRS + MediatR Application Rules
+
+For new or migrated business features, AI Agents should prefer a **CQRS-style Application layer using MediatR** instead of adding more large, all-purpose Application services.
+
+Required intent:
+
+```text
+Command = changes state / performs a business workflow
+Query   = reads data / builds a screen or read model
+```
+
+Preferred new-feature flow:
+
+```text
+Web Razor Page
+→ typed Web API client
+→ API Controller
+→ IMediator.Send(command/query)
+→ Application Command/Query Handler
+→ Application-facing repository/storage/email abstractions
+→ Infrastructure implementation
+→ SQL stored procedure / EF read query / external adapter
+```
+
+Use commands for workflows such as:
+
+- create series draft,
+- submit proposal,
+- update profile file,
+- reset password,
+- assign task,
+- complete task,
+- approve/reject/cancel workflow actions,
+- any action that writes audit events or changes workflow status.
+
+Use queries for read-only screens such as:
+
+- dashboard series list,
+- task list,
+- profile summary,
+- review queues,
+- ranking display,
+- audit feed.
+
+Recommended folder shape:
+
+```text
+MangaManagementSystem.Application
+└── Features
+    └── Mangaka
+        └── Series
+            ├── Commands
+            │   └── CreateSeriesDraft
+            │       ├── CreateSeriesDraftCommand.cs
+            │       ├── CreateSeriesDraftCommandHandler.cs
+            │       └── CreateSeriesDraftResult.cs
+            └── Queries
+                └── GetMySeries
+                    ├── GetMySeriesQuery.cs
+                    ├── GetMySeriesQueryHandler.cs
+                    └── MangakaSeriesListItemDto.cs
+```
+
+Command/query conventions:
+
+- Use `IRequest<TResponse>` for commands and queries.
+- Use one handler per command/query.
+- Use `CancellationToken` on all async handler methods.
+- Keep request DTOs/contracts in API or Web boundary models when they are HTTP-specific; map them into Application commands/queries.
+- Keep business validation in Application handlers or validators, not Razor pages or API controllers.
+- Use FluentValidation or explicit validation helpers when available.
+- A command handler may orchestrate Cloudinary upload through an Application-facing abstraction and then call an Infrastructure stored-procedure wrapper.
+- A query handler may call repository/read-model methods using EF Core for simple reads.
+- Do not mix write workflow logic into query handlers.
+- Do not perform database writes from query handlers.
+- Do not call MediatR from Razor components directly. Razor components call Web typed API clients only.
+
+Compatibility rule for existing code:
+
+- Existing Application services may remain while migration is in progress.
+- Do not perform broad refactors just to convert every service into MediatR.
+- When touching a new or migrated workflow, prefer adding a command/query and handler.
+- If an existing service method already contains valid orchestration and changing it is too risky, a command handler may delegate to that service temporarily, but the session note must record this as transitional technical debt.
+- For current branch work, avoid creating duplicate implementations of the same workflow in both a service method and a handler unless one is explicitly marked as transitional.
+
+Example API controller using MediatR:
+
+```csharp
+[ApiController]
+[Route("api/mangaka/series")]
+public sealed class MangakaSeriesController : ControllerBase
+{
+    private readonly IMediator _mediator;
+
+    public MangakaSeriesController(IMediator mediator)
+    {
+        _mediator = mediator;
+    }
+
+    [HttpPost("drafts")]
+    [Consumes("multipart/form-data")]
+    public async Task<ActionResult<CreateSeriesDraftResult>> CreateDraftAsync(
+        [FromForm] CreateSeriesDraftForm form,
+        CancellationToken cancellationToken)
+    {
+        var actorUserId = /* read from claims or transitional Web-to-API context */;
+
+        var command = form.ToCommand(actorUserId);
+
+        var result = await _mediator.Send(command, cancellationToken);
+
+        return CreatedAtAction(nameof(GetByIdAsync), new { seriesId = result.SeriesId }, result);
+    }
+}
+```
+
+Example command handler responsibility:
+
+```text
+CreateSeriesDraftCommandHandler
+- validate title/synopsis/genre/content language
+- normalize or generate slug
+- validate optional cover file metadata
+- upload cover through storage abstraction when present
+- call ISeriesRepository.CreateSeriesDraftViaProcAsync
+- compensate Cloudinary upload if SQL workflow fails
+- return CreateSeriesDraftResult
+```
+
+
 ### API Controller Rules
 
 Controllers must be thin HTTP adapters. They may:
@@ -80,7 +211,7 @@ Controllers must be thin HTTP adapters. They may:
 - accept route/query/body/form data,
 - bind `multipart/form-data` files when needed,
 - read the authenticated actor/user id from claims or the current transitional Web-to-API request pattern,
-- call one Application use-case method,
+- call one Application use-case method or `IMediator.Send(command/query)`,
 - map known Application exceptions to safe HTTP responses,
 - return DTOs or response contracts.
 
@@ -327,9 +458,11 @@ AI Agents must follow this exact sequential pipeline when interpreting user requ
 3. `decompose_epic_to_tasks` ➔ Splits requirements into Blazor UI and .NET Clean Architecture sub-tasks.
 4. `calculate_priority_matrix` ➔ Approves prioritization using Karl Wiegers matrix matching MVP constraints.
 5. `refine_functional_requirements` ➔ Converts logic to strict "The system shall..." statements using explicit C# types.
-6. `design_database_workflow` ➔ Decides whether the feature requires a stored procedure/wrapper procedure and defines SQL transaction/audit boundaries.
-7. `generate_acceptance_criteria` ➔ Writes BDD tests validating both C# business rules, stored-procedure effects, and Blazor UI states.
-8. `sync_to_github_projects` ➔ Automates GitHub tracking using `gh` CLI.
+6. `design_application_cqrs_use_case` ➔ Decides the Application command/query, MediatR handler, DTO/result, and validation boundaries.
+7. `design_database_workflow` ➔ Decides whether the feature requires a stored procedure/wrapper procedure and defines SQL transaction/audit boundaries.
+8. `generate_acceptance_criteria` ➔ Writes BDD tests validating both C# business rules, stored-procedure effects, and Blazor UI states.
+9. `write_session_summary` ➔ Writes a clear task/session note under `docs/revision` or the matching use-case subfolder.
+10. `sync_to_github_projects` ➔ Automates GitHub tracking using `gh` CLI.
 
 ---
 
@@ -353,7 +486,7 @@ AI Agents must follow this exact sequential pipeline when interpreting user requ
 * **Execution Rules:**
   - Every technical breakdown MUST generate four distinct layers formatted as a Markdown checklist (`- [ ]`):
     1. **Frontend (FE):** MudBlazor `.razor` component placement in the Blazor Server Web project plus typed Web API client changes. Web pages must call API clients for new/migrated business workflows, not Application services directly.
-    2. **Backend (BE):** Feature-based API controller/endpoints, request/response contracts, Application use-case services/DTOs/validators, Domain rules, EF Core Fluent API configurations in `Infrastructure`, and Infrastructure repository methods that call SQL Server stored procedures for important database workflows.
+    2. **Backend (BE):** Feature-based API controller/endpoints, request/response contracts, MediatR commands/queries/handlers, Application DTOs/results/validators, Domain rules, EF Core Fluent API configurations in `Infrastructure`, and Infrastructure repository methods that call SQL Server stored procedures for important database workflows.
     3. **AI Integration:** Async integration hooks to Python FastAPI (YOLO-based panel/region detection) if processing `ChapterPage` canvases.
     4. **Exceptions & Audit:** Custom middleware handling, stored-procedure audit calls through `audit.usp_AuditEvent_Append`, and compensation logic for external operations such as Cloudinary cleanup after SQL failure.
 
@@ -370,12 +503,28 @@ AI Agents must follow this exact sequential pipeline when interpreting user requ
   - Every generated workflow must explicitly state its transaction boundary, audit behavior, and rollback/compensation behavior.
 
 
+
+### 4A. Skill Name: `design_application_cqrs_use_case`
+* **System Prompt Constraint:** Before generating backend code, decide whether the Application boundary should be implemented as a command, query, or existing transitional service method.
+* **Execution Rules:**
+  - Use a **Command** for any operation that changes state, writes files, calls stored procedures, changes workflow status, writes audit events, sends OTP/email, or performs security/account actions.
+  - Use a **Query** for read-only dashboard/list/detail screens.
+  - Prefer MediatR `IRequest<TResponse>` and one handler per command/query for new or migrated features.
+  - Place new command/query code under a feature-based Application folder such as `Features/Mangaka/Series/Commands/CreateSeriesDraft`.
+  - API controllers should call `IMediator.Send(...)` for new CQRS handlers.
+  - Handlers may call Application-facing repository/storage/email abstractions, but must not depend on Web, API, EF `DbContext`, SQL client code, or Cloudinary SDK directly.
+  - Important mutating command handlers must call Infrastructure stored-procedure wrappers instead of performing several independent EF `SaveChangesAsync` calls.
+  - Query handlers may use read repository methods or EF-backed query abstractions for simple read models.
+  - Do not call MediatR directly from Blazor Razor components. Web must still call API through typed API clients.
+  - If a legacy Application service remains in use, mark it as transitional in the session note and do not create duplicate business logic in multiple places.
+
+
 ### 5. Skill Name: `enforce_clean_architecture`
 * **System Prompt Constraint:** Before generating or modifying code, verify that the proposed implementation preserves Clean Architecture dependency boundaries and the Web-to-API rule.
 * **Execution Rules:**
   - For every feature, explicitly state which code belongs in `Domain`, `Application`, `Infrastructure`, `API`, and `Web`.
   - Web must call the API via typed API clients for all new or migrated business workflows.
-  - API controllers must be thin and must delegate business work to Application services.
+  - API controllers must be thin and must delegate business work to Application commands/queries through MediatR or to an existing Application service when a workflow has not yet been migrated.
   - Application services must not depend on API/Web/Infrastructure concrete implementation details.
   - Infrastructure must hide EF Core, stored-procedure, Cloudinary, SMTP, and AI Hub details behind Application-facing interfaces.
   - Do not add new direct injections of Application workflow services into Razor components. If an existing Web page already injects an Application service, either leave it untouched when out of scope or migrate that workflow to an API client when the page is modified.
@@ -391,8 +540,8 @@ AI Agents must follow this exact sequential pipeline when interpreting user requ
     ```text
     Clean Architecture placement:
     - Web: ...
-    - API: ...
-    - Application: ...
+    - API: thin controller route and IMediator.Send(command/query) or existing use-case call
+    - Application: command/query/handler or transitional service method, DTOs/results/validators
     - Infrastructure: ...
     - Domain: ...
 
@@ -414,7 +563,9 @@ API:
 - Controller reads form fields and optional file bytes, resolves actor id, calls Application.
 
 Application:
-- ISeriesService.CreateSeriesDraftAsync validates draft input, slug rules, actor intent, and coordinates storage/SP workflow through interfaces.
+- Prefer CreateSeriesDraftCommand + CreateSeriesDraftCommandHandler through MediatR for new/migrated code.
+- If the existing ISeriesService.CreateSeriesDraftAsync path is kept temporarily, document it as transitional.
+- The handler/service validates draft input, slug rules, actor intent, and coordinates storage/SP workflow through interfaces.
 
 Infrastructure:
 - Uploads cover to Cloudinary if present.
@@ -451,6 +602,191 @@ MangakaDashboard.razor injects ISeriesService and IFileStorageService, uploads c
   - Must write 2 Happy Path scenarios and 2 Edge Case scenarios (e.g., unauthorized role rejection, invalid file uploads, stored-procedure rollback, Cloudinary cleanup after SQL failure, audit log write failures, or unauthorized workflow transitions).
   - Explicitly state the MudBlazor UI feedback state (e.g., `<MudProgressCircular>`, `<MudDialog>`, or `ISnackbar` toast notification).
 
+### 9. Skill Name: `write_session_summary`
+* **System Prompt Constraint:** At the end of every coding session, interrupted continuation, merge-conflict fix, architecture refactor, API migration, or completed feature task, write a durable Markdown session note in the repository so future AI agents and developers can resume accurately.
+* **Required Folder Root:** `MangaManagementSystem\MangaManagementSystem\docs\revision`
+* **Use-Case Folder Rule:** Put the note in the most specific existing use-case/actor folder. If no matching folder exists, create one.
+
+#### Required folder selection
+
+Use these rules when choosing where to write the note:
+
+| Task scope | Session note folder |
+|---|---|
+| Mangaka use cases, Mangaka dashboard, creator workspace, series draft/proposal/chapter/page workflows | `docs/revision/Mangaka` |
+| Assistant use cases, assigned tasks, assistant studio/work submission | `docs/revision/Assistant` |
+| Tantou Editor review/annotation/proposal-review workflows | `docs/revision/Editor` or create `docs/revision/TantouEditor` if that is the established repo naming |
+| Editorial Board Member or Board Chief poll/vote workflows | `docs/revision/Board` or create `docs/revision/BoardChief` for Chief-only work |
+| Admin account/file/audit/system management | `docs/revision/Admin` |
+| General user/profile/avatar/portfolio/password flows | `docs/revision/Profile` or `docs/revision/GeneralUser` depending on existing repo folder naming |
+| Auth, login, registration, OTP, Google auth, session/cookie work | `docs/revision/Auth` or `docs/revision/Registration` depending on existing repo folder naming |
+| Cross-cutting architecture, Clean Architecture/CQRS/API-client conventions, shared infrastructure | `docs/revision` root or `docs/revision/Architecture` |
+| Merge conflict resolution involving several modules | `docs/revision/Merge` or the dominant affected use-case folder |
+
+If a folder does not exist, the AI Agent must create it before writing the note.
+
+#### Required filename convention
+
+Use a readable, chronological Markdown filename:
+
+```text
+yyyy-MM-dd-short-task-slug.md
+```
+
+Examples:
+
+```text
+docs/revision/Mangaka/2026-06-16-create-series-draft.md
+docs/revision/Profile/2026-06-17-profile-password-reset-api-fix.md
+docs/revision/Architecture/2026-06-17-clean-architecture-cqrs-api-client-rules.md
+```
+
+Do not overwrite an unrelated previous note. If updating the same session note is explicitly appropriate, append a clearly labeled update section with timestamp/context.
+
+#### Required session note content
+
+Every session note must include these sections when applicable:
+
+```markdown
+# Session Note — <Task Name>
+
+- **Branch:** `<current git branch>`
+- **Date:** `<yyyy-MM-dd>`
+- **Scope:** `<actor/use case/module>`
+- **Applies to:** `<current branch / main / incoming merge branch / cross-cutting>`
+- **Related workflow:** `<short workflow name>`
+
+## Task summary
+
+Explain what was requested and what problem this session solved.
+
+## Important decisions
+
+List important architecture and business decisions made during the session.
+Separate branch-specific decisions when needed:
+
+### Applies to current/main branch
+- ...
+
+### Applies to incoming/merged branch only
+- ...
+
+### Deferred / out of scope
+- ...
+
+## Architecture flow
+
+Show the final intended flow, for example:
+
+```text
+Razor Page
+  -> typed Web API client
+  -> API controller
+  -> IMediator.Send(command/query)
+  -> Application handler
+  -> Infrastructure repository/SP wrapper
+  -> SQL Server stored procedure / EF read query
+```
+
+## Files changed
+
+Group by layer:
+
+### Web
+- `path/to/file` — what changed and why.
+
+### API
+- `path/to/file` — endpoint/contract changes.
+
+### Application
+- `path/to/file` — command/query/handler/DTO/validator/service changes.
+
+### Infrastructure
+- `path/to/file` — repository, SP wrapper, Cloudinary/SMTP/EF changes.
+
+### Domain
+- `path/to/file` — entity/value-object/domain-rule changes.
+
+### Database / SQL
+- `path/to/file-or-procedure` — stored procedure/table/mapping effects.
+
+### Documentation
+- `path/to/file` — docs/revision updates.
+
+## CQRS / MediatR changes
+
+- **Commands added/changed:** ...
+- **Queries added/changed:** ...
+- **Handlers added/changed:** ...
+- **Validators added/changed:** ...
+- **Controller dispatch pattern:** `IMediator.Send(...)` or explain transitional exception.
+
+## API endpoints added/changed
+
+- `METHOD /api/...` — request/response and purpose.
+
+## Web API clients added/changed
+
+- `I...ApiClient` / `...ApiClient` — endpoint called and UI pages using it.
+
+## Database / stored procedure behavior
+
+- Stored procedure used:
+- Transaction owner:
+- Audit behavior:
+- Rollback/compensation behavior:
+
+## UI behavior changed
+
+Describe visible UI changes, dialogs, forms, buttons, snackbars, validation messages, and navigation.
+
+## Validation and build result
+
+- Command run: `dotnet build ...`
+- Result: `Build succeeded` or exact failure summary.
+- Runtime tests: state whether runtime tests were intentionally not run.
+
+## Known issues / problems discovered
+
+List current problems clearly. If the problem belongs to another branch, say so explicitly.
+
+## Manual test checklist
+
+1. ...
+2. ...
+3. ...
+
+## Remaining follow-up tasks
+
+- ...
+
+## Resume prompt for next AI agent
+
+Write a short continuation prompt that tells the next AI agent exactly what to inspect and continue, including branch scope and what not to touch.
+```
+
+#### Final response requirement
+
+After writing the session note, the AI Agent's final response must mention:
+
+- the session note path,
+- files changed,
+- build result,
+- remaining follow-up tasks,
+- and any branch-specific warnings.
+
+#### Session summary quality rules
+
+- Be specific enough that a new AI agent can resume without rereading the whole chat.
+- Include exact file paths and API routes.
+- Include exact stored procedure names when relevant.
+- Distinguish completed work from partially completed or broken work.
+- Distinguish current/main branch decisions from incoming branch issues during merges.
+- Do not claim runtime testing was done if it was not done.
+- Do not hide known failures; record them under `Known issues / problems discovered`.
+- Do not paste secrets, passwords, OTPs, API keys, connection strings, or private tokens.
+
+
 ---
 
 ## ✅ CLEAN ARCHITECTURE REVIEW CHECKLIST
@@ -473,6 +809,10 @@ Before accepting generated code, AI Agents and reviewers must check the followin
 
 ### Application Project
 
+- [ ] New or migrated use cases are modeled as CQRS commands/queries with MediatR handlers where practical.
+- [ ] Commands perform state-changing workflows; queries remain read-only.
+- [ ] API controllers call `IMediator.Send(...)` for CQRS use cases or one existing Application service method for transitional workflows.
+- [ ] Blazor Web components do not call MediatR directly.
 - [ ] Use-case methods own business validation and workflow orchestration.
 - [ ] Application depends on Domain and abstractions, not Infrastructure concrete classes.
 - [ ] Application DTOs do not expose database-only or security-sensitive fields.
@@ -490,13 +830,21 @@ Before accepting generated code, AI Agents and reviewers must check the followin
 - [ ] EF mappings match the source-of-truth schema.
 - [ ] Stored-procedure output parameters and errors are handled safely.
 
+### Documentation / Session Notes
+
+- [ ] A Markdown session note was created or updated under `docs/revision` or the matching use-case folder.
+- [ ] The note uses the `yyyy-MM-dd-short-task-slug.md` naming convention.
+- [ ] The note records branch name, scope, files changed, architecture flow, CQRS/MediatR changes, API endpoints, Web API clients, DB/SP behavior, build result, manual test checklist, known issues, and remaining follow-ups.
+- [ ] Merge notes distinguish current/main branch decisions from incoming branch-only issues.
+- [ ] The final response mentions the session note path.
+
 ## 🚀 COPILOT CLI AUTOMATION CHEATSHEET
 
 Use these explicit commands to force Copilot CLI to leverage this skills file during pull request reviews or code generation:
 
 ```bash
 # Generate a new service ensuring compliance with the skills guide
-gh copilot suggest -f docs/ai_agent_skills/AI_AGENT_SKILLS_GUIDE.md "Create a MediatR command for creating a ChapterPageTask assigned to an Assistant"
+gh copilot suggest -f docs/ai_agent_skills/AI_AGENT_SKILLS_GUIDE.md "Create a CQRS MediatR command and handler for creating a ChapterPageTask assigned to an Assistant, with Web calling API through a typed client"
 
 # Code Audit before merging a Pull Request
 gh copilot explain -f docs/ai_agent_skills/AI_AGENT_SKILLS_GUIDE.md "Review current Git changes to check if the new Blazor view uses MudBlazor components and valid API requests"

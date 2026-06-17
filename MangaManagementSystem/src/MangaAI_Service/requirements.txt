@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+python-multipart
+opencv-python
+deep-translator
+pillow
+numpy
+ultralytics
+huggingface_hub
+manga-ocr

@@ -114,7 +114,7 @@
 | FR-USER-019 | The system shall prevent a display name update from changing `username`, `email`, role, account status, password, or approval state. | BR-USER-019 |
 | FR-USER-020 | The system shall record display name changes in the audit log. | BR-USER-020 |
 | FR-USER-021 | The system shall reject empty or whitespace-only display names after trimming. | BR-USER-021 |
-
+| FR-USER-022 | The system shall allow an authenticated user to update their own avatar and portfolio file through the profile workflow. | BR-USER-022 |
 ---
 
 ## 3.5 Series

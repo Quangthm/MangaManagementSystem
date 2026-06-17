@@ -13,6 +13,7 @@ namespace MangaManagementSystem.Infrastructure.Services
     {
         private const string RegistrationKeyPrefix = "registration-otp:";
         private const string EmailVerificationKeyPrefix = "email-verification-otp:";
+        private const string ProfileActionKeyPrefix = "profile-action-otp:";
         private static readonly TimeSpan OtpTtl = TimeSpan.FromMinutes(5);
 
         private readonly IMemoryCache _memoryCache;
@@ -63,8 +64,36 @@ namespace MangaManagementSystem.Infrastructure.Services
             return true;
         }
 
+        public void StoreProfileActionOtp(string email, string actionCode, string otp)
+        {
+            var key = BuildProfileActionKey(email, actionCode);
+            _memoryCache.Set(key, otp, OtpTtl);
+        }
+
+        public bool TryValidateAndRemoveProfileActionOtp(string email, string actionCode, string otp)
+        {
+            var key = BuildProfileActionKey(email, actionCode);
+
+            if (!_memoryCache.TryGetValue<string>(key, out var cachedOtp) ||
+                !string.Equals(cachedOtp, otp?.Trim(), StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            _memoryCache.Remove(key);
+            return true;
+        }
+
+        private static string BuildProfileActionKey(string email, string actionCode)
+        {
+            return ProfileActionKeyPrefix + NormalizeEmail(email) + ":" + NormalizeActionCode(actionCode);
+        }
+
         private static string NormalizeEmail(string email)
             => email.Trim().ToLowerInvariant();
+
+        private static string NormalizeActionCode(string actionCode)
+            => actionCode.Trim().ToUpperInvariant();
 
         private sealed record CachedRegistrationOtp(string Otp, RegisterDto Request);
     }

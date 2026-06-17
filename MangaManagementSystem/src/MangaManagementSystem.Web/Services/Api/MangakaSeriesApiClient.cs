@@ -1,0 +1,170 @@
+using System;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using MangaManagementSystem.Application.DTOs.Manga;
+using Microsoft.Extensions.Logging;
+
+namespace MangaManagementSystem.Web.Services.Api
+{
+    public class MangakaSeriesApiClient : IMangakaSeriesApiClient
+    {
+        // Transitional actor header forwarded to the API while API auth is not yet implemented.
+        // The Web host owns the Blazor cookie/session and passes the logged-in user's id here.
+        private const string ActorUserIdHeader = "X-Actor-User-Id";
+
+        private readonly HttpClient _httpClient;
+        private readonly ILogger<MangakaSeriesApiClient> _logger;
+
+        public MangakaSeriesApiClient(HttpClient httpClient, ILogger<MangakaSeriesApiClient> logger)
+        {
+            _httpClient = httpClient;
+            _logger = logger;
+        }
+
+        public async Task<SeriesDraftCreatedDto> CreateDraftAsync(
+            Guid actorUserId,
+            string title,
+            string synopsis,
+            string genre,
+            string? contentLanguageCode = null,
+            string? slug = null,
+            string? publicationFrequencyCode = null,
+            Guid? sourceSeriesId = null,
+            byte[]? coverFileBytes = null,
+            string? coverFileName = null,
+            string? coverContentType = null,
+            CancellationToken cancellationToken = default)
+        {
+            using var form = new MultipartFormDataContent();
+            form.Add(new StringContent(title), "Title");
+            form.Add(new StringContent(synopsis), "Synopsis");
+            form.Add(new StringContent(genre), "Genre");
+
+            if (!string.IsNullOrWhiteSpace(contentLanguageCode))
+            {
+                form.Add(new StringContent(contentLanguageCode), "ContentLanguageCode");
+            }
+
+            if (!string.IsNullOrWhiteSpace(slug))
+            {
+                form.Add(new StringContent(slug), "Slug");
+            }
+
+            if (!string.IsNullOrWhiteSpace(publicationFrequencyCode))
+            {
+                form.Add(new StringContent(publicationFrequencyCode), "PublicationFrequencyCode");
+            }
+
+            if (sourceSeriesId.HasValue && sourceSeriesId.Value != Guid.Empty)
+            {
+                form.Add(new StringContent(sourceSeriesId.Value.ToString()), "SourceSeriesId");
+            }
+
+            if (coverFileBytes is { Length: > 0 })
+            {
+                var fileContent = new ByteArrayContent(coverFileBytes);
+                fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(
+                    coverContentType ?? "application/octet-stream");
+                form.Add(fileContent, "CoverFile", coverFileName ?? "cover");
+            }
+
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Post, "api/mangaka/series/drafts")
+            {
+                Content = form
+            };
+            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var created = await response.Content.ReadFromJsonAsync<SeriesDraftCreatedDto>(
+                    cancellationToken: cancellationToken);
+                return created!;
+            }
+
+            var message = await ExtractErrorMessageAsync(response);
+            _logger.LogWarning(
+                "Create series draft failed: {StatusCode} {ReasonPhrase}",
+                (int)response.StatusCode,
+                response.ReasonPhrase);
+
+            throw new InvalidOperationException(message);
+        }
+
+        private static async Task<string> ExtractErrorMessageAsync(HttpResponseMessage response)
+        {
+            try
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                if (string.IsNullOrWhiteSpace(body))
+                {
+                    return "An unexpected error occurred. Please try again.";
+                }
+
+                using var doc = JsonDocument.Parse(body);
+                var root = doc.RootElement;
+
+                // ApiErrorResponse: { "message": "..." }
+                if (root.TryGetProperty("message", out var msgProp) && msgProp.ValueKind == JsonValueKind.String)
+                {
+                    var msg = msgProp.GetString();
+                    if (!string.IsNullOrWhiteSpace(msg))
+                    {
+                        return msg;
+                    }
+                }
+
+                // ProblemDetails / ValidationProblemDetails: { "detail": "...", "title": "...", "errors": { ... } }
+                if (root.TryGetProperty("detail", out var detailProp) && detailProp.ValueKind == JsonValueKind.String)
+                {
+                    var detail = detailProp.GetString();
+                    if (!string.IsNullOrWhiteSpace(detail))
+                    {
+                        return detail;
+                    }
+                }
+
+                // ValidationProblemDetails errors dictionary — return the first error message.
+                if (root.TryGetProperty("errors", out var errorsProp) && errorsProp.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var error in errorsProp.EnumerateObject())
+                    {
+                        if (error.Value.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var msg in error.Value.EnumerateArray())
+                            {
+                                if (msg.ValueKind == JsonValueKind.String)
+                                {
+                                    var errMsg = msg.GetString();
+                                    if (!string.IsNullOrWhiteSpace(errMsg))
+                                    {
+                                        return errMsg;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Fall back to title if nothing else found.
+                if (root.TryGetProperty("title", out var titleProp) && titleProp.ValueKind == JsonValueKind.String)
+                {
+                    var title = titleProp.GetString();
+                    if (!string.IsNullOrWhiteSpace(title))
+                    {
+                        return title;
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // Response body is not valid JSON — ignore and fall through.
+            }
+
+            return "An unexpected error occurred. Please try again.";
+        }
+    }
+}

@@ -1,41 +1,73 @@
-@namespace MangaManagementSystem.Web.Components.Layouts
+﻿@namespace MangaManagementSystem.Web.Components.Layouts
 @inject NavigationManager Nav
 
 <div class="mf-shell">
-    <aside class="mf-sidebar">
-        <div class="mf-sidebar-header">
-            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                <span class="mf-logo-box">MF</span>
-                <div>
-                    <MudText Typo="Typo.subtitle1" Class="font-weight-bold text-white">MangaFlow</MudText>
-                    <MudText Typo="Typo.caption" Style="color:#94a3b8">Editorial Platform</MudText>
-                </div>
-            </MudStack>
+    <aside class="mf-sidebar mf-dashboard-sidebar">
+
+        <div class="mf-sidebar-profile-area">
+            <UserAvatarMenu />
         </div>
+
         <nav class="mf-nav-section">
             <div class="mf-nav-title">Workspace</div>
-            <NavLink href="/dashboard" class="mf-nav-link" Match="NavLinkMatch.Prefix">Overview</NavLink>
-            <NavLink href="/dashboard/records" class="mf-nav-link" Match="NavLinkMatch.Prefix">Editorial Records</NavLink>
-            <NavLink href="/dashboard/studio" class="mf-nav-link" Match="NavLinkMatch.Prefix">Studio Progress</NavLink>
-            <NavLink href="/dashboard/workspace" class="mf-nav-link" Match="NavLinkMatch.Prefix">Review Workspace</NavLink>
 
+            <NavLink href="/dashboard"
+                     class="mf-nav-link"
+                     Match="NavLinkMatch.All">
+                Overview
+            </NavLink>
+
+            <NavLink href="/dashboard/records"
+                     class="mf-nav-link"
+                     Match="NavLinkMatch.Prefix">
+                Editorial Records
+            </NavLink>
+
+            <NavLink href="/dashboard/studio"
+                     class="mf-nav-link"
+                     Match="NavLinkMatch.Prefix">
+                Studio Progress
+            </NavLink>
+
+            <NavLink href="/dashboard/workspace"
+                     class="mf-nav-link"
+                     Match="NavLinkMatch.Prefix">
+                Review Workspace
+            </NavLink>
         </nav>
+
         <MudSpacer />
+
         <div class="pa-4">
-            <MudButton FullWidth="true" Variant="Variant.Outlined" Color="Color.Default" OnClick="BackToOverview">
+            <MudButton FullWidth="true"
+                       Variant="Variant.Outlined"
+                       Color="Color.Default"
+                       OnClick="BackToOverview">
                 Back to Overview
             </MudButton>
-            <div class="mt-3">
-                <LogoutForm />
-            </div>
+
         </div>
     </aside>
+
     <main class="mf-main">
         @ChildContent
     </main>
 </div>
 
 @code {
-    [Parameter] public RenderFragment? ChildContent { get; set; }
-    private void BackToOverview() => Nav.NavigateTo("/dashboard");
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    private void BackToOverview()
+    {
+        Nav.NavigateTo("/dashboard");
+    }
 }
+
+<style>
+    .mf-sidebar-profile-area {
+        padding: 18px 11px 14px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    }
+</style>
+

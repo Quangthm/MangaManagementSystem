@@ -1,107 +1,570 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
-@using MangaManagementSystem.Application.DTOs.Auth
-@using MangaManagementSystem.Web.Components.Shared
+@using Microsoft.AspNetCore.Components.Routing
+@using MangaManagementSystem.Application.Interfaces
+
+@implements IDisposable
+
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IUserService UserService
 @inject IFileResourceService FileResourceService
-@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
 
 <AuthorizeView>
-	<Authorized>
-		@if (_loading)
-		{
-			<MudSkeleton Width="36px" Height="36px" />
-		}
-		else
-		{
-			<MudMenu OffsetY="true">
-				<ActivatorContent>
-					<MudAvatar Size="Size.Medium" Image="@_avatarUrl" Class="mf-avatar" Color="Color.Primary">
-						@if (string.IsNullOrEmpty(_avatarUrl))
-						{
-							@(_initial ?? "?")
-						}
-					</MudAvatar>
-				</ActivatorContent>
-				<ChildContent>
-					<MudMenuItem OnClick="OpenProfile">View / Edit Profile</MudMenuItem>
-					<MudMenuItem OnClick="ChangePassword">Change Password</MudMenuItem>
-					<MudDivider />
-					<MudMenuItem>
-    <LogoutForm />
-</MudMenuItem>
-				</ChildContent>
-			</MudMenu>
-		}
-	</Authorized>
-	<NotAuthorized>
-		<MudButton Href="/login" Variant="Variant.Text">Sign in</MudButton>
-	</NotAuthorized>
+    <Authorized>
+        @if (_loading)
+        {
+            <div class="mf-user-profile-card mf-user-profile-loading">
+                <div class="mf-user-profile-avatar-placeholder"></div>
+
+                <div class="mf-user-profile-text">
+                    <div class="mf-user-profile-line mf-user-profile-line-name"></div>
+                    <div class="mf-user-profile-line mf-user-profile-line-role"></div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <MudMenu OffsetY="true">
+                <ActivatorContent>
+                    <button type="button"
+                            class="mf-user-profile-card"
+                            title="Open account menu"
+                            aria-label="Open account menu">
+
+                        <span class="mf-user-profile-avatar" @key="_avatarUrl">
+                            @if (!string.IsNullOrWhiteSpace(_avatarUrl))
+                            {
+                                <img src="@_avatarUrl"
+                                     alt="@($"{_displayName} avatar")" />
+                            }
+                            else
+                            {
+                                <span>@_initial</span>
+                            }
+                        </span>
+
+                        <span class="mf-user-profile-text">
+                            <strong title="@_displayName">
+                                @_displayName
+                            </strong>
+
+                            <small title="@_roleName">
+                                @_roleName
+                            </small>
+                        </span>
+
+                        <span class="mf-user-profile-chevron"
+                              aria-hidden="true">
+                            ⌄
+                        </span>
+                    </button>
+                </ActivatorContent>
+
+                <ChildContent>
+                    <MudMenuItem OnClick="OpenProfileSettings">
+                        <div class="mf-account-menu-item">
+                            <span class="mf-account-menu-icon">⚙</span>
+
+                            <span class="mf-account-menu-copy">
+                                <strong>Profile Settings</strong>
+                                <small>Profile, portfolio and security</small>
+                            </span>
+                        </div>
+                    </MudMenuItem>
+
+                    <MudDivider />
+
+                    <div class="mf-profile-logout-row">
+                        <LogoutForm />
+                    </div>
+                </ChildContent>
+            </MudMenu>
+        }
+    </Authorized>
+
+    <NotAuthorized>
+        <button type="button"
+                class="mf-user-profile-card mf-user-profile-sign-in"
+                @onclick="OpenLogin">
+
+            <span class="mf-user-profile-avatar">
+                <span>U</span>
+            </span>
+
+            <span class="mf-user-profile-text">
+                <strong>Sign in</strong>
+                <small>Open account</small>
+            </span>
+
+            <span class="mf-user-profile-chevron"
+                  aria-hidden="true">
+                ›
+            </span>
+        </button>
+    </NotAuthorized>
 </AuthorizeView>
 
 @code {
-	private bool _loading = true;
-	private string? _avatarUrl;
-	private string? _initial;
-	private Guid? _userId;
+    private bool _loading = true;
+    private bool _profileLoadInProgress;
+    private bool _disposed;
 
-	protected override async Task OnInitializedAsync()
-	{
-		try
-		{
-			var auth = await AuthStateProvider.GetAuthenticationStateAsync();
-			var user = auth.User;
-			if (user?.Identity?.IsAuthenticated == true)
-			{
-				var idClaim = user.FindFirst(ClaimTypes.NameIdentifier);
-				if (Guid.TryParse(idClaim?.Value, out var uid))
-				{
-					_userId = uid;
-					var dto = await UserService.GetUserByIdAsync(uid);
-					if (dto != null)
-					{
-						_initial = string.IsNullOrWhiteSpace(dto.DisplayName) ? dto.Username?.Substring(0,1).ToUpper() : dto.DisplayName?.Substring(0,1).ToUpper();
-						if (dto.AvatarFileId.HasValue)
-						{
-							var file = await FileResourceService.GetFileResourceByIdAsync(dto.AvatarFileId.Value);
-							if (file != null && !string.IsNullOrWhiteSpace(file.CloudinarySecureUrl))
-							{
-								_avatarUrl = file.CloudinarySecureUrl;
-							}
-						}
-					}
-				}
-			}
-		}
-		catch (Exception ex)
-		{
-			// Non-fatal; show placeholder avatar
-			Snackbar.Add("Failed to load profile info.", Severity.Warning);
-		}
-		finally
-		{
-			_loading = false;
-		}
-	}
+    private string? _avatarUrl;
+    private string _initial = "U";
+    private string _displayName = "User";
+    private string _roleName = "Account";
 
-	private void OpenProfile()
-	{
-		// Show a simple modal with profile info. For now this is a placeholder that
-		// shows read-only username/email/role/status and informs what update actions are available.
-		var title = "Profile";
-		var content = "Profile editing, avatar upload, and password change are temporarily unavailable in the current build.";
-		Snackbar.Add(content, Severity.Info);
-	}
+    protected override void OnInitialized()
+    {
+        AuthStateProvider.AuthenticationStateChanged +=
+            HandleAuthenticationStateChanged;
 
-	private void ChangePassword()
-	{
-		Snackbar.Add("Change password is temporarily unavailable.", Severity.Info);
-	}
+        NavigationManager.LocationChanged +=
+            HandleLocationChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await RefreshProfileAsync();
+
+        if (!_disposed)
+        {
+            StateHasChanged();
+        }
+    }
+
+    private async Task RefreshProfileAsync()
+    {
+        if (_disposed || _profileLoadInProgress)
+        {
+            return;
+        }
+
+        _profileLoadInProgress = true;
+        _loading = true;
+
+        try
+        {
+            var authenticationState =
+                await AuthStateProvider.GetAuthenticationStateAsync();
+
+            var principal = authenticationState.User;
+
+            if (principal?.Identity?.IsAuthenticated != true)
+            {
+                ResetProfile();
+                return;
+            }
+
+            LoadClaimFallback(principal);
+
+            var idClaim =
+                principal.FindFirst(ClaimTypes.NameIdentifier)
+                ?? principal.FindFirst("sub")
+                ?? principal.FindFirst("user_id");
+
+            if (!Guid.TryParse(idClaim?.Value, out var userId))
+            {
+                return;
+            }
+
+            var currentUser =
+                await UserService.GetUserByIdAsync(userId);
+
+            if (currentUser == null)
+            {
+                return;
+            }
+
+            _displayName = FirstNonEmpty(
+                currentUser.DisplayName,
+                currentUser.Username,
+                _displayName,
+                "User");
+
+            _roleName = FirstNonEmpty(
+                currentUser.RoleName,
+                _roleName,
+                "Account");
+
+            _initial = BuildInitial(
+                currentUser.DisplayName,
+                currentUser.Username,
+                currentUser.Email);
+
+            _avatarUrl = null;
+
+            if (!currentUser.AvatarFileId.HasValue)
+            {
+                return;
+            }
+
+            var avatarFile =
+                await FileResourceService.GetFileResourceByIdAsync(
+                    currentUser.AvatarFileId.Value);
+
+            if (avatarFile == null ||
+                avatarFile.DeletedAtUtc != null ||
+                string.IsNullOrWhiteSpace(avatarFile.CloudinarySecureUrl))
+            {
+                return;
+            }
+
+            _avatarUrl = BuildVersionedUrl(
+                avatarFile.CloudinarySecureUrl,
+                avatarFile.FileResourceId);
+        }
+        catch
+        {
+            _avatarUrl = null;
+            _initial = BuildInitial(_displayName);
+        }
+        finally
+        {
+            _loading = false;
+            _profileLoadInProgress = false;
+        }
+    }
+
+    private void LoadClaimFallback(ClaimsPrincipal principal)
+    {
+        var claimDisplayName =
+            principal.FindFirst(ClaimTypes.Name)?.Value
+            ?? principal.FindFirst("name")?.Value
+            ?? principal.FindFirst("display_name")?.Value
+            ?? principal.FindFirst("username")?.Value
+            ?? principal.Identity?.Name;
+
+        var claimRoleName =
+            principal.FindFirst(ClaimTypes.Role)?.Value
+            ?? principal.FindFirst("role")?.Value;
+
+        _displayName = FirstNonEmpty(
+            claimDisplayName,
+            "User");
+
+        _roleName = FirstNonEmpty(
+            claimRoleName,
+            "Account");
+
+        _initial = BuildInitial(_displayName);
+    }
+
+    private void HandleAuthenticationStateChanged(
+        Task<AuthenticationState> authenticationStateTask)
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await RefreshProfileAsync();
+
+            if (!_disposed)
+            {
+                StateHasChanged();
+            }
+        });
+    }
+
+    private void HandleLocationChanged(
+        object? sender,
+        LocationChangedEventArgs args)
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await RefreshProfileAsync();
+
+            if (!_disposed)
+            {
+                StateHasChanged();
+            }
+        });
+    }
+
+    private void OpenProfileSettings()
+    {
+        NavigationManager.NavigateTo("/profile/settings");
+    }
+
+    private void OpenLogin()
+    {
+        NavigationManager.NavigateTo("/login");
+    }
+
+    private void ResetProfile()
+    {
+        _avatarUrl = null;
+        _initial = "U";
+        _displayName = "User";
+        _roleName = "Account";
+    }
+
+    private static string FirstNonEmpty(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value.Trim();
+            }
+        }
+
+        return "User";
+    }
+
+    private static string BuildInitial(params string?[] values)
+    {
+        var source = FirstNonEmpty(values);
+
+        foreach (var character in source)
+        {
+            if (char.IsLetterOrDigit(character))
+            {
+                return character.ToString().ToUpperInvariant();
+            }
+        }
+
+        return "U";
+    }
+
+    private static string BuildVersionedUrl(
+        string url,
+        Guid fileResourceId)
+    {
+        var separator = url.Contains('?') ? "&" : "?";
+
+        return $"{url}{separator}v={fileResourceId:N}";
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+
+        AuthStateProvider.AuthenticationStateChanged -=
+            HandleAuthenticationStateChanged;
+
+        NavigationManager.LocationChanged -=
+            HandleLocationChanged;
+    }
 }
 
 <style>
-	.mf-avatar {
-		cursor: pointer;
-	}
+    .mf-user-profile-card {
+        width: 100%;
+        min-height: 84px;
+        border: 1px solid rgba(148, 163, 184, 0.20);
+        border-radius: 16px;
+        padding: 11px 10px;
+        background: rgba(255, 255, 255, 0.06);
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        text-align: left;
+        cursor: pointer;
+        transition:
+            background-color 0.16s ease,
+            border-color 0.16s ease,
+            transform 0.16s ease,
+            box-shadow 0.16s ease;
+    }
+
+    .mf-user-profile-card:hover {
+        background: rgba(124, 58, 237, 0.18);
+        border-color: rgba(196, 181, 253, 0.50);
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.28);
+        transform: translateY(-1px);
+    }
+
+    .mf-user-profile-card:focus-visible {
+        outline: 2px solid #c4b5fd;
+        outline-offset: 2px;
+    }
+
+    .mf-user-profile-avatar {
+        width: 50px;
+        height: 50px;
+        flex: 0 0 50px;
+        border-radius: 50%;
+        overflow: hidden;
+        background: linear-gradient(135deg, #7c3aed, #ec4899);
+        border: 2px solid rgba(255, 255, 255, 0.32);
+        box-shadow: 0 8px 20px rgba(124, 58, 237, 0.28);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #ffffff;
+        font-size: 18px;
+        font-weight: 900;
+    }
+
+    .mf-user-profile-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .mf-user-profile-text {
+        min-width: 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .mf-user-profile-text strong {
+        display: -webkit-box;
+        width: 100%;
+        color: #ffffff;
+        font-size: 13px;
+        font-weight: 800;
+        line-height: 1.25;
+        white-space: normal;
+        overflow: hidden;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+    }
+
+    .mf-user-profile-text small {
+        display: block;
+        width: 100%;
+        color: #aebbd0;
+        font-size: 11px;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .mf-user-profile-chevron {
+        flex: 0 0 auto;
+        color: #94a3b8;
+        font-size: 20px;
+        line-height: 1;
+        transition:
+            color 0.16s ease,
+            transform 0.16s ease;
+    }
+
+    .mf-user-profile-card:hover .mf-user-profile-chevron {
+        color: #ffffff;
+        transform: translateY(2px);
+    }
+
+    .mf-account-menu-item {
+        min-width: 235px;
+        padding: 4px 2px;
+        display: flex;
+        align-items: center;
+        gap: 11px;
+    }
+
+    .mf-account-menu-icon {
+        width: 34px;
+        height: 34px;
+        flex: 0 0 34px;
+        border-radius: 10px;
+        background: #eef2ff;
+        color: #4f46e5;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 17px;
+        font-weight: 900;
+    }
+
+    .mf-account-menu-copy {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .mf-account-menu-copy strong {
+        color: #0f172a;
+        font-size: 13px;
+        font-weight: 800;
+    }
+
+    .mf-account-menu-copy small {
+        color: #64748b;
+        font-size: 11px;
+        line-height: 1.25;
+    }
+
+    .mf-profile-logout-row {
+        min-width: 235px;
+        padding: 6px 8px 8px;
+    }
+
+    .mf-profile-logout-row form {
+        width: 100%;
+    }
+
+    .mf-profile-logout-row button {
+        width: 100%;
+        min-height: 40px;
+        border: 0;
+        border-radius: 9px;
+        padding: 0 12px;
+        background: transparent;
+        color: #dc2626;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        font-size: 13px;
+        font-weight: 800;
+        cursor: pointer;
+    }
+
+    .mf-profile-logout-row button:hover {
+        background: #fef2f2;
+    }
+
+    .mf-user-profile-loading {
+        cursor: default;
+        pointer-events: none;
+    }
+
+    .mf-user-profile-avatar-placeholder {
+        width: 50px;
+        height: 50px;
+        flex: 0 0 50px;
+        border-radius: 50%;
+        background: rgba(148, 163, 184, 0.20);
+        animation: mf-profile-pulse 1.2s ease-in-out infinite;
+    }
+
+    .mf-user-profile-line {
+        border-radius: 6px;
+        background: rgba(148, 163, 184, 0.20);
+        animation: mf-profile-pulse 1.2s ease-in-out infinite;
+    }
+
+    .mf-user-profile-line-name {
+        width: 110px;
+        height: 13px;
+    }
+
+    .mf-user-profile-line-role {
+        width: 76px;
+        height: 10px;
+    }
+
+    @@keyframes mf-profile-pulse {
+        0%, 100% {
+            opacity: 0.45;
+        }
+
+        50% {
+            opacity: 0.9;
+        }
+    }
 </style>

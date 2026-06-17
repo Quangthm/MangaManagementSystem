@@ -370,6 +370,109 @@ EXEC audit.usp_AuditEvent_Append
     END CATCH
 END;
 GO
+CREATE OR ALTER PROCEDURE auth.usp_User_UpdateDisplayName
+    @user_id UNIQUEIDENTIFIER,
+    @display_name NVARCHAR(100)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+    DECLARE @lock_result INT;
+    DECLARE @lock_resource NVARCHAR(255);
+
+    DECLARE @old_display_name NVARCHAR(100);
+    DECLARE @normalized_display_name NVARCHAR(100);
+
+    DECLARE @audit_entity_id NVARCHAR(100);
+    DECLARE @detail_json NVARCHAR(MAX);
+
+    SET @normalized_display_name =
+        NULLIF(LTRIM(RTRIM(@display_name)), N'');
+
+    BEGIN TRY
+     
+
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        SET @lock_resource =
+            N'auth_user_display_name_update_'
+            + CONVERT(NVARCHAR(36), @user_id);
+
+        EXEC @lock_result = sys.sp_getapplock
+            @Resource = @lock_resource,
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 10000;
+
+        IF @lock_result < 0
+        BEGIN
+            ;THROW 54102, 'Could not acquire display name update lock.', 1;
+        END;
+
+        SELECT
+            @old_display_name = u.display_name
+        FROM auth.Users u WITH (UPDLOCK, HOLDLOCK)
+        WHERE u.user_id = @user_id;
+
+        IF @@ROWCOUNT = 0
+        BEGIN
+            ;THROW 54103, 'User was not found.', 1;
+        END;
+
+        IF @old_display_name = @normalized_display_name
+        BEGIN
+            IF @started_tran = 1
+            BEGIN
+                COMMIT;
+            END;
+
+            RETURN;
+        END;
+
+        UPDATE auth.Users
+        SET display_name = @normalized_display_name
+        WHERE user_id = @user_id;
+
+        SELECT @detail_json =
+        (
+            SELECT
+                @user_id AS user_id,
+                @old_display_name AS old_display_name,
+                @normalized_display_name AS new_display_name
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        SET @audit_entity_id =
+            CONVERT(NVARCHAR(36), @user_id);
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @user_id,
+            @action_code = N'USER_DISPLAY_NAME_UPDATED',
+            @entity_type = N'Users',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH;
+END;
+GO
 CREATE OR ALTER PROCEDURE auth.usp_User_ResetPassword
     @target_user_id      UNIQUEIDENTIFIER,
     @new_password_hash   NVARCHAR(255),
@@ -707,17 +810,20 @@ BEGIN
 END;
 GO
 CREATE OR ALTER PROCEDURE auth.usp_User_UpdatePortfolioFile
-    @target_user_id              UNIQUEIDENTIFIER,
-    @actor_user_id               UNIQUEIDENTIFIER,
+    @user_id UNIQUEIDENTIFIER,
 
-    @original_file_name          NVARCHAR(260),
-    @cloudinary_public_id        NVARCHAR(255),
-    @cloudinary_secure_url       NVARCHAR(1000),
-    @content_type                NVARCHAR(100),
-    @file_size_bytes             BIGINT,
-    @sha256_hash                 CHAR(64),
+    @original_file_name NVARCHAR(260),
+    @cloudinary_public_id NVARCHAR(255),
+    @cloudinary_secure_url NVARCHAR(1000),
+    @content_type NVARCHAR(100),
+    @file_size_bytes BIGINT,
+    @sha256_hash CHAR(64),
 
-    @new_portfolio_file_id       UNIQUEIDENTIFIER OUTPUT
+    @new_portfolio_file_id UNIQUEIDENTIFIER OUTPUT,
+
+    @old_portfolio_file_id UNIQUEIDENTIFIER = NULL OUTPUT,
+    @old_cloudinary_public_id NVARCHAR(255) = NULL OUTPUT,
+    @old_content_type NVARCHAR(100) = NULL OUTPUT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -727,11 +833,11 @@ BEGIN
     DECLARE @lock_result INT;
     DECLARE @lock_resource NVARCHAR(255);
 
-    DECLARE @old_portfolio_file_id UNIQUEIDENTIFIER;
-    DECLARE @detail_json NVARCHAR(MAX);
-    DECLARE @action_code NVARCHAR(64);
+    DECLARE @old_file_purpose_code NVARCHAR(50);
+    DECLARE @old_deleted_at_utc DATETIME2(0);
+
     DECLARE @audit_entity_id NVARCHAR(100);
-    DECLARE @soft_delete_reason NVARCHAR(500);
+    DECLARE @detail_json NVARCHAR(MAX);
 
     BEGIN TRY
         IF @@TRANCOUNT = 0
@@ -739,7 +845,10 @@ BEGIN
             SET @started_tran = 1;
             BEGIN TRAN;
         END;
-        SET @lock_resource = N'auth_user_portfolio_update_' + CONVERT(NVARCHAR(36), @target_user_id);
+
+        SET @lock_resource =
+            N'auth_user_portfolio_update_'
+            + CONVERT(NVARCHAR(36), @user_id);
 
         EXEC @lock_result = sys.sp_getapplock
             @Resource = @lock_resource,
@@ -749,44 +858,17 @@ BEGIN
 
         IF @lock_result < 0
         BEGIN
-            ;THROW 54101, 'Could not acquire user portfolio update lock.', 1;
-        END;
-
-        /*
-            Permission rule:
-            - A user may update their own portfolio.
-            - An active Admin may update another user's portfolio.
-            This also supports registration-time attachment after the user row is created.
-        */
-        IF @actor_user_id <> @target_user_id
-           AND NOT EXISTS
-           (
-               SELECT 1
-               FROM
-               (
-                   SELECT
-                       u.user_id,
-                       u.role_id
-                   FROM auth.Users u
-                   WHERE u.user_id = @actor_user_id
-                     AND u.status_code = N'ACTIVE'
-               ) AS active_actor
-               INNER JOIN auth.Roles r
-                   ON r.role_id = active_actor.role_id
-               WHERE r.role_name = N'Admin'
-           )
-        BEGIN
-            ;THROW 54102, 'Actor does not have permission to update this portfolio.', 1;
+            ;THROW 54302, 'Could not acquire portfolio update lock.', 1;
         END;
 
         SELECT
-            @old_portfolio_file_id = portfolio_file_id
-        FROM auth.Users WITH (UPDLOCK, HOLDLOCK)
-        WHERE user_id = @target_user_id;
+            @old_portfolio_file_id = u.portfolio_file_id
+        FROM auth.Users u WITH (UPDLOCK, HOLDLOCK)
+        WHERE u.user_id = @user_id;
 
         IF @@ROWCOUNT = 0
         BEGIN
-            ;THROW 54103, 'Target user does not exist.', 1;
+            ;THROW 54303, 'User was not found.', 1;
         END;
 
         EXEC manga.usp_FileResource_Create
@@ -797,45 +879,67 @@ BEGIN
             @content_type = @content_type,
             @file_size_bytes = @file_size_bytes,
             @sha256_hash = @sha256_hash,
-            @uploaded_by_user_id = @target_user_id,
+            @uploaded_by_user_id = @user_id,
             @file_resource_id = @new_portfolio_file_id OUTPUT;
 
+        IF @new_portfolio_file_id IS NULL
+        BEGIN
+            ;THROW 54304, 'The new portfolio FileResource could not be created.', 1;
+        END;
+
         UPDATE auth.Users
-        SET
-            portfolio_file_id = @new_portfolio_file_id
-        WHERE user_id = @target_user_id;
+        SET portfolio_file_id = @new_portfolio_file_id
+        WHERE user_id = @user_id;
 
         IF @old_portfolio_file_id IS NOT NULL
         BEGIN
-            SET @soft_delete_reason = N'Replaced by user portfolio update.';
+            SELECT
+                @old_file_purpose_code = fr.file_purpose_code,
+                @old_cloudinary_public_id = fr.cloudinary_public_id,
+                @old_content_type = fr.content_type,
+                @old_deleted_at_utc = fr.deleted_at_utc
+            FROM manga.FileResource fr WITH (UPDLOCK, HOLDLOCK)
+            WHERE fr.file_resource_id = @old_portfolio_file_id;
 
-            EXEC manga.usp_FileResource_SoftDelete
-                @file_resource_id = @old_portfolio_file_id,
-                @deleted_by_user_id = @actor_user_id,
-                @delete_reason = @soft_delete_reason;
-        END;
-
-        SET @action_code =
-            CASE
-                WHEN @old_portfolio_file_id IS NULL
-                    THEN N'REGISTRATION_PORTFOLIO_ATTACHED'
-                ELSE N'USER_PORTFOLIO_UPDATED'
+            IF @old_file_purpose_code IS NULL
+            BEGIN
+                ;THROW 54305, 'The previous portfolio FileResource was not found.', 1;
             END;
+
+            IF @old_file_purpose_code <> N'REGISTRATION_PORTFOLIO'
+            BEGIN
+                ;THROW 54306, 'The previous file is not a REGISTRATION_PORTFOLIO resource.', 1;
+            END;
+
+            IF @old_deleted_at_utc IS NULL
+            BEGIN
+                EXEC manga.usp_FileResource_SoftDelete
+                    @file_resource_id = @old_portfolio_file_id,
+                    @deleted_by_user_id = @user_id,
+                    @delete_reason = N'Replaced by a new user portfolio.';
+            END;
+        END;
 
         SELECT @detail_json =
         (
             SELECT
-                @target_user_id AS user_id,
+                @user_id AS user_id,
                 @old_portfolio_file_id AS old_portfolio_file_id,
-                @new_portfolio_file_id AS new_portfolio_file_id
+                @new_portfolio_file_id AS new_portfolio_file_id,
+                @old_cloudinary_public_id AS old_cloudinary_public_id,
+                @cloudinary_public_id AS new_cloudinary_public_id,
+                @original_file_name AS new_original_file_name,
+                @content_type AS new_content_type,
+                @file_size_bytes AS new_file_size_bytes
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
         );
 
-        SET @audit_entity_id = CONVERT(NVARCHAR(36), @target_user_id);
+        SET @audit_entity_id =
+            CONVERT(NVARCHAR(36), @user_id);
 
         EXEC audit.usp_AuditEvent_Append
-            @actor_user_id = @actor_user_id,
-            @action_code = @action_code,
+            @actor_user_id = @user_id,
+            @action_code = N'USER_PORTFOLIO_UPDATED',
             @entity_type = N'Users',
             @entity_id = @audit_entity_id,
             @detail_json = @detail_json;
@@ -919,7 +1023,6 @@ BEGIN
         IF @has_portfolio = 1
         BEGIN
             EXEC auth.usp_User_UpdatePortfolioFile
-                @target_user_id = @new_user_id,
                 @actor_user_id = @new_user_id,
                 @original_file_name = @portfolio_original_file_name,
                 @cloudinary_public_id = @portfolio_cloudinary_public_id,
@@ -943,6 +1046,157 @@ BEGIN
 
         THROW;
     END CATCH
+END;
+GO
+CREATE OR ALTER PROCEDURE auth.usp_User_UpdateAvatarFile
+    @user_id UNIQUEIDENTIFIER,
+
+    @original_file_name NVARCHAR(260),
+    @cloudinary_public_id NVARCHAR(255),
+    @cloudinary_secure_url NVARCHAR(1000),
+    @content_type NVARCHAR(100),
+    @file_size_bytes BIGINT,
+    @sha256_hash CHAR(64),
+
+    @new_avatar_file_id UNIQUEIDENTIFIER OUTPUT,
+
+    @old_avatar_file_id UNIQUEIDENTIFIER = NULL OUTPUT,
+    @old_cloudinary_public_id NVARCHAR(255) = NULL OUTPUT,
+    @old_content_type NVARCHAR(100) = NULL OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+    DECLARE @lock_result INT;
+    DECLARE @lock_resource NVARCHAR(255);
+
+    DECLARE @old_file_purpose_code NVARCHAR(50);
+    DECLARE @old_deleted_at_utc DATETIME2(0);
+
+    DECLARE @audit_entity_id NVARCHAR(100);
+    DECLARE @detail_json NVARCHAR(MAX);
+
+    BEGIN TRY
+
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        SET @lock_resource =
+            N'auth_user_avatar_update_'
+            + CONVERT(NVARCHAR(36), @user_id);
+
+        EXEC @lock_result = sys.sp_getapplock
+            @Resource = @lock_resource,
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 10000;
+
+        IF @lock_result < 0
+        BEGIN
+            ;THROW 54202, 'Could not acquire avatar update lock.', 1;
+        END;
+
+        SELECT
+            @old_avatar_file_id = u.avatar_file_id
+        FROM auth.Users u WITH (UPDLOCK, HOLDLOCK)
+        WHERE u.user_id = @user_id;
+
+        IF @@ROWCOUNT = 0
+        BEGIN
+            ;THROW 54203, 'User was not found.', 1;
+        END;
+
+        EXEC manga.usp_FileResource_Create
+            @file_purpose_code = N'USER_AVATAR',
+            @original_file_name = @original_file_name,
+            @cloudinary_public_id = @cloudinary_public_id,
+            @cloudinary_secure_url = @cloudinary_secure_url,
+            @content_type = @content_type,
+            @file_size_bytes = @file_size_bytes,
+            @sha256_hash = @sha256_hash,
+            @uploaded_by_user_id = @user_id,
+            @file_resource_id = @new_avatar_file_id OUTPUT;
+
+        IF @new_avatar_file_id IS NULL
+        BEGIN
+            ;THROW 54204, 'The new avatar FileResource could not be created.', 1;
+        END;
+
+        UPDATE auth.Users
+        SET avatar_file_id = @new_avatar_file_id
+        WHERE user_id = @user_id;
+
+        IF @old_avatar_file_id IS NOT NULL
+        BEGIN
+            SELECT
+                @old_file_purpose_code = fr.file_purpose_code,
+                @old_cloudinary_public_id = fr.cloudinary_public_id,
+                @old_content_type = fr.content_type,
+                @old_deleted_at_utc = fr.deleted_at_utc
+            FROM manga.FileResource fr WITH (UPDLOCK, HOLDLOCK)
+            WHERE fr.file_resource_id = @old_avatar_file_id;
+
+            IF @old_file_purpose_code IS NULL
+            BEGIN
+                ;THROW 54205, 'The previous avatar FileResource was not found.', 1;
+            END;
+
+            IF @old_file_purpose_code <> N'USER_AVATAR'
+            BEGIN
+                ;THROW 54206, 'The previous file is not a USER_AVATAR resource.', 1;
+            END;
+
+            IF @old_deleted_at_utc IS NULL
+            BEGIN
+                EXEC manga.usp_FileResource_SoftDelete
+                    @file_resource_id = @old_avatar_file_id,
+                    @deleted_by_user_id = @user_id,
+                    @delete_reason = N'Replaced by a new user avatar.';
+            END;
+        END;
+
+        SELECT @detail_json =
+        (
+            SELECT
+                @user_id AS user_id,
+                @old_avatar_file_id AS old_avatar_file_id,
+                @new_avatar_file_id AS new_avatar_file_id,
+                @old_cloudinary_public_id AS old_cloudinary_public_id,
+                @cloudinary_public_id AS new_cloudinary_public_id,
+                @original_file_name AS new_original_file_name,
+                @content_type AS new_content_type,
+                @file_size_bytes AS new_file_size_bytes
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        SET @audit_entity_id =
+            CONVERT(NVARCHAR(36), @user_id);
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @user_id,
+            @action_code = N'USER_AVATAR_UPDATED',
+            @entity_type = N'Users',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH;
 END;
 GO
 CREATE OR ALTER PROCEDURE manga.usp_SeriesProposal_Submit
