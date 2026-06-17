@@ -5,11 +5,8 @@ using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Infrastructure.Options;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
-using System;
-using System.IO;
-using System.Linq;
 using System.Security.Cryptography;
-using System.Threading.Tasks;
+
 
 namespace MangaManagementSystem.Infrastructure.Services
 {
@@ -41,7 +38,6 @@ namespace MangaManagementSystem.Infrastructure.Services
             "SERIES_PROPOSAL",
             "SERIES_COVER",
             "CHAPTER_PAGE_VERSION",
-            "TASK_REFERENCE",
             "EDITORIAL_ATTACHMENT",
             "REGISTRATION_PORTFOLIO",
             "USER_AVATAR"
@@ -271,14 +267,13 @@ namespace MangaManagementSystem.Infrastructure.Services
 
         private static string BuildFolderForPurpose(string purpose) => purpose switch
         {
-            "USER_AVATAR" => "mangaflow/profile/avatars",
-            "REGISTRATION_PORTFOLIO" => "mangaflow/profile/portfolios",
-            "SERIES_COVER" => "mangaflow/series/covers",
-            "SERIES_PROPOSAL" => "mangaflow/series/proposals",
-            "CHAPTER_PAGE_VERSION" => "mangaflow/chapters/pages",
-            "TASK_REFERENCE" => "mangaflow/tasks/references",
-            "EDITORIAL_ATTACHMENT" => "mangaflow/editorial/attachments",
-            _ => "mangaflow/misc"
+            "REGISTRATION_PORTFOLIO" => "registration_portfolios",
+            "USER_AVATAR" => "avatars",
+            "SERIES_COVER" => "series/covers",
+            "SERIES_PROPOSAL" => "series/proposals",
+            "CHAPTER_PAGE_VERSION" => "chapters/pages",
+            "EDITORIAL_ATTACHMENT" => "editorial/attachments",
+            _ => "misc"
         };
 
         private static string ComputeSha256Hash(byte[] fileBytes)
