@@ -92,11 +92,10 @@ namespace MangaManagementSystem.Web
                 .AddInteractiveServerComponents();
 
             // Register typed API clients
-            builder.Services.AddHttpClient<Services.Api.IAssistantTaskApiClient, Services.Api.AssistantTaskApiClient>(client =>
+            builder.Services.AddHttpClient<Services.Api.IAssistantTaskApiClient, Services.Api.AssistantTaskApiClient>((sp, client) =>
             {
-                // Base address for the API - get from configuration with fallback for development
-                var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? "https://localhost:7256";
-                client.BaseAddress = new Uri(apiBaseUrl);
+                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                client.BaseAddress = new Uri(settings.Value.BaseUrl);
             });
 
             var app = builder.Build();
