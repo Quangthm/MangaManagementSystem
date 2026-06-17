@@ -45,6 +45,19 @@ namespace MangaManagementSystem.Domain.Interfaces
             CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// Cancels a PROPOSAL_DRAFT series through <c>manga.usp_Series_CancelDraft</c>.
+        /// The stored procedure: validates the series is PROPOSAL_DRAFT, validates the actor
+        /// is an active Mangaka contributor, transitions Series.status_code to CANCELLED,
+        /// and writes the SERIES_DRAFT_CANCELLED audit event.
+        /// No FileResource cleanup or Cloudinary involvement — pure status transition.
+        /// </summary>
+        Task CancelSeriesDraftViaProcAsync(
+            Guid actorUserId,
+            Guid seriesId,
+            string? reason,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Creates a series draft through the <c>manga.usp_Series_Create</c> stored procedure.
         /// The procedure enforces actor permission, creates the optional SERIES_COVER FileResource,
         /// inserts the Series (status PROPOSAL_DRAFT), seeds the creator contributor, and writes the audit event.

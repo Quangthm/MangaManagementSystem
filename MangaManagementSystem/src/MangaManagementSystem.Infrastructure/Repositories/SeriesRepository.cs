@@ -234,5 +234,64 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 _ =>
                     new InvalidOperationException("We could not update the series draft right now. Please try again.", ex)
             };
+
+        // ── Custom error numbers raised by manga.usp_Series_CancelDraft ─────────
+        private const int ErrCancelLockFailed       = 57101;
+        private const int ErrCancelSeriesNotFound   = 57102;
+        private const int ErrCancelNotProposalDraft = 57103;
+        private const int ErrCancelNotContributor   = 57104;
+
+        /// <summary>
+        /// Cancels a PROPOSAL_DRAFT series via <c>manga.usp_Series_CancelDraft</c>.
+        /// Uses ADO.NET CommandType.StoredProcedure with strongly-typed SqlParameters.
+        /// The procedure has no OUTPUT parameters; success = no exception.
+        /// Maps known custom SQL error numbers to user-safe messages.
+        /// </summary>
+        public async Task CancelSeriesDraftViaProcAsync(
+            Guid actorUserId,
+            Guid seriesId,
+            string? reason,
+            CancellationToken cancellationToken = default)
+        {
+            var conn = _context.Database.GetDbConnection();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "manga.usp_Series_CancelDraft";
+            cmd.CommandType = CommandType.StoredProcedure;
+
+            cmd.Parameters.Add(new SqlParameter("@actor_user_id", SqlDbType.UniqueIdentifier) { Value = actorUserId });
+            cmd.Parameters.Add(new SqlParameter("@series_id",     SqlDbType.UniqueIdentifier) { Value = seriesId });
+            cmd.Parameters.Add(new SqlParameter("@reason",        SqlDbType.NVarChar, 500)    { Value = (object?)reason ?? DBNull.Value });
+
+            if (conn.State != System.Data.ConnectionState.Open)
+            {
+                await conn.OpenAsync(cancellationToken);
+            }
+
+            try
+            {
+                await cmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+            catch (SqlException ex)
+            {
+                throw MapCancelSqlException(ex);
+            }
+        }
+
+        private static InvalidOperationException MapCancelSqlException(SqlException ex) =>
+            ex.Number switch
+            {
+                ErrCancelLockFailed =>
+                    new InvalidOperationException("Could not process the cancellation right now. Please try again.", ex),
+                ErrCancelSeriesNotFound =>
+                    new InvalidOperationException("The selected series could not be found.", ex),
+                ErrCancelNotProposalDraft =>
+                    new InvalidOperationException("Only a series in draft status can be cancelled.", ex),
+                ErrCancelNotContributor =>
+                    new InvalidOperationException("Only an active Mangaka contributor can cancel this draft.", ex),
+                ErrDuplicateKey or ErrUniqueIndex =>
+                    new InvalidOperationException("A conflict occurred. Please try again.", ex),
+                _ =>
+                    new InvalidOperationException("This draft could not be cancelled right now. Please try again.", ex)
+            };
     }
 }

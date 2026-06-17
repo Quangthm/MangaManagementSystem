@@ -220,6 +220,51 @@ namespace MangaManagementSystem.Web.Services.Api
             throw new InvalidOperationException(message);
         }
 
+        public async Task<SeriesDraftCancelledDto> CancelDraftAsync(
+            Guid actorUserId,
+            Guid seriesId,
+            string? reason = null,
+            CancellationToken cancellationToken = default)
+        {
+            var route = $"api/mangaka/series/{seriesId}/draft-cancellations";
+
+            // Serialize the optional reason as a JSON body.
+            // If reason is null/empty, send an empty object so the endpoint binds cleanly.
+            var payload = new { Reason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim() };
+            using var content = JsonContent.Create(payload);
+
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Post, route)
+            {
+                Content = content
+            };
+            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var cancelled = await response.Content.ReadFromJsonAsync<SeriesDraftCancelledDto>(
+                    cancellationToken: cancellationToken);
+
+                if (cancelled is null)
+                {
+                    throw new InvalidOperationException(
+                        "The draft was cancelled but no confirmation was returned. Please refresh to verify.");
+                }
+
+                return cancelled;
+            }
+
+            var message = await ExtractErrorMessageAsync(response);
+            _logger.LogWarning(
+                "Cancel series draft failed for series {SeriesId}: {StatusCode} {ReasonPhrase}",
+                seriesId,
+                (int)response.StatusCode,
+                response.ReasonPhrase);
+
+            throw new InvalidOperationException(message);
+        }
+
         private static async Task<string> ExtractErrorMessageAsync(HttpResponseMessage response)
         {
             try

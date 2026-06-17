@@ -155,15 +155,14 @@
                                                        Style="background: rgba(255,255,255,0.85); border-radius: 50%;" />
                                     </ActivatorContent>
                                     <ChildContent>
-                                        @* Cancel Draft — PROPOSAL_DRAFT only, disabled (no backend yet) *@
+                                        @* Cancel Draft — PROPOSAL_DRAFT only *@
                                         @if (series.StatusCode == "PROPOSAL_DRAFT")
                                         {
-                                            <MudTooltip Text="Cancel workflow will be available in a future update.">
-                                                <MudMenuItem Disabled="true">
-                                                    <MudIcon Icon="@Icons.Material.Filled.Cancel" Size="Size.Small" Style="margin-right: 8px; color: #94a3b8;" />
-                                                    <span style="color: #94a3b8;">Cancel Draft</span>
-                                                </MudMenuItem>
-                                            </MudTooltip>
+                                            <MudMenuItem Style="color: #dc2626;"
+                                                         OnClick="@(() => OpenCancelDraft(series.Id, series.Title))">
+                                                <MudIcon Icon="@Icons.Material.Filled.Cancel" Size="Size.Small" Style="margin-right: 8px; color: #dc2626;" />
+                                                Cancel Draft
+                                            </MudMenuItem>
                                         }
                                     </ChildContent>
                                 </MudMenu>
@@ -328,6 +327,56 @@
         </div>
     </main>
 </div>
+
+@* ── Cancel Draft Confirmation Modal ── *@
+@* Only reachable for PROPOSAL_DRAFT series. Transitions series to CANCELLED. *@
+<MudOverlay Visible="@_cancelDraftDialogOpen" OnClick="@(() => { if (!_cancelDraftBusy) CloseCancelDraft(); })">
+    <MudCard Style="width: 460px; max-width: 92vw; margin: 10% auto 0; border-radius: 14px;" @onclick:stopPropagation>
+        <MudCardContent Style="padding: 0;">
+            <div style="padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between;">
+                <div>
+                    <div style="font-weight: 700; font-size: 1rem; color: #111827;">Cancel Draft</div>
+                    <div style="color: #94a3b8; font-size: 0.72rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px;"
+                         title="@_cancelDraftSeriesTitle">
+                        @_cancelDraftSeriesTitle
+                    </div>
+                </div>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                               Disabled="@_cancelDraftBusy"
+                               OnClick="CloseCancelDraft" />
+            </div>
+
+            <div style="padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense="true">
+                    Cancelling will permanently close this draft. <strong>This action cannot be undone.</strong>
+                </MudAlert>
+
+                <MudTextField Label="Reason (optional)"
+                              @bind-Value="_cancelDraftReason"
+                              Placeholder="Describe why this draft is being cancelled..."
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              FullWidth="true"
+                              Lines="3"
+                              MaxLength="500"
+                              Disabled="@_cancelDraftBusy" />
+
+                <div style="display: flex; gap: 10px;">
+                    <MudButton Variant="Variant.Outlined" FullWidth="true"
+                               Disabled="@_cancelDraftBusy"
+                               OnClick="CloseCancelDraft">
+                        Keep Draft
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Error" FullWidth="true"
+                               Disabled="@_cancelDraftBusy"
+                               OnClick="ConfirmCancelDraftAsync">
+                        @(_cancelDraftBusy ? "Cancelling..." : "Cancel Draft")
+                    </MudButton>
+                </div>
+            </div>
+        </MudCardContent>
+    </MudCard>
+</MudOverlay>
 
 @* ── New Series Draft Modal (creates manga.Series with status PROPOSAL_DRAFT) ── *@
 <MudOverlay Visible="@_newSeriesDialogOpen" OnClick="@(() => _newSeriesDialogOpen = false)">
@@ -761,6 +810,65 @@
         {
             _tasks = [];
             _taskStats = new(0, 0, 0, 0);
+        }
+    }
+
+    // ── Cancel Draft state ────────────────────────────────────────────────────────
+    private bool _cancelDraftDialogOpen;
+    private Guid _cancelDraftSeriesId;
+    private string? _cancelDraftSeriesTitle;
+    private string? _cancelDraftReason;
+    private bool _cancelDraftBusy;
+
+    private void OpenCancelDraft(Guid seriesId, string title)
+    {
+        _cancelDraftSeriesId = seriesId;
+        _cancelDraftSeriesTitle = title;
+        _cancelDraftReason = null;
+        _cancelDraftBusy = false;
+        _cancelDraftDialogOpen = true;
+    }
+
+    private void CloseCancelDraft()
+    {
+        _cancelDraftDialogOpen = false;
+    }
+
+    private async Task ConfirmCancelDraftAsync()
+    {
+        if (_currentUserId is null || _currentUserId == Guid.Empty)
+        {
+            Snackbar.Add("Could not identify the signed-in user. Please sign in again.", Severity.Error);
+            return;
+        }
+
+        _cancelDraftBusy = true;
+        try
+        {
+            await MangakaSeriesApiClient.CancelDraftAsync(
+                actorUserId: _currentUserId.Value,
+                seriesId: _cancelDraftSeriesId,
+                reason: string.IsNullOrWhiteSpace(_cancelDraftReason) ? null : _cancelDraftReason.Trim(),
+                cancellationToken: default);
+
+            // Update card status in-memory. Edit Draft and Submit Proposal actions
+            // disappear automatically because they are guarded by StatusCode == "PROPOSAL_DRAFT".
+            var idx = _seriesData.FindIndex(s => s.Id == _cancelDraftSeriesId);
+            if (idx >= 0)
+            {
+                _seriesData[idx] = _seriesData[idx] with { StatusCode = "CANCELLED" };
+            }
+
+            Snackbar.Add("Draft cancelled.", Severity.Success);
+            _cancelDraftDialogOpen = false;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _cancelDraftBusy = false;
         }
     }
 

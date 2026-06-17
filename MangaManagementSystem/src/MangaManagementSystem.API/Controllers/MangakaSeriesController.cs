@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.API.Contracts;
 using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.Application.Features.Mangaka.Series.Commands.CancelSeriesDraft;
 using MangaManagementSystem.Application.Features.Mangaka.Series.Commands.UpdateSeriesDraft;
 
 using MangaManagementSystem.Application.Features.Mangaka.SeriesProposals.Commands.SubmitSeriesProposal;
@@ -244,6 +245,57 @@ namespace MangaManagementSystem.API.Controllers
                 _logger.LogError(ex, "Unexpected error updating series draft profile for series {SeriesId}.", seriesId);
                 return Problem(
                     detail: "We could not update the series draft right now. Please try again later.",
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
+        }
+
+        /// <summary>
+        /// Cancels a PROPOSAL_DRAFT series (soft workflow transition to CANCELLED).
+        /// Uses MediatR/CQRS — all business logic is in CancelSeriesDraftCommandHandler.
+        /// The stored procedure enforces the PROPOSAL_DRAFT guard, contributor permission,
+        /// and writes the SERIES_DRAFT_CANCELLED audit event.
+        /// Route: POST /api/mangaka/series/{seriesId}/draft-cancellations
+        /// (POST rather than DELETE because this is a business state transition, not a physical delete.)
+        /// </summary>
+        [HttpPost("{seriesId:guid}/draft-cancellations")]
+        public async Task<IActionResult> CancelDraftAsync(
+            Guid seriesId,
+            [FromBody] CancelSeriesDraftRequest? request,
+            CancellationToken cancellationToken)
+        {
+            if (!TryResolveActorUserId(out Guid actorUserId))
+            {
+                return BadRequest(new ApiErrorResponse(
+                    "Could not identify the requesting user. Please sign in again."));
+            }
+
+            // Reason is optional; null is valid and passed straight to the SP @reason param.
+            string? reason = string.IsNullOrWhiteSpace(request?.Reason) ? null : request.Reason.Trim();
+            if (reason?.Length > 500)
+            {
+                return BadRequest(new ApiErrorResponse(
+                    "The cancellation reason must be 500 characters or fewer."));
+            }
+
+            var command = new CancelSeriesDraftCommand(
+                ActorUserId: actorUserId,
+                SeriesId: seriesId,
+                Reason: reason);
+
+            try
+            {
+                SeriesDraftCancelledDto result = await _mediator.Send(command, cancellationToken);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new ApiErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error cancelling series draft {SeriesId}.", seriesId);
+                return Problem(
+                    detail: "We could not cancel the series draft right now. Please try again later.",
                     statusCode: StatusCodes.Status500InternalServerError);
             }
         }

@@ -61,5 +61,16 @@ namespace MangaManagementSystem.Web.Services.Api
             string? coverFileName = null,
             string? coverContentType = null,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Cancels a PROPOSAL_DRAFT series (soft workflow transition to CANCELLED).
+        /// Posts to POST /api/mangaka/series/{seriesId}/draft-cancellations.
+        /// Reason is optional; pass null to cancel without a reason.
+        /// </summary>
+        Task<SeriesDraftCancelledDto> CancelDraftAsync(
+            Guid actorUserId,
+            Guid seriesId,
+            string? reason = null,
+            CancellationToken cancellationToken = default);
     }
 }
