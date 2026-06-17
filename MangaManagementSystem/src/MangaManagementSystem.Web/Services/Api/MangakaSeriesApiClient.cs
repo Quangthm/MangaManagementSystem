@@ -94,6 +94,61 @@ namespace MangaManagementSystem.Web.Services.Api
             throw new InvalidOperationException(message);
         }
 
+        public async Task<SeriesProposalSubmittedDto> SubmitProposalAsync(
+            Guid actorUserId,
+            Guid seriesId,
+            byte[] proposalFileBytes,
+            string proposalFileName,
+            string proposalContentType,
+            CancellationToken cancellationToken = default)
+        {
+            if (proposalFileBytes is not { Length: > 0 })
+            {
+                throw new InvalidOperationException(
+                    "A proposal document file is required to submit a series proposal.");
+            }
+
+            using var form = new MultipartFormDataContent();
+            var fileContent = new ByteArrayContent(proposalFileBytes);
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(
+                string.IsNullOrWhiteSpace(proposalContentType) ? "application/octet-stream" : proposalContentType);
+
+            // Form part name must match the API SubmitSeriesProposalForm.ProposalFile property.
+            form.Add(fileContent, "ProposalFile", string.IsNullOrWhiteSpace(proposalFileName) ? "proposal" : proposalFileName);
+
+            var route = $"api/mangaka/series/{seriesId}/proposal-submissions";
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Post, route)
+            {
+                Content = form
+            };
+            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var submitted = await response.Content.ReadFromJsonAsync<SeriesProposalSubmittedDto>(
+                    cancellationToken: cancellationToken);
+
+                if (submitted is null)
+                {
+                    throw new InvalidOperationException(
+                        "The proposal was submitted but no confirmation was returned. Please refresh and verify.");
+                }
+
+                return submitted;
+            }
+
+            var message = await ExtractErrorMessageAsync(response);
+            _logger.LogWarning(
+                "Submit series proposal failed for series {SeriesId}: {StatusCode} {ReasonPhrase}",
+                seriesId,
+                (int)response.StatusCode,
+                response.ReasonPhrase);
+
+            throw new InvalidOperationException(message);
+        }
+
         private static async Task<string> ExtractErrorMessageAsync(HttpResponseMessage response)
         {
             try
