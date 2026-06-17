@@ -79,13 +79,22 @@ namespace MangaManagementSystem.Web
 
             builder.Services.AddAuthentication(options =>
             {
-                options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-                options.DefaultChallengeScheme = GoogleDefaults.AuthenticationScheme;
+                options.DefaultScheme =
+                    CookieAuthenticationDefaults.AuthenticationScheme;
+
+                options.DefaultAuthenticateScheme =
+                    CookieAuthenticationDefaults.AuthenticationScheme;
+
+                options.DefaultSignInScheme =
+                    CookieAuthenticationDefaults.AuthenticationScheme;
+
+                options.DefaultChallengeScheme =
+                    CookieAuthenticationDefaults.AuthenticationScheme;
             })
             .AddCookie(options =>
             {
                 options.LoginPath = "/login";
-                options.AccessDeniedPath = "/pending-approval";
+                options.AccessDeniedPath = "/access-denied";
             })
             .AddGoogle(options =>
             {
@@ -180,7 +189,8 @@ namespace MangaManagementSystem.Web
 
                     if (error.Contains("pending"))
                     {
-                        return Results.Redirect("/login?error=account_pending");
+                        return Results.Redirect(
+                            "/pending-approval");
                     }
 
                     if (error.Contains("disabled"))
@@ -236,13 +246,36 @@ namespace MangaManagementSystem.Web
                         await authService.GetUserByEmailAsync(email);
 
                     if (!authResult.Succeeded
-                        || authResult.User is null
-                        || string.IsNullOrWhiteSpace(
-                            authResult.RoleName))
+    || authResult.User is null
+    || string.IsNullOrWhiteSpace(
+        authResult.RoleName))
                     {
                         await context.SignOutAsync(
                             CookieAuthenticationDefaults
                                 .AuthenticationScheme);
+
+                        var error =
+                            (authResult.ErrorMessage
+                                ?? string.Empty)
+                            .ToLowerInvariant();
+
+                        if (error.Contains("pending"))
+                        {
+                            return Results.Redirect(
+                                "/pending-approval");
+                        }
+
+                        if (error.Contains("disabled"))
+                        {
+                            return Results.Redirect(
+                                "/login?error=account_disabled");
+                        }
+
+                        if (error.Contains("reject"))
+                        {
+                            return Results.Redirect(
+                                "/login?error=account_rejected");
+                        }
 
                         return Results.Redirect(
                             "/login?error=UserNotInDatabase");
@@ -695,16 +728,31 @@ app.MapGet("/signout", async (CustomAuthenticationStateProvider authStateProvide
                 });
         }
 
-        private static string GetDashboardRedirectUrl(string roleName) => roleName switch
-        {
-            "Admin" => "/admin",
-            "Mangaka" => "/mangaka",
-            "Assistant" => "/assistant",
-            "Tantou Editor" => "/editor",
-            "Editorial Board Member" => "/board",
-            "Editorial Board Chief" => "/board-chief",
-            _ => "/login?error=InvalidCredentials"
-        };
+        private static string GetDashboardRedirectUrl(
+            string roleName) =>
+            roleName switch
+    {
+        "Admin" =>
+            "/admin",
+
+        "Mangaka" =>
+            "/mangaka",
+
+        "Assistant" =>
+            "/assistant",
+
+        "Tantou Editor" =>
+            "/editor",
+
+        "Editorial Board Member" =>
+            "/board",
+
+        "Editorial Board Chief" =>
+            "/board-chief",
+
+        _ =>
+            "/access-denied"
+    };
 
         private static async Task<IResult> SignInAndRedirectAsync(
             HttpContext context,

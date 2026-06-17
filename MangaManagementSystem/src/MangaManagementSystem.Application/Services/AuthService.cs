@@ -204,16 +204,27 @@ namespace MangaManagementSystem.Application.Services
             return authResult;
         }
 
-        public async Task<AuthResultDto> GetUserByEmailAsync(string email)
+        public async Task<AuthResultDto> GetUserByEmailAsync(
+            string email)
         {
             if (string.IsNullOrWhiteSpace(email))
             {
-                _logger.LogWarning("Google login failed: Email claim was empty");
-                return new AuthResultDto(false, null, null, "Email is required.");
+                _logger.LogWarning(
+                    "Google login failed: Email claim was empty");
+
+                return new AuthResultDto(
+                    false,
+                    null,
+                    null,
+                    "Email is required.");
             }
 
-            var normalizedEmail = NormalizeEmail(email);
-            var user = await _unitOfWork.Users.GetByEmailAsync(normalizedEmail);
+            var normalizedEmail =
+                NormalizeEmail(email);
+
+            var user =
+                await _unitOfWork.Users
+                    .GetByEmailAsync(normalizedEmail);
 
             if (user is null)
             {
@@ -221,21 +232,31 @@ namespace MangaManagementSystem.Application.Services
                     "Google login failed: No user found for email {Email}",
                     normalizedEmail);
 
-                return new AuthResultDto(false, null, null, "User not found.");
+                return new AuthResultDto(
+                    false,
+                    null,
+                    null,
+                    "User not found.");
             }
 
-            if (!string.Equals(user.StatusCode, "ACTIVE", StringComparison.OrdinalIgnoreCase))
+            var statusFailure =
+                ValidatePasswordLoginStatus(user);
+
+            if (statusFailure is not null)
             {
                 _logger.LogWarning(
-                    "Google login failed: User {UserId} ({Email}) is not ACTIVE. Current status: {StatusCode}",
+                    "Google login failed for user {UserId} ({Email}). Current status: {StatusCode}",
                     user.UserId,
                     normalizedEmail,
                     user.StatusCode);
 
-                return new AuthResultDto(false, null, null, "User is not active.");
+                return statusFailure;
             }
 
-            var authResult = BuildSuccessfulAuthResult(user, "Google login failed");
+            var authResult =
+                BuildSuccessfulAuthResult(
+                    user,
+                    "Google login failed");
 
             if (authResult.Succeeded)
             {
