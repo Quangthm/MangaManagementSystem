@@ -14,7 +14,8 @@ DECLARE @Now DATETIME2(7) = SYSUTCDATETIME();
         (N'TestEditor',      N'Editor@test.com',    N'editor',  N'Tantou Editor'),
         (N'TestMangaka',     N'Mangaka@test.com',   N'mangaka', N'Mangaka'),
         (N'TestBoardMember', N'Member@test.com',    N'member',  N'Editorial Board Member'),
-        (N'TestBoardChief',  N'Chief@test.com',     N'chief',   N'Editorial Board Chief')
+        (N'TestBoardChief',  N'Chief@test.com',     N'chief',   N'Editorial Board Chief'),
+        (N'TestAssistant', N'Assistant@test.com', N'assistant', N'Assistant')
     ) AS v(username, email, display_name, role_name)
 )
 INSERT INTO [auth].[Users]
