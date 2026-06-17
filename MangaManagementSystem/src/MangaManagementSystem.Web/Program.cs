@@ -103,20 +103,20 @@ namespace MangaManagementSystem.Web
                 options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
                 options.Events.OnRemoteFailure = context =>
                 {
-                    var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
-                    logger.LogError(context.Failure, "Google OAuth Remote Failure: {Message}", context.Failure?.Message);
+                    var logger =
+                        context.HttpContext.RequestServices
+                            .GetRequiredService<ILogger<Program>>();
+
+                    logger.LogError(
+                        context.Failure,
+                        "Google OAuth remote authentication failed.");
 
                     context.HandleResponse();
-                    context.Response.ContentType = "application/json";
-                    context.Response.StatusCode = 500;
-                    var errorJson = System.Text.Json.JsonSerializer.Serialize(new
-                    {
-                        Message = "Google OAuth Handshake Failed (OnRemoteFailure)",
-                        ExceptionMessage = context.Failure?.Message,
-                        StackTrace = context.Failure?.StackTrace
-                    });
 
-                    return context.Response.WriteAsync(errorJson);
+                    context.Response.Redirect(
+                        "/login?error=google_oauth_failed");
+
+                    return Task.CompletedTask;
                 };
             });
 

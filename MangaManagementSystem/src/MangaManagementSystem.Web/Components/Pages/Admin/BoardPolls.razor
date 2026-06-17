@@ -1,12 +1,12 @@
-@page "/admin/board-polls"
-@attribute [Authorize(Roles = "Admin")]
+@page "/board/polls"
+@attribute [Authorize(Roles = "Editorial Board Chief")]
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 @inject ISeriesService SeriesService
 
 <PageTitle>Board Poll Management - MangaFlow</PageTitle>
 
-<AdminLayout>
+<RankingLayout>
     <div class="mf-page">
         <div class="mf-page-header">
             <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Board Poll Management</MudText>
@@ -208,7 +208,7 @@
             </DialogActions>
         </MudDialog>
     </div>
-</AdminLayout>
+</RankingLayout>
 
 @code {
     private record BoardPollRow(Guid SeriesBoardPollId, string SeriesTitle, string PollTypeCode, string? BoardPublicationFrequencyCode, string PollStatusCode, string CreatedByName, DateTime? EndsAtUtc);
