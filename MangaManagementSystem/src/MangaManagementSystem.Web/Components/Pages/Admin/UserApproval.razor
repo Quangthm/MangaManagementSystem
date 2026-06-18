@@ -1,7 +1,7 @@
 @page "/admin/user-approval"
+@using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Admin")]
-@inject IUserService UserService
-@inject IFileResourceService _fileResourceService
+@inject IAdminUserApiClient AdminUserApiClient
 @inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthenticationStateProvider
 
@@ -45,7 +45,7 @@
             @if (!_isLoading && !_pendingUsers.Any())
             {
                 <MudPaper Class="pa-8 mf-card text-center" Elevation="0">
-                    <MudAvatar Color="Color.Primary" Size="Size.Large" Class="mx-auto mb-3">✓</MudAvatar>
+                    <MudAvatar Color="Color.Primary" Size="Size.Large" Class="mx-auto mb-3">âœ“</MudAvatar>
                     <MudText Typo="Typo.h6" Class="font-weight-bold mb-1">No pending users</MudText>
                     <MudText Typo="Typo.body2" Class="mf-muted">Newly registered accounts that require admin approval will appear here.</MudText>
                 </MudPaper>
@@ -73,7 +73,7 @@
                         <MudTd DataLabel="Portfolio">
                             @if (context.PortfolioFileId.HasValue)
                             {
-                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(()=>ViewPortfolioAsync(context.PortfolioFileId.Value))">View Portfolio</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => ViewPortfolioAsync(context.UserId))">View Portfolio</MudButton>
                             }
                             else
                             {
@@ -155,7 +155,7 @@
         _isLoading = true;
         try
         {
-            var users = await UserService.GetUsersByStatusAsync(PendingStatus);
+            var users = await AdminUserApiClient.GetUsersAsync(PendingStatus);
             _pendingUsers.Clear();
             _pendingUsers.AddRange(users);
         }
@@ -171,41 +171,43 @@
 
     private bool IsRowBusy(Guid userId) => _isLoading || _processingUserId == userId;
 
-    private async Task<Guid> GetCurrentAdminUserIdAsync()
-    {
-        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        var userIdClaim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-
-        if (!Guid.TryParse(userIdClaim, out var adminUserId))
-        {
-            throw new InvalidOperationException("Current admin user id is not available.");
-        }
-
-        return adminUserId;
-    }
-
     private MangaManagementSystem.Application.DTOs.Manga.FileResourceDto? _currentPortfolio;
     private bool _showPortfolioPreview;
     private bool _isImagePreview;
 
-    private async Task ViewPortfolioAsync(Guid fileResourceId)
+    private async Task ViewPortfolioAsync(
+        Guid userId)
     {
         try
         {
-            var file = await _fileResourceService.GetFileResourceByIdAsync(fileResourceId);
+            var file =
+                await AdminUserApiClient
+                    .GetPortfolioAsync(
+                        userId);
+
             if (file == null)
             {
-                Snackbar.Add("Portfolio file not found.", Severity.Error);
+                Snackbar.Add(
+                    "Portfolio file not found.",
+                    Severity.Error);
+
                 return;
             }
 
             _currentPortfolio = file;
-            _isImagePreview = file.ContentType?.StartsWith("image/") == true;
+            _isImagePreview =
+                file.ContentType?.StartsWith(
+                    "image/",
+                    StringComparison.OrdinalIgnoreCase)
+                == true;
+
             _showPortfolioPreview = true;
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to load portfolio: {ex.Message}", Severity.Error);
+            Snackbar.Add(
+                $"Failed to load portfolio: {ex.Message}",
+                Severity.Error);
         }
     }
 
@@ -243,8 +245,9 @@
         _processingUserId = user.UserId;
         try
         {
-            var adminUserId = await GetCurrentAdminUserIdAsync();
-            await UserService.ApproveUserAsync(adminUserId, user.UserId);
+            await AdminUserApiClient
+                .ApproveUserAsync(
+                    user.UserId);
             Snackbar.Add($"Approved {user.Username}.", Severity.Success);
             await LoadPendingUsersAsync();
         }
@@ -283,8 +286,9 @@
         _showRejectConfirm = false;
         try
         {
-            var adminUserId = await GetCurrentAdminUserIdAsync();
-            await UserService.RejectUserAsync(adminUserId, user.UserId);
+            await AdminUserApiClient
+                .RejectUserAsync(
+                    user.UserId);
             Snackbar.Add($"Rejected {user.Username}.", Severity.Warning);
             await LoadPendingUsersAsync();
         }

@@ -27,7 +27,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         public IGenericRepository<ChapterReaderVoteSnapshot> ChapterReaderVoteSnapshots { get; }
         public IGenericRepository<SeriesRankingSnapshot> SeriesRankingSnapshots { get; }
         public IGenericRepository<Notification> Notifications { get; }
-        public IGenericRepository<AuditEvent> AuditEvents { get; }
+        public IAuditEventRepository AuditEvents { get; }
         public IGenericRepository<SeriesBoardVote> SeriesBoardVotes { get; }
 
         public UnitOfWork(
@@ -49,7 +49,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             IGenericRepository<ChapterReaderVoteSnapshot> chapterReaderVoteSnapshots,
             IGenericRepository<SeriesRankingSnapshot> seriesRankingSnapshots,
             IGenericRepository<Notification> notifications,
-            IGenericRepository<AuditEvent> auditEvents,
+            IAuditEventRepository auditEvents,
             IGenericRepository<SeriesBoardVote> seriesBoardVotes)
         {
             _context = context;

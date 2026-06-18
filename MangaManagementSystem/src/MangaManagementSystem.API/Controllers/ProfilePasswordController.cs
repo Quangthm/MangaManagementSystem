@@ -1,4 +1,5 @@
 using MangaManagementSystem.API.Contracts;
+using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
@@ -6,13 +7,15 @@ namespace MangaManagementSystem.API.Controllers
 {
     [ApiController]
     [Route("api/profile/password")]
-    public sealed class ProfilePasswordController : ControllerBase
+    public sealed class ProfilePasswordController
+        : ControllerBase
     {
         private const string PasswordResetActionCode =
             "PROFILE_PASSWORD_RESET";
 
         private readonly IUserService _userService;
-        private readonly ILogger<ProfilePasswordController> _logger;
+        private readonly ILogger<ProfilePasswordController>
+            _logger;
 
         public ProfilePasswordController(
             IUserService userService,
@@ -29,7 +32,8 @@ namespace MangaManagementSystem.API.Controllers
             if (request.UserId == Guid.Empty)
             {
                 return BadRequest(
-                    new ProfilePasswordResponse(
+                    new ApiErrorResponse(
+                        AuthErrorCodes.InvalidRequest,
                         "User id is required."));
             }
 
@@ -46,7 +50,9 @@ namespace MangaManagementSystem.API.Controllers
             catch (InvalidOperationException ex)
             {
                 return BadRequest(
-                    new ProfilePasswordResponse(ex.Message));
+                    new ApiErrorResponse(
+                        AuthErrorCodes.InvalidRequest,
+                        ex.Message));
             }
             catch (Exception ex)
             {
@@ -55,11 +61,11 @@ namespace MangaManagementSystem.API.Controllers
                     "Failed to send password OTP for user {UserId}.",
                     request.UserId);
 
-                return Problem(
-                    detail:
-                        "The OTP email could not be sent. Please try again.",
-                    statusCode:
-                        StatusCodes.Status500InternalServerError);
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    new ApiErrorResponse(
+                        AuthErrorCodes.RequestFailed,
+                        "The OTP email could not be sent. Please try again."));
             }
         }
 
@@ -70,43 +76,44 @@ namespace MangaManagementSystem.API.Controllers
             if (request.UserId == Guid.Empty)
             {
                 return BadRequest(
-                    new ProfilePasswordResponse(
+                    new ApiErrorResponse(
+                        AuthErrorCodes.InvalidRequest,
                         "User id is required."));
             }
 
-            if (string.IsNullOrWhiteSpace(request.OtpCode))
+            if (string.IsNullOrWhiteSpace(
+                    request.OtpCode))
             {
                 return BadRequest(
-                    new ProfilePasswordResponse(
+                    new ApiErrorResponse(
+                        AuthErrorCodes.InvalidOtp,
                         "OTP code is required."));
             }
 
-            if (string.IsNullOrWhiteSpace(request.NewPassword))
+            if (string.IsNullOrWhiteSpace(
+                    request.NewPassword)
+                || request.NewPassword.Length < 8)
             {
                 return BadRequest(
-                    new ProfilePasswordResponse(
-                        "New password cannot be empty."));
-            }
-
-            if (request.NewPassword.Length < 8)
-            {
-                return BadRequest(
-                    new ProfilePasswordResponse(
+                    new ApiErrorResponse(
+                        AuthErrorCodes.InvalidRequest,
                         "New password must be at least 8 characters."));
             }
 
             try
             {
                 var verified =
-                    await _userService.VerifyProfileOtpAsync(
-                        request.UserId,
-                        PasswordResetActionCode,
-                        request.OtpCode);
+                    await _userService
+                        .VerifyProfileOtpAsync(
+                            request.UserId,
+                            PasswordResetActionCode,
+                            request.OtpCode);
 
                 if (!verified)
                 {
                     return BadRequest(
-                        new ProfilePasswordResponse(
+                        new ApiErrorResponse(
+                            AuthErrorCodes.InvalidOtp,
                             "Invalid or expired OTP."));
                 }
 
@@ -121,7 +128,9 @@ namespace MangaManagementSystem.API.Controllers
             catch (InvalidOperationException ex)
             {
                 return BadRequest(
-                    new ProfilePasswordResponse(ex.Message));
+                    new ApiErrorResponse(
+                        AuthErrorCodes.InvalidRequest,
+                        ex.Message));
             }
             catch (Exception ex)
             {
@@ -130,11 +139,11 @@ namespace MangaManagementSystem.API.Controllers
                     "Failed to reset password for user {UserId}.",
                     request.UserId);
 
-                return Problem(
-                    detail:
-                        "The password could not be reset. Please try again.",
-                    statusCode:
-                        StatusCodes.Status500InternalServerError);
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    new ApiErrorResponse(
+                        AuthErrorCodes.RequestFailed,
+                        "The password could not be reset. Please try again."));
             }
         }
     }

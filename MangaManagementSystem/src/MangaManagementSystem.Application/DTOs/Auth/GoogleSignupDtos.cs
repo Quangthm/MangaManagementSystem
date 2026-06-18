@@ -13,6 +13,7 @@ namespace MangaManagementSystem.Application.DTOs.Auth
         string Email,
         UserDto? User = null,
         string? RoleName = null,
-        string? ErrorMessage = null
+        string? ErrorMessage = null,
+        string? ErrorCode = null
     );
 }

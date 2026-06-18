@@ -189,39 +189,29 @@ namespace MangaManagementSystem.Application.Services
             return user;
         }
 
-        private async Task<User> GetRequiredUserByIdAsync(Guid userId)
+        private async Task<User> GetRequiredUserByIdAsync(
+            Guid userId)
         {
-            var user = await _unitOfWork.Users.GetByIdAsync(userId);
+            var user =
+                await _unitOfWork.Users
+                    .GetByIdWithRoleAsync(
+                        userId);
 
             if (user is null)
             {
-                throw new InvalidOperationException($"User {userId} was not found.");
+                throw new InvalidOperationException(
+                    $"User {userId} was not found.");
             }
 
             return user;
         }
 
-        private async Task<User?> GetUserByIdForDtoAsync(Guid userId)
+        private Task<User?> GetUserByIdForDtoAsync(
+            Guid userId)
         {
-            var user = await _unitOfWork.Users.GetByIdAsync(userId);
-
-            if (user is null)
-            {
-                return null;
-            }
-
-            if (user.Role is not null)
-            {
-                return user;
-            }
-
-            /*
-                Generic GetByIdAsync usually does not Include Role.
-                Current UserRepository.GetByEmailAsync does Include Role, so we reload through email
-                before mapping to UserDto.
-            */
-            var userWithRole = await _unitOfWork.Users.GetByEmailAsync(user.Email);
-            return userWithRole ?? user;
+            return _unitOfWork.Users
+                .GetByIdWithRoleAsync(
+                    userId);
         }
 
         private async Task<User> GetRequiredUserByIdForDtoAsync(Guid userId)
@@ -473,8 +463,8 @@ namespace MangaManagementSystem.Application.Services
             string actionCode,
             string detailJson)
         {
-            var user =
-                await RequireExistingUserAsync(actorUserId);
+            await RequireExistingUserAsync(
+                actorUserId);
 
             if (string.IsNullOrWhiteSpace(actionCode))
             {
@@ -482,39 +472,25 @@ namespace MangaManagementSystem.Application.Services
                     "Audit action code is required.");
             }
 
-            var role =
-                await _unitOfWork.Roles
-                    .GetByIdAsync(user.RoleId);
-
-            var actorRoleName =
-                role?.RoleName
-                ?? user.Role?.RoleName;
-
-            var entity =
-                new AuditEvent
-                {
-                    OccurredAtUtc = DateTime.UtcNow,
-                    ActorUserId = actorUserId,
-                    ActorRoleName = actorRoleName,
-                    ActionCode =
-                        actionCode.Trim().ToUpperInvariant(),
-                    EntityType = "USER",
-                    EntityId = actorUserId.ToString(),
-                    DetailJson =
-                        string.IsNullOrWhiteSpace(detailJson)
-                            ? null
-                            : detailJson
-                };
-
-            await _unitOfWork.AuditEvents.AddAsync(entity);
-            await _unitOfWork.SaveChangesAsync();
+            await _unitOfWork.AuditEvents
+                .AppendAsync(
+                    actorUserId,
+                    actionCode,
+                    "USER",
+                    actorUserId.ToString(),
+                    string.IsNullOrWhiteSpace(
+                        detailJson)
+                        ? null
+                        : detailJson);
         }
 
         private async Task<User> RequireExistingUserAsync(
             Guid userId)
         {
             var user =
-                await _unitOfWork.Users.GetByIdAsync(userId);
+                await _unitOfWork.Users
+                    .GetByIdWithRoleAsync(
+                        userId);
 
             if (user == null)
             {

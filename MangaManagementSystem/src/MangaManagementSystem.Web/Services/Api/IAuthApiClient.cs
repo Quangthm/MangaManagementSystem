@@ -8,9 +8,13 @@ namespace MangaManagementSystem.Web.Services.Api
             string usernameOrEmail,
             string password);
 
-        Task<GoogleSignupCallbackResult> ProcessGoogleSignupAsync(
-            string email,
-            string? googleDisplayName,
-            string roleName);
+        Task<UserDto> ResolveGoogleLoginAsync(
+            string email);
+
+        Task<GoogleSignupCallbackResult>
+            ProcessGoogleSignupAsync(
+                string email,
+                string? googleDisplayName,
+                string roleName);
     }
 }

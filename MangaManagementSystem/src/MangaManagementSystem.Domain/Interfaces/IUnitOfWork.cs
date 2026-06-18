@@ -24,7 +24,7 @@ namespace MangaManagementSystem.Domain.Interfaces
         IGenericRepository<ChapterReaderVoteSnapshot> ChapterReaderVoteSnapshots { get; }
         IGenericRepository<SeriesRankingSnapshot> SeriesRankingSnapshots { get; }
         IGenericRepository<Notification> Notifications { get; }
-        IGenericRepository<AuditEvent> AuditEvents { get; }
+        IAuditEventRepository AuditEvents { get; }
         IGenericRepository<SeriesBoardVote> SeriesBoardVotes { get; }
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     }

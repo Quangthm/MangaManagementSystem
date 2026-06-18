@@ -1,8 +1,9 @@
 @page "/admin"
 @using Microsoft.AspNetCore.Authorization
+@using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Admin")]
 @inject NavigationManager Nav
-@inject IUserService UserService
+@inject IAdminUserApiClient AdminUserApiClient
 
 <AdminLayout>
     <div class="mf-page">
@@ -107,15 +108,21 @@
         _loadError = null;
         try
         {
-            var pending = (await UserService.GetUsersByStatusAsync("PENDING_APPROVAL")).ToList();
-            var active = (await UserService.GetUsersByStatusAsync("ACTIVE")).ToList();
-            var disabled = (await UserService.GetUsersByStatusAsync("DISABLED")).ToList();
-            var rejected = (await UserService.GetUsersByStatusAsync("REJECTED")).ToList();
+            var counts =
+                await AdminUserApiClient
+                    .GetStatusCountsAsync();
 
-            _pendingCount = pending.Count;
-            _activeCount = active.Count;
-            _disabledCount = disabled.Count;
-            _rejectedCount = rejected.Count;
+            _pendingCount =
+                counts.PendingApproval;
+
+            _activeCount =
+                counts.Active;
+
+            _disabledCount =
+                counts.Disabled;
+
+            _rejectedCount =
+                counts.Rejected;
         }
         catch (Exception ex)
         {

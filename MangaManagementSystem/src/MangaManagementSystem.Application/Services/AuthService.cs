@@ -165,7 +165,12 @@ namespace MangaManagementSystem.Application.Services
                     "Login failed: User not found for identifier {LoginIdentifier}",
                     loginIdentifier);
 
-                return new AuthResultDto(false, null, null, "Invalid credentials");
+                return new AuthResultDto(
+                    false,
+                    null,
+                    null,
+                    "Invalid credentials.",
+                    AuthErrorCodes.InvalidCredentials);
             }
 
             if (!_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
@@ -175,7 +180,12 @@ namespace MangaManagementSystem.Application.Services
                     user.UserId,
                     user.Username);
 
-                return new AuthResultDto(false, null, null, "Invalid credentials");
+                return new AuthResultDto(
+                    false,
+                    null,
+                    null,
+                    "Invalid credentials.",
+                    AuthErrorCodes.InvalidCredentials);
             }
 
             var statusFailure = ValidatePasswordLoginStatus(user);
@@ -216,7 +226,8 @@ namespace MangaManagementSystem.Application.Services
                     false,
                     null,
                     null,
-                    "Email is required.");
+                    "Google did not return an email address.",
+                    AuthErrorCodes.GoogleEmailMissing);
             }
 
             var normalizedEmail =
@@ -236,7 +247,8 @@ namespace MangaManagementSystem.Application.Services
                     false,
                     null,
                     null,
-                    "User not found.");
+                    "No account was found for this Google email.",
+                    AuthErrorCodes.AccountNotFound);
             }
 
             var statusFailure =
@@ -361,7 +373,9 @@ namespace MangaManagementSystem.Application.Services
                     GoogleSignupFlow.Rejected,
                     normalizedEmail,
                     ErrorMessage:
-                        "Account registration was rejected.");
+                        "Account registration was rejected.",
+                    ErrorCode:
+                        AuthErrorCodes.AccountRejected);
             }
 
             if (string.Equals(
@@ -378,7 +392,9 @@ namespace MangaManagementSystem.Application.Services
                     GoogleSignupFlow.Disabled,
                     normalizedEmail,
                     ErrorMessage:
-                        "Account is disabled.");
+                        "Account is disabled.",
+                    ErrorCode:
+                        AuthErrorCodes.AccountDisabled);
             }
 
             _logger.LogWarning(
@@ -391,7 +407,9 @@ namespace MangaManagementSystem.Application.Services
                 GoogleSignupFlow.Rejected,
                 normalizedEmail,
                 ErrorMessage:
-                    "Account configuration is invalid. Contact support.");
+                    "Account configuration is invalid. Contact support.",
+                ErrorCode:
+                    AuthErrorCodes.AccountConfigurationInvalid);
         }
 
         public async Task<bool> SendEmailVerificationOtpAsync(string email)
@@ -452,25 +470,29 @@ namespace MangaManagementSystem.Application.Services
                     false,
                     null,
                     null,
-                    "Account pending admin approval."),
+                    "Account pending admin approval.",
+                    AuthErrorCodes.AccountPending),
 
                 "REJECTED" => new AuthResultDto(
                     false,
                     null,
                     null,
-                    "Account registration was rejected."),
+                    "Account registration was rejected.",
+                    AuthErrorCodes.AccountRejected),
 
                 "DISABLED" => new AuthResultDto(
                     false,
                     null,
                     null,
-                    "Account is disabled."),
+                    "Account is disabled.",
+                    AuthErrorCodes.AccountDisabled),
 
                 _ => new AuthResultDto(
                     false,
                     null,
                     null,
-                    "Account configuration is invalid. Contact support.")
+                    "Account configuration is invalid. Contact support.",
+                    AuthErrorCodes.AccountConfigurationInvalid)
             };
         }
 
@@ -494,7 +516,8 @@ namespace MangaManagementSystem.Application.Services
                     false,
                     null,
                     null,
-                    "Account configuration is invalid. Contact support.");
+                    "Account configuration is invalid. Contact support.",
+                    AuthErrorCodes.AccountConfigurationInvalid);
             }
         }
 
@@ -523,7 +546,10 @@ namespace MangaManagementSystem.Application.Services
                 return new GoogleSignupCallbackResult(
                     GoogleSignupFlow.Rejected,
                     normalizedEmail,
-                    ErrorMessage: "Account configuration is invalid. Contact support.");
+                    ErrorMessage:
+                        "Account configuration is invalid. Contact support.",
+                    ErrorCode:
+                        AuthErrorCodes.AccountConfigurationInvalid);
             }
         }
 

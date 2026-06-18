@@ -17,7 +17,9 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
         private IQueryable<User> UsersWithRole()
         {
-            return _context.Users.Include(user => user.Role);
+            return _context.Users
+                .AsNoTracking()
+                .Include(user => user.Role);
         }
 
         public UserRepository(ApplicationDbContext context)
@@ -45,6 +47,59 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .FirstOrDefaultAsync(user =>
                     user.Email == usernameOrEmail
                     || user.Username == usernameOrEmail);
+        }
+
+        public Task<User?> GetByIdWithRoleAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default)
+        {
+            return UsersWithRole()
+                .SingleOrDefaultAsync(
+                    user =>
+                        user.UserId == userId,
+                    cancellationToken);
+        }
+
+        public async Task<IReadOnlyList<User>>
+            GetAllWithRoleAsync(
+                CancellationToken cancellationToken = default)
+        {
+            return await UsersWithRole()
+                .OrderByDescending(
+                    user =>
+                        user.CreatedAtUtc)
+                .ToListAsync(
+                    cancellationToken);
+        }
+
+        public async Task<IReadOnlyDictionary<string, int>>
+            GetStatusCountsAsync(
+                CancellationToken cancellationToken = default)
+        {
+            var rows =
+                await _context.Users
+                    .AsNoTracking()
+                    .GroupBy(
+                        user =>
+                            user.StatusCode)
+                    .Select(
+                        group =>
+                            new
+                            {
+                                StatusCode =
+                                    group.Key,
+                                Count =
+                                    group.Count()
+                            })
+                    .ToListAsync(
+                        cancellationToken);
+
+            return rows.ToDictionary(
+                row =>
+                    row.StatusCode,
+                row =>
+                    row.Count,
+                StringComparer.OrdinalIgnoreCase);
         }
 
         public async Task<IReadOnlyList<User>> GetByStatusAsync(

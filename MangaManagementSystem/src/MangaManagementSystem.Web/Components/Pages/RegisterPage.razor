@@ -244,16 +244,49 @@
         var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
         var query = QueryHelpers.ParseQuery(uri.Query);
 
-        if (query.TryGetValue("error", out var error))
+        if (query.TryGetValue(
+                "error",
+                out var error))
         {
-            var message = error.ToString() switch
-            {
-                "GoogleEmailMissing" => "Google did not return an email address. Try another account or use email registration.",
-                "account_pending" => "An account with this email is pending approval. Check your email for a verification code or complete verification below.",
-                "account_disabled" => "This account cannot be used for sign-up. Contact support.",
-                _ => Uri.UnescapeDataString(error.ToString())
-            };
-            Snackbar.Add(message, Severity.Error);
+            var errorCode =
+                error.ToString()
+                    .Trim()
+                    .ToLowerInvariant();
+
+            var message =
+                errorCode switch
+                {
+                    AuthErrorCodes.GoogleEmailMissing =>
+                        "Google did not return an email address. Try another account or use email registration.",
+
+                    AuthErrorCodes.InvalidRole =>
+                        "The selected registration role is invalid.",
+
+                    AuthErrorCodes.AccountPending =>
+                        "An account with this email is pending approval.",
+
+                    AuthErrorCodes.AccountRejected =>
+                        "This account registration was rejected. Contact an Admin for more information.",
+
+                    AuthErrorCodes.AccountDisabled =>
+                        "This account cannot be used for sign-up. Contact support.",
+
+                    AuthErrorCodes.EmailRequired =>
+                        "An email address is required.",
+
+                    AuthErrorCodes.EmailAlreadyExists =>
+                        "An account with this email already exists.",
+
+                    AuthErrorCodes.UsernameTaken =>
+                        "This username is already taken.",
+
+                    _ =>
+                        "Google sign-up could not be completed. Please try again."
+                };
+
+            Snackbar.Add(
+                message,
+                Severity.Error);
         }
     }
 

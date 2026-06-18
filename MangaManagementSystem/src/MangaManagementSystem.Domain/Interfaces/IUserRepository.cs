@@ -31,6 +31,17 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<User?> GetByUsernameOrEmailAsync(
             string usernameOrEmail);
 
+        Task<User?> GetByIdWithRoleAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default);
+
+        Task<IReadOnlyList<User>> GetAllWithRoleAsync(
+            CancellationToken cancellationToken = default);
+
+        Task<IReadOnlyDictionary<string, int>>
+            GetStatusCountsAsync(
+                CancellationToken cancellationToken = default);
+
         Task<IReadOnlyList<User>> GetByStatusAsync(
             string status);
 

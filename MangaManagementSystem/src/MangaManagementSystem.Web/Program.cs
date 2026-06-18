@@ -74,6 +74,14 @@ namespace MangaManagementSystem.Web
                 client.BaseAddress =
                     new Uri(settings.Value.BaseUrl);
             });
+            builder.Services.AddHttpClient<IAdminUserApiClient, AdminUserApiClient>((sp, client) =>
+            {
+                var settings =
+                    sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+
+                client.BaseAddress =
+                    new Uri(settings.Value.BaseUrl);
+            });
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddAntiforgery();
 
@@ -114,7 +122,7 @@ namespace MangaManagementSystem.Web
                     context.HandleResponse();
 
                     context.Response.Redirect(
-                        "/login?error=google_oauth_failed");
+                        $"/login?error={AuthErrorCodes.GoogleOAuthFailed}");
 
                     return Task.CompletedTask;
                 };
@@ -175,12 +183,12 @@ namespace MangaManagementSystem.Web
                 var isRecaptchaValid = await recaptchaService.VerifyTokenAsync(recaptchaResponse, ip);
                 if (!isRecaptchaValid)
                 {
-                    return Results.Redirect("/login?error=RecaptchaFailed");
+                    return Results.Redirect($"/login?error={AuthErrorCodes.RecaptchaFailed}");
                 }
 
                 if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
                 {
-                    return Results.Redirect("/login?error=InvalidCredentials");
+                    return Results.Redirect($"/login?error={AuthErrorCodes.InvalidCredentials}");
                 }
 
                 try
@@ -189,34 +197,30 @@ namespace MangaManagementSystem.Web
 
                     if (string.IsNullOrWhiteSpace(user.RoleName))
                     {
-                        return Results.Redirect("/login?error=InvalidCredentials");
+                        return Results.Redirect($"/login?error={AuthErrorCodes.InvalidCredentials}");
                     }
 
                     await SignInApplicationUserAsync(context, user, user.RoleName);
                     return Results.Redirect(GetDashboardRedirectUrl(user.RoleName));
                 }
-                catch (InvalidOperationException ex)
+                catch (ApiClientException ex)
                 {
-                    var error = (ex.Message ?? string.Empty).ToLowerInvariant();
-
-                    if (error.Contains("pending"))
+                    if (ex.Code ==
+                        AuthErrorCodes.AccountPending)
                     {
                         return Results.Redirect(
                             "/pending-approval");
                     }
 
-                    if (error.Contains("disabled"))
-                    {
-                        return Results.Redirect("/login?error=account_disabled");
-                    }
-
-                    if (error.Contains("reject") || error.Contains("rejected"))
-                    {
-                        return Results.Redirect("/login?error=account_rejected");
-                    }
-
-                    // Generic fallback for wrong username/password or other authentication failures.
-                    return Results.Redirect("/login?error=InvalidCredentials");
+                    return Results.Redirect(
+                        BuildLoginErrorRedirect(
+                            ex.Code));
+                }
+                catch (Exception)
+                {
+                    return Results.Redirect(
+                        BuildLoginErrorRedirect(
+                            AuthErrorCodes.InvalidCredentials));
                 }
             }).DisableAntiforgery();
 
@@ -238,11 +242,13 @@ namespace MangaManagementSystem.Web
                 "/api/auth/google-callback",
                 async (
                     HttpContext context,
-                    IAuthService authService) =>
+                    IAuthApiClient authApi,
+                    ILogger<Program> logger) =>
                 {
                     var (_, email, _, _) =
                         await GoogleAuthHelper
-                            .ResolveGoogleIdentityAsync(context);
+                            .ResolveGoogleIdentityAsync(
+                                context);
 
                     if (string.IsNullOrWhiteSpace(email))
                     {
@@ -251,56 +257,74 @@ namespace MangaManagementSystem.Web
                                 .AuthenticationScheme);
 
                         return Results.Redirect(
-                            "/login?error=GoogleEmailMissing");
+                            BuildLoginErrorRedirect(
+                                AuthErrorCodes
+                                    .GoogleEmailMissing));
                     }
 
-                    var authResult =
-                        await authService.GetUserByEmailAsync(email);
-
-                    if (!authResult.Succeeded
-    || authResult.User is null
-    || string.IsNullOrWhiteSpace(
-        authResult.RoleName))
+                    try
                     {
+                        var user =
+                            await authApi
+                                .ResolveGoogleLoginAsync(
+                                    email);
+
+                        if (string.IsNullOrWhiteSpace(
+                                user.RoleName))
+                        {
+                            throw new ApiClientException(
+                                AuthErrorCodes
+                                    .AccountConfigurationInvalid,
+                                "Account configuration is invalid.",
+                                System.Net.HttpStatusCode
+                                    .Forbidden);
+                        }
+
+                        await SignInApplicationUserAsync(
+                            context,
+                            user,
+                            user.RoleName);
+
+                        return Results.Redirect(
+                            GetDashboardRedirectUrl(
+                                user.RoleName));
+                    }
+                    catch (ApiClientException ex)
+                    {
+                        logger.LogWarning(
+                            "Google login was rejected with code {ErrorCode}.",
+                            ex.Code);
+
                         await context.SignOutAsync(
                             CookieAuthenticationDefaults
                                 .AuthenticationScheme);
 
-                        var error =
-                            (authResult.ErrorMessage
-                                ?? string.Empty)
-                            .ToLowerInvariant();
-
-                        if (error.Contains("pending"))
+                        if (ex.Code ==
+                            AuthErrorCodes.AccountPending)
                         {
                             return Results.Redirect(
                                 "/pending-approval");
                         }
 
-                        if (error.Contains("disabled"))
-                        {
-                            return Results.Redirect(
-                                "/login?error=account_disabled");
-                        }
+                        return Results.Redirect(
+                            BuildLoginErrorRedirect(
+                                ex.Code));
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(
+                            ex,
+                            "Unexpected Google login callback failure.");
 
-                        if (error.Contains("reject"))
-                        {
-                            return Results.Redirect(
-                                "/login?error=account_rejected");
-                        }
+                        await context.SignOutAsync(
+                            CookieAuthenticationDefaults
+                                .AuthenticationScheme);
 
                         return Results.Redirect(
-                            "/login?error=UserNotInDatabase");
+                            BuildLoginErrorRedirect(
+                                AuthErrorCodes
+                                    .GoogleOAuthFailed));
                     }
-
-                    await SignInApplicationUserAsync(
-                        context,
-                        authResult.User,
-                        authResult.RoleName);
-
-                    return Results.Redirect(
-                        GetDashboardRedirectUrl(
-                            authResult.RoleName));
                 });
 
             app.MapPost(
@@ -346,7 +370,9 @@ namespace MangaManagementSystem.Web
                                 .AuthenticationScheme);
 
                         return Results.Redirect(
-                            "/register?error=GoogleEmailMissing");
+                            BuildRegisterErrorRedirect(
+                                AuthErrorCodes
+                                    .GoogleEmailMissing));
                     }
 
                     if (!MangaManagementSystem
@@ -364,7 +390,8 @@ namespace MangaManagementSystem.Web
                                 .AuthenticationScheme);
 
                         return Results.Redirect(
-                            "/register?error=InvalidRole");
+                            BuildRegisterErrorRedirect(
+                                AuthErrorCodes.InvalidRole));
                     }
 
                     try
@@ -399,29 +426,37 @@ namespace MangaManagementSystem.Web
 
                             GoogleSignupFlow.Rejected =>
                                 Results.Redirect(
-                                    "/login?error=account_rejected"),
+                                    BuildLoginErrorRedirect(
+                                        AuthErrorCodes
+                                            .AccountRejected)),
 
                             GoogleSignupFlow.Disabled =>
                                 Results.Redirect(
-                                    "/login?error=account_disabled"),
+                                    BuildLoginErrorRedirect(
+                                        AuthErrorCodes
+                                            .AccountDisabled)),
 
                             _ =>
                                 Results.Redirect(
-                                    "/register?error=GoogleSignupFailed")
+                                    BuildRegisterErrorRedirect(
+                                        signupResult.ErrorCode
+                                        ?? AuthErrorCodes
+                                            .GoogleSignupFailed))
                         };
                     }
-                    catch (InvalidOperationException ex)
+                    catch (ApiClientException ex)
                     {
                         logger.LogWarning(
-                            ex,
-                            "Google sign-up API request was rejected.");
+                            "Google sign-up API request was rejected with code {ErrorCode}.",
+                            ex.Code);
 
                         await context.SignOutAsync(
                             CookieAuthenticationDefaults
                                 .AuthenticationScheme);
 
                         return Results.Redirect(
-                            "/register?error=GoogleSignupFailed");
+                            BuildRegisterErrorRedirect(
+                                ex.Code));
                     }
                     catch (Exception ex)
                     {
@@ -434,7 +469,9 @@ namespace MangaManagementSystem.Web
                                 .AuthenticationScheme);
 
                         return Results.Redirect(
-                            "/register?error=GoogleSignupFailed");
+                            BuildRegisterErrorRedirect(
+                                AuthErrorCodes
+                                    .GoogleSignupFailed));
                     }
                 });
 
@@ -446,7 +483,10 @@ namespace MangaManagementSystem.Web
             {
                 if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(otp))
                 {
-                    return Results.Redirect($"/verify-otp?email={Uri.EscapeDataString(email ?? string.Empty)}&error=InvalidOtp");
+                    return Results.Redirect(
+                        BuildVerifyOtpErrorRedirect(
+                            email,
+                            AuthErrorCodes.InvalidOtp));
                 }
 
                 try
@@ -456,7 +496,10 @@ namespace MangaManagementSystem.Web
                 }
                 catch (InvalidOperationException)
                 {
-                    return Results.Redirect($"/verify-otp?email={Uri.EscapeDataString(email)}&error=InvalidOtp");
+                    return Results.Redirect(
+                        BuildVerifyOtpErrorRedirect(
+                            email,
+                            AuthErrorCodes.InvalidOtp));
                 }
             }).DisableAntiforgery();
 
@@ -466,7 +509,9 @@ namespace MangaManagementSystem.Web
             {
                 if (string.IsNullOrWhiteSpace(email))
                 {
-                    return Results.Redirect("/register?error=EmailRequired");
+                    return Results.Redirect(
+                        BuildRegisterErrorRedirect(
+                            AuthErrorCodes.EmailRequired));
                 }
 
                 try
@@ -476,7 +521,10 @@ namespace MangaManagementSystem.Web
                 }
                 catch (InvalidOperationException ex)
                 {
-                    return Results.Redirect($"/verify-otp?email={Uri.EscapeDataString(email)}&error={Uri.EscapeDataString(ex.Message)}");
+                    return Results.Redirect(
+                        BuildVerifyOtpErrorRedirect(
+                            email,
+                            AuthErrorCodes.RequestFailed));
                 }
             }).DisableAntiforgery();
 
@@ -769,6 +817,102 @@ namespace MangaManagementSystem.Web
                     IsPersistent = true,
                     ExpiresUtc = DateTimeOffset.UtcNow.AddDays(14)
                 });
+        }
+
+        private static string BuildLoginErrorRedirect(
+            string? errorCode)
+        {
+            var normalizedCode =
+                errorCode switch
+                {
+                    AuthErrorCodes.AccountPending =>
+                        AuthErrorCodes.AccountPending,
+
+                    AuthErrorCodes.AccountRejected =>
+                        AuthErrorCodes.AccountRejected,
+
+                    AuthErrorCodes.AccountDisabled =>
+                        AuthErrorCodes.AccountDisabled,
+
+                    AuthErrorCodes.AccountNotFound =>
+                        AuthErrorCodes.AccountNotFound,
+
+                    AuthErrorCodes.AccountConfigurationInvalid =>
+                        AuthErrorCodes.AccountConfigurationInvalid,
+
+                    AuthErrorCodes.GoogleEmailMissing =>
+                        AuthErrorCodes.GoogleEmailMissing,
+
+                    AuthErrorCodes.GoogleOAuthFailed =>
+                        AuthErrorCodes.GoogleOAuthFailed,
+
+                    AuthErrorCodes.RecaptchaFailed =>
+                        AuthErrorCodes.RecaptchaFailed,
+
+                    _ =>
+                        AuthErrorCodes.InvalidCredentials
+                };
+
+            return "/login?error="
+                + Uri.EscapeDataString(
+                    normalizedCode);
+        }
+
+        private static string BuildRegisterErrorRedirect(
+            string? errorCode)
+        {
+            var normalizedCode =
+                errorCode switch
+                {
+                    AuthErrorCodes.GoogleEmailMissing =>
+                        AuthErrorCodes.GoogleEmailMissing,
+
+                    AuthErrorCodes.InvalidRole =>
+                        AuthErrorCodes.InvalidRole,
+
+                    AuthErrorCodes.AccountPending =>
+                        AuthErrorCodes.AccountPending,
+
+                    AuthErrorCodes.AccountRejected =>
+                        AuthErrorCodes.AccountRejected,
+
+                    AuthErrorCodes.AccountDisabled =>
+                        AuthErrorCodes.AccountDisabled,
+
+                    AuthErrorCodes.EmailRequired =>
+                        AuthErrorCodes.EmailRequired,
+
+                    AuthErrorCodes.EmailAlreadyExists =>
+                        AuthErrorCodes.EmailAlreadyExists,
+
+                    AuthErrorCodes.UsernameTaken =>
+                        AuthErrorCodes.UsernameTaken,
+
+                    _ =>
+                        AuthErrorCodes.GoogleSignupFailed
+                };
+
+            return "/register?error="
+                + Uri.EscapeDataString(
+                    normalizedCode);
+        }
+
+        private static string BuildVerifyOtpErrorRedirect(
+            string? email,
+            string? errorCode)
+        {
+            var normalizedCode =
+                errorCode ==
+                AuthErrorCodes.InvalidOtp
+                    ? AuthErrorCodes.InvalidOtp
+                    : AuthErrorCodes.RequestFailed;
+
+            return "/verify-otp?email="
+                + Uri.EscapeDataString(
+                    email ?? string.Empty)
+                + "&error="
+                + Uri.EscapeDataString(
+                    normalizedCode);
         }
 
         private static string GetDashboardRedirectUrl(

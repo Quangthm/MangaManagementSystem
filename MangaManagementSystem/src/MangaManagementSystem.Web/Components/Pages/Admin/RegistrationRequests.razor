@@ -1,10 +1,10 @@
 @page "/admin/registration-requests"
 @using Microsoft.AspNetCore.Authorization
+@using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Admin")]
 @inject NavigationManager Nav
-@inject IUserService UserService
+@inject IAdminUserApiClient AdminUserApiClient
 @inject ISnackbar Snackbar
-@inject AuthenticationStateProvider AuthStateProvider
 
 <AdminLayout>
     <div class="mf-page">
@@ -42,26 +42,19 @@
     private async Task LoadPendingRequestsAsync()
     {
         Requests.Clear();
-        var pending = await UserService.GetUsersByStatusAsync("PENDING_APPROVAL");
+        var pending = await AdminUserApiClient.GetUsersAsync("PENDING_APPROVAL");
         foreach (var u in pending)
         {
             Requests.Add(new PendingRequestRow(u.UserId, u.Username, u.Email, u.RoleName ?? "Unknown", u.CreatedAtUtc.ToString("MMM d, yyyy")));
         }
     }
 
-    private async Task<Guid> GetCurrentAdminIdAsync()
-    {
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-        var claim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
-        return claim != null ? Guid.Parse(claim.Value) : Guid.Empty;
-    }
-
     private async Task OnApprove(Guid userId)
     {
         try
         {
-            var adminId = await GetCurrentAdminIdAsync();
-            await UserService.ApproveUserAsync(adminId, userId);
+            await AdminUserApiClient
+                .ApproveUserAsync(userId);
             Snackbar.Add("User approved", Severity.Success);
             await LoadPendingRequestsAsync();
         }
@@ -75,8 +68,8 @@
     {
         try
         {
-            var adminId = await GetCurrentAdminIdAsync();
-            await UserService.RejectUserAsync(adminId, userId);
+            await AdminUserApiClient
+                .RejectUserAsync(userId);
             Snackbar.Add("User rejected", Severity.Warning);
             await LoadPendingRequestsAsync();
         }

@@ -1,11 +1,12 @@
-﻿USE MangaManagementDB;
+USE MangaManagementDB;
 GO
 CREATE OR ALTER PROCEDURE audit.usp_AuditEvent_Append
     @actor_user_id      UNIQUEIDENTIFIER = NULL,
     @action_code        NVARCHAR(64),
     @entity_type        NVARCHAR(128),
     @entity_id          NVARCHAR(100) = NULL,
-    @detail_json        NVARCHAR(MAX) = NULL
+    @detail_json        NVARCHAR(MAX) = NULL,
+    @audit_event_id     BIGINT = NULL OUTPUT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -81,6 +82,11 @@ BEGIN
             @entity_id,
             @detail_json
         );
+
+        SET @audit_event_id =
+            CONVERT(
+                BIGINT,
+                SCOPE_IDENTITY());
 
         IF @started_tran = 1
         BEGIN
@@ -1951,7 +1957,7 @@ END;
 GO
 -- ============================================================
 -- manga.usp_Series_UpdateProfile
--- BF-SERIES-002 — Edit Series Draft Profile
+-- BF-SERIES-002 â€” Edit Series Draft Profile
 --
 -- Allows an active Mangaka contributor to update a PROPOSAL_DRAFT
 -- series profile: title, slug, synopsis, genre, content language,
@@ -1965,12 +1971,12 @@ GO
 -- Once a proposal has been submitted (UNDER_EDITORIAL_REVIEW or later),
 -- this procedure rejects the update.
 --
--- Custom error numbers (57401–57410):
+-- Custom error numbers (57401â€“57410):
 --   57401  Could not acquire series profile update lock.
 --   57402  Series does not exist.
 --   57403  Only a PROPOSAL_DRAFT series can have its profile updated here.
 --   57404  Only an active Mangaka contributor can update this series profile.
---   57405  Cover file metadata is incomplete — pass all six cover fields or none.
+--   57405  Cover file metadata is incomplete â€” pass all six cover fields or none.
 -- ============================================================
 CREATE OR ALTER PROCEDURE manga.usp_Series_UpdateProfile
     @actor_user_id                  UNIQUEIDENTIFIER,

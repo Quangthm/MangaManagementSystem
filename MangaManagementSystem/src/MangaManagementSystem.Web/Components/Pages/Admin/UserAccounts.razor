@@ -1,10 +1,10 @@
 @page "/admin/users"
 @using Microsoft.AspNetCore.Authorization
+@using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Admin")]
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
-@inject IUserService UserService
-@inject IFileResourceService FileResourceService
+@inject IAdminUserApiClient AdminUserApiClient
 @inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>User Accounts - MangaFlow</PageTitle>
@@ -156,20 +156,13 @@
         _users.Clear();
         try
         {
-            // Load core statuses and combine
-            var pending = (await UserService.GetUsersByStatusAsync("PENDING_APPROVAL")).ToList();
-            var active = (await UserService.GetUsersByStatusAsync("ACTIVE")).ToList();
-            var disabled = (await UserService.GetUsersByStatusAsync("DISABLED")).ToList();
-            var rejected = (await UserService.GetUsersByStatusAsync("REJECTED")).ToList();
-
-            // Combine distinct users by id
-            var map = new Dictionary<Guid, MangaManagementSystem.Application.DTOs.Auth.UserDto>();
-            foreach (var u in pending.Concat(active).Concat(disabled).Concat(rejected))
-            {
-                if (!map.ContainsKey(u.UserId)) map[u.UserId] = u;
-            }
-
-            _users = map.Values.OrderByDescending(u => u.CreatedAtUtc).ToList();
+            _users =
+                (await AdminUserApiClient
+                    .GetUsersAsync())
+                .OrderByDescending(
+                    user =>
+                        user.CreatedAtUtc)
+                .ToList();
         }
         catch (Exception ex)
         {
@@ -193,18 +186,6 @@
         _deleteTarget = null;
     }
 
-    private async Task<Guid> GetCurrentAdminIdAsync()
-    {
-        var authState = await GetAuthenticationStateAsync();
-        var claim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
-        if (!Guid.TryParse(claim?.Value, out var adminId))
-        {
-            throw new InvalidOperationException("Current admin user id is not available.");
-        }
-
-        return adminId;
-    }
-
     private async Task ConfirmDisableAsync()
     {
         if (_deleteTarget == null) return;
@@ -215,8 +196,9 @@
         _showDeleteConfirm = false;
         try
         {
-            var adminId = await GetCurrentAdminIdAsync();
-            await UserService.DisableUserAsync(adminId, user.UserId);
+            await AdminUserApiClient
+                .DisableUserAsync(
+                    user.UserId);
             Snackbar.Add($"Disabled {user.Username}.", Severity.Success);
             await LoadAllUsersAsync();
         }
