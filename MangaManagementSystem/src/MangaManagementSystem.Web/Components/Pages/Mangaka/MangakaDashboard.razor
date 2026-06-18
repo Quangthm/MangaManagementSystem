@@ -1398,7 +1398,7 @@
                 break;
             case "SERIALIZED":
                 if (!string.IsNullOrWhiteSpace(series.Slug))
-                    Nav.NavigateTo($"/series/{series.Slug}");
+                    Nav.NavigateTo($"/series/{series.Slug}/workspace");
                 else
                     Snackbar.Add("Series page is not available yet.", Severity.Info);
                 break;

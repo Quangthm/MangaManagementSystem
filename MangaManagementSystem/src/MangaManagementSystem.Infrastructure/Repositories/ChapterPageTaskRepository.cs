@@ -48,13 +48,18 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
             if (pageRegionIds != null && pageRegionIds.Any())
             {
-                var regions = await _context.PageRegions
-                    .Where(r => pageRegionIds.Contains(r.PageRegionId))
-                    .ToListAsync();
-                    
-                foreach (var region in regions)
+                // Create unique IDs to attach
+                var uniqueIds = pageRegionIds.Distinct().ToList();
+                foreach (var regionId in uniqueIds)
                 {
-                    task.PageRegions.Add(region);
+                    // Check if already tracked to avoid InvalidOperationException
+                    var trackedRegion = _context.PageRegions.Local.FirstOrDefault(r => r.PageRegionId == regionId);
+                    if (trackedRegion == null)
+                    {
+                        trackedRegion = new PageRegion { PageRegionId = regionId };
+                        _context.PageRegions.Attach(trackedRegion);
+                    }
+                    task.PageRegions.Add(trackedRegion);
                 }
             }
 
