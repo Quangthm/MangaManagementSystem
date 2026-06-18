@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Manga;
@@ -11,6 +12,14 @@ namespace MangaManagementSystem.Web.Services.Api
     /// </summary>
     public interface IMangakaSeriesApiClient
     {
+        /// <summary>
+        /// Returns series where the logged-in actor is an active Mangaka contributor.
+        /// Server-side scoped — only series the actor contributes to are returned.
+        /// </summary>
+        Task<IReadOnlyList<SeriesDto>> GetMySeriesAsync(
+            Guid actorUserId,
+            CancellationToken cancellationToken = default);
+
         /// <summary>
         /// Creates a new series draft (status PROPOSAL_DRAFT) with an optional cover image.
         /// </summary>

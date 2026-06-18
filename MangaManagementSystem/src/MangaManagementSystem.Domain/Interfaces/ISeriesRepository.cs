@@ -10,6 +10,16 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<Series?> GetSeriesWithChaptersAsync(Guid seriesId);
 
         /// <summary>
+        /// Returns all series where the specified actor is an active contributor,
+        /// with CoverFile eagerly loaded for dashboard display.
+        /// Filters by: SeriesContributor.UserId == actorUserId, EndDate IS NULL,
+        /// User.StatusCode == "ACTIVE", and Role.RoleName == "Mangaka".
+        /// </summary>
+        Task<IReadOnlyList<Series>> GetByActiveContributorWithCoverAsync(
+            Guid actorUserId,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Returns all series with the <c>CoverFile</c> navigation property eagerly loaded.
         /// Used by the Mangaka dashboard to render cover thumbnails without a per-card N+1 query.
         /// Display-only; the URL is read from <c>FileResource.CloudinarySecureUrl</c>.

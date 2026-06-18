@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading;
@@ -21,6 +22,31 @@ namespace MangaManagementSystem.Web.Services.Api
         {
             _httpClient = httpClient;
             _logger = logger;
+        }
+
+        public async Task<IReadOnlyList<SeriesDto>> GetMySeriesAsync(
+            Guid actorUserId,
+            CancellationToken cancellationToken = default)
+        {
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Get, "api/mangaka/series/my-series");
+            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var series = await response.Content.ReadFromJsonAsync<List<SeriesDto>>(
+                    cancellationToken: cancellationToken);
+
+                return series ?? new List<SeriesDto>();
+            }
+
+            var message = await ExtractErrorMessageAsync(response);
+            _logger.LogWarning(
+                "Load my series failed: {StatusCode} {ReasonPhrase}",
+                (int)response.StatusCode, response.ReasonPhrase);
+
+            throw new InvalidOperationException(message);
         }
 
         public async Task<SeriesDraftCreatedDto> CreateDraftAsync(

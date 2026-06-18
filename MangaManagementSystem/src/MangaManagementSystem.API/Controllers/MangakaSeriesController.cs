@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -7,6 +8,7 @@ using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Features.Mangaka.Series.Commands.CancelSeriesDraft;
 using MangaManagementSystem.Application.Features.Mangaka.Series.Commands.CreateSeriesDraft;
 using MangaManagementSystem.Application.Features.Mangaka.Series.Commands.UpdateSeriesDraft;
+using MangaManagementSystem.Application.Features.Mangaka.Series.Queries.GetMyMangakaSeries;
 using MangaManagementSystem.Application.Features.Mangaka.SeriesProposals.Commands.SubmitSeriesProposal;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -300,6 +302,40 @@ namespace MangaManagementSystem.API.Controllers
                     "Unexpected error cancelling series draft {SeriesId}.", seriesId);
                 return Problem(
                     detail: "We could not cancel the series draft right now. Please try again later.",
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
+        }
+
+        /// <summary>
+        /// Returns series where the logged-in actor is an active Mangaka contributor.
+        /// Filters by: SeriesContributor.UserId == actorUserId, EndDate IS NULL,
+        /// User.StatusCode == "ACTIVE", and Role.RoleName == "Mangaka".
+        /// Uses MediatR/CQRS — all orchestration is in GetMyMangakaSeriesQueryHandler.
+        /// Route: GET /api/mangaka/series/my-series
+        /// </summary>
+        [HttpGet("my-series")]
+        public async Task<IActionResult> GetMySeriesAsync(
+            CancellationToken cancellationToken)
+        {
+            if (!TryResolveActorUserId(out Guid actorUserId))
+            {
+                return BadRequest(new ApiErrorResponse(
+                    "Could not identify the requesting user. Please sign in again."));
+            }
+
+            var query = new GetMyMangakaSeriesQuery(actorUserId);
+
+            try
+            {
+                IReadOnlyList<SeriesDto> result = await _mediator.Send(query, cancellationToken);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Unexpected error loading series for actor {ActorUserId}.", actorUserId);
+                return Problem(
+                    detail: "We could not load your series right now. Please try again later.",
                     statusCode: StatusCodes.Status500InternalServerError);
             }
         }

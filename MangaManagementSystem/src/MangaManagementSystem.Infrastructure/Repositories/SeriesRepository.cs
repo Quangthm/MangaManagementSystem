@@ -38,6 +38,29 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         }
 
         /// <summary>
+        /// Returns only series where the specified actor is an active Mangaka contributor,
+        /// with CoverFile eagerly loaded for the dashboard card thumbnails.
+        /// Read-only EF query; no stored procedure required.
+        /// </summary>
+        public async Task<IReadOnlyList<Series>> GetByActiveContributorWithCoverAsync(
+            Guid actorUserId,
+            CancellationToken cancellationToken = default)
+        {
+            return await _context.Series
+                .AsNoTracking()
+                .Include(s => s.CoverFile)
+                .Where(s => _context.SeriesContributors.Any(sc =>
+                    sc.SeriesId == s.SeriesId &&
+                    sc.UserId == actorUserId &&
+                    sc.EndDate == null &&
+                    sc.User != null &&
+                    sc.User.StatusCode == "ACTIVE" &&
+                    sc.User.Role != null &&
+                    sc.User.Role.RoleName == "Mangaka"))
+                .ToListAsync(cancellationToken);
+        }
+
+        /// <summary>
         /// Returns all series with CoverFile eagerly loaded so the dashboard can render
         /// cover thumbnails in a single query. Display-only — not for update workflows.
         /// </summary>

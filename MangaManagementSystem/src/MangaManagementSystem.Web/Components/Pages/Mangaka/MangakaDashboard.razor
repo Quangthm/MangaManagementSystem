@@ -5,7 +5,6 @@
 @attribute [Authorize(Roles = "Mangaka")]
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
-@inject ISeriesService SeriesService
 @inject IChapterPageTaskService TaskService
 @inject IMangakaSeriesApiClient MangakaSeriesApiClient
 @inject IProfileApiClient ProfileApiClient
@@ -101,7 +100,7 @@
                 <div style="color: #64748b; font-size: 0.85rem;">
                     @if (_activeTab == "current")
                     {
-                        <span>@_seriesData.Count active projects in your catalog</span>
+                        <span>@_seriesData.Count series in your Mangaka dashboard</span>
                     }
                     else
                     {
@@ -123,8 +122,67 @@
         <div style="flex: 1; overflow: auto; padding: 32px;">
             @if (_activeTab == "current")
             {
+                @* ── Filter chips + search + sort ── *@
+                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 24px;">
+                    @* Status filter chips *@
+                    <div style="display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0;">
+                        @foreach (var (label, statuses) in FilterGroups)
+                        {
+                            var count = FilterCount(statuses);
+                            var isActive = _selectedFilter == label;
+                            <button @onclick="@(() => _selectedFilter = label)"
+                                    style="padding: 6px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: @(isActive ? 600 : 500); cursor: pointer; white-space: nowrap;
+                                           background: @(isActive ? "#4f46e5" : "#f1f5f9"); color: @(isActive ? "#fff" : "#475569");
+                                           border: 1px solid @(isActive ? "#4f46e5" : "#e2e8f0"); transition: all 0.15s ease;">
+                                @label (@count)
+                            </button>
+                        }
+                    </div>
+
+                    @* Search *@
+                    <div style="width: 220px; flex-shrink: 0;">
+                        <MudTextField T="string" @bind-Value="_searchText"
+                                      Placeholder="Search by title or genre"
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Search"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense"
+                                      Immediate="true"
+                                      Style="font-size: 0.8rem;" />
+                    </div>
+
+                    @* Sort *@
+                    <div style="width: 170px; flex-shrink: 0;">
+                        <MudSelect T="string" @bind-Value="_sortMode"
+                                   Variant="Variant.Outlined" Margin="Margin.Dense"
+                                   Dense="true"
+                                   Style="font-size: 0.8rem;">
+                            <MudSelectItem T="string" Value="@("recent")">Recently Updated</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("newest")">Newest First</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("title")">Title A-Z</MudSelectItem>
+                        </MudSelect>
+                    </div>
+                </div>
+
+                @if (FilteredSeriesData.Count == 0)
+                {
+                    @* Empty state *@
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64px 24px; color: #94a3b8; gap: 16px;">
+                        <MudIcon Icon="@Icons.Material.Filled.Inbox" Style="font-size: 56px; opacity: 0.5;" />
+                        <div style="font-size: 0.95rem; font-weight: 500; color: #64748b; text-align: center; max-width: 360px;">@EmptyStateMessage</div>
+                        @if (_selectedFilter is "All" or "Draft" && string.IsNullOrWhiteSpace(_searchText))
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.Add"
+                                       OnClick="@(() => _newSeriesDialogOpen = true)">
+                                New Series Draft
+                            </MudButton>
+                        }
+                    </div>
+                }
+                else
+                {
                 <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px;">
-                    @foreach (var series in _seriesData)
+                    @foreach (var series in FilteredSeriesData)
                     {
                         @* ── Series Card ── *@
                         <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); position: relative; overflow: hidden; cursor: pointer; display: flex; flex-direction: column;"
@@ -225,6 +283,7 @@
                         </div>
                     </div>
                 </div>
+                }
             }
             else if (_activeTab == "review")
             {
@@ -1228,6 +1287,79 @@
     private string? _currentAvatarUrl;
     private List<SeriesCardData> _seriesData = [];
 
+    // ── Filter / search / sort state ──
+    private string _selectedFilter = "All";
+    private string _searchText = "";
+    private string _sortMode = "recent"; // "recent" | "newest" | "title"
+
+    private static readonly (string Label, string[] Statuses)[] FilterGroups =
+    [
+        ("All",             []),
+        ("Draft",           ["PROPOSAL_DRAFT"]),
+        ("In Review",       ["UNDER_EDITORIAL_REVIEW", "UNDER_BOARD_REVIEW"]),
+        ("Serialized",      ["SERIALIZED"]),
+        ("Paused / Hiatus", ["HIATUS"]),
+        ("Cancelled",       ["CANCELLED"]),
+        ("Completed",       ["COMPLETED"]),
+    ];
+
+    private int FilterCount(string[] statuses)
+        => statuses.Length == 0
+            ? _seriesData.Count
+            : _seriesData.Count(s => statuses.Contains(s.StatusCode));
+
+    private List<SeriesCardData> FilteredSeriesData
+    {
+        get
+        {
+            var group = FilterGroups.FirstOrDefault(g => g.Label == _selectedFilter);
+            IEnumerable<SeriesCardData> result = _seriesData;
+
+            // Status filter
+            if (group.Statuses is { Length: > 0 })
+                result = result.Where(s => group.Statuses.Contains(s.StatusCode));
+
+            // Search filter
+            if (!string.IsNullOrWhiteSpace(_searchText))
+            {
+                var term = _searchText.Trim();
+                result = result.Where(s =>
+                    s.Title.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                    s.Genre.Contains(term, StringComparison.OrdinalIgnoreCase));
+            }
+
+            // Sort
+            result = _sortMode switch
+            {
+                "newest" => result.OrderByDescending(s => s.CreatedAtUtc),
+                "title"  => result.OrderBy(s => s.Title, StringComparer.OrdinalIgnoreCase),
+                _        => result.OrderByDescending(s => s.UpdatedAtUtc ?? s.CreatedAtUtc), // "recent"
+            };
+
+            return result.ToList();
+        }
+    }
+
+    private string EmptyStateMessage
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(_searchText))
+                return "No series match your search.";
+
+            return _selectedFilter switch
+            {
+                "Draft"           => "No draft series. Create a new draft to get started.",
+                "In Review"       => "No series currently under review.",
+                "Serialized"      => "No serialized series yet.",
+                "Paused / Hiatus" => "No series on hiatus.",
+                "Cancelled"       => "No cancelled series.",
+                "Completed"       => "No completed series.",
+                _                 => "You don't have any series yet. Create a new draft to get started.",
+            };
+        }
+    }
+
     private async Task LoadCurrentUserSummaryAsync(Guid userId)
     {
         var currentUser = await ProfileApiClient.GetProfileAsync(userId);
@@ -1281,9 +1413,15 @@
 
     private async Task LoadSeriesAsync()
     {
+        if (_currentUserId is null || _currentUserId == Guid.Empty)
+        {
+            _seriesData = [];
+            return;
+        }
+
         try
         {
-            var dtos = await SeriesService.GetAllSeriesAsync();
+            var dtos = await MangakaSeriesApiClient.GetMySeriesAsync(_currentUserId.Value);
             _seriesData = dtos.Select(s => new SeriesCardData(
                 Id: s.SeriesId,
                 Title: s.Title,
