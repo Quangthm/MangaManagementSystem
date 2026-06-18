@@ -2,9 +2,9 @@
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 @using MangaManagementSystem.Application.DTOs.Manga
+@using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Assistant")]
-@inject MangaManagementSystem.Application.Interfaces.IChapterPageTaskService TaskService
-@inject AuthenticationStateProvider AuthStateProvider
+@inject IAssistantTaskApiClient AssistantTaskClient
 @inject NavigationManager Nav
 
 <AssistantLayout>
@@ -113,7 +113,7 @@
 @code {
     private bool _loading = true;
     private string? _loadError;
-    private IEnumerable<ChapterPageTaskDto>? _tasks;
+    private IReadOnlyList<ChapterPageTaskDto>? _tasks;
     private IEnumerable<ChapterPageTaskDto>? _dueSoon;
     private ChapterPageTaskDto? _selectedTask;
     private int? _assignedCount;
@@ -132,29 +132,13 @@
         _loadError = null;
         try
         {
-            var auth = await AuthStateProvider.GetAuthenticationStateAsync();
-            var user = auth.User;
-            if (user?.Identity?.IsAuthenticated != true)
-            {
-                _tasks = Array.Empty<ChapterPageTaskDto>();
-                return;
-            }
-
-            var idClaim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
-            if (!Guid.TryParse(idClaim?.Value, out var uid))
-            {
-                _tasks = Array.Empty<ChapterPageTaskDto>();
-                return;
-            }
-
-            var tasks = (await TaskService.GetChapterPageTasksByAssignedUserIdAsync(uid)).ToList();
-            _tasks = tasks;
-            _assignedCount = tasks.Count;
+            _tasks = await AssistantTaskClient.GetAssignedTasksAsync();
+            _assignedCount = _tasks.Count;
             var now = DateTime.UtcNow;
-            _dueSoon = tasks.Where(t => t.DueAtUtc.HasValue && t.DueAtUtc.Value >= now && t.DueAtUtc.Value <= now.AddDays(3) && t.StatusCode != "COMPLETED" && t.StatusCode != "CANCELLED").ToList();
+            _dueSoon = _tasks.Where(t => t.DueAtUtc.HasValue && t.DueAtUtc.Value >= now && t.DueAtUtc.Value <= now.AddDays(3) && t.StatusCode != "COMPLETED" && t.StatusCode != "CANCELLED").ToList();
             _dueSoonCount = _dueSoon.Count();
-            _underReviewCount = tasks.Count(t => t.StatusCode == "UNDER_REVIEW");
-            _completedCount = tasks.Count(t => t.StatusCode == "COMPLETED");
+            _underReviewCount = _tasks.Count(t => t.StatusCode == "UNDER_REVIEW");
+            _completedCount = _tasks.Count(t => t.StatusCode == "COMPLETED");
         }
         catch (Exception ex)
         {

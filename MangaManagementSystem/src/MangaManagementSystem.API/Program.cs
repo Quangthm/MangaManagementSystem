@@ -1,6 +1,10 @@
 using MangaManagementSystem.Application;
 using MangaManagementSystem.Infrastructure;
 
+using MangaManagementSystem.Application;
+using MangaManagementSystem.Infrastructure;
+using Microsoft.Extensions.Configuration;
+
 namespace MangaManagementSystem.API
 {
     public class Program
@@ -9,15 +13,20 @@ namespace MangaManagementSystem.API
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            // Application use-case services and Infrastructure (EF Core, stored procedure
-            // wrappers, Cloudinary, OTP cache) are reused as-is. The API only owns the
-            // HTTP boundary; it does not contain business logic or SQL details.
+            // Application use-case services and Infrastructure (EF Core,
+            // stored procedure wrappers, Cloudinary, OTP cache) are reused
+            // as-is. The API only owns the HTTP boundary; it does not contain
+            // business logic or SQL details.
             builder.Services.AddApplicationServices();
             builder.Services.AddInfrastructure(builder.Configuration);
 
             builder.Services.AddControllers();
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
+
+            // Add application and infrastructure services
+            builder.Services.AddApplicationServices();
+            builder.Services.AddInfrastructure(builder.Configuration);
 
             var app = builder.Build();
 
@@ -28,7 +37,6 @@ namespace MangaManagementSystem.API
             }
 
             app.UseHttpsRedirection();
-
             app.UseAuthorization();
 
             app.MapControllers();

@@ -26,6 +26,10 @@
                     <NavLink class="nav-link" href="/dashboard">Dashboard</NavLink>
                 </div>
 
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="/profile/settings">Profile Settings</NavLink>
+                </div>
+
                 <AuthorizeView Roles="Admin">
                     <Authorized Context="adminAuth">
                         <div class="nav-item px-3"><NavLink class="nav-link" href="/admin">Admin Dashboard</NavLink></div>
@@ -68,4 +72,3 @@
         </AuthorizeView>
     </nav>
 </div>
-

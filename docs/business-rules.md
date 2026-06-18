@@ -79,6 +79,22 @@
 | BR-FILE-014 | Optional duplicate-file warnings may be shown for repeated registration portfolios, repeated proposal files, repeated series covers, repeated chapter page-version files, repeated editorial attachments, or repeated avatars. | Optional MVP |
 | BR-FILE-015 | Duplicate-file warnings are advisory usability messages; they should not automatically block uploads unless a specific workflow later defines blocking behavior. | Optional MVP |
 | BR-FILE-016 | Some duplicate-file warnings may be omitted from the MVP UI when implementation time is limited, as long as `sha256_hash` is still stored for future detection, integrity checks, and audit traceability. | Optional MVP |
+| BR-FILE-017 | The system must validate uploaded file extensions and content types according to the file purpose code before uploading to Cloudinary or saving file metadata. | Active draft |
+| BR-FILE-018 | `SERIES_PROPOSAL` files must be formal proposal documents only and may use `.pdf`, `.doc`, or `.docx` in MVP. Markdown, plain text, and image files are not accepted for this purpose. | Active draft |
+| BR-FILE-019 | Image-only file purposes, including `SERIES_COVER`, `CHAPTER_PAGE_VERSION`, and `USER_AVATAR`, may use `.jpg`, `.jpeg`, `.png`, or `.webp` in MVP. | Active draft |
+| BR-FILE-020 | Mixed document/image purposes, including `EDITORIAL_ATTACHMENT` and `REGISTRATION_PORTFOLIO`, may use `.pdf`, `.doc`, `.docx`, `.jpg`, `.jpeg`, `.png`, or `.webp` in MVP. | Active draft |
+
+### MVP File Purpose Upload Format Matrix
+
+| File purpose code | Allowed extensions | Allowed content types | Cloudinary resource type | Notes |
+|---|---|---|---|---|
+| `SERIES_PROPOSAL` | `.pdf`, `.doc`, `.docx` | `application/pdf`, `application/msword`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | `raw` | Formal series proposal documents only. Markdown, plain text, and image files are not accepted for proposal submission in MVP. |
+| `SERIES_COVER` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Series cover image. |
+| `CHAPTER_PAGE_VERSION` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Official manga page image/version output. |
+| `EDITORIAL_ATTACHMENT` | `.pdf`, `.doc`, `.docx`, `.jpg`, `.jpeg`, `.png`, `.webp` | Proposal-document content types plus `image/jpeg`, `image/png`, `image/webp` | `raw` for documents; `image` for images | Editorial markup, review attachments, or supporting screenshots/documents. |
+| `REGISTRATION_PORTFOLIO` | `.pdf`, `.doc`, `.docx`, `.jpg`, `.jpeg`, `.png`, `.webp` | Proposal-document content types plus `image/jpeg`, `image/png`, `image/webp` | `raw` for documents; `image` for images | Optional portfolio submitted for account approval/profile review. |
+| `USER_AVATAR` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | User profile/avatar image. |
+
 
 ---
 
@@ -107,7 +123,7 @@
 | BR-USER-019 | Updating `display_name` must not change `username`, `email`, role, account status, password, or account approval state. | Active draft |
 | BR-USER-020 | Display name changes should be recorded in the audit log for traceability. | Active draft |
 | BR-USER-021 | The system should reject empty or whitespace-only display names after trimming. | Active draft |
-
+| BR-USER-022 | A user may update their own avatar and portfolio file | Active draft |
 ---
 
 ## 5. Series

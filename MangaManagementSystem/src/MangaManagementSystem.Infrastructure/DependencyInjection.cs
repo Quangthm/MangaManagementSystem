@@ -29,6 +29,9 @@ namespace MangaManagementSystem.Infrastructure
                 var cloudinary = new CloudinaryDotNet.Cloudinary(account) { Api = { Secure = true } };
                 services.AddSingleton(cloudinary);
             }
+            services.AddMemoryCache();
+            services.AddSingleton<IOtpCacheService, OtpCacheService>();
+
             services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
             services.AddScoped<IEmailService, EmailService>();
 
@@ -53,6 +56,9 @@ namespace MangaManagementSystem.Infrastructure
             // File storage (application interface implemented in Infrastructure)
             services.AddScoped<MangaManagementSystem.Application.Interfaces.IFileStorageService, Services.CloudinaryFileStorageService>();
             services.AddScoped<Services.CloudinaryFileStorageFormAdapter>();
+
+            // Assistant task submission
+            services.AddScoped<MangaManagementSystem.Application.Interfaces.IAssistantTaskSubmissionService, Services.AssistantTaskSubmissionService>();
 
             return services;
         }

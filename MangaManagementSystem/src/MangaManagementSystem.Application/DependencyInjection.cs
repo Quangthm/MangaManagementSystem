@@ -8,6 +8,12 @@ namespace MangaManagementSystem.Application
     {
         public static IServiceCollection AddApplicationServices(this IServiceCollection services)
         {
+            // MediatR — registers all IRequestHandler<,> implementations in this assembly.
+            // New CQRS workflows (e.g. SubmitSeriesProposalCommand) are picked up automatically.
+            services.AddMediatR(cfg =>
+                cfg.RegisterServicesFromAssembly(typeof(DependencyInjection).Assembly));
+
+
             services.AddScoped<ISeriesService, SeriesService>();
             services.AddScoped<IChapterService, ChapterService>();
             services.AddScoped<IUserService, UserService>();

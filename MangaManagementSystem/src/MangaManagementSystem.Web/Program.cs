@@ -14,7 +14,6 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MudBlazor.Services;
 using System.Security.Claims;
-using Microsoft.Extensions.Logging;
 
 namespace MangaManagementSystem.Web
 {
@@ -41,6 +40,27 @@ namespace MangaManagementSystem.Web
             {
                 var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
                 client.BaseAddress = new Uri(settings.Value.BaseUrl);
+            });
+            builder.Services.AddHttpClient<IMangakaSeriesApiClient, MangakaSeriesApiClient>((sp, client) =>
+            {
+                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                client.BaseAddress = new Uri(settings.Value.BaseUrl);
+            });
+            builder.Services.AddHttpClient<IProfilePasswordApiClient, ProfilePasswordApiClient>((sp, client) =>
+            {
+                var settings =
+                    sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+
+                client.BaseAddress =
+                    new Uri(settings.Value.BaseUrl);
+            });
+            builder.Services.AddHttpClient<IProfileApiClient, ProfileApiClient>((sp, client) =>
+            {
+                var settings =
+                    sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+
+                client.BaseAddress =
+                    new Uri(settings.Value.BaseUrl);
             });
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddAntiforgery();
@@ -89,7 +109,28 @@ namespace MangaManagementSystem.Web
             builder.Services.AddScoped<ToastService>();
 
             builder.Services.AddRazorComponents()
-                .AddInteractiveServerComponents();
+                .AddInteractiveServerComponents()
+                .AddHubOptions(options =>
+                {
+                    options.MaximumReceiveMessageSize = 50 * 1024 * 1024; // 50MB
+                });
+
+            // Register typed API clients
+            builder.Services.AddHttpClient<Services.Api.IAssistantTaskApiClient, Services.Api.AssistantTaskApiClient>((sp, client) =>
+            {
+                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                client.BaseAddress = new Uri(settings.Value.BaseUrl);
+            });
+            builder.Services.AddHttpClient<Services.Api.ISeriesApiClient, Services.Api.SeriesApiClient>((sp, client) =>
+            {
+                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                client.BaseAddress = new Uri(settings.Value.BaseUrl);
+            });
+            builder.Services.AddHttpClient<Services.Api.IEditorProposalApiClient, Services.Api.EditorProposalApiClient>((sp, client) =>
+            {
+                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                client.BaseAddress = new Uri(settings.Value.BaseUrl);
+            });
 
             var app = builder.Build();
 
