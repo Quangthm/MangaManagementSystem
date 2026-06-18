@@ -65,6 +65,32 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             return await query.OrderByDescending(sp => sp.SubmittedAtUtc).ToListAsync(ct);
         }
 
+        /// <summary>
+        /// Returns all proposals for series where the specified actor is an active Mangaka
+        /// contributor. Access scope matches GetByActiveContributorWithCoverAsync in SeriesRepository.
+        /// </summary>
+        public async Task<IReadOnlyList<SeriesProposal>> GetMySeriesProposalsAsync(
+            Guid actorUserId, CancellationToken ct = default)
+        {
+            return await _dbContext.Set<SeriesProposal>()
+                .AsNoTracking()
+                .Include(sp => sp.Series)
+                .Include(sp => sp.SubmittedByUser)
+                .Include(sp => sp.ReviewedByUser)
+                .Include(sp => sp.ProposalFile)
+                .Include(sp => sp.MarkupFile)
+                .Where(sp => _dbContext.SeriesContributors.Any(sc =>
+                    sc.SeriesId == sp.SeriesId &&
+                    sc.UserId == actorUserId &&
+                    sc.EndDate == null &&
+                    sc.User != null &&
+                    sc.User.StatusCode == "ACTIVE" &&
+                    sc.User.Role != null &&
+                    sc.User.Role.RoleName == "Mangaka"))
+                .OrderByDescending(sp => sp.SubmittedAtUtc)
+                .ToListAsync(ct);
+        }
+
         public async Task<Guid?> ClaimEditorialReviewAsync(Guid seriesProposalId, Guid actorUserId, string? notes, CancellationToken ct = default)
         {
             var outParam = new SqlParameter("@new_series_contributor_id", SqlDbType.UniqueIdentifier) { Direction = ParameterDirection.Output };

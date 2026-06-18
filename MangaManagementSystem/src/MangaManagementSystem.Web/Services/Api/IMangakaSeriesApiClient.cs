@@ -81,5 +81,13 @@ namespace MangaManagementSystem.Web.Services.Api
             Guid seriesId,
             string? reason = null,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Returns all series proposals scoped to the actor's active Mangaka contributor
+        /// memberships. Read-only tracking — no mutations. Server-side scoped.
+        /// </summary>
+        Task<IReadOnlyList<MangakaSeriesProposalDto>> GetMySeriesProposalsAsync(
+            Guid actorUserId,
+            CancellationToken cancellationToken = default);
     }
 }

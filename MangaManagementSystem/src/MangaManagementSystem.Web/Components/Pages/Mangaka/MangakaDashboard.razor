@@ -103,6 +103,10 @@
                     {
                         <span>@_seriesData.Count series in your Mangaka dashboard</span>
                     }
+                    else if (_activeTab == "proposals")
+                    {
+                        <span>Track submitted proposal versions and review progress</span>
+                    }
                     else
                     {
                         <span>Review tasks assigned to you</span>
@@ -323,6 +327,127 @@
                 </div>
                 }
             }
+            else if (_activeTab == "proposals")
+            {
+                @* ── Proposal filter chips + search + sort ── *@
+                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 24px;">
+                    <div style="display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0;">
+                        @foreach (var (label, statuses) in ProposalFilterGroups)
+                        {
+                            var count = ProposalFilterCount(statuses);
+                            var isActive = _proposalSelectedFilter == label;
+                            <button @onclick="@(() => { _proposalSelectedFilter = label; ResetProposalPage(); })"
+                                    style="padding: 6px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: @(isActive ? 600 : 500); cursor: pointer; white-space: nowrap;
+                                           background: @(isActive ? "#4f46e5" : "#f1f5f9"); color: @(isActive ? "#fff" : "#475569");
+                                           border: 1px solid @(isActive ? "#4f46e5" : "#e2e8f0"); transition: all 0.15s ease;">
+                                @label (@count)
+                            </button>
+                        }
+                    </div>
+
+                    <div style="width: 240px; flex-shrink: 0;">
+                        <MudTextField T="string" @bind-Value="_proposalSearchText"
+                                       @bind-Value:after="ResetProposalPage"
+                                       Placeholder="Search by title or genre"
+                                       Adornment="Adornment.Start"
+                                       AdornmentIcon="@Icons.Material.Filled.Search"
+                                       Variant="Variant.Outlined" Margin="Margin.Dense"
+                                       Immediate="true"
+                                       Style="font-size: 0.8rem;" />
+                    </div>
+
+                    <div style="width: 180px; flex-shrink: 0;">
+                        <MudSelect T="string" @bind-Value="_proposalSortMode"
+                                    @bind-Value:after="ResetProposalPage"
+                                    Variant="Variant.Outlined" Margin="Margin.Dense"
+                                    Dense="true"
+                                    Style="font-size: 0.8rem;">
+                            <MudSelectItem T="string" Value="@("submitted")">Recently Submitted</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("reviewed")">Reviewed Date</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("title")">Proposal Title A-Z</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("status")">Status</MudSelectItem>
+                        </MudSelect>
+                    </div>
+                </div>
+
+                @if (AllFilteredProposals.Count == 0)
+                {
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64px 24px; color: #94a3b8; gap: 16px;">
+                        <MudIcon Icon="@Icons.Material.Filled.Inbox" Style="font-size: 56px; opacity: 0.5;" />
+                        <div style="font-size: 0.95rem; font-weight: 500; color: #64748b; text-align: center; max-width: 360px;">@ProposalEmptyStateMessage</div>
+                    </div>
+                }
+                else
+                {
+                    @* ── Proposal table ── *@
+                    <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+                        <div style="display: grid; grid-template-columns: 2fr 2fr 100px 130px 130px 80px 60px; padding: 10px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 0.72rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">
+                            <span>Series</span>
+                            <span>Proposal</span>
+                            <span>Version</span>
+                            <span>Status</span>
+                            <span>Submitted</span>
+                            <span>Markup</span>
+                            <span></span>
+                        </div>
+                        @foreach (var p in PagedProposals)
+                        {
+                            <div @onclick="@(() => OpenProposalDetail(p))"
+                                 style="display: grid; grid-template-columns: 2fr 2fr 100px 130px 130px 80px 60px; padding: 12px 20px; border-bottom: 1px solid #f1f5f9; align-items: center; cursor: pointer; transition: background 0.12s;"
+                                 onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+                                <span style="font-weight: 600; font-size: 0.85rem; color: #111827; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="@p.SeriesTitle">@p.SeriesTitle</span>
+                                <span style="font-size: 0.85rem; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="@p.ProposalTitle">@p.ProposalTitle</span>
+                                <span style="font-size: 0.8rem; color: #64748b;">v@p.ProposalVersionNo</span>
+                                <span style="display: inline-block;">
+                                    <span style="background: @ProposalStatusColor(p.StatusCode); color: #fff; font-size: 0.68rem; padding: 2px 8px; border-radius: 10px; font-weight: 600; white-space: nowrap;">
+                                        @ProposalStatusLabel(p.StatusCode)
+                                    </span>
+                                </span>
+                                <span style="font-size: 0.78rem; color: #64748b;">@p.SubmittedAtUtc.ToString("MMM d, yyyy")</span>
+                                <span>
+                                    @if (p.MarkupFile is not null)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.AttachFile" Size="Size.Small" Style="color: #10b981; font-size: 16px;" />
+                                    }
+                                </span>
+                                <span style="text-align: right;">
+                                    <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" Style="color: #cbd5e1;" />
+                                </span>
+                            </div>
+                        }
+                    </div>
+
+                    @* ── Proposal pagination ── *@
+                    @if (ProposalTotalPages > 1)
+                    {
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 20px;">
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                       Disabled="@(_proposalPage <= 1)"
+                                       OnClick="@(() => { _proposalPage--; })">
+                                Prev
+                            </MudButton>
+
+                            @for (int p = 1; p <= ProposalTotalPages; p++)
+                            {
+                                int pageNum = p;
+                                bool isCurrent = pageNum == _proposalPage;
+                                <MudButton Size="Size.Small"
+                                           Variant="@(isCurrent ? Variant.Filled : Variant.Outlined)"
+                                           Color="@(isCurrent ? Color.Primary : Color.Default)"
+                                           OnClick="@(() => { _proposalPage = pageNum; })">
+                                    @pageNum
+                                </MudButton>
+                            }
+
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                       Disabled="@(_proposalPage >= ProposalTotalPages)"
+                                       OnClick="@(() => { _proposalPage++; })">
+                                Next
+                            </MudButton>
+                        </div>
+                    }
+                }
+            }
             else if (_activeTab == "review")
             {
                 <div style="display: flex; flex-direction: column; gap: 16px;">
@@ -364,6 +489,151 @@
         </div>
     </main>
 </div>
+
+@* ── Proposal Detail Modal (read-only) ── *@
+<MudOverlay Visible="@_proposalDetailOpen" OnClick="@(() => _proposalDetailOpen = false)">
+    <MudCard Style="width: 680px; max-width: 92vw; max-height: 85vh; margin: 5% auto 0; border-radius: 14px; overflow: hidden; display: flex; flex-direction: column;" @onclick:stopPropagation>
+        @if (_selectedProposal is not null)
+        {
+            <div style="padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: flex-start; justify-content: space-between; flex-shrink: 0;">
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-weight: 700; font-size: 1.1rem; color: #111827; margin-bottom: 4px;">
+                        @_selectedProposal.ProposalTitle
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <span style="font-size: 0.78rem; color: #64748b;">Series: @_selectedProposal.SeriesTitle</span>
+                        <span style="font-size: 0.72rem; color: #94a3b8;">v@_selectedProposal.ProposalVersionNo</span>
+                        <span style="background: @ProposalStatusColor(_selectedProposal.StatusCode); color: #fff; font-size: 0.68rem; padding: 2px 8px; border-radius: 10px; font-weight: 600;">
+                            @ProposalStatusLabel(_selectedProposal.StatusCode)
+                        </span>
+                    </div>
+                </div>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="@(() => _proposalDetailOpen = false)" />
+            </div>
+
+            <div style="flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px;">
+                @* Series link *@
+                @if (!string.IsNullOrWhiteSpace(_selectedProposal.SeriesSlug))
+                {
+                    <div style="font-size: 0.8rem;">
+                        <span style="color: #94a3b8;">Series: </span>
+                        <a href="/series/@_selectedProposal.SeriesSlug" target="_blank" style="color: #4f46e5; text-decoration: none; font-weight: 500;">
+                            @_selectedProposal.SeriesSlug
+                        </a>
+                    </div>
+                }
+
+                @* Submitted by / at *@
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div>
+                        <div style="font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 2px;">Submitted By</div>
+                        <div style="font-size: 0.85rem; color: #111827; font-weight: 500;">@_selectedProposal.SubmittedByDisplayName</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 2px;">Submitted At</div>
+                        <div style="font-size: 0.85rem; color: #111827;">@_selectedProposal.SubmittedAtUtc.ToString("MMM d, yyyy HH:mm")</div>
+                    </div>
+                </div>
+
+                @* Reviewed by / at *@
+                @if (_selectedProposal.ReviewedByDisplayName is not null || _selectedProposal.ReviewedAtUtc.HasValue)
+                {
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <div style="font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 2px;">Reviewed By</div>
+                            <div style="font-size: 0.85rem; color: #111827; font-weight: 500;">@(_selectedProposal.ReviewedByDisplayName ?? "—")</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 2px;">Reviewed At</div>
+                            <div style="font-size: 0.85rem; color: #111827;">@(_selectedProposal.ReviewedAtUtc?.ToString("MMM d, yyyy HH:mm") ?? "—")</div>
+                        </div>
+                    </div>
+                }
+
+                @* Withdrawn at *@
+                @if (_selectedProposal.StatusCode == "WITHDRAWN" && _selectedProposal.WithdrawnAtUtc.HasValue)
+                {
+                    <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 10px 14px;">
+                        <div style="font-size: 0.7rem; color: #dc2626; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 2px;">Withdrawn</div>
+                        <div style="font-size: 0.85rem; color: #991b1b;">@_selectedProposal.WithdrawnAtUtc.Value.ToString("MMM d, yyyy HH:mm")</div>
+                    </div>
+                }
+
+                @* Genre snapshot *@
+                <div>
+                    <div style="font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 4px;">Genre</div>
+                    <div style="font-size: 0.85rem; color: #111827;">@_selectedProposal.GenreSnapshot</div>
+                </div>
+
+                @* Synopsis snapshot (bounded scrollable box) *@
+                <div>
+                    <div style="font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 4px;">Synopsis Snapshot</div>
+                    <div style="max-height: 220px; overflow-y: auto; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; font-size: 0.85rem; color: #374151; line-height: 1.6;">
+                        @_selectedProposal.SynopsisSnapshot
+                    </div>
+                </div>
+
+                @* Comments *@
+                @if (!string.IsNullOrWhiteSpace(_selectedProposal.Comments))
+                {
+                    <div>
+                        <div style="font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 4px;">Review Comments</div>
+                        <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 12px 14px; font-size: 0.85rem; color: #92400e; line-height: 1.6;">
+                            @_selectedProposal.Comments
+                        </div>
+                    </div>
+                }
+
+                @* Proposal file actions *@
+                <div>
+                    <div style="font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 6px;">Proposal File</div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                   Href="@_selectedProposal.ProposalFile.SecureUrl" Target="_blank"
+                                   StartIcon="@Icons.Material.Filled.OpenInNew">
+                            Open Proposal File
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Default"
+                                   Href="@_selectedProposal.ProposalFile.SecureUrl" Target="_blank"
+                                   StartIcon="@Icons.Material.Filled.Download">
+                            Download Proposal File
+                        </MudButton>
+                    </div>
+                    <div style="font-size: 0.72rem; color: #94a3b8; margin-top: 4px;">
+                        @_selectedProposal.ProposalFile.OriginalFileName · @FormatFileSize(_selectedProposal.ProposalFile.FileSizeBytes)
+                    </div>
+                </div>
+
+                @* Markup file actions *@
+                <div>
+                    <div style="font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 6px;">Markup File</div>
+                    @if (_selectedProposal.MarkupFile is not null)
+                    {
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                       Href="@_selectedProposal.MarkupFile.SecureUrl" Target="_blank"
+                                       StartIcon="@Icons.Material.Filled.OpenInNew">
+                                Open Markup File
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Default"
+                                       Href="@_selectedProposal.MarkupFile.SecureUrl" Target="_blank"
+                                       StartIcon="@Icons.Material.Filled.Download">
+                                Download Markup File
+                            </MudButton>
+                        </div>
+                        <div style="font-size: 0.72rem; color: #94a3b8; margin-top: 4px;">
+                            @_selectedProposal.MarkupFile.OriginalFileName · @FormatFileSize(_selectedProposal.MarkupFile.FileSizeBytes)
+                        </div>
+                    }
+                    else
+                    {
+                        <div style="font-size: 0.85rem; color: #94a3b8; font-style: italic;">No markup file uploaded yet.</div>
+                    }
+                </div>
+            </div>
+        }
+    </MudCard>
+</MudOverlay>
 
 @* ── Cancel Draft Confirmation Modal ── *@
 @* Only reachable for PROPOSAL_DRAFT series. Transitions series to CANCELLED. *@
@@ -889,6 +1159,142 @@
         }
     }
 
+    // ── Proposal tracking state ───────────────────────────────────────────────
+    private bool _proposalDetailOpen;
+    private MangakaSeriesProposalDto? _selectedProposal;
+    private string _proposalSelectedFilter = "All";
+    private string _proposalSearchText = "";
+    private string _proposalSortMode = "submitted";
+    private int _proposalPage = 1;
+    private const int ProposalPageSize = 8;
+    private List<MangakaSeriesProposalDto> _proposalData = [];
+
+    private static readonly (string Label, string[] Statuses)[] ProposalFilterGroups =
+    [
+        ("All", []),
+        ("Under Editorial Review", ["UNDER_EDITORIAL_REVIEW"]),
+        ("Under Board Review", ["UNDER_BOARD_REVIEW"]),
+        ("Revision Requested", ["REVISION_REQUESTED"]),
+        ("Approved", ["APPROVED"]),
+        ("Cancelled", ["CANCELLED"]),
+        ("Withdrawn", ["WITHDRAWN"]),
+    ];
+
+    private int ProposalFilterCount(string[] statuses)
+        => statuses.Length == 0
+            ? _proposalData.Count
+            : _proposalData.Count(p => statuses.Contains(p.StatusCode));
+
+    private List<MangakaSeriesProposalDto> AllFilteredProposals
+    {
+        get
+        {
+            var group = ProposalFilterGroups.FirstOrDefault(g => g.Label == _proposalSelectedFilter);
+            IEnumerable<MangakaSeriesProposalDto> result = _proposalData;
+
+            if (group.Statuses is { Length: > 0 })
+                result = result.Where(p => group.Statuses.Contains(p.StatusCode));
+
+            if (!string.IsNullOrWhiteSpace(_proposalSearchText))
+            {
+                var term = _proposalSearchText.Trim();
+                result = result.Where(p =>
+                    p.SeriesTitle.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                    p.ProposalTitle.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                    p.GenreSnapshot.Contains(term, StringComparison.OrdinalIgnoreCase));
+            }
+
+            result = _proposalSortMode switch
+            {
+                "reviewed" => result.OrderByDescending(p => p.ReviewedAtUtc ?? DateTime.MinValue),
+                "title" => result.OrderBy(p => p.ProposalTitle, StringComparer.OrdinalIgnoreCase),
+                "status" => result.OrderBy(p => ProposalStatusLabel(p.StatusCode), StringComparer.OrdinalIgnoreCase),
+                _ => result.OrderByDescending(p => p.SubmittedAtUtc),
+            };
+
+            return result.ToList();
+        }
+    }
+
+    private int ProposalTotalPages => ProposalPageSize == 0
+        ? 0
+        : (int)Math.Ceiling((double)AllFilteredProposals.Count / ProposalPageSize);
+
+    private List<MangakaSeriesProposalDto> PagedProposals =>
+        AllFilteredProposals
+            .Skip((_proposalPage - 1) * ProposalPageSize)
+            .Take(ProposalPageSize)
+            .ToList();
+
+    private void ResetProposalPage() => _proposalPage = 1;
+
+    private static string ProposalStatusLabel(string statusCode) => statusCode switch
+    {
+        "UNDER_EDITORIAL_REVIEW" => "Under Editorial Review",
+        "UNDER_BOARD_REVIEW" => "Under Board Review",
+        "REVISION_REQUESTED" => "Revision Requested",
+        "APPROVED" => "Approved",
+        "CANCELLED" => "Cancelled",
+        "WITHDRAWN" => "Withdrawn",
+        _ => statusCode.Replace("_", " "),
+    };
+
+    private static string ProposalStatusColor(string statusCode) => statusCode switch
+    {
+        "UNDER_EDITORIAL_REVIEW" => "#0ea5e9",
+        "UNDER_BOARD_REVIEW" => "#8b5cf6",
+        "REVISION_REQUESTED" => "#f59e0b",
+        "APPROVED" => "#059669",
+        "CANCELLED" => "#dc2626",
+        "WITHDRAWN" => "#64748b",
+        _ => "#64748b",
+    };
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024d:0.#} KB";
+        return $"{bytes / (1024d * 1024d):0.#} MB";
+    }
+
+    private string ProposalEmptyStateMessage =>
+        !string.IsNullOrWhiteSpace(_proposalSearchText)
+            ? "No proposals match your search."
+            : _proposalSelectedFilter switch
+            {
+                "Under Editorial Review" => "No proposals are currently under editorial review.",
+                "Under Board Review" => "No proposals are currently under board review.",
+                "Revision Requested" => "No proposals currently need revisions.",
+                "Approved" => "No approved proposals yet.",
+                "Cancelled" => "No cancelled proposals yet.",
+                "Withdrawn" => "No withdrawn proposals yet.",
+                _ => "You don't have any tracked proposals yet.",
+            };
+
+    private void OpenProposalDetail(MangakaSeriesProposalDto proposal)
+    {
+        _selectedProposal = proposal;
+        _proposalDetailOpen = true;
+    }
+
+    private async Task LoadProposalTrackingAsync()
+    {
+        if (_currentUserId is null || _currentUserId == Guid.Empty)
+        {
+            _proposalData = [];
+            return;
+        }
+
+        try
+        {
+            _proposalData = (await MangakaSeriesApiClient.GetMySeriesProposalsAsync(_currentUserId.Value)).ToList();
+        }
+        catch
+        {
+            _proposalData = [];
+        }
+    }
+
     // ── Cancel Draft state ────────────────────────────────────────────────────────
     private bool _cancelDraftDialogOpen;
     private Guid _cancelDraftSeriesId;
@@ -1289,6 +1695,7 @@
     private readonly List<NavItem> _navItems =
     [
         new("current", "Current Series", Icons.Material.Filled.ViewModule),
+        new("proposals", "Series Proposals", Icons.Material.Filled.Description),
         new("review", "Assistant Review", Icons.Material.Filled.AssignmentTurnedIn),
     ];
 
@@ -1439,6 +1846,7 @@
 
         await LoadSeriesAsync();
         await LoadTasksAsync();
+        await LoadProposalTrackingAsync();
     }
 
     private async Task LoadSeriesAsync()

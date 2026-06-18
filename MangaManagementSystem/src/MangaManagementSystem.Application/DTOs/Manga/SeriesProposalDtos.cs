@@ -66,4 +66,38 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         [Required] Guid SeriesProposalId,
         [Required] string Comments
     );
+
+    /// <summary>
+    /// Read-only proposal tracking DTO for Mangaka users. Shows scoped proposals with
+    /// series info and file references for the tracking dashboard.
+    /// </summary>
+    public sealed record MangakaSeriesProposalDto(
+        Guid SeriesProposalId,
+        Guid SeriesId,
+        string SeriesSlug,
+        string SeriesTitle,
+        short ProposalVersionNo,
+        string ProposalTitle,
+        string SynopsisSnapshot,
+        string GenreSnapshot,
+        string StatusCode,
+        DateTime SubmittedAtUtc,
+        DateTime? WithdrawnAtUtc,
+        DateTime? ReviewedAtUtc,
+        string? Comments,
+        string SubmittedByDisplayName,
+        string? ReviewedByDisplayName,
+        ProposalFileRefDto ProposalFile,
+        ProposalFileRefDto? MarkupFile);
+
+    /// <summary>
+    /// Lean file reference for API-facing DTOs. Maps FileResource.CloudinarySecureUrl → SecureUrl
+    /// to avoid exposing Cloudinary naming in the UI layer.
+    /// </summary>
+    public sealed record ProposalFileRefDto(
+        Guid FileResourceId,
+        string OriginalFileName,
+        string ContentType,
+        long FileSizeBytes,
+        string SecureUrl);
 }

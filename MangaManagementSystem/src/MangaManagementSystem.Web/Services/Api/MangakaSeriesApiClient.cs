@@ -291,6 +291,31 @@ namespace MangaManagementSystem.Web.Services.Api
             throw new InvalidOperationException(message);
         }
 
+        public async Task<IReadOnlyList<MangakaSeriesProposalDto>> GetMySeriesProposalsAsync(
+            Guid actorUserId,
+            CancellationToken cancellationToken = default)
+        {
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Get, "api/mangaka/series/proposals");
+            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var proposals = await response.Content.ReadFromJsonAsync<List<MangakaSeriesProposalDto>>(
+                    cancellationToken: cancellationToken);
+
+                return proposals ?? new List<MangakaSeriesProposalDto>();
+            }
+
+            var message = await ExtractErrorMessageAsync(response);
+            _logger.LogWarning(
+                "Load my series proposals failed: {StatusCode} {ReasonPhrase}",
+                (int)response.StatusCode, response.ReasonPhrase);
+
+            throw new InvalidOperationException(message);
+        }
+
         private static async Task<string> ExtractErrorMessageAsync(HttpResponseMessage response)
         {
             try
