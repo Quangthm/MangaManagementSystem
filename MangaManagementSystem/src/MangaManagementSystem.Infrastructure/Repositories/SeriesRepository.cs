@@ -4,7 +4,9 @@ using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using System;
+using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -316,5 +318,82 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 _ =>
                     new InvalidOperationException("This draft could not be cancelled right now. Please try again.", ex)
             };
+
+        // ── Series detail by slug (read model) ─────────────────────────────────────
+
+        /// <inheritdoc />
+        public async Task<(Series? Series, IReadOnlyList<string> ContributorDisplayNames, IReadOnlyList<Chapter> Chapters, int TotalChapterCount)>
+            GetSeriesDetailBySlugAsync(
+                string slug,
+                int chapterPage,
+                int chapterPageSize,
+                CancellationToken cancellationToken = default)
+        {
+            var series = await _context.Series
+                .AsNoTracking()
+                .Include(s => s.CoverFile)
+                .FirstOrDefaultAsync(s => s.Slug == slug, cancellationToken);
+
+            if (series is null)
+                return (null, Array.Empty<string>(), Array.Empty<Chapter>(), 0);
+
+            // Active contributor display names (Option B — all active contributors).
+            var contributorNames = await _context.SeriesContributors
+                .AsNoTracking()
+                .Where(sc => sc.SeriesId == series.SeriesId && sc.EndDate == null && sc.User != null)
+                .Select(sc => sc.User!.DisplayName)
+                .ToListAsync(cancellationToken);
+
+            // Paginated chapters sorted by ChapterNumberLabel.
+            int totalChapterCount = await _context.Chapters
+                .CountAsync(c => c.SeriesId == series.SeriesId, cancellationToken);
+
+            int skip = (chapterPage - 1) * chapterPageSize;
+
+            var chapters = await _context.Chapters
+                .AsNoTracking()
+                .Where(c => c.SeriesId == series.SeriesId)
+                .OrderBy(c => c.ChapterNumberLabel)
+                .Skip(skip)
+                .Take(chapterPageSize)
+                .ToListAsync(cancellationToken);
+
+            return (series, contributorNames, chapters, totalChapterCount);
+        }
+
+        // ── Workspace entry access check (read model) ───────────────────────────────
+
+        private static readonly string[] AllowedWorkspaceRoles = { "Mangaka", "Tantou Editor", "Assistant" };
+
+        /// <inheritdoc />
+        public async Task<(Guid SeriesId, string Slug, string Title, bool CanAccess)?>
+            GetWorkspaceEntryBySlugAsync(
+                string slug,
+                Guid actorUserId,
+                CancellationToken cancellationToken = default)
+        {
+            var series = await _context.Series
+                .AsNoTracking()
+                .Where(s => s.Slug == slug)
+                .Select(s => new { s.SeriesId, s.Slug, s.Title })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (series is null)
+                return null;
+
+            bool canAccess = await _context.SeriesContributors
+                .AsNoTracking()
+                .AnyAsync(sc =>
+                    sc.SeriesId == series.SeriesId &&
+                    sc.UserId == actorUserId &&
+                    sc.EndDate == null &&
+                    sc.User != null &&
+                    sc.User.StatusCode == "ACTIVE" &&
+                    sc.User.Role != null &&
+                    AllowedWorkspaceRoles.Contains(sc.User.Role.RoleName),
+                    cancellationToken);
+
+            return (series.SeriesId, series.Slug, series.Title, canAccess);
+        }
     }
 }

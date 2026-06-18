@@ -90,5 +90,35 @@ namespace MangaManagementSystem.Domain.Interfaces
             long? coverFileSizeBytes,
             string? coverSha256Hash,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Returns series detail by slug with CoverFile, active contributors, and paginated chapters.
+        /// Used by the /series/{slug} detail page. Returns null if series not found.
+        /// EF Core read query — no stored procedure.
+        /// </summary>
+        Task<(Series? Series, IReadOnlyList<string> ContributorDisplayNames, IReadOnlyList<Chapter> Chapters, int TotalChapterCount)>
+            GetSeriesDetailBySlugAsync(
+                string slug,
+                int chapterPage,
+                int chapterPageSize,
+                CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Checks if the actor has workspace access for the specified series.
+        /// Returns (SeriesId, Slug, Title, CanAccess).
+        /// CanAccess is true if:
+        /// - actor account status == ACTIVE
+        /// - actor role is Mangaka, Tantou Editor, or Assistant
+        /// - Series.Slug == slug
+        /// - SeriesContributor.UserId == actorUserId
+        /// - SeriesContributor.EndDate IS NULL
+        /// Returns null if series not found.
+        /// EF Core read query — no stored procedure.
+        /// </summary>
+        Task<(Guid SeriesId, string Slug, string Title, bool CanAccess)?>
+            GetWorkspaceEntryBySlugAsync(
+                string slug,
+                Guid actorUserId,
+                CancellationToken cancellationToken = default);
     }
 }
