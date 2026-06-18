@@ -342,6 +342,25 @@ manga.usp_FileResource_Create
 - If Cloudinary upload succeeds but the later SQL workflow fails, the backend should try to delete the uploaded Cloudinary asset as cleanup.
 - File creation itself does not always need a separate audit event; the meaningful business action should be audited by the caller, such as `SERIES_PROPOSAL_SUBMITTED`, `CHAPTER_PAGE_VERSION_CREATED`, or `USER_AVATAR_UPDATED`.
 
+### MVP File Purpose Upload Format Matrix
+
+| File purpose code | Allowed extensions | Allowed content types | Cloudinary resource type | Notes |
+|---|---|---|---|---|
+| `SERIES_PROPOSAL` | `.pdf`, `.doc`, `.docx` | `application/pdf`, `application/msword`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | `raw` | Formal series proposal documents only. Markdown, plain text, and image files are not accepted for proposal submission in MVP. |
+| `SERIES_COVER` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Series cover image. |
+| `CHAPTER_PAGE_VERSION` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Official manga page image/version output. |
+| `EDITORIAL_ATTACHMENT` | `.pdf`, `.doc`, `.docx`, `.jpg`, `.jpeg`, `.png`, `.webp` | Proposal-document content types plus `image/jpeg`, `image/png`, `image/webp` | `raw` for documents; `image` for images | Editorial markup, review attachments, or supporting screenshots/documents. |
+| `REGISTRATION_PORTFOLIO` | `.pdf`, `.doc`, `.docx`, `.jpg`, `.jpeg`, `.png`, `.webp` | Proposal-document content types plus `image/jpeg`, `image/png`, `image/webp` | `raw` for documents; `image` for images | Optional portfolio submitted for account approval/profile review. |
+| `USER_AVATAR` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | User profile/avatar image. |
+
+### Validation Notes
+
+- The UI may use browser-side file filters for convenience, but backend Application validation remains authoritative.
+- Backend validation should check both file extension and content type when possible.
+- Cloudinary cleanup should use the resource type associated with the accepted file purpose and uploaded content type.
+- SQL stored procedures should receive validated file metadata and do not need to duplicate extension/MIME validation.
+
+
 ### System Should Try To
 
 - Keep file references consistent.
@@ -588,6 +607,8 @@ audit.usp_AuditEvent_Append
 
 - Proposal file is required for formal proposal submission.
 - The proposal file must be stored as `FileResource` with `file_purpose_code = SERIES_PROPOSAL`.
+- `SERIES_PROPOSAL` upload accepts only `.pdf`, `.doc`, and `.docx` files in MVP. Markdown, plain text, and image files are not accepted for proposal submission.
+- Proposal document uploads should be stored in Cloudinary using the `raw` resource type.
 - First submission requires an active Mangaka contributor but does not require an active Tantou Editor contributor already assigned to the series.
 - Submitted proposals appear in the editorial review queue for active Tantou Editors.
 - The UI may prioritize unclaimed proposals first, but the database should not block multiple Tantou Editors from becoming active contributors to the same series.

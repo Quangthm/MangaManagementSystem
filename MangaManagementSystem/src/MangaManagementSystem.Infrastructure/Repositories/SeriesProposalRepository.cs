@@ -9,6 +9,7 @@ using System.Data;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Data.Common;
 
 namespace MangaManagementSystem.Infrastructure.Repositories
 {
@@ -158,6 +159,108 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 parameters);
 
             return (Guid)outParam.Value;
+        }
+
+        /// <summary>
+        /// Calls <c>manga.usp_SeriesProposal_Submit</c> via ADO.NET StoredProcedure command.
+        /// Uses strongly-typed SqlParameters and output parameter capture, consistent with
+        /// SeriesRepository.CreateSeriesDraftViaProcAsync.
+        /// Maps known custom SQL error numbers to user-safe InvalidOperationException messages.
+        /// Raw SQL error text is never surfaced to callers.
+        /// </summary>
+        public async Task<(Guid SeriesProposalId, short ProposalVersionNo)> SubmitSeriesProposalViaProcAsync(
+            Guid seriesId,
+            Guid submittedByUserId,
+            string originalFileName,
+            string cloudinaryPublicId,
+            string cloudinarySecureUrl,
+            string contentType,
+            long fileSizeBytes,
+            string sha256Hash,
+            CancellationToken cancellationToken = default)
+        {
+            var conn = _dbContext.Database.GetDbConnection();
+            await using DbCommand cmd = conn.CreateCommand();
+            cmd.CommandText = "manga.usp_SeriesProposal_Submit";
+            cmd.CommandType = CommandType.StoredProcedure;
+
+            cmd.Parameters.Add(new SqlParameter("@series_id", SqlDbType.UniqueIdentifier) { Value = seriesId });
+            cmd.Parameters.Add(new SqlParameter("@submitted_by_user_id", SqlDbType.UniqueIdentifier) { Value = submittedByUserId });
+            cmd.Parameters.Add(new SqlParameter("@original_file_name", SqlDbType.NVarChar, 260) { Value = originalFileName });
+            cmd.Parameters.Add(new SqlParameter("@cloudinary_public_id", SqlDbType.NVarChar, 255) { Value = cloudinaryPublicId });
+            cmd.Parameters.Add(new SqlParameter("@cloudinary_secure_url", SqlDbType.NVarChar, 1000) { Value = cloudinarySecureUrl });
+            cmd.Parameters.Add(new SqlParameter("@content_type", SqlDbType.NVarChar, 100) { Value = contentType });
+            cmd.Parameters.Add(new SqlParameter("@file_size_bytes", SqlDbType.BigInt) { Value = fileSizeBytes });
+            cmd.Parameters.Add(new SqlParameter("@sha256_hash", SqlDbType.Char, 64) { Value = sha256Hash });
+
+            var outProposalId = new SqlParameter("@series_proposal_id", SqlDbType.UniqueIdentifier)
+            {
+                Direction = ParameterDirection.Output
+            };
+            cmd.Parameters.Add(outProposalId);
+
+            var outVersionNo = new SqlParameter("@proposal_version_no", SqlDbType.SmallInt)
+            {
+                Direction = ParameterDirection.Output
+            };
+            cmd.Parameters.Add(outVersionNo);
+
+            if (conn.State != System.Data.ConnectionState.Open)
+            {
+                await conn.OpenAsync(cancellationToken);
+            }
+
+            try
+            {
+                await cmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+            catch (SqlException ex)
+            {
+                throw MapSqlException(ex);
+            }
+
+            var proposalId = (Guid)outProposalId.Value;
+            var versionNo = (short)outVersionNo.Value;
+
+            return (proposalId, versionNo);
+        }
+
+        // ── Custom error numbers raised by manga.usp_SeriesProposal_Submit ─────────
+        private const int ErrProposalSubmitLockFailed = 57001;
+        private const int ErrSeriesNotFound          = 57002;
+        private const int ErrNotProposalDraft        = 57003;
+        private const int ErrNotActiveMangakaContrib = 57004;
+
+        // SQL Server constraint violation numbers.
+        private const int ErrDuplicateKey  = 2627;
+        private const int ErrUniqueIndex   = 2601;
+        private const int ErrConstraint    = 547;
+
+        /// <summary>
+        /// Translates known SqlException error numbers into user-safe messages.
+        /// Raw SQL text is never propagated.
+        /// </summary>
+        private static InvalidOperationException MapSqlException(SqlException ex)
+        {
+            string message = ex.Number switch
+            {
+                ErrProposalSubmitLockFailed =>
+                    "Could not process the proposal submission right now. Please try again.",
+                ErrSeriesNotFound =>
+                    "The selected series could not be found.",
+                ErrNotProposalDraft =>
+                    "Only a series in draft status can be submitted for editorial review.",
+                ErrNotActiveMangakaContrib =>
+                    "Only an active Mangaka contributor can submit a proposal for this series.",
+                ErrDuplicateKey or ErrUniqueIndex =>
+                    "A proposal submission conflict occurred. Please try again.",
+                ErrConstraint =>
+                    "The proposal submission was rejected due to an invalid value. Please check the details and try again.",
+                _ =>
+                    "This proposal could not be submitted right now. Please try again."
+            };
+
+            return new InvalidOperationException(message, ex);
         }
     }
 }

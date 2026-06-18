@@ -172,7 +172,9 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<IEnumerable<SeriesDto>> GetAllSeriesAsync()
         {
-            var entities = await _unitOfWork.Series.GetAllAsync();
+            // Use the cover-included query so the dashboard can display cover thumbnails
+            // without a per-card N+1 fetch. Read-only; no tracking required.
+            var entities = await _unitOfWork.Series.GetAllWithCoverAsync();
             return entities.Select(MapToDto);
         }
 
@@ -227,7 +229,12 @@ namespace MangaManagementSystem.Application.Services
             s.CreatedAtUtc,
             s.UpdatedAtUtc,
             s.UpdatedByUserId,
-            s.PublicationFrequencyCode
+            s.PublicationFrequencyCode,
+            // CoverUrl: populated only when the CoverFile navigation is loaded and not deleted.
+            // Display-only — never used for upload/update workflows.
+            CoverUrl: s.CoverFile?.DeletedAtUtc == null
+                ? s.CoverFile?.CloudinarySecureUrl
+                : null
         );
     }
 }

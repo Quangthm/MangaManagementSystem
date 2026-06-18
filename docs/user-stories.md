@@ -50,6 +50,12 @@ Basis: Verified MVP business rules, updated PageRegion segmentation rules, and p
 | US-USER-007 | BR-USER-014, BR-USER-015, BR-USER-016 | As a General System User, I want other users to be shown by display name instead of only username, so that task assignments, annotations, notifications, board votes, and contributor lists are easier to understand. |
 | US-USER-008 | BR-USER-018, BR-USER-019, BR-USER-021 | As a General System User, I want to update my display name without entering my password, so that I can adjust my visible profile name without changing my login identity or account security settings. |
 | US-USER-009 | BR-FILE-011, BR-FILE-012, BR-FILE-013, BR-FILE-014, BR-FILE-015, BR-FILE-016 | As a General System User, I may receive an optional warning when I upload a file that appears identical to an existing active file, so that I can avoid accidental duplicate uploads when the MVP UI supports this warning. |
+| US-USER-010 | BR-FILE-017, BR-FILE-018, BR-FILE-019, BR-FILE-020 | As a General System User, I want the system to accept only the approved file formats for each file purpose, so that proposal documents, covers, page versions, portfolios, attachments, and avatars are stored consistently and safely. |
+
+### File Upload Acceptance Note
+
+Uploaded business files should follow the MVP file-purpose acceptance matrix in `business-rules.md` and `functional-requirements.md`. In particular, `SERIES_PROPOSAL` accepts only `.pdf`, `.doc`, and `.docx` formal documents in MVP.
+
 
 ---
 
@@ -85,7 +91,7 @@ Basis: Verified MVP business rules, updated PageRegion segmentation rules, and p
 | US-MANGAKA-001B | BR-SERIES-020, BR-SERIES-022, BR-SERIES-023, BR-SERIES-024 | As a Mangaka, I want normal series profile editing to lock after the series leaves `PROPOSAL_DRAFT`, so that editorial and board review use stable information while I continue production through chapters, pages, versions, regions, and tasks. |
 | US-MANGAKA-002 | BR-SERIES-010, BR-SERIES-011, BR-SC-001, BR-SC-003, BR-SC-004, BR-SC-005 | As a Mangaka, I want to manage active contributors for a series, so that the production team is visible and duplicate active membership is avoided. |
 | US-MANGAKA-003 | BR-SC-006, BR-SC-007, BR-SC-008 | As a Mangaka, I want my draft series to be submitted for editorial review without needing a Tantou Editor to already be assigned, so that active editors can later find and handle my proposal from the review queue. |
-| US-MANGAKA-004 | BR-PROP-001, BR-PROP-004, BR-PROP-005, BR-PROP-006, BR-PROP-021 | As a Mangaka, I want to submit a formal series proposal with a proposal file and submission-time snapshot, so that editors can evaluate the exact version I submitted. |
+| US-MANGAKA-004 | BR-PROP-001, BR-PROP-004, BR-PROP-005, BR-PROP-006, BR-PROP-021, BR-FILE-018 | As a Mangaka, I want to submit a formal series proposal with a `.pdf`, `.doc`, or `.docx` proposal document and submission-time snapshot, so that editors can evaluate the exact version I submitted. |
 | US-MANGAKA-005 | BR-PROP-002, BR-PROP-003, BR-PROP-007, BR-PROP-008 | As a Mangaka, I want proposal revisions to create new proposal versions instead of overwriting old submissions, so that previous review packages remain historically accurate. |
 | US-MANGAKA-006 | BR-PROP-010, BR-PROP-011 | As a Mangaka, I want to withdraw a proposal before final approval or cancellation, so that I can stop review when the submission is no longer intended to proceed. |
 | US-MANGAKA-007 | BR-PROP-009, BR-PROP-017, BR-PROP-018 | As a Mangaka, I want to view proposal status and version history for my series, so that I understand previous submissions and current review progress. |

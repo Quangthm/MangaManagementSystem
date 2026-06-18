@@ -9,6 +9,8 @@ namespace MangaManagementSystem.Application
         public static IServiceCollection AddApplicationServices(
             this IServiceCollection services)
         {
+            // Register all MediatR command and query handlers
+            // contained in the Application assembly.
             services.AddMediatR(configuration =>
                 configuration.RegisterServicesFromAssembly(
                     typeof(DependencyInjection).Assembly));
