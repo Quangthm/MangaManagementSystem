@@ -10,7 +10,6 @@
 @inject ISnackbar Snackbar
 @inject ISeriesApiClient SeriesApiClient
 @inject AuthenticationStateProvider AuthStateProvider
-@inject IDialogService DialogService
 
 <div style="min-height: 100vh; background: #f8fafc; padding: 40px 32px;">
     @if (_loading)
@@ -247,86 +246,104 @@
     }
 </div>
 
-@* ── Contributor panel dialog ── *@
-<MudDialog @bind-Visible="_contributorDialogOpen">
-    <DialogContent>
-        @if (_series is not null)
+@* ── Contributor panel drawer (right side) ── *@
+<MudDrawer @bind-Open="_contributorDrawerOpen" Anchor="Anchor.End" Variant="DrawerVariant.Temporary"
+           Style="width: 380px;">
+    <MudDrawerHeader>
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 4px;">
+            <div style="font-weight: 700; font-size: 1rem; color: #111827;">Contributors</div>
+            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                           OnClick="@(() => _contributorDrawerOpen = false)" />
+        </div>
+    </MudDrawerHeader>
+
+    @* Filters *@
+    <div style="padding: 8px 16px 16px; border-bottom: 1px solid #f1f5f9;">
+        <div style="display: flex; gap: 12px; margin-bottom: 8px;">
+            <MudSelect T="string" @bind-Value="_contributorFilterStatus" Variant="Variant.Outlined"
+                       Label="Status" Margin="Margin.Dense" Dense="true" Style="flex: 1; font-size: 0.8rem;">
+                <MudSelectItem T="string" Value="@("all")">All</MudSelectItem>
+                <MudSelectItem T="string" Value="@("active")">Active</MudSelectItem>
+                <MudSelectItem T="string" Value="@("past")">Past</MudSelectItem>
+            </MudSelect>
+            <MudSelect T="string" @bind-Value="_contributorFilterRole" Variant="Variant.Outlined"
+                       Label="Role" Margin="Margin.Dense" Dense="true" Style="flex: 1; font-size: 0.8rem;">
+                <MudSelectItem T="string" Value="@("all")">All roles</MudSelectItem>
+                <MudSelectItem T="string" Value="@("Mangaka")">Mangaka</MudSelectItem>
+                <MudSelectItem T="string" Value="@("Tantou Editor")">Tantou Editor</MudSelectItem>
+                <MudSelectItem T="string" Value="@("Assistant")">Assistant</MudSelectItem>
+            </MudSelect>
+        </div>
+        <div style="font-size: 0.75rem; color: #94a3b8;">
+            @FilteredContributors.Count contributor(s)
+        </div>
+    </div>
+
+    @* Contributor list *@
+    <div style="flex: 1; overflow-y: auto; padding: 8px 16px;">
+        @if (_series is null)
         {
-            var active = _series.Contributors.Where(c => c.EndDate == null).ToList();
-            var past = _series.Contributors.Where(c => c.EndDate != null).ToList();
-
-            @* Active contributors *@
-            <div style="font-weight: 700; font-size: 1rem; color: #111827; margin-bottom: 12px;">Active Contributors</div>
-            @if (active.Count == 0)
+            <div style="color: #94a3b8; font-size: 0.85rem; padding: 16px 0;">No series data available.</div>
+        }
+        else if (FilteredContributors.Count == 0)
+        {
+            <div style="color: #94a3b8; font-size: 0.85rem; padding: 16px 0;">No contributors match the selected filters.</div>
+        }
+        else
+        {
+            @foreach (var c in FilteredContributors)
             {
-                <div style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 20px;">No active contributors.</div>
-            }
-            else
-            {
-                <div style="margin-bottom: 24px;">
-                    @foreach (var c in active)
-                    {
-                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f1f5f9;">
-                            <div>
-                                <div style="font-weight: 600; color: #111827; font-size: 0.9rem;">@c.DisplayName</div>
-                                <div style="color: #6366f1; font-size: 0.75rem; font-weight: 500;">@c.RoleName</div>
-                            </div>
-                            <div style="text-align: right;">
-                                <div style="font-size: 0.75rem; color: #10b981; font-weight: 600;">Active</div>
-                                <div style="font-size: 0.7rem; color: #94a3b8;">Started @c.StartDate.ToString("MMM d, yyyy")</div>
-                            </div>
-                        </div>
-                    }
-                </div>
-            }
-
-            @* Past contributors *@
-            <div style="font-weight: 700; font-size: 1rem; color: #111827; margin-bottom: 12px;">Past Contributors</div>
-            @if (past.Count == 0)
-            {
-                <div style="color: #94a3b8; font-size: 0.85rem;">No past contributors.</div>
-            }
-            else
-            {
-                <div>
-                    @foreach (var c in past)
-                    {
-                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f1f5f9;">
-                            <div>
-                                <div style="font-weight: 600; color: #111827; font-size: 0.9rem;">@c.DisplayName</div>
-                                <div style="color: #6366f1; font-size: 0.75rem; font-weight: 500;">@c.RoleName</div>
-                            </div>
-                            <div style="text-align: right;">
-                                <div style="font-size: 0.75rem; color: #94a3b8; font-weight: 600;">Ended</div>
-                                <div style="font-size: 0.7rem; color: #94a3b8;">
-                                    Started @c.StartDate.ToString("MMM d, yyyy")
-                                </div>
-                                @if (c.EndDate.HasValue)
-                                {
-                                    <div style="font-size: 0.7rem; color: #94a3b8;">
-                                        Stopped @c.EndDate.Value.ToString("MMM d, yyyy")
-                                    </div>
-                                }
-                            </div>
-                        </div>
-                    }
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f1f5f9;">
+                    <div>
+                        <div style="font-weight: 600; color: #111827; font-size: 0.9rem;">@c.DisplayName</div>
+                        <div style="color: #6366f1; font-size: 0.75rem; font-weight: 500;">@c.RoleName</div>
+                    </div>
+                    <div style="text-align: right;">
+                        @if (c.EndDate == null)
+                        {
+                            <div style="font-size: 0.75rem; color: #10b981; font-weight: 600;">Active</div>
+                            <div style="font-size: 0.7rem; color: #94a3b8;">Started @c.StartDate.ToString("MMM d, yyyy")</div>
+                        }
+                        else
+                        {
+                            <div style="font-size: 0.75rem; color: #94a3b8; font-weight: 600;">Ended</div>
+                            <div style="font-size: 0.7rem; color: #94a3b8;">Started @c.StartDate.ToString("MMM d, yyyy")</div>
+                            <div style="font-size: 0.7rem; color: #94a3b8;">Stopped @c.EndDate.Value.ToString("MMM d, yyyy")</div>
+                        }
+                    </div>
                 </div>
             }
         }
-    </DialogContent>
-    <DialogActions>
-        <MudButton Variant="Variant.Text" Color="Color.Default" OnClick="@(() => _contributorDialogOpen = false)">
-            Close
-        </MudButton>
-    </DialogActions>
-</MudDialog>
+    </div>
+</MudDrawer>
 
 @code {
-    private bool _contributorDialogOpen;
+    // ── Contributor drawer state ──
+    private bool _contributorDrawerOpen;
+    private string _contributorFilterStatus = "all";
+    private string _contributorFilterRole = "all";
+
+    private List<SeriesContributorSummaryDto> FilteredContributors
+    {
+        get
+        {
+            if (_series is null) return [];
+            var result = _series.Contributors.AsEnumerable();
+            if (_contributorFilterStatus == "active")
+                result = result.Where(c => c.EndDate == null);
+            else if (_contributorFilterStatus == "past")
+                result = result.Where(c => c.EndDate != null);
+            if (_contributorFilterRole != "all")
+                result = result.Where(c => c.RoleName == _contributorFilterRole);
+            return result.ToList();
+        }
+    }
 
     private void OpenContributorPanel()
     {
-        _contributorDialogOpen = true;
+        _contributorFilterStatus = "all";
+        _contributorFilterRole = "all";
+        _contributorDrawerOpen = true;
     }
 
     [Parameter] public string Slug { get; set; } = string.Empty;

@@ -131,7 +131,7 @@
                         {
                             var count = FilterCount(statuses);
                             var isActive = _selectedFilter == label;
-                            <button @onclick="@(() => _selectedFilter = label)"
+                            <button @onclick="@(() => { _selectedFilter = label; ResetDashboardPage(); })"
                                     style="padding: 6px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: @(isActive ? 600 : 500); cursor: pointer; white-space: nowrap;
                                            background: @(isActive ? "#4f46e5" : "#f1f5f9"); color: @(isActive ? "#fff" : "#475569");
                                            border: 1px solid @(isActive ? "#4f46e5" : "#e2e8f0"); transition: all 0.15s ease;">
@@ -143,20 +143,22 @@
                     @* Search *@
                     <div style="width: 220px; flex-shrink: 0;">
                         <MudTextField T="string" @bind-Value="_searchText"
-                                      Placeholder="Search by title or genre"
-                                      Adornment="Adornment.Start"
-                                      AdornmentIcon="@Icons.Material.Filled.Search"
-                                      Variant="Variant.Outlined" Margin="Margin.Dense"
-                                      Immediate="true"
-                                      Style="font-size: 0.8rem;" />
+                                       @bind-Value:after="ResetDashboardPage"
+                                       Placeholder="Search by title or genre"
+                                       Adornment="Adornment.Start"
+                                       AdornmentIcon="@Icons.Material.Filled.Search"
+                                       Variant="Variant.Outlined" Margin="Margin.Dense"
+                                       Immediate="true"
+                                       Style="font-size: 0.8rem;" />
                     </div>
 
                     @* Sort *@
                     <div style="width: 170px; flex-shrink: 0;">
                         <MudSelect T="string" @bind-Value="_sortMode"
-                                   Variant="Variant.Outlined" Margin="Margin.Dense"
-                                   Dense="true"
-                                   Style="font-size: 0.8rem;">
+                                    @bind-Value:after="ResetDashboardPage"
+                                    Variant="Variant.Outlined" Margin="Margin.Dense"
+                                    Dense="true"
+                                    Style="font-size: 0.8rem;">
                             <MudSelectItem T="string" Value="@("recent")">Recently Updated</MudSelectItem>
                             <MudSelectItem T="string" Value="@("newest")">Newest First</MudSelectItem>
                             <MudSelectItem T="string" Value="@("title")">Title A-Z</MudSelectItem>
@@ -164,7 +166,7 @@
                     </div>
                 </div>
 
-                @if (FilteredSeriesData.Count == 0)
+                @if (AllFilteredSeries.Count == 0)
                 {
                     @* Empty state *@
                     <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64px 24px; color: #94a3b8; gap: 16px;">
@@ -183,7 +185,7 @@
                 else
                 {
                 <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px;">
-                    @foreach (var series in FilteredSeriesData)
+                    @foreach (var series in PagedSeriesData)
                     {
                         @* ── Series Card ── *@
                         <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); position: relative; overflow: hidden; cursor: pointer; display: flex; flex-direction: column;"
@@ -207,7 +209,9 @@
                             }
 
                             @* Kebab menu — top-right over thumbnail *@
-                            <div style="position: absolute; top: 8px; right: 8px; z-index: 10;" @onclick:stopPropagation>
+                            @if (!IsAnyDashboardModalOpen)
+                            {
+                            <div style="position: absolute; top: 8px; right: 8px;" @onclick:stopPropagation>
                                 <div style="position: relative;">
                                     <MudIconButton Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small"
                                                    Style="background: rgba(255,255,255,0.85); border-radius: 50%;"
@@ -227,6 +231,7 @@
                                     }
                                 </div>
                             </div>
+                            }
 
                             @* Accent bar *@
                             <div style="height: 3px; background: @series.Color; flex-shrink: 0;"></div>
@@ -246,29 +251,32 @@
                                 </div>
                             </div>
 
-                            @* Card action row — visible primary actions for PROPOSAL_DRAFT *@
-                            @if (series.StatusCode == "PROPOSAL_DRAFT")
+                            @* Card action row — visible primary actions (hidden while modal open) *@
+                            @if (!IsAnyDashboardModalOpen)
                             {
-                                <div style="padding: 0 16px 14px; display: flex; gap: 8px;" @onclick:stopPropagation>
-                                    <MudButton Variant="Variant.Outlined" Size="Size.Small" FullWidth="true"
-                                               OnClick="@(() => OpenDraftDetails(series))">
-                                        View Draft
-                                    </MudButton>
-                                    <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" FullWidth="true"
-                                               StartIcon="@Icons.Material.Filled.Send"
-                                               OnClick="@(() => OpenSubmitProposal(series.Id, series.Title))">
-                                        Submit
-                                    </MudButton>
-                                </div>
-                            }
-                            else if (series.StatusCode is "UNDER_EDITORIAL_REVIEW" or "UNDER_BOARD_REVIEW")
-                            {
-                                <div style="padding: 0 16px 14px;" @onclick:stopPropagation>
-                                    <MudButton Variant="Variant.Outlined" Size="Size.Small" FullWidth="true"
-                                               OnClick="@(() => OpenReviewStatus(series))">
-                                        View Status
-                                    </MudButton>
-                                </div>
+                                @if (series.StatusCode == "PROPOSAL_DRAFT")
+                                {
+                                    <div style="padding: 0 16px 14px; display: flex; gap: 8px;" @onclick:stopPropagation>
+                                        <MudButton Variant="Variant.Outlined" Size="Size.Small" FullWidth="true"
+                                                   OnClick="@(() => OpenDraftDetails(series))">
+                                            View Draft
+                                        </MudButton>
+                                        <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" FullWidth="true"
+                                                   StartIcon="@Icons.Material.Filled.Send"
+                                                   OnClick="@(() => OpenSubmitProposal(series.Id, series.Title))">
+                                            Submit
+                                        </MudButton>
+                                    </div>
+                                }
+                                else if (series.StatusCode is "UNDER_EDITORIAL_REVIEW" or "UNDER_BOARD_REVIEW")
+                                {
+                                    <div style="padding: 0 16px 14px;" @onclick:stopPropagation>
+                                        <MudButton Variant="Variant.Outlined" Size="Size.Small" FullWidth="true"
+                                                   OnClick="@(() => OpenReviewStatus(series))">
+                                            View Status
+                                        </MudButton>
+                                    </div>
+                                }
                             }
                         </div>
                     }
@@ -284,6 +292,34 @@
                             <div style="color: #94a3b8; font-size: 0.75rem; text-align: center;">Start a new series draft</div>
                         </div>
                     </div>
+
+                    @* Pagination controls *@
+                    @if (DashboardTotalPages > 1)
+                    {
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 16px 0;">
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                       Disabled="@(_dashboardPage <= 1)"
+                                       OnClick="@(() => { _dashboardPage--; })">
+                                Prev
+                            </MudButton>
+                            @for (int p = 1; p <= DashboardTotalPages; p++)
+                            {
+                                int pageNum = p;
+                                bool isCurrent = pageNum == _dashboardPage;
+                                <MudButton Size="Size.Small"
+                                           Variant="@(isCurrent ? Variant.Filled : Variant.Outlined)"
+                                           Color="@(isCurrent ? Color.Primary : Color.Default)"
+                                           OnClick="@(() => _dashboardPage = pageNum)">
+                                    @pageNum
+                                </MudButton>
+                            }
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                       Disabled="@(_dashboardPage >= DashboardTotalPages)"
+                                       OnClick="@(() => { _dashboardPage++; })">
+                                Next
+                            </MudButton>
+                        </div>
+                    }
                 </div>
                 }
             }
@@ -787,6 +823,26 @@
     private bool _reviewStatusOpen;
     private SeriesCardData? _reviewSeries;
 
+    // ── Dashboard modal state ──
+    private bool IsAnyDashboardModalOpen =>
+        _cancelDraftDialogOpen || _newSeriesDialogOpen || _draftDetailsOpen || _reviewStatusOpen || _submitProposalDialogOpen;
+
+    // ── Dashboard pagination ──
+    private int _dashboardPage = 1;
+    private const int DashboardPageSize = 8;
+
+    private int DashboardTotalPages => DashboardPageSize == 0
+        ? 0
+        : (int)Math.Ceiling((double)AllFilteredSeries.Count / DashboardPageSize);
+
+    private List<SeriesCardData> PagedSeriesData =>
+        AllFilteredSeries
+            .Skip((_dashboardPage - 1) * DashboardPageSize)
+            .Take(DashboardPageSize)
+            .ToList();
+
+    private void ResetDashboardPage() => _dashboardPage = 1;
+
     private Guid? _currentUserId;
     private Guid? _openSeriesActionMenuId;
 
@@ -1263,7 +1319,7 @@
             ? _seriesData.Count
             : _seriesData.Count(s => statuses.Contains(s.StatusCode));
 
-    private List<SeriesCardData> FilteredSeriesData
+    private List<SeriesCardData> AllFilteredSeries
     {
         get
         {
