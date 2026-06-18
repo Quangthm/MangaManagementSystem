@@ -427,6 +427,14 @@
                         }
                     </MudSelect>
 
+                    <MudSelect T="string" Label="Publication Frequency (optional)" @bind-Value="_newDraftFrequency"
+                               Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true">
+                        <MudSelectItem Value="@((string?)null)">— Not set —</MudSelectItem>
+                        <MudSelectItem Value="@("WEEKLY")">Weekly</MudSelectItem>
+                        <MudSelectItem Value="@("MONTHLY")">Monthly</MudSelectItem>
+                        <MudSelectItem Value="@("IRREGULAR")">Irregular</MudSelectItem>
+                    </MudSelect>
+
                     @* Optional Series Cover Upload (purpose SERIES_COVER) *@
                     <div>
                         <div style="font-size: 0.78rem; font-weight: 600; color: #374151; margin-bottom: 6px;">Series Cover (optional)</div>
@@ -727,6 +735,7 @@
     private string _newDraftSynopsis = "";
     private string _newDraftGenre = "";
     private string _newDraftLanguage = "ja";
+    private string? _newDraftFrequency;
     private byte[]? _draftCoverBytes;
     private string? _draftCoverFileName;
     private string? _draftCoverContentType;
@@ -1319,7 +1328,7 @@
                 genre: _newDraftGenre,
                 contentLanguageCode: _newDraftLanguage,
                 slug: null,
-                publicationFrequencyCode: null,
+                publicationFrequencyCode: _newDraftFrequency,
                 sourceSeriesId: null,
                 coverFileBytes: _draftCoverBytes,
                 coverFileName: _draftCoverFileName,
@@ -1336,7 +1345,7 @@
                 CoverUrl: null, // cover URL requires a DB round-trip; will show on next full load
                 CreatedAtUtc: DateTime.UtcNow,
                 UpdatedAtUtc: null,
-                PublicationFrequencyCode: null // new drafts are created without a frequency
+                PublicationFrequencyCode: _newDraftFrequency
             ));
 
             _draftCreated = true;
@@ -1349,6 +1358,7 @@
             _newDraftSynopsis = "";
             _newDraftGenre = "";
             _newDraftLanguage = "ja";
+            _newDraftFrequency = null;
             _draftCoverBytes = null;
             _draftCoverFileName = null;
             _draftCoverContentType = null;
