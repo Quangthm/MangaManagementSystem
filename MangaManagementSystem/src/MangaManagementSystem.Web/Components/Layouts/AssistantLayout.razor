@@ -1,42 +1,61 @@
-@namespace MangaManagementSystem.Web.Components.Layouts
+﻿@namespace MangaManagementSystem.Web.Components.Layouts
 @inject NavigationManager Nav
 
 <div class="mf-shell">
     <aside class="mf-sidebar mf-assistant-sidebar">
-        <div class="mf-sidebar-header">
-            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                <span class="mf-logo-box mf-assistant-logo">MF</span>
-                <div>
-                    <MudText Typo="Typo.subtitle1" Class="font-weight-bold text-white">MangaFlow</MudText>
-                    <MudText Typo="Typo.caption" Style="color:#94a3b8">Assistant Workspace</MudText>
-                </div>
-            </MudStack>
+
+        <div class="mf-sidebar-profile-area">
+            <UserAvatarMenu />
         </div>
+
         <nav class="mf-nav-section">
             <div class="mf-nav-title">Main Menu</div>
-            <NavLink href="/assistant" class="mf-nav-link" Match="NavLinkMatch.Prefix">Dashboard</NavLink>
-            <NavLink href="/assistant/tasks" class="mf-nav-link" Match="NavLinkMatch.Prefix">Assigned Tasks</NavLink>
-            <!-- Notification and settings pages not implemented yet; show disabled placeholders -->
-            <div class="mf-nav-link disabled">Notifications (Not available)</div>
-            <div class="mf-nav-link disabled">Settings (Not available)</div>
 
+            <NavLink href="/assistant"
+                     class="mf-nav-link"
+                     Match="NavLinkMatch.All">
+                Dashboard
+            </NavLink>
+
+            <NavLink href="/assistant/tasks"
+                     class="mf-nav-link"
+                     Match="NavLinkMatch.Prefix">
+                Assigned Tasks
+            </NavLink>
         </nav>
+
         <MudSpacer />
+
         <div class="pa-4">
-            <MudButton FullWidth="true" Variant="Variant.Outlined" Color="Color.Default" OnClick="BackToOverview">
+            <MudButton FullWidth="true"
+                       Variant="Variant.Outlined"
+                       Color="Color.Default"
+                       OnClick="BackToOverview">
                 Back to Overview
             </MudButton>
-            <div class="mt-3">
-                <LogoutForm />
-            </div>
+
         </div>
     </aside>
+
     <main class="mf-main">
         @ChildContent
     </main>
 </div>
 
 @code {
-    [Parameter] public RenderFragment? ChildContent { get; set; }
-    private void BackToOverview() => Nav.NavigateTo("/dashboard");
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    private void BackToOverview()
+    {
+        Nav.NavigateTo("/dashboard");
+    }
 }
+
+<style>
+    .mf-sidebar-profile-area {
+        padding: 18px 11px 14px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    }
+</style>
+

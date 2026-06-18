@@ -9,5 +9,8 @@ namespace MangaManagementSystem.Application.Interfaces
 
         void StoreEmailVerificationOtp(string email, string otp);
         bool TryValidateAndRemoveEmailVerificationOtp(string email, string otp);
+
+        void StoreProfileActionOtp(string email, string actionCode, string otp);
+        bool TryValidateAndRemoveProfileActionOtp(string email, string actionCode, string otp);
     }
 }

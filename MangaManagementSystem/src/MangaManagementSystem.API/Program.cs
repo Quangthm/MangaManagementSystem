@@ -12,9 +12,10 @@ namespace MangaManagementSystem.API
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            // Application use-case services and Infrastructure (EF Core, stored procedure
-            // wrappers, Cloudinary, OTP cache) are reused as-is. The API only owns the
-            // HTTP boundary; it does not contain business logic or SQL details.
+            // Application use-case services and Infrastructure (EF Core,
+            // stored procedure wrappers, Cloudinary, OTP cache) are reused
+            // as-is. The API only owns the HTTP boundary; it does not contain
+            // business logic or SQL details.
             builder.Services.AddApplicationServices();
             builder.Services.AddInfrastructure(builder.Configuration);
 

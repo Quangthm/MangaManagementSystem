@@ -107,7 +107,7 @@
 | BR-USER-019 | Updating `display_name` must not change `username`, `email`, role, account status, password, or account approval state. | Active draft |
 | BR-USER-020 | Display name changes should be recorded in the audit log for traceability. | Active draft |
 | BR-USER-021 | The system should reject empty or whitespace-only display names after trimming. | Active draft |
-
+| BR-USER-022 | A user may update their own avatar and portfolio file | Active draft |
 ---
 
 ## 5. Series
