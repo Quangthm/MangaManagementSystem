@@ -1,6 +1,10 @@
 using MangaManagementSystem.Application;
 using MangaManagementSystem.Infrastructure;
 
+using MangaManagementSystem.Application;
+using MangaManagementSystem.Infrastructure;
+using Microsoft.Extensions.Configuration;
+
 namespace MangaManagementSystem.API
 {
     public class Program
@@ -19,6 +23,10 @@ namespace MangaManagementSystem.API
             builder.Services.AddControllers();
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
+
+            // Add application and infrastructure services
+            builder.Services.AddApplicationServices();
+            builder.Services.AddInfrastructure(builder.Configuration);
 
             var app = builder.Build();
 

@@ -88,5 +88,37 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .OrderByDescending(t => t.CreatedAtUtc)
                 .ToListAsync();
         }
+
+        public async Task<IReadOnlyList<ChapterPageTask>> GetByAssignedUserIdWithFullContextAsync(Guid assignedToUserId)
+        {
+            return await _context.ChapterPageTasks
+                .Include(t => t.AssignedToUser)
+                .Include(t => t.PageRegions)
+                    .ThenInclude(r => r.ChapterPageVersion)
+                        .ThenInclude(v => v.ChapterPage)
+                            .ThenInclude(p => p.Chapter)
+                                .ThenInclude(c => c.Series)
+                .Include(t => t.PageRegions)
+                    .ThenInclude(r => r.ChapterPageVersion)
+                        .ThenInclude(v => v.PageFile)
+                .Where(t => t.AssignedToUserId == assignedToUserId)
+                .OrderByDescending(t => t.CreatedAtUtc)
+                .ToListAsync();
+        }
+
+        public async Task<ChapterPageTask?> GetByIdWithFullContextAsync(Guid taskId)
+        {
+            return await _context.ChapterPageTasks
+                .Include(t => t.AssignedToUser)
+                .Include(t => t.PageRegions)
+                    .ThenInclude(r => r.ChapterPageVersion)
+                        .ThenInclude(v => v.ChapterPage)
+                            .ThenInclude(p => p.Chapter)
+                                .ThenInclude(c => c.Series)
+                .Include(t => t.PageRegions)
+                    .ThenInclude(r => r.ChapterPageVersion)
+                        .ThenInclude(v => v.PageFile)
+                .FirstOrDefaultAsync(t => t.ChapterPageTaskId == taskId);
+        }
     }
 }
