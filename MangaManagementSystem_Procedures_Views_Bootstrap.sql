@@ -838,7 +838,7 @@ BEGIN
 
     DECLARE @audit_entity_id NVARCHAR(100);
     DECLARE @detail_json NVARCHAR(MAX);
-
+    DECLARE @action_code NVARCHAR(64);
     BEGIN TRY
         IF @@TRANCOUNT = 0
         BEGIN
@@ -882,10 +882,7 @@ BEGIN
             @uploaded_by_user_id = @user_id,
             @file_resource_id = @new_portfolio_file_id OUTPUT;
 
-        IF @new_portfolio_file_id IS NULL
-        BEGIN
-            ;THROW 54304, 'The new portfolio FileResource could not be created.', 1;
-        END;
+       
 
         UPDATE auth.Users
         SET portfolio_file_id = @new_portfolio_file_id
@@ -937,12 +934,19 @@ BEGIN
         SET @audit_entity_id =
             CONVERT(NVARCHAR(36), @user_id);
 
-        EXEC audit.usp_AuditEvent_Append
-            @actor_user_id = @user_id,
-            @action_code = N'USER_PORTFOLIO_UPDATED',
-            @entity_type = N'Users',
-            @entity_id = @audit_entity_id,
-            @detail_json = @detail_json;
+        SET @action_code =
+    CASE
+        WHEN @old_portfolio_file_id IS NULL
+            THEN N'REGISTRATION_PORTFOLIO_ATTACHED'
+        ELSE N'USER_PORTFOLIO_UPDATED'
+    END;
+
+EXEC audit.usp_AuditEvent_Append
+    @actor_user_id = @user_id,
+    @action_code = @action_code,
+    @entity_type = N'Users',
+    @entity_id = @audit_entity_id,
+    @detail_json = @detail_json;
 
         IF @started_tran = 1
         BEGIN
@@ -1023,7 +1027,7 @@ BEGIN
         IF @has_portfolio = 1
         BEGIN
             EXEC auth.usp_User_UpdatePortfolioFile
-                @actor_user_id = @new_user_id,
+                @user_id = @new_user_id,
                 @original_file_name = @portfolio_original_file_name,
                 @cloudinary_public_id = @portfolio_cloudinary_public_id,
                 @cloudinary_secure_url = @portfolio_cloudinary_secure_url,
@@ -1945,6 +1949,248 @@ BEGIN
     END CATCH;
 END;
 GO
+-- ============================================================
+-- manga.usp_Series_UpdateProfile
+-- BF-SERIES-002 — Edit Series Draft Profile
+--
+-- Allows an active Mangaka contributor to update a PROPOSAL_DRAFT
+-- series profile: title, slug, synopsis, genre, content language,
+-- publication frequency, and optionally the cover image.
+--
+-- Cover update is all-or-nothing: pass all six cover metadata params
+-- or none. When a new cover is supplied, the old FileResource is
+-- soft-deleted inside the transaction and a new one is created.
+--
+-- Status guard: only PROPOSAL_DRAFT series can be updated here.
+-- Once a proposal has been submitted (UNDER_EDITORIAL_REVIEW or later),
+-- this procedure rejects the update.
+--
+-- Custom error numbers (57401–57410):
+--   57401  Could not acquire series profile update lock.
+--   57402  Series does not exist.
+--   57403  Only a PROPOSAL_DRAFT series can have its profile updated here.
+--   57404  Only an active Mangaka contributor can update this series profile.
+--   57405  Cover file metadata is incomplete — pass all six cover fields or none.
+-- ============================================================
+CREATE OR ALTER PROCEDURE manga.usp_Series_UpdateProfile
+    @actor_user_id                  UNIQUEIDENTIFIER,
+    @series_id                      UNIQUEIDENTIFIER,
+
+    -- Profile fields (all updatable while PROPOSAL_DRAFT)
+    @title                          NVARCHAR(200),
+    @slug                           NVARCHAR(220),
+    @synopsis                       NVARCHAR(MAX),
+    @genre                          NVARCHAR(100),
+    @content_language_code          NVARCHAR(10)  = N'ja',
+    @publication_frequency_code     NVARCHAR(50)  = NULL,
+
+    -- Optional new cover image (all-or-nothing; NULL = keep existing cover)
+    @cover_original_file_name       NVARCHAR(260) = NULL,
+    @cover_cloudinary_public_id     NVARCHAR(255) = NULL,
+    @cover_cloudinary_secure_url    NVARCHAR(1000) = NULL,
+    @cover_content_type             NVARCHAR(100) = NULL,
+    @cover_file_size_bytes          BIGINT        = NULL,
+    @cover_sha256_hash              CHAR(64)      = NULL,
+
+    -- Output: new cover FileResource id (NULL if cover was not changed)
+    @new_cover_file_resource_id     UNIQUEIDENTIFIER OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+    DECLARE @lock_result INT;
+    DECLARE @lock_resource NVARCHAR(255);
+
+    DECLARE @old_cover_file_id UNIQUEIDENTIFIER;
+    DECLARE @has_cover_metadata BIT = 0;
+    DECLARE @updated_at_utc DATETIME2(0) = SYSUTCDATETIME();
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        --------------------------------------------------------------------
+        -- 1. Serialize profile updates per series.
+        --------------------------------------------------------------------
+        SET @lock_resource = N'manga_series_update_profile_' + CONVERT(NVARCHAR(36), @series_id);
+
+        EXEC @lock_result = sys.sp_getapplock
+            @Resource        = @lock_resource,
+            @LockMode        = 'Exclusive',
+            @LockOwner       = 'Transaction',
+            @LockTimeout     = 10000;
+
+        IF @lock_result < 0
+        BEGIN
+            ;THROW 57401, 'Could not acquire series profile update lock.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 2. Series must exist.
+        --------------------------------------------------------------------
+        DECLARE @current_status_code NVARCHAR(50);
+
+        SELECT
+            @current_status_code = s.status_code,
+            @old_cover_file_id   = s.cover_file_id
+        FROM manga.Series s WITH (UPDLOCK, HOLDLOCK)
+        WHERE s.series_id = @series_id;
+
+        IF @current_status_code IS NULL
+        BEGIN
+            ;THROW 57402, 'Series does not exist.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 3. Only PROPOSAL_DRAFT series can be updated here.
+        --------------------------------------------------------------------
+        IF @current_status_code <> N'PROPOSAL_DRAFT'
+        BEGIN
+            ;THROW 57403, 'Only a series in PROPOSAL_DRAFT status can have its profile updated here.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 4. Actor must be an active Mangaka contributor of this series.
+        --------------------------------------------------------------------
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM manga.SeriesContributor sc
+            INNER JOIN auth.Users u
+                ON u.user_id = sc.user_id
+            INNER JOIN auth.Roles r
+                ON r.role_id = u.role_id
+            WHERE sc.series_id = @series_id
+              AND sc.user_id   = @actor_user_id
+              AND sc.end_date  IS NULL
+              AND u.status_code = N'ACTIVE'
+              AND r.role_name   = N'Mangaka'
+        )
+        BEGIN
+            ;THROW 57404, 'Only an active Mangaka contributor can update this series profile.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 5. Validate cover metadata group (all-or-nothing).
+        --------------------------------------------------------------------
+        IF @cover_original_file_name    IS NOT NULL
+           OR @cover_cloudinary_public_id  IS NOT NULL
+           OR @cover_cloudinary_secure_url IS NOT NULL
+           OR @cover_content_type          IS NOT NULL
+           OR @cover_file_size_bytes       IS NOT NULL
+           OR @cover_sha256_hash           IS NOT NULL
+        BEGIN
+            SET @has_cover_metadata = 1;
+        END;
+
+        IF @has_cover_metadata = 1
+           AND (
+               @cover_original_file_name    IS NULL
+               OR @cover_cloudinary_public_id  IS NULL
+               OR @cover_cloudinary_secure_url IS NULL
+               OR @cover_content_type          IS NULL
+               OR @cover_file_size_bytes       IS NULL
+               OR @cover_sha256_hash           IS NULL
+           )
+        BEGIN
+            ;THROW 57405, 'Cover file metadata is incomplete. Pass all six cover fields or none.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 6. Soft-delete old cover FileResource if a new cover is supplied.
+        --------------------------------------------------------------------
+        SET @new_cover_file_resource_id = NULL;
+
+        IF @has_cover_metadata = 1
+        BEGIN
+            IF @old_cover_file_id IS NOT NULL
+            BEGIN
+                EXEC manga.usp_FileResource_SoftDelete
+                    @file_resource_id  = @old_cover_file_id,
+                    @deleted_by_user_id = @actor_user_id;
+            END;
+
+            -- Create new SERIES_COVER FileResource.
+            EXEC manga.usp_FileResource_Create
+                @file_purpose_code     = N'SERIES_COVER',
+                @original_file_name    = @cover_original_file_name,
+                @cloudinary_public_id  = @cover_cloudinary_public_id,
+                @cloudinary_secure_url = @cover_cloudinary_secure_url,
+                @content_type          = @cover_content_type,
+                @file_size_bytes       = @cover_file_size_bytes,
+                @sha256_hash           = @cover_sha256_hash,
+                @uploaded_by_user_id   = @actor_user_id,
+                @file_resource_id      = @new_cover_file_resource_id OUTPUT;
+        END;
+
+        --------------------------------------------------------------------
+        -- 7. Update series profile.
+        --    Only update cover_file_id when a new cover was provided.
+        --------------------------------------------------------------------
+        UPDATE manga.Series
+        SET
+            title                       = @title,
+            slug                        = @slug,
+            synopsis                    = @synopsis,
+            genre                       = @genre,
+            content_language_code       = @content_language_code,
+            publication_frequency_code  = @publication_frequency_code,
+            cover_file_id               = CASE WHEN @has_cover_metadata = 1
+                                               THEN @new_cover_file_resource_id
+                                               ELSE cover_file_id
+                                          END,
+            updated_at_utc              = @updated_at_utc,
+            updated_by_user_id          = @actor_user_id
+        WHERE series_id = @series_id;
+
+        --------------------------------------------------------------------
+        -- 8. Audit.
+        --------------------------------------------------------------------
+        DECLARE @audit_entity_id NVARCHAR(100) =
+            CONVERT(NVARCHAR(36), @series_id);
+
+        DECLARE @detail_json NVARCHAR(MAX) =
+        (
+            SELECT
+                @series_id                      AS series_id,
+                @title                          AS title,
+                @slug                           AS slug,
+                @genre                          AS genre,
+                @content_language_code          AS content_language_code,
+                @publication_frequency_code     AS publication_frequency_code,
+                @has_cover_metadata             AS cover_updated,
+                @new_cover_file_resource_id     AS new_cover_file_resource_id,
+                @old_cover_file_id              AS old_cover_file_id
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id  = @actor_user_id,
+            @action_code    = N'SERIES_DRAFT_PROFILE_UPDATED',
+            @entity_type    = N'Series',
+            @entity_id      = @audit_entity_id,
+            @detail_json    = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH;
+END;
+GO
 CREATE OR ALTER PROCEDURE manga.usp_PageRegion_Create
     @actor_user_id UNIQUEIDENTIFIER,
     @chapter_page_version_id UNIQUEIDENTIFIER,
@@ -2263,9 +2509,12 @@ END;
         (
             SELECT 1
             FROM manga.SeriesContributor sc
-            WHERE sc.series_id = @owning_series_id
-              AND sc.user_id = @actor_user_id
-              AND sc.end_date IS NULL
+INNER JOIN auth.Users u
+    ON u.user_id = sc.user_id
+WHERE sc.series_id = @owning_series_id
+  AND sc.user_id = @actor_user_id
+  AND sc.end_date IS NULL
+  AND u.status_code = N'ACTIVE'
         )
         BEGIN
             ;THROW 57504, 'User is not an active contributor for the series that owns these page regions.', 1;
@@ -2422,10 +2671,13 @@ BEGIN
     INNER JOIN manga.Chapter ch
         ON ch.chapter_id = cp.chapter_id
     INNER JOIN manga.SeriesContributor sc
-        ON sc.series_id = ch.series_id
-    WHERE cpar.chapter_page_annotation_id = @chapter_page_annotation_id
-      AND sc.user_id = @actor_user_id
-      AND sc.end_date IS NULL
+    ON sc.series_id = ch.series_id
+INNER JOIN auth.Users u
+    ON u.user_id = sc.user_id
+WHERE cpar.chapter_page_annotation_id = @chapter_page_annotation_id
+  AND sc.user_id = @actor_user_id
+  AND sc.end_date IS NULL
+  AND u.status_code = N'ACTIVE'
 )
 BEGIN
     ;THROW 57807, 'User is not an active contributor for the series that owns this annotation.', 1;
@@ -2613,10 +2865,13 @@ END;
 IF NOT EXISTS
 (
     SELECT 1
-    FROM manga.SeriesContributor sc
-    WHERE sc.series_id = @owning_series_id
-      AND sc.user_id = @actor_user_id
-      AND sc.end_date IS NULL
+FROM manga.SeriesContributor sc
+INNER JOIN auth.Users u
+    ON u.user_id = sc.user_id
+WHERE sc.series_id = @owning_series_id
+  AND sc.user_id = @actor_user_id
+  AND sc.end_date IS NULL
+  AND u.status_code = N'ACTIVE'
 )
 OR NOT EXISTS
 (
@@ -3177,6 +3432,33 @@ BEGIN
         BEGIN
             ;THROW 58104, 'Only the assigned user can submit this task for review.', 1;
         END;
+        DECLARE @task_chapter_page_id UNIQUEIDENTIFIER;
+DECLARE @submitted_chapter_page_id UNIQUEIDENTIFIER;
+
+SELECT TOP (1)
+    @task_chapter_page_id = cpv.chapter_page_id
+FROM manga.ChapterPageTaskRegion tr
+INNER JOIN manga.PageRegion pr
+    ON pr.page_region_id = tr.page_region_id
+INNER JOIN manga.ChapterPageVersion cpv
+    ON cpv.chapter_page_version_id = pr.chapter_page_version_id
+WHERE tr.chapter_page_task_id = @chapter_page_task_id;
+
+SELECT
+    @submitted_chapter_page_id = cpv.chapter_page_id
+FROM manga.ChapterPageVersion cpv
+WHERE cpv.chapter_page_version_id = @completed_page_version_id;
+
+IF @submitted_chapter_page_id IS NULL
+BEGIN
+    ;THROW 58105, 'Submitted page version does not exist.', 1;
+END;
+
+IF @task_chapter_page_id IS NULL
+   OR @task_chapter_page_id <> @submitted_chapter_page_id
+BEGIN
+    ;THROW 58106, 'Submitted page version must belong to the same logical chapter page as the task.', 1;
+END;
         --------------------------------------------------------------------
         -- 6. Move task to UNDER_REVIEW
         --------------------------------------------------------------------
