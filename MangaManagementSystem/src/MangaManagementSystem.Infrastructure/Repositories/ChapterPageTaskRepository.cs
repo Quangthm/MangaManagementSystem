@@ -31,33 +31,37 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             decimal? compensationAmount,
             IReadOnlyList<Guid> pageRegionIds)
         {
-            var conn = _context.Database.GetDbConnection();
-            await using var cmd = conn.CreateCommand();
-            cmd.CommandText = "manga.usp_ChapterPageTask_Create";
-            cmd.CommandType = CommandType.StoredProcedure;
+            var task = new ChapterPageTask
+            {
+                ChapterPageTaskId = Guid.NewGuid(),
+                AssignedToUserId = assignedToUserId,
+                TypeCode = typeCode,
+                TaskTitle = taskTitle,
+                TaskDescription = taskDescription,
+                PriorityLevel = priorityLevel,
+                DueAtUtc = dueAtUtc,
+                CompensationAmount = compensationAmount ?? 0m,
+                CreatedByUserId = actorUserId,
+                CreatedAtUtc = DateTime.UtcNow,
+                StatusCode = "ASSIGNED"
+            };
 
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@actor_user_id", System.Data.SqlDbType.UniqueIdentifier) { Value = actorUserId });
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@assigned_to_user_id", System.Data.SqlDbType.UniqueIdentifier) { Value = assignedToUserId });
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@type_code", System.Data.SqlDbType.NVarChar, 50) { Value = typeCode });
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@task_title", System.Data.SqlDbType.NVarChar, 200) { Value = taskTitle });
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@task_description", System.Data.SqlDbType.NVarChar, -1) { Value = taskDescription });
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@priority_level", System.Data.SqlDbType.TinyInt) { Value = priorityLevel });
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@due_at_utc", System.Data.SqlDbType.DateTime2) { Value = dueAtUtc });
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@compensation_amount", System.Data.SqlDbType.Decimal, 5) { Value = compensationAmount ?? 0m });
+            if (pageRegionIds != null && pageRegionIds.Any())
+            {
+                var regions = await _context.PageRegions
+                    .Where(r => pageRegionIds.Contains(r.PageRegionId))
+                    .ToListAsync();
+                    
+                foreach (var region in regions)
+                {
+                    task.PageRegions.Add(region);
+                }
+            }
 
-            var regionsJson = JsonSerializer.Serialize(pageRegionIds);
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@page_region_ids_json", System.Data.SqlDbType.NVarChar, -1) { Value = regionsJson });
+            await _context.ChapterPageTasks.AddAsync(task);
+            await _context.SaveChangesAsync();
 
-            var outParam = new Microsoft.Data.SqlClient.SqlParameter("@new_chapter_page_task_id", System.Data.SqlDbType.UniqueIdentifier) { Direction = System.Data.ParameterDirection.Output };
-            cmd.Parameters.Add(outParam);
-
-            if (conn.State != ConnectionState.Open)
-                await conn.OpenAsync();
-
-            await cmd.ExecuteNonQueryAsync();
-
-            var newTaskId = outParam.Value == System.DBNull.Value ? Guid.Empty : (Guid)outParam.Value;
-            return newTaskId;
+            return task.ChapterPageTaskId;
         }
 
         public async Task<ChapterPageTask?> GetByIdWithRegionsAsync(Guid id)
@@ -119,6 +123,16 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     .ThenInclude(r => r.ChapterPageVersion)
                         .ThenInclude(v => v.PageFile)
                 .FirstOrDefaultAsync(t => t.ChapterPageTaskId == taskId);
+        }
+
+        public async Task<IReadOnlyList<ChapterPageTask>> GetByChapterPageIdWithRegionsAsync(Guid chapterPageId)
+        {
+            return await _context.ChapterPageTasks
+                .Include(t => t.AssignedToUser)
+                .Include(t => t.PageRegions)
+                .Where(t => t.PageRegions.Any(r => r.ChapterPageVersion != null && r.ChapterPageVersion.ChapterPageId == chapterPageId))
+                .OrderByDescending(t => t.CreatedAtUtc)
+                .ToListAsync();
         }
     }
 }

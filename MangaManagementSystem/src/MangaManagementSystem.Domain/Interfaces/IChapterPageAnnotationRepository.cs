@@ -20,5 +20,7 @@ namespace MangaManagementSystem.Domain.Interfaces
             Guid actorUserId,
             Guid annotationId,
             string? resolutionNote = null);
+
+        Task<IReadOnlyList<ChapterPageAnnotation>> GetByChapterPageIdWithRegionsAsync(Guid chapterPageId);
     }
 }

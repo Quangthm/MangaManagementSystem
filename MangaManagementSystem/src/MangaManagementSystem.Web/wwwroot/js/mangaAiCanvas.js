@@ -448,6 +448,7 @@ export function loadImage(dataUrl) {
             return;
         }
         const img = new Image();
+        img.crossOrigin = 'anonymous';
         img.onload = () => {
             originalImg = img;
             backgroundCanvas.width = img.width;
@@ -470,6 +471,30 @@ export function loadImage(dataUrl) {
             
             redraw();
             resolve();
+        };
+        img.onerror = () => {
+            // Fallback: if CORS fails, try without crossOrigin
+            const img2 = new Image();
+            img2.onload = () => {
+                originalImg = img2;
+                backgroundCanvas.width = img2.width;
+                backgroundCanvas.height = img2.height;
+                bgCtx.drawImage(img2, 0, 0);
+                canvas.style.display = 'block';
+                canvas.width = img2.width;
+                canvas.height = img2.height;
+                canvas.style.width = img2.width + 'px';
+                canvas.style.height = img2.height + 'px';
+                canvas.style.maxWidth = 'none';
+                canvas.style.maxHeight = 'none';
+                scale = Math.min(container.clientWidth / img2.width, container.clientHeight / img2.height);
+                panX = (container.clientWidth - img2.width * scale) / 2;
+                panY = (container.clientHeight - img2.height * scale) / 2;
+                applyTransform();
+                redraw();
+                resolve();
+            };
+            img2.src = dataUrl;
         };
         img.src = dataUrl;
     });
@@ -814,9 +839,16 @@ function saveState() {
     if (historyIndex < historyStack.length - 1) {
         historyStack = historyStack.slice(0, historyIndex + 1);
     }
+    let imgSrc = null;
+    try {
+        imgSrc = backgroundCanvas.toDataURL('image/png');
+    } catch (e) {
+        // Canvas is tainted (cross-origin image), skip saving image state
+        imgSrc = currentDataUrl;
+    }
     historyStack.push({
         regions: JSON.parse(JSON.stringify(regions)),
-        imgSrc: backgroundCanvas.toDataURL('image/png')
+        imgSrc: imgSrc
     });
     historyIndex++;
     if (typeof dotNetRef !== 'undefined' && dotNetRef) syncToBlazor();
@@ -828,8 +860,11 @@ export function undo() {
         const state = historyStack[historyIndex];
         regions = JSON.parse(JSON.stringify(state.regions));
         
-        if (state.imgSrc && state.imgSrc !== backgroundCanvas.toDataURL('image/png')) {
+        let currentImgSrc = null;
+        try { currentImgSrc = backgroundCanvas.toDataURL('image/png'); } catch(e) { /* tainted */ }
+        if (state.imgSrc && state.imgSrc !== currentImgSrc) {
             const img = new Image();
+            img.crossOrigin = 'anonymous';
             img.onload = () => {
                 backgroundCanvas.width = img.width;
                 backgroundCanvas.height = img.height;
@@ -851,8 +886,11 @@ export function redo() {
         const state = historyStack[historyIndex];
         regions = JSON.parse(JSON.stringify(state.regions));
         
-        if (state.imgSrc && state.imgSrc !== backgroundCanvas.toDataURL('image/png')) {
+        let currentImgSrc2 = null;
+        try { currentImgSrc2 = backgroundCanvas.toDataURL('image/png'); } catch(e) { /* tainted */ }
+        if (state.imgSrc && state.imgSrc !== currentImgSrc2) {
             const img = new Image();
+            img.crossOrigin = 'anonymous';
             img.onload = () => {
                 backgroundCanvas.width = img.width;
                 backgroundCanvas.height = img.height;
@@ -895,12 +933,26 @@ function calculateIoU(box1, box2) {
 export async function callSegmentAPI() {
     if (!currentDataUrl) return false;
     try {
-        const blob = dataURItoBlob(currentDataUrl);
-        const formData = new FormData();
-        formData.append('file', blob, 'image.jpg');
-        
-        const res = await fetch('http://localhost:8000/api/ai/segment', { method: 'POST', body: formData });
-        const json = await res.json();
+        let blob;
+        try {
+            // Try to get data from canvas (works if not tainted)
+            const canvasDataUrl = backgroundCanvas.toDataURL('image/png');
+            blob = dataURItoBlob(canvasDataUrl);
+        } catch (e) {
+            // Canvas is tainted, fetch the image directly from the URL
+            const response = await fetch(currentDataUrl);
+            blob = await response.blob();
+        }
+        // Call Blazor C# backend instead of direct AI service call
+        if (!dotNetRef) return false;
+        const reader = new FileReader();
+        const base64Promise = new Promise((resolve) => {
+            reader.onloadend = () => resolve(reader.result);
+            reader.readAsDataURL(blob);
+        });
+        const base64Data = await base64Promise;
+        const resultStr = await dotNetRef.invokeMethodAsync('SegmentImageJS', base64Data);
+        const json = JSON.parse(resultStr);
         
         if (json.status === "success" && json.regions) {
             json.regions.forEach(aiReg => {
@@ -939,27 +991,41 @@ export async function callSegmentAPI() {
 export async function callTranslateAPI() {
     let targets = regions.filter(r => r.selected);
     if (targets.length === 0) targets = regions; // Fallback to all if none selected
-    if (targets.length === 0) return false;
+    if (targets.length === 0) return "no_regions";
     
     try {
+        // Get base64 image data - either from canvas or by fetching the URL
+        let imageBase64;
+        try {
+            imageBase64 = backgroundCanvas.toDataURL('image/png');
+        } catch (e) {
+            // Canvas is tainted, fetch the URL and convert to base64
+            const response = await fetch(currentDataUrl);
+            const blob = await response.blob();
+            imageBase64 = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.readAsDataURL(blob);
+            });
+        }
+
         const payload = {
-            image_base64: currentDataUrl,
+            image_base64: imageBase64,
             regions: targets.map(r => ({
                 id: r.id, x: r.x, y: r.y, width: r.width, height: r.height
             }))
         };
         
-        const res = await fetch('http://localhost:8000/api/ai/translate-selected', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const json = await res.json();
+        // Call Blazor C# backend instead of direct AI service call
+        if (!dotNetRef) return "error: dotNetRef is null";
+        const resultStr = await dotNetRef.invokeMethodAsync('TranslateRegionsJS', JSON.stringify(payload));
+        const json = JSON.parse(resultStr);
         
         if (json.status === "success" && json.regions) {
             if (json.clean_image_base64) {
                 return new Promise((resolve) => {
                     const img = new Image();
+                    img.crossOrigin = 'anonymous';
                     img.onload = () => {
                         backgroundCanvas.width = img.width;
                         backgroundCanvas.height = img.height;
@@ -976,7 +1042,7 @@ export async function callTranslateAPI() {
                         saveState();
                         if (typeof dotNetRef !== 'undefined' && dotNetRef) syncToBlazor();
                         redraw();
-                        resolve(true);
+                        resolve("success");
                     };
                     img.src = json.clean_image_base64;
                 });
@@ -991,18 +1057,23 @@ export async function callTranslateAPI() {
                 saveState();
                 if (typeof dotNetRef !== 'undefined' && dotNetRef) syncToBlazor();
                 redraw();
-                return true;
+                return "success";
             }
         }
     } catch (e) {
         console.error("AI API Error:", e);
-        return false;
+        return "error: " + e.message;
     }
-    return false;
+    return "error";
 }
 
 export function exportImage() {
-    return backgroundCanvas.toDataURL('image/png');
+    try {
+        return backgroundCanvas.toDataURL('image/png');
+    } catch (e) {
+        // Canvas is tainted, return the original URL
+        return currentDataUrl || '';
+    }
 }
 
 export function exportRegions() {

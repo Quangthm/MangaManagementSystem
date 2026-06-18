@@ -92,6 +92,12 @@ namespace MangaManagementSystem.Application.Services
             return await _unitOfWork.ChapterPageAnnotations.ResolveAnnotationAsync(actorUserId, annotationId, resolutionNote);
         }
 
+        public async Task<IEnumerable<ChapterPageAnnotationDto>> GetChapterPageAnnotationsByChapterPageIdAsync(Guid chapterPageId)
+        {
+            var annotations = await _unitOfWork.ChapterPageAnnotations.GetByChapterPageIdWithRegionsAsync(chapterPageId);
+            return annotations.Select(MapToDto).ToList();
+        }
+
         private async Task AttachPageRegionsAsync(ChapterPageAnnotation entity, IReadOnlyList<Guid> pageRegionIds)
         {
             if (pageRegionIds == null)

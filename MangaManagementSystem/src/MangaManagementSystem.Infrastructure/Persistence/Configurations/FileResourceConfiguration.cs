@@ -10,7 +10,7 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
         {
             builder.ToTable("FileResource", "manga", t =>
             {
-                t.HasCheckConstraint("CK_FileResource_PurposeCode", "file_purpose_code IN ('SERIES_PROPOSAL','SERIES_COVER','CHAPTER_DRAFT','CHAPTER_ASSET','TASK_REFERENCE','TASK_SUBMISSION','EDITORIAL_ATTACHMENT','REGISTRATION_PORTFOLIO','USER_AVATAR')");
+                t.HasCheckConstraint("CK_FileResource_PurposeCode", "file_purpose_code IN ('SERIES_PROPOSAL','SERIES_COVER','CHAPTER_DRAFT','CHAPTER_ASSET','CHAPTER_PAGE_VERSION','TASK_REFERENCE','TASK_SUBMISSION','EDITORIAL_ATTACHMENT','REGISTRATION_PORTFOLIO','USER_AVATAR')");
             });
             builder.HasKey(f => f.FileResourceId);
             builder.Property(f => f.FileResourceId).ValueGeneratedOnAdd();

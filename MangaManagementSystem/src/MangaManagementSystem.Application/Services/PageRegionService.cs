@@ -90,6 +90,42 @@ namespace MangaManagementSystem.Application.Services
             return true;
         }
 
+        public async Task<bool> BulkReplacePageRegionsAsync(Guid chapterPageVersionId, IEnumerable<CreatePageRegionDto> dtos)
+        {
+            // Get all existing regions for this version
+            var all = await _unitOfWork.PageRegions.GetAllAsync();
+            var existing = all.Where(r => r.ChapterPageVersionId == chapterPageVersionId).ToList();
+
+            // Delete existing
+            foreach (var r in existing)
+            {
+                _unitOfWork.PageRegions.Delete(r);
+            }
+
+            // Create new ones
+            foreach (var dto in dtos)
+            {
+                var entity = new PageRegion
+                {
+                    ChapterPageVersionId = chapterPageVersionId, // Ensure it overrides just in case
+                    TypeCode = dto.TypeCode,
+                    RegionLabel = dto.RegionLabel,
+                    X = dto.X,
+                    Y = dto.Y,
+                    Width = dto.Width,
+                    Height = dto.Height,
+                    ConfidenceScore = dto.ConfidenceScore,
+                    SourceType = dto.SourceType,
+                    OriginalText = dto.OriginalText,
+                    CreatedAtUtc = DateTime.UtcNow
+                };
+                await _unitOfWork.PageRegions.AddAsync(entity);
+            }
+
+            await _unitOfWork.SaveChangesAsync();
+            return true;
+        }
+
         private static PageRegionDto MapToDto(PageRegion r) => new(
             r.PageRegionId,
             r.ChapterPageVersionId,

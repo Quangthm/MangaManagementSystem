@@ -44,6 +44,16 @@ namespace MangaManagementSystem.Application.Services
             return all.Where(c => c.SeriesId == seriesId).Select(MapToDto);
         }
 
+        public async Task DeleteChapterAsync(Guid id)
+        {
+            var entity = await _unitOfWork.Chapters.GetByIdAsync(id);
+            if (entity != null)
+            {
+                _unitOfWork.Chapters.Delete(entity);
+                await _unitOfWork.SaveChangesAsync();
+            }
+        }
+
         private static ChapterDto MapToDto(Chapter c) => new(
             c.ChapterId,
             c.SeriesId,

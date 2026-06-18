@@ -18,5 +18,6 @@ namespace MangaManagementSystem.Application.Interfaces
         // Assistant read operations
         Task<IEnumerable<ChapterPageTaskDto>> GetAssignedTasksForAssistantAsync(Guid assistantUserId);
         Task<ChapterPageTaskDto?> GetAssignedTaskDetailForAssistantAsync(Guid assistantUserId, Guid taskId);
+        Task<IEnumerable<ChapterPageTaskDto>> GetChapterPageTasksByChapterPageIdAsync(Guid chapterPageId);
     }
 }
