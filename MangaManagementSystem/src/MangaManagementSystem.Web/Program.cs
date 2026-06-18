@@ -125,11 +125,13 @@ namespace MangaManagementSystem.Web
 
             app.UseHttpsRedirection();
             app.UseStaticFiles();
-            app.UseAntiforgery();
+
+            app.UseRouting();
 
             app.UseAuthentication();
             app.UseAuthorization();
-            app.UseRouting();   
+
+            app.UseAntiforgery();
             app.MapPost("/api/auth/login", async (
                 HttpContext context,
                 IAuthApiClient authApi,
