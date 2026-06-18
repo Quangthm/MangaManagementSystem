@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Domain.Interfaces;
+using MangaManagementSystem.Domain.ReadModels;
 using MediatR;
 
 namespace MangaManagementSystem.Application.Features.Series.Queries.GetSeriesBySlug
@@ -29,7 +30,7 @@ namespace MangaManagementSystem.Application.Features.Series.Queries.GetSeriesByS
             int page = Math.Max(1, request.ChapterPage);
             int size = Math.Clamp(request.ChapterPageSize, 1, 50);
 
-            var (series, contributorNames, chapters, totalChapterCount) =
+            var (series, contributors, chapters, totalChapterCount) =
                 await _seriesRepository.GetSeriesDetailBySlugAsync(
                     request.Slug, page, size, cancellationToken);
 
@@ -43,6 +44,11 @@ namespace MangaManagementSystem.Application.Features.Series.Queries.GetSeriesByS
             int totalPages = totalChapterCount == 0
                 ? 0
                 : (int)Math.Ceiling((double)totalChapterCount / size);
+
+            var contributorDtos = contributors
+                .Select(c => new SeriesContributorSummaryDto(
+                    c.DisplayName, c.RoleName, c.StartDate, c.EndDate))
+                .ToList();
 
             var chapterDtos = chapters.Select(c => new SeriesChapterListItemDto(
                 c.ChapterId,
@@ -64,7 +70,7 @@ namespace MangaManagementSystem.Application.Features.Series.Queries.GetSeriesByS
                 series.ContentLanguageCode,
                 series.PublicationFrequencyCode,
                 coverUrl,
-                contributorNames,
+                contributorDtos,
                 chapterDtos,
                 page,
                 size,

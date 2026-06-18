@@ -105,7 +105,7 @@
                     }
                     else
                     {
-                        <span>Manage your @_navItems.First(n => n.Id == _activeTab).Label.ToLower()</span>
+                        <span>Review tasks assigned to you</span>
                     }
                 </div>
             </div>
@@ -208,23 +208,24 @@
 
                             @* Kebab menu — top-right over thumbnail *@
                             <div style="position: absolute; top: 8px; right: 8px; z-index: 10;" @onclick:stopPropagation>
-                                <MudMenu>
-                                    <ActivatorContent>
-                                        <MudIconButton Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small"
-                                                       Style="background: rgba(255,255,255,0.85); border-radius: 50%;" />
-                                    </ActivatorContent>
-                                    <ChildContent>
-                                        @* Cancel Draft — PROPOSAL_DRAFT only *@
-                                        @if (series.StatusCode == "PROPOSAL_DRAFT")
-                                        {
-                                            <MudMenuItem Style="color: #dc2626;"
-                                                         OnClick="@(() => OpenCancelDraft(series.Id, series.Title))">
-                                                <MudIcon Icon="@Icons.Material.Filled.Cancel" Size="Size.Small" Style="margin-right: 8px; color: #dc2626;" />
-                                                Cancel Draft
-                                            </MudMenuItem>
-                                        }
-                                    </ChildContent>
-                                </MudMenu>
+                                <div style="position: relative;">
+                                    <MudIconButton Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small"
+                                                   Style="background: rgba(255,255,255,0.85); border-radius: 50%;"
+                                                   @onclick="@(() => _openSeriesActionMenuId = _openSeriesActionMenuId == series.Id ? null : series.Id)" />
+                                    @if (_openSeriesActionMenuId == series.Id)
+                                    {
+                                        <div style="position: absolute; top: 100%; right: 0; margin-top: 4px; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); min-width: 170px; z-index: 100; padding: 4px;">
+                                            @if (series.StatusCode == "PROPOSAL_DRAFT")
+                                            {
+                                                <button @onclick="@(() => { _openSeriesActionMenuId = null; OpenCancelDraft(series.Id, series.Title); })"
+                                                        style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px; border: none; background: none; cursor: pointer; color: #dc2626; font-size: 0.85rem; border-radius: 6px; text-align: left;">
+                                                    <MudIcon Icon="@Icons.Material.Filled.Cancel" Size="Size.Small" Style="color: #dc2626;" />
+                                                    Cancel Draft
+                                                </button>
+                                            }
+                                        </div>
+                                    }
+                                </div>
                             </div>
 
                             @* Accent bar *@
@@ -322,62 +323,6 @@
                             </MudTable>
                         }
                     </div>
-                </div>
-            }
-            else if (_activeTab == "ranking")
-            {
-                <div style="display: flex; flex-direction: column; gap: 24px;">
-                    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">Decision Support Alert: low-performing series may require board review.</MudAlert>
-                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
-                        <StatCard Label="Total Serialized" Value="24" />
-                        <StatCard Label="Series at Risk" Value="3" />
-                        <StatCard Label="Avg Performance" Value="87.2%" />
-                        <StatCard Label="Total Poll Votes" Value="156.2K" />
-                    </div>
-                    <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px;">
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
-                            <div>
-                                <div style="font-weight: 600; color: #111827;">Weekly reader poll results and status tracking</div>
-                                <div style="color: #94a3b8; font-size: 0.85rem;">@_rankingWeek</div>
-                            </div>
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => _showRankingUpdate = true)">Update Weekly Poll Results</MudButton>
-                        </div>
-                        <MudTable Items="_rankingData" Hover="true">
-                            <HeaderContent>
-                                <MudTh>#</MudTh><MudTh>Series</MudTh><MudTh>Total Votes</MudTh><MudTh>Performance</MudTh><MudTh>Risk</MudTh><MudTh>Action</MudTh>
-                            </HeaderContent>
-                            <RowTemplate>
-                                <MudTd>@context.Rank</MudTd>
-                                <MudTd>@context.Series</MudTd>
-                                <MudTd>@context.Votes</MudTd>
-                                <MudTd>@context.Performance%</MudTd>
-                                <MudTd><MudChip T="string" Color="@context.Color" Size="Size.Small">@context.Risk</MudChip></MudTd>
-                                <MudTd>@if (context.Risk == "Danger Zone") { <MudButton Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">Prepare Board Review</MudButton> }</MudTd>
-                            </RowTemplate>
-                        </MudTable>
-                    </div>
-                    @if (_showRankingUpdate)
-                    {
-                        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px;">
-                            <div style="font-weight: 600; color: #111827; margin-bottom: 16px;">Update Weekly Poll Results</div>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                                <MudTextField Label="Week" @bind-Value="_pollWeek" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                                <MudTextField Label="Series" @bind-Value="_pollSeries" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                                <MudTextField Label="Total Votes" @bind-Value="_pollVotes" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                                <MudTextField Label="Rank" @bind-Value="_pollRank" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                            </div>
-                            <MudTextField Label="Notes" @bind-Value="_pollNotes" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="3" FullWidth="true" Class="mt-3" />
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="@(() => _showRankingUpdate = false)">Save Update</MudButton>
-                        </div>
-                    }
-                </div>
-            }
-            else if (_activeTab == "audit")
-            {
-                <div style="padding: 32px; background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; text-align: center;">
-                    <MudIcon Icon="@Icons.Material.Filled.Notifications" Size="Size.Large" Style="font-size: 40px; color: #cbd5e1; margin-bottom: 16px;" />
-                    <div style="font-weight: 600; color: #111827; margin-bottom: 8px;">Audit Log Notifications</div>
-                    <div style="color: #64748b; font-size: 0.85rem;">Activity feed displaying real-time updates from the production loop.</div>
                 </div>
             }
         </div>
@@ -843,21 +788,7 @@
     private SeriesCardData? _reviewSeries;
 
     private Guid? _currentUserId;
-
-    private string _rankingWeek = "Week 21 - May 2026";
-    private bool _showRankingUpdate;
-    private string _pollWeek = "Week 21 - May 2026";
-    private string _pollSeries = "";
-    private string _pollVotes = "";
-    private string _pollRank = "";
-    private string _pollNotes = "";
-    private readonly List<RankingRow> _rankingData =
-    [
-        new(1, "Crimson Moon Academy", "23,450", 98, "Stable", Color.Success),
-        new(2, "Neon Samurai Path", "21,900", 94, "Stable", Color.Success),
-        new(9, "Shadow Garden Tales", "4,123", 42, "Danger Zone", Color.Error),
-        new(10, "Phoenix Rising Team", "3,867", 39, "Danger Zone", Color.Error),
-    ];
+    private Guid? _openSeriesActionMenuId;
 
     private List<ChapterPageTaskDto> _tasks = [];
     private TaskStats _taskStats = new(0, 0, 0, 0);
@@ -911,6 +842,7 @@
 
     private void OpenCancelDraft(Guid seriesId, string title)
     {
+        _openSeriesActionMenuId = null;
         _cancelDraftSeriesId = seriesId;
         _cancelDraftSeriesTitle = title;
         _cancelDraftReason = null;
@@ -996,6 +928,7 @@
     /// </summary>
     private void OpenSeriesCard(SeriesCardData series)
     {
+        _openSeriesActionMenuId = null;
         switch (series.StatusCode)
         {
             case "PROPOSAL_DRAFT":
@@ -1015,6 +948,7 @@
 
     private void OpenDraftDetails(SeriesCardData series)
     {
+        _openSeriesActionMenuId = null;
         _detailSeries = series;
         // Seed the edit form fields from the current card data
         _editTitle = series.Title;
@@ -1167,12 +1101,14 @@
 
     private void OpenReviewStatus(SeriesCardData series)
     {
+        _openSeriesActionMenuId = null;
         _reviewSeries = series;
         _reviewStatusOpen = true;
     }
 
     private void OpenSubmitProposal(Guid seriesId, string title)
     {
+        _openSeriesActionMenuId = null;
         _submitProposalSeriesId = seriesId;
         _submitProposalSeriesTitle = title;
         _proposalFileBytes = null;
@@ -1298,8 +1234,6 @@
     [
         new("current", "Current Series", Icons.Material.Filled.ViewModule),
         new("review", "Assistant Review", Icons.Material.Filled.AssignmentTurnedIn),
-        new("ranking", "Ranking Tracker", Icons.Material.Filled.TrendingUp),
-        new("audit", "Audit Log", Icons.Material.Filled.Notifications),
     ];
 
     private string _currentDisplayName = "Mangaka";
@@ -1553,7 +1487,6 @@
     }
 
     private record NavItem(string Id, string Label, string Icon);
-    private record RankingRow(int Rank, string Series, string Votes, int Performance, string Risk, Color Color);
     private record TaskStats(int Total, int Assigned, int UnderReview, int Completed);
 
     private record SeriesCardData(

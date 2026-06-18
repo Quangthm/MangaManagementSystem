@@ -1,4 +1,5 @@
 using MangaManagementSystem.Domain.Entities;
+using MangaManagementSystem.Domain.ReadModels;
 using MangaManagementSystem.Domain.Interfaces;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
@@ -322,7 +323,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         // ── Series detail by slug (read model) ─────────────────────────────────────
 
         /// <inheritdoc />
-        public async Task<(Series? Series, IReadOnlyList<string> ContributorDisplayNames, IReadOnlyList<Chapter> Chapters, int TotalChapterCount)>
+        public async Task<(Series? Series, IReadOnlyList<SeriesContributorReadModel> Contributors, IReadOnlyList<Chapter> Chapters, int TotalChapterCount)>
             GetSeriesDetailBySlugAsync(
                 string slug,
                 int chapterPage,
@@ -335,13 +336,17 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .FirstOrDefaultAsync(s => s.Slug == slug, cancellationToken);
 
             if (series is null)
-                return (null, Array.Empty<string>(), Array.Empty<Chapter>(), 0);
+                return (null, Array.Empty<SeriesContributorReadModel>(), Array.Empty<Chapter>(), 0);
 
-            // Active contributor display names (Option B — all active contributors).
-            var contributorNames = await _context.SeriesContributors
+            // All contributors (active and past) with display name, role, dates.
+            var contributors = await _context.SeriesContributors
                 .AsNoTracking()
-                .Where(sc => sc.SeriesId == series.SeriesId && sc.EndDate == null && sc.User != null)
-                .Select(sc => sc.User!.DisplayName)
+                .Where(sc => sc.SeriesId == series.SeriesId && sc.User != null)
+                .Select(sc => new SeriesContributorReadModel(
+                    sc.User!.DisplayName,
+                    sc.User.Role != null ? sc.User.Role.RoleName : "",
+                    sc.StartDate,
+                    sc.EndDate))
                 .ToListAsync(cancellationToken);
 
             // Paginated chapters sorted by ChapterNumberLabel.
@@ -358,7 +363,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .Take(chapterPageSize)
                 .ToListAsync(cancellationToken);
 
-            return (series, contributorNames, chapters, totalChapterCount);
+            return (series, contributors, chapters, totalChapterCount);
         }
 
         // ── Workspace entry access check (read model) ───────────────────────────────

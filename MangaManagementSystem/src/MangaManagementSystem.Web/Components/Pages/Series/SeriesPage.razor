@@ -10,6 +10,7 @@
 @inject ISnackbar Snackbar
 @inject ISeriesApiClient SeriesApiClient
 @inject AuthenticationStateProvider AuthStateProvider
+@inject IDialogService DialogService
 
 <div style="min-height: 100vh; background: #f8fafc; padding: 40px 32px;">
     @if (_loading)
@@ -67,13 +68,10 @@
                             @_series.Title
                         </div>
 
-                        @* Badges *@
-                        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px;">
+                        @* Badges (status, language, frequency) *@
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px;">
                             <span style="background: @SeriesStatusHelper.BadgeColor(_series.StatusCode); color: @SeriesStatusHelper.TextColor(_series.StatusCode); font-size: 0.72rem; padding: 3px 10px; border-radius: 12px; font-weight: 600;">
                                 @SeriesStatusHelper.DisplayName(_series.StatusCode)
-                            </span>
-                            <span style="background: #f1f5f9; color: #475569; font-size: 0.72rem; padding: 3px 10px; border-radius: 12px; font-weight: 500;">
-                                @_series.Genre
                             </span>
                             @if (!string.IsNullOrWhiteSpace(_series.ContentLanguageCode))
                             {
@@ -89,15 +87,40 @@
                             }
                         </div>
 
-                        @* Contributors *@
-                        @if (_series.ContributorDisplayNames.Count > 0)
+                        @* Genres *@
+                        @if (!string.IsNullOrWhiteSpace(_series.Genre))
                         {
                             <div style="margin-bottom: 14px;">
+                                <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; display: block; margin-bottom: 4px;">Genres</span>
+                                <span style="background: #f1f5f9; color: #475569; font-size: 0.72rem; padding: 3px 10px; border-radius: 12px; font-weight: 500;">
+                                    @_series.Genre
+                                </span>
+                            </div>
+                        }
+
+                        @* Mangaka (active Mangaka contributors only) *@
+                        @{
+                            var activeMangaka = _series.Contributors
+                                .Where(c => c.RoleName == "Mangaka" && c.EndDate == null)
+                                .ToList();
+                        }
+                        @if (activeMangaka.Count > 0)
+                        {
+                            <div style="margin-bottom: 8px;">
                                 <span style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">Mangaka</span>
                                 <div style="color: #374151; font-size: 0.9rem; font-weight: 500; margin-top: 2px;">
-                                    @string.Join(", ", _series.ContributorDisplayNames)
+                                    @string.Join(", ", activeMangaka.Select(c => c.DisplayName))
                                 </div>
                             </div>
+                        }
+
+                        @if (_series.Contributors.Count > 0)
+                        {
+                            <MudButton Variant="Variant.Text" Size="Size.Small"
+                                       Style="color: #6366f1; font-size: 0.78rem; padding: 0; min-width: 0; margin-bottom: 8px;"
+                                       OnClick="@OpenContributorPanel">
+                                View all contributors
+                            </MudButton>
                         }
 
                         @* Synopsis *@
@@ -220,17 +243,92 @@
                 }
             </div>
 
-            @* ── URL info ── *@
-            <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 20px; display: flex; align-items: center; gap: 10px; margin-bottom: 40px;">
-                <MudIcon Icon="@Icons.Material.Filled.Link" Style="font-size: 18px; color: #94a3b8;" />
-                <span style="color: #94a3b8; font-size: 0.8rem;">Stable series URL:</span>
-                <code style="color: #6366f1; font-size: 0.8rem; background: #eef2ff; padding: 2px 8px; border-radius: 4px;">/series/@Slug</code>
-            </div>
         </div>
     }
 </div>
 
+@* ── Contributor panel dialog ── *@
+<MudDialog @bind-Visible="_contributorDialogOpen">
+    <DialogContent>
+        @if (_series is not null)
+        {
+            var active = _series.Contributors.Where(c => c.EndDate == null).ToList();
+            var past = _series.Contributors.Where(c => c.EndDate != null).ToList();
+
+            @* Active contributors *@
+            <div style="font-weight: 700; font-size: 1rem; color: #111827; margin-bottom: 12px;">Active Contributors</div>
+            @if (active.Count == 0)
+            {
+                <div style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 20px;">No active contributors.</div>
+            }
+            else
+            {
+                <div style="margin-bottom: 24px;">
+                    @foreach (var c in active)
+                    {
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f1f5f9;">
+                            <div>
+                                <div style="font-weight: 600; color: #111827; font-size: 0.9rem;">@c.DisplayName</div>
+                                <div style="color: #6366f1; font-size: 0.75rem; font-weight: 500;">@c.RoleName</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 0.75rem; color: #10b981; font-weight: 600;">Active</div>
+                                <div style="font-size: 0.7rem; color: #94a3b8;">Started @c.StartDate.ToString("MMM d, yyyy")</div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
+            @* Past contributors *@
+            <div style="font-weight: 700; font-size: 1rem; color: #111827; margin-bottom: 12px;">Past Contributors</div>
+            @if (past.Count == 0)
+            {
+                <div style="color: #94a3b8; font-size: 0.85rem;">No past contributors.</div>
+            }
+            else
+            {
+                <div>
+                    @foreach (var c in past)
+                    {
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f1f5f9;">
+                            <div>
+                                <div style="font-weight: 600; color: #111827; font-size: 0.9rem;">@c.DisplayName</div>
+                                <div style="color: #6366f1; font-size: 0.75rem; font-weight: 500;">@c.RoleName</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 0.75rem; color: #94a3b8; font-weight: 600;">Ended</div>
+                                <div style="font-size: 0.7rem; color: #94a3b8;">
+                                    Started @c.StartDate.ToString("MMM d, yyyy")
+                                </div>
+                                @if (c.EndDate.HasValue)
+                                {
+                                    <div style="font-size: 0.7rem; color: #94a3b8;">
+                                        Stopped @c.EndDate.Value.ToString("MMM d, yyyy")
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" Color="Color.Default" OnClick="@(() => _contributorDialogOpen = false)">
+            Close
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
 @code {
+    private bool _contributorDialogOpen;
+
+    private void OpenContributorPanel()
+    {
+        _contributorDialogOpen = true;
+    }
+
     [Parameter] public string Slug { get; set; } = string.Empty;
 
     private SeriesDetailDto? _series;
