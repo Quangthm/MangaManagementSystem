@@ -1,20 +1,42 @@
-@page "/mangaka/workspace/{SeriesId}"
+@page "/series/{Slug}/workspace"
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 @using System.Text.Json
 @using MangaManagementSystem.Application.Interfaces
-@attribute [Authorize(Roles = "Mangaka")]
+@using MangaManagementSystem.Web.Services.Api
+@attribute [Authorize(Roles = "Mangaka,Tantou Editor,Assistant")]
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject ISeriesService SeriesService
 @inject IChapterService ChapterService
+@inject ISeriesApiClient SeriesApiClient
+@inject AuthenticationStateProvider AuthStateProvider
 
+@if (_accessDenied)
+{
+    <div style="min-height: 100vh; background: #f8fafc; display: flex; align-items: center; justify-content: center;">
+        <div style="max-width: 480px; text-align: center; padding: 40px 24px;">
+            <MudIcon Icon="@Icons.Material.Filled.Lock" Style="font-size: 56px; color: #cbd5e1; margin-bottom: 16px;" />
+            <div style="font-weight: 700; font-size: 1.2rem; color: #111827; margin-bottom: 8px;">Workspace Access Denied</div>
+            <div style="color: #64748b; font-size: 0.9rem; margin-bottom: 24px;">
+                You are not an active contributor for this series, or the series was not found.
+            </div>
+            <MudButton Variant="Variant.Outlined" OnClick="@(() => Nav.NavigateTo($"/series/{Slug}"))">
+                Back to Series
+            </MudButton>
+        </div>
+    </div>
+}
+else
+{
 <div class="mf-workspace-container">
     <!-- Header -->
     <header class="mf-workspace-header px-4 py-2 d-flex justify-space-between align-center" style="position: relative;">
         <div class="d-flex align-center">
-            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="/mangaka" Class="mr-2" />
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="@($"/series/{Slug}")" Class="mr-2" />
             <MudText Typo="Typo.h6" Class="font-weight-bold">@SeriesTitle</MudText>
             <MudText Typo="Typo.caption" Class="mf-muted ml-2 mt-1">@SeriesSubtitle</MudText>
         </div>
@@ -421,6 +443,7 @@
 
     </div>
 </div>
+}
 
 <style>
     body { margin: 0; padding: 0; overflow: hidden; }
@@ -455,7 +478,13 @@
 </style>
 
 @code {
-    [Parameter] public string? SeriesId { get; set; }
+    [Parameter] public string Slug { get; set; } = string.Empty;
+    [SupplyParameterFromQuery] public string? chapterId { get; set; }
+
+    private string? SeriesId { get; set; }
+    private bool _accessDenied = false;
+    private Guid? _currentUserId;
+
     private int SelectedChapter { get; set; } = 0;
     private int SelectedPage { get; set; } = 0;
     private List<RegionModel> SelectedRegions = new();
@@ -697,12 +726,47 @@
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync();
+
+        // Resolve actor user ID from auth state.
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var idClaim = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (Guid.TryParse(idClaim, out var uid))
+                _currentUserId = uid;
+        }
+        catch { }
+
+        // Workspace access guard: resolve slug → SeriesId and verify series-specific access.
+        if (string.IsNullOrWhiteSpace(Slug) || !_currentUserId.HasValue)
+        {
+            _accessDenied = true;
+            return;
+        }
+
+        try
+        {
+            var entry = await SeriesApiClient.GetWorkspaceEntryAsync(_currentUserId.Value, Slug);
+            if (entry is null || !entry.CanAccess)
+            {
+                _accessDenied = true;
+                return;
+            }
+
+            SeriesId = entry.SeriesId.ToString();
+        }
+        catch
+        {
+            _accessDenied = true;
+            return;
+        }
+
         await LoadSeriesDataAsync();
     }
 
     private async Task LoadSeriesDataAsync()
     {
-        if (Guid.TryParse(SeriesId, out Guid id))
+        if (!string.IsNullOrWhiteSpace(SeriesId) && Guid.TryParse(SeriesId, out Guid id))
         {
             var series = await SeriesService.GetSeriesByIdAsync(id);
             if (series != null)

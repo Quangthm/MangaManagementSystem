@@ -16,7 +16,13 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         DateTime CreatedAtUtc,
         DateTime? UpdatedAtUtc,
         Guid? UpdatedByUserId,
-        string? PublicationFrequencyCode
+        string? PublicationFrequencyCode,
+        /// <summary>
+        /// Cloudinary secure URL for the series cover image, if a cover FileResource exists
+        /// and has not been soft-deleted. Null when no cover has been uploaded.
+        /// Display-only — do not use for upload or update workflows.
+        /// </summary>
+        string? CoverUrl = null
     );
 
     public record CreateSeriesDto(

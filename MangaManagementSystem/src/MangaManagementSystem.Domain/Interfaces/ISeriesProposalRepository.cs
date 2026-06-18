@@ -12,6 +12,25 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<SeriesProposal?> GetLatestBySeriesIdAsync(Guid seriesId, CancellationToken ct = default);
         Task<List<SeriesProposal>> GetEditorialQueueAsync(string? statusCode, Guid? seriesId, Guid? submittedByUserId, Guid? reviewedByUserId, CancellationToken ct = default);
 
+        /// <summary>
+        /// Submits a series proposal for editorial review via <c>manga.usp_SeriesProposal_Submit</c>.
+        /// The stored procedure: validates the series is PROPOSAL_DRAFT, validates the submitter is
+        /// an active Mangaka contributor, creates the SERIES_PROPOSAL FileResource, creates the
+        /// SeriesProposal row, transitions Series to UNDER_EDITORIAL_REVIEW, and writes the audit event.
+        /// The caller must NOT pass title/synopsis/genre — the procedure snapshots them from Series.
+        /// All file metadata parameters are required (no nulls accepted by the procedure).
+        /// </summary>
+        Task<(Guid SeriesProposalId, short ProposalVersionNo)> SubmitSeriesProposalViaProcAsync(
+            Guid seriesId,
+            Guid submittedByUserId,
+            string originalFileName,
+            string cloudinaryPublicId,
+            string cloudinarySecureUrl,
+            string contentType,
+            long fileSizeBytes,
+            string sha256Hash,
+            CancellationToken cancellationToken = default);
+
         Task<Guid?> ClaimEditorialReviewAsync(Guid seriesProposalId, Guid actorUserId, string? notes, CancellationToken ct = default);
         
         Task<Guid?> RequestRevisionAsync(Guid seriesProposalId, Guid actorUserId, string comments, 
