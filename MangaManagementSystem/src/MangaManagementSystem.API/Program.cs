@@ -1,3 +1,6 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using MangaManagementSystem.Application;
 using MangaManagementSystem.Infrastructure;
 
@@ -22,6 +25,7 @@ namespace MangaManagementSystem.API
 
             builder.Services.AddControllers();
             builder.Services.AddEndpointsApiExplorer();
+            var app = builder.Build();
             builder.Services.AddSwaggerGen();
 
             // Add application and infrastructure services
@@ -37,6 +41,7 @@ namespace MangaManagementSystem.API
             }
 
             app.UseHttpsRedirection();
+            app.UseAuthentication();
             app.UseAuthorization();
 
             app.MapControllers();

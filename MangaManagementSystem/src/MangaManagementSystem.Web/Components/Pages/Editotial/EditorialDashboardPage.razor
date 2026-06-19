@@ -1,0 +1,167 @@
+@page "/demo/mangaflow/editorial"
+
+<MangaFlowShell Title="Editorial Dashboard"
+                Subtitle="Overview of proposal review, board polls, and pending decisions."
+                ActiveMenu="dashboard">
+    <ChildContent>
+        <div class="mf-grid mf-grid-3">
+            <KpiCard Label="Proposal Reviews"
+                     Value="4"
+                     Description="Need board review"
+                     Icon="▤"
+                     Tone="blue" />
+
+            <KpiCard Label="Open Polls"
+                     Value="3"
+                     Description="Active voting sessions"
+                     Icon="▥"
+                     Tone="green" />
+
+            <KpiCard Label="Awaiting Decision"
+                     Value="3"
+                     Description="Ready for board chief action"
+                     Icon="⌛"
+                     Tone="orange" />
+        </div>
+
+        <div class="mf-grid mf-grid-2 mf-gap-top">
+            <section class="mf-card">
+                <div class="mf-section-head">
+                    <div class="mf-section-title-wrap">
+                        <div class="mf-section-icon">▤</div>
+
+                        <div>
+                            <h2>Recent Proposal Reviews</h2>
+                            <p>Submitted series proposals currently visible to the editorial board.</p>
+                        </div>
+                    </div>
+
+                    <a class="mf-btn mf-btn-primary" href="/demo/mangaflow/proposals">
+                        Review Proposals
+                    </a>
+                </div>
+
+                @foreach (var proposal in RecentProposals)
+                {
+                    <div class="mf-list-row">
+                        <div>
+                            <div class="mf-code">@proposal.Code</div>
+                            <div class="mf-strong">@proposal.Title</div>
+                            <div class="mf-muted">@proposal.Author · @proposal.Genre</div>
+                        </div>
+
+                        <StatusBadge Status="@proposal.Status" />
+                    </div>
+                }
+            </section>
+
+            <section class="mf-card">
+                <div class="mf-section-head">
+                    <div class="mf-section-title-wrap">
+                        <div class="mf-section-icon">▥</div>
+
+                        <div>
+                            <h2>Open Polls</h2>
+                            <p>Active serialization and continuation votes.</p>
+                        </div>
+                    </div>
+
+                    <a class="mf-btn mf-btn-primary" href="/demo/mangaflow/polls">
+                        Manage Polls
+                    </a>
+                </div>
+
+                @foreach (var poll in OpenPolls)
+                {
+                    <div class="mf-list-row">
+                        <div>
+                            <div class="mf-strong">@poll.Name</div>
+                            <div class="mf-muted">@poll.Code · @poll.Votes/@poll.Total votes</div>
+                        </div>
+
+                        <StatusBadge Status="Open" />
+                    </div>
+                }
+            </section>
+        </div>
+
+        <section class="mf-card mf-gap-top">
+            <div class="mf-section-head">
+                <div class="mf-section-title-wrap">
+                    <div class="mf-section-icon orange">⌛</div>
+
+                    <div>
+                        <h2>Decision Queue</h2>
+                        <p>Polls waiting for final publishing decision after board voting.</p>
+                    </div>
+                </div>
+
+                <a class="mf-btn" href="/demo/mangaflow/decisions">
+                    Open Decision Center
+                </a>
+            </div>
+
+            <div class="mf-grid mf-grid-4">
+                @foreach (var item in Decisions)
+                {
+                    <div class="mf-decision-mini-card">
+                        <StatusBadge Status="Voting in Progress" />
+
+                        <div class="mf-decision-title">
+                            @item.Title
+                        </div>
+
+                        <div class="mf-decision-meta">
+                            @item.Code · @item.Votes/9 votes
+                        </div>
+
+                        <span class="mf-decision-arrow">›</span>
+                    </div>
+                }
+            </div>
+        </section>
+    </ChildContent>
+</MangaFlowShell>
+
+@code {
+    private sealed record ProposalRow(
+        string Code,
+        string Title,
+        string Author,
+        string Genre,
+        string Status);
+
+    private sealed record PollRow(
+        string Code,
+        string Name,
+        int Votes,
+        int Total);
+
+    private sealed record DecisionRow(
+        string Code,
+        string Title,
+        int Votes);
+
+    private readonly IReadOnlyList<ProposalRow> RecentProposals = new List<ProposalRow>
+    {
+        new("MNG-001", "Celestial Blade Chronicles", "Hiroshi Tanaka", "Action / Fantasy", "Published"),
+        new("MNG-002", "Shadow of the Lotus", "Yuki Aoyama", "Drama / Romance", "In Review"),
+        new("MNG-003", "Mecha Storm Zero", "Kenji Mori", "Sci-Fi / Action", "Approved"),
+        new("MNG-004", "The Wandering Sorcerer", "Ren Nakamura", "Fantasy / Adventure", "Draft")
+    };
+
+    private readonly IReadOnlyList<PollRow> OpenPolls = new List<PollRow>
+    {
+        new("MNG-003", "Serialization Approval — Mecha Storm Zero", 7, 9),
+        new("MNG-002", "Serialization Vote — Shadow of the Lotus", 5, 9),
+        new("MNG-015", "Continuation — Velocity Kings", 5, 9)
+    };
+
+    private readonly IReadOnlyList<DecisionRow> Decisions = new List<DecisionRow>
+    {
+        new("MNG-001", "Celestial Blade Chronicles", 8),
+        new("MNG-002", "Shadow of the Lotus", 7),
+        new("MNG-003", "Mecha Storm Zero", 6),
+        new("MNG-004", "The Wandering Sorcerer", 6)
+    };
+}
