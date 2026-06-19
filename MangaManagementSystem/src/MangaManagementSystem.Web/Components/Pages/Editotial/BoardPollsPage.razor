@@ -33,19 +33,19 @@
                 <KpiCard Label="Open Polls"
                          Value="@_polls.Count.ToString(CultureInfo.InvariantCulture)"
                          Description="Active voting sessions"
-                         Icon="▥"
+                         Icon="O"
                          Tone="green" />
 
                 <KpiCard Label="Total Votes"
                          Value="@_polls.Sum(p => p.TotalVotes).ToString(CultureInfo.InvariantCulture)"
                          Description="Votes already submitted"
-                         Icon="✓"
+                         Icon="C"
                          Tone="blue" />
 
                 <KpiCard Label="My Pending Votes"
                          Value="@_polls.Count(p => string.IsNullOrWhiteSpace(p.CurrentUserChoiceCode)).ToString(CultureInfo.InvariantCulture)"
                          Description="Polls waiting for your vote"
-                         Icon="⌛"
+                         Icon="U"
                          Tone="orange" />
             </div>
 
@@ -55,7 +55,9 @@
             {
                 <section class="mf-card">
                     <div class="mf-strong">No open polls</div>
-                    <div class="mf-muted">When Board Chief opens a poll, it will appear here for all board members.</div>
+                    <div class="mf-muted">
+                        When Board Chief opens a poll from Proposal Review, it will appear here from SQL Server.
+                    </div>
                 </section>
             }
             else
@@ -310,16 +312,17 @@
         _isSavingVote = true;
         _voteMessage = null;
 
+        var pollId = _selectedPoll.PollId;
+
         try
         {
             await EditorialBoardApiClient.CastVoteAsync(
-                _selectedPoll.PollId,
+                pollId,
                 new CastVoteRequest(_selectedChoice, _voteReason));
 
             await LoadPollsAsync();
 
-            _selectedPoll = _polls.FirstOrDefault(p => p.PollId == _selectedPoll.PollId);
-
+            _selectedPoll = _polls.FirstOrDefault(p => p.PollId == pollId);
             _voteMessage = "Vote saved successfully. This result is stored in database.";
         }
         catch (Exception ex)
