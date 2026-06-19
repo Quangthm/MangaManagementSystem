@@ -1,30 +1,14 @@
 @page "/admin/audit-logs"
-@using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "Admin")]
-@inject NavigationManager Nav
+@inject NavigationManager NavigationManager
 
-<AdminLayout>
-    <div class="mf-page">
-        <div class="mf-page-header">
-            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">System Audit Logs</MudText>
-            <MudText Typo="Typo.body1" Class="mf-muted">Review system actions, account changes, and workflow decisions</MudText>
-        </div>
-
-        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
-            <MudText>System audit logs are disabled in this release. Contact your system administrator if you need to access audit data.</MudText>
-        </MudAlert>
-
-    </div>
-</AdminLayout>
+<PageTitle>User Audit History - MangaFlow</PageTitle>
 
 @code {
-
-    private readonly List<AuditRow> Logs = new()
+    protected override void OnInitialized()
     {
-        new("2026-05-21 09:15", "admin@mangaflow.jp", "USER_APPROVED", "auth.Users:42"),
-        new("2026-05-21 10:20", "Yuki Tanaka", "REVIEW_SUBMITTED", "ChapterSubmission:18"),
-        new("2026-05-21 11:45", "Board Member", "BOARD_VOTE_CAST", "SeriesBoardVote:7")
-    };
-    private record AuditRow(string Time, string Actor, string Action, string Object);
-
+        NavigationManager.NavigateTo(
+            "/admin/users",
+            replace: true);
+    }
 }

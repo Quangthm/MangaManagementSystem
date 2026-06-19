@@ -50,5 +50,62 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .ToListAsync(
                     cancellationToken);
         }
+
+
+        public async Task<(
+            IReadOnlyList<AuditEvent> Items,
+            int TotalCount)> GetForUserAsync(
+                Guid userId,
+                int pageNumber,
+                int pageSize,
+                CancellationToken cancellationToken = default)
+        {
+            if (userId == Guid.Empty)
+            {
+                return (
+                    Array.Empty<AuditEvent>(),
+                    0);
+            }
+
+            var userIdD =
+                userId.ToString("D");
+
+            var userIdN =
+                userId.ToString("N");
+
+            var query =
+                _context.AuditEvents
+                    .AsNoTracking()
+                    .Where(
+                        item =>
+                            (item.EntityType == "Users"
+                                || item.EntityType == "USER")
+                            && (item.EntityId == userIdD
+                                || item.EntityId == userIdN));
+
+            var totalCount =
+                await query.CountAsync(
+                    cancellationToken);
+
+            var items =
+                await query
+                    .OrderByDescending(
+                        item =>
+                            item.OccurredAtUtc)
+                    .ThenByDescending(
+                        item =>
+                            item.AuditEventId)
+                    .Skip(
+                        (pageNumber - 1)
+                        * pageSize)
+                    .Take(
+                        pageSize)
+                    .ToListAsync(
+                        cancellationToken);
+
+            return (
+                items,
+                totalCount);
+        }
     }
 }

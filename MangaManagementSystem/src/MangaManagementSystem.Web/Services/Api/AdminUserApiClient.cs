@@ -63,14 +63,132 @@ namespace MangaManagementSystem.Web.Services.Api
                 response,
                 "Load admin users");
 
-            var users =
-                await ApiResponseReader
-                    .ReadRequiredAsync<List<UserDto>>(
-                        response,
-                        "The Admin User API returned an empty response.",
-                        cancellationToken);
+            return await ApiResponseReader
+                .ReadRequiredAsync<List<UserDto>>(
+                    response,
+                    "The Admin User API returned an empty response.",
+                    cancellationToken);
+        }
 
-            return users;
+        public async Task<AdminUserPageDto>
+            SearchUsersAsync(
+                string? search = null,
+                string? statusCode = null,
+                string? roleName = null,
+                int pageNumber = 1,
+                int pageSize = 20,
+                CancellationToken cancellationToken = default)
+        {
+            var query =
+                new List<string>
+                {
+                    "pageNumber=" + pageNumber,
+                    "pageSize=" + pageSize
+                };
+
+            AddQueryValue(
+                query,
+                "search",
+                search);
+
+            AddQueryValue(
+                query,
+                "status",
+                statusCode);
+
+            AddQueryValue(
+                query,
+                "role",
+                roleName);
+
+            var route =
+                "api/admin/users/search?"
+                + string.Join("&", query);
+
+            using var request =
+                await CreateAuthorizedRequestAsync(
+                    HttpMethod.Get,
+                    route);
+
+            using var response =
+                await _httpClient.SendAsync(
+                    request,
+                    cancellationToken);
+
+            LogFailure(
+                response,
+                "Search admin users");
+
+            return await ApiResponseReader
+                .ReadRequiredAsync<AdminUserPageDto>(
+                    response,
+                    "The Admin User API returned an empty search response.",
+                    cancellationToken);
+        }
+
+        public async Task<AdminUserDetailDto?>
+            GetUserAsync(
+                Guid userId,
+                CancellationToken cancellationToken = default)
+        {
+            using var request =
+                await CreateAuthorizedRequestAsync(
+                    HttpMethod.Get,
+                    $"api/admin/users/{userId:D}");
+
+            using var response =
+                await _httpClient.SendAsync(
+                    request,
+                    cancellationToken);
+
+            if (response.StatusCode ==
+                HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+
+            LogFailure(
+                response,
+                "Load admin user detail");
+
+            return await ApiResponseReader
+                .ReadRequiredAsync<AdminUserDetailDto>(
+                    response,
+                    "The Admin User API returned an empty user detail response.",
+                    cancellationToken);
+        }
+
+        public async Task<AdminUserAuditPageDto>
+            GetUserAuditAsync(
+                Guid userId,
+                int pageNumber = 1,
+                int pageSize = 20,
+                CancellationToken cancellationToken = default)
+        {
+            var route =
+                $"api/admin/users/{userId:D}/audit"
+                + $"?pageNumber={pageNumber}"
+                + $"&pageSize={pageSize}";
+
+            using var request =
+                await CreateAuthorizedRequestAsync(
+                    HttpMethod.Get,
+                    route);
+
+            using var response =
+                await _httpClient.SendAsync(
+                    request,
+                    cancellationToken);
+
+            LogFailure(
+                response,
+                "Load user audit history");
+
+            return await ApiResponseReader
+                .ReadRequiredAsync<AdminUserAuditPageDto>(
+                    response,
+                    "The Admin User API returned an empty audit response.",
+                    cancellationToken);
         }
 
         public async Task<AdminUserStatusCountsDto>
@@ -177,6 +295,42 @@ namespace MangaManagementSystem.Web.Services.Api
                 cancellationToken);
         }
 
+        public async Task SendPasswordResetAsync(
+            Guid userId,
+            string resetPageUrl,
+            CancellationToken cancellationToken = default)
+        {
+            using var request =
+                await CreateAuthorizedRequestAsync(
+                    HttpMethod.Post,
+                    $"api/admin/users/{userId:D}/password-reset");
+
+            request.Content =
+                JsonContent.Create(
+                    new
+                    {
+                        ResetPageUrl =
+                            resetPageUrl
+                    });
+
+            using var response =
+                await _httpClient.SendAsync(
+                    request,
+                    cancellationToken);
+
+            LogFailure(
+                response,
+                "Send Admin password reset");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw await ApiResponseReader
+                    .CreateExceptionAsync(
+                        response,
+                        cancellationToken);
+            }
+        }
+
         private async Task<UserDto> SendActionAsync(
             Guid userId,
             string action,
@@ -277,6 +431,22 @@ namespace MangaManagementSystem.Web.Services.Api
                 actorRole);
 
             return request;
+        }
+
+        private static void AddQueryValue(
+            ICollection<string> query,
+            string name,
+            string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return;
+            }
+
+            query.Add(
+                Uri.EscapeDataString(name)
+                + "="
+                + Uri.EscapeDataString(value.Trim()));
         }
 
         private void LogFailure(

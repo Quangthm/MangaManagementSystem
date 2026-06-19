@@ -12,5 +12,13 @@ namespace MangaManagementSystem.Domain.Interfaces
             string entityType,
             string entityId,
             CancellationToken cancellationToken = default);
+
+
+        Task<(IReadOnlyList<AuditEvent> Items, int TotalCount)>
+            GetForUserAsync(
+                Guid userId,
+                int pageNumber,
+                int pageSize,
+                CancellationToken cancellationToken = default);
     }
 }

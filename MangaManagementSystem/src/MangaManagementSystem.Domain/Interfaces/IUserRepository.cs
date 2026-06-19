@@ -19,6 +19,17 @@ namespace MangaManagementSystem.Domain.Interfaces
         string? OldContentType
     );
 
+    public sealed record UserSearchCriteria(
+        string? Search,
+        string? StatusCode,
+        string? RoleName,
+        int PageNumber,
+        int PageSize);
+
+    public sealed record PagedUserResult(
+        IReadOnlyList<User> Items,
+        int TotalCount);
+
     public interface IUserRepository
         : IGenericRepository<User>
     {
@@ -36,6 +47,10 @@ namespace MangaManagementSystem.Domain.Interfaces
             CancellationToken cancellationToken = default);
 
         Task<IReadOnlyList<User>> GetAllWithRoleAsync(
+            CancellationToken cancellationToken = default);
+
+        Task<PagedUserResult> SearchAdminUsersAsync(
+            UserSearchCriteria criteria,
             CancellationToken cancellationToken = default);
 
         Task<IReadOnlyDictionary<string, int>>

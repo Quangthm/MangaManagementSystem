@@ -1,5 +1,7 @@
+using System.Text.Json;
 using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.Interfaces;
+using MangaManagementSystem.Domain.Interfaces;
 using MediatR;
 
 namespace MangaManagementSystem.Application.Features.Admin.Users.Commands
@@ -16,14 +18,27 @@ namespace MangaManagementSystem.Application.Features.Admin.Users.Commands
             UserDto>,
           IRequestHandler<
             ActivateAdminUserCommand,
-            UserDto>
+            UserDto>,
+          IRequestHandler<
+            SendAdminPasswordResetCommand,
+            bool>
     {
         private readonly IUserService _userService;
+        private readonly IUserRepository _userRepository;
+        private readonly IAuthService _authService;
+        private readonly IAuditEventRepository
+            _auditEventRepository;
 
         public AdminUserCommandHandlers(
-            IUserService userService)
+            IUserService userService,
+            IUserRepository userRepository,
+            IAuthService authService,
+            IAuditEventRepository auditEventRepository)
         {
             _userService = userService;
+            _userRepository = userRepository;
+            _authService = authService;
+            _auditEventRepository = auditEventRepository;
         }
 
         public Task<UserDto> Handle(
@@ -73,6 +88,45 @@ namespace MangaManagementSystem.Application.Features.Admin.Users.Commands
             return _userService.ActivateUserAsync(
                 request.ActorUserId,
                 request.TargetUserId);
+        }
+
+        public async Task<bool> Handle(
+            SendAdminPasswordResetCommand request,
+            CancellationToken cancellationToken)
+        {
+            if (request.TargetUserId == Guid.Empty)
+            {
+                throw new InvalidOperationException(
+                    "Target user id is required.");
+            }
+
+            var user =
+                await _userRepository.GetByIdWithRoleAsync(
+                    request.TargetUserId,
+                    cancellationToken)
+                ?? throw new InvalidOperationException(
+                    "The target user was not found.");
+
+            await _authService.RequestPasswordResetAsync(
+                user.Email,
+                request.ResetPageUrl,
+                cancellationToken);
+
+            await _auditEventRepository.AppendAsync(
+                request.ActorUserId,
+                "ADMIN_PASSWORD_RESET_LINK_SENT",
+                "Users",
+                request.TargetUserId.ToString("D"),
+                JsonSerializer.Serialize(
+                    new
+                    {
+                        target_user_id =
+                            request.TargetUserId,
+                        delivery = "email"
+                    }),
+                cancellationToken);
+
+            return true;
         }
 
         private async Task<UserDto> GetRequiredUserAsync(

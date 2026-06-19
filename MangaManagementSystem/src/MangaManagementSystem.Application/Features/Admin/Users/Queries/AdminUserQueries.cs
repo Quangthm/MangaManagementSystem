@@ -9,6 +9,24 @@ namespace MangaManagementSystem.Application.Features.Admin.Users.Queries
         string? StatusCode = null)
         : IRequest<IReadOnlyList<UserDto>>;
 
+    public sealed record SearchAdminUsersQuery(
+        string? Search,
+        string? StatusCode,
+        string? RoleName,
+        int PageNumber = 1,
+        int PageSize = 20)
+        : IRequest<AdminUserPageDto>;
+
+    public sealed record GetAdminUserDetailQuery(
+        Guid UserId)
+        : IRequest<AdminUserDetailDto?>;
+
+    public sealed record GetAdminUserAuditQuery(
+        Guid UserId,
+        int PageNumber = 1,
+        int PageSize = 20)
+        : IRequest<AdminUserAuditPageDto>;
+
     public sealed record GetAdminUserStatusCountsQuery
         : IRequest<AdminUserStatusCountsDto>
     {

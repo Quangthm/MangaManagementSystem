@@ -72,6 +72,78 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     cancellationToken);
         }
 
+        public async Task<PagedUserResult>
+            SearchAdminUsersAsync(
+                UserSearchCriteria criteria,
+                CancellationToken cancellationToken = default)
+        {
+            var query =
+                UsersWithRole();
+
+            if (!string.IsNullOrWhiteSpace(
+                    criteria.Search))
+            {
+                var search =
+                    criteria.Search.Trim();
+
+                query =
+                    query.Where(
+                        user =>
+                            user.Username.Contains(search)
+                            || user.Email.Contains(search)
+                            || user.DisplayName.Contains(search));
+            }
+
+            if (!string.IsNullOrWhiteSpace(
+                    criteria.StatusCode))
+            {
+                var statusCode =
+                    criteria.StatusCode.Trim();
+
+                query =
+                    query.Where(
+                        user =>
+                            user.StatusCode == statusCode);
+            }
+
+            if (!string.IsNullOrWhiteSpace(
+                    criteria.RoleName))
+            {
+                var roleName =
+                    criteria.RoleName.Trim();
+
+                query =
+                    query.Where(
+                        user =>
+                            user.Role != null
+                            && user.Role.RoleName == roleName);
+            }
+
+            var totalCount =
+                await query.CountAsync(
+                    cancellationToken);
+
+            var items =
+                await query
+                    .OrderByDescending(
+                        user =>
+                            user.CreatedAtUtc)
+                    .ThenBy(
+                        user =>
+                            user.Username)
+                    .Skip(
+                        (criteria.PageNumber - 1)
+                        * criteria.PageSize)
+                    .Take(
+                        criteria.PageSize)
+                    .ToListAsync(
+                        cancellationToken);
+
+            return new PagedUserResult(
+                items,
+                totalCount);
+        }
+
         public async Task<IReadOnlyDictionary<string, int>>
             GetStatusCountsAsync(
                 CancellationToken cancellationToken = default)

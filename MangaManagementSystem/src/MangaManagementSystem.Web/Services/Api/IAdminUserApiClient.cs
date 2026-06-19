@@ -10,6 +10,24 @@ namespace MangaManagementSystem.Web.Services.Api
             string? statusCode = null,
             CancellationToken cancellationToken = default);
 
+        Task<AdminUserPageDto> SearchUsersAsync(
+            string? search = null,
+            string? statusCode = null,
+            string? roleName = null,
+            int pageNumber = 1,
+            int pageSize = 20,
+            CancellationToken cancellationToken = default);
+
+        Task<AdminUserDetailDto?> GetUserAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default);
+
+        Task<AdminUserAuditPageDto> GetUserAuditAsync(
+            Guid userId,
+            int pageNumber = 1,
+            int pageSize = 20,
+            CancellationToken cancellationToken = default);
+
         Task<AdminUserStatusCountsDto>
             GetStatusCountsAsync(
                 CancellationToken cancellationToken = default);
@@ -34,6 +52,11 @@ namespace MangaManagementSystem.Web.Services.Api
 
         Task<UserDto> ActivateUserAsync(
             Guid userId,
+            CancellationToken cancellationToken = default);
+
+        Task SendPasswordResetAsync(
+            Guid userId,
+            string resetPageUrl,
             CancellationToken cancellationToken = default);
     }
 }

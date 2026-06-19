@@ -20,18 +20,8 @@
             <NavLink href="/admin/users"
                      class="mf-nav-link"
                      Match="NavLinkMatch.Prefix">
-                User Accounts
+                User Management
             </NavLink>
-
-            <AuthorizeView Roles="Admin">
-                <Authorized>
-                    <NavLink href="/admin/user-approval"
-                             class="mf-nav-link"
-                             Match="NavLinkMatch.Prefix">
-                        User Approval
-                    </NavLink>
-                </Authorized>
-            </AuthorizeView>
 <div class="mf-nav-title mt-3">System</div>
 
             <div class="mf-nav-link disabled">

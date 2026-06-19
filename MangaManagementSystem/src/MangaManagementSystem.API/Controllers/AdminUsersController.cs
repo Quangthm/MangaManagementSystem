@@ -62,8 +62,7 @@ namespace MangaManagementSystem.API.Controllers
             {
                 var users =
                     await _sender.Send(
-                        new GetAdminUsersQuery(
-                            status),
+                        new GetAdminUsersQuery(status),
                         cancellationToken);
 
                 return Ok(users);
@@ -80,6 +79,54 @@ namespace MangaManagementSystem.API.Controllers
                 _logger.LogError(
                     ex,
                     "Failed to load admin users.");
+
+                return AdminRequestFailed();
+            }
+        }
+
+        [HttpGet("search")]
+        public async Task<IActionResult> SearchUsersAsync(
+            [FromQuery] string? search,
+            [FromQuery] string? status,
+            [FromQuery] string? role,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 20,
+            CancellationToken cancellationToken = default)
+        {
+            var authorization =
+                await ResolveAdminActorAsync();
+
+            if (authorization.Error is not null)
+            {
+                return authorization.Error;
+            }
+
+            try
+            {
+                var page =
+                    await _sender.Send(
+                        new SearchAdminUsersQuery(
+                            search,
+                            status,
+                            role,
+                            pageNumber,
+                            pageSize),
+                        cancellationToken);
+
+                return Ok(page);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(
+                    new ApiErrorResponse(
+                        AdminUserErrorCodes.InvalidFilter,
+                        ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to search admin users.");
 
                 return AdminRequestFailed();
             }
@@ -112,6 +159,80 @@ namespace MangaManagementSystem.API.Controllers
                 _logger.LogError(
                     ex,
                     "Failed to load admin user status counts.");
+
+                return AdminRequestFailed();
+            }
+        }
+
+        [HttpGet("{userId:guid}")]
+        public async Task<IActionResult> GetUserAsync(
+            Guid userId,
+            CancellationToken cancellationToken)
+        {
+            var authorization =
+                await ResolveAdminActorAsync();
+
+            if (authorization.Error is not null)
+            {
+                return authorization.Error;
+            }
+
+            var user =
+                await _sender.Send(
+                    new GetAdminUserDetailQuery(userId),
+                    cancellationToken);
+
+            if (user is null)
+            {
+                return NotFound(
+                    new ApiErrorResponse(
+                        AdminUserErrorCodes.UserNotFound,
+                        "The requested user was not found."));
+            }
+
+            return Ok(user);
+        }
+
+        [HttpGet("{userId:guid}/audit")]
+        public async Task<IActionResult> GetUserAuditAsync(
+            Guid userId,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 20,
+            CancellationToken cancellationToken = default)
+        {
+            var authorization =
+                await ResolveAdminActorAsync();
+
+            if (authorization.Error is not null)
+            {
+                return authorization.Error;
+            }
+
+            try
+            {
+                var page =
+                    await _sender.Send(
+                        new GetAdminUserAuditQuery(
+                            userId,
+                            pageNumber,
+                            pageSize),
+                        cancellationToken);
+
+                return Ok(page);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(
+                    new ApiErrorResponse(
+                        AdminUserErrorCodes.InvalidFilter,
+                        ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to load audit events for user {UserId}.",
+                    userId);
 
                 return AdminRequestFailed();
             }
@@ -173,7 +294,7 @@ namespace MangaManagementSystem.API.Controllers
             Guid userId,
             CancellationToken cancellationToken)
         {
-            return ExecuteCommandAsync(
+            return ExecuteUserCommandAsync(
                 async actorUserId =>
                     await _sender.Send(
                         new ApproveAdminUserCommand(
@@ -188,7 +309,7 @@ namespace MangaManagementSystem.API.Controllers
             [FromBody] AdminUserActionRequest? request,
             CancellationToken cancellationToken)
         {
-            return ExecuteCommandAsync(
+            return ExecuteUserCommandAsync(
                 async actorUserId =>
                     await _sender.Send(
                         new RejectAdminUserCommand(
@@ -204,7 +325,7 @@ namespace MangaManagementSystem.API.Controllers
             [FromBody] AdminUserActionRequest? request,
             CancellationToken cancellationToken)
         {
-            return ExecuteCommandAsync(
+            return ExecuteUserCommandAsync(
                 async actorUserId =>
                     await _sender.Send(
                         new DisableAdminUserCommand(
@@ -219,7 +340,7 @@ namespace MangaManagementSystem.API.Controllers
             Guid userId,
             CancellationToken cancellationToken)
         {
-            return ExecuteCommandAsync(
+            return ExecuteUserCommandAsync(
                 async actorUserId =>
                     await _sender.Send(
                         new ActivateAdminUserCommand(
@@ -228,8 +349,62 @@ namespace MangaManagementSystem.API.Controllers
                         cancellationToken));
         }
 
+        [HttpPost("{userId:guid}/password-reset")]
+        public async Task<IActionResult>
+            SendPasswordResetAsync(
+                Guid userId,
+                [FromBody] AdminPasswordResetRequest request,
+                CancellationToken cancellationToken)
+        {
+            var authorization =
+                await ResolveAdminActorAsync();
+
+            if (authorization.Error is not null)
+            {
+                return authorization.Error;
+            }
+
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(
+                    new ApiErrorResponse(
+                        AuthErrorCodes.ValidationFailed,
+                        "A valid reset page URL is required."));
+            }
+
+            try
+            {
+                await _sender.Send(
+                    new SendAdminPasswordResetCommand(
+                        authorization.Actor!.UserId,
+                        userId,
+                        request.ResetPageUrl),
+                    cancellationToken);
+
+                return Ok(
+                    new ApiMessageResponse(
+                        "Password reset link sent."));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(
+                    new ApiErrorResponse(
+                        AdminUserErrorCodes.PasswordResetFailed,
+                        ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to send an Admin password reset link for user {UserId}.",
+                    userId);
+
+                return AdminRequestFailed();
+            }
+        }
+
         private async Task<IActionResult>
-            ExecuteCommandAsync(
+            ExecuteUserCommandAsync(
                 Func<Guid, Task<UserDto>> action)
         {
             var authorization =

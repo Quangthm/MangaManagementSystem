@@ -1,84 +1,14 @@
 @page "/admin/registration-requests"
-@using Microsoft.AspNetCore.Authorization
-@using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Admin")]
-@inject NavigationManager Nav
-@inject IAdminUserApiClient AdminUserApiClient
-@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
 
-<AdminLayout>
-    <div class="mf-page">
-        <div class="mf-page-header">
-            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Registration Request Management</MudText>
-            <MudText Typo="Typo.body1" Class="mf-muted">Review and approve pending account registration requests</MudText>
-        </div>
-
-        <MudPaper Class="pa-5 mf-card" Elevation="0">
-            <MudTable Items="Requests" Hover="true">
-                <HeaderContent><MudTh>Username</MudTh><MudTh>Email</MudTh><MudTh>Requested Role</MudTh><MudTh>Request Date</MudTh><MudTh>Actions</MudTh></HeaderContent>
-                <RowTemplate>
-                    <MudTd>@context.Username</MudTd><MudTd>@context.Email</MudTd><MudTd>@context.RoleName</MudTd><MudTd>@context.CreatedAt</MudTd>
-                    <MudTd>
-                        <MudButton Size="Size.Small" Color="Color.Success" Variant="Variant.Filled" OnClick="@(()=>OnApprove(context.UserId))">Approve</MudButton>
-                        <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined" Class="ml-2" OnClick="@(()=>OnReject(context.UserId))">Reject</MudButton>
-                    </MudTd>
-                </RowTemplate>
-            </MudTable>
-        </MudPaper>
-
-    </div>
-</AdminLayout>
+<PageTitle>Registration Requests - MangaFlow</PageTitle>
 
 @code {
-
-    [Inject] private ToastService Toast { get; set; } = default!;
-    private List<PendingRequestRow> Requests = new();
-
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        await LoadPendingRequestsAsync();
+        NavigationManager.NavigateTo(
+            "/admin/users?status=PENDING_APPROVAL",
+            replace: true);
     }
-
-    private async Task LoadPendingRequestsAsync()
-    {
-        Requests.Clear();
-        var pending = await AdminUserApiClient.GetUsersAsync("PENDING_APPROVAL");
-        foreach (var u in pending)
-        {
-            Requests.Add(new PendingRequestRow(u.UserId, u.Username, u.Email, u.RoleName ?? "Unknown", u.CreatedAtUtc.ToString("MMM d, yyyy")));
-        }
-    }
-
-    private async Task OnApprove(Guid userId)
-    {
-        try
-        {
-            await AdminUserApiClient
-                .ApproveUserAsync(userId);
-            Snackbar.Add("User approved", Severity.Success);
-            await LoadPendingRequestsAsync();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add(ex.Message, Severity.Error);
-        }
-    }
-
-    private async Task OnReject(Guid userId)
-    {
-        try
-        {
-            await AdminUserApiClient
-                .RejectUserAsync(userId);
-            Snackbar.Add("User rejected", Severity.Warning);
-            await LoadPendingRequestsAsync();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add(ex.Message, Severity.Error);
-        }
-    }
-
-    private record PendingRequestRow(Guid UserId, string Username, string Email, string RoleName, string CreatedAt);
-
 }

@@ -161,13 +161,16 @@ namespace MangaManagementSystem.Application.Services
         {
             await RequirePendingUserAsync(userId);
 
+            var normalizedReason =
+                NormalizeRequiredReason(
+                    reason,
+                    "Reject reason");
+
             await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
                 adminUserId,
                 userId,
                 StatusRejected,
-                string.IsNullOrWhiteSpace(reason)
-                    ? "User registration rejected."
-                    : reason.Trim());
+                normalizedReason);
         }
 
         public async Task<UserDto> ActivateUserAsync(Guid adminUserId, Guid userId)
@@ -197,16 +200,43 @@ namespace MangaManagementSystem.Application.Services
         {
             await GetRequiredUserByIdAsync(userId);
 
+            var normalizedReason =
+                NormalizeRequiredReason(
+                    reason,
+                    "Disable reason");
+
             await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
                 adminUserId,
                 userId,
                 StatusDisabled,
-                string.IsNullOrWhiteSpace(reason)
-                    ? "User account disabled."
-                    : reason.Trim());
+                normalizedReason);
 
             var updated = await GetRequiredUserByIdForDtoAsync(userId);
             return updated.ToDto();
+        }
+
+        private static string NormalizeRequiredReason(
+            string? reason,
+            string fieldName)
+        {
+            var normalized =
+                string.IsNullOrWhiteSpace(reason)
+                    ? null
+                    : reason.Trim();
+
+            if (normalized is null)
+            {
+                throw new InvalidOperationException(
+                    $"{fieldName} is required.");
+            }
+
+            if (normalized.Length > 500)
+            {
+                throw new InvalidOperationException(
+                    $"{fieldName} cannot exceed 500 characters.");
+            }
+
+            return normalized;
         }
 
         private async Task<User> RequirePendingUserAsync(Guid userId)

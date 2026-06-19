@@ -24,4 +24,10 @@ namespace MangaManagementSystem.Application.Features.Admin.Users.Commands
         Guid ActorUserId,
         Guid TargetUserId)
         : IRequest<UserDto>;
+
+    public sealed record SendAdminPasswordResetCommand(
+        Guid ActorUserId,
+        Guid TargetUserId,
+        string ResetPageUrl)
+        : IRequest<bool>;
 }
