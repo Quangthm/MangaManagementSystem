@@ -2505,20 +2505,45 @@ END;
         --------------------------------------------------------------------
         -- 4. Actor must be active contributor for the owning series.
         --------------------------------------------------------------------
+        --------------------------------------------------------------------
+            DECLARE @actor_role_name NVARCHAR(30);
+
+        SELECT
+            @actor_role_name = r.role_name
+        FROM auth.Users u
+        INNER JOIN auth.Roles r
+            ON r.role_id = u.role_id
+        WHERE u.user_id = @actor_user_id
+          AND u.status_code = N'ACTIVE';
+
+        IF @actor_role_name IS NULL
+        BEGIN
+            ;THROW 57501, 'Actor user is not active or was not found.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 6. Actor must be active contributor for the owning series.
+        --------------------------------------------------------------------
         IF NOT EXISTS
         (
             SELECT 1
             FROM manga.SeriesContributor sc
-INNER JOIN auth.Users u
-    ON u.user_id = sc.user_id
-WHERE sc.series_id = @owning_series_id
-  AND sc.user_id = @actor_user_id
-  AND sc.end_date IS NULL
-  AND u.status_code = N'ACTIVE'
+            WHERE sc.series_id = @owning_series_id
+              AND sc.user_id = @actor_user_id
+              AND sc.end_date IS NULL
         )
         BEGIN
             ;THROW 57504, 'User is not an active contributor for the series that owns these page regions.', 1;
         END;
+
+        --------------------------------------------------------------------
+        -- 7. Only Mangaka and Tantou Editor can create annotations in MVP.
+        --------------------------------------------------------------------
+        IF @actor_role_name NOT IN (N'Mangaka', N'Tantou Editor')
+        BEGIN
+            ;THROW 57505, 'Only Mangaka or Tantou Editor contributors can create page annotations.', 1;
+        END;
+
 
 
         --------------------------------------------------------------------
@@ -2753,6 +2778,234 @@ END;
             cpa.resolved_by_user_id
         FROM manga.ChapterPageAnnotation cpa
         WHERE cpa.chapter_page_annotation_id = @chapter_page_annotation_id;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH;
+END;
+GO
+CREATE OR ALTER PROCEDURE manga.usp_ChapterPageAnnotation_UpdateText
+    @actor_user_id UNIQUEIDENTIFIER,
+    @chapter_page_annotation_id UNIQUEIDENTIFIER,
+    @new_annotation_text NVARCHAR(MAX),
+    @update_reason NVARCHAR(500) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+    DECLARE @lock_result INT;
+    DECLARE @lock_resource NVARCHAR(255);
+
+    DECLARE @old_annotation_text NVARCHAR(MAX);
+    DECLARE @trimmed_new_annotation_text NVARCHAR(MAX);
+    DECLARE @annotated_by_user_id UNIQUEIDENTIFIER;
+    DECLARE @resolved_at_utc DATETIME2(0);
+
+    DECLARE @owning_series_id UNIQUEIDENTIFIER;
+    DECLARE @owning_chapter_id UNIQUEIDENTIFIER;
+    DECLARE @chapter_page_version_id UNIQUEIDENTIFIER;
+
+    DECLARE @actor_role_name NVARCHAR(30);
+    DECLARE @creator_role_name NVARCHAR(30);
+
+    DECLARE @audit_entity_id NVARCHAR(100);
+    DECLARE @detail_json NVARCHAR(MAX);
+
+    BEGIN TRY
+        SET @trimmed_new_annotation_text = LTRIM(RTRIM(@new_annotation_text));
+
+        
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        SET @lock_resource =
+            N'manga_chapter_page_annotation_text_update_'
+            + CONVERT(NVARCHAR(36), @chapter_page_annotation_id);
+
+        EXEC @lock_result = sys.sp_getapplock
+            @Resource = @lock_resource,
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 10000;
+
+        IF @lock_result < 0
+        BEGIN
+            ;THROW 57922, 'Could not acquire annotation text update lock.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 1. Read annotation row under lock.
+        --------------------------------------------------------------------
+        SELECT
+            @old_annotation_text = cpa.annotation_text,
+            @annotated_by_user_id = cpa.annotated_by_user_id,
+            @resolved_at_utc = cpa.resolved_at_utc
+        FROM manga.ChapterPageAnnotation cpa WITH (UPDLOCK, HOLDLOCK)
+        WHERE cpa.chapter_page_annotation_id = @chapter_page_annotation_id;
+
+        IF @annotated_by_user_id IS NULL
+        BEGIN
+            ;THROW 57923, 'Chapter page annotation was not found.', 1;
+        END;
+
+        IF @resolved_at_utc IS NOT NULL
+        BEGIN
+            ;THROW 57924, 'Resolved annotations cannot be edited.', 1;
+        END;
+
+        IF @old_annotation_text = @trimmed_new_annotation_text
+        BEGIN
+            ;THROW 57925, 'The new annotation text is the same as the current annotation text.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 2. Derive owning series/chapter/page-version context.
+        --------------------------------------------------------------------
+        SELECT TOP (1)
+            @owning_series_id = ch.series_id,
+            @owning_chapter_id = ch.chapter_id,
+            @chapter_page_version_id = pr.chapter_page_version_id
+        FROM manga.ChapterPageAnnotationRegion cpar
+        INNER JOIN manga.PageRegion pr
+            ON pr.page_region_id = cpar.page_region_id
+        INNER JOIN manga.ChapterPageVersion cpv
+            ON cpv.chapter_page_version_id = pr.chapter_page_version_id
+        INNER JOIN manga.ChapterPage cp
+            ON cp.chapter_page_id = cpv.chapter_page_id
+        INNER JOIN manga.Chapter ch
+            ON ch.chapter_id = cp.chapter_id
+        WHERE cpar.chapter_page_annotation_id = @chapter_page_annotation_id;
+
+        IF @owning_series_id IS NULL
+        BEGIN
+            ;THROW 57926, 'Could not derive owning series for this annotation.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 3. Resolve active actor role.
+        --------------------------------------------------------------------
+        SELECT
+            @actor_role_name = r.role_name
+        FROM auth.Users u
+        INNER JOIN auth.Roles r
+            ON r.role_id = u.role_id
+        WHERE u.user_id = @actor_user_id
+          AND u.status_code = N'ACTIVE';
+
+        IF @actor_role_name IS NULL
+        BEGIN
+            ;THROW 57927, 'Actor user is not active or was not found.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 4. Resolve annotation creator role.
+        --------------------------------------------------------------------
+        SELECT
+            @creator_role_name = r.role_name
+        FROM auth.Users u
+        INNER JOIN auth.Roles r
+            ON r.role_id = u.role_id
+        WHERE u.user_id = @annotated_by_user_id;
+
+        IF @creator_role_name IS NULL
+        BEGIN
+            ;THROW 57928, 'Annotation creator role could not be resolved.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 5. Actor must be active contributor for the owning series.
+        --------------------------------------------------------------------
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM manga.SeriesContributor sc
+            WHERE sc.series_id = @owning_series_id
+              AND sc.user_id = @actor_user_id
+              AND sc.end_date IS NULL
+        )
+        BEGIN
+            ;THROW 57929, 'Actor is not an active contributor for the owning series.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 6. Permission rule:
+        --
+        -- Mangaka-created annotation:
+        --   - Mangaka contributor may update
+        --   - Tantou Editor contributor may update
+        --
+        -- Tantou Editor-created annotation:
+        --   - only Tantou Editor contributor may update
+        --------------------------------------------------------------------
+        IF NOT
+        (
+            (
+                @creator_role_name = N'Mangaka'
+                AND @actor_role_name IN (N'Mangaka', N'Tantou Editor')
+            )
+            OR
+            (
+                @creator_role_name = N'Tantou Editor'
+                AND @actor_role_name = N'Tantou Editor'
+            )
+        )
+        BEGIN
+            ;THROW 57930, 'Actor does not have permission to update this annotation text.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 7. Update annotation text.
+        --
+        -- If your table later has updated_at_utc / updated_by_user_id,
+        -- add those columns to this UPDATE.
+        --------------------------------------------------------------------
+        UPDATE manga.ChapterPageAnnotation
+        SET annotation_text = @trimmed_new_annotation_text
+        WHERE chapter_page_annotation_id = @chapter_page_annotation_id;
+
+        --------------------------------------------------------------------
+        -- 8. Audit.
+        --------------------------------------------------------------------
+        SET @audit_entity_id =
+            CONVERT(NVARCHAR(36), @chapter_page_annotation_id);
+
+        SELECT @detail_json =
+        (
+            SELECT
+                @chapter_page_annotation_id AS chapter_page_annotation_id,
+                @owning_series_id AS series_id,
+                @owning_chapter_id AS chapter_id,
+                @chapter_page_version_id AS chapter_page_version_id,
+                @annotated_by_user_id AS annotated_by_user_id,
+                @creator_role_name AS creator_role_name,
+                @actor_role_name AS actor_role_name,
+                @old_annotation_text AS old_annotation_text,
+                @trimmed_new_annotation_text AS new_annotation_text,
+                @update_reason AS update_reason
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @actor_user_id,
+            @action_code = N'CHAPTER_PAGE_ANNOTATION_TEXT_UPDATED',
+            @entity_type = N'ChapterPageAnnotation',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
 
         IF @started_tran = 1
         BEGIN
@@ -4573,253 +4826,5 @@ END;
 
         ;THROW;
     END CATCH;
-END;
-GO
-CREATE OR ALTER PROCEDURE manga.usp_AssistantTask_SubmitWork
-    @actor_user_id              UNIQUEIDENTIFIER,
-    @chapter_page_task_id       UNIQUEIDENTIFIER,
-    @storage_provider_code      NVARCHAR(50),
-    @public_id                  NVARCHAR(255),
-    @secure_url                 NVARCHAR(1000),
-    @original_file_name         NVARCHAR(260),
-    @content_type               NVARCHAR(100),
-    @file_size_bytes            BIGINT,
-    @sha256_hash                CHAR(64),
-    @version_note               NVARCHAR(500) = NULL,
-
-    @new_file_resource_id       UNIQUEIDENTIFIER OUTPUT,
-    @new_page_version_id        UNIQUEIDENTIFIER OUTPUT
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-
-    DECLARE @started_tran BIT = 0;
-    DECLARE @lock_result INT;
-
-    --------------------------------------------------------------------
-    -- 1. Permission and task validation
-    --------------------------------------------------------------------
-    IF @@TRANCOUNT = 0
-    BEGIN
-        SET @started_tran = 1;
-        BEGIN TRAN;
-    END;
-
-    --------------------------------------------------------------------
-    -- 2. Validate actor exists and is ACTIVE
-    --------------------------------------------------------------------
-    IF NOT EXISTS
-    (
-        SELECT 1
-        FROM auth.Users u
-        WHERE u.user_id = @actor_user_id
-          AND u.status_code = N'ACTIVE'
-    )
-    BEGIN
-        ;THROW 57901, 'Actor user does not exist or is not active.', 1;
-    END;
-
-    --------------------------------------------------------------------
-    -- 3. Validate task exists and belongs to actor
-    --------------------------------------------------------------------
-    DECLARE @task_assigned_to_user_id UNIQUEIDENTIFIER;
-    DECLARE @task_status_code NVARCHAR(50);
-    DECLARE @task_created_by_user_id UNIQUEIDENTIFIER;
-
-    SELECT
-        @task_assigned_to_user_id = t.assigned_to_user_id,
-        @task_status_code = t.status_code,
-        @task_created_by_user_id = t.created_by_user_id
-    FROM manga.ChapterPageTask t WITH (UPDLOCK, HOLDLOCK)
-    WHERE t.chapter_page_task_id = @chapter_page_task_id;
-
-    IF @task_assigned_to_user_id IS NULL
-    BEGIN
-        ;THROW 57902, 'ChapterPageTask does not exist.', 1;
-    END;
-
-    --------------------------------------------------------------------
-    -- 4. Validate task assignment and status
-    --------------------------------------------------------------------
-    IF @task_assigned_to_user_id <> @actor_user_id
-    BEGIN
-        ;THROW 57903, 'Task is not assigned to the actor.', 1;
-    END;
-
-    IF @task_status_code <> N'ASSIGNED'
-    BEGIN
-        ;THROW 57904, 'Task must be in ASSIGNED status to submit work.', 1;
-    END;
-
-    --------------------------------------------------------------------
-    -- 5. Validate task has linked page regions
-    --------------------------------------------------------------------
-    IF NOT EXISTS
-    (
-        SELECT 1
-        FROM manga.ChapterPageTaskRegion tr
-        WHERE tr.chapter_page_task_id = @chapter_page_task_id
-    )
-    BEGIN
-        ;THROW 57905, 'Task must have at least one linked page region.', 1;
-    END;
-
-    --------------------------------------------------------------------
-    -- 6. Lock and derive ChapterPageId from task's page regions
-    -- All regions must belong to the same ChapterPageVersion, hence same ChapterPage
-    --------------------------------------------------------------------
-    SET @lock_result = sys.sp_getapplock
-        @Resource = N'manga_chapter_page_task_submit_' + CONVERT(NVARCHAR(36), @chapter_page_task_id),
-        @LockMode = 'Exclusive',
-        @LockOwner = 'Transaction',
-        @LockTimeout = 10000;
-
-    IF @lock_result < 0
-    BEGIN
-        ;THROW 57906, 'Could not acquire task submit lock.', 1;
-    END;
-
-    --------------------------------------------------------------------
-    -- 7. Derive ChapterPageId and validate all regions belong to same page
-    --------------------------------------------------------------------
-    DECLARE @chapter_page_id UNIQUEIDENTIFIER;
-
-    SELECT TOP (1)
-        @chapter_page_id = cp.chapter_page_id
-    FROM manga.ChapterPageTaskRegion tr
-    INNER JOIN manga.PageRegion pr
-        ON pr.page_region_id = tr.page_region_id
-    INNER JOIN manga.ChapterPageVersion cpv
-        ON cpv.chapter_page_version_id = pr.chapter_page_version_id
-    INNER JOIN manga.ChapterPage cp
-        ON cp.chapter_page_id = cpv.chapter_page_id
-    WHERE tr.chapter_page_task_id = @chapter_page_task_id;
-
-    --------------------------------------------------------------------
-    -- 8. Verify all regions belong to same ChapterPage
-    --------------------------------------------------------------------
-    IF EXISTS
-    (
-        SELECT 1
-        FROM manga.ChapterPageTaskRegion tr
-        INNER JOIN manga.PageRegion pr
-            ON pr.page_region_id = tr.page_region_id
-        INNER JOIN manga.ChapterPageVersion cpv
-            ON cpv.chapter_page_version_id = pr.chapter_page_version_id
-        INNER JOIN manga.ChapterPage cp
-            ON cp.chapter_page_id = cpv.chapter_page_id
-        WHERE tr.chapter_page_task_id = @chapter_page_task_id
-          AND cp.chapter_page_id <> @chapter_page_id
-    )
-    BEGIN
-        ;THROW 57907, 'All task page regions must belong to the same ChapterPage.', 1;
-    END;
-
-    --------------------------------------------------------------------
-    -- 9. Create FileResource row
-    --------------------------------------------------------------------
-    EXEC manga.usp_FileResource_Create
-        @file_purpose_code = N'CHAPTER_PAGE_VERSION',
-        @original_file_name = @original_file_name,
-        @cloudinary_public_id = @public_id,
-        @cloudinary_secure_url = @secure_url,
-        @content_type = @content_type,
-        @file_size_bytes = @file_size_bytes,
-        @sha256_hash = @sha256_hash,
-        @uploaded_by_user_id = @actor_user_id,
-        @file_resource_id = @new_file_resource_id OUTPUT;
-
-    --------------------------------------------------------------------
-    -- 10. Compute next VersionNo for this ChapterPage and update current version
-    --------------------------------------------------------------------
-    DECLARE @new_version_no SMALLINT;
-    DECLARE @created_versions TABLE
-    (
-        chapter_page_version_id UNIQUEIDENTIFIER NOT NULL
-    );
-
-    --------------------------------------------------------------------
-    -- 10a. Get current version number and set existing to not current
-    --------------------------------------------------------------------
-    UPDATE manga.ChapterPageVersion
-    SET
-        is_current_version = 0
-    WHERE chapter_page_id = @chapter_page_id
-      AND is_current_version = 1;
-
-    --------------------------------------------------------------------
-    -- 10b. Calculate next version number
-    --------------------------------------------------------------------
-    SELECT
-        @new_version_no = CONVERT(SMALLINT, ISNULL(MAX(cv.version_no), 0) + 1)
-    FROM manga.ChapterPageVersion cv WITH (UPDLOCK, HOLDLOCK)
-    WHERE cv.chapter_page_id = @chapter_page_id;
-
-    --------------------------------------------------------------------
-    -- 10c. Create new ChapterPageVersion
-    --------------------------------------------------------------------
-    INSERT INTO manga.ChapterPageVersion
-    (
-        chapter_page_id,
-        version_no,
-        page_file_id,
-        version_note,
-        is_current_version
-    )
-    OUTPUT inserted.chapter_page_version_id
-    INTO @created_versions(chapter_page_version_id)
-    VALUES
-    (
-        @chapter_page_id,
-        @new_version_no,
-        @new_file_resource_id,
-        @version_note,
-        1
-    );
-
-    SELECT
-        @new_page_version_id = chapter_page_version_id
-    FROM @created_versions;
-
-    --------------------------------------------------------------------
-    -- 11. Update ChapterPageTask with output and status
-    --------------------------------------------------------------------
-    UPDATE manga.ChapterPageTask
-    SET
-        completed_page_version_id = @new_page_version_id,
-        status_code = N'UNDER_REVIEW',
-        updated_at_utc = SYSUTCDATETIME()
-    WHERE chapter_page_task_id = @chapter_page_task_id;
-
-    --------------------------------------------------------------------
-    -- 12. Audit
-    --------------------------------------------------------------------
-    DECLARE @audit_entity_id NVARCHAR(100) =
-        CONVERT(NVARCHAR(36), @chapter_page_task_id);
-
-    DECLARE @detail_json NVARCHAR(MAX) =
-    (
-        SELECT
-            @chapter_page_task_id AS chapter_page_task_id,
-            @new_page_version_id AS completed_page_version_id,
-            @new_file_resource_id AS file_resource_id,
-            @task_status_code AS old_status_code,
-            N'UNDER_REVIEW' AS new_status_code,
-            @version_note AS version_note
-        FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
-    );
-
-    EXEC audit.usp_AuditEvent_Append
-        @actor_user_id = @actor_user_id,
-        @action_code = N'ASSISTANT_TASK_WORK_SUBMITTED',
-        @entity_type = N'ChapterPageTask',
-        @entity_id = @audit_entity_id,
-        @detail_json = @detail_json;
-
-    IF @started_tran = 1
-    BEGIN
-        COMMIT;
-    END;
 END;
 GO

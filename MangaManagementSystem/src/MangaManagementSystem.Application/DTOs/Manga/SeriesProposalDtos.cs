@@ -77,6 +77,7 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         Guid SeriesId,
         string SeriesTitle,
         string SeriesSlug,
+        string? SeriesCoverUrl,
         short ProposalVersionNo,
         string ProposalTitle,
         string GenreSnapshot,

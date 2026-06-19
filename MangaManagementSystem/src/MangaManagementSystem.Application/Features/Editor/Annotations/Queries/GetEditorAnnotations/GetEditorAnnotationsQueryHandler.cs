@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using MangaManagementSystem.Application.Common.Constants;
 using MangaManagementSystem.Application.DTOs.Editor;
 using MangaManagementSystem.Domain.Interfaces;
 using MediatR;
@@ -32,8 +33,16 @@ namespace MangaManagementSystem.Application.Features.Editor.Annotations.Queries.
                 seriesId = parsedSeriesId;
             }
 
+            string? resolvedIssueType = request.IssueType;
+            if (!string.IsNullOrWhiteSpace(resolvedIssueType) &&
+                !string.Equals(resolvedIssueType, "all", StringComparison.OrdinalIgnoreCase) &&
+                !ChapterPageAnnotationIssueTypes.All.Contains(resolvedIssueType, StringComparer.OrdinalIgnoreCase))
+            {
+                resolvedIssueType = null;
+            }
+
             var data = await _repository.GetAnnotationsAsync(
-                actorUserId, seriesId, request.IssueType, request.Status, cancellationToken);
+                actorUserId, seriesId, resolvedIssueType, request.Status, cancellationToken);
 
             var seriesGroups = data.SeriesGroups
                 .Select(g => new EditorAnnotationSeriesGroupDto(
@@ -80,7 +89,7 @@ namespace MangaManagementSystem.Application.Features.Editor.Annotations.Queries.
                 data.SeriesFilters
                     .Select(s => new EditorAnnotationSeriesFilterDto(s.SeriesId, s.SeriesTitle))
                     .ToList(),
-                data.IssueTypeFilters,
+                ChapterPageAnnotationIssueTypes.All.ToList(),
                 seriesGroups);
         }
     }

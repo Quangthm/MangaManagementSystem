@@ -13,7 +13,6 @@ namespace MangaManagementSystem.Infrastructure.Repositories
     public class EditorAnnotationRepository : IEditorAnnotationRepository
     {
         private const string TantouEditorRole = "Tantou Editor";
-        private const string UserActive = "ACTIVE";
 
         private readonly ApplicationDbContext _dbContext;
 
@@ -29,7 +28,10 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             string? status,
             CancellationToken ct = default)
         {
-            IQueryable<Guid> scopedSeriesIds = ScopedSeriesIdsQuery(actorUserId);
+            IQueryable<Guid> scopedSeriesIds = _dbContext.ActiveSeriesContributors
+                .AsNoTracking()
+                .Where(c => c.UserId == actorUserId && c.RoleName == TantouEditorRole)
+                .Select(c => c.SeriesId);
 
             IQueryable<ChapterPageAnnotation> baseQuery = _dbContext.ChapterPageAnnotations
                 .AsNoTracking()
@@ -197,35 +199,16 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .Select(g => new EditorAnnotationSeriesFilterItem(g.SeriesId, g.SeriesTitle))
                 .ToList();
 
-            var issueTypeFilters = seriesGroups
-                .SelectMany(g => g.Annotations)
-                .Select(a => a.IssueTypeCode)
-                .Distinct()
-                .OrderBy(x => x)
-                .ToList();
-
             return new EditorAnnotationData(
                 totalOpen,
                 totalResolved,
                 pagesWithIssues,
                 distinctIssueTypes,
                 seriesFilters,
-                issueTypeFilters,
+                Array.Empty<string>(),
                 seriesGroups);
         }
 
-        private IQueryable<Guid> ScopedSeriesIdsQuery(Guid actorUserId)
-        {
-            return _dbContext.SeriesContributors
-                .AsNoTracking()
-                .Where(sc =>
-                    sc.UserId == actorUserId &&
-                    sc.EndDate == null &&
-                    sc.User != null &&
-                    sc.User.StatusCode == UserActive &&
-                    sc.User.Role != null &&
-                    sc.User.Role.RoleName == TantouEditorRole)
-                .Select(sc => sc.SeriesId);
-        }
+
     }
 }

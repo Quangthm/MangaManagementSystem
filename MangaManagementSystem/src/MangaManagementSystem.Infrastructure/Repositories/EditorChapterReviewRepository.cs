@@ -23,7 +23,6 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         private const string StatusRevisionRequested = "REVISION_REQUESTED";
         private const string StatusOnHold = "ON_HOLD";
         private const string TantouEditorRole = "Tantou Editor";
-        private const string UserActive = "ACTIVE";
 
         private readonly ApplicationDbContext _dbContext;
 
@@ -35,9 +34,10 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         public async Task<EditorChapterReviewData> GetReviewQueueAsync(
             string? statusFilter, Guid actorUserId, CancellationToken ct = default)
         {
-            // Series the actor is an active Tantou Editor contributor of. Both KPI counts and
-            // the chapter list are restricted to these series.
-            IQueryable<Guid> scopedSeriesIds = ScopedSeriesIdsQuery(actorUserId);
+            IQueryable<Guid> scopedSeriesIds = _dbContext.ActiveSeriesContributors
+                .AsNoTracking()
+                .Where(c => c.UserId == actorUserId && c.RoleName == TantouEditorRole)
+                .Select(c => c.SeriesId);
 
             IQueryable<Chapter> scopedChapters = _dbContext.Chapters
                 .AsNoTracking()
@@ -112,7 +112,11 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .Include(c => c.Series)
                 .Include(c => c.CreatedByUser)
                 .Where(c => c.ChapterId == chapterId)
-                .Where(c => ScopedSeriesIdsQuery(actorUserId).Contains(c.SeriesId))
+                .Where(c => _dbContext.ActiveSeriesContributors
+                    .AsNoTracking()
+                    .Where(ac => ac.UserId == actorUserId && ac.RoleName == TantouEditorRole)
+                    .Select(ac => ac.SeriesId)
+                    .Contains(c.SeriesId))
                 .FirstOrDefaultAsync(ct);
 
             if (chapter is null)
@@ -186,23 +190,6 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 openAnnotations);
         }
 
-        /// <summary>
-        /// Series ids where <paramref name="actorUserId"/> is an active Tantou Editor
-        /// contributor (EndDate IS NULL, user ACTIVE, role 'Tantou Editor'). Composable
-        /// subquery used by both the queue and the detail scope.
-        /// </summary>
-        private IQueryable<Guid> ScopedSeriesIdsQuery(Guid actorUserId)
-        {
-            return _dbContext.SeriesContributors
-                .AsNoTracking()
-                .Where(sc =>
-                    sc.UserId == actorUserId &&
-                    sc.EndDate == null &&
-                    sc.User != null &&
-                    sc.User.StatusCode == UserActive &&
-                    sc.User.Role != null &&
-                    sc.User.Role.RoleName == TantouEditorRole)
-                .Select(sc => sc.SeriesId);
-        }
+
     }
 }

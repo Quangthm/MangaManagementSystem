@@ -29,7 +29,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         }
 
         public async Task<EditorDashboardData> GetDashboardDataAsync(
-            int proposalQueueTake, int recentSeriesTake, CancellationToken ct = default)
+            Guid actorUserId, int proposalQueueTake, int recentSeriesTake, CancellationToken ct = default)
         {
             // KPI counts (computed in SQL).
             int pendingProposalCount = await _dbContext.SeriesProposals
@@ -46,7 +46,10 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
             int serializedSeriesCount = await _dbContext.Series
                 .AsNoTracking()
-                .CountAsync(s => s.StatusCode == SeriesStatusSerialized, ct);
+                .Where(s => s.StatusCode == SeriesStatusSerialized)
+                .Where(s => _dbContext.ActiveSeriesContributors
+                    .Any(asc => asc.SeriesId == s.SeriesId && asc.UserId == actorUserId))
+                .CountAsync(ct);
 
             // Proposal review queue preview: newest UNDER_EDITORIAL_REVIEW proposals first.
             List<SeriesProposal> proposalQueue = await _dbContext.SeriesProposals
@@ -58,11 +61,14 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .Take(proposalQueueTake)
                 .ToListAsync(ct);
 
-            // Recent series activity: most recently updated/created series first, with chapters
-            // eagerly loaded so the handler can derive the latest chapter label.
+            // Recent series activity: most recently updated/created series first, scoped to
+            // series the current editor contributes to, with chapters eagerly loaded so the
+            // handler can derive the latest chapter label.
             List<Series> recentSeries = await _dbContext.Series
                 .AsNoTracking()
                 .Include(s => s.Chapters)
+                .Where(s => _dbContext.ActiveSeriesContributors
+                    .Any(asc => asc.SeriesId == s.SeriesId && asc.UserId == actorUserId))
                 .OrderByDescending(s => s.UpdatedAtUtc ?? s.CreatedAtUtc)
                 .Take(recentSeriesTake)
                 .ToListAsync(ct);

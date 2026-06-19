@@ -72,6 +72,7 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Quer
                 SeriesId: proposal.SeriesId,
                 SeriesTitle: proposal.Series?.Title ?? string.Empty,
                 SeriesSlug: proposal.Series?.Slug ?? string.Empty,
+                SeriesCoverUrl: proposal.Series?.CoverFile?.CloudinarySecureUrl,
                 ProposalVersionNo: proposal.ProposalVersionNo,
                 ProposalTitle: proposal.ProposalTitle,
                 GenreSnapshot: proposal.GenreSnapshot,

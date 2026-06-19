@@ -1030,3 +1030,39 @@ CREATE INDEX ix_notification_related_entity ON manga.Notification (
 	)
 WHERE related_entity_type IS NOT NULL
 	AND related_entity_id IS NOT NULL;
+
+CREATE INDEX ix_series_contributor_active_lookup
+ON manga.SeriesContributor
+(
+    series_id,
+    user_id,
+    end_date
+);
+GO
+
+CREATE INDEX ix_users_status_role_lookup
+ON auth.Users
+(
+    user_id,
+    status_code,
+    role_id
+);
+GO
+
+CREATE OR ALTER VIEW manga.vw_ActiveSeriesContributor
+AS
+SELECT
+    sc.series_id,
+    sc.user_id,
+    r.role_name,
+    u.status_code AS user_status_code,
+    sc.start_date,
+    sc.end_date
+FROM manga.SeriesContributor sc
+INNER JOIN auth.Users u
+    ON u.user_id = sc.user_id
+INNER JOIN auth.Roles r
+    ON r.role_id = u.role_id
+WHERE sc.end_date IS NULL
+  AND u.status_code = N'ACTIVE';
+GO

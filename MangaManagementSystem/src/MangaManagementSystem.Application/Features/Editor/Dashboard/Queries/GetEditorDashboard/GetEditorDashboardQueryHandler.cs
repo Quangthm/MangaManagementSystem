@@ -32,7 +32,7 @@ namespace MangaManagementSystem.Application.Features.Editor.Dashboard.Queries.Ge
             GetEditorDashboardQuery request, CancellationToken cancellationToken)
         {
             var data = await _editorDashboardRepository.GetDashboardDataAsync(
-                ProposalQueueTake, RecentSeriesTake, cancellationToken);
+                request.ActorUserId, ProposalQueueTake, RecentSeriesTake, cancellationToken);
 
             var proposalQueue = data.ProposalReviewQueue
                 .Select(sp => new EditorDashboardProposalDto(

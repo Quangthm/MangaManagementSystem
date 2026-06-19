@@ -25,7 +25,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         public async Task<SeriesProposal?> GetByIdWithDetailsAsync(Guid seriesProposalId, CancellationToken ct = default)
         {
             return await _dbContext.Set<SeriesProposal>()
-                .Include(sp => sp.Series)
+                .Include(sp => sp.Series).ThenInclude(s => s.CoverFile)
                 .Include(sp => sp.SubmittedByUser)
                 .Include(sp => sp.ReviewedByUser)
                 .Include(sp => sp.ProposalFile)
