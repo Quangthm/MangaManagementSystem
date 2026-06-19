@@ -119,7 +119,7 @@ Verified transitions:
 - The reset email was received successfully.
 - The link opened the existing `/reset-password` workflow.
 - The administrator never views or assigns the user's new password.
-- The action generated an `ADMIN_PASSWORD_RESET_LINK_SENT` audit event.
+- The action sends the password-reset link without writing a separate application-layer Audit event. Any future Audit record for this action must be implemented through a database-owned business procedure.
 
 ### User audit history
 

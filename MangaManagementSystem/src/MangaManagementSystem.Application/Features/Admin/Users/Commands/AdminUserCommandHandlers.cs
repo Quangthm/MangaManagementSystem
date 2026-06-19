@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Domain.Interfaces;
@@ -26,19 +25,15 @@ namespace MangaManagementSystem.Application.Features.Admin.Users.Commands
         private readonly IUserService _userService;
         private readonly IUserRepository _userRepository;
         private readonly IAuthService _authService;
-        private readonly IAuditEventRepository
-            _auditEventRepository;
 
         public AdminUserCommandHandlers(
             IUserService userService,
             IUserRepository userRepository,
-            IAuthService authService,
-            IAuditEventRepository auditEventRepository)
+            IAuthService authService)
         {
             _userService = userService;
             _userRepository = userRepository;
             _authService = authService;
-            _auditEventRepository = auditEventRepository;
         }
 
         public Task<UserDto> Handle(
@@ -112,19 +107,6 @@ namespace MangaManagementSystem.Application.Features.Admin.Users.Commands
                 request.ResetPageUrl,
                 cancellationToken);
 
-            await _auditEventRepository.AppendAsync(
-                request.ActorUserId,
-                "ADMIN_PASSWORD_RESET_LINK_SENT",
-                "Users",
-                request.TargetUserId.ToString("D"),
-                JsonSerializer.Serialize(
-                    new
-                    {
-                        target_user_id =
-                            request.TargetUserId,
-                        delivery = "email"
-                    }),
-                cancellationToken);
 
             return true;
         }
