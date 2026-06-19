@@ -1,0 +1,145 @@
+@page "/verify-otp"
+@using Microsoft.AspNetCore.WebUtilities
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+
+<PageTitle>Verify Email - MangaFlow</PageTitle>
+
+<div class="mf-gradient-bg d-flex align-center justify-center pa-4">
+    <MudContainer MaxWidth="MaxWidth.Small">
+        <div class="text-center mb-6">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mf-gradient-text">MangaFlow</MudText>
+            <MudText Typo="Typo.h6" Class="mf-muted mt-2">Verify your email address</MudText>
+        </div>
+
+        <MudPaper Class="pa-8 mf-card" Elevation="8">
+            <MudAlert Severity="Severity.Info" Class="mb-4">
+                Enter the 6-digit code sent to <strong>@_email</strong>. Your account will remain pending until an administrator approves it.
+            </MudAlert>
+
+            <form action="/api/auth/verify-email-otp" method="post" data-enhance="false" class="verify-otp-form">
+                <input type="hidden" name="email" value="@_email" />
+                <MudStack Spacing="3">
+                    <div class="verify-otp-form__field">
+                        <label class="verify-otp-form__label" for="otp">6-Digit Verification Code</label>
+                        <input id="otp"
+                               name="otp"
+                               type="text"
+                               class="verify-otp-form__input"
+                               maxlength="6"
+                               required
+                               autocomplete="one-time-code"
+                               inputmode="numeric" />
+                    </div>
+                    <button type="submit" class="verify-otp-form__submit">Verify Email</button>
+                </MudStack>
+            </form>
+
+            <form action="/api/auth/resend-email-otp" method="post" data-enhance="false" class="mt-3">
+                <input type="hidden" name="email" value="@_email" />
+                <button type="submit" class="verify-otp-form__resend">Resend verification code</button>
+            </form>
+
+            <MudDivider Class="my-4" />
+            <MudText Align="Align.Center">
+                <MudLink Href="/login">Back to Login</MudLink>
+            </MudText>
+        </MudPaper>
+    </MudContainer>
+</div>
+
+<style>
+    .verify-otp-form__field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .verify-otp-form__label {
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: rgba(0, 0, 0, 0.6);
+    }
+
+    .verify-otp-form__input {
+        width: 100%;
+        padding: 16px 14px;
+        border: 1px solid rgba(0, 0, 0, 0.23);
+        border-radius: 4px;
+        font-size: 1.25rem;
+        letter-spacing: 0.3em;
+        text-align: center;
+        box-sizing: border-box;
+    }
+
+    .verify-otp-form__submit {
+        width: 100%;
+        padding: 14px 16px;
+        border: none;
+        border-radius: 4px;
+        background: #594ae2;
+        color: #fff;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        margin-top: 8px;
+    }
+
+    .verify-otp-form__resend {
+        width: 100%;
+        padding: 10px 16px;
+        border: 1px solid #dadce0;
+        border-radius: 4px;
+        background: #fff;
+        color: #594ae2;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+    }
+</style>
+
+@code {
+    private string _email = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        if (query.TryGetValue("email", out var email) && !string.IsNullOrWhiteSpace(email))
+        {
+            _email = email.ToString().Trim();
+        }
+        else
+        {
+            Snackbar.Add("Missing email address. Please start registration again.", Severity.Error);
+            NavigationManager.NavigateTo("/register");
+            return;
+        }
+
+        if (query.TryGetValue(
+                "error",
+                out var error))
+        {
+            var errorCode =
+                error.ToString()
+                    .Trim()
+                    .ToLowerInvariant();
+
+            var message =
+                errorCode ==
+                AuthErrorCodes.InvalidOtp
+                    ? "Invalid or expired verification code. Please try again."
+                    : "The verification request could not be completed. Please try again.";
+
+            Snackbar.Add(
+                message,
+                Severity.Error);
+        }
+
+        if (query.TryGetValue("resent", out _))
+        {
+            Snackbar.Add("A new verification code was sent to your email.", Severity.Success);
+        }
+    }
+}
