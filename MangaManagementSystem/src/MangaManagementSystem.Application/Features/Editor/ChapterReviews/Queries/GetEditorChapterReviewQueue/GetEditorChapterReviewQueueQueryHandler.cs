@@ -34,7 +34,7 @@ namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queri
                 {
                     string? slug = c.Series?.Slug;
                     string? workspaceUrl = !string.IsNullOrWhiteSpace(slug)
-                        ? $"/series/{slug}/workspace?chapterId={c.ChapterId}"
+                        ? $"/series/{slug}/workspace?chapterId={c.ChapterId}&returnUrl={Uri.EscapeDataString("/editor/chapters")}"
                         : null;
 
                     return new EditorChapterReviewQueueItemDto(
