@@ -45,7 +45,7 @@
             @if (!_isLoading && !_pendingUsers.Any())
             {
                 <MudPaper Class="pa-8 mf-card text-center" Elevation="0">
-                    <MudAvatar Color="Color.Primary" Size="Size.Large" Class="mx-auto mb-3">âœ“</MudAvatar>
+                    <MudAvatar Color="Color.Primary" Size="Size.Large" Class="mx-auto mb-3"><MudIcon Icon="@Icons.Material.Filled.Check" /></MudAvatar>
                     <MudText Typo="Typo.h6" Class="font-weight-bold mb-1">No pending users</MudText>
                     <MudText Typo="Typo.body2" Class="mf-muted">Newly registered accounts that require admin approval will appear here.</MudText>
                 </MudPaper>

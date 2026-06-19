@@ -1,3 +1,4 @@
+using MangaManagementSystem.Application.Common;
 using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.Features.Auth.Registration;
 using MangaManagementSystem.Application.Interfaces;
@@ -15,6 +16,8 @@ namespace MangaManagementSystem.Application.Services
         private readonly IPasswordHasher _passwordHasher;
         private readonly IEmailService _emailService;
         private readonly IOtpCacheService _otpCacheService;
+        private readonly IPasswordResetTokenService
+            _passwordResetTokenService;
         private readonly ILogger<AuthService> _logger;
         private readonly IFileStorageService _fileStorageService;
 
@@ -23,6 +26,7 @@ namespace MangaManagementSystem.Application.Services
             IPasswordHasher passwordHasher,
             IEmailService emailService,
             IOtpCacheService otpCacheService,
+            IPasswordResetTokenService passwordResetTokenService,
             ILogger<AuthService> logger,
             IFileStorageService fileStorageService)
         {
@@ -30,6 +34,8 @@ namespace MangaManagementSystem.Application.Services
             _passwordHasher = passwordHasher;
             _emailService = emailService;
             _otpCacheService = otpCacheService;
+            _passwordResetTokenService =
+                passwordResetTokenService;
             _logger = logger;
             _fileStorageService = fileStorageService;
         }
@@ -62,22 +68,43 @@ namespace MangaManagementSystem.Application.Services
             string? portfolioContentType = null)
         {
             var normalizedEmail = NormalizeEmail(email);
-            var pendingRegistration = _otpCacheService.TryValidateAndRemoveRegistrationOtp(normalizedEmail, otp);
+
+            ValidatedRegistrationPortfolio? validatedPortfolio =
+                null;
+
+            if (portfolioFileBytes is not null
+                || !string.IsNullOrWhiteSpace(portfolioFileName)
+                || !string.IsNullOrWhiteSpace(portfolioContentType))
+            {
+                validatedPortfolio =
+                    RegistrationPortfolioFileValidator.Validate(
+                        portfolioFileBytes,
+                        portfolioFileName,
+                        portfolioContentType);
+            }
+
+            var pendingRegistration =
+                _otpCacheService
+                    .TryValidateAndRemoveRegistrationOtp(
+                        normalizedEmail,
+                        otp);
 
             if (pendingRegistration is null)
             {
-                throw new InvalidOperationException("The verification code is invalid or has expired.");
+                throw new InvalidOperationException(
+                    "The verification code is invalid or has expired.");
             }
 
-            // When the user uploads portfolio at step 2 (multipart complete), override the
-            // cached registration's portfolio fields so the existing upload/linking logic applies.
-            if (portfolioFileBytes is not null)
+            if (validatedPortfolio is not null)
             {
                 pendingRegistration = pendingRegistration with
                 {
-                    PortfolioFileBytes = portfolioFileBytes,
-                    PortfolioFileName = portfolioFileName,
-                    PortfolioContentType = portfolioContentType
+                    PortfolioFileBytes =
+                        validatedPortfolio.Bytes,
+                    PortfolioFileName =
+                        validatedPortfolio.FileName,
+                    PortfolioContentType =
+                        validatedPortfolio.ContentType
                 };
             }
 
@@ -411,41 +438,122 @@ namespace MangaManagementSystem.Application.Services
                 ErrorCode:
                     AuthErrorCodes.AccountConfigurationInvalid);
         }
-
-        public async Task<bool> SendEmailVerificationOtpAsync(string email)
+        public async Task RequestPasswordResetAsync(
+            string email,
+            string resetPageUrl,
+            CancellationToken cancellationToken = default)
         {
-            var normalizedEmail = NormalizeEmail(email);
+            var normalizedEmail =
+                NormalizeEmail(email);
 
-            await GetPendingApprovalUserByNormalizedEmailAsync(
-                normalizedEmail,
-                "Email verification is only available for pending accounts.");
+            var resetPageUri =
+                ValidateResetPageUrl(
+                    resetPageUrl);
 
-            var otp = GenerateOtp();
-            _otpCacheService.StoreEmailVerificationOtp(normalizedEmail, otp);
-            await _emailService.SendOtpEmailAsync(normalizedEmail, otp);
+            var user =
+                await _unitOfWork.Users
+                    .GetByEmailAsync(
+                        normalizedEmail);
 
-            return true;
-        }
-
-        public async Task<bool> CompleteEmailVerificationOtpAsync(string email, string otp)
-        {
-            var normalizedEmail = NormalizeEmail(email);
-
-            if (!_otpCacheService.TryValidateAndRemoveEmailVerificationOtp(normalizedEmail, otp))
+            if (user is null)
             {
-                throw new InvalidOperationException("The verification code is invalid or has expired.");
+                _logger.LogInformation(
+                    "Password reset requested for an unknown email address.");
+
+                return;
             }
 
-            var user = await GetPendingApprovalUserByNormalizedEmailAsync(
-                normalizedEmail,
-                "This account is not awaiting email verification.");
+            var token =
+                _passwordResetTokenService
+                    .IssueToken(
+                        user.UserId,
+                        normalizedEmail,
+                        TimeSpan.FromMinutes(30));
+
+            var resetLink =
+                BuildPasswordResetLink(
+                    resetPageUri,
+                    token);
+
+            await _emailService
+                .SendPasswordResetEmailAsync(
+                    normalizedEmail,
+                    resetLink,
+                    cancellationToken);
 
             _logger.LogInformation(
-                "Email verified via OTP for pending user {UserId} ({Email}). Awaiting admin approval.",
-                user.UserId,
-                normalizedEmail);
+                "Password reset link issued for user {UserId}.",
+                user.UserId);
+        }
 
-            return true;
+        public async Task ResetPasswordWithTokenAsync(
+            string token,
+            string newPassword,
+            CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(newPassword)
+                || newPassword.Length < 8
+                || newPassword.Length > 255)
+            {
+                throw new InvalidOperationException(
+                    "New password must contain between 8 and 255 characters.");
+            }
+
+            if (!_passwordResetTokenService.TryConsumeToken(
+                    token,
+                    out var payload))
+            {
+                throw new InvalidOperationException(
+                    "The password reset link is invalid or has expired.");
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var passwordHash =
+                _passwordHasher.HashPassword(
+                    newPassword);
+
+            await _unitOfWork.Users
+                .ResetPasswordViaProcAsync(
+                    payload.UserId,
+                    passwordHash);
+
+            _logger.LogInformation(
+                "Password reset by one-time token completed for user {UserId}.",
+                payload.UserId);
+        }
+
+        private static Uri ValidateResetPageUrl(
+            string resetPageUrl)
+        {
+            if (!Uri.TryCreate(
+                    resetPageUrl,
+                    UriKind.Absolute,
+                    out var uri)
+                || (uri.Scheme != Uri.UriSchemeHttps
+                    && uri.Scheme != Uri.UriSchemeHttp))
+            {
+                throw new InvalidOperationException(
+                    "The password reset page URL is invalid.");
+            }
+
+            return uri;
+        }
+
+        private static string BuildPasswordResetLink(
+            Uri resetPageUri,
+            string token)
+        {
+            var builder =
+                new UriBuilder(resetPageUri)
+                {
+                    Fragment = string.Empty,
+                    Query =
+                        "token="
+                        + Uri.EscapeDataString(token)
+                };
+
+            return builder.Uri.ToString();
         }
 
         private async Task EnsureEmailAndUsernameAvailableAsync(string normalizedEmail, string username)
@@ -552,26 +660,6 @@ namespace MangaManagementSystem.Application.Services
                         AuthErrorCodes.AccountConfigurationInvalid);
             }
         }
-
-        private async Task<User> GetPendingApprovalUserByNormalizedEmailAsync(
-            string normalizedEmail,
-            string invalidStatusMessage)
-        {
-            var user = await _unitOfWork.Users.GetByEmailAsync(normalizedEmail);
-
-            if (user is null)
-            {
-                throw new InvalidOperationException("No account found for this email.");
-            }
-
-            if (!string.Equals(user.StatusCode, "PENDING_APPROVAL", StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException(invalidStatusMessage);
-            }
-
-            return user;
-        }
-
         private async Task TryDeleteUploadedPortfolioAsync(
             string portfolioPublicId,
             string? portfolioContentType)

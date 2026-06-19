@@ -19,6 +19,11 @@ namespace MangaManagementSystem.Application.DTOs.Auth
         public const string UsernameTaken = "username_taken";
         public const string RegistrationStartFailed = "registration_start_failed";
         public const string RegistrationCompleteFailed = "registration_complete_failed";
+        public const string InvalidPortfolioFile = "invalid_portfolio_file";
+        public const string PortfolioFileTooLarge = "portfolio_file_too_large";
+        public const string InvalidPasswordResetToken = "invalid_password_reset_token";
+        public const string PasswordResetRequestFailed = "password_reset_request_failed";
+        public const string PasswordResetCompleteFailed = "password_reset_complete_failed";
         public const string ValidationFailed = "validation_failed";
         public const string UnauthorizedInternalRequest = "unauthorized_internal_request";
         public const string InvalidRequest = "invalid_request";

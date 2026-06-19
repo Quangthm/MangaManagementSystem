@@ -4,7 +4,8 @@ namespace MangaManagementSystem.Application.Interfaces
 {
     public interface IAuthService
     {
-        Task<bool> SendRegistrationOtpAsync(RegisterDto request);
+        Task<bool> SendRegistrationOtpAsync(
+            RegisterDto request);
 
         Task<UserDto> CompleteRegistrationWithOtpAsync(
             string email,
@@ -13,19 +14,26 @@ namespace MangaManagementSystem.Application.Interfaces
             string? portfolioFileName = null,
             string? portfolioContentType = null);
 
-        Task<AuthResultDto> LoginAsync(LoginDto request);
+        Task<AuthResultDto> LoginAsync(
+            LoginDto request);
 
-        Task<AuthResultDto> GetUserByEmailAsync(string email);
+        Task<AuthResultDto> GetUserByEmailAsync(
+            string email);
 
-        Task<GoogleSignupCallbackResult> ProcessGoogleSignupCallbackAsync(
+        Task<GoogleSignupCallbackResult>
+            ProcessGoogleSignupCallbackAsync(
+                string email,
+                string? googleDisplayName,
+                string roleName);
+
+        Task RequestPasswordResetAsync(
             string email,
-            string? googleDisplayName,
-            string roleName);
+            string resetPageUrl,
+            CancellationToken cancellationToken = default);
 
-        Task<bool> SendEmailVerificationOtpAsync(string email);
-
-        Task<bool> CompleteEmailVerificationOtpAsync(
-            string email,
-            string otp);
+        Task ResetPasswordWithTokenAsync(
+            string token,
+            string newPassword,
+            CancellationToken cancellationToken = default);
     }
 }

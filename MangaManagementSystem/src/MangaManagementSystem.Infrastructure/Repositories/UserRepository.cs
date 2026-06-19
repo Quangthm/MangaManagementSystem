@@ -765,7 +765,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     SqlDbType.NVarChar,
                     500)
                 {
-                    Value = "Password reset verified by OTP."
+                    Value = "Password reset verified by one-time token."
                 });
 
             if (conn.State != ConnectionState.Open)

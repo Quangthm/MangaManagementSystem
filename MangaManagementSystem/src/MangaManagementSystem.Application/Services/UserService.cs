@@ -121,13 +121,37 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<UserDto> ApproveUserAsync(Guid adminUserId, Guid userId)
         {
-            await RequirePendingUserAsync(userId);
+            var user = await GetRequiredUserByIdAsync(userId);
+
+            var canApprove =
+                string.Equals(
+                    user.StatusCode,
+                    StatusPendingApproval,
+                    StringComparison.OrdinalIgnoreCase)
+                || string.Equals(
+                    user.StatusCode,
+                    StatusRejected,
+                    StringComparison.OrdinalIgnoreCase);
+
+            if (!canApprove)
+            {
+                throw new InvalidOperationException(
+                    $"User {userId} cannot be approved because their status is '{user.StatusCode}'. Only PENDING_APPROVAL or REJECTED accounts can be approved.");
+            }
+
+            var reason =
+                string.Equals(
+                    user.StatusCode,
+                    StatusRejected,
+                    StringComparison.OrdinalIgnoreCase)
+                    ? "Rejected user registration approved again."
+                    : "User registration approved.";
 
             await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
                 adminUserId,
                 userId,
                 StatusActive,
-                "User registration approved.");
+                reason);
 
             var updated = await GetRequiredUserByIdForDtoAsync(userId);
             return updated.ToDto();
@@ -148,13 +172,22 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<UserDto> ActivateUserAsync(Guid adminUserId, Guid userId)
         {
-            await GetRequiredUserByIdAsync(userId);
+            var user = await GetRequiredUserByIdAsync(userId);
+
+            if (!string.Equals(
+                    user.StatusCode,
+                    StatusDisabled,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"User {userId} cannot be activated because their status is '{user.StatusCode}', not '{StatusDisabled}'.");
+            }
 
             await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
                 adminUserId,
                 userId,
                 StatusActive,
-                "User account activated.");
+                "Disabled user account activated.");
 
             var updated = await GetRequiredUserByIdForDtoAsync(userId);
             return updated.ToDto();

@@ -53,6 +53,11 @@ namespace MangaManagementSystem.Web
                 var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
                 client.BaseAddress = new Uri(settings.Value.BaseUrl);
             });
+            builder.Services.AddHttpClient<IPasswordResetApiClient, PasswordResetApiClient>((sp, client) =>
+            {
+                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                client.BaseAddress = new Uri(settings.Value.BaseUrl);
+            });
             builder.Services.AddHttpClient<IMangakaSeriesApiClient, MangakaSeriesApiClient>((sp, client) =>
             {
                 var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
@@ -475,60 +480,7 @@ namespace MangaManagementSystem.Web
                     }
                 });
 
-            app.MapPost("/api/auth/verify-email-otp", async (
-                HttpContext context,
-                IAuthService authService,
-                [FromForm] string email,
-                [FromForm] string otp) =>
-            {
-                if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(otp))
-                {
-                    return Results.Redirect(
-                        BuildVerifyOtpErrorRedirect(
-                            email,
-                            AuthErrorCodes.InvalidOtp));
-                }
-
-                try
-                {
-                    await authService.CompleteEmailVerificationOtpAsync(email, otp);
-                    return Results.Redirect("/login?verified=1");
-                }
-                catch (InvalidOperationException)
-                {
-                    return Results.Redirect(
-                        BuildVerifyOtpErrorRedirect(
-                            email,
-                            AuthErrorCodes.InvalidOtp));
-                }
-            }).DisableAntiforgery();
-
-            app.MapPost("/api/auth/resend-email-otp", async (
-                IAuthService authService,
-                [FromForm] string email) =>
-            {
-                if (string.IsNullOrWhiteSpace(email))
-                {
-                    return Results.Redirect(
-                        BuildRegisterErrorRedirect(
-                            AuthErrorCodes.EmailRequired));
-                }
-
-                try
-                {
-                    await authService.SendEmailVerificationOtpAsync(email);
-                    return Results.Redirect($"/verify-otp?email={Uri.EscapeDataString(email)}&resent=1");
-                }
-                catch (InvalidOperationException ex)
-                {
-                    return Results.Redirect(
-                        BuildVerifyOtpErrorRedirect(
-                            email,
-                            AuthErrorCodes.RequestFailed));
-                }
-            }).DisableAntiforgery();
-
-            app.MapPost(
+app.MapPost(
     "/api/auth/logout",
     async (
         HttpContext context,
@@ -893,24 +845,6 @@ namespace MangaManagementSystem.Web
                 };
 
             return "/register?error="
-                + Uri.EscapeDataString(
-                    normalizedCode);
-        }
-
-        private static string BuildVerifyOtpErrorRedirect(
-            string? email,
-            string? errorCode)
-        {
-            var normalizedCode =
-                errorCode ==
-                AuthErrorCodes.InvalidOtp
-                    ? AuthErrorCodes.InvalidOtp
-                    : AuthErrorCodes.RequestFailed;
-
-            return "/verify-otp?email="
-                + Uri.EscapeDataString(
-                    email ?? string.Empty)
-                + "&error="
                 + Uri.EscapeDataString(
                     normalizedCode);
         }

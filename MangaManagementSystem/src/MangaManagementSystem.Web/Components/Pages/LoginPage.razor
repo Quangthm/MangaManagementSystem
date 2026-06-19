@@ -48,7 +48,7 @@
                                    required
                                    autocomplete="current-password" />
                         </div>
-                        <MudText Align="Align.Right"><MudLink Href="#">Forgot Password?</MudLink></MudText>
+                        <MudText Align="Align.Right"><MudLink Href="/forgot-password">Forgot Password?</MudLink></MudText>
                         <div id="login-recaptcha" class="my-2 d-flex justify-center"></div>
                         <button type="submit" class="login-form__submit">
                             Login
@@ -170,14 +170,7 @@
     {
         var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
         var query = QueryHelpers.ParseQuery(uri.Query);
-
-        if (query.TryGetValue("verified", out _))
-        {
-            _pageAlertMessage = "Email verified successfully. You can sign in once an administrator approves your account.";
-            _pageAlertSeverity = Severity.Success;
-        }
-
-        if (query.TryGetValue("error", out var error))
+if (query.TryGetValue("error", out var error))
         {
             var errorCode =
                 error.ToString()

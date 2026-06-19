@@ -1,4 +1,5 @@
 using MangaManagementSystem.API.Contracts;
+using MangaManagementSystem.Application.Common;
 using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.Features.Auth.Registration;
 using MediatR;
@@ -6,15 +7,15 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace MangaManagementSystem.API.Controllers
 {
-    /// <summary>
-    /// HTTP boundary for public registration workflows.
-    /// Commands are dispatched through MediatR.
-    /// </summary>
     [ApiController]
     [Route("api/registration")]
     public sealed class RegistrationController
         : ControllerBase
     {
+        private const long MultipartRequestLimitBytes =
+            RegistrationPortfolioFileValidator.MaxFileSizeBytes
+            + (1024L * 1024L);
+
         private readonly ISender _sender;
         private readonly ILogger<RegistrationController>
             _logger;
@@ -86,6 +87,7 @@ namespace MangaManagementSystem.API.Controllers
 
         [HttpPost("complete")]
         [Consumes("multipart/form-data")]
+        [RequestSizeLimit(MultipartRequestLimitBytes)]
         public async Task<IActionResult> CompleteAsync(
             [FromForm] string email,
             [FromForm] string otp,
@@ -105,27 +107,45 @@ namespace MangaManagementSystem.API.Controllers
             string? fileName = null;
             string? contentType = null;
 
-            if (portfolioFile is { Length: > 0 })
-            {
-                await using var memoryStream =
-                    new MemoryStream();
-
-                await portfolioFile.CopyToAsync(
-                    memoryStream,
-                    cancellationToken);
-
-                fileBytes =
-                    memoryStream.ToArray();
-
-                fileName =
-                    portfolioFile.FileName;
-
-                contentType =
-                    portfolioFile.ContentType;
-            }
-
             try
             {
+                if (portfolioFile is not null)
+                {
+                    if (portfolioFile.Length <= 0)
+                    {
+                        throw new RegistrationPortfolioValidationException(
+                            AuthErrorCodes.InvalidPortfolioFile,
+                            "The portfolio file is empty.");
+                    }
+
+                    if (portfolioFile.Length >
+                        RegistrationPortfolioFileValidator
+                            .MaxFileSizeBytes)
+                    {
+                        throw new RegistrationPortfolioValidationException(
+                            AuthErrorCodes.PortfolioFileTooLarge,
+                            "The portfolio file is too large. The maximum size is 10 MB.");
+                    }
+
+                    await using var memoryStream =
+                        new MemoryStream(
+                            checked((int)portfolioFile.Length));
+
+                    await portfolioFile.CopyToAsync(
+                        memoryStream,
+                        cancellationToken);
+
+                    var validated =
+                        RegistrationPortfolioFileValidator.Validate(
+                            memoryStream.ToArray(),
+                            portfolioFile.FileName,
+                            portfolioFile.ContentType);
+
+                    fileBytes = validated.Bytes;
+                    fileName = validated.FileName;
+                    contentType = validated.ContentType;
+                }
+
                 var user =
                     await _sender.Send(
                         new CompleteRegistrationCommand(
@@ -137,6 +157,20 @@ namespace MangaManagementSystem.API.Controllers
                         cancellationToken);
 
                 return Ok(user);
+            }
+            catch (RegistrationPortfolioValidationException ex)
+            {
+                var statusCode =
+                    ex.ErrorCode ==
+                    AuthErrorCodes.PortfolioFileTooLarge
+                        ? StatusCodes.Status413PayloadTooLarge
+                        : StatusCodes.Status400BadRequest;
+
+                return StatusCode(
+                    statusCode,
+                    new ApiErrorResponse(
+                        ex.ErrorCode,
+                        ex.Message));
             }
             catch (InvalidOperationException ex)
             {

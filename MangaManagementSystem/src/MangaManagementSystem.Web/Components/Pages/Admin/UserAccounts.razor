@@ -84,14 +84,42 @@
                             <MudTd>@context.CreatedAtUtc.ToLocalTime().ToString("g")</MudTd>
                             <MudTd>
                                 <MudStack Row="true" Spacing="1">
-                                    <MudButton Size="Size.Small" Variant="Variant.Text" Href="@($"/admin/user-approval")">View</MudButton>
                                     <MudButton Size="Size.Small"
-                                               Variant="Variant.Outlined"
-                                               Color="Color.Error"
-                                               Disabled="@(context.StatusCode == "DISABLED" || context.StatusCode == "REJECTED")"
-                                               OnClick="@(()=>ConfirmDisable(context))">
-                                        Disable
+                                               Variant="Variant.Text"
+                                               Href="/admin/user-approval">
+                                        View
                                     </MudButton>
+
+                                    @if (IsRejected(context))
+                                    {
+                                        <MudButton Size="Size.Small"
+                                                   Variant="Variant.Filled"
+                                                   Color="Color.Success"
+                                                   Disabled="@(IsActionDisabled(context))"
+                                                   OnClick="@(() => OpenRestoreConfirmation(context, RestoreAction.ApproveAgain))">
+                                            Approve Again
+                                        </MudButton>
+                                    }
+                                    else if (IsDisabled(context))
+                                    {
+                                        <MudButton Size="Size.Small"
+                                                   Variant="Variant.Filled"
+                                                   Color="Color.Success"
+                                                   Disabled="@(IsActionDisabled(context))"
+                                                   OnClick="@(() => OpenRestoreConfirmation(context, RestoreAction.Activate))">
+                                            Activate
+                                        </MudButton>
+                                    }
+                                    else if (CanDisable(context))
+                                    {
+                                        <MudButton Size="Size.Small"
+                                                   Variant="Variant.Outlined"
+                                                   Color="Color.Error"
+                                                   Disabled="@(IsActionDisabled(context))"
+                                                   OnClick="@(() => ConfirmDisable(context))">
+                                            Disable
+                                        </MudButton>
+                                    }
                                 </MudStack>
                             </MudTd>
                         </RowTemplate>
@@ -114,6 +142,46 @@
                     </DialogActions>
                 </MudDialog>
             }
+
+            @if (_restoreTarget != null)
+            {
+                <MudDialog @bind-Visible="_showRestoreConfirm">
+                    <DialogContent>
+                        <MudText Typo="Typo.h6" Class="font-weight-bold">
+                            @GetRestoreDialogTitle()
+                        </MudText>
+                        <MudText Class="mt-2">
+                            @GetRestoreDialogMessage()
+                        </MudText>
+                        <MudText Class="mt-2">
+                            Current status:
+                            <MudChip T="string" Size="Size.Small">@_restoreTarget.StatusCode</MudChip>
+                        </MudText>
+                        <MudAlert Severity="Severity.Info" Class="mt-3">
+                            The account will become ACTIVE and will be able to sign in.
+                        </MudAlert>
+                    </DialogContent>
+                    <DialogActions>
+                        <MudButton Variant="Variant.Text" OnClick="CancelRestore">Cancel</MudButton>
+                        @if (_restoreAction == RestoreAction.ApproveAgain)
+                        {
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Success"
+                                       OnClick="ConfirmRestoreAsync">
+                                Approve Again
+                            </MudButton>
+                        }
+                        else
+                        {
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Success"
+                                       OnClick="ConfirmRestoreAsync">
+                                Activate Account
+                            </MudButton>
+                        }
+                    </DialogActions>
+                </MudDialog>
+            }
         </MudPaper>
     </div>
 </AdminLayout>
@@ -128,6 +196,9 @@
     private MangaManagementSystem.Application.DTOs.Auth.UserDto? _deleteTarget;
     private string? _currentUserUsername;
 
+    private bool _showRestoreConfirm;
+    private MangaManagementSystem.Application.DTOs.Auth.UserDto? _restoreTarget;
+    private RestoreAction _restoreAction;
     private async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
         return await AuthStateProvider.GetAuthenticationStateAsync();
@@ -215,5 +286,142 @@
             _processingUserId = null;
             _deleteTarget = null;
         }
+    }
+    private bool IsCurrentUser(
+        MangaManagementSystem.Application.DTOs.Auth.UserDto user)
+    {
+        return !string.IsNullOrWhiteSpace(_currentUserUsername)
+            && string.Equals(
+                user.Username,
+                _currentUserUsername,
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool IsActionDisabled(
+        MangaManagementSystem.Application.DTOs.Auth.UserDto user)
+    {
+        return _processingUserId.HasValue
+            || IsCurrentUser(user);
+    }
+
+    private static bool IsRejected(
+        MangaManagementSystem.Application.DTOs.Auth.UserDto user)
+    {
+        return string.Equals(
+            user.StatusCode,
+            "REJECTED",
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsDisabled(
+        MangaManagementSystem.Application.DTOs.Auth.UserDto user)
+    {
+        return string.Equals(
+            user.StatusCode,
+            "DISABLED",
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool CanDisable(
+        MangaManagementSystem.Application.DTOs.Auth.UserDto user)
+    {
+        return string.Equals(
+                   user.StatusCode,
+                   "ACTIVE",
+                   StringComparison.OrdinalIgnoreCase)
+            || string.Equals(
+                   user.StatusCode,
+                   "PENDING_APPROVAL",
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void OpenRestoreConfirmation(
+        MangaManagementSystem.Application.DTOs.Auth.UserDto user,
+        RestoreAction action)
+    {
+        if (IsActionDisabled(user))
+        {
+            return;
+        }
+
+        _restoreTarget = user;
+        _restoreAction = action;
+        _showRestoreConfirm = true;
+    }
+
+    private void CancelRestore()
+    {
+        _showRestoreConfirm = false;
+        _restoreTarget = null;
+    }
+
+    private string GetRestoreDialogTitle()
+    {
+        return _restoreAction == RestoreAction.ApproveAgain
+            ? "Confirm Approve Account Again"
+            : "Confirm Activate Account";
+    }
+
+    private string GetRestoreDialogMessage()
+    {
+        if (_restoreTarget == null)
+        {
+            return string.Empty;
+        }
+
+        return _restoreAction == RestoreAction.ApproveAgain
+            ? $"Approve the previously rejected registration for '{_restoreTarget.Username}'?"
+            : $"Activate the disabled account '{_restoreTarget.Username}'?";
+    }
+
+    private async Task ConfirmRestoreAsync()
+    {
+        if (_restoreTarget == null || _processingUserId.HasValue)
+        {
+            return;
+        }
+
+        var user = _restoreTarget;
+        var action = _restoreAction;
+
+        _processingUserId = user.UserId;
+        _showRestoreConfirm = false;
+
+        try
+        {
+            if (action == RestoreAction.ApproveAgain)
+            {
+                await AdminUserApiClient.ApproveUserAsync(user.UserId);
+                Snackbar.Add($"Approved {user.Username} again.", Severity.Success);
+            }
+            else
+            {
+                await AdminUserApiClient.ActivateUserAsync(user.UserId);
+                Snackbar.Add($"Activated {user.Username}.", Severity.Success);
+            }
+
+            await LoadAllUsersAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(
+                $"Failed to update {user.Username}: {ex.Message}",
+                Severity.Error);
+        }
+        finally
+        {
+            _processingUserId = null;
+            _restoreTarget = null;
+        }
+    }
+
+    private enum RestoreAction
+    {
+        ApproveAgain,
+        Activate
     }
 }
