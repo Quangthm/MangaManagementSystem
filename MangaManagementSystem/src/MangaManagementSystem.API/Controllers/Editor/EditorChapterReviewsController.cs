@@ -2,6 +2,8 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.API.Contracts;
+using MangaManagementSystem.Application.DTOs.Editor;
+using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queries.GetEditorChapterReviewDetail;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queries.GetEditorChapterReviewQueue;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -10,8 +12,9 @@ using Microsoft.Extensions.Logging;
 namespace MangaManagementSystem.API.Controllers.Editor
 {
     /// <summary>
-    /// Thin HTTP boundary for the Tantou Editor Chapter Review Queue. Resolves the actor,
-    /// dispatches one MediatR query, returns the result. No business logic, EF, or SQL here.
+    /// Thin HTTP boundary for the Tantou Editor Chapter Review queue and detail. Resolves the
+    /// actor, dispatches one MediatR query, returns the result. No business logic, EF, or SQL
+    /// here. Both endpoints are scoped to series the actor contributes to.
     /// </summary>
     [ApiController]
     [Route("api/editor/chapters")]
@@ -31,7 +34,8 @@ namespace MangaManagementSystem.API.Controllers.Editor
         }
 
         /// <summary>
-        /// Returns the chapter review queue read model (KPI counts + filtered chapter list).
+        /// Returns the chapter review queue read model (KPI counts + filtered chapter list),
+        /// scoped to the actor's series.
         /// Route: GET /api/editor/chapters/review-queue?status=UNDER_REVIEW
         /// </summary>
         [HttpGet("review-queue")]
@@ -39,7 +43,7 @@ namespace MangaManagementSystem.API.Controllers.Editor
             [FromQuery(Name = "status")] string? status,
             CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out _))
+            if (!TryResolveActorUserId(out Guid actorUserId))
             {
                 return BadRequest(new ApiErrorResponse(
                     "Could not identify the requesting user. Please sign in again."));
@@ -48,7 +52,7 @@ namespace MangaManagementSystem.API.Controllers.Editor
             try
             {
                 var result = await _mediator.Send(
-                    new GetEditorChapterReviewQueueQuery(status), cancellationToken);
+                    new GetEditorChapterReviewQueueQuery(status, actorUserId), cancellationToken);
                 return Ok(result);
             }
             catch (Exception ex)
@@ -56,6 +60,45 @@ namespace MangaManagementSystem.API.Controllers.Editor
                 _logger.LogError(ex, "Unexpected error loading the chapter review queue.");
                 return Problem(
                     detail: "We could not load the chapter review queue right now. Please try again later.",
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
+        }
+
+        /// <summary>
+        /// Returns the scoped review detail for one chapter. Responds 403 when the actor is not
+        /// an active Tantou Editor contributor of the chapter's series (no details leaked).
+        /// Route: GET /api/editor/chapters/{chapterId}/review-detail
+        /// </summary>
+        [HttpGet("{chapterId:guid}/review-detail")]
+        public async Task<IActionResult> GetReviewDetailAsync(
+            Guid chapterId,
+            CancellationToken cancellationToken)
+        {
+            if (!TryResolveActorUserId(out Guid actorUserId))
+            {
+                return BadRequest(new ApiErrorResponse(
+                    "Could not identify the requesting user. Please sign in again."));
+            }
+
+            try
+            {
+                EditorChapterReviewDetailDto? result = await _mediator.Send(
+                    new GetEditorChapterReviewDetailQuery(chapterId, actorUserId), cancellationToken);
+
+                if (result is null)
+                {
+                    // Not found OR not authorised — same safe response, no details leaked.
+                    return StatusCode(StatusCodes.Status403Forbidden, new ApiErrorResponse(
+                        "You do not have access to this chapter review."));
+                }
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error loading chapter review detail {ChapterId}.", chapterId);
+                return Problem(
+                    detail: "We could not load the chapter review right now. Please try again later.",
                     statusCode: StatusCodes.Status500InternalServerError);
             }
         }

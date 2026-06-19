@@ -19,9 +19,24 @@ namespace MangaManagementSystem.Domain.Interfaces
         /// all reviewable statuses (UNDER_REVIEW, REVISION_REQUESTED, ON_HOLD). Each chapter
         /// carries its page count (derived from the ChapterPages table) and its parent Series
         /// (with Slug) so the handler can build workspace URLs.
+        ///
+        /// Scope: only chapters belonging to series where <paramref name="actorUserId"/> is an
+        /// active Tantou Editor contributor are counted and listed.
         /// </summary>
         Task<EditorChapterReviewData> GetReviewQueueAsync(
             string? statusFilter,
+            Guid actorUserId,
+            CancellationToken ct = default);
+
+        /// <summary>
+        /// Returns the scoped review detail for one chapter, or null when the chapter does not
+        /// exist or <paramref name="actorUserId"/> is not an active Tantou Editor contributor of
+        /// the chapter's series. Returning null lets the API respond 403/not-found without
+        /// leaking chapter or series details.
+        /// </summary>
+        Task<EditorChapterReviewDetail?> GetReviewDetailForEditorAsync(
+            Guid chapterId,
+            Guid actorUserId,
             CancellationToken ct = default);
     }
 
@@ -48,4 +63,38 @@ namespace MangaManagementSystem.Domain.Interfaces
         int PageCount,
         DateTime CreatedAtUtc,
         Series? Series);
+
+    /// <summary>
+    /// Scoped chapter review detail read result. Pages and open annotations are pre-shaped
+    /// into primitive-friendly records so the Application handler can map straight to DTOs
+    /// without further EF access.
+    /// </summary>
+    public sealed record EditorChapterReviewDetail(
+        Guid ChapterId,
+        Guid SeriesId,
+        string SeriesTitle,
+        string? SeriesSlug,
+        string ChapterNumberLabel,
+        string? ChapterTitle,
+        string StatusCode,
+        int PageCount,
+        DateTime CreatedAtUtc,
+        string? SubmittedByDisplayName,
+        IReadOnlyList<EditorChapterReviewDetailPage> Pages,
+        IReadOnlyList<EditorChapterReviewDetailAnnotation> OpenAnnotations);
+
+    public sealed record EditorChapterReviewDetailPage(
+        Guid ChapterPageId,
+        int PageNumber,
+        Guid? CurrentVersionId,
+        string? CurrentVersionFileUrl,
+        short? CurrentVersionNo);
+
+    public sealed record EditorChapterReviewDetailAnnotation(
+        Guid AnnotationId,
+        string Comment,
+        string IssueTypeCode,
+        DateTime CreatedAtUtc,
+        string? CreatedByDisplayName,
+        bool IsResolved);
 }

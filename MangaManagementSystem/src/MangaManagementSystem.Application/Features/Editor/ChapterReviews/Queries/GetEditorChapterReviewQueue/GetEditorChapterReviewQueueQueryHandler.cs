@@ -27,7 +27,7 @@ namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queri
             GetEditorChapterReviewQueueQuery request, CancellationToken cancellationToken)
         {
             var data = await _repository.GetReviewQueueAsync(
-                request.StatusFilter, cancellationToken);
+                request.StatusFilter, request.ActorUserId, cancellationToken);
 
             var chapters = data.Chapters
                 .Select(c =>

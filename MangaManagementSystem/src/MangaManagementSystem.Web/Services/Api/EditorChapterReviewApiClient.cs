@@ -64,6 +64,46 @@ namespace MangaManagementSystem.Web.Services.Api
             throw new InvalidOperationException(message);
         }
 
+        public async Task<EditorChapterReviewDetailResult> GetReviewDetailAsync(
+            Guid actorUserId,
+            Guid chapterId,
+            CancellationToken cancellationToken = default)
+        {
+            using var requestMessage = new HttpRequestMessage(
+                HttpMethod.Get, $"api/editor/chapters/{chapterId}/review-detail");
+            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var detail = await response.Content.ReadFromJsonAsync<EditorChapterReviewDetailDto>(
+                    cancellationToken: cancellationToken);
+
+                if (detail is null)
+                {
+                    return EditorChapterReviewDetailResult.Failure(
+                        "The chapter review returned no data. Please refresh and try again.");
+                }
+
+                return EditorChapterReviewDetailResult.Success(detail);
+            }
+
+            // 403 (and 404, defensively) map to a friendly access-denied state without leaking details.
+            if (response.StatusCode == System.Net.HttpStatusCode.Forbidden ||
+                response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return EditorChapterReviewDetailResult.Forbidden(
+                    "You do not have access to this chapter review.");
+            }
+
+            var message = await ExtractErrorMessageAsync(response);
+            _logger.LogWarning(
+                "Load chapter review detail {ChapterId} failed: {StatusCode} {ReasonPhrase}",
+                chapterId, (int)response.StatusCode, response.ReasonPhrase);
+            return EditorChapterReviewDetailResult.Failure(message);
+        }
+
         private static async Task<string> ExtractErrorMessageAsync(HttpResponseMessage response)
         {
             try
