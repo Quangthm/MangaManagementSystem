@@ -1293,22 +1293,16 @@ BEGIN
         -- 4. Submitter must be an ACTIVE Mangaka contributor of this series.
         --------------------------------------------------------------------
         IF NOT EXISTS
-        (
-            SELECT 1
-            FROM manga.SeriesContributor sc
-            INNER JOIN auth.Users u
-                ON u.user_id = sc.user_id
-            INNER JOIN auth.Roles r
-                ON r.role_id = u.role_id
-            WHERE sc.series_id = @series_id
-              AND sc.user_id = @submitted_by_user_id
-              AND sc.end_date IS NULL
-              AND u.status_code = N'ACTIVE'
-              AND r.role_name = N'Mangaka'
-        )
-        BEGIN
-            ;THROW 57004, 'Submitter must be an active Mangaka contributor of this series.', 1;
-        END;
+(
+    SELECT 1
+    FROM manga.vw_ActiveSeriesContributor ascx
+    WHERE ascx.series_id = @series_id
+      AND ascx.user_id = @submitted_by_user_id
+      AND ascx.role_name = N'Mangaka'
+)
+BEGIN
+    ;THROW 57004, 'Submitter must be an active Mangaka contributor of this series.', 1;
+END;
 
         --------------------------------------------------------------------
         -- 5. Generate next proposal version number.
@@ -1483,22 +1477,16 @@ BEGIN
         -- 3. Actor must be an active Mangaka contributor of this series
         --------------------------------------------------------------------
         IF NOT EXISTS
-        (
-            SELECT 1
-            FROM manga.SeriesContributor sc
-            INNER JOIN auth.Users u
-                ON u.user_id = sc.user_id
-            INNER JOIN auth.Roles r
-                ON r.role_id = u.role_id
-            WHERE sc.series_id = @series_id
-              AND sc.user_id = @actor_user_id
-              AND sc.end_date IS NULL
-              AND u.status_code = N'ACTIVE'
-              AND r.role_name = N'Mangaka'
-        )
-        BEGIN
-            ;THROW 57104, 'Only an active Mangaka contributor can cancel this draft series.', 1;
-        END;
+(
+    SELECT 1
+    FROM manga.vw_ActiveSeriesContributor ascx
+    WHERE ascx.series_id = @series_id
+      AND ascx.user_id = @actor_user_id
+      AND ascx.role_name = N'Mangaka'
+)
+BEGIN
+    ;THROW 57104, 'Only an active Mangaka contributor can cancel this draft series.', 1;
+END;
 
         --------------------------------------------------------------------
         -- 4. Cancel draft series
@@ -1949,29 +1937,6 @@ BEGIN
     END CATCH;
 END;
 GO
--- ============================================================
--- manga.usp_Series_UpdateProfile
--- BF-SERIES-002 — Edit Series Draft Profile
---
--- Allows an active Mangaka contributor to update a PROPOSAL_DRAFT
--- series profile: title, slug, synopsis, genre, content language,
--- publication frequency, and optionally the cover image.
---
--- Cover update is all-or-nothing: pass all six cover metadata params
--- or none. When a new cover is supplied, the old FileResource is
--- soft-deleted inside the transaction and a new one is created.
---
--- Status guard: only PROPOSAL_DRAFT series can be updated here.
--- Once a proposal has been submitted (UNDER_EDITORIAL_REVIEW or later),
--- this procedure rejects the update.
---
--- Custom error numbers (57401–57410):
---   57401  Could not acquire series profile update lock.
---   57402  Series does not exist.
---   57403  Only a PROPOSAL_DRAFT series can have its profile updated here.
---   57404  Only an active Mangaka contributor can update this series profile.
---   57405  Cover file metadata is incomplete — pass all six cover fields or none.
--- ============================================================
 CREATE OR ALTER PROCEDURE manga.usp_Series_UpdateProfile
     @actor_user_id                  UNIQUEIDENTIFIER,
     @series_id                      UNIQUEIDENTIFIER,
@@ -2057,23 +2022,17 @@ BEGIN
         --------------------------------------------------------------------
         -- 4. Actor must be an active Mangaka contributor of this series.
         --------------------------------------------------------------------
-        IF NOT EXISTS
-        (
-            SELECT 1
-            FROM manga.SeriesContributor sc
-            INNER JOIN auth.Users u
-                ON u.user_id = sc.user_id
-            INNER JOIN auth.Roles r
-                ON r.role_id = u.role_id
-            WHERE sc.series_id = @series_id
-              AND sc.user_id   = @actor_user_id
-              AND sc.end_date  IS NULL
-              AND u.status_code = N'ACTIVE'
-              AND r.role_name   = N'Mangaka'
-        )
-        BEGIN
-            ;THROW 57404, 'Only an active Mangaka contributor can update this series profile.', 1;
-        END;
+       IF NOT EXISTS
+(
+    SELECT 1
+    FROM manga.vw_ActiveSeriesContributor ascx
+    WHERE ascx.series_id = @series_id
+      AND ascx.user_id = @actor_user_id
+      AND ascx.role_name = N'Mangaka'
+)
+BEGIN
+    ;THROW 57404, 'Only an active Mangaka contributor can update this series profile.', 1;
+END;
 
         --------------------------------------------------------------------
         -- 5. Validate cover metadata group (all-or-nothing).
@@ -2218,25 +2177,21 @@ BEGIN
         -- selected chapter_page_version_id.
         --------------------------------------------------------------------
         IF NOT EXISTS
-        (
-             SELECT 1
-    FROM auth.Users u
-    INNER JOIN manga.ChapterPageVersion cpv
-        ON cpv.chapter_page_version_id = @chapter_page_version_id
+(
+    SELECT 1
+    FROM manga.ChapterPageVersion cpv
     INNER JOIN manga.ChapterPage cp
         ON cp.chapter_page_id = cpv.chapter_page_id
     INNER JOIN manga.Chapter ch
         ON ch.chapter_id = cp.chapter_id
-    INNER JOIN manga.SeriesContributor sc
-        ON sc.series_id = ch.series_id
-       AND sc.user_id = u.user_id
-    WHERE u.user_id = @actor_user_id
-      AND u.status_code = N'ACTIVE'
-      AND sc.end_date IS NULL
-        )
-        BEGIN
-            ;THROW 57411, 'User is not an active contributor for the series that owns this page version.', 1;
-        END;
+    INNER JOIN manga.vw_ActiveSeriesContributor ascx
+        ON ascx.series_id = ch.series_id
+       AND ascx.user_id = @actor_user_id
+    WHERE cpv.chapter_page_version_id = @chapter_page_version_id
+)
+BEGIN
+    ;THROW 57411, 'User is not an active contributor for the series that owns this page version.', 1;
+END;
 
         --------------------------------------------------------------------
         -- 2. Validate JSON input

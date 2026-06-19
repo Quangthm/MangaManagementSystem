@@ -51,13 +51,36 @@
                     <RowTemplate>
                         <MudTd>@context.Title</MudTd>
                         <MudTd>@context.Slug</MudTd>
-                        <MudTd><MudChip T="string" Color="@GetStatusColor(context.StatusCode)" Size="Size.Small">@context.StatusCode</MudChip></MudTd>
+                        <MudTd><MudChip T="string" Color="@GetStatusColor(context.StatusCode)" Size="Size.Small">@context.StatusCode.Replace("_", " ")</MudChip></MudTd>
                         <MudTd>@context.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</MudTd>
                         <MudTd>
-                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
-                                       OnClick="@(() => ViewSeries(context.SeriesId))">
-                                Review
-                            </MudButton>
+                            @if (CanReview(context))
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                           OnClick="@(() => Nav.NavigateTo($"/editor/proposals/{context.LatestProposalId}"))">
+                                    Review
+                                </MudButton>
+                            }
+                            else if (context.LatestProposalId.HasValue)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default"
+                                           OnClick="@(() => Nav.NavigateTo($"/editor/proposals/{context.LatestProposalId}"))">
+                                    View
+                                </MudButton>
+                            }
+                            else if (!string.IsNullOrWhiteSpace(context.Slug))
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default"
+                                           OnClick="@(() => Nav.NavigateTo($"/series/{context.Slug}"))">
+                                    View Series
+                                </MudButton>
+                            }
+                            else
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="true">
+                                    View
+                                </MudButton>
+                            }
                         </MudTd>
                     </RowTemplate>
                 </MudTable>
@@ -71,6 +94,13 @@
     private string? _error;
     private IReadOnlyList<EditorSeriesDto>? _series;
     private Guid _currentUserId;
+
+    private const string StatusUnderEditorialReview = "UNDER_EDITORIAL_REVIEW";
+
+    private static bool CanReview(EditorSeriesDto s) =>
+        s.LatestProposalId.HasValue &&
+        string.Equals(s.StatusCode, StatusUnderEditorialReview, StringComparison.Ordinal) &&
+        string.Equals(s.LatestProposalStatusCode, StatusUnderEditorialReview, StringComparison.Ordinal);
 
     private Color GetStatusColor(string status) => status switch
     {
@@ -118,7 +148,4 @@
             _loading = false;
         }
     }
-
-    private void ViewSeries(Guid seriesId) =>
-        Nav.NavigateTo($"/editor/series/{seriesId}");
 }

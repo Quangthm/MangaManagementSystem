@@ -25,12 +25,26 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         public async Task<SeriesProposal?> GetByIdWithDetailsAsync(Guid seriesProposalId, CancellationToken ct = default)
         {
             return await _dbContext.Set<SeriesProposal>()
-                .Include(sp => sp.Series).ThenInclude(s => s.CoverFile)
+                .Include(sp => sp.Series!).ThenInclude(s => s.CoverFile)
                 .Include(sp => sp.SubmittedByUser)
                 .Include(sp => sp.ReviewedByUser)
                 .Include(sp => sp.ProposalFile)
                 .Include(sp => sp.MarkupFile)
                 .FirstOrDefaultAsync(sp => sp.SeriesProposalId == seriesProposalId, ct);
+        }
+
+        public async Task<IReadOnlyList<SeriesProposal>> GetLatestForSeriesBatchAsync(
+            IReadOnlyList<Guid> seriesIds, CancellationToken ct = default)
+        {
+            if (seriesIds is null || seriesIds.Count == 0)
+                return Array.Empty<SeriesProposal>();
+
+            return await _dbContext.Set<SeriesProposal>()
+                .AsNoTracking()
+                .Where(sp => seriesIds.Contains(sp.SeriesId))
+                .OrderByDescending(sp => sp.ProposalVersionNo)
+                .ThenByDescending(sp => sp.SubmittedAtUtc)
+                .ToListAsync(ct);
         }
 
         public async Task<SeriesProposal?> GetLatestBySeriesIdAsync(Guid seriesId, CancellationToken ct = default)

@@ -28,15 +28,51 @@
         else if (_proposal != null)
         {
             <MudGrid>
-                <MudItem xs="12" md="8">
+                @* ── Left: Series Cover ── *@
+                <MudItem xs="12" md="3">
+                    <MudPaper Class="pa-4 mf-card mb-5 text-center" Elevation="0">
+                        @if (!string.IsNullOrWhiteSpace(_proposal.SeriesCoverUrl))
+                        {
+                            <div style="width:100%; max-width:220px; margin:0 auto; background:#f1f5f9; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:12px;">
+                                <img src="@_proposal.SeriesCoverUrl"
+                                     alt="@($"{_proposal.SeriesTitle} cover")"
+                                     style="width:100%; max-height:310px; object-fit:cover; display:block; border-radius:12px;" />
+                            </div>
+                        }
+                        else
+                        {
+                            <div style="width:100%; max-width:220px; margin:0 auto; background:#f1f5f9; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:12px; height:200px;">
+                                <MudIcon Icon="@Icons.Material.Filled.MenuBook"
+                                         Style="font-size:72px; color:#cbd5e1;" />
+                            </div>
+                        }
+                        <MudText Typo="Typo.caption" Class="mf-muted mt-2">@_proposal.SeriesTitle</MudText>
+                    </MudPaper>
+                </MudItem>
+
+                @* ── Center: Proposal Info + File + Decision ── *@
+                <MudItem xs="12" md="6">
                     <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
                         <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Class="mb-4">
                             <div>
                                 <MudText Typo="Typo.h5" Class="font-weight-bold">@_proposal.ProposalTitle</MudText>
                                 <MudText Class="mf-muted">@_proposal.SeriesTitle · Proposal v@_proposal.ProposalVersionNo</MudText>
                             </div>
-                            <MudChip T="string" Color="@GetStatusColor(_proposal.StatusCode)">@_proposal.StatusCode.Replace("_", " ")</MudChip>
+                            <div class="d-flex flex-column align-end gap-1">
+                                <MudChip T="string" Color="@GetStatusColor(_proposal.ProposalStatusCode)">@_proposal.ProposalStatusCode.Replace("_", " ")</MudChip>
+                                @if (!string.IsNullOrWhiteSpace(_proposal.SeriesStatusCode) && _proposal.SeriesStatusCode != _proposal.ProposalStatusCode)
+                                {
+                                    <MudText Typo="Typo.caption" Class="mf-muted">Series: @_proposal.SeriesStatusCode.Replace("_", " ")</MudText>
+                                }
+                            </div>
                         </MudStack>
+
+                        @if (!string.IsNullOrWhiteSpace(_proposal.SeriesStatusCode) && _proposal.SeriesStatusCode != _proposal.ProposalStatusCode)
+                        {
+                            <MudAlert Severity="Severity.Warning" Class="mb-3" Dense="true">
+                                <MudText Typo="Typo.caption">Current series state (@_proposal.SeriesStatusCode.Replace("_", " ")) differs from this proposal version.</MudText>
+                            </MudAlert>
+                        }
 
                         <MudDivider Class="mb-3" />
 
@@ -50,8 +86,8 @@
                         <MudText Class="mb-3">@_proposal.GenreSnapshot</MudText>
 
                         <MudText Typo="Typo.subtitle2" Class="mf-muted mt-3">Synopsis</MudText>
-                        <MudPaper Elevation="0" Class="pa-3" Style="max-height: 260px; overflow-y: auto; background: var(--mud-palette-background-grey);">
-                            <MudText Style="white-space: pre-wrap;">@_proposal.SynopsisSnapshot</MudText>
+                        <MudPaper Elevation="0" Class="pa-3" Style="max-height:260px; overflow-y:auto; background:var(--mud-palette-background-grey);">
+                            <MudText Style="white-space:pre-wrap;">@_proposal.SynopsisSnapshot</MudText>
                         </MudPaper>
 
                         <MudDivider Class="my-4" />
@@ -91,8 +127,8 @@
                             }
                             @if (!string.IsNullOrWhiteSpace(_proposal.Comments))
                             {
-                                <MudPaper Elevation="0" Class="pa-3 mt-2" Style="background: var(--mud-palette-warning-hover);">
-                                    <MudText Style="white-space: pre-wrap;">@_proposal.Comments</MudText>
+                                <MudPaper Elevation="0" Class="pa-3 mt-2" Style="background:var(--mud-palette-warning-hover);">
+                                    <MudText Style="white-space:pre-wrap;">@_proposal.Comments</MudText>
                                 </MudPaper>
                             }
                             @if (!string.IsNullOrEmpty(_proposal.MarkupFileUrl))
@@ -111,15 +147,8 @@
                     }
                 </MudItem>
 
-                <MudItem xs="12" md="4">
-                    @if (!string.IsNullOrWhiteSpace(_proposal.SeriesCoverUrl))
-                    {
-                        <MudPaper Class="pa-4 mf-card mb-5 text-center" Elevation="0">
-                            <MudImage Src="@_proposal.SeriesCoverUrl" Alt="@($"{_proposal.SeriesTitle} cover")" Elevation="2" Class="mb-2" />
-                            <MudText Typo="Typo.caption" Class="mf-muted">@_proposal.SeriesTitle</MudText>
-                        </MudPaper>
-                    }
-
+                @* ── Right: Submission + Claim/Actions ── *@
+                <MudItem xs="12" md="3">
                     <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
                         <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Submission</MudText>
                         <MudText Typo="Typo.body2" Class="mf-muted">Submitted by</MudText>
@@ -130,7 +159,7 @@
 
                     @if (_proposal.CanClaim)
                     {
-                        <MudPaper Class="pa-5 mf-card mb-5" Elevation="0" Style="border: 2px dashed var(--mud-palette-warning);">
+                        <MudPaper Class="pa-5 mf-card mb-5" Elevation="0" Style="border:2px dashed var(--mud-palette-warning);">
                             <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">Unclaimed Proposal</MudText>
                             <MudText Class="mb-4">Claim this proposal to become its active Tantou Editor reviewer before recording a decision.</MudText>
                             <MudButton Variant="Variant.Filled" Color="Color.Warning" FullWidth="true"
@@ -164,7 +193,7 @@
                         </MudPaper>
                     }
                     else if (!_proposal.CanClaim && !_proposal.HasEditorialDecision
-                             && _proposal.StatusCode == "UNDER_EDITORIAL_REVIEW"
+                             && _proposal.ProposalStatusCode == "UNDER_EDITORIAL_REVIEW"
                              && !_proposal.CurrentActorIsActiveTantouEditorContributor)
                     {
                         <MudAlert Severity="Severity.Info">

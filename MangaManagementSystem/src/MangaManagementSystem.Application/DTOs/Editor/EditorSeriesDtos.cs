@@ -8,7 +8,9 @@ namespace MangaManagementSystem.Application.DTOs.Editor
         string Title,
         string Slug,
         string StatusCode,
-        DateTime CreatedAtUtc);
+        DateTime CreatedAtUtc,
+        Guid? LatestProposalId,
+        string? LatestProposalStatusCode);
 
     public sealed record EditorSeriesListDto(
         IReadOnlyList<EditorSeriesDto> Series);

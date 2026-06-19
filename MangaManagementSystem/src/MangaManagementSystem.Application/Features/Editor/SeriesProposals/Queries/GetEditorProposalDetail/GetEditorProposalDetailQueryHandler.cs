@@ -58,7 +58,13 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Quer
             bool isUnderEditorialReview =
                 string.Equals(proposal.StatusCode, StatusUnderEditorialReview, StringComparison.Ordinal);
 
-            bool eligible = isUnderEditorialReview && !hasEditorialDecision;
+            bool seriesIsUnderEditorialReview =
+                string.Equals(proposal.Series?.StatusCode, StatusUnderEditorialReview, StringComparison.Ordinal);
+
+            // Actionable only when both the proposal row AND the current series are in
+            // UNDER_EDITORIAL_REVIEW. A stale proposal row on a PROPOSAL_DRAFT series must
+            // NOT show review actions.
+            bool eligible = isUnderEditorialReview && seriesIsUnderEditorialReview && !hasEditorialDecision;
 
             // Claim: eligible, not yet claimed by this actor. The page is already restricted to
             // the Tantou Editor role; the claim stored procedure performs the authoritative check.
@@ -77,7 +83,8 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Quer
                 ProposalTitle: proposal.ProposalTitle,
                 GenreSnapshot: proposal.GenreSnapshot,
                 SynopsisSnapshot: proposal.SynopsisSnapshot,
-                StatusCode: proposal.StatusCode,
+                ProposalStatusCode: proposal.StatusCode,
+                SeriesStatusCode: proposal.Series?.StatusCode,
                 SubmittedByUserId: proposal.SubmittedByUserId,
                 SubmitterDisplayName: proposal.SubmittedByUser?.DisplayName ?? string.Empty,
                 SubmittedAtUtc: proposal.SubmittedAtUtc,
