@@ -146,6 +146,17 @@ namespace MangaManagementSystem.Web
                 var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
                 client.BaseAddress = new Uri(settings.Value.BaseUrl);
             });
+            builder.Services.AddHttpClient<Services.Api.IMangakaTaskApiClient, Services.Api.MangakaTaskApiClient>((sp, client) =>
+            builder.Services.AddHttpClient<Services.Api.IEditorDashboardApiClient, Services.Api.EditorDashboardApiClient>((sp, client) =>
+            {
+                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                client.BaseAddress = new Uri(settings.Value.BaseUrl);
+            });
+            builder.Services.AddHttpClient<Services.Api.IEditorChapterReviewApiClient, Services.Api.EditorChapterReviewApiClient>((sp, client) =>
+            {
+                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                client.BaseAddress = new Uri(settings.Value.BaseUrl);
+            });
 
             var app = builder.Build();
 

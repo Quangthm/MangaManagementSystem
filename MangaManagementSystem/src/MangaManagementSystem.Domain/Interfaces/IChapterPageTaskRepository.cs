@@ -26,5 +26,13 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<IReadOnlyList<ChapterPageTask>> GetByAssignedUserIdWithFullContextAsync(Guid assignedToUserId);
 
         Task<ChapterPageTask?> GetByIdWithFullContextAsync(Guid taskId);
+
+        // Mangaka task lifecycle SPs
+        Task CancelTaskAsync(Guid actorUserId, Guid taskId, string reason);
+        Task MarkTaskCompletedAsync(Guid actorUserId, Guid taskId, string? completionNote);
+        Task ReturnTaskForReworkAsync(Guid actorUserId, Guid taskId, string updatedTaskDescription);
+
+        // Mangaka: tasks created by this user (for review submissions view)
+        Task<IReadOnlyList<ChapterPageTask>> GetTasksForReviewByCreatorAsync(Guid creatorUserId);
     }
 }
