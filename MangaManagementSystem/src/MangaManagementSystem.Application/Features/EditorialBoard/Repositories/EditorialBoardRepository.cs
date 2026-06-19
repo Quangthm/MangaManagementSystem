@@ -1,4 +1,5 @@
 ﻿using System.Data;
+using System.Data.Common;
 using MangaManagementSystem.Application.Features.EditorialBoard.Dtos;
 using MangaManagementSystem.Application.Features.EditorialBoard.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -28,7 +29,10 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             """
             SELECT COUNT(1)
             FROM manga.SeriesProposal
-            WHERE status_code = N'UNDER_EDITORIAL_REVIEW';
+            WHERE status_code IN (
+                N'UNDER_EDITORIAL_REVIEW',
+                N'UNDER_BOARD_REVIEW'
+            );
             """,
             cancellationToken);
 
@@ -45,8 +49,9 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             connection,
             """
             SELECT COUNT(1)
-            FROM manga.SeriesBoardPoll
-            WHERE poll_status_code = N'CLOSED';
+            FROM manga.vw_SeriesBoardPollVoteSummary
+            WHERE poll_status_code = N'CLOSED'
+              AND is_applicable = 1;
             """,
             cancellationToken);
 
@@ -64,7 +69,7 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
     }
 
     private static async Task<int> ExecuteScalarIntAsync(
-        System.Data.Common.DbConnection connection,
+        DbConnection connection,
         string sql,
         CancellationToken cancellationToken)
     {
@@ -72,13 +77,14 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         command.CommandText = sql;
 
         var result = await command.ExecuteScalarAsync(cancellationToken);
+
         return result is null || result == DBNull.Value
             ? 0
             : Convert.ToInt32(result);
     }
 
     private static async Task<IReadOnlyList<EditorialProposalReviewRowDto>> ReadRecentProposalsAsync(
-        System.Data.Common.DbConnection connection,
+        DbConnection connection,
         CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
@@ -87,20 +93,24 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             """
             SELECT TOP (4)
                 sp.series_proposal_id,
-                s.series_id,
-                s.series_code,
-                s.title,
-                u.username AS author_name,
-                s.genre,
+                sp.series_id,
+                s.slug,
+                sp.proposal_title,
+                u.display_name,
+                sp.genre_snapshot,
                 sp.status_code
             FROM manga.SeriesProposal sp
-            INNER JOIN manga.Series s ON s.series_id = sp.series_id
-            INNER JOIN auth.Users u ON u.user_id = sp.submitted_by_user_id
+            INNER JOIN manga.Series s
+                ON s.series_id = sp.series_id
+            INNER JOIN auth.Users u
+                ON u.user_id = sp.submitted_by_user_id
             WHERE sp.status_code IN (
                 N'UNDER_EDITORIAL_REVIEW',
+                N'UNDER_BOARD_REVIEW',
+                N'REVISION_REQUESTED',
                 N'APPROVED',
-                N'REJECTED',
-                N'REVISION_REQUESTED'
+                N'CANCELLED',
+                N'WITHDRAWN'
             )
             ORDER BY sp.submitted_at_utc DESC;
             """;
@@ -112,20 +122,20 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         while (await reader.ReadAsync(cancellationToken))
         {
             rows.Add(new EditorialProposalReviewRowDto(
-                ProposalId: reader.GetInt64(0),
-                SeriesId: reader.GetInt64(1),
-                Code: reader.GetString(2),
-                Title: reader.GetString(3),
-                Author: reader.GetString(4),
-                Genre: reader.IsDBNull(5) ? "Unknown" : reader.GetString(5),
-                Status: MapProposalStatus(reader.GetString(6))));
+                ProposalId: reader.GetGuid(0),
+                SeriesId: reader.GetGuid(1),
+                Code: GetStringOrDefault(reader, 2, "N/A"),
+                Title: GetStringOrDefault(reader, 3, "Untitled Proposal"),
+                Author: GetStringOrDefault(reader, 4, "Unknown Author"),
+                Genre: GetStringOrDefault(reader, 5, "Unknown Genre"),
+                Status: MapProposalStatus(GetStringOrDefault(reader, 6, "UNKNOWN"))));
         }
 
         return rows;
     }
 
     private static async Task<IReadOnlyList<EditorialOpenPollRowDto>> ReadOpenPollsAsync(
-        System.Data.Common.DbConnection connection,
+        DbConnection connection,
         CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
@@ -134,21 +144,22 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             """
             SELECT TOP (3)
                 p.series_board_poll_id,
-                s.series_id,
-                s.series_code,
+                p.series_id,
+                s.slug,
                 s.title,
                 p.poll_type_code,
                 p.poll_status_code,
                 ISNULL(v.approve_count, 0) AS approve_count,
                 ISNULL(v.reject_count, 0) AS reject_count,
                 ISNULL(v.abstain_count, 0) AS abstain_count,
-                ISNULL(v.total_votes, 0) AS total_votes
+                ISNULL(v.total_vote_count, 0) AS total_vote_count
             FROM manga.SeriesBoardPoll p
-            INNER JOIN manga.Series s ON s.series_id = p.series_id
+            INNER JOIN manga.Series s
+                ON s.series_id = p.series_id
             LEFT JOIN manga.vw_SeriesBoardPollVoteSummary v
                 ON v.series_board_poll_id = p.series_board_poll_id
             WHERE p.poll_status_code = N'OPEN'
-            ORDER BY p.opened_at_utc DESC;
+            ORDER BY p.started_at_utc DESC;
             """;
 
         var rows = new List<EditorialOpenPollRowDto>();
@@ -157,26 +168,26 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
 
         while (await reader.ReadAsync(cancellationToken))
         {
-            var pollTypeCode = reader.GetString(4);
-            var seriesTitle = reader.GetString(3);
+            var pollTypeCode = GetStringOrDefault(reader, 4, "UNKNOWN");
+            var seriesTitle = GetStringOrDefault(reader, 3, "Untitled Series");
 
             rows.Add(new EditorialOpenPollRowDto(
-                PollId: reader.GetInt64(0),
-                SeriesId: reader.GetInt64(1),
-                Code: reader.GetString(2),
+                PollId: reader.GetGuid(0),
+                SeriesId: reader.GetGuid(1),
+                Code: GetStringOrDefault(reader, 2, "N/A"),
                 Name: $"{MapPollType(pollTypeCode)} — {seriesTitle}",
-                ApproveVotes: reader.GetInt32(6),
-                RejectVotes: reader.GetInt32(7),
-                AbstainVotes: reader.GetInt32(8),
-                TotalVotes: reader.GetInt32(9),
-                Status: MapPollStatus(reader.GetString(5))));
+                ApproveVotes: ToInt32(reader, 6),
+                RejectVotes: ToInt32(reader, 7),
+                AbstainVotes: ToInt32(reader, 8),
+                TotalVotes: ToInt32(reader, 9),
+                Status: MapPollStatus(GetStringOrDefault(reader, 5, "UNKNOWN"))));
         }
 
         return rows;
     }
 
     private static async Task<IReadOnlyList<EditorialDecisionQueueRowDto>> ReadDecisionQueueAsync(
-        System.Data.Common.DbConnection connection,
+        DbConnection connection,
         CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
@@ -184,21 +195,21 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         command.CommandText =
             """
             SELECT TOP (4)
-                p.series_board_poll_id,
-                s.series_id,
-                s.series_code,
-                s.title,
+                v.series_board_poll_id,
+                v.series_id,
+                s.slug,
+                v.series_title,
                 ISNULL(v.approve_count, 0) AS approve_count,
                 ISNULL(v.reject_count, 0) AS reject_count,
                 ISNULL(v.abstain_count, 0) AS abstain_count,
-                ISNULL(v.total_votes, 0) AS total_votes,
+                ISNULL(v.total_vote_count, 0) AS total_vote_count,
                 ISNULL(v.computed_result_code, N'PENDING') AS computed_result_code
-            FROM manga.SeriesBoardPoll p
-            INNER JOIN manga.Series s ON s.series_id = p.series_id
-            LEFT JOIN manga.vw_SeriesBoardPollVoteSummary v
-                ON v.series_board_poll_id = p.series_board_poll_id
-            WHERE p.poll_status_code = N'CLOSED'
-            ORDER BY p.closed_at_utc DESC;
+            FROM manga.vw_SeriesBoardPollVoteSummary v
+            INNER JOIN manga.Series s
+                ON s.series_id = v.series_id
+            WHERE v.poll_status_code = N'CLOSED'
+              AND v.is_applicable = 1
+            ORDER BY v.started_at_utc DESC;
             """;
 
         var rows = new List<EditorialDecisionQueueRowDto>();
@@ -208,18 +219,35 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         while (await reader.ReadAsync(cancellationToken))
         {
             rows.Add(new EditorialDecisionQueueRowDto(
-                PollId: reader.GetInt64(0),
-                SeriesId: reader.GetInt64(1),
-                Code: reader.GetString(2),
-                Title: reader.GetString(3),
-                ApproveVotes: reader.GetInt32(4),
-                RejectVotes: reader.GetInt32(5),
-                AbstainVotes: reader.GetInt32(6),
-                TotalVotes: reader.GetInt32(7),
-                ComputedResultCode: reader.GetString(8)));
+                PollId: reader.GetGuid(0),
+                SeriesId: reader.GetGuid(1),
+                Code: GetStringOrDefault(reader, 2, "N/A"),
+                Title: GetStringOrDefault(reader, 3, "Untitled Series"),
+                ApproveVotes: ToInt32(reader, 4),
+                RejectVotes: ToInt32(reader, 5),
+                AbstainVotes: ToInt32(reader, 6),
+                TotalVotes: ToInt32(reader, 7),
+                ComputedResultCode: MapDecisionResult(GetStringOrDefault(reader, 8, "PENDING"))));
         }
 
         return rows;
+    }
+
+    private static int ToInt32(DbDataReader reader, int ordinal)
+    {
+        return reader.IsDBNull(ordinal)
+            ? 0
+            : Convert.ToInt32(reader.GetValue(ordinal));
+    }
+
+    private static string GetStringOrDefault(
+        DbDataReader reader,
+        int ordinal,
+        string fallback)
+    {
+        return reader.IsDBNull(ordinal)
+            ? fallback
+            : reader.GetString(ordinal);
     }
 
     private static string MapProposalStatus(string statusCode)
@@ -227,10 +255,11 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         return statusCode switch
         {
             "UNDER_EDITORIAL_REVIEW" => "In Review",
-            "APPROVED" => "Approved",
-            "REJECTED" => "Rejected",
+            "UNDER_BOARD_REVIEW" => "Board Review",
             "REVISION_REQUESTED" => "Revision Requested",
-            "PROPOSAL_DRAFT" => "Draft",
+            "APPROVED" => "Approved",
+            "CANCELLED" => "Cancelled",
+            "WITHDRAWN" => "Withdrawn",
             _ => statusCode
         };
     }
@@ -253,6 +282,19 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             "START_SERIALIZATION" => "Serialization Approval",
             "CANCEL_SERIALIZATION" => "Cancel Serialization",
             _ => pollTypeCode
+        };
+    }
+
+    private static string MapDecisionResult(string resultCode)
+    {
+        return resultCode switch
+        {
+            "APPROVED" => "Approved",
+            "REJECTED" => "Rejected",
+            "NO_DECISION" => "No Decision",
+            "PENDING" => "Voting in Progress",
+            "INVALIDATED" => "Cancelled",
+            _ => resultCode
         };
     }
 }

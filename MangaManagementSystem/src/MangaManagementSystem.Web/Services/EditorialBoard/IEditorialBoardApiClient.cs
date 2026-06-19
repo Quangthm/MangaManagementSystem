@@ -1,45 +1,20 @@
 ﻿namespace MangaManagementSystem.Web.Services.EditorialBoard;
 
-public sealed record EditorialBoardPollDto(
-    Guid PollId,
-    Guid SeriesId,
-    string Code,
-    string SeriesTitle,
-    string PollName,
-    string PollTypeCode,
-    string PollStatusCode,
-    string PollReason,
-    string? PublicationFrequencyCode,
-    DateTime StartedAtUtc,
-    DateTime? EndsAtUtc,
-    int ApproveVotes,
-    int RejectVotes,
-    int AbstainVotes,
-    int TotalVotes,
-    string ComputedResultCode,
-    string? CurrentUserChoiceCode,
-    string? CurrentUserVoteReason);
+public interface IEditorialBoardApiClient
+{
+    Task<EditorialDashboardDto?> GetDashboardAsync(
+        CancellationToken cancellationToken = default);
 
-public sealed record OpenPollRequest(
-    string PollTypeCode,
-    string PollReason,
-    string? PublicationFrequencyCode,
-    DateTime? EndsAtUtc);
+    Task<IReadOnlyList<EditorialBoardPollDto>> GetOpenPollsAsync(
+        CancellationToken cancellationToken = default);
 
-public sealed record OpenPollResult(
-    Guid PollId,
-    Guid SeriesId,
-    Guid ProposalId,
-    string PollStatusCode);
+    Task<OpenPollResult?> OpenPollAsync(
+        Guid proposalId,
+        OpenPollRequest request,
+        CancellationToken cancellationToken = default);
 
-public sealed record CastVoteRequest(
-    string ChoiceCode,
-    string? VoteReason);
-
-public sealed record CastVoteResult(
-    Guid PollId,
-    Guid VoteId,
-    Guid UserId,
-    string ChoiceCode,
-    string? VoteReason,
-    DateTime VotedAtUtc);
+    Task<CastVoteResult?> CastVoteAsync(
+        Guid pollId,
+        CastVoteRequest request,
+        CancellationToken cancellationToken = default);
+}

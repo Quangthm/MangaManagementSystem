@@ -4,16 +4,8 @@ namespace MangaManagementSystem.Application.Features.EditorialBoard.Repositories
 
 public interface IEditorialBoardRepository
 {
-    Task<EditorialDashboardDto> GetDashboardAsync(CancellationToken cancellationToken);
-}
-
-using MangaManagementSystem.Application.Features.EditorialBoard.Dtos;
-
-namespace MangaManagementSystem.Application.Features.EditorialBoard.Repositories;
-
-public interface IEditorialBoardRepository
-{
-    Task<EditorialDashboardDto> GetDashboardAsync(CancellationToken cancellationToken);
+    Task<EditorialDashboardDto> GetDashboardAsync(
+        CancellationToken cancellationToken);
 
     Task<IReadOnlyList<EditorialBoardPollDto>> GetOpenPollsAsync(
         Guid currentUserId,
