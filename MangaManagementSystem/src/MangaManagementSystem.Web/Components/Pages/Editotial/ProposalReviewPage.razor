@@ -1,73 +1,113 @@
 @page "/demo/mangaflow/proposals"
+
 @using System.Globalization
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Authorization
+@using MangaManagementSystem.Web.Services.EditorialBoard
+
+@inject IEditorialBoardApiClient EditorialBoardApiClient
+@inject NavigationManager NavigationManager
 
 <MangaFlowShell Title="Proposal Reviews"
                 Subtitle="Review and evaluate manga proposals submitted by authors."
                 ActiveMenu="proposals">
     <ChildContent>
-        <section class="mf-filter-card">
-            <input class="mf-input mf-search-input"
-                   placeholder="Search proposals..."
-                   @bind="SearchText" />
+        @if (IsLoading)
+        {
+            <section class="mf-card">
+                <div class="mf-strong">Loading proposals...</div>
+                <div class="mf-muted">Fetching proposal data from API.</div>
+            </section>
+        }
+        else if (!string.IsNullOrWhiteSpace(ErrorMessage))
+        {
+            <section class="mf-card">
+                <div class="mf-strong">Cannot load proposals</div>
+                <div class="mf-muted">@ErrorMessage</div>
 
-            <button class="@GetFilterChipClass(null)" @onclick="ClearStatusFilter">All</button>
-            <button class="@GetFilterChipClass("Draft")" @onclick="SetDraftFilter">Draft</button>
-            <button class="@GetFilterChipClass("In Review")" @onclick="SetInReviewFilter">In Review</button>
-            <button class="@GetFilterChipClass("Approved")" @onclick="SetApprovedFilter">Approved</button>
-            <button class="@GetFilterChipClass("Rejected")" @onclick="SetRejectedFilter">Rejected</button>
-        </section>
+                <button type="button"
+                        class="mf-btn mf-btn-primary mf-gap-small"
+                        @onclick="LoadProposalsAsync">
+                    Retry
+                </button>
+            </section>
+        }
+        else
+        {
+            <section class="mf-filter-card">
+                <input class="mf-input mf-search-input"
+                       placeholder="Search proposals..."
+                       @bind="SearchText" />
 
-        <section class="mf-card table-card">
-            <div class="mf-table-wrap">
-                <table class="mf-table">
-                    <thead>
-                        <tr>
-                            <th>Series Code</th>
-                            <th>Proposal Title</th>
-                            <th>Author</th>
-                            <th>Genre</th>
-                            <th>Version</th>
-                            <th>Submitted</th>
-                            <th>Status</th>
-                            <th>Assigned Editor</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
+                <button class='@GetFilterChipClass(null)' @onclick="ClearStatusFilter">All</button>
+                <button class='@GetFilterChipClass("Draft")' @onclick="SetDraftFilter">Draft</button>
+                <button class='@GetFilterChipClass("In Review")' @onclick="SetInReviewFilter">In Review</button>
+                <button class='@GetFilterChipClass("Approved")' @onclick="SetApprovedFilter">Approved</button>
+                <button class='@GetFilterChipClass("Rejected")' @onclick="SetRejectedFilter">Rejected</button>
+            </section>
 
-                    <tbody>
-                        @foreach (var proposal in FilteredProposals)
-                        {
+            <section class="mf-card table-card">
+                <div class="mf-table-wrap">
+                    <table class="mf-table">
+                        <thead>
                             <tr>
-                                <td>
-                                    <span class="mf-code">@proposal.Code</span>
-                                </td>
-
-                                <td class="mf-strong">@proposal.Title</td>
-                                <td>@proposal.Author</td>
-                                <td>@proposal.Genre</td>
-                                <td class="mf-mono">@proposal.Version</td>
-                                <td>@proposal.Submitted</td>
-
-                                <td>
-                                    <StatusBadge Status="@proposal.Status" />
-                                </td>
-
-                                <td>@proposal.AssignedEditor</td>
-
-                                <td>
-                                    <button class="mf-btn mf-btn-soft"
-                                            @onclick="() => OpenDetails(proposal)">
-                                        View
-                                    </button>
-                                </td>
+                                <th>Series Code</th>
+                                <th>Proposal Title</th>
+                                <th>Author</th>
+                                <th>Genre</th>
+                                <th>Version</th>
+                                <th>Submitted</th>
+                                <th>Status</th>
+                                <th>Assigned Editor</th>
+                                <th>Actions</th>
                             </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </section>
+                        </thead>
+
+                        <tbody>
+                            @if (!FilteredProposals.Any())
+                            {
+                                <tr>
+                                    <td colspan="9">
+                                        <div class="mf-muted">No proposals found.</div>
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var proposal in FilteredProposals)
+                                {
+                                    <tr>
+                                        <td>
+                                            <span class="mf-code">@proposal.Code</span>
+                                        </td>
+
+                                        <td class="mf-strong">@proposal.Title</td>
+                                        <td>@proposal.Author</td>
+                                        <td>@proposal.Genre</td>
+                                        <td class="mf-mono">@proposal.Version</td>
+                                        <td>@proposal.Submitted</td>
+
+                                        <td>
+                                            <StatusBadge Status="@proposal.Status" />
+                                        </td>
+
+                                        <td>@proposal.AssignedEditor</td>
+
+                                        <td>
+                                            <button type="button"
+                                                    class="mf-btn mf-btn-soft"
+                                                    @onclick="() => OpenDetails(proposal)">
+                                                View
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        }
 
         @if (SelectedProposal is not null)
         {
@@ -83,7 +123,11 @@
                             <h2>@SelectedProposal.Title</h2>
                         </div>
 
-                        <button class="mf-icon-btn" @onclick="CloseDetails">×</button>
+                        <button type="button"
+                                class="mf-icon-btn"
+                                @onclick="CloseDetails">
+                            ×
+                        </button>
                     </div>
 
                     <div class="mf-proposal-layout">
@@ -167,7 +211,7 @@
                             <AuthorizeView Roles="Editorial Board Chief">
                                 <Authorized>
                                     <section class="mf-side-panel">
-                                        <h3>E. Open Polls</h3>
+                                        <h3>E. Open Poll</h3>
 
                                         <div class="mf-open-poll-box">
                                             <div class="mf-panel-title">
@@ -177,9 +221,20 @@
                                             <label class="mf-label">Poll type</label>
 
                                             <select class="mf-input" @bind="PollType">
-                                                <option value="START_SERIALIZATION">Serialization</option>
-                                                <option value="CANCEL_SERIALIZATION">Cancellation</option>
+                                                <option value="START_SERIALIZATION">START_SERIALIZATION</option>
+                                                <option value="CANCEL_SERIALIZATION">CANCEL_SERIALIZATION</option>
                                             </select>
+
+                                            @if (PollType == "START_SERIALIZATION")
+                                            {
+                                                <label class="mf-label">Publication frequency</label>
+
+                                                <select class="mf-input" @bind="PublicationFrequencyCode">
+                                                    <option value="WEEKLY">WEEKLY</option>
+                                                    <option value="MONTHLY">MONTHLY</option>
+                                                    <option value="IRREGULAR">IRREGULAR</option>
+                                                </select>
+                                            }
 
                                             @if (ShowDeadlinePicker)
                                             {
@@ -192,12 +247,14 @@
                                                            @onchange="OnDeadlineInputChanged" />
 
                                                     <div class="mf-actions tight">
-                                                        <button class="mf-btn mf-btn-primary"
+                                                        <button type="button"
+                                                                class="mf-btn mf-btn-primary"
                                                                 @onclick="ConfirmDeadline">
                                                             Save
                                                         </button>
 
-                                                        <button class="mf-btn"
+                                                        <button type="button"
+                                                                class="mf-btn"
                                                                 @onclick="CancelDeadline">
                                                             Cancel
                                                         </button>
@@ -206,7 +263,8 @@
                                             }
                                             else
                                             {
-                                                <button class="mf-btn mf-btn-soft full"
+                                                <button type="button"
+                                                        class="mf-btn mf-btn-soft full"
                                                         @onclick="StartDeadlinePicker">
                                                     @(ConfirmedOpenPollDeadline is null
                                                         ? "Set deadline (optional)"
@@ -214,14 +272,22 @@
                                                 </button>
                                             }
 
-                                            <button class="mf-btn mf-btn-primary full"
-                                                    @onclick="ConfirmOpenPoll">
-                                                Confirm & Open Poll
+                                            <label class="mf-label">Poll reason</label>
+
+                                            <textarea class="mf-textarea"
+                                                      @bind="PollReason"
+                                                      placeholder="Explain why this proposal should go to board vote..."></textarea>
+
+                                            <button type="button"
+                                                    class="mf-btn mf-btn-primary full"
+                                                    disabled="@IsOpeningPoll"
+                                                    @onclick="ConfirmOpenPollAsync">
+                                                @(IsOpeningPoll ? "Opening..." : "Confirm & Open Poll")
                                             </button>
 
                                             @if (!string.IsNullOrWhiteSpace(OpenPollMessage))
                                             {
-                                                <div class="mf-alert success">
+                                                <div class="@OpenPollAlertClass">
                                                     @OpenPollMessage
                                                 </div>
                                             }
@@ -243,12 +309,86 @@
     private ProposalItem? SelectedProposal { get; set; }
 
     private string PollType { get; set; } = "START_SERIALIZATION";
+    private string PublicationFrequencyCode { get; set; } = "WEEKLY";
+    private string PollReason { get; set; } = string.Empty;
+
     private bool ShowDeadlinePicker { get; set; }
+    private bool IsOpeningPoll { get; set; }
+    private bool IsLoading { get; set; } = true;
+
     private string OpenPollDeadlineDraftText { get; set; } = string.Empty;
     private DateTime? ConfirmedOpenPollDeadline { get; set; }
     private string? OpenPollMessage { get; set; }
+    private bool OpenPollSucceeded { get; set; }
 
+    private string? ErrorMessage { get; set; }
     private string EditorialNote { get; set; } = string.Empty;
+
+    private IReadOnlyList<ProposalItem> Proposals { get; set; } = Array.Empty<ProposalItem>();
+
+    private string OpenPollAlertClass =>
+        OpenPollSucceeded
+            ? "mf-alert success"
+            : "mf-alert info";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProposalsAsync();
+    }
+
+    private async Task LoadProposalsAsync()
+    {
+        IsLoading = true;
+        ErrorMessage = null;
+
+        try
+        {
+            var dashboard = await EditorialBoardApiClient.GetDashboardAsync();
+
+            Proposals = dashboard?.RecentProposals
+                .Select(MapProposal)
+                .ToList()
+                ?? new List<ProposalItem>();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+            Proposals = Array.Empty<ProposalItem>();
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private static ProposalItem MapProposal(EditorialProposalReviewRowDto proposal)
+    {
+        return new ProposalItem
+        {
+            ProposalId = proposal.ProposalId,
+            SeriesId = proposal.SeriesId,
+            Code = proposal.Code,
+            Title = proposal.Title,
+            Author = proposal.Author,
+            Genre = proposal.Genre,
+            Version = "Latest",
+            Submitted = "From API",
+            Status = proposal.Status,
+            AssignedEditor = "Editorial Team",
+            TargetAudience = "Editorial Review",
+            EstimatedLength = "TBD",
+            Synopsis = "Proposal details are loaded from the editorial proposal record. Full proposal detail endpoint can extend this section later.",
+            History = new List<HistoryItem>
+            {
+                new("Latest", "From API", "Proposal is available for editorial board review.")
+            },
+            Attachments = new List<string>
+            {
+                "Proposal file",
+                "Markup file if available"
+            }
+        };
+    }
 
     private void ClearStatusFilter() => StatusFilter = null;
 
@@ -278,16 +418,21 @@
     {
         SelectedProposal = proposal;
         PollType = "START_SERIALIZATION";
+        PublicationFrequencyCode = "WEEKLY";
         ShowDeadlinePicker = false;
         OpenPollDeadlineDraftText = string.Empty;
         ConfirmedOpenPollDeadline = null;
         OpenPollMessage = null;
+        OpenPollSucceeded = false;
         EditorialNote = string.Empty;
+        PollReason = $"Board poll opened for {proposal.Title}.";
     }
 
     private void CloseDetails()
     {
         SelectedProposal = null;
+        OpenPollMessage = null;
+        OpenPollSucceeded = false;
     }
 
     private void StartDeadlinePicker()
@@ -321,25 +466,73 @@
         OpenPollDeadlineDraftText = ConfirmedOpenPollDeadline?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty;
     }
 
-    private void ConfirmOpenPoll()
+    private async Task ConfirmOpenPollAsync()
     {
         if (SelectedProposal is null)
         {
             return;
         }
 
-        var pollTypeDisplay = PollType switch
+        if (SelectedProposal.ProposalId == Guid.Empty)
         {
-            "START_SERIALIZATION" => "START SERIALIZATION",
-            "CANCEL_SERIALIZATION" => "CANCEL SERIALIZATION",
-            _ => PollType.Replace("_", " ")
-        };
+            OpenPollSucceeded = false;
+            OpenPollMessage = "This proposal does not have a real ProposalId.";
+            return;
+        }
 
-        var deadlineText = ConfirmedOpenPollDeadline is null
-            ? "without deadline"
-            : $"with deadline {FormatDate(ConfirmedOpenPollDeadline)}";
+        if (string.IsNullOrWhiteSpace(PollReason))
+        {
+            OpenPollSucceeded = false;
+            OpenPollMessage = "Poll reason is required.";
+            return;
+        }
 
-        OpenPollMessage = $"Opened {pollTypeDisplay} poll for {SelectedProposal.Code} {deadlineText}.";
+        if (PollType == "START_SERIALIZATION" &&
+            string.IsNullOrWhiteSpace(PublicationFrequencyCode))
+        {
+            OpenPollSucceeded = false;
+            OpenPollMessage = "Publication frequency is required for START_SERIALIZATION.";
+            return;
+        }
+
+        IsOpeningPoll = true;
+        OpenPollMessage = null;
+        OpenPollSucceeded = false;
+
+        try
+        {
+            var request = new OpenPollRequest(
+                PollTypeCode: PollType,
+                PollReason: PollReason,
+                PublicationFrequencyCode: PollType == "START_SERIALIZATION"
+                    ? PublicationFrequencyCode
+                    : null,
+                EndsAtUtc: ConfirmedOpenPollDeadline?.ToUniversalTime());
+
+            var result = await EditorialBoardApiClient.OpenPollAsync(
+                SelectedProposal.ProposalId,
+                request);
+
+            if (result is null)
+            {
+                OpenPollMessage = "API returned empty result.";
+                return;
+            }
+
+            OpenPollSucceeded = true;
+            OpenPollMessage = "Poll opened successfully. Redirecting to Board Polls...";
+
+            NavigationManager.NavigateTo("/demo/mangaflow/polls");
+        }
+        catch (Exception ex)
+        {
+            OpenPollSucceeded = false;
+            OpenPollMessage = ex.Message;
+        }
+        finally
+        {
+            IsOpeningPoll = false;
+        }
     }
 
     private static string FormatDate(DateTime? date)
@@ -348,9 +541,10 @@
             ? "No deadline"
             : date.Value.ToString("MMM dd, yyyy", CultureInfo.InvariantCulture);
     }
-
     private sealed class ProposalItem
     {
+        public Guid ProposalId { get; init; }
+        public Guid SeriesId { get; init; }
         public string Code { get; init; } = string.Empty;
         public string Title { get; init; } = string.Empty;
         public string Author { get; init; } = string.Empty;
@@ -367,101 +561,4 @@
     }
 
     private sealed record HistoryItem(string Version, string Date, string Description);
-
-    private readonly IReadOnlyList<ProposalItem> Proposals = new List<ProposalItem>
-    {
-        new()
-        {
-            Code = "MNG-001",
-            Title = "Celestial Blade Chronicles",
-            Author = "Hiroshi Tanaka",
-            Genre = "Action / Fantasy",
-            Version = "v3.0",
-            Submitted = "Jan 10, 2026",
-            Status = "Published",
-            AssignedEditor = "Keiko Sato",
-            TargetAudience = "Shonen 14+",
-            EstimatedLength = "120 chapters",
-            Synopsis = "A young swordsman discovers his blade carries the soul of a fallen celestial warrior.",
-            History = new List<HistoryItem>
-            {
-                new("v3.0", "Jan 10, 2026", "Latest submission — complete rewrite of chapters 1-3"),
-                new("v1.0", "Mar 01, 2026", "Initial submission")
-            },
-            Attachments = new List<string>
-            {
-                "proposal-outline.pdf",
-                "character-designs.png",
-                "chapter1-draft.pdf"
-            }
-        },
-        new()
-        {
-            Code = "MNG-002",
-            Title = "Shadow of the Lotus",
-            Author = "Yuki Aoyama",
-            Genre = "Drama / Romance",
-            Version = "v2.1",
-            Submitted = "Apr 15, 2026",
-            Status = "In Review",
-            AssignedEditor = "Ryo Tanaka",
-            TargetAudience = "Seinen 16+",
-            EstimatedLength = "80 chapters",
-            Synopsis = "A quiet romance unfolds inside a theater troupe haunted by an old family secret.",
-            History = new List<HistoryItem>
-            {
-                new("v2.1", "Apr 15, 2026", "Updated act structure and character motivation")
-            },
-            Attachments = new List<string>
-            {
-                "lotus-outline.pdf",
-                "visual-reference.png"
-            }
-        },
-        new()
-        {
-            Code = "MNG-003",
-            Title = "Mecha Storm Zero",
-            Author = "Kenji Mori",
-            Genre = "Sci-Fi / Action",
-            Version = "v1.5",
-            Submitted = "Mar 20, 2026",
-            Status = "Approved",
-            AssignedEditor = "Nao Yamamoto",
-            TargetAudience = "Shonen 13+",
-            EstimatedLength = "60 chapters",
-            Synopsis = "Pilots fight a border war using relic mechs powered by unstable storm cores.",
-            History = new List<HistoryItem>
-            {
-                new("v1.5", "Mar 20, 2026", "Refined pilot team and first arc")
-            },
-            Attachments = new List<string>
-            {
-                "mecha-proposal.pdf",
-                "mech-designs.zip"
-            }
-        },
-        new()
-        {
-            Code = "MNG-004",
-            Title = "The Wandering Sorcerer",
-            Author = "Ren Nakamura",
-            Genre = "Fantasy / Adventure",
-            Version = "v0.8",
-            Submitted = "May 20, 2026",
-            Status = "Draft",
-            AssignedEditor = "Keiko Sato",
-            TargetAudience = "All ages",
-            EstimatedLength = "45 chapters",
-            Synopsis = "A traveling sorcerer solves magical disputes across isolated villages.",
-            History = new List<HistoryItem>
-            {
-                new("v0.8", "May 20, 2026", "Draft pitch")
-            },
-            Attachments = new List<string>
-            {
-                "pitch.pdf"
-            }
-        }
-    };
 }

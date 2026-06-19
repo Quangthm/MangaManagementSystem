@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace MangaManagementSystem.Application.Features.EditorialBoard.Dtos;
+namespace MangaManagementSystem.Web.Services.EditorialBoard;
 
 public sealed record EditorialDashboardDto(
     int ProposalReviewCount,

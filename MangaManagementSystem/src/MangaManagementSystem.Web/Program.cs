@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MudBlazor.Services;
 using System.Security.Claims;
+using MangaManagementSystem.Web.Services.EditorialBoard;
 
 namespace MangaManagementSystem.Web
 {
@@ -35,6 +36,17 @@ namespace MangaManagementSystem.Web
             {
                 var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
                 client.BaseAddress = new Uri(settings.Value.BaseUrl);
+            });
+            builder.Services.AddHttpClient<IEditorialBoardApiClient, EditorialBoardApiClient>(client =>
+            {
+                var baseUrl = builder.Configuration["ApiSettings:BaseUrl"];
+
+                if (string.IsNullOrWhiteSpace(baseUrl))
+                {
+                    throw new InvalidOperationException("ApiSettings:BaseUrl is missing.");
+                }
+
+                client.BaseAddress = new Uri(baseUrl);
             });
             builder.Services.AddHttpClient<IAuthApiClient, AuthApiClient>((sp, client) =>
             {
@@ -502,4 +514,5 @@ app.MapGet("/signout", async (CustomAuthenticationStateProvider authStateProvide
             return Results.Redirect(GetDashboardRedirectUrl(roleName));
         }
     }
+
 }
