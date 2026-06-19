@@ -10,7 +10,10 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         Guid AnnotatedByUserId,
         string? AnnotationText,
         Guid? ResolvedByUserId,
-        IReadOnlyList<PageRegionDto> PageRegions
+        IReadOnlyList<PageRegionDto> PageRegions,
+        DateTime? CreatedAtUtc = null,
+        string? AnnotatedByDisplayName = null,
+        DateTime? ResolvedAtUtc = null
     );
 
     public record CreateChapterPageAnnotationDto(

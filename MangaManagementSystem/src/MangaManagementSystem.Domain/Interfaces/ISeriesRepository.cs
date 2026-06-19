@@ -1,4 +1,5 @@
 using MangaManagementSystem.Domain.Entities;
+using MangaManagementSystem.Domain.ReadModels;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -92,11 +93,11 @@ namespace MangaManagementSystem.Domain.Interfaces
             CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Returns series detail by slug with CoverFile, active contributors, and paginated chapters.
-        /// Used by the /series/{slug} detail page. Returns null if series not found.
-        /// EF Core read query — no stored procedure.
+        /// Returns series detail by slug with CoverFile, all contributors (active and past),
+        /// and paginated chapters. Used by the /series/{slug} detail page.
+        /// Returns null if series not found. EF Core read query — no stored procedure.
         /// </summary>
-        Task<(Series? Series, IReadOnlyList<string> ContributorDisplayNames, IReadOnlyList<Chapter> Chapters, int TotalChapterCount)>
+        Task<(Series? Series, IReadOnlyList<SeriesContributorReadModel> Contributors, IReadOnlyList<Chapter> Chapters, int TotalChapterCount)>
             GetSeriesDetailBySlugAsync(
                 string slug,
                 int chapterPage,

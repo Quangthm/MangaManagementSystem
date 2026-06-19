@@ -1,18 +1,21 @@
 @page "/assistant/task/{TaskId:guid}/submit"
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components.Forms
+@using System.Security.Claims
 @using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Assistant")]
 @inject NavigationManager Nav
 @inject IAssistantTaskApiClient AssistantTaskClient
 @inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthStateProvider
 
 <AssistantLayout>
     <div class="mf-page">
         <div class="mf-page-header">
             <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Submit Work</MudText>
-            <MudText Typo="Typo.body1" Class="mf-muted">Send completed work for editor review</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Upload completed work for Mangaka review</MudText>
         </div>
 
         @if (_loading)
@@ -35,17 +38,26 @@
                         <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
                             <div>
                                 <MudText Typo="Typo.h6" Class="font-weight-bold">Submit Your Work</MudText>
-                                <MudText Class="mf-muted">@_task.TypeCode — Task @_task.ChapterPageTaskId</MudText>
+                                <MudText Class="mf-muted">@_task.TypeCode @(!string.IsNullOrWhiteSpace(_task.TaskTitle) ? $"— {_task.TaskTitle}" : "")</MudText>
                             </div>
                             <StatusBadge Status="@_task.StatusCode" />
                         </MudStack>
 
-                        <MudAlert Severity="Severity.Info" Class="mb-4">
-                            Submit your completed work for editor review.
-                        </MudAlert>
+                        @if (!CanSubmit)
+                        {
+                            <MudAlert Severity="Severity.Warning" Class="mb-4">
+                                Only tasks in ASSIGNED status can be submitted for review. Current status: @_task.StatusCode
+                            </MudAlert>
+                        }
+                        else
+                        {
+                            <MudAlert Severity="Severity.Info" Class="mb-4">
+                                Upload your completed page image. Allowed: PNG, JPEG, WebP (max 10 MB).
+                            </MudAlert>
+                        }
 
-                        <div class="mf-canvas" style="min-height:260px">
-                            <InputFile OnChange="HandleFileSelected" />
+                        <div class="mb-4">
+                            <InputFile OnChange="HandleFileSelected" disabled="@(!CanSubmit)" />
                             <MudText Typo="Typo.caption" Class="mf-muted mt-2 d-block">
                                 @if (_selectedFile != null)
                                 {
@@ -53,20 +65,22 @@
                                 }
                                 else
                                 {
-                                    <span>Click to select a file (PNG, JPEG, WebP)</span>
+                                    <span>Click to select a file</span>
                                 }
                             </MudText>
                             @if (!string.IsNullOrWhiteSpace(_fileValidationError))
                             {
-                                <MudAlert Severity="Severity.Error" Class="mt-2">
-                                    @_fileValidationError
-                                </MudAlert>
+                                <MudAlert Severity="Severity.Error" Class="mt-2">@_fileValidationError</MudAlert>
                             }
                         </div>
 
-                        <MudText Typo="Typo.caption" Class="mf-muted mt-4 d-block">
-                            Current due date: <TimestampDisplay Value="@_task.DueAtUtc" EmptyText="No deadline set" />
-                        </MudText>
+                        @* Source page reference *@
+                        @if (!string.IsNullOrWhiteSpace(_task.PageImageUrl))
+                        {
+                            <MudText Typo="Typo.body2" Class="mb-2"><strong>Source Page Reference:</strong></MudText>
+                            <MudImage Src="@_task.PageImageUrl" MaxHeight="250" ObjectFit="ObjectFit.Contain" Class="rounded" />
+                            <MudButton Variant="Variant.Text" Size="Size.Small" Href="@_task.PageImageUrl" Target="_blank" Class="mt-1">Download Source</MudButton>
+                        }
                     </MudPaper>
                 </MudItem>
 
@@ -82,35 +96,18 @@
                             {
                                 <MudText><strong>Compensation:</strong> @_task.CompensationAmount.Value.ToString("C2")</MudText>
                             }
-                            @if (_task.CompletedPageVersionId.HasValue)
-                            {
-                                <MudText><strong>Completed Version:</strong> @_task.CompletedPageVersionId</MudText>
-                            }
                         </MudStack>
                     </MudPaper>
 
                     <MudPaper Class="pa-5 mf-card" Elevation="0">
-                        <MudText Typo="Typo.h6" Class="font-weight-bold">Submission Notes</MudText>
-                        <MudText Class="mf-muted mb-3">Notes are captured in the UI only in this commit. They are not persisted by the current backend contract.</MudText>
-                        <MudTextField Lines="6" Label="Notes" @bind-Value="Notes" Variant="Variant.Outlined" />
-
-                        @if (!CanSubmit)
-                        {
-                            <MudAlert Severity="Severity.Warning" Class="mt-3">
-                                Only tasks in ASSIGNED status can be submitted for review.
-                            </MudAlert>
-                        }
+                        <MudTextField Lines="4" Label="Submission Notes (optional)" @bind-Value="Notes" Variant="Variant.Outlined" Class="mb-3" />
 
                         <MudButton Variant="Variant.Filled"
                                    Color="Color.Primary"
                                    FullWidth="true"
-                                   Class="mt-3"
-                                   Disabled="@(!CanSubmit || _submitting)"
+                                   Disabled="@(!CanSubmit || _selectedFile == null || _submitting)"
                                    OnClick="SubmitAsync">
                             @(_submitting ? "Submitting..." : "Submit Final Work")
-                        </MudButton>
-                        <MudButton Variant="Variant.Text" FullWidth="true" Class="mt-2" Disabled="true">
-                            Save Draft (Not Available)
                         </MudButton>
                         <MudButton Variant="Variant.Outlined" FullWidth="true" Class="mt-2" Href="@($"/assistant/task/{TaskId}")">
                             Back to Task Detail
@@ -125,16 +122,16 @@
 @code {
     [Parameter] public Guid TaskId { get; set; }
 
-    private const long MaxFileSizeBytes = 10 * 1024 * 1024; // 10 MB
+    private const long MaxFileSizeBytes = 10 * 1024 * 1024;
     private readonly string[] AllowedFileTypes = new[] { "image/png", "image/jpeg", "image/jpg", "image/webp" };
 
+    private Guid _currentUserId;
     private string Notes { get; set; } = string.Empty;
     private bool _loading = true;
     private bool _submitting;
     private string? _error;
     private ChapterPageTaskDto? _task;
 
-    // File upload fields
     private IBrowserFile? _selectedFile;
     private string _fileSizeDisplay = string.Empty;
     private string _fileValidationError = string.Empty;
@@ -143,6 +140,17 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (Guid.TryParse(idClaim, out var userId))
+            {
+                _currentUserId = userId;
+            }
+        }
+
         await LoadTaskAsync();
     }
 
@@ -153,7 +161,7 @@
 
         try
         {
-            _task = await AssistantTaskClient.GetTaskDetailAsync(TaskId);
+            _task = await AssistantTaskClient.GetTaskDetailAsync(_currentUserId, TaskId);
         }
         catch (Exception ex)
         {
@@ -197,27 +205,8 @@
 
     private async Task SubmitAsync()
     {
-        if (_task is null)
+        if (_task is null || !CanSubmit || _selectedFile == null)
         {
-            _error = "Task not found.";
-            return;
-        }
-
-        if (!CanSubmit)
-        {
-            _error = "Only tasks in ASSIGNED status can be submitted for review.";
-            return;
-        }
-
-        if (_selectedFile == null)
-        {
-            _error = "Please select a file to submit.";
-            return;
-        }
-
-        if (!string.IsNullOrWhiteSpace(_fileValidationError))
-        {
-            _error = _fileValidationError;
             return;
         }
 
@@ -226,7 +215,7 @@
 
         try
         {
-            var result = await AssistantTaskClient.SubmitTaskWorkAsync(TaskId, _selectedFile, Notes);
+            var result = await AssistantTaskClient.SubmitTaskWorkAsync(_currentUserId, TaskId, _selectedFile, Notes);
 
             if (result != null)
             {
@@ -244,7 +233,7 @@
         }
         catch (Exception ex)
         {
-            _error = $"Failed to submit task for review: {ex.Message}";
+            _error = $"Failed to submit: {ex.Message}";
         }
         finally
         {

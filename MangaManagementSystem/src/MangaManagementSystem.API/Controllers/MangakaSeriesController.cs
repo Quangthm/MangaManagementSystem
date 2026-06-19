@@ -10,6 +10,7 @@ using MangaManagementSystem.Application.Features.Mangaka.Series.Commands.CreateS
 using MangaManagementSystem.Application.Features.Mangaka.Series.Commands.UpdateSeriesDraft;
 using MangaManagementSystem.Application.Features.Mangaka.Series.Queries.GetMyMangakaSeries;
 using MangaManagementSystem.Application.Features.Mangaka.SeriesProposals.Commands.SubmitSeriesProposal;
+using MangaManagementSystem.Application.Features.Mangaka.SeriesProposals.Queries.GetMySeriesProposals;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -336,6 +337,41 @@ namespace MangaManagementSystem.API.Controllers
                     "Unexpected error loading series for actor {ActorUserId}.", actorUserId);
                 return Problem(
                     detail: "We could not load your series right now. Please try again later.",
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
+        }
+
+        /// <summary>
+        /// Returns all series proposals scoped to the requesting Mangaka user's active contributor
+        /// memberships. Read-only tracking query — no mutations.
+        /// Access rule: SeriesContributor.UserId == actorUserId, EndDate IS NULL,
+        /// User.StatusCode == "ACTIVE", Role.RoleName == "Mangaka".
+        /// Uses MediatR/CQRS — all orchestration is in GetMySeriesProposalsQueryHandler.
+        /// Route: GET /api/mangaka/series/proposals
+        /// </summary>
+        [HttpGet("proposals")]
+        public async Task<IActionResult> GetMySeriesProposalsAsync(
+            CancellationToken cancellationToken)
+        {
+            if (!TryResolveActorUserId(out Guid actorUserId))
+            {
+                return BadRequest(new ApiErrorResponse(
+                    "Could not identify the requesting user. Please sign in again."));
+            }
+
+            var query = new GetMySeriesProposalsQuery(actorUserId);
+
+            try
+            {
+                IReadOnlyList<MangakaSeriesProposalDto> result = await _mediator.Send(query, cancellationToken);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Unexpected error loading proposals for actor {ActorUserId}.", actorUserId);
+                return Problem(
+                    detail: "We could not load your series proposals right now. Please try again later.",
                     statusCode: StatusCodes.Status500InternalServerError);
             }
         }

@@ -65,6 +65,47 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             return await query.OrderByDescending(sp => sp.SubmittedAtUtc).ToListAsync(ct);
         }
 
+        /// <summary>
+        /// Returns all proposals for series where the specified actor is an active Mangaka
+        /// contributor. Access scope matches GetByActiveContributorWithCoverAsync in SeriesRepository.
+        /// </summary>
+        public async Task<IReadOnlyList<SeriesProposal>> GetMySeriesProposalsAsync(
+            Guid actorUserId, CancellationToken ct = default)
+        {
+            return await _dbContext.Set<SeriesProposal>()
+                .AsNoTracking()
+                .Include(sp => sp.Series)
+                .Include(sp => sp.SubmittedByUser)
+                .Include(sp => sp.ReviewedByUser)
+                .Include(sp => sp.ProposalFile)
+                .Include(sp => sp.MarkupFile)
+                .Where(sp => _dbContext.SeriesContributors.Any(sc =>
+                    sc.SeriesId == sp.SeriesId &&
+                    sc.UserId == actorUserId &&
+                    sc.EndDate == null &&
+                    sc.User != null &&
+                    sc.User.StatusCode == "ACTIVE" &&
+                    sc.User.Role != null &&
+                    sc.User.Role.RoleName == "Mangaka"))
+                .OrderByDescending(sp => sp.SubmittedAtUtc)
+                .ToListAsync(ct);
+        }
+
+        public async Task<bool> IsActiveTantouEditorContributorAsync(
+            Guid seriesId, Guid userId, CancellationToken ct = default)
+        {
+            return await _dbContext.SeriesContributors
+                .AsNoTracking()
+                .AnyAsync(sc =>
+                    sc.SeriesId == seriesId &&
+                    sc.UserId == userId &&
+                    sc.EndDate == null &&
+                    sc.User != null &&
+                    sc.User.StatusCode == "ACTIVE" &&
+                    sc.User.Role != null &&
+                    sc.User.Role.RoleName == "Tantou Editor", ct);
+        }
+
         public async Task<Guid?> ClaimEditorialReviewAsync(Guid seriesProposalId, Guid actorUserId, string? notes, CancellationToken ct = default)
         {
             var outParam = new SqlParameter("@new_series_contributor_id", SqlDbType.UniqueIdentifier) { Direction = ParameterDirection.Output };
@@ -76,9 +117,16 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 outParam
             };
 
-            await _dbContext.Database.ExecuteSqlRawAsync(
-                "EXEC manga.usp_SeriesProposal_ClaimEditorialReview @series_proposal_id, @actor_user_id, @notes, @new_series_contributor_id OUTPUT",
-                parameters);
+            try
+            {
+                await _dbContext.Database.ExecuteSqlRawAsync(
+                    "EXEC manga.usp_SeriesProposal_ClaimEditorialReview @series_proposal_id, @actor_user_id, @notes, @new_series_contributor_id OUTPUT",
+                    parameters);
+            }
+            catch (SqlException ex)
+            {
+                throw MapReviewSqlException(ex);
+            }
 
             return outParam.Value as Guid?;
         }
@@ -102,9 +150,16 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 outParam
             };
 
-            await _dbContext.Database.ExecuteSqlRawAsync(
-                "EXEC manga.usp_SeriesProposal_RequestRevision @series_proposal_id, @actor_user_id, @comments, @markup_original_file_name, @markup_cloudinary_public_id, @markup_cloudinary_secure_url, @markup_content_type, @markup_file_size_bytes, @markup_sha256_hash, @markup_file_resource_id OUTPUT",
-                parameters);
+            try
+            {
+                await _dbContext.Database.ExecuteSqlRawAsync(
+                    "EXEC manga.usp_SeriesProposal_RequestRevision @series_proposal_id, @actor_user_id, @comments, @markup_original_file_name, @markup_cloudinary_public_id, @markup_cloudinary_secure_url, @markup_content_type, @markup_file_size_bytes, @markup_sha256_hash, @markup_file_resource_id OUTPUT",
+                    parameters);
+            }
+            catch (SqlException ex)
+            {
+                throw MapReviewSqlException(ex);
+            }
 
             return outParam.Value as Guid?;
         }
@@ -128,9 +183,16 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 outParam
             };
 
-            await _dbContext.Database.ExecuteSqlRawAsync(
-                "EXEC manga.usp_SeriesProposal_PassToBoard @series_proposal_id, @actor_user_id, @comments, @markup_original_file_name, @markup_cloudinary_public_id, @markup_cloudinary_secure_url, @markup_content_type, @markup_file_size_bytes, @markup_sha256_hash, @markup_file_resource_id OUTPUT",
-                parameters);
+            try
+            {
+                await _dbContext.Database.ExecuteSqlRawAsync(
+                    "EXEC manga.usp_SeriesProposal_PassToBoard @series_proposal_id, @actor_user_id, @comments, @markup_original_file_name, @markup_cloudinary_public_id, @markup_cloudinary_secure_url, @markup_content_type, @markup_file_size_bytes, @markup_sha256_hash, @markup_file_resource_id OUTPUT",
+                    parameters);
+            }
+            catch (SqlException ex)
+            {
+                throw MapReviewSqlException(ex);
+            }
 
             return outParam.Value as Guid?;
         }
@@ -154,9 +216,16 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 outParam
             };
 
-            await _dbContext.Database.ExecuteSqlRawAsync(
-                "EXEC manga.usp_SeriesProposal_CancelEditorialReview @series_proposal_id, @actor_user_id, @comments, @markup_original_file_name, @markup_cloudinary_public_id, @markup_cloudinary_secure_url, @markup_content_type, @markup_file_size_bytes, @markup_sha256_hash, @markup_file_resource_id OUTPUT",
-                parameters);
+            try
+            {
+                await _dbContext.Database.ExecuteSqlRawAsync(
+                    "EXEC manga.usp_SeriesProposal_CancelEditorialReview @series_proposal_id, @actor_user_id, @comments, @markup_original_file_name, @markup_cloudinary_public_id, @markup_cloudinary_secure_url, @markup_content_type, @markup_file_size_bytes, @markup_sha256_hash, @markup_file_resource_id OUTPUT",
+                    parameters);
+            }
+            catch (SqlException ex)
+            {
+                throw MapReviewSqlException(ex);
+            }
 
             return (Guid)outParam.Value;
         }
@@ -258,6 +327,64 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     "The proposal submission was rejected due to an invalid value. Please check the details and try again.",
                 _ =>
                     "This proposal could not be submitted right now. Please try again."
+            };
+
+            return new InvalidOperationException(message, ex);
+        }
+
+        /// <summary>
+        /// Translates known SqlException error numbers raised by the editorial-review stored
+        /// procedures (usp_SeriesProposal_RequestRevision / _PassToBoard / _CancelEditorialReview
+        /// and the claim procedure) into user-safe messages. Raw SQL text is never propagated.
+        /// Unknown numbers fall through to a generic safe message.
+        /// </summary>
+        private static InvalidOperationException MapReviewSqlException(SqlException ex)
+        {
+            string message = ex.Number switch
+            {
+                // Claim (573xx)
+                57302 => "Only an active Tantou Editor can claim a proposal for review.",
+                57303 => "The selected proposal could not be found.",
+                57304 => "Only proposals under editorial review can be claimed.",
+                57305 => "This series is not under editorial review.",
+                57306 => "This proposal has already been reviewed.",
+
+                // Request Revision (574xx)
+                57402 => "The selected proposal could not be found.",
+                57403 => "Only proposals under editorial review can request a revision.",
+                57404 => "This series is not under editorial review.",
+                57405 => "This proposal has already been reviewed.",
+                57406 => "Only the active Tantou Editor for this series can request a revision.",
+
+                // Pass To Board (575xx)
+                57502 => "The selected proposal could not be found.",
+                57503 => "Only proposals under editorial review can be passed to the board.",
+                57504 => "This series is not under editorial review.",
+                57505 => "This proposal has already been reviewed.",
+                57506 => "Only the active Tantou Editor for this series can pass the proposal to the board.",
+
+                // Cancel Editorial Review (576xx)
+                57602 => "The selected proposal could not be found.",
+                57603 => "Only proposals under editorial review can be cancelled.",
+                57604 => "This series is not under editorial review.",
+                57605 => "This proposal has already received an editorial decision.",
+                57606 => "Only the active Tantou Editor for this series can cancel the proposal.",
+
+                // Shared comments-required guard
+                57607 => "Comments are required for this editorial decision.",
+
+                // Lock-acquisition failures (573xx/574xx/575xx/576xx 01-variants)
+                57301 or 57307 or 57401 or 57501 or 57601 =>
+                    "Could not process the review right now. Please try again.",
+
+                // Standard SQL constraint codes
+                ErrDuplicateKey or ErrUniqueIndex =>
+                    "A review conflict occurred. Please refresh and try again.",
+                ErrConstraint =>
+                    "The review was rejected due to an invalid value. Please check the details and try again.",
+
+                _ =>
+                    "This editorial action could not be completed right now. Please try again."
             };
 
             return new InvalidOperationException(message, ex);

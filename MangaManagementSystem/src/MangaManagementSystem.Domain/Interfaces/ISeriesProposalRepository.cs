@@ -13,6 +13,22 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<List<SeriesProposal>> GetEditorialQueueAsync(string? statusCode, Guid? seriesId, Guid? submittedByUserId, Guid? reviewedByUserId, CancellationToken ct = default);
 
         /// <summary>
+        /// Returns all proposals for series where the specified actor is an active Mangaka
+        /// contributor. Scoped by SeriesContributor membership (EndDate IS NULL, User ACTIVE,
+        /// Role Mangaka). Eagerly loads Series, SubmittedByUser, ReviewedByUser, ProposalFile,
+        /// and MarkupFile. Read-only EF query; no stored procedure required.
+        /// </summary>
+        Task<IReadOnlyList<SeriesProposal>> GetMySeriesProposalsAsync(Guid actorUserId, CancellationToken ct = default);
+
+        /// <summary>
+        /// Returns true when the specified user is an active Tantou Editor contributor of the
+        /// given series (SeriesContributor.EndDate IS NULL, User ACTIVE, Role 'Tantou Editor').
+        /// This mirrors the membership predicate used by the editorial-review stored procedures
+        /// and represents the "claimed" state for editorial review. Read-only EF query.
+        /// </summary>
+        Task<bool> IsActiveTantouEditorContributorAsync(Guid seriesId, Guid userId, CancellationToken ct = default);
+
+        /// <summary>
         /// Submits a series proposal for editorial review via <c>manga.usp_SeriesProposal_Submit</c>.
         /// The stored procedure: validates the series is PROPOSAL_DRAFT, validates the submitter is
         /// an active Mangaka contributor, creates the SERIES_PROPOSAL FileResource, creates the

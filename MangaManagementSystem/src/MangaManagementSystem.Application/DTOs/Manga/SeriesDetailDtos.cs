@@ -5,7 +5,7 @@ namespace MangaManagementSystem.Application.DTOs.Manga
 {
     /// <summary>
     /// Read-only detail DTO for the /series/{slug} page.
-    /// Includes series metadata, active contributor display names,
+    /// Includes series metadata, structured contributor list,
     /// and a paginated chapter list.
     /// </summary>
     public sealed record SeriesDetailDto(
@@ -18,12 +18,22 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         string ContentLanguageCode,
         string? PublicationFrequencyCode,
         string? CoverUrl,
-        IReadOnlyList<string> ContributorDisplayNames,
+        IReadOnlyList<SeriesContributorSummaryDto> Contributors,
         IReadOnlyList<SeriesChapterListItemDto> Chapters,
         int ChapterPage,
         int ChapterPageSize,
         int TotalChapterCount,
         int TotalChapterPages);
+
+    /// <summary>
+    /// Lightweight contributor summary for the series detail page.
+    /// Includes display name, role name, and contribution period.
+    /// </summary>
+    public sealed record SeriesContributorSummaryDto(
+        string DisplayName,
+        string RoleName,
+        DateTime StartDate,
+        DateTime? EndDate);
 
     /// <summary>
     /// Lightweight chapter summary for series detail page chapter list.
