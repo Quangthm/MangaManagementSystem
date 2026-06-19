@@ -959,7 +959,7 @@ audit.usp_AuditEvent_Append
 ## BF-PAGE-004 — Create Page Annotation Linked to Existing or Newly Created Page Regions
 
 **Status:** Agreed  
-**Primary actor:** Authorized Page Workspace User  
+**Primary actor:** Mangaka / Tantou Editor  
 **Goal:** Create a page annotation/comment and link it to one or more `PageRegion` records.
 
 ### Main Flow
@@ -980,7 +980,10 @@ User opens the chapter/page workspace
 → Database validates page_region_ids_json
 → Database verifies all referenced PageRegion rows exist
 → Database verifies all referenced PageRegion rows belong to the same ChapterPageVersion
-→ Database verifies the actor is allowed to annotate the owning series/page workspace
+→ Database derives owning series/page context through linked PageRegion records
+→ Database verifies the actor account is ACTIVE
+→ Database verifies the actor is an active contributor for the owning series
+→ Database verifies the actor role is Mangaka or Tantou Editor
 → Database creates one manga.ChapterPageAnnotation row
 → Database creates one or more manga.ChapterPageAnnotationRegion rows
 → Database writes CHAPTER_PAGE_ANNOTATION_CREATED audit event
@@ -1030,6 +1033,9 @@ manga.ChapterPageVersion
 - The annotation creation procedure should still validate cross-table rules even if C# already checked the IDs.
 - The `issue_type_code` allowed values are enforced by the `ChapterPageAnnotation` table constraint.
 - `ChapterPageAnnotationRegion` primary key prevents duplicate annotation-region pairs.
+- Mangaka-created annotations are production-tracking feedback.
+- Tantou Editor-created annotations are editorial-review feedback.
+- The MVP does not add an annotation-origin column; permission is guarded by stored procedures using the annotation creator's current role and owning series context.
 
 ### System Should Try To
 
@@ -1045,7 +1051,7 @@ manga.ChapterPageVersion
 ## BF-PAGE-005 — Resolve Page Annotation
 
 **Status:** Agreed  
-**Primary actor:** Authorized Page Workspace User / reviewer with permission  
+**Primary actor:** Mangaka / Tantou Editor with permission  
 **Goal:** Mark an annotation as handled without deleting the original feedback record.
 
 ### Main Flow
@@ -1057,7 +1063,14 @@ User opens the chapter/page workspace
 → Authorized resolver confirms the issue has been handled
 → Backend calls the annotation resolve workflow procedure
 → Database verifies annotation exists and is not already resolved
-→ Database verifies resolver is active and has permission for the owning page workspace through linked PageRegion records
+→ Database derives owning series/page context through linked PageRegion records
+→ Database resolves the annotation creator's current role through annotated_by_user_id
+→ Database resolves the resolver's current role through actor_user_id
+→ Database verifies the resolver account is ACTIVE and an active contributor for the owning series
+→ If the annotation was created by a Mangaka:
+    Database allows resolution by an active Mangaka contributor or active Tantou Editor contributor on the same series
+→ If the annotation was created by a Tantou Editor:
+    Database allows resolution only by an active Tantou Editor contributor on the same series
 → Database sets resolved_at_utc = SYSUTCDATETIME()
 → Database sets resolved_by_user_id = resolver user ID
 → Database writes CHAPTER_PAGE_ANNOTATION_RESOLVED audit event
@@ -1081,6 +1094,10 @@ audit.usp_AuditEvent_Append
 - Resolved annotations remain useful for traceability, review history, and explaining why a later page version was created.
 - Many visual/content issues should normally be resolved only after a corrected page version or accepted output exists.
 - Some annotations may be resolved without a new page version if the reviewer decides the feedback is no longer applicable, duplicated, or intentionally accepted.
+- Mangaka users may resolve Mangaka-created annotations on the same series.
+- Mangaka users must not resolve Tantou Editor-created annotations.
+- Tantou Editors assigned/active on the same series may resolve both Mangaka-created and Tantou Editor-created annotations.
+- The MVP does not add a new annotation-origin column; stored procedures should enforce this using `annotated_by_user_id`, current user roles, active series contributor membership, and the owning series derived from linked regions.
 
 ### System Should Try To
 
@@ -1088,10 +1105,62 @@ audit.usp_AuditEvent_Append
 - Preserve resolved feedback as workflow history.
 - Avoid deleting annotation records just because the issue was fixed.
 - Keep resolution accountable by recording who resolved it and when.
-
-
+- Keep editorial feedback authority with Tantou Editors while still allowing Mangaka production tracking.
 
 ---
+
+## BF-PAGE-005A — Update Page Annotation Text
+
+**Status:** Agreed  
+**Primary actor:** Mangaka / Tantou Editor with permission  
+**Goal:** Correct or clarify unresolved annotation text without changing linked regions or deleting feedback history.
+
+### Main Flow
+
+```text
+User opens the chapter/page workspace
+→ User selects an unresolved annotation
+→ User edits annotation text and optionally enters an update reason
+→ Backend calls the annotation text update workflow procedure
+→ Database verifies annotation exists and is unresolved
+→ Database derives owning series/page context through linked PageRegion records
+→ Database resolves the annotation creator's current role through annotated_by_user_id
+→ Database resolves the actor's current role through actor_user_id
+→ Database verifies the actor account is ACTIVE and an active contributor for the owning series
+→ If the annotation was created by a Mangaka:
+    Database allows update by an active Mangaka contributor or active Tantou Editor contributor on the same series
+→ If the annotation was created by a Tantou Editor:
+    Database allows update only by an active Tantou Editor contributor on the same series
+→ Database updates annotation_text
+→ Database writes CHAPTER_PAGE_ANNOTATION_TEXT_UPDATED audit event with old text, new text, actor, and optional reason
+→ UI refreshes the annotation text
+```
+
+### Database Procedure(s)
+
+```text
+manga.usp_ChapterPageAnnotation_UpdateText
+audit.usp_AuditEvent_Append
+```
+
+### Important Notes
+
+- This MVP flow updates only `ChapterPageAnnotation.annotation_text`.
+- It must not change linked `PageRegion` records.
+- It must not delete or recreate the annotation row.
+- Resolved annotations should not be edited in MVP.
+- Mangaka users may update unresolved Mangaka-created annotations on the same series.
+- Mangaka users must not update Tantou Editor-created annotations.
+- Tantou Editors assigned/active on the same series may update unresolved annotations created by either Mangaka users or Tantou Editors.
+- The procedure is a database guard check; no new annotation-origin column is added for MVP.
+- Audit should include old text and new text because annotation text is part of workflow feedback history.
+
+### System Should Try To
+
+- Let Mangaka correct production-tracking notes before or during preparation.
+- Let Tantou Editors clarify Mangaka-created notes during chapter review.
+- Preserve audit traceability for text changes.
+- Avoid silently overwriting feedback history.
 
 ## BF-PAGE-006 — Create Chapter Page Task Linked to Page Regions
 

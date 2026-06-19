@@ -1,8 +1,13 @@
 @page "/editor/annotations"
 @using Microsoft.AspNetCore.Authorization
+@using System.Security.Claims
+@using MangaManagementSystem.Application.DTOs.Editor
+@using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Tantou Editor")]
+@inject IEditorAnnotationApiClient AnnotationApi
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthStateProvider
 
 <EditorLayout>
     <div class="mf-page">
@@ -11,79 +16,247 @@
             <MudText Typo="Typo.body1" Class="mf-muted">Track page-region feedback, unresolved issues, and review evidence</MudText>
         </div>
 
-        <MudGrid Class="mb-6">
-            <MudItem xs="12" sm="6" md="3"><MudPaper Class="pa-4 mf-card text-center" Elevation="0"><MudText Typo="Typo.h4" Class="font-weight-bold mf-gradient-text">@_openCount</MudText><MudText Class="mf-muted">Open</MudText></MudPaper></MudItem>
-            <MudItem xs="12" sm="6" md="3"><MudPaper Class="pa-4 mf-card text-center" Elevation="0"><MudText Typo="Typo.h4" Class="font-weight-bold mf-gradient-text">@_resolvedCount</MudText><MudText Class="mf-muted">Resolved</MudText></MudPaper></MudItem>
-            <MudItem xs="12" sm="6" md="3"><MudPaper Class="pa-4 mf-card text-center" Elevation="0"><MudText Typo="Typo.h4" Class="font-weight-bold mf-gradient-text">@_pagesWithIssues</MudText><MudText Class="mf-muted">Pages With Issues</MudText></MudPaper></MudItem>
-            <MudItem xs="12" sm="6" md="3"><MudPaper Class="pa-4 mf-card text-center" Elevation="0"><MudText Typo="Typo.h4" Class="font-weight-bold mf-gradient-text">@_criticalCount</MudText><MudText Class="mf-muted">Critical</MudText></MudPaper></MudItem>
-        </MudGrid>
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" Class="mb-4" />
+        }
+        else if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-4">
+                <MudText Class="font-weight-bold">Failed to load annotations</MudText>
+                <MudText Class="mt-1">@_error</MudText>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="@LoadDataAsync" Class="mt-2">
+                    Retry
+                </MudButton>
+            </MudAlert>
+        }
+        else if (_data is null)
+        {
+            <MudAlert Severity="Severity.Info" Class="mb-4">
+                No annotation data available.
+            </MudAlert>
+        }
+        else
+        {
+            <MudGrid Class="mb-6">
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-4 mf-card text-center" Elevation="0">
+                        <MudText Typo="Typo.h4" Class="font-weight-bold mf-gradient-text">@_data.OpenCount</MudText>
+                        <MudText Class="mf-muted">Open</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-4 mf-card text-center" Elevation="0">
+                        <MudText Typo="Typo.h4" Class="font-weight-bold mf-gradient-text">@_data.ResolvedCount</MudText>
+                        <MudText Class="mf-muted">Resolved</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-4 mf-card text-center" Elevation="0">
+                        <MudText Typo="Typo.h4" Class="font-weight-bold mf-gradient-text">@_data.PagesWithIssuesCount</MudText>
+                        <MudText Class="mf-muted">Pages With Issues</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-4 mf-card text-center" Elevation="0">
+                        <MudText Typo="Typo.h4" Class="font-weight-bold mf-gradient-text">@_data.DistinctIssueTypeCount</MudText>
+                        <MudText Class="mf-muted">Issue Types</MudText>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
 
-        <MudPaper Class="pa-5 mf-card" Elevation="0">
-            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
-                <MudText Typo="Typo.h6" Class="font-weight-bold">Editorial Annotations</MudText>
-                <MudSelect T="string" Label="Issue Type" @bind-Value="_issueFilter" Variant="Variant.Outlined" Style="max-width:220px">
-                    <MudSelectItem Value="@("all")">All Issues</MudSelectItem>
-                    <MudSelectItem Value="@("DIALOGUE_ERROR")">Dialogue</MudSelectItem>
-                    <MudSelectItem Value="@("SHADING_ERROR")">Shading</MudSelectItem>
-                    <MudSelectItem Value="@("CONTINUITY_ERROR")">Continuity</MudSelectItem>
-                    <MudSelectItem Value="@("PANEL_ORDER_ERROR")">Panel Order</MudSelectItem>
-                </MudSelect>
-            </MudStack>
+            <MudPaper Class="pa-5 mf-card" Elevation="0">
+                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4" Spacing="4">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold">Editorial Annotations</MudText>
 
-            <MudTable Items="_annotations" Hover="true" Dense="true">
-                <HeaderContent>
-                    <MudTh>Series</MudTh>
-                    <MudTh>Chapter/Page</MudTh>
-                    <MudTh>Region</MudTh>
-                    <MudTh>Issue</MudTh>
-                    <MudTh>Text</MudTh>
-                    <MudTh>Status</MudTh>
-                    <MudTh>Actions</MudTh>
-                </HeaderContent>
-                <RowTemplate>
-                    <MudTd>@context.Series</MudTd>
-                    <MudTd>@context.ChapterPage</MudTd>
-                    <MudTd><MudChip T="string" Color="Color.Info" Size="Size.Small">@context.RegionType</MudChip></MudTd>
-                    <MudTd>@context.IssueType</MudTd>
-                    <MudTd>@context.Text</MudTd>
-                    <MudTd>
-                        @if (context.IsResolved)
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <MudSelect T="string" Label="Series" @bind-Value="_seriesFilter" Variant="Variant.Outlined" Style="min-width:180px" Immediate="true">
+                            <MudSelectItem Value="@("all")">All Series</MudSelectItem>
+                            @foreach (var s in _data.SeriesFilters)
+                            {
+                                <MudSelectItem Value="@(s.SeriesId.ToString())">@s.SeriesTitle</MudSelectItem>
+                            }
+                        </MudSelect>
+
+                        <MudSelect T="string" Label="Issue Type" @bind-Value="_issueFilter" Variant="Variant.Outlined" Style="min-width:160px" Immediate="true">
+                            <MudSelectItem Value="@("all")">All Issues</MudSelectItem>
+                            @foreach (var t in _data.IssueTypeFilters)
+                            {
+                                <MudSelectItem Value="@t">@t</MudSelectItem>
+                            }
+                        </MudSelect>
+
+                        <MudSelect T="string" Label="Status" @bind-Value="_statusFilter" Variant="Variant.Outlined" Style="min-width:140px" Immediate="true">
+                            <MudSelectItem Value="@("all")">All</MudSelectItem>
+                            <MudSelectItem Value="@("open")">Open</MudSelectItem>
+                            <MudSelectItem Value="@("resolved")">Resolved</MudSelectItem>
+                        </MudSelect>
+
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@ApplyFiltersAsync">
+                            Refresh
+                        </MudButton>
+                    </MudStack>
+                </MudStack>
+
+                @if (!_data.SeriesGroups.Any())
+                {
+                    <MudAlert Severity="Severity.Info">
+                        No annotations match the current filters.
+                    </MudAlert>
+                }
+                else
+                {
+                    <MudExpansionPanels MultiExpansion="true" Class="mf-expansion-groups">
+                        @foreach (var group in _data.SeriesGroups)
                         {
-                            <MudChip T="string" Color="Color.Success" Size="Size.Small">Resolved</MudChip>
+                            <MudExpansionPanel Class="mb-2">
+                                <TitleContent>
+                                    <MudText Typo="Typo.subtitle1" Class="font-weight-bold">
+                                        @group.SeriesTitle
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Info">@group.Annotations.Count</MudChip>
+                                    </MudText>
+                                </TitleContent>
+                                <ChildContent>
+                                    @if (!group.Annotations.Any())
+                                    {
+                                        <MudText Class="mf-muted pa-4">No annotations for this series.</MudText>
+                                    }
+                                    else
+                                    {
+                                        <MudTable Items="group.Annotations" Hover="true" Dense="true" Class="mb-2">
+                                            <HeaderContent>
+                                                <MudTh>Chapter/Page</MudTh>
+                                                <MudTh>Version</MudTh>
+                                                <MudTh>Issue Type</MudTh>
+                                                <MudTh>Text</MudTh>
+                                                <MudTh>Status</MudTh>
+                                                <MudTh>Regions</MudTh>
+                                                <MudTh>Actions</MudTh>
+                                            </HeaderContent>
+                                            <RowTemplate>
+                                                <MudTd>
+                                                    <MudText>@context.ChapterNumberLabel@(string.IsNullOrWhiteSpace(context.ChapterTitle) ? "" : $" — {context.ChapterTitle}")</MudText>
+                                                    <MudText Class="mf-muted" Style="font-size:0.8rem">Page @context.PageNumber</MudText>
+                                                </MudTd>
+                                                <MudTd>
+                                                    @if (context.VersionNo.HasValue)
+                                                    {
+                                                        <MudChip T="string" Size="Size.Small" Color="Color.Default">v@(context.VersionNo)</MudChip>
+                                                    }
+                                                    else
+                                                    {
+                                                        <MudText Class="mf-muted">—</MudText>
+                                                    }
+                                                </MudTd>
+                                                <MudTd>
+                                                    <MudChip T="string" Size="Size.Small" Color="Color.Info">@context.IssueTypeCode</MudChip>
+                                                </MudTd>
+                                                <MudTd Style="max-width:280px;">
+                                                    <MudText Style="word-break:break-word;white-space:normal">@context.AnnotationText</MudText>
+                                                </MudTd>
+                                                <MudTd>
+                                                    @if (context.IsResolved)
+                                                    {
+                                                        <MudChip T="string" Color="Color.Success" Size="Size.Small">Resolved</MudChip>
+                                                    }
+                                                    else
+                                                    {
+                                                        <MudChip T="string" Color="Color.Warning" Size="Size.Small">Open</MudChip>
+                                                    }
+                                                </MudTd>
+                                                <MudTd>
+                                                    <MudStack Row="true" Spacing="1">
+                                                        @foreach (var region in context.Regions.Take(3))
+                                                        {
+                                                            <MudTooltip Text="@($"{region.RegionTypeCode} ({region.X:0},{region.Y:0})")">
+                                                                <MudChip T="string" Size="Size.Small" Color="Color.Tertiary">@region.RegionTypeCode</MudChip>
+                                                            </MudTooltip>
+                                                        }
+                                                        @if (context.Regions.Count > 3)
+                                                        {
+                                                            <MudChip T="string" Size="Size.Small" Color="Color.Default">+@(context.Regions.Count - 3)</MudChip>
+                                                        }
+                                                    </MudStack>
+                                                </MudTd>
+                                                <MudTd>
+                                                    @if (!string.IsNullOrWhiteSpace(context.WorkspaceUrl))
+                                                    {
+                                                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                                                    OnClick="@(() => Nav.NavigateTo(context.WorkspaceUrl))">
+                                                            Open Page
+                                                        </MudButton>
+                                                    }
+                                                    else
+                                                    {
+                                                        <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="true">
+                                                            Open Page
+                                                        </MudButton>
+                                                    }
+                                                </MudTd>
+                                            </RowTemplate>
+                                        </MudTable>
+                                    }
+                                </ChildContent>
+                            </MudExpansionPanel>
                         }
-                        else
-                        {
-                            <MudChip T="string" Color="Color.Warning" Size="Size.Small">Open</MudChip>
-                        }
-                    </MudTd>
-                    <MudTd>
-                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => Nav.NavigateTo($"/editor/chapters/{context.ChapterId}"))">Open Page</MudButton>
-                    </MudTd>
-                </RowTemplate>
-            </MudTable>
-        </MudPaper>
+                    </MudExpansionPanels>
+                }
+            </MudPaper>
+        }
     </div>
 </EditorLayout>
 
 @code {
-    private int _openCount = 8;
-    private int _resolvedCount = 14;
-    private int _pagesWithIssues = 6;
-    private int _criticalCount = 2;
+    private EditorAnnotationWorkspaceDto? _data;
+    private bool _loading;
+    private string? _error;
+    private Guid _currentUserId;
+
+    private string _seriesFilter = "all";
     private string _issueFilter = "all";
+    private string _statusFilter = "all";
 
-    private readonly List<AnnotationRow> _annotations = new()
+    protected override async Task OnInitializedAsync()
     {
-        new(Guid.Parse("b1c2d3e4-1001-4000-8000-000000000065"), 3,  "Crimson Moon Academy", "Ch.45 / Pg.03", "SPEECH_BUBBLE", "DIALOGUE_ERROR",   "Dialogue text exceeds bubble area",               false),
-        new(Guid.Parse("b1c2d3e4-1002-4000-8000-000000000066"), 7,  "Crimson Moon Academy", "Ch.45 / Pg.07", "BACKGROUND",    "SHADING_ERROR",    "Background shading breaks continuity",            false),
-        new(Guid.Parse("b1c2d3e4-1003-4000-8000-000000000067"), 12, "Neon Samurai Path",    "Ch.19 / Pg.12", "PANEL",         "PANEL_ORDER_ERROR","Panel read order is ambiguous",                   false),
-        new(Guid.Parse("b1c2d3e4-1004-4000-8000-000000000068"), 2,  "Lunar Eclipse Academy","Ch.13 / Pg.02", "CHARACTER",     "CONTINUITY_ERROR", "Character outfit differs from previous page",     true)
-    };
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (Guid.TryParse(idClaim, out var userId))
+            {
+                _currentUserId = userId;
+            }
+        }
 
-    private IEnumerable<AnnotationRow> FilteredAnnotations =>
-        string.IsNullOrEmpty(_issueFilter) || _issueFilter == "all"
-            ? _annotations
-            : _annotations.Where(a => a.IssueType == _issueFilter);
+        await LoadDataAsync();
+    }
 
-    private record AnnotationRow(Guid ChapterId, int PageNumber, string Series, string ChapterPage, string RegionType, string IssueType, string Text, bool IsResolved);
+    private async Task LoadDataAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _data = await AnnotationApi.GetAnnotationsAsync(
+                _currentUserId,
+                seriesId: _seriesFilter == "all" ? null : _seriesFilter,
+                issueType: _issueFilter == "all" ? null : _issueFilter,
+                status: _statusFilter == "all" ? null : _statusFilter);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _data = null;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        await LoadDataAsync();
+    }
 }

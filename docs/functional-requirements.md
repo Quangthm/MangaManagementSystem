@@ -339,7 +339,7 @@
 | FR-WORKSPACE-004 | The system shall display the selected page version in the main workspace viewing area with available overlays such as saved page regions and annotations. | BR-WORKSPACE-004 |
 | FR-WORKSPACE-005 | The system shall provide a right tools/actions panel containing AI segmentation, AI/OCR translation support, annotation tools, page-version actions, and role-specific workflow actions. | BR-WORKSPACE-005 |
 | FR-WORKSPACE-006 | The system shall allow all Authorized Page Workspace Users with access to the relevant chapter/page version to use available AI tools. | BR-WORKSPACE-006 |
-| FR-WORKSPACE-007 | The system shall enforce role-specific permissions for business actions in the workspace, including task assignment, task submission, review annotations, and chapter review actions. | BR-WORKSPACE-007 |
+| FR-WORKSPACE-007 | The system shall enforce role-specific permissions for business actions in the workspace, including task assignment, task submission, production annotations, editorial-review annotations, and chapter review actions. | BR-WORKSPACE-007 |
 | FR-WORKSPACE-008 | The system shall not grant Editorial Board Members chapter workspace access by default unless a future permission explicitly allows it. | BR-WORKSPACE-008 |
 | FR-WORKSPACE-009 | The system shall support workspace entry from the main series page, dashboards, review queues, assistant task lists, and other authorized workflow lists. | BR-WORKSPACE-009 |
 | FR-WORKSPACE-010 | The system shall return users to `/series/{slug}` by default when they entered the workspace from the main series page. | BR-WORKSPACE-010 |
@@ -365,13 +365,21 @@
 | FR-ANN-011 | The system shall require non-empty annotation text. | BR-ANN-010 |
 | FR-ANN-012 | The system shall record the user who created each annotation. | BR-ANN-011 |
 | FR-ANN-013 | The system shall record the creation time of each annotation. | BR-ANN-012 |
-| FR-ANN-014 | The system shall restrict annotation creation to authorized users according to workflow permissions. | BR-ANN-013 |
+| FR-ANN-014 | The system shall restrict annotation creation to active Mangaka contributors and active Tantou Editor contributors with access to the owning series/page workspace in MVP. | BR-ANN-013 |
 | FR-ANN-015 | The system shall allow a page annotation to be linked to existing saved regions, newly created regions, or both. | BR-ANN-014 |
 | FR-ANN-016 | The system shall require both resolver user and resolved timestamp when an annotation is resolved. | BR-ANN-015 |
 | FR-ANN-017 | The system shall require both `resolved_by_user_id` and `resolved_at_utc` to be `NULL` when an annotation is unresolved. | BR-ANN-016 |
 | FR-ANN-018 | The system shall resolve annotations by setting resolver and timestamp fields without deleting the annotation or its region links. | BR-ANN-017 |
 | FR-ANN-019 | The system shall preserve old annotations through their linked regions after a new page version is uploaded. | BR-ANN-018 |
 | FR-ANN-020 | The system shall enforce fixed MVP annotation issue types by database constraint instead of a separate lookup table. | BR-ANN-019 |
+| FR-ANN-021 | The system shall allow unresolved Mangaka-created annotations to be resolved by active Mangaka contributors on the same series or active Tantou Editor contributors on the same series. | BR-ANN-020 |
+| FR-ANN-022 | The system shall prevent Mangaka users from resolving annotations created by Tantou Editors. | BR-ANN-021 |
+| FR-ANN-023 | The system shall allow only active Tantou Editor contributors on the same series to resolve Tantou Editor-created annotations. | BR-ANN-021 |
+| FR-ANN-024 | The system shall allow active Mangaka contributors to update unresolved annotation text only for Mangaka-created annotations on the same series. | BR-ANN-022 |
+| FR-ANN-025 | The system shall allow active Tantou Editor contributors to update unresolved annotation text for either Mangaka-created or Tantou Editor-created annotations on the same series. | BR-ANN-023 |
+| FR-ANN-026 | The system shall prevent resolved annotations from being edited in MVP. | BR-ANN-024 |
+| FR-ANN-027 | The system shall determine annotation permission in MVP through stored-procedure guard checks using `annotated_by_user_id`, the creator's current role, the actor's current role, active account status, active series contributor membership, and the series context derived from linked regions. | BR-ANN-025 |
+| FR-ANN-028 | The system shall audit annotation text updates with old text, new text, actor user, related series/page context, and optional update reason when available. | BR-ANN-026 |
 
 ## 3.14 Page Task
 

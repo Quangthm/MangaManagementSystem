@@ -336,7 +336,7 @@
 | BR-WORKSPACE-004 | The workspace main viewing area should display the selected page version with available overlays such as page regions and annotations. | Active draft |
 | BR-WORKSPACE-005 | The workspace right panel contains tools and actions such as AI segmentation, AI/OCR translation support, annotation actions, page-version actions, and role-specific workflow actions. | Active draft |
 | BR-WORKSPACE-006 | AI tools in the workspace are available to all Authorized Page Workspace Users who have access to the relevant chapter/page version. | Active draft |
-| BR-WORKSPACE-007 | Role-specific actions remain permission-gated; for example, Mangaka may assign page regions as assistant tasks, Assistants may work on assigned tasks, and Tantou Editors may create review annotations or review feedback. | Active draft |
+| BR-WORKSPACE-007 | Role-specific actions remain permission-gated; for example, Mangaka may assign page regions as assistant tasks, Assistants may work on assigned tasks, Mangaka may create production-tracking annotations, and Tantou Editors may create or manage editorial-review annotations according to annotation permission rules. | Active draft |
 | BR-WORKSPACE-008 | Editorial Board Members are not considered Authorized Page Workspace Users by default unless a future permission explicitly grants workspace access. | Active draft |
 | BR-WORKSPACE-009 | Workspace entry may come from the main series URL, a dashboard, an editorial review queue, an assistant task list, or another authorized workflow list. | Active draft |
 | BR-WORKSPACE-010 | The workspace back action should return to the main `/series/{slug}` page by default when the user entered from the series page. | Active draft |
@@ -361,13 +361,20 @@
 | BR-ANN-010 | An annotation must contain non-empty annotation text. | Active draft |
 | BR-ANN-011 | Each annotation must record the user who created it. | Active draft |
 | BR-ANN-012 | Each annotation must record the time it was created. | Active draft |
-| BR-ANN-013 | Only authorized users, such as Tantou Editors, Mangaka reviewers, or assigned users, may create annotations according to workflow permissions. | Active draft |
+| BR-ANN-013 | Only active Mangaka contributors and active Tantou Editor contributors with access to the owning series/page workspace may create annotations in MVP. Assistants, Board roles, and Admin do not create annotations in MVP. | Active draft |
 | BR-ANN-014 | A page annotation may be created from existing saved `PageRegion` records, newly created `PageRegion` records, or a combination of both. | Active draft |
 | BR-ANN-015 | If an annotation is resolved, both resolver and resolved timestamp must be recorded. | Active draft |
 | BR-ANN-016 | If an annotation is unresolved, both `resolved_by_user_id` and `resolved_at_utc` must be NULL. | Active draft |
 | BR-ANN-017 | Resolving an annotation marks the feedback as handled but must not delete the annotation or its linked region records. | Active draft |
 | BR-ANN-018 | When a new page version is uploaded, old annotations remain available through their linked regions for traceability and comparison. | Active draft |
 | BR-ANN-019 | Annotation issue types are fixed for MVP and are enforced by database constraint rather than a separate lookup table. | Active draft |
+| BR-ANN-020 | An annotation created by a Mangaka is treated as production-tracking feedback. It may be resolved by an active Mangaka contributor on the same series or by an active Tantou Editor contributor on the same series. | Active draft |
+| BR-ANN-021 | An annotation created by a Tantou Editor is treated as editorial-review feedback. It may be resolved only by an active Tantou Editor contributor on the same series. Mangaka users must not resolve Tantou Editor-created annotations. | Active draft |
+| BR-ANN-022 | Active Mangaka contributors may update unresolved annotation text only for annotations created by Mangaka users on the same series. | Active draft |
+| BR-ANN-023 | Active Tantou Editor contributors may update unresolved annotation text for annotations created by either Mangaka users or Tantou Editors on the same series when the text needs clarification for production tracking or editorial review. | Active draft |
+| BR-ANN-024 | Resolved annotations should not be edited in MVP; any correction to resolved feedback should use a new annotation or a future correction workflow. | Active draft |
+| BR-ANN-025 | The MVP does not add an annotation-origin column. Stored procedures determine creation and resolution permissions by joining `ChapterPageAnnotation.annotated_by_user_id` to the creator's current role and by deriving the owning series through `ChapterPageAnnotationRegion → PageRegion → ChapterPageVersion → ChapterPage → Chapter`. | Active draft |
+| BR-ANN-026 | Annotation text updates must be audit-logged with old text, new text, actor user, owning series/page context, and optional update reason when available. | Active draft |
 
 ## 14. Page Task
 

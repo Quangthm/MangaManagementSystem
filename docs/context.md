@@ -323,7 +323,13 @@ The project uses **permission-based actor grouping** for shared features and rol
 - Each annotation must have a valid issue type.
 - Annotation text must be non-empty.
 - Creator and created time must be recorded.
-- Authorized users such as Tantou Editors, Mangaka reviewers, or assigned users may create annotations according to permissions.
+- For MVP, annotation creation is allowed only for active Mangaka contributors and active Tantou Editor contributors with access to the owning series/page workspace.
+- Mangaka-created annotations are production-tracking feedback. They may be resolved by active Mangaka contributors on the same series or active Tantou Editor contributors on the same series.
+- Tantou Editor-created annotations are editorial-review feedback. They may be resolved only by active Tantou Editor contributors on the same series; Mangaka users must not resolve them.
+- Active Mangaka contributors may update unresolved annotation text only for Mangaka-created annotations on the same series.
+- Active Tantou Editor contributors may update unresolved annotation text for either Mangaka-created or Tantou Editor-created annotations on the same series when clarification is needed.
+- Resolved annotations should not be edited in MVP.
+- The MVP does not add a new annotation-origin column. Stored procedures should guard permissions using `annotated_by_user_id`, the creator's current role, the actor's current role, active account status, active series contributor membership, and the owning series derived from linked regions.
 - A page annotation may be created from existing saved regions, newly created regions, or both.
 - Resolved annotations must record resolver and resolved timestamp.
 - Unresolved annotations must have `resolved_by_user_id` and `resolved_at_utc` as `NULL`.

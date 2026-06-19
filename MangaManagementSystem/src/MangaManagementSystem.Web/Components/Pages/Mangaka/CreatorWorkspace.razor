@@ -524,6 +524,7 @@ else
         // Allow only known internal route prefixes.
         return value.StartsWith("/editor/chapters", StringComparison.Ordinal)
             || value.StartsWith("/editor/proposals", StringComparison.Ordinal)
+            || value.StartsWith("/editor/annotations", StringComparison.Ordinal)
             || value.StartsWith("/series/", StringComparison.Ordinal);
     }
 
