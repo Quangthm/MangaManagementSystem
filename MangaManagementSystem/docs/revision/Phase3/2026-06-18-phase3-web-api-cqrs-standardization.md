@@ -84,7 +84,7 @@ Added CQRS commands for:
 
 Admin and authentication queries use EF Core read methods. User workflow writes continue through existing stored procedures, including `auth.usp_Admin_ChangeUserStatus` and user creation/update procedures.
 
-Audit writes were removed from EF `AddAsync` / `SaveChangesAsync` paths. `AuditEventService` and profile audit now use `audit.usp_AuditEvent_Append` through `IAuditEventRepository`.
+Audit writes are owned by the business stored procedures that perform each mutation. Application services use the audit repository only for read operations and do not invoke `audit.usp_AuditEvent_Append` directly.
 
 The audit procedure now returns the inserted audit id through an optional output parameter. Existing stored procedure callers remain compatible.
 

@@ -16,21 +16,6 @@ namespace MangaManagementSystem.Application.Services
             _unitOfWork = unitOfWork;
         }
 
-        public async Task<AuditEventDto>
-            CreateAuditEventAsync(
-                CreateAuditEventDto dto)
-        {
-            var entity =
-                await _unitOfWork.AuditEvents
-                    .AppendAsync(
-                        dto.ActorUserId,
-                        dto.ActionCode,
-                        dto.EntityType,
-                        dto.EntityId,
-                        dto.DetailJson);
-
-            return MapToDto(entity);
-        }
 
         public async Task<AuditEventDto?>
             GetAuditEventByIdAsync(

@@ -66,9 +66,5 @@ namespace MangaManagementSystem.Application.Interfaces
             string actionCode,
             string otpCode);
 
-        Task RecordProfileAuditAsync(
-            Guid actorUserId,
-            string actionCode,
-            string detailJson);
     }
 }

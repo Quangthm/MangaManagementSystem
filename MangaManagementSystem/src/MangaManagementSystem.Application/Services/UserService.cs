@@ -491,31 +491,6 @@ namespace MangaManagementSystem.Application.Services
                     otpCode.Trim());
         }
 
-        public async Task RecordProfileAuditAsync(
-            Guid actorUserId,
-            string actionCode,
-            string detailJson)
-        {
-            await RequireExistingUserAsync(
-                actorUserId);
-
-            if (string.IsNullOrWhiteSpace(actionCode))
-            {
-                throw new InvalidOperationException(
-                    "Audit action code is required.");
-            }
-
-            await _unitOfWork.AuditEvents
-                .AppendAsync(
-                    actorUserId,
-                    actionCode,
-                    "USER",
-                    actorUserId.ToString(),
-                    string.IsNullOrWhiteSpace(
-                        detailJson)
-                        ? null
-                        : detailJson);
-        }
 
         private async Task<User> RequireExistingUserAsync(
             Guid userId)

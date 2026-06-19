@@ -5,8 +5,7 @@ CREATE OR ALTER PROCEDURE audit.usp_AuditEvent_Append
     @action_code        NVARCHAR(64),
     @entity_type        NVARCHAR(128),
     @entity_id          NVARCHAR(100) = NULL,
-    @detail_json        NVARCHAR(MAX) = NULL,
-    @audit_event_id     BIGINT = NULL OUTPUT
+    @detail_json        NVARCHAR(MAX) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -83,10 +82,6 @@ BEGIN
             @detail_json
         );
 
-        SET @audit_event_id =
-            CONVERT(
-                BIGINT,
-                SCOPE_IDENTITY());
 
         IF @started_tran = 1
         BEGIN
