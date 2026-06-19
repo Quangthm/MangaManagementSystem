@@ -3,6 +3,7 @@
 @using System.Security.Claims
 @using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Web.Services.Api
+@using MangaManagementSystem.Web.Services
 @attribute [Authorize(Roles = "Tantou Editor")]
 @inject IEditorProposalApiClient EditorProposalApiClient
 @inject NavigationManager Nav
@@ -28,24 +29,22 @@
         else if (_proposal != null)
         {
             <MudGrid>
-                @* ── Left: Series Cover ── *@
+                @* ── Left: Series Cover (portrait box, object-fit: contain) ── *@
                 <MudItem xs="12" md="3">
                     <MudPaper Class="pa-4 mf-card mb-5 text-center" Elevation="0">
-                        @if (!string.IsNullOrWhiteSpace(_proposal.SeriesCoverUrl))
-                        {
-                            <div style="width:100%; max-width:220px; margin:0 auto; background:#f1f5f9; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:12px;">
+                        <div style="width:100%; max-width:240px; min-height:340px; margin:0 auto; background:#f1f5f9; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:12px;">
+                            @if (!string.IsNullOrWhiteSpace(_proposal.SeriesCoverUrl))
+                            {
                                 <img src="@_proposal.SeriesCoverUrl"
                                      alt="@($"{_proposal.SeriesTitle} cover")"
-                                     style="width:100%; max-height:310px; object-fit:cover; display:block; border-radius:12px;" />
-                            </div>
-                        }
-                        else
-                        {
-                            <div style="width:100%; max-width:220px; margin:0 auto; background:#f1f5f9; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:12px; height:200px;">
+                                     style="width:100%; height:100%; object-fit:contain; display:block; border-radius:12px;" />
+                            }
+                            else
+                            {
                                 <MudIcon Icon="@Icons.Material.Filled.MenuBook"
                                          Style="font-size:72px; color:#cbd5e1;" />
-                            </div>
-                        }
+                            }
+                        </div>
                         <MudText Typo="Typo.caption" Class="mf-muted mt-2">@_proposal.SeriesTitle</MudText>
                     </MudPaper>
                 </MudItem>
@@ -86,8 +85,14 @@
                         <MudText Class="mb-3">@_proposal.GenreSnapshot</MudText>
 
                         <MudText Typo="Typo.subtitle2" Class="mf-muted mt-3">Synopsis</MudText>
-                        <MudPaper Elevation="0" Class="pa-3" Style="max-height:260px; overflow-y:auto; background:var(--mud-palette-background-grey);">
-                            <MudText Style="white-space:pre-wrap;">@_proposal.SynopsisSnapshot</MudText>
+                        <MudPaper Elevation="0" Class="pa-3" Style="background:var(--mud-palette-background-grey);">
+                            <div style="white-space:pre-wrap; @(_synopsisExpanded ? "" : "max-height:140px; overflow:hidden;")">@_proposal.SynopsisSnapshot</div>
+                            @if (_proposal.SynopsisSnapshot?.Length > 300)
+                            {
+                                <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="ToggleSynopsis" Class="mt-1">
+                                    @(_synopsisExpanded ? "Show less" : "View more")
+                                </MudButton>
+                            }
                         </MudPaper>
 
                         <MudDivider Class="my-4" />
@@ -193,7 +198,16 @@
                         </MudPaper>
                     }
                     else if (!_proposal.CanClaim && !_proposal.HasEditorialDecision
+                             && !string.IsNullOrWhiteSpace(_proposal.SeriesStatusCode)
+                             && _proposal.SeriesStatusCode != _proposal.ProposalStatusCode)
+                    {
+                        <MudAlert Severity="Severity.Warning">
+                            Current series state (@_proposal.SeriesStatusCode.Replace("_", " ")) differs from this proposal version. Review actions are unavailable.
+                        </MudAlert>
+                    }
+                    else if (!_proposal.CanClaim && !_proposal.HasEditorialDecision
                              && _proposal.ProposalStatusCode == "UNDER_EDITORIAL_REVIEW"
+                             && _proposal.SeriesStatusCode == "UNDER_EDITORIAL_REVIEW"
                              && !_proposal.CurrentActorIsActiveTantouEditorContributor)
                     {
                         <MudAlert Severity="Severity.Info">
@@ -321,6 +335,7 @@
     private bool _processing;
     private string? _error;
     private Guid _currentUserId;
+    private bool _synopsisExpanded;
 
     // Modal state
     private bool _revisionDialogOpen;
@@ -334,6 +349,8 @@
     private byte[]? _markupBytes;
 
     private const long MaxMarkupSize = 10 * 1024 * 1024; // 10 MB
+
+    [SupplyParameterFromQuery] public string? returnUrl { get; set; }
 
     private readonly DialogOptions _dialogOptions = new()
     {
@@ -380,7 +397,10 @@
         }
     }
 
-    private void GoBack() => Nav.NavigateTo("/editor/proposals");
+    private void GoBack() =>
+        Nav.NavigateTo(SafeReturnUrl.Resolve(returnUrl, "/editor/proposals"));
+
+    private void ToggleSynopsis() => _synopsisExpanded = !_synopsisExpanded;
 
     private Color GetStatusColor(string status) => status switch
     {

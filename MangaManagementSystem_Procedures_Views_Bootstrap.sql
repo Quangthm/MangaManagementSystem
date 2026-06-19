@@ -2442,63 +2442,59 @@ BEGIN
     ;THROW 57902, 'All page regions must exist and belong to the same chapter page version.', 1;
 END;
 
-        --------------------------------------------------------------------
         DECLARE @owning_series_id UNIQUEIDENTIFIER;
 
-        SELECT TOP (1)
-            @owning_series_id = ch.series_id
-        FROM @parsed_page_region_ids parsed
-        INNER JOIN manga.PageRegion pr
-            ON pr.page_region_id = parsed.page_region_id
-        INNER JOIN manga.ChapterPageVersion cpv
-            ON cpv.chapter_page_version_id = pr.chapter_page_version_id
-        INNER JOIN manga.ChapterPage cp
-            ON cp.chapter_page_id = cpv.chapter_page_id
-        INNER JOIN manga.Chapter ch
-            ON ch.chapter_id = cp.chapter_id;
+SELECT TOP (1)
+    @owning_series_id = ch.series_id
+FROM @parsed_page_region_ids parsed
+INNER JOIN manga.PageRegion pr
+    ON pr.page_region_id = parsed.page_region_id
+INNER JOIN manga.ChapterPageVersion cpv
+    ON cpv.chapter_page_version_id = pr.chapter_page_version_id
+INNER JOIN manga.ChapterPage cp
+    ON cp.chapter_page_id = cpv.chapter_page_id
+INNER JOIN manga.Chapter ch
+    ON ch.chapter_id = cp.chapter_id;
 
-        --------------------------------------------------------------------
-        -- 4. Actor must be active contributor for the owning series.
-        --------------------------------------------------------------------
-        --------------------------------------------------------------------
-            DECLARE @actor_role_name NVARCHAR(30);
+--------------------------------------------------------------------
+-- 4. Actor must be active.
+--------------------------------------------------------------------
+DECLARE @actor_role_name NVARCHAR(30);
 
-        SELECT
-            @actor_role_name = r.role_name
-        FROM auth.Users u
-        INNER JOIN auth.Roles r
-            ON r.role_id = u.role_id
-        WHERE u.user_id = @actor_user_id
-          AND u.status_code = N'ACTIVE';
+SELECT
+    @actor_role_name = r.role_name
+FROM auth.Users u
+INNER JOIN auth.Roles r
+    ON r.role_id = u.role_id
+WHERE u.user_id = @actor_user_id
+  AND u.status_code = N'ACTIVE';
 
-        IF @actor_role_name IS NULL
-        BEGIN
-            ;THROW 57501, 'Actor user is not active or was not found.', 1;
-        END;
+IF @actor_role_name IS NULL
+BEGIN
+    ;THROW 57501, 'Actor user is not active or was not found.', 1;
+END;
 
-        --------------------------------------------------------------------
-        -- 6. Actor must be active contributor for the owning series.
-        --------------------------------------------------------------------
-        IF NOT EXISTS
-        (
-            SELECT 1
-            FROM manga.SeriesContributor sc
-            WHERE sc.series_id = @owning_series_id
-              AND sc.user_id = @actor_user_id
-              AND sc.end_date IS NULL
-        )
-        BEGIN
-            ;THROW 57504, 'User is not an active contributor for the series that owns these page regions.', 1;
-        END;
+--------------------------------------------------------------------
+-- 5. Actor must be active contributor for the owning series.
+--------------------------------------------------------------------
+IF NOT EXISTS
+(
+    SELECT 1
+    FROM manga.vw_ActiveSeriesContributor ascx
+    WHERE ascx.series_id = @owning_series_id
+      AND ascx.user_id = @actor_user_id
+)
+BEGIN
+    ;THROW 57504, 'User is not an active contributor for the series that owns these page regions.', 1;
+END;
 
-        --------------------------------------------------------------------
-        -- 7. Only Mangaka and Tantou Editor can create annotations in MVP.
-        --------------------------------------------------------------------
-        IF @actor_role_name NOT IN (N'Mangaka', N'Tantou Editor')
-        BEGIN
-            ;THROW 57505, 'Only Mangaka or Tantou Editor contributors can create page annotations.', 1;
-        END;
-
+--------------------------------------------------------------------
+-- 6. Only Mangaka and Tantou Editor can create annotations in MVP.
+--------------------------------------------------------------------
+IF @actor_role_name NOT IN (N'Mangaka', N'Tantou Editor')
+BEGIN
+    ;THROW 57505, 'Only Mangaka or Tantou Editor contributors can create page annotations.', 1;
+END;
 
 
         --------------------------------------------------------------------
@@ -2638,7 +2634,7 @@ BEGIN
         --------------------------------------------------------------------
         -- 7. Actor must be active contributor for the owning series
         --------------------------------------------------------------------
-        IF NOT EXISTS
+       IF NOT EXISTS
 (
     SELECT 1
     FROM manga.ChapterPageAnnotationRegion cpar
@@ -2650,14 +2646,10 @@ BEGIN
         ON cp.chapter_page_id = cpv.chapter_page_id
     INNER JOIN manga.Chapter ch
         ON ch.chapter_id = cp.chapter_id
-    INNER JOIN manga.SeriesContributor sc
-    ON sc.series_id = ch.series_id
-INNER JOIN auth.Users u
-    ON u.user_id = sc.user_id
-WHERE cpar.chapter_page_annotation_id = @chapter_page_annotation_id
-  AND sc.user_id = @actor_user_id
-  AND sc.end_date IS NULL
-  AND u.status_code = N'ACTIVE'
+    INNER JOIN manga.vw_ActiveSeriesContributor ascx
+        ON ascx.series_id = ch.series_id
+       AND ascx.user_id = @actor_user_id
+    WHERE cpar.chapter_page_annotation_id = @chapter_page_annotation_id
 )
 BEGIN
     ;THROW 57807, 'User is not an active contributor for the series that owns this annotation.', 1;
@@ -2854,48 +2846,47 @@ BEGIN
         --------------------------------------------------------------------
         -- 3. Resolve active actor role.
         --------------------------------------------------------------------
-        SELECT
-            @actor_role_name = r.role_name
-        FROM auth.Users u
-        INNER JOIN auth.Roles r
-            ON r.role_id = u.role_id
-        WHERE u.user_id = @actor_user_id
-          AND u.status_code = N'ACTIVE';
+       SELECT
+    @actor_role_name = r.role_name
+FROM auth.Users u
+INNER JOIN auth.Roles r
+    ON r.role_id = u.role_id
+WHERE u.user_id = @actor_user_id
+  AND u.status_code = N'ACTIVE';
 
-        IF @actor_role_name IS NULL
-        BEGIN
-            ;THROW 57927, 'Actor user is not active or was not found.', 1;
-        END;
+IF @actor_role_name IS NULL
+BEGIN
+    ;THROW 57927, 'Actor user is not active or was not found.', 1;
+END;
 
-        --------------------------------------------------------------------
-        -- 4. Resolve annotation creator role.
-        --------------------------------------------------------------------
-        SELECT
-            @creator_role_name = r.role_name
-        FROM auth.Users u
-        INNER JOIN auth.Roles r
-            ON r.role_id = u.role_id
-        WHERE u.user_id = @annotated_by_user_id;
+--------------------------------------------------------------------
+-- 4. Resolve annotation creator role.
+--------------------------------------------------------------------
+SELECT
+    @creator_role_name = r.role_name
+FROM auth.Users u
+INNER JOIN auth.Roles r
+    ON r.role_id = u.role_id
+WHERE u.user_id = @annotated_by_user_id;
 
-        IF @creator_role_name IS NULL
-        BEGIN
-            ;THROW 57928, 'Annotation creator role could not be resolved.', 1;
-        END;
+IF @creator_role_name IS NULL
+BEGIN
+    ;THROW 57928, 'Annotation creator role could not be resolved.', 1;
+END;
 
-        --------------------------------------------------------------------
-        -- 5. Actor must be active contributor for the owning series.
-        --------------------------------------------------------------------
-        IF NOT EXISTS
-        (
-            SELECT 1
-            FROM manga.SeriesContributor sc
-            WHERE sc.series_id = @owning_series_id
-              AND sc.user_id = @actor_user_id
-              AND sc.end_date IS NULL
-        )
-        BEGIN
-            ;THROW 57929, 'Actor is not an active contributor for the owning series.', 1;
-        END;
+--------------------------------------------------------------------
+-- 5. Actor must be active contributor for the owning series.
+--------------------------------------------------------------------
+IF NOT EXISTS
+(
+    SELECT 1
+    FROM manga.vw_ActiveSeriesContributor ascx
+    WHERE ascx.series_id = @owning_series_id
+      AND ascx.user_id = @actor_user_id
+)
+BEGIN
+    ;THROW 57929, 'Actor is not an active contributor for the owning series.', 1;
+END;
 
         --------------------------------------------------------------------
         -- 6. Permission rule:
@@ -3073,24 +3064,16 @@ END;
 IF NOT EXISTS
 (
     SELECT 1
-FROM manga.SeriesContributor sc
-INNER JOIN auth.Users u
-    ON u.user_id = sc.user_id
-WHERE sc.series_id = @owning_series_id
-  AND sc.user_id = @actor_user_id
-  AND sc.end_date IS NULL
-  AND u.status_code = N'ACTIVE'
+    FROM manga.vw_ActiveSeriesContributor ascx
+    WHERE ascx.series_id = @owning_series_id
+      AND ascx.user_id = @actor_user_id
 )
 OR NOT EXISTS
 (
     SELECT 1
-    FROM manga.SeriesContributor sc
-    INNER JOIN auth.Users u
-        ON u.user_id = sc.user_id
-    WHERE sc.series_id = @owning_series_id
-      AND sc.user_id = @assigned_to_user_id
-      AND sc.end_date IS NULL
-      AND u.status_code = N'ACTIVE'
+    FROM manga.vw_ActiveSeriesContributor ascx
+    WHERE ascx.series_id = @owning_series_id
+      AND ascx.user_id = @assigned_to_user_id
 )
 BEGIN
     ;THROW 57908, 'Actor and assigned user must both be active contributors for the series that owns these page regions.', 1;
@@ -3264,7 +3247,7 @@ BEGIN
         --------------------------------------------------------------------
         -- 4. Actor must be active Mangaka contributor
         --------------------------------------------------------------------
-       IF NOT EXISTS
+      IF NOT EXISTS
 (
     SELECT 1
     FROM manga.ChapterPageTaskRegion tr
@@ -3276,22 +3259,15 @@ BEGIN
         ON cp.chapter_page_id = cpv.chapter_page_id
     INNER JOIN manga.Chapter ch
         ON ch.chapter_id = cp.chapter_id
-    INNER JOIN manga.SeriesContributor sc
-        ON sc.series_id = ch.series_id
-    INNER JOIN auth.Users u
-        ON u.user_id = sc.user_id
-    INNER JOIN auth.Roles r
-        ON r.role_id = u.role_id
+    INNER JOIN manga.vw_ActiveSeriesContributor ascx
+        ON ascx.series_id = ch.series_id
+       AND ascx.user_id = @actor_user_id
     WHERE tr.chapter_page_task_id = @chapter_page_task_id
-      AND sc.user_id = @actor_user_id
-      AND sc.end_date IS NULL
-      AND u.status_code = N'ACTIVE'
-      AND r.role_name = N'Mangaka'
+      AND ascx.role_name = N'Mangaka'
 )
 BEGIN
     ;THROW 58306, 'Only an active Mangaka contributor can cancel this task.', 1;
 END;
-
         --------------------------------------------------------------------
         -- 5. Cancel task
         --------------------------------------------------------------------
@@ -3436,31 +3412,26 @@ BEGIN
         --
         -- Derive series through the old task's existing PageRegion links.
         --------------------------------------------------------------------
-        IF NOT EXISTS
-        (
-            SELECT 1
-            FROM manga.ChapterPageTaskRegion tr
-            INNER JOIN manga.PageRegion pr
-                ON pr.page_region_id = tr.page_region_id
-            INNER JOIN manga.ChapterPageVersion cpv
-                ON cpv.chapter_page_version_id = pr.chapter_page_version_id
-            INNER JOIN manga.ChapterPage cp
-                ON cp.chapter_page_id = cpv.chapter_page_id
-            INNER JOIN manga.Chapter ch
-                ON ch.chapter_id = cp.chapter_id
-            INNER JOIN manga.SeriesContributor sc
-                ON sc.series_id = ch.series_id
-            INNER JOIN auth.Users u
-                ON u.user_id = sc.user_id
-            WHERE tr.chapter_page_task_id = @chapter_page_task_id
-              AND sc.user_id = @new_assigned_to_user_id
-              AND sc.end_date IS NULL
-              AND u.status_code = N'ACTIVE'
-        )
-        BEGIN
-            ;THROW 58508, 'New assigned user must be an active contributor of the same series as the existing task.', 1;
-        END;
-
+       IF NOT EXISTS
+(
+    SELECT 1
+    FROM manga.ChapterPageTaskRegion tr
+    INNER JOIN manga.PageRegion pr
+        ON pr.page_region_id = tr.page_region_id
+    INNER JOIN manga.ChapterPageVersion cpv
+        ON cpv.chapter_page_version_id = pr.chapter_page_version_id
+    INNER JOIN manga.ChapterPage cp
+        ON cp.chapter_page_id = cpv.chapter_page_id
+    INNER JOIN manga.Chapter ch
+        ON ch.chapter_id = cp.chapter_id
+    INNER JOIN manga.vw_ActiveSeriesContributor ascx
+        ON ascx.series_id = ch.series_id
+       AND ascx.user_id = @new_assigned_to_user_id
+    WHERE tr.chapter_page_task_id = @chapter_page_task_id
+)
+BEGIN
+    ;THROW 58508, 'New assigned user must be an active contributor of the same series as the existing task.', 1;
+END;
         --------------------------------------------------------------------
         -- 4. Cancel old task
         --------------------------------------------------------------------
@@ -3795,17 +3766,11 @@ BEGIN
         ON cp.chapter_page_id = cpv.chapter_page_id
     INNER JOIN manga.Chapter ch
         ON ch.chapter_id = cp.chapter_id
-    INNER JOIN manga.SeriesContributor sc
-        ON sc.series_id = ch.series_id
-    INNER JOIN auth.Users u
-        ON u.user_id = sc.user_id
-    INNER JOIN auth.Roles r
-        ON r.role_id = u.role_id
+    INNER JOIN manga.vw_ActiveSeriesContributor ascx
+        ON ascx.series_id = ch.series_id
+       AND ascx.user_id = @actor_user_id
     WHERE tr.chapter_page_task_id = @chapter_page_task_id
-      AND sc.user_id = @actor_user_id
-      AND sc.end_date IS NULL
-      AND u.status_code = N'ACTIVE'
-      AND r.role_name = N'Mangaka'
+      AND ascx.role_name = N'Mangaka'
 )
 BEGIN
     ;THROW 58206, 'Only an active Mangaka contributor can mark this task complete.', 1;
@@ -3940,17 +3905,11 @@ BEGIN
         ON cp.chapter_page_id = cpv.chapter_page_id
     INNER JOIN manga.Chapter ch
         ON ch.chapter_id = cp.chapter_id
-    INNER JOIN manga.SeriesContributor sc
-        ON sc.series_id = ch.series_id
-    INNER JOIN auth.Users u
-        ON u.user_id = sc.user_id
-    INNER JOIN auth.Roles r
-        ON r.role_id = u.role_id
+    INNER JOIN manga.vw_ActiveSeriesContributor ascx
+        ON ascx.series_id = ch.series_id
+       AND ascx.user_id = @actor_user_id
     WHERE tr.chapter_page_task_id = @chapter_page_task_id
-      AND sc.user_id = @actor_user_id
-      AND sc.end_date IS NULL
-      AND u.status_code = N'ACTIVE'
-      AND r.role_name = N'Mangaka'
+      AND ascx.role_name = N'Mangaka'
 )
 BEGIN
     ;THROW 58406, 'Only an active Mangaka contributor can return this task for rework.', 1;
@@ -4285,24 +4244,17 @@ END;
         --------------------------------------------------------------------
         -- 3. Actor must be the active Tantou Editor contributor for this series
         --------------------------------------------------------------------
-        IF NOT EXISTS
-        (
-            SELECT 1
-            FROM manga.SeriesContributor sc
-            INNER JOIN auth.Users u
-                ON u.user_id = sc.user_id
-            INNER JOIN auth.Roles r
-                ON r.role_id = u.role_id
-            WHERE sc.series_id = @series_id
-              AND sc.user_id = @actor_user_id
-              AND sc.end_date IS NULL
-              AND u.status_code = N'ACTIVE'
-              AND r.role_name = N'Tantou Editor'
-        )
-        BEGIN
-            ;THROW 57406, 'Only the active Tantou Editor contributor for this series can request revision.', 1;
-        END;
-
+       IF NOT EXISTS
+(
+    SELECT 1
+    FROM manga.vw_ActiveSeriesContributor ascx
+    WHERE ascx.series_id = @series_id
+      AND ascx.user_id = @actor_user_id
+      AND ascx.role_name = N'Tantou Editor'
+)
+BEGIN
+    ;THROW 57406, 'Only the active Tantou Editor contributor for this series can request revision.', 1;
+END;
      
         --------------------------------------------------------------------
         -- 5. Optional markup FileResource
@@ -4485,22 +4437,16 @@ BEGIN
         -- 3. Actor must be the active Tantou Editor contributor for this series
         --------------------------------------------------------------------
         IF NOT EXISTS
-        (
-            SELECT 1
-            FROM manga.SeriesContributor sc
-            INNER JOIN auth.Users u
-                ON u.user_id = sc.user_id
-            INNER JOIN auth.Roles r
-                ON r.role_id = u.role_id
-            WHERE sc.series_id = @series_id
-              AND sc.user_id = @actor_user_id
-              AND sc.end_date IS NULL
-              AND u.status_code = N'ACTIVE'
-              AND r.role_name = N'Tantou Editor'
-        )
-        BEGIN
-            ;THROW 57506, 'Only the active Tantou Editor contributor for this series can pass the proposal to board.', 1;
-        END;
+(
+    SELECT 1
+    FROM manga.vw_ActiveSeriesContributor ascx
+    WHERE ascx.series_id = @series_id
+      AND ascx.user_id = @actor_user_id
+      AND ascx.role_name = N'Tantou Editor'
+)
+BEGIN
+    ;THROW 57506, 'Only the active Tantou Editor contributor for this series can pass the proposal to board.', 1;
+END;
 
         --------------------------------------------------------------------
         -- 4. Optional markup FileResource
@@ -4682,22 +4628,16 @@ BEGIN
         -- 3. Actor must be an active Tantou Editor contributor of this series
         --------------------------------------------------------------------
         IF NOT EXISTS
-        (
-            SELECT 1
-            FROM manga.SeriesContributor sc
-            INNER JOIN auth.Users u
-                ON u.user_id = sc.user_id
-            INNER JOIN auth.Roles r
-                ON r.role_id = u.role_id
-            WHERE sc.series_id = @series_id
-              AND sc.user_id = @actor_user_id
-              AND sc.end_date IS NULL
-              AND u.status_code = N'ACTIVE'
-              AND r.role_name = N'Tantou Editor'
-        )
-        BEGIN
-            ;THROW 57606, 'Only an active Tantou Editor contributor for this series can cancel the proposal during editorial review.', 1;
-        END;
+(
+    SELECT 1
+    FROM manga.vw_ActiveSeriesContributor ascx
+    WHERE ascx.series_id = @series_id
+      AND ascx.user_id = @actor_user_id
+      AND ascx.role_name = N'Tantou Editor'
+)
+BEGIN
+    ;THROW 57606, 'Only an active Tantou Editor contributor for this series can cancel the proposal during editorial review.', 1;
+END;
 
        IF LTRIM(RTRIM(@comments)) = N''
 BEGIN

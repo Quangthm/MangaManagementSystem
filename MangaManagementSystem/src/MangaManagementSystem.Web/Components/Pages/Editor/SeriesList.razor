@@ -1,4 +1,5 @@
 @page "/editor/series"
+@using System
 @using Microsoft.AspNetCore.Authorization
 @using System.Security.Claims
 @using MangaManagementSystem.Application.DTOs.Editor
@@ -54,24 +55,27 @@
                         <MudTd><MudChip T="string" Color="@GetStatusColor(context.StatusCode)" Size="Size.Small">@context.StatusCode.Replace("_", " ")</MudChip></MudTd>
                         <MudTd>@context.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</MudTd>
                         <MudTd>
+                            @{
+                                var encodedReturn = Uri.EscapeDataString("/editor/series");
+                            }
                             @if (CanReview(context))
                             {
                                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
-                                           OnClick="@(() => Nav.NavigateTo($"/editor/proposals/{context.LatestProposalId}"))">
+                                           OnClick="@(() => Nav.NavigateTo($"/editor/proposals/{context.LatestProposalId}?returnUrl={encodedReturn}"))">
                                     Review
                                 </MudButton>
                             }
                             else if (context.LatestProposalId.HasValue)
                             {
                                 <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default"
-                                           OnClick="@(() => Nav.NavigateTo($"/editor/proposals/{context.LatestProposalId}"))">
+                                           OnClick="@(() => Nav.NavigateTo($"/editor/proposals/{context.LatestProposalId}?returnUrl={encodedReturn}"))">
                                     View
                                 </MudButton>
                             }
                             else if (!string.IsNullOrWhiteSpace(context.Slug))
                             {
                                 <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default"
-                                           OnClick="@(() => Nav.NavigateTo($"/series/{context.Slug}"))">
+                                           OnClick="@(() => Nav.NavigateTo($"/series/{context.Slug}?returnUrl={encodedReturn}"))">
                                     View Series
                                 </MudButton>
                             }
