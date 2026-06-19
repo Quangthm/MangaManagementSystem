@@ -93,6 +93,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         {
             return await _context.ChapterPageTasks
                 .Include(t => t.AssignedToUser)
+                .Include(t => t.CompletedPageVersion)
+                    .ThenInclude(v => v!.PageFile)
                 .Include(t => t.PageRegions)
                     .ThenInclude(r => r.ChapterPageVersion)
                         .ThenInclude(v => v.ChapterPage)
@@ -110,6 +112,9 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         {
             return await _context.ChapterPageTasks
                 .Include(t => t.AssignedToUser)
+                .Include(t => t.CreatedByUser)
+                .Include(t => t.CompletedPageVersion)
+                    .ThenInclude(v => v!.PageFile)
                 .Include(t => t.PageRegions)
                     .ThenInclude(r => r.ChapterPageVersion)
                         .ThenInclude(v => v.ChapterPage)
@@ -119,6 +124,82 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     .ThenInclude(r => r.ChapterPageVersion)
                         .ThenInclude(v => v.PageFile)
                 .FirstOrDefaultAsync(t => t.ChapterPageTaskId == taskId);
+        }
+
+        // --- Mangaka task lifecycle SPs ---
+
+        public async Task CancelTaskAsync(Guid actorUserId, Guid taskId, string reason)
+        {
+            var conn = _context.Database.GetDbConnection();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "manga.usp_ChapterPageTask_Cancel";
+            cmd.CommandType = CommandType.StoredProcedure;
+
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@actor_user_id", System.Data.SqlDbType.UniqueIdentifier) { Value = actorUserId });
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@chapter_page_task_id", System.Data.SqlDbType.UniqueIdentifier) { Value = taskId });
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@reason", System.Data.SqlDbType.NVarChar, 500) { Value = reason });
+
+            if (conn.State != ConnectionState.Open)
+                await conn.OpenAsync();
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        public async Task MarkTaskCompletedAsync(Guid actorUserId, Guid taskId, string? completionNote)
+        {
+            var conn = _context.Database.GetDbConnection();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "manga.usp_ChapterPageTask_MarkCompleted";
+            cmd.CommandType = CommandType.StoredProcedure;
+
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@actor_user_id", System.Data.SqlDbType.UniqueIdentifier) { Value = actorUserId });
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@chapter_page_task_id", System.Data.SqlDbType.UniqueIdentifier) { Value = taskId });
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@completion_note", System.Data.SqlDbType.NVarChar, -1)
+            {
+                Value = string.IsNullOrWhiteSpace(completionNote) ? (object)DBNull.Value : completionNote
+            });
+
+            if (conn.State != ConnectionState.Open)
+                await conn.OpenAsync();
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        public async Task ReturnTaskForReworkAsync(Guid actorUserId, Guid taskId, string updatedTaskDescription)
+        {
+            var conn = _context.Database.GetDbConnection();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "manga.usp_ChapterPageTask_ReturnForRework";
+            cmd.CommandType = CommandType.StoredProcedure;
+
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@actor_user_id", System.Data.SqlDbType.UniqueIdentifier) { Value = actorUserId });
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@chapter_page_task_id", System.Data.SqlDbType.UniqueIdentifier) { Value = taskId });
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@updated_task_description", System.Data.SqlDbType.NVarChar, -1) { Value = updatedTaskDescription });
+
+            if (conn.State != ConnectionState.Open)
+                await conn.OpenAsync();
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        public async Task<IReadOnlyList<ChapterPageTask>> GetTasksForReviewByCreatorAsync(Guid creatorUserId)
+        {
+            return await _context.ChapterPageTasks
+                .Include(t => t.AssignedToUser)
+                .Include(t => t.CreatedByUser)
+                .Include(t => t.CompletedPageVersion)
+                    .ThenInclude(v => v!.PageFile)
+                .Include(t => t.PageRegions)
+                    .ThenInclude(r => r.ChapterPageVersion)
+                        .ThenInclude(v => v.ChapterPage)
+                            .ThenInclude(p => p.Chapter)
+                                .ThenInclude(c => c.Series)
+                .Include(t => t.PageRegions)
+                    .ThenInclude(r => r.ChapterPageVersion)
+                        .ThenInclude(v => v.PageFile)
+                .Where(t => t.CreatedByUserId == creatorUserId)
+                .OrderByDescending(t => t.UpdatedAtUtc ?? t.CreatedAtUtc)
+                .ToListAsync();
         }
     }
 }

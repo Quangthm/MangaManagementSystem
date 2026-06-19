@@ -24,7 +24,12 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         int? PageNo = null,
         string? PageImageUrl = null,
         decimal? CompensationAmount = null,
-        string? AssignedUsername = null
+        string? AssignedUsername = null,
+        // Mangaka review context fields
+        string? CompletedOutputUrl = null,
+        string? CreatedByDisplayName = null,
+        DateTime? CreatedAtUtc = null,
+        DateTime? UpdatedAtUtc = null
     );
 
     public record CreateChapterPageTaskDto(

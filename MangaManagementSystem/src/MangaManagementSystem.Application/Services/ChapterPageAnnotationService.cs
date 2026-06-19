@@ -52,6 +52,12 @@ namespace MangaManagementSystem.Application.Services
             return annotations.Select(MapToDto).ToList();
         }
 
+        public async Task<IEnumerable<ChapterPageAnnotationDto>> GetAnnotationsByPageRegionIdsAsync(IReadOnlyList<Guid> pageRegionIds)
+        {
+            var annotations = await _unitOfWork.ChapterPageAnnotations.GetByPageRegionIdsAsync(pageRegionIds);
+            return annotations.Select(MapToDto).ToList();
+        }
+
         public async Task<ChapterPageAnnotationDto?> UpdateChapterPageAnnotationAsync(UpdateChapterPageAnnotationDto dto)
         {
             // Load with regions so the existing PageRegions links are tracked and can be reconciled.
@@ -128,7 +134,10 @@ namespace MangaManagementSystem.Application.Services
                 r.SourceType,
                 r.OriginalText,
                 r.CreatedByUserId,
-                r.UpdatedByUserId)).ToList()
+                r.UpdatedByUserId)).ToList(),
+            CreatedAtUtc: a.CreatedAtUtc,
+            AnnotatedByDisplayName: a.AnnotatedByUser?.DisplayName,
+            ResolvedAtUtc: a.ResolvedAtUtc
         );
     }
 }
