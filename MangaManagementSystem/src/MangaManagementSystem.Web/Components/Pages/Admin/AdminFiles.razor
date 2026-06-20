@@ -1,0 +1,1002 @@
+﻿@page "/admin/files"
+@using MangaManagementSystem.Application.DTOs.Admin
+@using MangaManagementSystem.Web.Services.Api
+@attribute [Authorize(Roles = "Admin")]
+@inject IAdminFileApiClient AdminFileApiClient
+@inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
+
+<PageTitle>File Management - MangaFlow</PageTitle>
+
+<style>
+    .phase6-file-dialog-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 2000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        background: rgba(0, 0, 0, 0.45);
+    }
+
+    .phase6-file-dialog-card {
+        width: min(640px, 100%);
+        max-height: calc(100vh - 32px);
+        overflow-y: auto;
+    }
+
+    .phase6-file-name {
+        overflow-wrap: anywhere;
+    }
+
+    .phase6-file-hash {
+        overflow-wrap: anywhere;
+        font-family: monospace;
+        font-size: 0.78rem;
+    }
+</style>
+
+<AdminLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3"
+                     Class="font-weight-bold mb-1">
+                File Management
+            </MudText>
+
+            <MudText Typo="Typo.body1"
+                     Class="mf-muted">
+                Review file metadata, use controlled preview/download,
+                and soft-delete files with an audited reason.
+            </MudText>
+        </div>
+
+        <MudPaper Class="pa-5 mf-card mb-4"
+                  Elevation="0">
+            <MudGrid>
+                <MudItem xs="12" md="4">
+                    <MudTextField T="string"
+                                  @bind-Value="_search"
+                                  Label="Search file name, uploader, or hash"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Immediate="true" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6" md="3">
+                    <MudSelect T="string"
+                               @bind-Value="_purposeFilter"
+                               Label="File purpose"
+                               ShrinkLabel="true"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense">
+                        <MudSelectItem T="string"
+                                       Value="@AllFilter">
+                            All purposes
+                        </MudSelectItem>
+
+                        @foreach (var purpose in PurposeOptions)
+                        {
+                            <MudSelectItem T="string"
+                                           Value="@purpose">
+                                @FormatCode(purpose)
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" sm="6" md="2">
+                    <MudSelect T="string"
+                               @bind-Value="_deletedState"
+                               Label="State"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense">
+                        <MudSelectItem T="string"
+                                       Value="@ActiveState">
+                            Active
+                        </MudSelectItem>
+
+                        <MudSelectItem T="string"
+                                       Value="@DeletedState">
+                            Deleted
+                        </MudSelectItem>
+
+                        <MudSelectItem T="string"
+                                       Value="@AllState">
+                            All
+                        </MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" sm="6" md="3">
+                    <MudSelect T="int"
+                               Label="Page size"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Value="_pageSize"
+                               ValueChanged="ChangePageSizeAsync">
+                        <MudSelectItem T="int" Value="10">10</MudSelectItem>
+                        <MudSelectItem T="int" Value="20">20</MudSelectItem>
+                        <MudSelectItem T="int" Value="50">50</MudSelectItem>
+                        <MudSelectItem T="int" Value="100">100</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" sm="6" md="3">
+                    <MudDatePicker Label="Uploaded from"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   @bind-Date="_fromDate" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6" md="3">
+                    <MudDatePicker Label="Uploaded to"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   @bind-Date="_toDate" />
+                </MudItem>
+
+                <MudItem xs="12"
+                         md="6"
+                         Class="d-flex align-center gap-2">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Disabled="_isLoading"
+                               OnClick="ApplyFiltersAsync">
+                        Apply
+                    </MudButton>
+
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Default"
+                               Disabled="_isLoading"
+                               OnClick="ClearFiltersAsync">
+                        Clear
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        @if (_isLoading)
+        {
+            <MudProgressLinear Indeterminate="true"
+                               Class="mb-4" />
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_loadError))
+        {
+            <MudAlert Severity="Severity.Error"
+                      Class="mb-4">
+                @_loadError
+            </MudAlert>
+        }
+
+        <MudPaper Class="pa-4 mf-card"
+                  Elevation="0">
+            <div class="d-flex justify-space-between align-center mb-3">
+                <div>
+                    <MudText Typo="Typo.h6">
+                        File Resources
+                    </MudText>
+
+                    <MudText Typo="Typo.body2"
+                             Class="mf-muted">
+                        @_page.TotalCount file(s)
+                    </MudText>
+                </div>
+
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Default"
+                           Disabled="_isLoading"
+                           OnClick="RefreshAsync">
+                    Refresh
+                </MudButton>
+            </div>
+
+            <MudTable T="AdminFileListItemDto"
+                      Items="_page.Items"
+                      Dense="true"
+                      Hover="true"
+                      Bordered="true"
+                      Breakpoint="Breakpoint.Sm">
+                <HeaderContent>
+                    <MudTh>File</MudTh>
+                    <MudTh>Purpose</MudTh>
+                    <MudTh>Size</MudTh>
+                    <MudTh>Uploaded By</MudTh>
+                    <MudTh>Uploaded</MudTh>
+                    <MudTh>Status</MudTh>
+                    <MudTh>Actions</MudTh>
+                </HeaderContent>
+
+                <RowTemplate>
+                    <MudTd DataLabel="File">
+                        <div class="phase6-file-name">
+                            @context.OriginalFileName
+                        </div>
+
+                        <MudText Typo="Typo.caption"
+                                 Class="mf-muted">
+                            @context.ContentType
+                        </MudText>
+                    </MudTd>
+
+                    <MudTd DataLabel="Purpose">
+                        @FormatCode(context.FilePurposeCode)
+                    </MudTd>
+
+                    <MudTd DataLabel="Size">
+                        @FormatFileSize(context.FileSizeBytes)
+                    </MudTd>
+
+                    <MudTd DataLabel="Uploaded By">
+                        @FormatUser(
+                            context.UploadedByDisplayName,
+                            context.UploadedByUsername,
+                            context.UploadedByUserId)
+                    </MudTd>
+
+                    <MudTd DataLabel="Uploaded">
+                        @FormatDate(context.UploadedAtUtc)
+                    </MudTd>
+
+                    <MudTd DataLabel="Status">
+                        @if (context.IsDeleted)
+                        {
+                            <MudChip T="string"
+                                     Color="Color.Error"
+                                     Size="Size.Small">
+                                Deleted
+                            </MudChip>
+                        }
+                        else
+                        {
+                            <MudChip T="string"
+                                     Color="Color.Success"
+                                     Size="Size.Small">
+                                Active
+                            </MudChip>
+                        }
+                    </MudTd>
+
+                    <MudTd DataLabel="Actions">
+                        <MudStack Row="true"
+                                  Spacing="1"
+                                  Wrap="Wrap.Wrap">
+                            <MudButton Size="Size.Small"
+                                       Variant="Variant.Outlined"
+                                       Disabled="_isLoading"
+                                       OnClick="@(() => OpenDetailAsync(context.FileResourceId))">
+                                Details
+                            </MudButton>
+
+                            <MudButton Size="Size.Small"
+                                       Variant="Variant.Outlined"
+                                       Disabled="@(_isLoading || !CanPreview(context))"
+                                       OnClick="@(() => PreviewAsync(context.FileResourceId))">
+                                Preview
+                            </MudButton>
+
+                            <MudButton Size="Size.Small"
+                                       Variant="Variant.Outlined"
+                                       Disabled="@(_isLoading || context.IsDeleted)"
+                                       OnClick="@(() => DownloadAsync(context.FileResourceId))">
+                                Download
+                            </MudButton>
+
+                            <MudButton Size="Size.Small"
+                                       Variant="Variant.Filled"
+                                       Color="Color.Error"
+                                       Disabled="@(_isLoading || context.IsDeleted)"
+                                       OnClick="@(() => OpenDeleteDialog(context))">
+                                Soft Delete
+                            </MudButton>
+                        </MudStack>
+                    </MudTd>
+                </RowTemplate>
+
+                <NoRecordsContent>
+                    <MudText Class="pa-4">
+                        No files match the selected filters.
+                    </MudText>
+                </NoRecordsContent>
+            </MudTable>
+
+            <div class="d-flex justify-center align-center gap-3 mt-4">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Default"
+                           Disabled="@(_isLoading || _pageNumber <= 1)"
+                           OnClick="PreviousPageAsync">
+                    Previous
+                </MudButton>
+
+                <MudText Typo="Typo.body2">
+                    Page @_pageNumber of @DisplayTotalPages
+                </MudText>
+
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Default"
+                           Disabled="@(_isLoading || !CanMoveNext)"
+                           OnClick="NextPageAsync">
+                    Next
+                </MudButton>
+            </div>
+        </MudPaper>
+    </div>
+</AdminLayout>
+
+@if (_selectedDetail is not null)
+{
+    <div class="phase6-file-dialog-backdrop"
+         role="presentation">
+        <MudPaper Class="phase6-file-dialog-card pa-5 mf-card"
+                  Elevation="12">
+            <div class="d-flex justify-space-between align-center mb-4">
+                <MudText Typo="Typo.h5">
+                    File Details
+                </MudText>
+
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Default"
+                           OnClick="CloseDetailDialog">
+                    Close
+                </MudButton>
+            </div>
+
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.caption"
+                             Class="mf-muted">
+                        File name
+                    </MudText>
+
+                    <MudText Class="phase6-file-name">
+                        @_selectedDetail.OriginalFileName
+                    </MudText>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption"
+                             Class="mf-muted">
+                        Purpose
+                    </MudText>
+
+                    <MudText>
+                        @FormatCode(_selectedDetail.FilePurposeCode)
+                    </MudText>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption"
+                             Class="mf-muted">
+                        Content type
+                    </MudText>
+
+                    <MudText>
+                        @_selectedDetail.ContentType
+                    </MudText>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption"
+                             Class="mf-muted">
+                        File size
+                    </MudText>
+
+                    <MudText>
+                        @FormatFileSize(_selectedDetail.FileSizeBytes)
+                    </MudText>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption"
+                             Class="mf-muted">
+                        References
+                    </MudText>
+
+                    <MudText>
+                        @_selectedDetail.ReferenceCount
+                    </MudText>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption"
+                             Class="mf-muted">
+                        Uploaded by
+                    </MudText>
+
+                    <MudText>
+                        @FormatUser(
+                            _selectedDetail.UploadedByDisplayName,
+                            _selectedDetail.UploadedByUsername,
+                            _selectedDetail.UploadedByUserId)
+                    </MudText>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption"
+                             Class="mf-muted">
+                        Uploaded at
+                    </MudText>
+
+                    <MudText>
+                        @FormatDate(_selectedDetail.UploadedAtUtc)
+                    </MudText>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudText Typo="Typo.caption"
+                             Class="mf-muted">
+                        SHA-256
+                    </MudText>
+
+                    <div class="phase6-file-hash">
+                        @_selectedDetail.Sha256Hash
+                    </div>
+                </MudItem>
+
+                @if (_selectedDetail.IsDeleted)
+                {
+                    <MudItem xs="12" sm="6">
+                        <MudText Typo="Typo.caption"
+                                 Class="mf-muted">
+                            Deleted by
+                        </MudText>
+
+                        <MudText>
+                            @FormatUser(
+                                _selectedDetail.DeletedByDisplayName,
+                                _selectedDetail.DeletedByUsername,
+                                _selectedDetail.DeletedByUserId)
+                        </MudText>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudText Typo="Typo.caption"
+                                 Class="mf-muted">
+                            Deleted at
+                        </MudText>
+
+                        <MudText>
+                            @FormatNullableDate(_selectedDetail.DeletedAtUtc)
+                        </MudText>
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudPaper>
+    </div>
+}
+
+@if (_deleteTarget is not null)
+{
+    <div class="phase6-file-dialog-backdrop"
+         role="presentation">
+        <MudPaper Class="phase6-file-dialog-card pa-5 mf-card"
+                  Elevation="12">
+            <MudText Typo="Typo.h5"
+                     Class="mb-2">
+                Soft Delete File
+            </MudText>
+
+            <MudAlert Severity="Severity.Warning"
+                      Class="mb-4">
+                This action marks the database record as deleted.
+                It does not delete the physical storage asset.
+            </MudAlert>
+
+            <MudText Typo="Typo.body2"
+                     Class="mb-3 phase6-file-name">
+                @_deleteTarget.OriginalFileName
+            </MudText>
+
+            <MudTextField T="string"
+                          @bind-Value="_deleteReason"
+                          Label="Deletion reason"
+                          Variant="Variant.Outlined"
+                          Lines="4"
+                          Counter="500"
+                          MaxLength="500"
+                          Immediate="true" />
+
+            <MudStack Row="true"
+                      Justify="Justify.FlexEnd"
+                      Spacing="2"
+                      Class="mt-4">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Default"
+                           Disabled="_isDeleting"
+                           OnClick="CloseDeleteDialog">
+                    Cancel
+                </MudButton>
+
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Error"
+                           Disabled="@(_isDeleting || string.IsNullOrWhiteSpace(_deleteReason))"
+                           OnClick="ConfirmDeleteAsync">
+                    @(_isDeleting ? "Deleting..." : "Confirm Soft Delete")
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    </div>
+}
+
+@code {
+    private const string AllFilter = "__ALL_PURPOSES__";
+    private const string ActiveState = "ACTIVE";
+    private const string DeletedState = "DELETED";
+    private const string AllState = "ALL";
+
+    private static readonly string[] PurposeOptions =
+    {
+        "SERIES_PROPOSAL",
+        "SERIES_COVER",
+        "CHAPTER_PAGE_VERSION",
+        "EDITORIAL_ATTACHMENT",
+        "REGISTRATION_PORTFOLIO",
+        "USER_AVATAR"
+    };
+
+    private AdminFilePageDto _page =
+        new(
+            Array.Empty<AdminFileListItemDto>(),
+            1,
+            20,
+            0,
+            0);
+
+    private string _search = string.Empty;
+    private string _purposeFilter = AllFilter;
+    private string _deletedState = ActiveState;
+    private DateTime? _fromDate;
+    private DateTime? _toDate;
+    private int _pageNumber = 1;
+    private int _pageSize = 20;
+    private bool _isLoading;
+    private bool _isDeleting;
+    private string? _loadError;
+    private AdminFileDetailDto? _selectedDetail;
+    private AdminFileListItemDto? _deleteTarget;
+    private string _deleteReason = string.Empty;
+
+    private int DisplayTotalPages =>
+        Math.Max(
+            1,
+            _page.TotalPages);
+
+    private bool CanMoveNext =>
+        _page.TotalPages > 0
+        && _pageNumber < _page.TotalPages;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadFilesAsync();
+    }
+
+    private async Task LoadFilesAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        try
+        {
+            if (_fromDate.HasValue
+                && _toDate.HasValue
+                && _fromDate.Value.Date >
+                    _toDate.Value.Date)
+            {
+                throw new InvalidOperationException(
+                    "The uploaded-from date cannot be later than the uploaded-to date.");
+            }
+
+            _page =
+                await AdminFileApiClient.SearchAsync(
+                    _search,
+                    NormalizeFilter(_purposeFilter),
+                    _deletedState,
+                    ToUtcStartOfDay(_fromDate),
+                    ToUtcEndOfDay(_toDate),
+                    _pageNumber,
+                    _pageSize);
+
+            if (_page.TotalPages > 0
+                && _pageNumber > _page.TotalPages)
+            {
+                _pageNumber =
+                    _page.TotalPages;
+
+                _page =
+                    await AdminFileApiClient.SearchAsync(
+                        _search,
+                        NormalizeFilter(_purposeFilter),
+                        _deletedState,
+                        ToUtcStartOfDay(_fromDate),
+                        ToUtcEndOfDay(_toDate),
+                        _pageNumber,
+                        _pageSize);
+            }
+        }
+        catch (Exception ex)
+        {
+            _loadError =
+                "Files could not be loaded. "
+                + ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        _pageNumber = 1;
+        await LoadFilesAsync();
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        _search = string.Empty;
+        _purposeFilter = AllFilter;
+        _deletedState = ActiveState;
+        _fromDate = null;
+        _toDate = null;
+        _pageNumber = 1;
+        _pageSize = 20;
+
+        await LoadFilesAsync();
+    }
+
+    private Task RefreshAsync()
+    {
+        return LoadFilesAsync();
+    }
+
+    private async Task ChangePageSizeAsync(
+        int pageSize)
+    {
+        _pageSize = pageSize;
+        _pageNumber = 1;
+
+        await LoadFilesAsync();
+    }
+
+    private async Task PreviousPageAsync()
+    {
+        if (_pageNumber <= 1)
+        {
+            return;
+        }
+
+        _pageNumber--;
+        await LoadFilesAsync();
+    }
+
+    private async Task NextPageAsync()
+    {
+        if (!CanMoveNext)
+        {
+            return;
+        }
+
+        _pageNumber++;
+        await LoadFilesAsync();
+    }
+
+    private async Task OpenDetailAsync(
+        Guid fileResourceId)
+    {
+        _isLoading = true;
+
+        try
+        {
+            _selectedDetail =
+                await AdminFileApiClient
+                    .GetByIdAsync(
+                        fileResourceId);
+
+            if (_selectedDetail is null)
+            {
+                Snackbar.Add(
+                    "The selected file no longer exists.",
+                    Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(
+                ex.Message,
+                Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void CloseDetailDialog()
+    {
+        _selectedDetail = null;
+    }
+
+    private async Task PreviewAsync(
+        Guid fileResourceId)
+    {
+        _isLoading = true;
+
+        try
+        {
+            var content =
+                await AdminFileApiClient
+                    .GetPreviewAsync(
+                        fileResourceId);
+
+            using var stream =
+                new MemoryStream(
+                    content.Content,
+                    writable: false);
+
+            using var streamReference =
+                new DotNetStreamReference(
+                    stream);
+
+            await JSRuntime.InvokeVoidAsync(
+                "adminFileContent.open",
+                streamReference,
+                content.ContentType,
+                content.FileName);
+
+            if (content.IsPlaceholder)
+            {
+                Snackbar.Add(
+                    "A safe placeholder was shown because the file is "
+                    + (content.PlaceholderReason ?? "unavailable")
+                    + ".",
+                    Severity.Info);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(
+                ex.Message,
+                Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task DownloadAsync(
+        Guid fileResourceId)
+    {
+        _isLoading = true;
+
+        try
+        {
+            var content =
+                await AdminFileApiClient
+                    .GetDownloadAsync(
+                        fileResourceId);
+
+            using var stream =
+                new MemoryStream(
+                    content.Content,
+                    writable: false);
+
+            using var streamReference =
+                new DotNetStreamReference(
+                    stream);
+
+            await JSRuntime.InvokeVoidAsync(
+                "adminFileContent.download",
+                streamReference,
+                content.ContentType,
+                content.FileName);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(
+                ex.Message,
+                Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OpenDeleteDialog(
+        AdminFileListItemDto file)
+    {
+        _deleteTarget = file;
+        _deleteReason = string.Empty;
+    }
+
+    private void CloseDeleteDialog()
+    {
+        if (_isDeleting)
+        {
+            return;
+        }
+
+        _deleteTarget = null;
+        _deleteReason = string.Empty;
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_deleteTarget is null
+            || string.IsNullOrWhiteSpace(
+                _deleteReason))
+        {
+            return;
+        }
+
+        _isDeleting = true;
+
+        try
+        {
+            await AdminFileApiClient
+                .SoftDeleteAsync(
+                    _deleteTarget.FileResourceId,
+                    _deleteReason.Trim());
+
+            Snackbar.Add(
+                "The file was soft-deleted and audited.",
+                Severity.Success);
+
+            _deleteTarget = null;
+            _deleteReason = string.Empty;
+
+            await LoadFilesAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(
+                ex.Message,
+                Severity.Error);
+        }
+        finally
+        {
+            _isDeleting = false;
+        }
+    }
+
+    private static bool CanPreview(
+        AdminFileListItemDto file)
+    {
+        if (file.IsDeleted)
+        {
+            return true;
+        }
+
+        return file.ContentType.StartsWith(
+                "image/",
+                StringComparison.OrdinalIgnoreCase)
+            || string.Equals(
+                file.ContentType,
+                "application/pdf",
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? NormalizeFilter(
+        string value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            || string.Equals(
+                value,
+                AllFilter,
+                StringComparison.Ordinal)
+            ? null
+            : value.Trim();
+    }
+
+    private static DateTime? ToUtcStartOfDay(
+        DateTime? date)
+    {
+        if (!date.HasValue)
+        {
+            return null;
+        }
+
+        var local =
+            DateTime.SpecifyKind(
+                date.Value.Date,
+                DateTimeKind.Local);
+
+        return local.ToUniversalTime();
+    }
+
+    private static DateTime? ToUtcEndOfDay(
+        DateTime? date)
+    {
+        if (!date.HasValue)
+        {
+            return null;
+        }
+
+        var local =
+            DateTime.SpecifyKind(
+                date.Value.Date
+                    .AddDays(1)
+                    .AddTicks(-1),
+                DateTimeKind.Local);
+
+        return local.ToUniversalTime();
+    }
+
+    private static string FormatFileSize(
+        long bytes)
+    {
+        string[] units =
+        {
+            "B",
+            "KB",
+            "MB",
+            "GB"
+        };
+
+        double size = bytes;
+        var unitIndex = 0;
+
+        while (size >= 1024
+            && unitIndex < units.Length - 1)
+        {
+            size /= 1024;
+            unitIndex++;
+        }
+
+        return unitIndex == 0
+            ? $"{bytes} {units[unitIndex]}"
+            : $"{size:0.##} {units[unitIndex]}";
+    }
+
+    private static string FormatCode(
+        string value)
+    {
+        return string.Join(
+            " ",
+            value.Split(
+                '_',
+                StringSplitOptions.RemoveEmptyEntries)
+                .Select(
+                    part =>
+                        char.ToUpperInvariant(part[0])
+                        + part[1..].ToLowerInvariant()));
+    }
+
+    private static string FormatUser(
+        string? displayName,
+        string? username,
+        Guid? userId)
+    {
+        if (!string.IsNullOrWhiteSpace(displayName))
+        {
+            return displayName;
+        }
+
+        if (!string.IsNullOrWhiteSpace(username))
+        {
+            return username;
+        }
+
+        return userId?.ToString("D")
+            ?? "System";
+    }
+
+    private static string FormatDate(
+        DateTime date)
+    {
+        return date
+            .ToLocalTime()
+            .ToString("g");
+    }
+
+    private static string FormatNullableDate(
+        DateTime? date)
+    {
+        return date.HasValue
+            ? FormatDate(date.Value)
+            : "-";
+    }
+}

@@ -1,4 +1,4 @@
-using MangaManagementSystem.Application;
+﻿using MangaManagementSystem.Application;
 using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Infrastructure;
@@ -105,6 +105,14 @@ namespace MangaManagementSystem.Web
                     new Uri(settings.Value.BaseUrl);
             });
             builder.Services.AddHttpClient<IAdminAuditApiClient, AdminAuditApiClient>((sp, client) =>
+            {
+                var settings =
+                    sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+
+                client.BaseAddress =
+                    new Uri(settings.Value.BaseUrl);
+            });
+            builder.Services.AddHttpClient<IAdminFileApiClient, AdminFileApiClient>((sp, client) =>
             {
                 var settings =
                     sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();

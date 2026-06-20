@@ -843,6 +843,339 @@ BEGIN
     END CATCH
 END;
 GO
+CREATE OR ALTER PROCEDURE manga.usp_Admin_FileResource_Search
+    @actor_user_id UNIQUEIDENTIFIER,
+    @search NVARCHAR(260) = NULL,
+    @file_purpose_code NVARCHAR(50) = NULL,
+    @deleted_state NVARCHAR(20) = N'ACTIVE',
+    @from_utc DATETIME2(0) = NULL,
+    @to_utc DATETIME2(0) = NULL,
+    @page_number INT = 1,
+    @page_size INT = 20
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @normalized_search NVARCHAR(260) =
+        NULLIF(LTRIM(RTRIM(@search)), N'');
+
+    DECLARE @normalized_file_purpose_code NVARCHAR(50) =
+        NULLIF(UPPER(LTRIM(RTRIM(@file_purpose_code))), N'');
+
+    DECLARE @normalized_deleted_state NVARCHAR(20) =
+        UPPER(LTRIM(RTRIM(COALESCE(@deleted_state, N'ACTIVE'))));
+
+    IF @actor_user_id IS NULL
+    BEGIN
+        ;THROW 54010, 'Actor user id is required.', 1;
+    END;
+
+    IF NOT EXISTS
+    (
+        SELECT 1
+        FROM auth.Users u
+        INNER JOIN auth.Roles r
+            ON r.role_id = u.role_id
+        WHERE u.user_id = @actor_user_id
+          AND u.status_code = N'ACTIVE'
+          AND r.role_name = N'Admin'
+    )
+    BEGIN
+        ;THROW 54011, 'Actor is not an active administrator.', 1;
+    END;
+
+    IF @page_number < 1
+    BEGIN
+        ;THROW 54012, 'Page number must be greater than zero.', 1;
+    END;
+
+    IF @page_size NOT BETWEEN 1 AND 100
+    BEGIN
+        ;THROW 54013, 'Page size must be between 1 and 100.', 1;
+    END;
+
+    IF @normalized_deleted_state NOT IN
+    (
+        N'ACTIVE',
+        N'DELETED',
+        N'ALL'
+    )
+    BEGIN
+        ;THROW 54014, 'Deleted state must be ACTIVE, DELETED, or ALL.', 1;
+    END;
+
+    IF @from_utc IS NOT NULL
+       AND @to_utc IS NOT NULL
+       AND @from_utc > @to_utc
+    BEGIN
+        ;THROW 54015, 'From date cannot be later than to date.', 1;
+    END;
+
+    SELECT
+        fr.file_resource_id,
+        fr.file_purpose_code,
+        fr.original_file_name,
+        fr.content_type,
+        fr.file_size_bytes,
+        fr.sha256_hash,
+        fr.uploaded_by_user_id,
+        uploader.username AS uploaded_by_username,
+        uploader.display_name AS uploaded_by_display_name,
+        fr.uploaded_at_utc,
+        fr.deleted_at_utc,
+        fr.deleted_by_user_id,
+        deleter.username AS deleted_by_username,
+        deleter.display_name AS deleted_by_display_name
+    INTO #filtered_files
+    FROM manga.FileResource fr
+    LEFT JOIN auth.Users uploader
+        ON uploader.user_id = fr.uploaded_by_user_id
+    LEFT JOIN auth.Users deleter
+        ON deleter.user_id = fr.deleted_by_user_id
+    WHERE
+        (
+            @normalized_search IS NULL
+            OR fr.original_file_name LIKE N'%' + @normalized_search + N'%'
+            OR fr.file_purpose_code LIKE N'%' + @normalized_search + N'%'
+            OR fr.content_type LIKE N'%' + @normalized_search + N'%'
+            OR uploader.username LIKE N'%' + @normalized_search + N'%'
+            OR uploader.email LIKE N'%' + @normalized_search + N'%'
+            OR uploader.display_name LIKE N'%' + @normalized_search + N'%'
+        )
+        AND
+        (
+            @normalized_file_purpose_code IS NULL
+            OR fr.file_purpose_code = @normalized_file_purpose_code
+        )
+        AND
+        (
+            @normalized_deleted_state = N'ALL'
+            OR
+            (
+                @normalized_deleted_state = N'ACTIVE'
+                AND fr.deleted_at_utc IS NULL
+            )
+            OR
+            (
+                @normalized_deleted_state = N'DELETED'
+                AND fr.deleted_at_utc IS NOT NULL
+            )
+        )
+        AND
+        (
+            @from_utc IS NULL
+            OR fr.uploaded_at_utc >= @from_utc
+        )
+        AND
+        (
+            @to_utc IS NULL
+            OR fr.uploaded_at_utc <= @to_utc
+        );
+
+    SELECT
+        file_resource_id,
+        file_purpose_code,
+        original_file_name,
+        content_type,
+        file_size_bytes,
+        sha256_hash,
+        uploaded_by_user_id,
+        uploaded_by_username,
+        uploaded_by_display_name,
+        uploaded_at_utc,
+        deleted_at_utc,
+        deleted_by_user_id,
+        deleted_by_username,
+        deleted_by_display_name
+    FROM #filtered_files
+    ORDER BY
+        uploaded_at_utc DESC,
+        file_resource_id DESC
+    OFFSET (@page_number - 1) * @page_size ROWS
+    FETCH NEXT @page_size ROWS ONLY;
+
+    SELECT
+        COUNT(1) AS total_count
+    FROM #filtered_files;
+END;
+GO
+CREATE OR ALTER PROCEDURE manga.usp_Admin_FileResource_GetById
+    @actor_user_id UNIQUEIDENTIFIER,
+    @file_resource_id UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @actor_user_id IS NULL
+    BEGIN
+        ;THROW 54020, 'Actor user id is required.', 1;
+    END;
+
+    IF @file_resource_id IS NULL
+    BEGIN
+        ;THROW 54021, 'File resource id is required.', 1;
+    END;
+
+    IF NOT EXISTS
+    (
+        SELECT 1
+        FROM auth.Users u
+        INNER JOIN auth.Roles r
+            ON r.role_id = u.role_id
+        WHERE u.user_id = @actor_user_id
+          AND u.status_code = N'ACTIVE'
+          AND r.role_name = N'Admin'
+    )
+    BEGIN
+        ;THROW 54022, 'Actor is not an active administrator.', 1;
+    END;
+
+    SELECT
+        fr.file_resource_id,
+        fr.file_purpose_code,
+        fr.original_file_name,
+        fr.cloudinary_public_id,
+        fr.cloudinary_secure_url,
+        fr.content_type,
+        fr.file_size_bytes,
+        fr.sha256_hash,
+        fr.uploaded_by_user_id,
+        uploader.username AS uploaded_by_username,
+        uploader.display_name AS uploaded_by_display_name,
+        fr.uploaded_at_utc,
+        fr.deleted_at_utc,
+        fr.deleted_by_user_id,
+        deleter.username AS deleted_by_username,
+        deleter.display_name AS deleted_by_display_name,
+        CAST
+        (
+            (
+                SELECT COUNT_BIG(1)
+                FROM auth.Users u
+                WHERE u.avatar_file_id = fr.file_resource_id
+            )
+            +
+            (
+                SELECT COUNT_BIG(1)
+                FROM auth.Users u
+                WHERE u.portfolio_file_id = fr.file_resource_id
+            )
+            +
+            (
+                SELECT COUNT_BIG(1)
+                FROM manga.Series s
+                WHERE s.cover_file_id = fr.file_resource_id
+            )
+            +
+            (
+                SELECT COUNT_BIG(1)
+                FROM manga.SeriesProposal sp
+                WHERE sp.proposal_file_id = fr.file_resource_id
+            )
+            +
+            (
+                SELECT COUNT_BIG(1)
+                FROM manga.SeriesProposal sp
+                WHERE sp.markup_file_id = fr.file_resource_id
+            )
+            +
+            (
+                SELECT COUNT_BIG(1)
+                FROM manga.ChapterPageVersion cpv
+                WHERE cpv.page_file_id = fr.file_resource_id
+            )
+            +
+            (
+                SELECT COUNT_BIG(1)
+                FROM manga.ChapterEditorialReview cer
+                WHERE cer.markup_file_id = fr.file_resource_id
+            )
+            AS BIGINT
+        ) AS reference_count
+    FROM manga.FileResource fr
+    LEFT JOIN auth.Users uploader
+        ON uploader.user_id = fr.uploaded_by_user_id
+    LEFT JOIN auth.Users deleter
+        ON deleter.user_id = fr.deleted_by_user_id
+    WHERE fr.file_resource_id = @file_resource_id;
+END;
+GO
+CREATE OR ALTER PROCEDURE manga.usp_Admin_FileResource_SoftDelete
+    @actor_user_id UNIQUEIDENTIFIER,
+    @file_resource_id UNIQUEIDENTIFIER,
+    @delete_reason NVARCHAR(500) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+
+    BEGIN TRY
+        IF @actor_user_id IS NULL
+        BEGIN
+            ;THROW 54030, 'Actor user id is required.', 1;
+        END;
+
+        IF @file_resource_id IS NULL
+        BEGIN
+            ;THROW 54031, 'File resource id is required.', 1;
+        END;
+
+        DECLARE @normalized_delete_reason NVARCHAR(500) =
+            NULLIF(LTRIM(RTRIM(@delete_reason)), N'');
+
+        IF @normalized_delete_reason IS NULL
+        BEGIN
+            ;THROW 54032, 'Delete reason is required.', 1;
+        END;
+
+        IF LEN(@normalized_delete_reason) > 500
+        BEGIN
+            ;THROW 54034, 'Delete reason cannot exceed 500 characters.', 1;
+        END;
+
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM auth.Users u
+            INNER JOIN auth.Roles r
+                ON r.role_id = u.role_id
+            WHERE u.user_id = @actor_user_id
+              AND u.status_code = N'ACTIVE'
+              AND r.role_name = N'Admin'
+        )
+        BEGIN
+            ;THROW 54033, 'Actor is not an active administrator.', 1;
+        END;
+
+        EXEC manga.usp_FileResource_SoftDelete
+            @file_resource_id = @file_resource_id,
+            @deleted_by_user_id = @actor_user_id,
+            @delete_reason = @normalized_delete_reason;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1
+           AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH
+END;
+GO
 CREATE OR ALTER PROCEDURE manga.usp_FileResource_FindActiveDuplicates
     @sha256_hash         CHAR(64),
     @file_size_bytes     BIGINT = NULL,

@@ -1,4 +1,4 @@
-/* ═══════════════════════════════════════════════════════════════
+﻿/* ═══════════════════════════════════════════════════════════════
    MangaFlow Editorial Board UI
    Clean Figma-style shell + dashboard + proposal/poll/decision UI
    ═══════════════════════════════════════════════════════════════ */
@@ -79,6 +79,105 @@ select {
     min-width: 0;
     min-height: 100vh;
     background: var(--mf-page-bg);
+}
+
+/*
+   Shared role-workspace shell.
+   These layouts use mf-shell / mf-nav-* rather than mf-app-shell /
+   mf-side-link, so the shared definitions must exist here.
+*/
+
+.mf-shell {
+    min-height: 100vh;
+    display: flex;
+    background: var(--mf-page-bg);
+    color: var(--mf-text);
+}
+
+.mf-shell > .mf-sidebar {
+    width: 264px;
+    flex: 0 0 264px;
+}
+
+.mf-shell > .mf-main {
+    flex: 1;
+    min-width: 0;
+    min-height: 100vh;
+}
+
+.mf-nav-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 16px 12px 20px;
+}
+
+.mf-nav-title {
+    padding: 0 10px;
+    margin-bottom: 4px;
+    color: #8f9bbb;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    line-height: 1.4;
+    text-transform: uppercase;
+}
+
+.mf-nav-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 42px;
+    padding: 10px 12px;
+    border-radius: 9px;
+    color: #d7e4ff;
+    line-height: 1.3;
+    transition:
+        background-color 0.16s ease,
+        color 0.16s ease,
+        box-shadow 0.16s ease;
+}
+
+.mf-nav-link:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.mf-nav-link.active {
+    color: #ffffff;
+    background: rgba(79, 125, 243, 0.2);
+    box-shadow: inset 3px 0 0 var(--mf-primary);
+}
+
+.mf-nav-link.disabled {
+    color: rgba(215, 228, 255, 0.45);
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.mf-nav-icon {
+    flex: 0 0 auto;
+    color: currentColor;
+}
+
+@media (max-width: 760px) {
+    .mf-shell {
+        display: block;
+    }
+
+    .mf-shell > .mf-sidebar {
+        width: 100%;
+        height: auto;
+        min-height: auto;
+        position: relative;
+        top: auto;
+        flex-basis: auto;
+    }
+
+    .mf-shell > .mf-main {
+        min-height: auto;
+    }
 }
 
 /* ═══════════════════════════════════════════════════════════════

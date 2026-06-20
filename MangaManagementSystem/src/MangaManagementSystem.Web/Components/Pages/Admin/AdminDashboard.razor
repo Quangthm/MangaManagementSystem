@@ -1,4 +1,4 @@
-@page "/admin"
+﻿@page "/admin"
 @using Microsoft.AspNetCore.Authorization
 @using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Admin")]
@@ -180,7 +180,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _hasFileManagement = false;
+        _hasFileManagement = true;
         await LoadStatsAsync();
     }
 

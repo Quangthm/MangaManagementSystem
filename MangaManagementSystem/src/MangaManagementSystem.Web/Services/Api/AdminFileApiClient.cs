@@ -1,0 +1,392 @@
+﻿using System.Net;
+using System.Net.Http.Json;
+using System.Security.Claims;
+using MangaManagementSystem.Application.DTOs.Admin;
+using MangaManagementSystem.Web.Options;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.Extensions.Options;
+
+namespace MangaManagementSystem.Web.Services.Api
+{
+    public sealed class AdminFileApiClient
+        : IAdminFileApiClient
+    {
+        private const string PlaceholderHeaderName =
+            "X-File-Placeholder";
+
+        private readonly HttpClient _httpClient;
+        private readonly ILogger<AdminFileApiClient>
+            _logger;
+        private readonly AuthenticationStateProvider
+            _authenticationStateProvider;
+        private readonly InternalApiOptions
+            _internalApiOptions;
+
+        public AdminFileApiClient(
+            HttpClient httpClient,
+            ILogger<AdminFileApiClient> logger,
+            AuthenticationStateProvider
+                authenticationStateProvider,
+            IOptions<InternalApiOptions>
+                internalApiOptions)
+        {
+            _httpClient = httpClient;
+            _logger = logger;
+            _authenticationStateProvider =
+                authenticationStateProvider;
+            _internalApiOptions =
+                internalApiOptions.Value;
+        }
+
+        public async Task<AdminFilePageDto>
+            SearchAsync(
+                string? search = null,
+                string? filePurposeCode = null,
+                string? deletedState = "ACTIVE",
+                DateTime? fromUtc = null,
+                DateTime? toUtc = null,
+                int pageNumber = 1,
+                int pageSize = 20,
+                CancellationToken cancellationToken = default)
+        {
+            var query =
+                new List<string>
+                {
+                    "pageNumber=" + pageNumber,
+                    "pageSize=" + pageSize
+                };
+
+            AddQueryValue(
+                query,
+                "search",
+                search);
+
+            AddQueryValue(
+                query,
+                "filePurposeCode",
+                filePurposeCode);
+
+            AddQueryValue(
+                query,
+                "deletedState",
+                deletedState);
+
+            AddQueryDate(
+                query,
+                "fromUtc",
+                fromUtc);
+
+            AddQueryDate(
+                query,
+                "toUtc",
+                toUtc);
+
+            var route =
+                "api/admin/files?"
+                + string.Join("&", query);
+
+            using var request =
+                await CreateAuthorizedRequestAsync(
+                    HttpMethod.Get,
+                    route);
+
+            using var response =
+                await _httpClient.SendAsync(
+                    request,
+                    cancellationToken);
+
+            LogFailure(
+                response,
+                "Search Admin files");
+
+            return await ApiResponseReader
+                .ReadRequiredAsync<AdminFilePageDto>(
+                    response,
+                    "The Admin File API returned an empty search response.",
+                    cancellationToken);
+        }
+
+        public async Task<AdminFileDetailDto?>
+            GetByIdAsync(
+                Guid fileResourceId,
+                CancellationToken cancellationToken = default)
+        {
+            using var request =
+                await CreateAuthorizedRequestAsync(
+                    HttpMethod.Get,
+                    $"api/admin/files/{fileResourceId:D}");
+
+            using var response =
+                await _httpClient.SendAsync(
+                    request,
+                    cancellationToken);
+
+            if (response.StatusCode ==
+                HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+
+            LogFailure(
+                response,
+                "Load Admin file detail");
+
+            return await ApiResponseReader
+                .ReadRequiredAsync<AdminFileDetailDto>(
+                    response,
+                    "The Admin File API returned an empty detail response.",
+                    cancellationToken);
+        }
+
+        public async Task<AdminFileDetailDto>
+            SoftDeleteAsync(
+                Guid fileResourceId,
+                string deleteReason,
+                CancellationToken cancellationToken = default)
+        {
+            using var request =
+                await CreateAuthorizedRequestAsync(
+                    HttpMethod.Post,
+                    $"api/admin/files/{fileResourceId:D}/soft-delete");
+
+            request.Content =
+                JsonContent.Create(
+                    new
+                    {
+                        deleteReason
+                    });
+
+            using var response =
+                await _httpClient.SendAsync(
+                    request,
+                    cancellationToken);
+
+            LogFailure(
+                response,
+                "Soft-delete Admin file");
+
+            return await ApiResponseReader
+                .ReadRequiredAsync<AdminFileDetailDto>(
+                    response,
+                    "The Admin File API returned an empty soft-delete response.",
+                    cancellationToken);
+        }
+
+        public Task<AdminFileContentResult>
+            GetPreviewAsync(
+                Guid fileResourceId,
+                CancellationToken cancellationToken = default)
+        {
+            return GetContentAsync(
+                fileResourceId,
+                "preview",
+                cancellationToken);
+        }
+
+        public Task<AdminFileContentResult>
+            GetDownloadAsync(
+                Guid fileResourceId,
+                CancellationToken cancellationToken = default)
+        {
+            return GetContentAsync(
+                fileResourceId,
+                "download",
+                cancellationToken);
+        }
+
+        private async Task<AdminFileContentResult>
+            GetContentAsync(
+                Guid fileResourceId,
+                string operation,
+                CancellationToken cancellationToken)
+        {
+            using var request =
+                await CreateAuthorizedRequestAsync(
+                    HttpMethod.Get,
+                    $"api/admin/files/{fileResourceId:D}/{operation}");
+
+            using var response =
+                await _httpClient.SendAsync(
+                    request,
+                    HttpCompletionOption.ResponseHeadersRead,
+                    cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                LogFailure(
+                    response,
+                    $"Load Admin file {operation}");
+
+                throw await ApiResponseReader
+                    .CreateExceptionAsync(
+                        response,
+                        cancellationToken);
+            }
+
+            var content =
+                await response.Content
+                    .ReadAsByteArrayAsync(
+                        cancellationToken);
+
+            var contentType =
+                response.Content.Headers.ContentType
+                    ?.MediaType
+                ?? "application/octet-stream";
+
+            var fileName =
+                NormalizeFileName(
+                    response.Content.Headers
+                        .ContentDisposition
+                        ?.FileNameStar
+                    ?? response.Content.Headers
+                        .ContentDisposition
+                        ?.FileName)
+                ?? $"file-{fileResourceId:D}";
+
+            string? placeholderReason = null;
+
+            if (response.Headers.TryGetValues(
+                    PlaceholderHeaderName,
+                    out var values))
+            {
+                placeholderReason =
+                    values.FirstOrDefault();
+            }
+
+            return new AdminFileContentResult(
+                content,
+                contentType,
+                fileName,
+                !string.IsNullOrWhiteSpace(
+                    placeholderReason),
+                placeholderReason);
+        }
+
+        private async Task<HttpRequestMessage>
+            CreateAuthorizedRequestAsync(
+                HttpMethod method,
+                string requestUri)
+        {
+            var authenticationState =
+                await _authenticationStateProvider
+                    .GetAuthenticationStateAsync();
+
+            var principal =
+                authenticationState.User;
+
+            if (principal.Identity?.IsAuthenticated
+                != true)
+            {
+                throw new InvalidOperationException(
+                    "You must be logged in as an administrator.");
+            }
+
+            var actorUserIdValue =
+                principal.FindFirst(
+                    ClaimTypes.NameIdentifier)?.Value;
+
+            var actorRole =
+                principal.FindFirst(
+                    ClaimTypes.Role)?.Value
+                ?? principal.FindFirst("role")?.Value;
+
+            if (!Guid.TryParse(
+                    actorUserIdValue,
+                    out var actorUserId))
+            {
+                throw new InvalidOperationException(
+                    "The current administrator id is invalid.");
+            }
+
+            if (!string.Equals(
+                    actorRole,
+                    "Admin",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "Administrator access is required.");
+            }
+
+            var request =
+                new HttpRequestMessage(
+                    method,
+                    requestUri);
+
+            request.Headers.TryAddWithoutValidation(
+                InternalApiOptions.HeaderName,
+                _internalApiOptions.Key);
+
+            request.Headers.TryAddWithoutValidation(
+                InternalApiOptions.ActorUserIdHeaderName,
+                actorUserId.ToString("D"));
+
+            request.Headers.TryAddWithoutValidation(
+                InternalApiOptions.ActorRoleHeaderName,
+                actorRole);
+
+            return request;
+        }
+
+        private static string? NormalizeFileName(
+            string? fileName)
+        {
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                return null;
+            }
+
+            return fileName
+                .Trim()
+                .Trim('"');
+        }
+
+        private static void AddQueryValue(
+            ICollection<string> query,
+            string name,
+            string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return;
+            }
+
+            query.Add(
+                Uri.EscapeDataString(name)
+                + "="
+                + Uri.EscapeDataString(value.Trim()));
+        }
+
+        private static void AddQueryDate(
+            ICollection<string> query,
+            string name,
+            DateTime? value)
+        {
+            if (!value.HasValue)
+            {
+                return;
+            }
+
+            query.Add(
+                Uri.EscapeDataString(name)
+                + "="
+                + Uri.EscapeDataString(
+                    value.Value.ToString("O")));
+        }
+
+        private void LogFailure(
+            HttpResponseMessage response,
+            string operation)
+        {
+            if (response.IsSuccessStatusCode)
+            {
+                return;
+            }
+
+            _logger.LogWarning(
+                "{Operation} failed: {StatusCode} {ReasonPhrase}",
+                operation,
+                (int)response.StatusCode,
+                response.ReasonPhrase);
+        }
+    }
+}

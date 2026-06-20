@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using MangaManagementSystem.API.Options;
 using MangaManagementSystem.Application;
 using MangaManagementSystem.Infrastructure;
@@ -31,6 +31,25 @@ namespace MangaManagementSystem.API
                 .ValidateOnStart();
 
             builder.Services.AddControllers();
+
+            builder.Services
+                .AddHttpClient(
+                    Controllers.AdminFilesController
+                        .ContentHttpClientName,
+                    client =>
+                    {
+                        client.Timeout =
+                            TimeSpan.FromSeconds(30);
+                    })
+                .ConfigurePrimaryHttpMessageHandler(
+                    () =>
+                        new HttpClientHandler
+                        {
+                            AllowAutoRedirect = false,
+                            AutomaticDecompression =
+                                System.Net.DecompressionMethods.None
+                        });
+
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
 
