@@ -11,6 +11,7 @@ namespace MangaManagementSystem.Domain.Entities
         public Guid AnnotatedByUserId { get; set; }
         public User? AnnotatedByUser { get; set; }
         public string? AnnotationText { get; set; }
+        public DateTime CreatedAtUtc { get; set; }
         public DateTime? ResolvedAtUtc { get; set; }
         public Guid? ResolvedByUserId { get; set; }
         public User? ResolvedByUser { get; set; }

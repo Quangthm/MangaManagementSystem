@@ -73,6 +73,19 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .ToListAsync();
         }
 
+        public async Task<IReadOnlyList<ChapterPageAnnotation>> GetByPageRegionIdsAsync(IReadOnlyList<Guid> pageRegionIds)
+        {
+            if (pageRegionIds == null || pageRegionIds.Count == 0)
+                return Array.Empty<ChapterPageAnnotation>();
+
+            return await _context.ChapterPageAnnotations
+                .Include(a => a.PageRegions)
+                .Include(a => a.AnnotatedByUser)
+                .Where(a => a.PageRegions.Any(r => pageRegionIds.Contains(r.PageRegionId)))
+                .OrderByDescending(a => a.CreatedAtUtc)
+                .ToListAsync();
+        }
+
         public async Task<bool> ResolveAnnotationAsync(
             Guid actorUserId,
             Guid annotationId,

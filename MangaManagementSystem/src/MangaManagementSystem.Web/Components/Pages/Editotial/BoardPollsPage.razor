@@ -1,0 +1,344 @@
+@page "/demo/mangaflow/polls"
+
+@using System.Globalization
+@using MangaManagementSystem.Web.Services.EditorialBoard
+@inject IEditorialBoardApiClient EditorialBoardApiClient
+
+<MangaFlowShell Title="Board Polls"
+                Subtitle="Editorial board voting system — manage and track serialization votes."
+                ActiveMenu="polls">
+    <ChildContent>
+        @if (_isLoading)
+        {
+            <section class="mf-card">
+                <div class="mf-strong">Loading board polls...</div>
+                <div class="mf-muted">Fetching open polls from database.</div>
+            </section>
+        }
+        else if (!string.IsNullOrWhiteSpace(_errorMessage))
+        {
+            <section class="mf-card">
+                <div class="mf-strong">Cannot load board polls</div>
+                <div class="mf-muted">@_errorMessage</div>
+
+                <button class="mf-btn mf-btn-primary mf-gap-small"
+                        @onclick="LoadPollsAsync">
+                    Retry
+                </button>
+            </section>
+        }
+        else
+        {
+            <div class="mf-grid mf-grid-3">
+                <KpiCard Label="Open Polls"
+                         Value="@_polls.Count.ToString(CultureInfo.InvariantCulture)"
+                         Description="Active voting sessions"
+                         Icon="O"
+                         Tone="green" />
+
+                <KpiCard Label="Total Votes"
+                         Value="@_polls.Sum(p => p.TotalVotes).ToString(CultureInfo.InvariantCulture)"
+                         Description="Votes already submitted"
+                         Icon="C"
+                         Tone="blue" />
+
+                <KpiCard Label="My Pending Votes"
+                         Value="@_polls.Count(p => string.IsNullOrWhiteSpace(p.CurrentUserChoiceCode)).ToString(CultureInfo.InvariantCulture)"
+                         Description="Polls waiting for your vote"
+                         Icon="U"
+                         Tone="orange" />
+            </div>
+
+            <h2 class="mf-section-title">Open Polls</h2>
+
+            @if (_polls.Count == 0)
+            {
+                <section class="mf-card">
+                    <div class="mf-strong">No open polls</div>
+                    <div class="mf-muted">
+                        When Board Chief opens a poll from Proposal Review, it will appear here from SQL Server.
+                    </div>
+                </section>
+            }
+            else
+            {
+                <div class="mf-grid mf-grid-2">
+                    @foreach (var poll in _polls)
+                    {
+                        <article class="mf-poll-card">
+                            <div class="mf-row">
+                                <div>
+                                    <h3>@poll.PollName</h3>
+                                    <div class="mf-muted">@poll.Code · @poll.PollTypeCode</div>
+                                </div>
+
+                                <StatusBadge Status="Open" />
+                            </div>
+
+                            <VoteBreakdown Approve="@poll.ApproveVotes"
+                                           Reject="@poll.RejectVotes"
+                                           Abstain="@poll.AbstainVotes"
+                                           TotalMembers="9" />
+
+                            <div class="mf-row mf-gap-small">
+                                <div class="mf-muted">@DeadlineText(poll)</div>
+
+                                @if (!string.IsNullOrWhiteSpace(poll.CurrentUserChoiceCode))
+                                {
+                                    <StatusBadge Status="@($"Voted {poll.CurrentUserChoiceCode}")" />
+                                }
+                                else
+                                {
+                                    <StatusBadge Status="Not Voted" />
+                                }
+                            </div>
+
+                            <div class="mf-actions end">
+                                <button class="mf-btn mf-btn-primary"
+                                        @onclick="() => OpenVotingCenter(poll)">
+                                    Vote / View Poll
+                                </button>
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+
+            @if (_selectedPoll is not null)
+            {
+                <div class="mf-modal-backdrop" @onclick="CloseVotingCenter">
+                    <div class="mf-voting-modal" @onclick:stopPropagation="true">
+                        <div class="mf-voting-header">
+                            <div>
+                                <h2>@_selectedPoll.PollName</h2>
+                                <p>@_selectedPoll.Code · @_selectedPoll.PollTypeCode · @DeadlineText(_selectedPoll)</p>
+                            </div>
+
+                            <div class="mf-voting-header-actions">
+                                <span class="mf-deadline-pill">@DeadlineText(_selectedPoll)</span>
+                                <button class="mf-icon-btn" @onclick="CloseVotingCenter">×</button>
+                            </div>
+                        </div>
+
+                        <div class="mf-voting-body">
+                            <main class="mf-voting-main">
+                                <section class="mf-card">
+                                    <h2>@_selectedPoll.SeriesTitle</h2>
+
+                                    <div class="mf-proposal-summary-box">
+                                        <strong>Poll Reason</strong>
+                                        <p>@_selectedPoll.PollReason</p>
+                                    </div>
+
+                                    <div class="mf-editor-recommendation">
+                                        <strong>Current Vote</strong>
+                                        <p>
+                                            @if (string.IsNullOrWhiteSpace(_selectedPoll.CurrentUserChoiceCode))
+                                            {
+                                                <span>You have not voted yet.</span>
+                                            }
+                                            else
+                                            {
+                                                <span>You voted @_selectedPoll.CurrentUserChoiceCode.</span>
+                                            }
+                                        </p>
+                                    </div>
+                                </section>
+
+                                <section class="mf-card">
+                                    <h3>Cast Your Vote</h3>
+
+                                    <div class="mf-vote-options">
+                                        <button class="@VoteOptionClass("APPROVE")"
+                                                @onclick='() => SelectChoice("APPROVE")'>
+                                            <span>✓</span>
+                                            Approve
+                                        </button>
+
+                                        <button class="@VoteOptionClass("REJECT")"
+                                                @onclick='() => SelectChoice("REJECT")'>
+                                            <span>×</span>
+                                            Reject
+                                        </button>
+
+                                        <button class="@VoteOptionClass("ABSTAIN")"
+                                                @onclick='() => SelectChoice("ABSTAIN")'>
+                                            <span>–</span>
+                                            Abstain
+                                        </button>
+                                    </div>
+
+                                    <textarea class="mf-textarea"
+                                              placeholder="Reason / comment. Required when rejecting."
+                                              @bind="_voteReason">
+                                    </textarea>
+
+                                    @if (!string.IsNullOrWhiteSpace(_voteMessage))
+                                    {
+                                        <div class="mf-alert info">@_voteMessage</div>
+                                    }
+
+                                    <button class="mf-btn mf-btn-primary full"
+                                            disabled="@_isSavingVote"
+                                            @onclick="SubmitVoteAsync">
+                                        @(_isSavingVote ? "Saving..." : "Submit Vote")
+                                    </button>
+                                </section>
+                            </main>
+
+                            <aside class="mf-voting-side">
+                                <section class="mf-card">
+                                    <h3>Live Results</h3>
+
+                                    <div class="mf-live-total">
+                                        <strong>@_selectedPoll.TotalVotes</strong>
+                                        <span>Total votes submitted</span>
+                                    </div>
+
+                                    <ResultRow Label="Approve"
+                                               Tone="approve"
+                                               Count="@_selectedPoll.ApproveVotes"
+                                               Total="9" />
+
+                                    <ResultRow Label="Reject"
+                                               Tone="reject"
+                                               Count="@_selectedPoll.RejectVotes"
+                                               Total="9" />
+
+                                    <ResultRow Label="Abstain"
+                                               Tone="abstain"
+                                               Count="@_selectedPoll.AbstainVotes"
+                                               Total="9" />
+
+                                    <div class="mf-trajectory-box">
+                                        <span>Computed Result</span>
+                                        <strong>@_selectedPoll.ComputedResultCode</strong>
+                                        <p>Result is recalculated from database vote summary.</p>
+                                    </div>
+                                </section>
+                            </aside>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </ChildContent>
+</MangaFlowShell>
+
+@code {
+    private IReadOnlyList<EditorialBoardPollDto> _polls = Array.Empty<EditorialBoardPollDto>();
+    private EditorialBoardPollDto? _selectedPoll;
+    private bool _isLoading = true;
+    private bool _isSavingVote;
+    private string? _errorMessage;
+    private string? _voteMessage;
+    private string _selectedChoice = string.Empty;
+    private string? _voteReason;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPollsAsync();
+    }
+
+    private async Task LoadPollsAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+
+        try
+        {
+            _polls = await EditorialBoardApiClient.GetOpenPollsAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OpenVotingCenter(EditorialBoardPollDto poll)
+    {
+        _selectedPoll = poll;
+        _selectedChoice = poll.CurrentUserChoiceCode ?? string.Empty;
+        _voteReason = poll.CurrentUserVoteReason;
+        _voteMessage = null;
+    }
+
+    private void CloseVotingCenter()
+    {
+        _selectedPoll = null;
+        _selectedChoice = string.Empty;
+        _voteReason = null;
+        _voteMessage = null;
+    }
+
+    private void SelectChoice(string choiceCode)
+    {
+        _selectedChoice = choiceCode;
+        _voteMessage = null;
+    }
+
+    private string VoteOptionClass(string choiceCode)
+    {
+        var tone = choiceCode.ToLowerInvariant();
+
+        return _selectedChoice == choiceCode
+            ? $"mf-vote-option {tone} selected"
+            : $"mf-vote-option {tone}";
+    }
+
+    private async Task SubmitVoteAsync()
+    {
+        if (_selectedPoll is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_selectedChoice))
+        {
+            _voteMessage = "Please choose Approve, Reject, or Abstain.";
+            return;
+        }
+
+        if (_selectedChoice == "REJECT" && string.IsNullOrWhiteSpace(_voteReason))
+        {
+            _voteMessage = "Reject vote requires reason.";
+            return;
+        }
+
+        _isSavingVote = true;
+        _voteMessage = null;
+
+        var pollId = _selectedPoll.PollId;
+
+        try
+        {
+            await EditorialBoardApiClient.CastVoteAsync(
+                pollId,
+                new CastVoteRequest(_selectedChoice, _voteReason));
+
+            await LoadPollsAsync();
+
+            _selectedPoll = _polls.FirstOrDefault(p => p.PollId == pollId);
+            _voteMessage = "Vote saved successfully. This result is stored in database.";
+        }
+        catch (Exception ex)
+        {
+            _voteMessage = ex.Message;
+        }
+        finally
+        {
+            _isSavingVote = false;
+        }
+    }
+
+    private static string DeadlineText(EditorialBoardPollDto poll)
+    {
+        return poll.EndsAtUtc is null
+            ? "No deadline"
+            : $"Deadline: {poll.EndsAtUtc.Value.ToLocalTime().ToString("MMM dd, yyyy", CultureInfo.InvariantCulture)}";
+    }
+}

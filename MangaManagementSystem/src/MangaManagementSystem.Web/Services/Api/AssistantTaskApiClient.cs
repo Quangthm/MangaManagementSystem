@@ -8,6 +8,8 @@ namespace MangaManagementSystem.Web.Services.Api
 {
     public class AssistantTaskApiClient : IAssistantTaskApiClient
     {
+        private const string ActorUserIdHeader = "X-Actor-User-Id";
+
         private readonly HttpClient _httpClient;
         private readonly JsonSerializerOptions _jsonOptions;
 
@@ -23,9 +25,12 @@ namespace MangaManagementSystem.Web.Services.Api
 
         // === Read Operations ===
 
-        public async Task<IReadOnlyList<ChapterPageTaskDto>> GetAssignedTasksAsync(CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyList<ChapterPageTaskDto>> GetAssignedTasksAsync(Guid actorUserId, CancellationToken cancellationToken = default)
         {
-            var response = await _httpClient.GetAsync("api/assistant/tasks", cancellationToken);
+            using var request = new HttpRequestMessage(HttpMethod.Get, "api/assistant/tasks");
+            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(request, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -42,14 +47,17 @@ namespace MangaManagementSystem.Web.Services.Api
             return result ?? new List<ChapterPageTaskDto>();
         }
 
-        public async Task<ChapterPageTaskDto?> GetTaskDetailAsync(Guid taskId, CancellationToken cancellationToken = default)
+        public async Task<ChapterPageTaskDto?> GetTaskDetailAsync(Guid actorUserId, Guid taskId, CancellationToken cancellationToken = default)
         {
             if (taskId == Guid.Empty)
             {
                 throw new ArgumentException("Invalid task ID.", nameof(taskId));
             }
 
-            var response = await _httpClient.GetAsync($"api/assistant/tasks/{taskId}", cancellationToken);
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"api/assistant/tasks/{taskId}");
+            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(request, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -71,9 +79,31 @@ namespace MangaManagementSystem.Web.Services.Api
             return result;
         }
 
+        // === Annotations ===
+
+        public async Task<IReadOnlyList<ChapterPageAnnotationDto>> GetTaskAnnotationsAsync(Guid actorUserId, Guid taskId, CancellationToken cancellationToken = default)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"api/assistant/tasks/{taskId}/annotations");
+            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                // Non-critical: return empty list on error so the page still works
+                return new List<ChapterPageAnnotationDto>();
+            }
+
+            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            var result = JsonSerializer.Deserialize<IReadOnlyList<ChapterPageAnnotationDto>>(responseContent, _jsonOptions);
+
+            return result ?? new List<ChapterPageAnnotationDto>();
+        }
+
         // === Submit Operation ===
 
         public async Task<AssistantTaskSubmitResultDto?> SubmitTaskWorkAsync(
+            Guid actorUserId,
             Guid taskId,
             IBrowserFile file,
             string? versionNote = null,
@@ -92,11 +122,13 @@ namespace MangaManagementSystem.Web.Services.Api
             // Build multipart form data
             using var content = new MultipartFormDataContent();
             
-            // Add file
-            using var stream = file.OpenReadStream(10 * 1024 * 1024);
-            using var reader = new System.IO.BinaryReader(stream);
-            var fileBytes = reader.ReadBytes((int)stream.Length);
-            var fileContent = new ByteArrayContent(fileBytes);
+            // Add file -- use async CopyToAsync to avoid "Synchronous reads are not supported" on Blazor Server streams
+            using var ms = new MemoryStream();
+            await using (var stream = file.OpenReadStream(10 * 1024 * 1024))
+            {
+                await stream.CopyToAsync(ms, cancellationToken);
+            }
+            var fileContent = new ByteArrayContent(ms.ToArray());
             fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse(file.ContentType);
             content.Add(fileContent, "file", file.Name);
 
@@ -106,8 +138,13 @@ namespace MangaManagementSystem.Web.Services.Api
                 content.Add(new StringContent(versionNote, Encoding.UTF8, "text/plain"), "versionNote");
             }
 
+            // Build request with actor header
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"api/assistant/tasks/{taskId}/submit-work");
+            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+            request.Content = content;
+
             // Post to API endpoint
-            var response = await _httpClient.PostAsync($"api/assistant/tasks/{taskId}/submit-work", content, cancellationToken);
+            var response = await _httpClient.SendAsync(request, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {

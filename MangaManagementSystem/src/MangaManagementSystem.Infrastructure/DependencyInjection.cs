@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using EFCore.NamingConventions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using MangaManagementSystem.Application.Features.EditorialBoard.Repositories;
 
 namespace MangaManagementSystem.Infrastructure
 {
@@ -49,6 +50,8 @@ namespace MangaManagementSystem.Infrastructure
             services.AddScoped<IChapterPageTaskRepository, ChapterPageTaskRepository>();
             services.AddScoped<IChapterPageAnnotationRepository, ChapterPageAnnotationRepository>();
             services.AddScoped<ISeriesProposalRepository, SeriesProposalRepository>();
+            services.AddScoped<IEditorDashboardRepository, EditorDashboardRepository>();
+            services.AddScoped<IEditorChapterReviewRepository, EditorChapterReviewRepository>();
 
             // Unit of Work
             services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -64,7 +67,9 @@ namespace MangaManagementSystem.Infrastructure
             services.AddHttpClient<IAiService, AiService>();
             services.AddScoped<IAiService, AiService>();
 
+            services.AddScoped<IEditorialBoardRepository, EditorialBoardRepository>();
             return services;
         }
     }
 }
+

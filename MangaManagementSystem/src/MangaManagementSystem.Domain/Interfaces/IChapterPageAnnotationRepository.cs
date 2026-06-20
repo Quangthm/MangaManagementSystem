@@ -16,6 +16,8 @@ namespace MangaManagementSystem.Domain.Interfaces
 
         Task<IReadOnlyList<ChapterPageAnnotation>> GetByPageRegionIdAsync(Guid pageRegionId);
 
+        Task<IReadOnlyList<ChapterPageAnnotation>> GetByPageRegionIdsAsync(IReadOnlyList<Guid> pageRegionIds);
+
         Task<bool> ResolveAnnotationAsync(
             Guid actorUserId,
             Guid annotationId,
