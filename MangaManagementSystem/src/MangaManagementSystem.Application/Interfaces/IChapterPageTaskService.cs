@@ -18,5 +18,13 @@ namespace MangaManagementSystem.Application.Interfaces
         // Assistant read operations
         Task<IEnumerable<ChapterPageTaskDto>> GetAssignedTasksForAssistantAsync(Guid assistantUserId);
         Task<ChapterPageTaskDto?> GetAssignedTaskDetailForAssistantAsync(Guid assistantUserId, Guid taskId);
+
+        // Mangaka task lifecycle actions
+        Task ApproveTaskAsync(Guid actorUserId, Guid taskId, string? completionNote);
+        Task ReturnTaskForReworkAsync(Guid actorUserId, Guid taskId, string reason);
+        Task CancelTaskAsync(Guid actorUserId, Guid taskId, string reason);
+
+        // Mangaka: tasks created by this user (for review submissions view)
+        Task<IEnumerable<ChapterPageTaskDto>> GetTasksForReviewByCreatorAsync(Guid creatorUserId);
     }
 }
