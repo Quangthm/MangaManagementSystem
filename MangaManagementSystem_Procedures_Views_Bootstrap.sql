@@ -1,4 +1,4 @@
-﻿USE MangaManagementDB;
+USE MangaManagementDB;
 GO
 CREATE OR ALTER PROCEDURE audit.usp_AuditEvent_Append
     @actor_user_id      UNIQUEIDENTIFIER = NULL,
@@ -2449,7 +2449,7 @@ BEGIN
             BEGIN TRAN;
         END;
 
-       IF ISJSON(@page_region_ids_json, ARRAY) <> 1
+       IF ISJSON(@page_region_ids_json) <> 1
 BEGIN
     ;THROW 57901, 'page_region_ids_json must be a valid JSON array of page region IDs.', 1;
 END;
@@ -2800,7 +2800,7 @@ BEGIN
         --------------------------------------------------------------------
 -- 1. Validate JSON array and parse region IDs.
 --------------------------------------------------------------------
-IF ISJSON(@page_region_ids_json, ARRAY) <> 1
+IF ISJSON(@page_region_ids_json) <> 1
 BEGIN
     ;THROW 57901, 'page_region_ids_json must be a valid JSON array of page region IDs.', 1;
 END;
@@ -4669,8 +4669,7 @@ BEGIN
     -- 6. Lock and derive ChapterPageId from task's page regions
     -- All regions must belong to the same ChapterPageVersion, hence same ChapterPage
     --------------------------------------------------------------------
-    SET @lock_result = sys.sp_getapplock
-        @Resource = N'manga_chapter_page_task_submit_' + CONVERT(NVARCHAR(36), @chapter_page_task_id),
+    DECLARE @lock_resource_tmp NVARCHAR(200) = N'manga_chapter_page_task_submit_' + CONVERT(NVARCHAR(36), @chapter_page_task_id); EXEC @lock_result = sys.sp_getapplock @Resource = @lock_resource_tmp,
         @LockMode = 'Exclusive',
         @LockOwner = 'Transaction',
         @LockTimeout = 10000;
@@ -4823,3 +4822,5 @@ BEGIN
     END;
 END;
 GO
+
+
