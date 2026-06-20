@@ -16,13 +16,13 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             _context = context;
         }
 
-
         public Task<AuditEvent?> GetByIdAsync(
             long auditEventId,
             CancellationToken cancellationToken = default)
         {
             return _context.AuditEvents
                 .AsNoTracking()
+                .Include(item => item.ActorUser)
                 .SingleOrDefaultAsync(
                     item =>
                         item.AuditEventId ==
@@ -38,6 +38,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         {
             return await _context.AuditEvents
                 .AsNoTracking()
+                .Include(item => item.ActorUser)
                 .Where(
                     item =>
                         item.EntityType ==
@@ -47,10 +48,12 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .OrderByDescending(
                     item =>
                         item.OccurredAtUtc)
+                .ThenByDescending(
+                    item =>
+                        item.AuditEventId)
                 .ToListAsync(
                     cancellationToken);
         }
-
 
         public async Task<(
             IReadOnlyList<AuditEvent> Items,
@@ -76,6 +79,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             var query =
                 _context.AuditEvents
                     .AsNoTracking()
+                    .Include(item => item.ActorUser)
                     .Where(
                         item =>
                             (item.EntityType == "Users"
@@ -106,6 +110,129 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             return (
                 items,
                 totalCount);
+        }
+
+        public async Task<(
+            IReadOnlyList<AuditEvent> Items,
+            int TotalCount)> SearchAsync(
+                AuditEventSearchCriteria criteria,
+                CancellationToken cancellationToken = default)
+        {
+            var query =
+                _context.AuditEvents
+                    .AsNoTracking()
+                    .Include(item => item.ActorUser)
+                    .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(
+                    criteria.Search))
+            {
+                var search = criteria.Search;
+
+                query =
+                    query.Where(
+                        item =>
+                            item.ActionCode.Contains(search)
+                            || item.EntityType.Contains(search)
+                            || (item.EntityId != null
+                                && item.EntityId.Contains(search))
+                            || (item.DetailJson != null
+                                && item.DetailJson.Contains(search))
+                            || (item.ActorRoleName != null
+                                && item.ActorRoleName.Contains(search))
+                            || (item.ActorUser != null
+                                && (item.ActorUser.Username.Contains(search)
+                                    || item.ActorUser.Email.Contains(search)
+                                    || item.ActorUser.DisplayName.Contains(search))));
+            }
+
+            if (!string.IsNullOrWhiteSpace(
+                    criteria.ActionCode))
+            {
+                query =
+                    query.Where(
+                        item =>
+                            item.ActionCode ==
+                            criteria.ActionCode);
+            }
+
+            if (!string.IsNullOrWhiteSpace(
+                    criteria.EntityType))
+            {
+                query =
+                    query.Where(
+                        item =>
+                            item.EntityType ==
+                            criteria.EntityType);
+            }
+
+            if (criteria.FromUtc.HasValue)
+            {
+                query =
+                    query.Where(
+                        item =>
+                            item.OccurredAtUtc >=
+                            criteria.FromUtc.Value);
+            }
+
+            if (criteria.ToUtc.HasValue)
+            {
+                query =
+                    query.Where(
+                        item =>
+                            item.OccurredAtUtc <=
+                            criteria.ToUtc.Value);
+            }
+
+            var totalCount =
+                await query.CountAsync(
+                    cancellationToken);
+
+            var items =
+                await query
+                    .OrderByDescending(
+                        item =>
+                            item.OccurredAtUtc)
+                    .ThenByDescending(
+                        item =>
+                            item.AuditEventId)
+                    .Skip(
+                        (criteria.PageNumber - 1)
+                        * criteria.PageSize)
+                    .Take(
+                        criteria.PageSize)
+                    .ToListAsync(
+                        cancellationToken);
+
+            return (
+                items,
+                totalCount);
+        }
+
+        public async Task<IReadOnlyList<string>>
+            GetDistinctActionCodesAsync(
+                CancellationToken cancellationToken = default)
+        {
+            return await _context.AuditEvents
+                .AsNoTracking()
+                .Select(item => item.ActionCode)
+                .Distinct()
+                .OrderBy(item => item)
+                .ToListAsync(
+                    cancellationToken);
+        }
+
+        public async Task<IReadOnlyList<string>>
+            GetDistinctEntityTypesAsync(
+                CancellationToken cancellationToken = default)
+        {
+            return await _context.AuditEvents
+                .AsNoTracking()
+                .Select(item => item.EntityType)
+                .Distinct()
+                .OrderBy(item => item)
+                .ToListAsync(
+                    cancellationToken);
         }
     }
 }
