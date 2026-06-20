@@ -3,8 +3,8 @@
 
     What this creates:
     - 1 SERIALIZED series
-    - Normalized Genre/SeriesGenre rows
-    - Normalized Tag/SeriesTag rows
+    - Normalized Genre/SeriesGenre links resolved from real seeded Genre rows
+    - Normalized Tag/SeriesTag links resolved from real seeded Tag rows
     - Series contributors: Mangaka, Assistant, Tantou Editor
     - 2 chapters
     - 3 pages
@@ -28,6 +28,12 @@ DECLARE @Now DATETIME2(0) = SYSUTCDATETIME();
 DECLARE @MangakaUserId UNIQUEIDENTIFIER = NULL;
 DECLARE @AssistantUserId UNIQUEIDENTIFIER = NULL;
 DECLARE @EditorUserId UNIQUEIDENTIFIER = NULL;
+
+-- For mock data portability, use names here and resolve them to the real
+-- DB-generated Genre/Tag GUIDs before inserting SeriesGenre/SeriesTag links.
+-- These names must already exist in manga.Genre and manga.Tag from the base lookup seed.
+DECLARE @GenreNamesJson NVARCHAR(MAX) = N'["Action","Fantasy"]';
+DECLARE @TagNamesJson NVARCHAR(MAX) = N'["Original Work","Magic","Found Family"]';
 
 -- Example manual replacement:
 -- SET @MangakaUserId = 'PUT-MANGAKA-USER-GUID-HERE';
@@ -79,13 +85,6 @@ END;
 
 DECLARE @SeriesId UNIQUEIDENTIFIER = '10000000-0000-0000-0000-000000000001';
 DECLARE @SeriesCoverFileId UNIQUEIDENTIFIER = '10000000-0000-0000-0000-000000000101';
-
-DECLARE @ActionGenreId UNIQUEIDENTIFIER = '11000000-0000-0000-0000-000000000001';
-DECLARE @FantasyGenreId UNIQUEIDENTIFIER = '11000000-0000-0000-0000-000000000002';
-
-DECLARE @OriginalWorkTagId UNIQUEIDENTIFIER = '12000000-0000-0000-0000-000000000001';
-DECLARE @MagicTagId UNIQUEIDENTIFIER = '12000000-0000-0000-0000-000000000002';
-DECLARE @FoundFamilyTagId UNIQUEIDENTIFIER = '12000000-0000-0000-0000-000000000003';
 
 DECLARE @Chapter1Id UNIQUEIDENTIFIER = '20000000-0000-0000-0000-000000000001';
 DECLARE @Chapter2Id UNIQUEIDENTIFIER = '20000000-0000-0000-0000-000000000002';
@@ -256,139 +255,163 @@ WHERE NOT EXISTS
 );
 
 ----------------------------------------------------------------------
--- Normalized genres
--- Genres are broad story categories. The script uses existing rows by
--- genre_name when available, otherwise it creates the needed seed rows.
+-- Normalized genre/tag resolution
+-- The base Genre/Tag lookup seed uses DB-generated GUIDs. This mock
+-- script therefore accepts names, resolves the real IDs, and writes
+-- SeriesGenre/SeriesTag using those actual IDs.
 ----------------------------------------------------------------------
 
-INSERT INTO manga.Genre
+DECLARE @SelectedGenreIds TABLE
 (
-    genre_id,
-    genre_name,
-    description
-)
-SELECT
-    v.genre_id,
-    v.genre_name,
-    v.description
-FROM
-(
-    VALUES
-    (
-        @ActionGenreId,
-        N'Action',
-        N'Fast-paced stories with combat, conflict, or physical intensity.'
-    ),
-    (
-        @FantasyGenreId,
-        N'Fantasy',
-        N'Stories involving magical, mythical, supernatural, or imaginary worlds.'
-    )
-) AS v(genre_id, genre_name, description)
-WHERE NOT EXISTS
-(
-    SELECT 1
-    FROM manga.Genre g
-    WHERE g.genre_id = v.genre_id
-       OR g.genre_name = v.genre_name
+    genre_id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY
 );
 
-SELECT TOP (1)
-    @ActionGenreId = g.genre_id
-FROM manga.Genre g
-WHERE g.genre_name = N'Action';
-
-SELECT TOP (1)
-    @FantasyGenreId = g.genre_id
-FROM manga.Genre g
-WHERE g.genre_name = N'Fantasy';
-
-IF @ActionGenreId IS NULL
-BEGIN
-    ;THROW 59904, 'Action genre id was not found or created.', 1;
-END;
-
-IF @FantasyGenreId IS NULL
-BEGIN
-    ;THROW 59905, 'Fantasy genre id was not found or created.', 1;
-END;
-
-----------------------------------------------------------------------
--- Normalized tags
--- Tags are specific tropes, themes, settings, traits, or source labels.
--- Do not duplicate broad genre names as tags.
-----------------------------------------------------------------------
-
-INSERT INTO manga.Tag
+DECLARE @SelectedTagIds TABLE
 (
-    tag_id,
-    tag_name,
-    description
-)
-SELECT
-    v.tag_id,
-    v.tag_name,
-    v.description
-FROM
-(
-    VALUES
-    (
-        @OriginalWorkTagId,
-        N'Original Work',
-        N'An original series concept rather than an adaptation.'
-    ),
-    (
-        @MagicTagId,
-        N'Magic',
-        N'Story elements involving magic systems, spells, or supernatural powers.'
-    ),
-    (
-        @FoundFamilyTagId,
-        N'Found Family',
-        N'Characters form a meaningful chosen-family bond during the story.'
-    )
-) AS v(tag_id, tag_name, description)
-WHERE NOT EXISTS
-(
-    SELECT 1
-    FROM manga.Tag t
-    WHERE t.tag_id = v.tag_id
-       OR t.tag_name = v.tag_name
+    tag_id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY
 );
 
-SELECT TOP (1)
-    @OriginalWorkTagId = t.tag_id
-FROM manga.Tag t
-WHERE t.tag_name = N'Original Work';
-
-SELECT TOP (1)
-    @MagicTagId = t.tag_id
-FROM manga.Tag t
-WHERE t.tag_name = N'Magic';
-
-SELECT TOP (1)
-    @FoundFamilyTagId = t.tag_id
-FROM manga.Tag t
-WHERE t.tag_name = N'Found Family';
-
-IF @OriginalWorkTagId IS NULL
+IF ISJSON(@GenreNamesJson) <> 1 OR LEFT(LTRIM(@GenreNamesJson), 1) <> N'['
 BEGIN
-    ;THROW 59906, 'Original Work tag id was not found or created.', 1;
+    ;THROW 59904, '@GenreNamesJson must be a JSON array of genre names, for example ["Action","Fantasy"].', 1;
 END;
 
-IF @MagicTagId IS NULL
+IF EXISTS
+(
+    SELECT 1
+    FROM OPENJSON(@GenreNamesJson)
+    WHERE [type] <> 1
+)
 BEGIN
-    ;THROW 59907, 'Magic tag id was not found or created.', 1;
+    ;THROW 59905, '@GenreNamesJson must contain string genre names only.', 1;
 END;
 
-IF @FoundFamilyTagId IS NULL
+IF EXISTS
+(
+    SELECT 1
+    FROM OPENJSON(@GenreNamesJson)
+    WHERE NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(100), [value]))), N'') IS NULL
+)
 BEGIN
-    ;THROW 59908, 'Found Family tag id was not found or created.', 1;
+    ;THROW 59906, '@GenreNamesJson must not contain empty genre names.', 1;
 END;
+
+DECLARE @MissingGenreNames NVARCHAR(MAX);
+
+;WITH RequestedGenreNames AS
+(
+    SELECT DISTINCT
+        genre_name = LTRIM(RTRIM(CONVERT(NVARCHAR(100), j.[value])))
+    FROM OPENJSON(@GenreNamesJson) j
+)
+SELECT
+    @MissingGenreNames = STRING_AGG(r.genre_name, N', ')
+FROM RequestedGenreNames r
+LEFT JOIN manga.Genre g
+    ON g.genre_name = r.genre_name
+WHERE g.genre_id IS NULL;
+
+IF @MissingGenreNames IS NOT NULL
+BEGIN
+    DECLARE @MissingGenreMessage NVARCHAR(2048) =
+        N'The following genre names were not found in manga.Genre. Run the base genre lookup seed first or correct @GenreNamesJson: '
+        + @MissingGenreNames;
+
+    ;THROW 59907, @MissingGenreMessage, 1;
+END;
+
+INSERT INTO @SelectedGenreIds
+(
+    genre_id
+)
+SELECT DISTINCT
+    g.genre_id
+FROM OPENJSON(@GenreNamesJson) j
+INNER JOIN manga.Genre g
+    ON g.genre_name = LTRIM(RTRIM(CONVERT(NVARCHAR(100), j.[value])));
+
+IF NOT EXISTS
+(
+    SELECT 1
+    FROM @SelectedGenreIds
+)
+BEGIN
+    ;THROW 59908, 'At least one valid genre is required for the mock series.', 1;
+END;
+
+IF ISJSON(@TagNamesJson) <> 1 OR LEFT(LTRIM(@TagNamesJson), 1) <> N'['
+BEGIN
+    ;THROW 59909, '@TagNamesJson must be a JSON array of tag names, for example ["Original Work","Magic"].', 1;
+END;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM OPENJSON(@TagNamesJson)
+    WHERE [type] <> 1
+)
+BEGIN
+    ;THROW 59910, '@TagNamesJson must contain string tag names only.', 1;
+END;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM OPENJSON(@TagNamesJson)
+    WHERE NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(100), [value]))), N'') IS NULL
+)
+BEGIN
+    ;THROW 59911, '@TagNamesJson must not contain empty tag names.', 1;
+END;
+
+DECLARE @MissingTagNames NVARCHAR(MAX);
+
+;WITH RequestedTagNames AS
+(
+    SELECT DISTINCT
+        tag_name = LTRIM(RTRIM(CONVERT(NVARCHAR(100), j.[value])))
+    FROM OPENJSON(@TagNamesJson) j
+)
+SELECT
+    @MissingTagNames = STRING_AGG(r.tag_name, N', ')
+FROM RequestedTagNames r
+LEFT JOIN manga.Tag t
+    ON t.tag_name = r.tag_name
+WHERE t.tag_id IS NULL;
+
+IF @MissingTagNames IS NOT NULL
+BEGIN
+    DECLARE @MissingTagMessage NVARCHAR(2048) =
+        N'The following tag names were not found in manga.Tag. Run the base tag lookup seed first or correct @TagNamesJson: '
+        + @MissingTagNames;
+
+    ;THROW 59912, @MissingTagMessage, 1;
+END;
+
+INSERT INTO @SelectedTagIds
+(
+    tag_id
+)
+SELECT DISTINCT
+    t.tag_id
+FROM OPENJSON(@TagNamesJson) j
+INNER JOIN manga.Tag t
+    ON t.tag_name = LTRIM(RTRIM(CONVERT(NVARCHAR(100), j.[value])));
 
 ----------------------------------------------------------------------
 -- Series-genre links
+-- Replace this mock series' genre links with the selected real lookup IDs.
 ----------------------------------------------------------------------
+
+DELETE sg
+FROM manga.SeriesGenre sg
+WHERE sg.series_id = @SeriesId
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM @SelectedGenreIds selected
+      WHERE selected.genre_id = sg.genre_id
+  );
 
 INSERT INTO manga.SeriesGenre
 (
@@ -396,31 +419,31 @@ INSERT INTO manga.SeriesGenre
     genre_id
 )
 SELECT
-    v.series_id,
-    v.genre_id
-FROM
-(
-    VALUES
-    (
-        @SeriesId,
-        @ActionGenreId
-    ),
-    (
-        @SeriesId,
-        @FantasyGenreId
-    )
-) AS v(series_id, genre_id)
+    @SeriesId,
+    selected.genre_id
+FROM @SelectedGenreIds selected
 WHERE NOT EXISTS
 (
     SELECT 1
     FROM manga.SeriesGenre sg
-    WHERE sg.series_id = v.series_id
-      AND sg.genre_id = v.genre_id
+    WHERE sg.series_id = @SeriesId
+      AND sg.genre_id = selected.genre_id
 );
 
 ----------------------------------------------------------------------
 -- Series-tag links
+-- Replace this mock series' tag links with the selected real lookup IDs.
 ----------------------------------------------------------------------
+
+DELETE st
+FROM manga.SeriesTag st
+WHERE st.series_id = @SeriesId
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM @SelectedTagIds selected
+      WHERE selected.tag_id = st.tag_id
+  );
 
 INSERT INTO manga.SeriesTag
 (
@@ -428,30 +451,15 @@ INSERT INTO manga.SeriesTag
     tag_id
 )
 SELECT
-    v.series_id,
-    v.tag_id
-FROM
-(
-    VALUES
-    (
-        @SeriesId,
-        @OriginalWorkTagId
-    ),
-    (
-        @SeriesId,
-        @MagicTagId
-    ),
-    (
-        @SeriesId,
-        @FoundFamilyTagId
-    )
-) AS v(series_id, tag_id)
+    @SeriesId,
+    selected.tag_id
+FROM @SelectedTagIds selected
 WHERE NOT EXISTS
 (
     SELECT 1
     FROM manga.SeriesTag st
-    WHERE st.series_id = v.series_id
-      AND st.tag_id = v.tag_id
+    WHERE st.series_id = @SeriesId
+      AND st.tag_id = selected.tag_id
 );
 
 ----------------------------------------------------------------------

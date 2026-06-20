@@ -1744,7 +1744,16 @@ CREATE OR ALTER PROCEDURE manga.usp_Series_Create
     @title NVARCHAR(200),
     @slug NVARCHAR(220),
     @synopsis NVARCHAR(MAX),
-    @genre NVARCHAR(100),
+
+    -- Normalized metadata
+    -- Required: at least one valid existing genre_id.
+    -- Example: N'["guid-1","guid-2"]'
+    @genre_ids_json NVARCHAR(MAX),
+
+    -- Optional: zero or more valid existing tag_id values.
+    -- Example: N'["guid-1","guid-2"]'
+    @tag_ids_json NVARCHAR(MAX) = NULL,
+
     @content_language_code NVARCHAR(10) = N'ja',
     @source_series_id UNIQUEIDENTIFIER = NULL,
     @publication_frequency_code NVARCHAR(50) = NULL,
@@ -1772,6 +1781,7 @@ BEGIN
             BEGIN TRAN;
         END;
 
+        SET @new_series_id = NULL;
         SET @cover_file_resource_id = NULL;
 
         --------------------------------------------------------------------
@@ -1792,7 +1802,117 @@ BEGIN
         END;
 
         --------------------------------------------------------------------
-        -- 2. Optional cover metadata group validation
+        -- 2. Validate and parse genre IDs JSON
+        --------------------------------------------------------------------
+        SET @genre_ids_json = NULLIF(LTRIM(RTRIM(@genre_ids_json)), N'');
+
+        IF @genre_ids_json IS NULL
+        BEGIN
+            ;THROW 57302, 'At least one genre id is required.', 1;
+        END;
+
+        IF ISJSON(@genre_ids_json) <> 1
+           OR LEFT(LTRIM(@genre_ids_json), 1) <> N'['
+        BEGIN
+            ;THROW 57303, 'Genre ids must be a JSON array.', 1;
+        END;
+
+        DECLARE @genre_ids TABLE
+        (
+            genre_id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY
+        );
+
+        IF EXISTS
+        (
+            SELECT 1
+            FROM OPENJSON(@genre_ids_json) j
+            WHERE TRY_CONVERT(UNIQUEIDENTIFIER, j.[value]) IS NULL
+        )
+        BEGIN
+            ;THROW 57304, 'Genre ids JSON contains an invalid GUID value.', 1;
+        END;
+
+        INSERT INTO @genre_ids
+        (
+            genre_id
+        )
+        SELECT DISTINCT
+            TRY_CONVERT(UNIQUEIDENTIFIER, j.[value]) AS genre_id
+        FROM OPENJSON(@genre_ids_json) j;
+
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM @genre_ids
+        )
+        BEGIN
+            ;THROW 57305, 'At least one genre id is required.', 1;
+        END;
+
+        IF EXISTS
+        (
+            SELECT 1
+            FROM @genre_ids gi
+            LEFT JOIN manga.Genre g
+                ON g.genre_id = gi.genre_id
+            WHERE g.genre_id IS NULL
+        )
+        BEGIN
+            ;THROW 57306, 'Genre ids JSON contains a genre id that does not exist.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 3. Validate and parse tag IDs JSON
+        -- Tags are optional. NULL or [] means no tags.
+        --------------------------------------------------------------------
+        SET @tag_ids_json = NULLIF(LTRIM(RTRIM(@tag_ids_json)), N'');
+
+        DECLARE @tag_ids TABLE
+        (
+            tag_id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY
+        );
+
+        IF @tag_ids_json IS NOT NULL
+        BEGIN
+            IF ISJSON(@tag_ids_json) <> 1
+               OR LEFT(LTRIM(@tag_ids_json), 1) <> N'['
+            BEGIN
+                ;THROW 57307, 'Tag ids must be a JSON array.', 1;
+            END;
+
+            IF EXISTS
+            (
+                SELECT 1
+                FROM OPENJSON(@tag_ids_json) j
+                WHERE TRY_CONVERT(UNIQUEIDENTIFIER, j.[value]) IS NULL
+            )
+            BEGIN
+                ;THROW 57308, 'Tag ids JSON contains an invalid GUID value.', 1;
+            END;
+
+            INSERT INTO @tag_ids
+            (
+                tag_id
+            )
+            SELECT DISTINCT
+                TRY_CONVERT(UNIQUEIDENTIFIER, j.[value]) AS tag_id
+            FROM OPENJSON(@tag_ids_json) j;
+
+            IF EXISTS
+            (
+                SELECT 1
+                FROM @tag_ids ti
+                LEFT JOIN manga.Tag t
+                    ON t.tag_id = ti.tag_id
+                WHERE t.tag_id IS NULL
+            )
+            BEGIN
+                ;THROW 57309, 'Tag ids JSON contains a tag id that does not exist.', 1;
+            END;
+        END;
+
+        --------------------------------------------------------------------
+        -- 4. Optional cover metadata group validation
         --------------------------------------------------------------------
         DECLARE @has_cover_metadata BIT = 0;
 
@@ -1817,11 +1937,11 @@ BEGIN
                OR @cover_sha256_hash IS NULL
            )
         BEGIN
-            ;THROW 57302, 'Cover file metadata is incomplete.', 1;
+            ;THROW 57310, 'Cover file metadata is incomplete.', 1;
         END;
 
         --------------------------------------------------------------------
-        -- 3. Create FileResource for cover if metadata exists
+        -- 5. Create FileResource for cover if metadata exists
         --------------------------------------------------------------------
         IF @has_cover_metadata = 1
         BEGIN
@@ -1838,12 +1958,15 @@ BEGIN
         END;
 
         --------------------------------------------------------------------
-        -- 4. Insert series draft
+        -- 6. Insert series draft
         --
         -- Table defaults should handle:
         -- - series_id = NEWID()
         -- - status_code = PROPOSAL_DRAFT
         -- - created_at_utc = SYSUTCDATETIME()
+        --
+        -- Genre is no longer stored on manga.Series.
+        -- Genres/tags are linked below through junction tables.
         --------------------------------------------------------------------
         DECLARE @created_series TABLE
         (
@@ -1855,7 +1978,6 @@ BEGIN
             title,
             slug,
             synopsis,
-            genre,
             cover_file_id,
             content_language_code,
             source_series_id,
@@ -1868,7 +1990,6 @@ BEGIN
             @title,
             @slug,
             @synopsis,
-            @genre,
             @cover_file_resource_id,
             @content_language_code,
             @source_series_id,
@@ -1880,7 +2001,33 @@ BEGIN
         FROM @created_series;
 
         --------------------------------------------------------------------
-        -- 5. Add creator as initial contributor
+        -- 7. Insert normalized series genres
+        --------------------------------------------------------------------
+        INSERT INTO manga.SeriesGenre
+        (
+            series_id,
+            genre_id
+        )
+        SELECT
+            @new_series_id,
+            gi.genre_id
+        FROM @genre_ids gi;
+
+        --------------------------------------------------------------------
+        -- 8. Insert normalized series tags
+        --------------------------------------------------------------------
+        INSERT INTO manga.SeriesTag
+        (
+            series_id,
+            tag_id
+        )
+        SELECT
+            @new_series_id,
+            ti.tag_id
+        FROM @tag_ids ti;
+
+        --------------------------------------------------------------------
+        -- 9. Add creator as initial contributor
         --------------------------------------------------------------------
         DECLARE @new_series_contributor_id UNIQUEIDENTIFIER;
 
@@ -1892,7 +2039,7 @@ BEGIN
             @new_series_contributor_id = @new_series_contributor_id OUTPUT;
 
         --------------------------------------------------------------------
-        -- 6. Audit
+        -- 10. Audit
         --------------------------------------------------------------------
         DECLARE @audit_entity_id NVARCHAR(100) =
             CONVERT(NVARCHAR(36), @new_series_id);
@@ -1903,7 +2050,24 @@ BEGIN
                 @title AS title,
                 @slug AS slug,
                 @synopsis AS synopsis,
-                @genre AS genre,
+                JSON_QUERY
+                (
+                    (
+                        SELECT
+                            gi.genre_id
+                        FROM @genre_ids gi
+                        FOR JSON PATH
+                    )
+                ) AS genre_ids,
+                JSON_QUERY
+                (
+                    (
+                        SELECT
+                            ti.tag_id
+                        FROM @tag_ids ti
+                        FOR JSON PATH
+                    )
+                ) AS tag_ids,
                 @content_language_code AS content_language_code,
                 @source_series_id AS source_series_id,
                 @publication_frequency_code AS publication_frequency_code,
@@ -1942,7 +2106,16 @@ CREATE OR ALTER PROCEDURE manga.usp_Series_UpdateProfile
     @title                          NVARCHAR(200),
     @slug                           NVARCHAR(220),
     @synopsis                       NVARCHAR(MAX),
-    @genre                          NVARCHAR(100),
+
+    -- Normalized metadata
+    -- Required: at least one existing genre_id.
+    -- Example: N'["guid-1","guid-2"]'
+    @genre_ids_json                 NVARCHAR(MAX),
+
+    -- Optional: NULL or [] means no tags.
+    -- Example: N'["guid-1","guid-2"]'
+    @tag_ids_json                   NVARCHAR(MAX) = NULL,
+
     @content_language_code          NVARCHAR(10)  = N'ja',
     @publication_frequency_code     NVARCHAR(50)  = NULL,
 
@@ -1975,6 +2148,8 @@ BEGIN
             SET @started_tran = 1;
             BEGIN TRAN;
         END;
+
+        SET @new_cover_file_resource_id = NULL;
 
         --------------------------------------------------------------------
         -- 1. Serialize profile updates per series.
@@ -2019,22 +2194,163 @@ BEGIN
         --------------------------------------------------------------------
         -- 4. Actor must be an active Mangaka contributor of this series.
         --------------------------------------------------------------------
-       IF NOT EXISTS
-(
-    SELECT 1
-    FROM manga.vw_ActiveSeriesContributor ascx
-    WHERE ascx.series_id = @series_id
-      AND ascx.user_id = @actor_user_id
-      AND ascx.role_name = N'Mangaka'
-)
-BEGIN
-    ;THROW 57404, 'Only an active Mangaka contributor can update this series profile.', 1;
-END;
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM manga.vw_ActiveSeriesContributor ascx
+            WHERE ascx.series_id = @series_id
+              AND ascx.user_id = @actor_user_id
+              AND ascx.role_name = N'Mangaka'
+        )
+        BEGIN
+            ;THROW 57404, 'Only an active Mangaka contributor can update this series profile.', 1;
+        END;
 
         --------------------------------------------------------------------
-        -- 5. Validate cover metadata group (all-or-nothing).
+        -- 5. Validate and parse genre IDs JSON.
         --------------------------------------------------------------------
-        IF @cover_original_file_name    IS NOT NULL
+        SET @genre_ids_json = NULLIF(LTRIM(RTRIM(@genre_ids_json)), N'');
+
+        IF @genre_ids_json IS NULL
+        BEGIN
+            ;THROW 57405, 'At least one genre id is required.', 1;
+        END;
+
+        IF ISJSON(@genre_ids_json) <> 1
+           OR LEFT(LTRIM(@genre_ids_json), 1) <> N'['
+        BEGIN
+            ;THROW 57406, 'Genre ids must be a JSON array.', 1;
+        END;
+
+        DECLARE @genre_ids TABLE
+        (
+            genre_id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY
+        );
+
+        IF EXISTS
+        (
+            SELECT 1
+            FROM OPENJSON(@genre_ids_json) j
+            WHERE TRY_CONVERT(UNIQUEIDENTIFIER, j.[value]) IS NULL
+        )
+        BEGIN
+            ;THROW 57407, 'Genre ids JSON contains an invalid GUID value.', 1;
+        END;
+
+        INSERT INTO @genre_ids
+        (
+            genre_id
+        )
+        SELECT DISTINCT
+            TRY_CONVERT(UNIQUEIDENTIFIER, j.[value]) AS genre_id
+        FROM OPENJSON(@genre_ids_json) j;
+
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM @genre_ids
+        )
+        BEGIN
+            ;THROW 57408, 'At least one genre id is required.', 1;
+        END;
+
+        IF EXISTS
+        (
+            SELECT 1
+            FROM @genre_ids gi
+            LEFT JOIN manga.Genre g
+                ON g.genre_id = gi.genre_id
+            WHERE g.genre_id IS NULL
+        )
+        BEGIN
+            ;THROW 57409, 'Genre ids JSON contains a genre id that does not exist.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 6. Validate and parse tag IDs JSON.
+        -- Tags are optional. NULL or [] means clear all tags.
+        --------------------------------------------------------------------
+        SET @tag_ids_json = NULLIF(LTRIM(RTRIM(@tag_ids_json)), N'');
+
+        DECLARE @tag_ids TABLE
+        (
+            tag_id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY
+        );
+
+        IF @tag_ids_json IS NOT NULL
+        BEGIN
+            IF ISJSON(@tag_ids_json) <> 1
+               OR LEFT(LTRIM(@tag_ids_json), 1) <> N'['
+            BEGIN
+                ;THROW 57410, 'Tag ids must be a JSON array.', 1;
+            END;
+
+            IF EXISTS
+            (
+                SELECT 1
+                FROM OPENJSON(@tag_ids_json) j
+                WHERE TRY_CONVERT(UNIQUEIDENTIFIER, j.[value]) IS NULL
+            )
+            BEGIN
+                ;THROW 57411, 'Tag ids JSON contains an invalid GUID value.', 1;
+            END;
+
+            INSERT INTO @tag_ids
+            (
+                tag_id
+            )
+            SELECT DISTINCT
+                TRY_CONVERT(UNIQUEIDENTIFIER, j.[value]) AS tag_id
+            FROM OPENJSON(@tag_ids_json) j;
+
+            IF EXISTS
+            (
+                SELECT 1
+                FROM @tag_ids ti
+                LEFT JOIN manga.Tag t
+                    ON t.tag_id = ti.tag_id
+                WHERE t.tag_id IS NULL
+            )
+            BEGIN
+                ;THROW 57412, 'Tag ids JSON contains a tag id that does not exist.', 1;
+            END;
+        END;
+
+        --------------------------------------------------------------------
+        -- 7. Capture old genre/tag links for audit.
+        --------------------------------------------------------------------
+        DECLARE @old_genre_ids TABLE
+        (
+            genre_id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY
+        );
+
+        DECLARE @old_tag_ids TABLE
+        (
+            tag_id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY
+        );
+
+        INSERT INTO @old_genre_ids
+        (
+            genre_id
+        )
+        SELECT
+            sg.genre_id
+        FROM manga.SeriesGenre sg
+        WHERE sg.series_id = @series_id;
+
+        INSERT INTO @old_tag_ids
+        (
+            tag_id
+        )
+        SELECT
+            st.tag_id
+        FROM manga.SeriesTag st
+        WHERE st.series_id = @series_id;
+
+        --------------------------------------------------------------------
+        -- 8. Validate cover metadata group (all-or-nothing).
+        --------------------------------------------------------------------
+        IF @cover_original_file_name       IS NOT NULL
            OR @cover_cloudinary_public_id  IS NOT NULL
            OR @cover_cloudinary_secure_url IS NOT NULL
            OR @cover_content_type          IS NOT NULL
@@ -2045,8 +2361,9 @@ END;
         END;
 
         IF @has_cover_metadata = 1
-           AND (
-               @cover_original_file_name    IS NULL
+           AND
+           (
+               @cover_original_file_name       IS NULL
                OR @cover_cloudinary_public_id  IS NULL
                OR @cover_cloudinary_secure_url IS NULL
                OR @cover_content_type          IS NULL
@@ -2054,24 +2371,21 @@ END;
                OR @cover_sha256_hash           IS NULL
            )
         BEGIN
-            ;THROW 57405, 'Cover file metadata is incomplete. Pass all six cover fields or none.', 1;
+            ;THROW 57413, 'Cover file metadata is incomplete. Pass all six cover fields or none.', 1;
         END;
 
         --------------------------------------------------------------------
-        -- 6. Soft-delete old cover FileResource if a new cover is supplied.
+        -- 9. Soft-delete old cover FileResource if a new cover is supplied.
         --------------------------------------------------------------------
-        SET @new_cover_file_resource_id = NULL;
-
         IF @has_cover_metadata = 1
         BEGIN
             IF @old_cover_file_id IS NOT NULL
             BEGIN
                 EXEC manga.usp_FileResource_SoftDelete
-                    @file_resource_id  = @old_cover_file_id,
+                    @file_resource_id   = @old_cover_file_id,
                     @deleted_by_user_id = @actor_user_id;
             END;
 
-            -- Create new SERIES_COVER FileResource.
             EXEC manga.usp_FileResource_Create
                 @file_purpose_code     = N'SERIES_COVER',
                 @original_file_name    = @cover_original_file_name,
@@ -2085,27 +2399,61 @@ END;
         END;
 
         --------------------------------------------------------------------
-        -- 7. Update series profile.
-        --    Only update cover_file_id when a new cover was provided.
+        -- 10. Update series profile.
+        -- Genre/tag metadata is no longer stored on manga.Series.
+        -- It is replaced in manga.SeriesGenre and manga.SeriesTag below.
         --------------------------------------------------------------------
         UPDATE manga.Series
         SET
             title                       = @title,
             slug                        = @slug,
             synopsis                    = @synopsis,
-            genre                       = @genre,
             content_language_code       = @content_language_code,
             publication_frequency_code  = @publication_frequency_code,
-            cover_file_id               = CASE WHEN @has_cover_metadata = 1
-                                               THEN @new_cover_file_resource_id
-                                               ELSE cover_file_id
+            cover_file_id               = CASE
+                                              WHEN @has_cover_metadata = 1
+                                                  THEN @new_cover_file_resource_id
+                                              ELSE cover_file_id
                                           END,
             updated_at_utc              = @updated_at_utc,
             updated_by_user_id          = @actor_user_id
         WHERE series_id = @series_id;
 
         --------------------------------------------------------------------
-        -- 8. Audit.
+        -- 11. Replace normalized series genres.
+        --------------------------------------------------------------------
+        DELETE FROM manga.SeriesGenre
+        WHERE series_id = @series_id;
+
+        INSERT INTO manga.SeriesGenre
+        (
+            series_id,
+            genre_id
+        )
+        SELECT
+            @series_id,
+            gi.genre_id
+        FROM @genre_ids gi;
+
+        --------------------------------------------------------------------
+        -- 12. Replace normalized series tags.
+        -- NULL or [] clears all tags.
+        --------------------------------------------------------------------
+        DELETE FROM manga.SeriesTag
+        WHERE series_id = @series_id;
+
+        INSERT INTO manga.SeriesTag
+        (
+            series_id,
+            tag_id
+        )
+        SELECT
+            @series_id,
+            ti.tag_id
+        FROM @tag_ids ti;
+
+        --------------------------------------------------------------------
+        -- 13. Audit.
         --------------------------------------------------------------------
         DECLARE @audit_entity_id NVARCHAR(100) =
             CONVERT(NVARCHAR(36), @series_id);
@@ -2113,15 +2461,51 @@ END;
         DECLARE @detail_json NVARCHAR(MAX) =
         (
             SELECT
-                @series_id                      AS series_id,
-                @title                          AS title,
-                @slug                           AS slug,
-                @genre                          AS genre,
-                @content_language_code          AS content_language_code,
-                @publication_frequency_code     AS publication_frequency_code,
-                @has_cover_metadata             AS cover_updated,
-                @new_cover_file_resource_id     AS new_cover_file_resource_id,
-                @old_cover_file_id              AS old_cover_file_id
+                @series_id                  AS series_id,
+                @title                      AS title,
+                @slug                       AS slug,
+                @synopsis                   AS synopsis,
+                JSON_QUERY
+                (
+                    (
+                        SELECT
+                            og.genre_id
+                        FROM @old_genre_ids og
+                        FOR JSON PATH
+                    )
+                ) AS old_genre_ids,
+                JSON_QUERY
+                (
+                    (
+                        SELECT
+                            gi.genre_id
+                        FROM @genre_ids gi
+                        FOR JSON PATH
+                    )
+                ) AS new_genre_ids,
+                JSON_QUERY
+                (
+                    (
+                        SELECT
+                            ot.tag_id
+                        FROM @old_tag_ids ot
+                        FOR JSON PATH
+                    )
+                ) AS old_tag_ids,
+                JSON_QUERY
+                (
+                    (
+                        SELECT
+                            ti.tag_id
+                        FROM @tag_ids ti
+                        FOR JSON PATH
+                    )
+                ) AS new_tag_ids,
+                @content_language_code      AS content_language_code,
+                @publication_frequency_code AS publication_frequency_code,
+                @has_cover_metadata         AS cover_updated,
+                @new_cover_file_resource_id AS new_cover_file_resource_id,
+                @old_cover_file_id          AS old_cover_file_id
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
         );
 
