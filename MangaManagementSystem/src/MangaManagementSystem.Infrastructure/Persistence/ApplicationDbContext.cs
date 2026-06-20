@@ -18,6 +18,7 @@ namespace MangaManagementSystem.Infrastructure.Persistence
         public DbSet<SeriesBoardPoll> SeriesBoardPolls => Set<SeriesBoardPoll>();
         public DbSet<SeriesBoardVote> SeriesBoardVotes => Set<SeriesBoardVote>();
         public DbSet<SeriesBoardPollVoteSummary> SeriesBoardPollVoteSummaries => Set<SeriesBoardPollVoteSummary>();
+        public DbSet<ActiveSeriesContributor> ActiveSeriesContributors => Set<ActiveSeriesContributor>();
         public DbSet<Chapter> Chapters => Set<Chapter>();
         public DbSet<ChapterPage> ChapterPages => Set<ChapterPage>();
         public DbSet<ChapterPageVersion> ChapterPageVersions => Set<ChapterPageVersion>();
@@ -37,6 +38,10 @@ namespace MangaManagementSystem.Infrastructure.Persistence
             builder.Entity<SeriesBoardPollVoteSummary>()
                 .ToView("vw_SeriesBoardPollVoteSummary", "manga")
                 .HasNoKey();
+
+            builder.Entity<ActiveSeriesContributor>()
+                .ToView("vw_ActiveSeriesContributor", "manga")
+                .HasNoKey();
         }
     }
 
@@ -52,6 +57,7 @@ namespace MangaManagementSystem.Infrastructure.Persistence
         DbSet<SeriesBoardPoll> SeriesBoardPolls { get; }
         DbSet<SeriesBoardVote> SeriesBoardVotes { get; }
         DbSet<SeriesBoardPollVoteSummary> SeriesBoardPollVoteSummaries { get; }
+        DbSet<ActiveSeriesContributor> ActiveSeriesContributors { get; }
         DbSet<Chapter> Chapters { get; }
         DbSet<ChapterPage> ChapterPages { get; }
         DbSet<ChapterPageVersion> ChapterPageVersions { get; }

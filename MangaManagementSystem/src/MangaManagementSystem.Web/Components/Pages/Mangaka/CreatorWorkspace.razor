@@ -5,6 +5,7 @@
 @using System.Text.Json
 @using MangaManagementSystem.Application.Interfaces
 @using MangaManagementSystem.Web.Services.Api
+@using MangaManagementSystem.Web.Services
 @attribute [Authorize(Roles = "Mangaka,Tantou Editor,Assistant")]
 @inject NavigationManager Nav
 @inject IJSRuntime JS
@@ -24,7 +25,7 @@
             <div style="color: #64748b; font-size: 0.9rem; margin-bottom: 24px;">
                 You are not an active contributor for this series, or the series was not found.
             </div>
-            <MudButton Variant="Variant.Outlined" OnClick="@(() => Nav.NavigateTo($"/series/{Slug}"))">
+            <MudButton Variant="Variant.Outlined" OnClick="@(() => Nav.NavigateTo(BackHref))">
                 Back to Series
             </MudButton>
         </div>
@@ -36,7 +37,7 @@ else
     <!-- Header -->
     <header class="mf-workspace-header px-4 py-2 d-flex justify-space-between align-center" style="position: relative;">
         <div class="d-flex align-center">
-            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="@($"/series/{Slug}")" Class="mr-2" />
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="@BackHref" Class="mr-2" />
             <MudText Typo="Typo.h6" Class="font-weight-bold">@SeriesTitle</MudText>
             <MudText Typo="Typo.caption" Class="mf-muted ml-2 mt-1">@SeriesSubtitle</MudText>
         </div>
@@ -480,10 +481,18 @@ else
 @code {
     [Parameter] public string Slug { get; set; } = string.Empty;
     [SupplyParameterFromQuery] public string? chapterId { get; set; }
+    [SupplyParameterFromQuery] public string? returnUrl { get; set; }
 
     private string? SeriesId { get; set; }
     private bool _accessDenied = false;
     private Guid? _currentUserId;
+
+    /// <summary>
+    /// Context-aware back-navigation URL. When the workspace is opened from the Editor chapter
+    /// review flow with a safe returnUrl, the back arrow returns there. Otherwise it falls back
+    /// to the series page.
+    /// </summary>
+    private string BackHref => SafeReturnUrl.Resolve(returnUrl, $"/series/{Slug}");
 
     private int SelectedChapter { get; set; } = 0;
     private int SelectedPage { get; set; } = 0;

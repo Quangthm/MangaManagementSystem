@@ -143,8 +143,11 @@
 | FR-SERIES-004 | The system shall restrict each series to one approved lifecycle status value. | BR-SERIES-003 |
 | FR-SERIES-005 | The system shall update a series to `SERIALIZED` after the proposal, editorial, and board approval workflow accepts the series into production/publication. | BR-SERIES-004 |
 | FR-SERIES-006 | The system shall require each series to declare one primary content language. | BR-SERIES-005 |
-| FR-SERIES-007 | The system shall store genre as simple text metadata for MVP. | BR-SERIES-006 |
-| FR-SERIES-008 | The system shall allow a series to reference an optional cover image through `FileResource`. | BR-SERIES-007 |
+| FR-SERIES-007 | The system shall manage series genres through `manga.Genre` and `manga.SeriesGenre`, allowing a series to have multiple genres. | BR-SERIES-006 |
+| FR-SERIES-007A | The system shall manage series tags through `manga.Tag` and `manga.SeriesTag`, allowing a series to have multiple tags. | BR-SERIES-006A |
+| FR-SERIES-007B | The system shall treat genres as broad story categories and tags as more specific tropes, themes, settings, character traits, source/context labels, or content descriptors. | BR-SERIES-006B |
+| FR-SERIES-007C | The system shall treat genres and tags as current series metadata rather than proposal-history snapshot records in MVP. | BR-SERIES-006C |
+| FR-SERIES-008 | The system shall allow a series to reference an optional current cover image through `FileResource`. | BR-SERIES-007 |
 | FR-SERIES-009 | The system shall require series cover images to use the `SERIES_COVER` file purpose when provided. | BR-SERIES-007 |
 | FR-SERIES-010 | The system shall allow a series to optionally reference another series as its source version. | BR-SERIES-008 |
 | FR-SERIES-011 | The system shall prevent a series from referencing itself as its source series. | BR-SERIES-009 |
@@ -159,7 +162,7 @@
 | FR-SERIES-020 | The system shall regenerate and update the slug when the Mangaka changes the title and saves while the series is still `PROPOSAL_DRAFT`. | BR-SERIES-019 |
 | FR-SERIES-021 | The system shall lock the slug from normal update after the series leaves `PROPOSAL_DRAFT`. | BR-SERIES-020 |
 | FR-SERIES-022 | The system shall expose `/series/{slug}` as the stable main series URL after the series becomes `SERIALIZED`. | BR-SERIES-021 |
-| FR-SERIES-023 | The system shall allow normal Mangaka updates to title, synopsis, genre, cover, content language, source series, publication frequency, and regenerate slug from title only while the series is in `PROPOSAL_DRAFT`. | BR-SERIES-022 |
+| FR-SERIES-023 | The system shall allow normal Mangaka updates to title, synopsis, genres, tags, cover, content language, source series, publication frequency, and regenerate slug from title only while the series is in `PROPOSAL_DRAFT`. | BR-SERIES-022 |
 | FR-SERIES-024 | The system shall reject normal series profile update attempts after the series leaves `PROPOSAL_DRAFT`, unless a separate controlled workflow allows the specific change. | BR-SERIES-023 |
 | FR-SERIES-025 | The system shall allow Mangaka production work after serialization through chapters, pages, page versions, regions, tasks, and the authorized chapter workspace rather than normal series profile editing. | BR-SERIES-024 |
 | FR-SERIES-026 | The system shall create an active `SeriesContributor` record for the Mangaka who creates a new series draft in the same backend workflow or transaction that creates the `Series` record. | BR-SERIES-025 |
@@ -189,7 +192,9 @@
 | FR-PROP-002 | The system shall represent each formal proposal submission version as one `SeriesProposal` row. | BR-PROP-001 |
 | FR-PROP-003 | The system shall allow a series to have multiple proposal versions over time. | BR-PROP-002 |
 | FR-PROP-004 | The system shall require proposal version numbers to be positive and unique within the same series. | BR-PROP-003 |
-| FR-PROP-005 | The system shall preserve submission-time snapshots of proposal title, synopsis, genre, and proposal file. | BR-PROP-004 |
+| FR-PROP-005 | The system shall preserve submission-time snapshots of proposal title, synopsis, and proposal file. | BR-PROP-004 |
+| FR-PROP-005A | The system shall not require `SeriesProposal` to snapshot genres, tags, or the current series cover file in MVP. | BR-PROP-004A |
+| FR-PROP-005B | The system shall allow proposal review screens to display current genres, tags, and cover from locked series metadata rather than from proposal snapshot tables. | BR-PROP-004A |
 | FR-PROP-006 | The system shall require each submitted proposal to include a proposal file stored as a `FileResource` with purpose `SERIES_PROPOSAL`. | BR-PROP-005 |
 | FR-PROP-007 | The system shall prevent direct editing of submitted proposal snapshot fields after the `SeriesProposal` row is created. | BR-PROP-007 |
 | FR-PROP-008 | The system shall require corrected proposal content to be submitted as a new proposal version when revision is requested. | BR-PROP-008 |
@@ -339,7 +344,7 @@
 | FR-WORKSPACE-004 | The system shall display the selected page version in the main workspace viewing area with available overlays such as saved page regions and annotations. | BR-WORKSPACE-004 |
 | FR-WORKSPACE-005 | The system shall provide a right tools/actions panel containing AI segmentation, AI/OCR translation support, annotation tools, page-version actions, and role-specific workflow actions. | BR-WORKSPACE-005 |
 | FR-WORKSPACE-006 | The system shall allow all Authorized Page Workspace Users with access to the relevant chapter/page version to use available AI tools. | BR-WORKSPACE-006 |
-| FR-WORKSPACE-007 | The system shall enforce role-specific permissions for business actions in the workspace, including task assignment, task submission, review annotations, and chapter review actions. | BR-WORKSPACE-007 |
+| FR-WORKSPACE-007 | The system shall enforce role-specific permissions for business actions in the workspace, including task assignment, task submission, production annotations, editorial-review annotations, and chapter review actions. | BR-WORKSPACE-007 |
 | FR-WORKSPACE-008 | The system shall not grant Editorial Board Members chapter workspace access by default unless a future permission explicitly allows it. | BR-WORKSPACE-008 |
 | FR-WORKSPACE-009 | The system shall support workspace entry from the main series page, dashboards, review queues, assistant task lists, and other authorized workflow lists. | BR-WORKSPACE-009 |
 | FR-WORKSPACE-010 | The system shall return users to `/series/{slug}` by default when they entered the workspace from the main series page. | BR-WORKSPACE-010 |
@@ -365,13 +370,21 @@
 | FR-ANN-011 | The system shall require non-empty annotation text. | BR-ANN-010 |
 | FR-ANN-012 | The system shall record the user who created each annotation. | BR-ANN-011 |
 | FR-ANN-013 | The system shall record the creation time of each annotation. | BR-ANN-012 |
-| FR-ANN-014 | The system shall restrict annotation creation to authorized users according to workflow permissions. | BR-ANN-013 |
+| FR-ANN-014 | The system shall restrict annotation creation to active Mangaka contributors and active Tantou Editor contributors with access to the owning series/page workspace in MVP. | BR-ANN-013 |
 | FR-ANN-015 | The system shall allow a page annotation to be linked to existing saved regions, newly created regions, or both. | BR-ANN-014 |
 | FR-ANN-016 | The system shall require both resolver user and resolved timestamp when an annotation is resolved. | BR-ANN-015 |
 | FR-ANN-017 | The system shall require both `resolved_by_user_id` and `resolved_at_utc` to be `NULL` when an annotation is unresolved. | BR-ANN-016 |
 | FR-ANN-018 | The system shall resolve annotations by setting resolver and timestamp fields without deleting the annotation or its region links. | BR-ANN-017 |
 | FR-ANN-019 | The system shall preserve old annotations through their linked regions after a new page version is uploaded. | BR-ANN-018 |
 | FR-ANN-020 | The system shall enforce fixed MVP annotation issue types by database constraint instead of a separate lookup table. | BR-ANN-019 |
+| FR-ANN-021 | The system shall allow unresolved Mangaka-created annotations to be resolved by active Mangaka contributors on the same series or active Tantou Editor contributors on the same series. | BR-ANN-020 |
+| FR-ANN-022 | The system shall prevent Mangaka users from resolving annotations created by Tantou Editors. | BR-ANN-021 |
+| FR-ANN-023 | The system shall allow only active Tantou Editor contributors on the same series to resolve Tantou Editor-created annotations. | BR-ANN-021 |
+| FR-ANN-024 | The system shall allow active Mangaka contributors to update unresolved annotation text only for Mangaka-created annotations on the same series. | BR-ANN-022 |
+| FR-ANN-025 | The system shall allow active Tantou Editor contributors to update unresolved annotation text for either Mangaka-created or Tantou Editor-created annotations on the same series. | BR-ANN-023 |
+| FR-ANN-026 | The system shall prevent resolved annotations from being edited in MVP. | BR-ANN-024 |
+| FR-ANN-027 | The system shall determine annotation permission in MVP through stored-procedure guard checks using `annotated_by_user_id`, the creator's current role, the actor's current role, active account status, active series contributor membership, and the series context derived from linked regions. | BR-ANN-025 |
+| FR-ANN-028 | The system shall audit annotation text updates with old text, new text, actor user, related series/page context, and optional update reason when available. | BR-ANN-026 |
 
 ## 3.14 Page Task
 
