@@ -29,7 +29,7 @@ The MVP should stay focused and avoid unnecessary tables unless a table represen
 |---|---|
 | Users and accounts | Use one MVP role per account. New users start as `PENDING_APPROVAL`. Admin activates, rejects, or disables accounts. Each user has a non-unique `display_name` for UI display; if not provided during registration or external login, it defaults to the username. Users may update their own display name without entering their account password. |
 | File management | Store actual media in Cloudinary; store metadata and references in `manga.FileResource`. Every file resource must store a backend-calculated `sha256_hash`; duplicate-file warnings based on this hash are optional MVP usability behavior and may be implemented only where time allows. |
-| Series management | Manage series profile, unique slug, lifecycle status, primary language, genre text, cover image, publication frequency, and optional source series reference. `series_id` is the internal backend identity; `slug` is the stable URL identity after serialization. No separate `series_code` is used in MVP. |
+| Series management | Manage series profile, unique slug, lifecycle status, primary language, normalized genres, normalized tags, current cover image, publication frequency, and optional source series reference. `series_id` is the internal backend identity; `slug` is the stable URL identity after serialization. No separate `series_code` is used in MVP. |
 | Series contributors | Manage team membership through `SeriesContributor`, not a direct lead Mangaka column on `Series`. |
 | Series proposals | Store formal submitted proposal versions in `SeriesProposal`; revisions create new proposal rows. |
 | Board workflow | Use `SeriesBoardPoll` and `SeriesBoardVote`; Editorial Board Chief opens, closes, and cancels board polls, specifies publication frequency when opening `START_SERIALIZATION` polls, may also vote, and board results are computed from votes. Do **not** use a separate `SeriesBoardDecision` table. |
@@ -195,8 +195,10 @@ The project uses **permission-based actor grouping** for shared features and rol
 - Each series has one lifecycle status from the approved list.
 - A series becomes `SERIALIZED` after passing proposal, editorial, and board approval.
 - Each series declares one primary content language.
-- Genre is simple text metadata for MVP.
-- Cover images use `FileResource` and should use file purpose `SERIES_COVER`.
+- Genres are normalized through `manga.Genre` and `manga.SeriesGenre`, allowing a series to have multiple broad story categories.
+- Tags are normalized through `manga.Tag` and `manga.SeriesTag`, allowing a series to have multiple specific tropes, settings, character traits, themes, source/context labels, or content descriptors.
+- Genres and tags are current series metadata, not proposal-history snapshot tables in MVP.
+- Cover images are current series metadata, use `FileResource`, and should use file purpose `SERIES_COVER`.
 - A series may reference another series as its source version but cannot reference itself.
 - Series ownership and contributor membership are managed through `SeriesContributor`.
 - A series may have multiple contributors.
@@ -213,7 +215,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 - `SeriesProposal` stores one formal submitted proposal version.
 - A series can have multiple proposal versions.
 - Proposal version numbers must be positive and unique within the same series.
-- A submitted proposal preserves snapshots of proposal title, synopsis, genre, and proposal file.
+- A submitted proposal preserves snapshots of proposal title, synopsis, and proposal file only; it does not snapshot genres, tags, or the current series cover file in MVP.
 - A submitted proposal must include a `FileResource` with purpose `SERIES_PROPOSAL`.
 - First proposal submission does not require an already assigned Tantou Editor; the submitted proposal becomes visible in the editorial review queue for active Tantou Editors.
 - `SeriesProposal` does not store draft proposal editing.
@@ -498,6 +500,10 @@ When implementing, functional requirements should remain traceable to source bus
 
 - `manga.FileResource`
 - `manga.Series`
+- `manga.Genre`
+- `manga.SeriesGenre`
+- `manga.Tag`
+- `manga.SeriesTag`
 - `manga.SeriesContributor`
 - `manga.SeriesProposal`
 - `manga.SeriesBoardPoll`

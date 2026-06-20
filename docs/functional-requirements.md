@@ -143,8 +143,11 @@
 | FR-SERIES-004 | The system shall restrict each series to one approved lifecycle status value. | BR-SERIES-003 |
 | FR-SERIES-005 | The system shall update a series to `SERIALIZED` after the proposal, editorial, and board approval workflow accepts the series into production/publication. | BR-SERIES-004 |
 | FR-SERIES-006 | The system shall require each series to declare one primary content language. | BR-SERIES-005 |
-| FR-SERIES-007 | The system shall store genre as simple text metadata for MVP. | BR-SERIES-006 |
-| FR-SERIES-008 | The system shall allow a series to reference an optional cover image through `FileResource`. | BR-SERIES-007 |
+| FR-SERIES-007 | The system shall manage series genres through `manga.Genre` and `manga.SeriesGenre`, allowing a series to have multiple genres. | BR-SERIES-006 |
+| FR-SERIES-007A | The system shall manage series tags through `manga.Tag` and `manga.SeriesTag`, allowing a series to have multiple tags. | BR-SERIES-006A |
+| FR-SERIES-007B | The system shall treat genres as broad story categories and tags as more specific tropes, themes, settings, character traits, source/context labels, or content descriptors. | BR-SERIES-006B |
+| FR-SERIES-007C | The system shall treat genres and tags as current series metadata rather than proposal-history snapshot records in MVP. | BR-SERIES-006C |
+| FR-SERIES-008 | The system shall allow a series to reference an optional current cover image through `FileResource`. | BR-SERIES-007 |
 | FR-SERIES-009 | The system shall require series cover images to use the `SERIES_COVER` file purpose when provided. | BR-SERIES-007 |
 | FR-SERIES-010 | The system shall allow a series to optionally reference another series as its source version. | BR-SERIES-008 |
 | FR-SERIES-011 | The system shall prevent a series from referencing itself as its source series. | BR-SERIES-009 |
@@ -159,7 +162,7 @@
 | FR-SERIES-020 | The system shall regenerate and update the slug when the Mangaka changes the title and saves while the series is still `PROPOSAL_DRAFT`. | BR-SERIES-019 |
 | FR-SERIES-021 | The system shall lock the slug from normal update after the series leaves `PROPOSAL_DRAFT`. | BR-SERIES-020 |
 | FR-SERIES-022 | The system shall expose `/series/{slug}` as the stable main series URL after the series becomes `SERIALIZED`. | BR-SERIES-021 |
-| FR-SERIES-023 | The system shall allow normal Mangaka updates to title, synopsis, genre, cover, content language, source series, publication frequency, and regenerate slug from title only while the series is in `PROPOSAL_DRAFT`. | BR-SERIES-022 |
+| FR-SERIES-023 | The system shall allow normal Mangaka updates to title, synopsis, genres, tags, cover, content language, source series, publication frequency, and regenerate slug from title only while the series is in `PROPOSAL_DRAFT`. | BR-SERIES-022 |
 | FR-SERIES-024 | The system shall reject normal series profile update attempts after the series leaves `PROPOSAL_DRAFT`, unless a separate controlled workflow allows the specific change. | BR-SERIES-023 |
 | FR-SERIES-025 | The system shall allow Mangaka production work after serialization through chapters, pages, page versions, regions, tasks, and the authorized chapter workspace rather than normal series profile editing. | BR-SERIES-024 |
 | FR-SERIES-026 | The system shall create an active `SeriesContributor` record for the Mangaka who creates a new series draft in the same backend workflow or transaction that creates the `Series` record. | BR-SERIES-025 |
@@ -189,7 +192,9 @@
 | FR-PROP-002 | The system shall represent each formal proposal submission version as one `SeriesProposal` row. | BR-PROP-001 |
 | FR-PROP-003 | The system shall allow a series to have multiple proposal versions over time. | BR-PROP-002 |
 | FR-PROP-004 | The system shall require proposal version numbers to be positive and unique within the same series. | BR-PROP-003 |
-| FR-PROP-005 | The system shall preserve submission-time snapshots of proposal title, synopsis, genre, and proposal file. | BR-PROP-004 |
+| FR-PROP-005 | The system shall preserve submission-time snapshots of proposal title, synopsis, and proposal file. | BR-PROP-004 |
+| FR-PROP-005A | The system shall not require `SeriesProposal` to snapshot genres, tags, or the current series cover file in MVP. | BR-PROP-004A |
+| FR-PROP-005B | The system shall allow proposal review screens to display current genres, tags, and cover from locked series metadata rather than from proposal snapshot tables. | BR-PROP-004A |
 | FR-PROP-006 | The system shall require each submitted proposal to include a proposal file stored as a `FileResource` with purpose `SERIES_PROPOSAL`. | BR-PROP-005 |
 | FR-PROP-007 | The system shall prevent direct editing of submitted proposal snapshot fields after the `SeriesProposal` row is created. | BR-PROP-007 |
 | FR-PROP-008 | The system shall require corrected proposal content to be submitted as a new proposal version when revision is requested. | BR-PROP-008 |

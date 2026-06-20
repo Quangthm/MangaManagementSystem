@@ -3,6 +3,7 @@
 @using Microsoft.AspNetCore.Authorization
 @using System.Security.Claims
 @using MangaManagementSystem.Application.DTOs.Editor
+@using MangaManagementSystem.Web.Services
 @using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Tantou Editor")]
 @inject IEditorSeriesApiClient EditorSeriesApiClient
@@ -56,27 +57,21 @@
                         <MudTd>@context.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</MudTd>
                         <MudTd>
                             @{
-                                var encodedReturn = Uri.EscapeDataString("/editor/series");
+                                var viewHref = SeriesNavigationUrlBuilder.BuildEditorSeriesOrProposalHref(
+                                    context.CanOpenSeriesSlugPage, context.Slug, context.LatestProposalId, "/editor/series");
                             }
                             @if (CanReview(context))
                             {
                                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
-                                           OnClick="@(() => Nav.NavigateTo($"/editor/proposals/{context.LatestProposalId}?returnUrl={encodedReturn}"))">
+                                           OnClick="@(() => Nav.NavigateTo(SeriesNavigationUrlBuilder.BuildEditorSeriesOrProposalHref(false, null, context.LatestProposalId, "/editor/series")!))">
                                     Review
                                 </MudButton>
                             }
-                            else if (context.LatestProposalId.HasValue)
+                            else if (viewHref != null)
                             {
                                 <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default"
-                                           OnClick="@(() => Nav.NavigateTo($"/editor/proposals/{context.LatestProposalId}?returnUrl={encodedReturn}"))">
-                                    View
-                                </MudButton>
-                            }
-                            else if (!string.IsNullOrWhiteSpace(context.Slug))
-                            {
-                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default"
-                                           OnClick="@(() => Nav.NavigateTo($"/series/{context.Slug}?returnUrl={encodedReturn}"))">
-                                    View Series
+                                           OnClick="@(() => Nav.NavigateTo(viewHref))">
+                                    @(context.CanOpenSeriesSlugPage ? "View Series" : "View")
                                 </MudButton>
                             }
                             else

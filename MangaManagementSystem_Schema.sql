@@ -33,13 +33,7 @@ CREATE TABLE auth.Roles (
     CONSTRAINT uq_roles_role_name UNIQUE (role_name)
 );
 
-INSERT INTO auth.Roles (role_name)
-VALUES (N'Mangaka'),
-	(N'Assistant'),
-	(N'Tantou Editor'),
-	(N'Editorial Board Member'),
-	(N'Editorial Board Chief'),
-	(N'Admin');
+
 
 CREATE TABLE auth.Users (
 	user_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_users_user_id DEFAULT NEWID() PRIMARY KEY,
@@ -179,7 +173,6 @@ CREATE TABLE manga.Series (
 	title NVARCHAR(200) NOT NULL,
 	slug NVARCHAR(220) NOT NULL,
 	synopsis NVARCHAR(MAX) NOT NULL,
-	genre NVARCHAR(100) NOT NULL,
 	cover_file_id UNIQUEIDENTIFIER NULL,
 	status_code NVARCHAR(50) NOT NULL CONSTRAINT df_series_current_status_code DEFAULT(N'PROPOSAL_DRAFT'),
 	content_language_code NVARCHAR(10) NOT NULL CONSTRAINT df_series_content_language_code DEFAULT(N'ja'),
@@ -236,6 +229,79 @@ CREATE TABLE manga.Series (
 
 CREATE INDEX ix_series_current_status_code ON manga.Series (status_code);
 
+CREATE TABLE manga.Genre
+(
+    genre_id UNIQUEIDENTIFIER NOT NULL
+        CONSTRAINT df_genre_id DEFAULT NEWID(),
+
+    genre_name NVARCHAR(100) NOT NULL,
+
+    description NVARCHAR(500) NULL,
+
+    CONSTRAINT pk_genre
+        PRIMARY KEY (genre_id),
+
+    CONSTRAINT uq_genre_name
+        UNIQUE (genre_name),
+
+    CONSTRAINT ck_genre_name_not_blank
+        CHECK (LEN(LTRIM(RTRIM(genre_name))) > 0)
+);
+CREATE TABLE manga.SeriesGenre
+(
+    series_id UNIQUEIDENTIFIER NOT NULL,
+
+    genre_id UNIQUEIDENTIFIER NOT NULL,
+
+    CONSTRAINT pk_series_genre
+        PRIMARY KEY (series_id, genre_id),
+
+    CONSTRAINT fk_series_genre_series
+        FOREIGN KEY (series_id)
+        REFERENCES manga.Series(series_id),
+
+    CONSTRAINT fk_series_genre_genre
+        FOREIGN KEY (genre_id)
+        REFERENCES manga.Genre(genre_id)
+);
+
+CREATE TABLE manga.Tag
+(
+    tag_id UNIQUEIDENTIFIER NOT NULL
+        CONSTRAINT df_tag_id DEFAULT NEWID(),
+
+    tag_name NVARCHAR(100) NOT NULL,
+
+    description NVARCHAR(500) NULL,
+
+    CONSTRAINT pk_tag
+        PRIMARY KEY (tag_id),
+
+    CONSTRAINT uq_tag_name
+        UNIQUE (tag_name),
+
+    CONSTRAINT ck_tag_name_not_blank
+        CHECK (LEN(LTRIM(RTRIM(tag_name))) > 0)
+);
+
+CREATE TABLE manga.SeriesTag
+(
+    series_id UNIQUEIDENTIFIER NOT NULL,
+
+    tag_id UNIQUEIDENTIFIER NOT NULL,
+
+    CONSTRAINT pk_series_tag
+        PRIMARY KEY (series_id, tag_id),
+
+    CONSTRAINT fk_series_tag_series
+        FOREIGN KEY (series_id)
+        REFERENCES manga.Series(series_id),
+
+    CONSTRAINT fk_series_tag_tag
+        FOREIGN KEY (tag_id)
+        REFERENCES manga.Tag(tag_id)
+);
+GO
 CREATE TABLE manga.SeriesContributor (
 	series_contributor_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_series_contributor_id DEFAULT NEWID() CONSTRAINT pk_series_contributor PRIMARY KEY,
 	series_id UNIQUEIDENTIFIER NOT NULL,
@@ -286,7 +352,6 @@ CREATE TABLE manga.SeriesProposal (
 	proposal_version_no SMALLINT NOT NULL,
 	proposal_title NVARCHAR(200) NOT NULL,
 	synopsis_snapshot NVARCHAR(MAX) NOT NULL,
-	genre_snapshot NVARCHAR(100) NOT NULL,
 	proposal_file_id UNIQUEIDENTIFIER NOT NULL,
 	status_code NVARCHAR(50) NOT NULL CONSTRAINT df_series_proposal_status_code DEFAULT(N'UNDER_EDITORIAL_REVIEW'),
 	submitted_by_user_id UNIQUEIDENTIFIER NOT NULL,

@@ -62,7 +62,10 @@
                 <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
                     <MudText Typo="Typo.h6" Class="font-weight-bold">Chapters Awaiting Review</MudText>
                     <div class="d-flex align-center gap-2">
-                        <MudSelect T="string" Label="Filter" Value="@_statusFilter" ValueChanged="OnFilterChanged" Variant="Variant.Outlined" Style="max-width:200px">
+                        <MudTextField @bind-Value="_searchText" Label="Search series, chapter, or title"
+                                      Immediate="true" Variant="Variant.Outlined"
+                                      Style="min-width: 300px; max-width: 400px;" />
+                        <MudSelect T="string" Label="Filter" Value="@_statusFilter" ValueChanged="OnFilterChanged" Variant="Variant.Outlined" Style="width: 220px; min-width: 220px; max-width: 220px;">
                             <MudSelectItem Value="@("all")">All</MudSelectItem>
                             <MudSelectItem Value="@("UNDER_REVIEW")">Under Review</MudSelectItem>
                             <MudSelectItem Value="@("REVISION_REQUESTED")">Revision Requested</MudSelectItem>
@@ -82,7 +85,7 @@
                 }
                 else
                 {
-                    <MudTable Items="_queue.Chapters" Hover="true" Dense="true" RowsPerPage="15">
+                    <MudTable Items="@GetFilteredChapters()" Hover="true" Dense="true" RowsPerPage="15">
                         <HeaderContent>
                             <MudTh>Series</MudTh>
                             <MudTh>Chapter</MudTh>
@@ -129,6 +132,7 @@
     private bool _loading = true;
     private string? _error;
     private string _statusFilter = "all";
+    private string _searchText = "";
     private Guid _currentUserId;
 
     protected override async Task OnInitializedAsync()
@@ -179,4 +183,21 @@
         "APPROVED" => Color.Success,
         _ => Color.Default
     };
+
+    private IEnumerable<EditorChapterReviewQueueItemDto> GetFilteredChapters()
+    {
+        if (_queue?.Chapters == null) return Array.Empty<EditorChapterReviewQueueItemDto>();
+
+        var filtered = _queue.Chapters.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(_searchText))
+        {
+            filtered = filtered.Where(c =>
+                c.SeriesTitle.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
+                c.ChapterNumberLabel.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
+                (c.ChapterTitle != null && c.ChapterTitle.Contains(_searchText, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        return filtered;
+    }
 }

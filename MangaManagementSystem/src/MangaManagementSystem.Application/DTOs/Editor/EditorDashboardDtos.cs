@@ -36,6 +36,11 @@ namespace MangaManagementSystem.Application.DTOs.Editor
     /// LatestChapterLabel is the chapter number label (e.g. "Ch. 45") because the schema stores
     /// chapter numbers as labels, not integers. LastActivityAtUtc is the series' UpdatedAtUtc
     /// falling back to CreatedAtUtc.
+    ///
+    /// LatestProposalId and LatestProposalStatusCode enable navigation to the latest proposal
+    /// when the series is not yet serialized. CanOpenSeriesSlugPage is pre-computed by the
+    /// Application handler using SeriesNavigationPolicy, so the Web layer does not need to
+    /// call business policy directly.
     /// </summary>
     public sealed record EditorDashboardSeriesActivityDto(
         Guid SeriesId,
@@ -43,5 +48,8 @@ namespace MangaManagementSystem.Application.DTOs.Editor
         string SeriesSlug,
         string StatusCode,
         string? LatestChapterLabel,
-        DateTime? LastActivityAtUtc);
+        DateTime? LastActivityAtUtc,
+        Guid? LatestProposalId,
+        string? LatestProposalStatusCode,
+        bool CanOpenSeriesSlugPage);
 }

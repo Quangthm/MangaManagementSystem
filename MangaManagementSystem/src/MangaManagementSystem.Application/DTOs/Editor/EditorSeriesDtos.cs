@@ -10,7 +10,8 @@ namespace MangaManagementSystem.Application.DTOs.Editor
         string StatusCode,
         DateTime CreatedAtUtc,
         Guid? LatestProposalId,
-        string? LatestProposalStatusCode);
+        string? LatestProposalStatusCode,
+        bool CanOpenSeriesSlugPage);
 
     public sealed record EditorSeriesListDto(
         IReadOnlyList<EditorSeriesDto> Series);

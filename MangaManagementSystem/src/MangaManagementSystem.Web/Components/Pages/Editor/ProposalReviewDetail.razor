@@ -13,7 +13,7 @@
 <EditorLayout>
     <div class="mf-page">
         <div class="mf-page-header">
-            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="GoBack" Class="mb-2">Back to Queue</MudButton>
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="GoBack" Class="mb-2">@_backLabel</MudButton>
             <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Proposal Review</MudText>
             <MudText Typo="Typo.body1" Class="mf-muted">Review the proposal material, add feedback, and move it to the next workflow step</MudText>
         </div>
@@ -29,28 +29,25 @@
         else if (_proposal != null)
         {
             <MudGrid>
-                @* ── Left: Series Cover (portrait box, object-fit: contain) ── *@
-                <MudItem xs="12" md="3">
-                    <MudPaper Class="pa-4 mf-card mb-5 text-center" Elevation="0">
-                        <div style="width:100%; max-width:240px; min-height:340px; margin:0 auto; background:#f1f5f9; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:12px;">
-                            @if (!string.IsNullOrWhiteSpace(_proposal.SeriesCoverUrl))
-                            {
-                                <img src="@_proposal.SeriesCoverUrl"
-                                     alt="@($"{_proposal.SeriesTitle} cover")"
-                                     style="width:100%; height:100%; object-fit:contain; display:block; border-radius:12px;" />
-                            }
-                            else
-                            {
-                                <MudIcon Icon="@Icons.Material.Filled.MenuBook"
-                                         Style="font-size:72px; color:#cbd5e1;" />
-                            }
-                        </div>
-                        <MudText Typo="Typo.caption" Class="mf-muted mt-2">@_proposal.SeriesTitle</MudText>
-                    </MudPaper>
+                @* ── Left: Series Cover (portrait 2:3, object-fit: cover) ── *@
+                <MudItem xs="12" md="4">
+                    <div style="width:100%; max-width:320px; aspect-ratio:2/3; margin:0 auto; background:#f1f5f9; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:12px;">
+                        @if (!string.IsNullOrWhiteSpace(_proposal.SeriesCoverUrl))
+                        {
+                            <img src="@_proposal.SeriesCoverUrl"
+                                 alt="@($"{_proposal.SeriesTitle} cover")"
+                                 style="width:100%; height:100%; object-fit:cover; object-position:center; display:block;" />
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.MenuBook"
+                                     Style="font-size:72px; color:#cbd5e1;" />
+                        }
+                    </div>
                 </MudItem>
 
                 @* ── Center: Proposal Info + File + Decision ── *@
-                <MudItem xs="12" md="6">
+                <MudItem xs="12" md="5">
                     <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
                         <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Class="mb-4">
                             <div>
@@ -336,6 +333,7 @@
     private string? _error;
     private Guid _currentUserId;
     private bool _synopsisExpanded;
+    private string _backLabel = "Back to Queue";
 
     // Modal state
     private bool _revisionDialogOpen;
@@ -371,6 +369,14 @@
                 _currentUserId = userId;
             }
         }
+
+        var resolved = SafeReturnUrl.Resolve(returnUrl, "/editor/proposals");
+        _backLabel = resolved switch
+        {
+            "/editor/dashboard" => "Back to Dashboard",
+            "/editor/series" or "/editor/proposals" => "Back to Queue",
+            _ => "Back to Queue"
+        };
 
         await LoadProposal();
     }

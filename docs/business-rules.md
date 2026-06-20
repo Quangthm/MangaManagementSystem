@@ -135,8 +135,11 @@
 | BR-SERIES-003 | Each series must have one lifecycle status from the approved status list. | Active draft |
 | BR-SERIES-004 | A series becomes `SERIALIZED` after it has passed proposal, editorial, and board approval and is accepted into the production/publication workflow. | Active draft |
 | BR-SERIES-005 | Each series must declare one primary content language. | Active draft |
-| BR-SERIES-006 | In MVP, genre is stored as simple text metadata for display. | Active draft |
-| BR-SERIES-007 | A series cover image must be stored as a `FileResource` and should have the file purpose `SERIES_COVER`. | Active draft |
+| BR-SERIES-006 | Series genres are normalized through `manga.Genre` and `manga.SeriesGenre`; a series may have multiple genres. | Active draft |
+| BR-SERIES-006A | Series tags are normalized through `manga.Tag` and `manga.SeriesTag`; a series may have multiple tags. | Active draft |
+| BR-SERIES-006B | Genres represent broad story categories, while tags represent more specific tropes, themes, settings, character traits, source/context labels, or content descriptors. | Active draft |
+| BR-SERIES-006C | Genres and tags are current series metadata and are not stored as proposal-history snapshot tables in MVP. | Active draft |
+| BR-SERIES-007 | A series cover image is current series metadata, must be stored as a `FileResource`, and should have the file purpose `SERIES_COVER` when provided. | Active draft |
 | BR-SERIES-008 | A series may optionally reference another series as its source version. | Active draft |
 | BR-SERIES-009 | A series cannot reference itself as its own source series. | Active draft |
 | BR-SERIES-010 | Series ownership and contributor membership are managed through `SeriesContributor` instead of storing a lead Mangaka directly in `Series`. | Active draft |
@@ -151,7 +154,7 @@
 | BR-SERIES-019 | While a series is still in `PROPOSAL_DRAFT`, the backend may automatically regenerate the slug when the Mangaka changes the title and saves the draft. | Active draft |
 | BR-SERIES-020 | Once a series leaves `PROPOSAL_DRAFT`, the slug must be locked for normal workflow so the future `/series/{slug}` URL remains stable. | Active draft |
 | BR-SERIES-021 | The stable main series URL uses `/series/{slug}` and becomes meaningful primarily after the series reaches `SERIALIZED`. | Active draft |
-| BR-SERIES-022 | Normal Mangaka profile updates to title, slug, synopsis, genre, cover, content language, source series, and publication frequency are allowed only while the series is in `PROPOSAL_DRAFT`. | Active draft |
+| BR-SERIES-022 | Normal Mangaka profile updates to title, slug, synopsis, genres, tags, cover, content language, source series, and publication frequency are allowed only while the series is in `PROPOSAL_DRAFT`. | Active draft |
 | BR-SERIES-023 | After a series leaves `PROPOSAL_DRAFT`, normal profile editing is locked; later changes require a separate controlled workflow, board/chief procedure, or future administrative correction process. | Active draft |
 | BR-SERIES-024 | After serialization, Mangaka production work continues through chapters, pages, page versions, regions, tasks, and the authorized chapter workspace rather than by editing the locked series profile. | Active draft |
 | BR-SERIES-025 | When a Mangaka creates a new series draft, the system must create the `Series` row and an active `SeriesContributor` row for that Mangaka in the same backend workflow or transaction, so that the creator is immediately recognized as an active Mangaka contributor for the draft. | Active draft |
@@ -160,7 +163,7 @@
 
 | Rule ID | Future Information | Review Status |
 |---|---|---|
-| FI-SERIES-001 | Genre may later be normalized into lookup/junction tables for cleaner filtering and reporting. | Future information |
+| FI-SERIES-001 | Additional public-facing discovery metadata, moderation workflows, or controlled vocabulary management may be expanded later if the MVP needs richer catalogue/search behavior. | Future information |
 
 ---
 
@@ -186,7 +189,8 @@
 | BR-PROP-001 | A `SeriesProposal` row represents one formal submitted proposal version for a series. | Active draft |
 | BR-PROP-002 | A series may have multiple proposal versions over time. | Active draft |
 | BR-PROP-003 | Proposal version numbers must be positive and unique within the same series. | Active draft |
-| BR-PROP-004 | A submitted proposal must preserve submission-time snapshots of review-relevant series information, including proposal title, synopsis, genre, and proposal file. | Active draft |
+| BR-PROP-004 | A submitted proposal must preserve submission-time snapshots of review-relevant submitted content, including proposal title, synopsis, and the proposal file. | Active draft |
+| BR-PROP-004A | `SeriesProposal` does not snapshot genres, tags, or the current series cover file in MVP; reviewers read current genres, tags, and cover from the locked `Series` metadata during review. | Active draft |
 | BR-PROP-005 | A submitted series proposal must include a proposal file stored as a `FileResource` with purpose `SERIES_PROPOSAL`. | Active draft |
 | BR-PROP-006 | `SeriesProposal` does not store draft proposal editing; a row is created only when the proposal is formally submitted for editorial review. | Active draft |
 | BR-PROP-007 | Once a `SeriesProposal` row is created, its submitted snapshot fields should remain locked. | Active draft |

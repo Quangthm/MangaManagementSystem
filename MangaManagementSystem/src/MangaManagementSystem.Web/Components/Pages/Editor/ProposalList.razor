@@ -17,8 +17,11 @@
         </div>
 
         <MudPaper Class="pa-5 mf-card" Elevation="0">
-            <div class="d-flex align-center mb-4">
-                <MudSelect T="string" Label="Filter by Status" Value="@_statusFilter" ValueChanged="OnFilterChanged" Variant="Variant.Outlined" Class="max-w-xs">
+            <div class="d-flex align-center mb-4 gap-3">
+                <MudTextField @bind-Value="_searchText" Label="Search series, proposal, or submitter"
+                              Immediate="true" Variant="Variant.Outlined"
+                              Style="min-width: 300px; max-width: 400px;" />
+                <MudSelect T="string" Label="Filter by Status" Value="@_statusFilter" ValueChanged="OnFilterChanged" Variant="Variant.Outlined" Style="min-width: 200px; max-width: 200px;">
                     <MudSelectItem Value="@((string?)null)">All Proposals</MudSelectItem>
                     <MudSelectItem Value="@("UNDER_EDITORIAL_REVIEW")">Under Editorial Review</MudSelectItem>
                     <MudSelectItem Value="@("UNDER_BOARD_REVIEW")">Under Board Review</MudSelectItem>
@@ -48,7 +51,7 @@
             }
             else
             {
-                <MudTable Items="_proposals" Hover="true" RowsPerPage="15">
+                <MudTable Items="@GetFilteredProposals()" Hover="true" RowsPerPage="15">
                     <HeaderContent>
                         <MudTh>Series</MudTh>
                         <MudTh>Version</MudTh>
@@ -64,7 +67,7 @@
                             <MudText Typo="Typo.body1" Class="font-weight-bold">@context.SeriesTitle</MudText>
                             <MudText Typo="Typo.caption" Class="mf-muted">@context.ProposalTitle</MudText>
                         </MudTd>
-                        <MudTd DataLabel="Version">v@context.ProposalVersionNo</MudTd>
+                        <MudTd DataLabel="Version">@($"v{context.ProposalVersionNo}")</MudTd>
                         <MudTd DataLabel="Submitted By">@context.SubmitterDisplayName</MudTd>
                         <MudTd DataLabel="Submitted">@context.SubmittedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</MudTd>
                         <MudTd DataLabel="Reviewer">
@@ -91,6 +94,7 @@
     private string? _error;
     private IReadOnlyList<ProposalQueueItemDto>? _proposals;
     private string? _statusFilter = "UNDER_EDITORIAL_REVIEW";
+    private string _searchText = "";
     private Guid _currentUserId;
 
     protected override async Task OnInitializedAsync()
@@ -131,6 +135,23 @@
         {
             _loading = false;
         }
+    }
+
+    private IEnumerable<ProposalQueueItemDto> GetFilteredProposals()
+    {
+        if (_proposals == null) return Array.Empty<ProposalQueueItemDto>();
+
+        var filtered = _proposals.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(_searchText))
+        {
+            filtered = filtered.Where(p =>
+                p.SeriesTitle.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
+                p.ProposalTitle.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
+                p.SubmitterDisplayName.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return filtered;
     }
 
     private Color GetStatusColor(string status) => status switch

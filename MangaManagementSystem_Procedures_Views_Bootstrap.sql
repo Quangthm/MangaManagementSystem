@@ -1231,7 +1231,6 @@ BEGIN
 
     DECLARE @proposal_title NVARCHAR(200);
     DECLARE @synopsis_snapshot NVARCHAR(MAX);
-    DECLARE @genre_snapshot NVARCHAR(100);
     DECLARE @current_series_status_code NVARCHAR(50);
     DECLARE @submitted_at_utc DATETIME2(0) = SYSUTCDATETIME();
 
@@ -1270,7 +1269,6 @@ BEGIN
         SELECT
             @proposal_title = s.title,
             @synopsis_snapshot = s.synopsis,
-            @genre_snapshot = s.genre,
             @current_series_status_code = s.status_code
         FROM manga.Series s WITH (UPDLOCK, HOLDLOCK)
         WHERE s.series_id = @series_id;
@@ -1353,7 +1351,6 @@ END;
             @proposal_version_no,
             @proposal_title,
             @synopsis_snapshot,
-            @genre_snapshot,
             @proposal_file_resource_id,
             N'UNDER_EDITORIAL_REVIEW',
             @submitted_by_user_id,

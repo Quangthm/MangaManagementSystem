@@ -55,5 +55,11 @@
 13. Unsafe returnUrl values (e.g. `https://evil.com`, `javascript:alert(1)`): ignored, fallback used
 14. Build: 0 errors, 0 changed-file warnings
 
+## Follow-up: Cover Card Fill Behavior
+
+- Problem: `object-fit: contain` preserved full image but caused gray gaps for landscape images.
+- Fix: controlled portrait cover card (`aspect-ratio: 2/3`) with `object-fit: cover`, no inner padding, removed duplicate title caption.
+- Cloudinary note: original upload remains unchanged; future display-specific transformations can generate cover thumbnails.
+
 ## Remaining Tasks
 - Data cleanup for inconsistent `PROPOSAL_DRAFT` series with `UNDER_EDITORIAL_REVIEW` proposal rows (stale/test data)

@@ -467,12 +467,12 @@ User selects/uploads a file
 Mangaka opens /mangaka/series/drafts
 → Mangaka clicks Create Draft
 → UI shows create draft popup/modal
-→ Mangaka enters title, synopsis, genre, content language, optional source series, optional proposed publication frequency, and optional cover image
+→ Mangaka enters title, synopsis, one or more genres, optional tags, content language, optional source series, optional proposed publication frequency, and optional cover image
 → Backend validates the form and confirms the actor is an active Mangaka
 → Backend generates slug from title
 → Backend resolves slug uniqueness
 → If a cover image is provided, backend uploads the file to Cloudinary and calculates SHA-256 from the exact uploaded bytes
-→ Backend calls manga.usp_Series_Create with series data and optional cover metadata
+→ Backend calls manga.usp_Series_Create with series data, selected genre/tag IDs, and optional cover metadata
 → Database calls manga.usp_FileResource_Create if cover metadata exists
 → Database creates manga.Series with status_code = PROPOSAL_DRAFT
 → Database creates an active manga.SeriesContributor row for the creating Mangaka
@@ -496,6 +496,9 @@ audit.usp_AuditEvent_Append
 - Draft series are managed internally by `series_id`, not by `/series/{slug}`.
 - Backend generates and resolves slug uniqueness before calling the stored procedure.
 - `publication_frequency_code` may be provided by Mangaka during draft creation as the proposed/preferred frequency.
+- Genres are selected from `manga.Genre` and linked through `manga.SeriesGenre`.
+- Tags are selected from `manga.Tag` and linked through `manga.SeriesTag`.
+- Genres and tags are current series metadata; they are not duplicated into proposal snapshot tables in MVP.
 - If a cover image is provided, C# uploads to Cloudinary first, then passes Cloudinary metadata to SQL.
 - SQL creates the `FileResource` row inside the series creation workflow.
 - If SQL fails after Cloudinary upload, the backend should attempt to delete the uploaded Cloudinary asset to avoid orphaned files.
@@ -522,12 +525,12 @@ audit.usp_AuditEvent_Append
 Mangaka opens /mangaka/series/drafts
 → Mangaka selects a draft series
 → UI opens edit draft popup/modal
-→ Mangaka updates title, synopsis, genre, content language, optional source series, optional proposed publication frequency, and optional cover image
+→ Mangaka updates title, synopsis, genres, tags, content language, optional source series, optional proposed publication frequency, and optional cover image
 → Backend validates the form and confirms the actor is an active Mangaka contributor of the selected series
 → Backend confirms the series is still PROPOSAL_DRAFT
 → If title changed, backend regenerates slug from title and resolves slug uniqueness
 → If cover image changed, backend uploads the new cover to Cloudinary and calculates SHA-256 from the exact uploaded bytes
-→ Backend calls manga.usp_Series_UpdateProfile with updated series data and optional new cover metadata
+→ Backend calls manga.usp_Series_UpdateProfile with updated series data, selected genre/tag IDs, and optional new cover metadata
 → Database calls manga.usp_FileResource_Create if new cover metadata exists
 → Database updates manga.Series editable profile fields
 → Database updates updated_at_utc and updated_by_user_id together
@@ -546,10 +549,11 @@ audit.usp_AuditEvent_Append
 ### Important Notes
 
 - Normal Mangaka profile updates are allowed only while `Series.status_code = PROPOSAL_DRAFT`.
-- Once the series leaves `PROPOSAL_DRAFT`, title, slug, synopsis, genre, cover, content language, source series, and `publication_frequency_code` are locked from normal Mangaka profile editing.
+- Once the series leaves `PROPOSAL_DRAFT`, title, slug, synopsis, genres, tags, cover, content language, source series, and `publication_frequency_code` are locked from normal Mangaka profile editing.
 - Slug may auto-regenerate from title during `PROPOSAL_DRAFT` because draft workflows use `series_id`.
 - Slug locks after the series leaves `PROPOSAL_DRAFT`; no slug history or redirect table is required for MVP.
 - `publication_frequency_code` is treated as Mangaka's proposed/preferred frequency during draft; board serialization/frequency override is handled by a separate board procedure.
+- Genres and tags are updated as current series metadata through `SeriesGenre` and `SeriesTag` while the draft remains editable.
 - The procedure should rely on database constraints for simple `CHECK`, `UNIQUE`, `NOT NULL`, and FK enforcement, while still validating actor permission and workflow state.
 
 ### System Should Try To
@@ -586,7 +590,7 @@ Mangaka opens /mangaka/series/drafts
 → Database verifies the submitter is an active Mangaka contributor of the series
 → Database does not require an active Tantou Editor contributor for first submission
 → Database creates manga.FileResource with file_purpose_code = SERIES_PROPOSAL
-→ Database creates manga.SeriesProposal with the next proposal_version_no and submission-time snapshots
+→ Database creates manga.SeriesProposal with the next proposal_version_no, proposal title/synopsis snapshots, and proposal file reference
 → Database sets manga.SeriesProposal.status_code = UNDER_EDITORIAL_REVIEW
 → Database sets manga.Series.status_code = UNDER_EDITORIAL_REVIEW
 → Database writes SERIES_PROPOSAL_SUBMITTED audit event
@@ -612,8 +616,9 @@ audit.usp_AuditEvent_Append
 - First submission requires an active Mangaka contributor but does not require an active Tantou Editor contributor already assigned to the series.
 - Submitted proposals appear in the editorial review queue for active Tantou Editors.
 - The UI may prioritize unclaimed proposals first, but the database should not block multiple Tantou Editors from becoming active contributors to the same series.
-- Submitted proposal snapshot fields should remain locked.
+- Submitted proposal snapshot fields should remain locked; `SeriesProposal` snapshots proposal title, synopsis, and proposal file, but does not snapshot genres, tags, or the current series cover file in MVP.
 - Revision later creates a new `SeriesProposal` version instead of overwriting the submitted proposal.
+- Proposal review screens may display current genres, tags, and cover from the locked `Series` metadata during review; these are not copied into `SeriesProposal`.
 - If Cloudinary upload succeeds but SQL fails, the backend should attempt to delete the uploaded Cloudinary asset.
 
 ### System Should Try To

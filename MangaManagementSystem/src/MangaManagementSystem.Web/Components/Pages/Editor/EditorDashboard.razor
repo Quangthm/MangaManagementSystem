@@ -2,6 +2,7 @@
 @using Microsoft.AspNetCore.Authorization
 @using System.Security.Claims
 @using MangaManagementSystem.Application.DTOs.Editor
+@using MangaManagementSystem.Web.Services
 @using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Tantou Editor")]
 @inject IEditorDashboardApiClient EditorDashboardApiClient
@@ -101,7 +102,7 @@
                                 <MudText Typo="Typo.body1" Class="font-weight-bold">@context.SeriesTitle</MudText>
                                 <MudText Typo="Typo.caption" Class="mf-muted">@context.ProposalTitle</MudText>
                             </MudTd>
-                            <MudTd DataLabel="Version">v@context.ProposalVersionNo</MudTd>
+                            <MudTd DataLabel="Version">@($"v{context.ProposalVersionNo}")</MudTd>
                             <MudTd DataLabel="Submitted By">@context.SubmittedByDisplayName</MudTd>
                             <MudTd DataLabel="Submitted">@context.SubmittedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</MudTd>
                             <MudTd DataLabel="Status"><MudChip T="string" Color="Color.Warning" Size="Size.Small">@context.StatusCode.Replace("_", " ")</MudChip></MudTd>
@@ -142,10 +143,17 @@
                             <MudTh>Last Activity</MudTh>
                         </HeaderContent>
                         <RowTemplate>
+                            @{
+                                var seriesHref = SeriesNavigationUrlBuilder.BuildEditorSeriesOrProposalHref(
+                                    context.CanOpenSeriesSlugPage,
+                                    context.SeriesSlug,
+                                    context.LatestProposalId,
+                                    "/editor/dashboard");
+                            }
                             <MudTd DataLabel="Title">
-                                @if (!string.IsNullOrWhiteSpace(context.SeriesSlug))
+                                @if (seriesHref != null)
                                 {
-                                    <MudLink Href="@($"/series/{context.SeriesSlug}")">@context.SeriesTitle</MudLink>
+                                    <MudLink Href="@seriesHref">@context.SeriesTitle</MudLink>
                                 }
                                 else
                                 {

@@ -62,7 +62,7 @@ Allow Mangaka to create, view, edit, and submit their own series drafts before f
 
 | Element | Behavior |
 |---|---|
-| Draft table/card grid | Shows series title, status, genre, language, proposed frequency, last updated time, and action buttons. |
+| Draft table/card grid | Shows series title, status, genres, tags, language, proposed frequency, last updated time, and action buttons. |
 | Create Draft button | Opens the create draft modal. |
 | Edit button | Opens the edit draft modal for a `PROPOSAL_DRAFT` series. |
 | Submit Proposal button | Opens proposal submission flow for an eligible `PROPOSAL_DRAFT` series and requires a proposal file upload. |
@@ -73,7 +73,8 @@ Allow Mangaka to create, view, edit, and submit their own series drafts before f
 - Cover thumbnail or placeholder
 - Title
 - `status_code`
-- Genre
+- Genres
+- Tags
 - Content language
 - `publication_frequency_code` as proposed frequency
 - Slug preview
@@ -90,7 +91,8 @@ Allow Mangaka to create, view, edit, and submit their own series drafts before f
 | Title | Yes | Backend generates slug from this field. |
 | Slug preview | Read-only for MVP | Shows backend-style preview; actual saved slug is computed on save. |
 | Synopsis | Yes | Required by current database schema. |
-| Genre | Yes | Simple text for MVP. |
+| Genres | Yes | Multi-select from `manga.Genre`, saved through `manga.SeriesGenre`. |
+| Tags | No | Optional multi-select from `manga.Tag`, saved through `manga.SeriesTag`. |
 | Content language | Yes | `ja`, `en`, `vi`. |
 | Cover image | No | Must reference `FileResource` with `SERIES_COVER` purpose if provided. |
 | Source series | No | Cannot reference itself. |
@@ -140,7 +142,7 @@ Allow a Mangaka contributor to formally submit a `PROPOSAL_DRAFT` series for edi
 | Field | Required | Notes |
 |---|---:|---|
 | Proposal file | Yes | Stored as `FileResource` with purpose `SERIES_PROPOSAL`; accepts only `.pdf`, `.doc`, and `.docx` in MVP. |
-| Confirmation checkbox | Yes | Confirms the submitted proposal snapshot will be locked after submission. |
+| Confirmation checkbox | Yes | Confirms the submitted proposal title, synopsis, and proposal file will be locked after submission. |
 
 ### Submission behavior
 
@@ -163,6 +165,8 @@ Mangaka clicks Submit Proposal
 - Submitted proposals should appear in the editorial proposal queue for active Tantou Editors.
 - The queue may prioritize proposals that do not yet have any active Tantou Editor contributor, but the database should still allow multiple active Tantou Editor contributors for a series.
 - After submission, normal series profile editing is locked until revision returns the series to `PROPOSAL_DRAFT`.
+- Proposal review screens display current series cover, genres, and tags from locked series metadata during review.
+- `SeriesProposal` does not snapshot the current cover file, genres, or tags in MVP.
 
 ---
 
@@ -198,7 +202,7 @@ A unified series page that can later become the public reader-facing series URL.
 
 | Section | Content |
 |---|---|
-| Header | Cover, title, status badge, genre, language, publication frequency. |
+| Header | Current cover, title, status badge, genres, tags, language, publication frequency. |
 | Synopsis panel | Current series synopsis. |
 | Chapter list | Chapters under the series with status and planned/released dates. |
 | Role action panel | Buttons shown based on current user role and permission. |

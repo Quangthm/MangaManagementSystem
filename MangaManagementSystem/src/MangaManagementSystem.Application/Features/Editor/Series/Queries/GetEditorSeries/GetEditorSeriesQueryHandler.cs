@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using MangaManagementSystem.Application.Common.Policies;
 using MangaManagementSystem.Application.DTOs.Editor;
 using MangaManagementSystem.Domain.Interfaces;
 using MediatR;
@@ -44,14 +45,19 @@ namespace MangaManagementSystem.Application.Features.Editor.Series.Queries.GetEd
                 .Select(s =>
                 {
                     latestBySeriesId.TryGetValue(s.SeriesId, out var latest);
+                    var latestProposalId = latest?.SeriesProposalId;
+                    var latestProposalStatusCode = latest?.StatusCode;
+
                     return new EditorSeriesDto(
                         s.SeriesId,
                         s.Title,
                         s.Slug,
                         s.StatusCode,
                         s.CreatedAtUtc,
-                        latest?.SeriesProposalId,
-                        latest?.StatusCode);
+                        latestProposalId,
+                        latestProposalStatusCode,
+                        SeriesNavigationPolicy.CanOpenSeriesSlugPage(
+                            s.StatusCode, s.Slug, latestProposalId, latestProposalStatusCode));
                 })
                 .ToList();
 
