@@ -29,7 +29,8 @@ namespace MangaManagementSystem.Web.Services
                 return false;
             }
 
-            return value.StartsWith("/editor/", StringComparison.Ordinal)
+            return value == "/editor"
+                || value.StartsWith("/editor/", StringComparison.Ordinal)
                 || value.StartsWith("/series/", StringComparison.Ordinal)
                 || value == "/editor/series"
                 || value == "/editor/proposals"

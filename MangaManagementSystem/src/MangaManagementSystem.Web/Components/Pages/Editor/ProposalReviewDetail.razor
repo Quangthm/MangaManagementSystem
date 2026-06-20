@@ -13,7 +13,7 @@
 <EditorLayout>
     <div class="mf-page">
         <div class="mf-page-header">
-            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="GoBack" Class="mb-2">@_backLabel</MudButton>
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack" Href="@_backHref" Class="mb-2">@_backLabel</MudButton>
             <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Proposal Review</MudText>
             <MudText Typo="Typo.body1" Class="mf-muted">Review the proposal material, add feedback, and move it to the next workflow step</MudText>
         </div>
@@ -31,7 +31,7 @@
             <MudGrid>
                 @* ── Left: Series Cover (portrait 2:3, object-fit: cover) ── *@
                 <MudItem xs="12" md="4">
-                    <div style="width:100%; max-width:320px; aspect-ratio:2/3; margin:0 auto; background:#f1f5f9; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:12px;">
+                    <div style="width: min(100%, 420px); max-width: 420px; aspect-ratio:2/3; margin:0 auto; background:#f1f5f9; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:12px;">
                         @if (!string.IsNullOrWhiteSpace(_proposal.SeriesCoverUrl))
                         {
                             <img src="@_proposal.SeriesCoverUrl"
@@ -334,6 +334,7 @@
     private Guid _currentUserId;
     private bool _synopsisExpanded;
     private string _backLabel = "Back to Queue";
+    private string _backHref = "/editor/proposals";
 
     // Modal state
     private bool _revisionDialogOpen;
@@ -370,11 +371,12 @@
             }
         }
 
-        var resolved = SafeReturnUrl.Resolve(returnUrl, "/editor/proposals");
-        _backLabel = resolved switch
+        _backHref = SafeReturnUrl.Resolve(returnUrl, "/editor/proposals");
+        _backLabel = _backHref switch
         {
-            "/editor/dashboard" => "Back to Dashboard",
-            "/editor/series" or "/editor/proposals" => "Back to Queue",
+            "/editor" => "Back to Dashboard",
+            "/editor/series" => "Back to Series",
+            "/editor/proposals" => "Back to Queue",
             _ => "Back to Queue"
         };
 
@@ -402,9 +404,6 @@
             _loading = false;
         }
     }
-
-    private void GoBack() =>
-        Nav.NavigateTo(SafeReturnUrl.Resolve(returnUrl, "/editor/proposals"));
 
     private void ToggleSynopsis() => _synopsisExpanded = !_synopsisExpanded;
 
