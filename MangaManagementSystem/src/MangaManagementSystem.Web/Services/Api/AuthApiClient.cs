@@ -25,9 +25,10 @@ namespace MangaManagementSystem.Web.Services.Api
                 internalApiOptions.Value;
         }
 
-        public async Task<UserDto> LoginAsync(
+        public async Task<LoginApiResult> LoginAsync(
             string usernameOrEmail,
-            string password)
+            string password,
+            CancellationToken cancellationToken = default)
         {
             using var response =
                 await _httpClient.PostAsJsonAsync(
@@ -37,21 +38,24 @@ namespace MangaManagementSystem.Web.Services.Api
                         UsernameOrEmail =
                             usernameOrEmail,
                         Password = password
-                    });
+                    },
+                    cancellationToken);
 
             LogFailure(
                 response,
                 "Login");
 
             return await ApiResponseReader
-                .ReadRequiredAsync<UserDto>(
+                .ReadRequiredAsync<LoginApiResult>(
                     response,
-                    "The login response was empty.");
+                    "The login response was empty.",
+                    cancellationToken);
         }
 
-        public async Task<UserDto>
+        public async Task<LoginApiResult>
             ResolveGoogleLoginAsync(
-                string email)
+                string email,
+                CancellationToken cancellationToken = default)
         {
             using var request =
                 CreateInternalRequest(
@@ -64,23 +68,26 @@ namespace MangaManagementSystem.Web.Services.Api
 
             using var response =
                 await _httpClient.SendAsync(
-                    request);
+                    request,
+                    cancellationToken);
 
             LogFailure(
                 response,
                 "Google login resolution");
 
             return await ApiResponseReader
-                .ReadRequiredAsync<UserDto>(
+                .ReadRequiredAsync<LoginApiResult>(
                     response,
-                    "The Google login response was empty.");
+                    "The Google login response was empty.",
+                    cancellationToken);
         }
 
         public async Task<GoogleSignupCallbackResult>
             ProcessGoogleSignupAsync(
                 string email,
                 string? googleDisplayName,
-                string roleName)
+                string roleName,
+                CancellationToken cancellationToken = default)
         {
             using var request =
                 CreateInternalRequest(
@@ -96,7 +103,8 @@ namespace MangaManagementSystem.Web.Services.Api
 
             using var response =
                 await _httpClient.SendAsync(
-                    request);
+                    request,
+                    cancellationToken);
 
             LogFailure(
                 response,
@@ -106,7 +114,8 @@ namespace MangaManagementSystem.Web.Services.Api
                 .ReadRequiredAsync<
                     GoogleSignupCallbackResult>(
                     response,
-                    "The Google sign-up response was empty.");
+                    "The Google sign-up response was empty.",
+                    cancellationToken);
         }
 
         private HttpRequestMessage

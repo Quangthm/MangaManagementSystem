@@ -4,17 +4,26 @@ namespace MangaManagementSystem.Web.Services.Api
 {
     public interface IAuthApiClient
     {
-        Task<UserDto> LoginAsync(
+        Task<LoginApiResult> LoginAsync(
             string usernameOrEmail,
-            string password);
+            string password,
+            CancellationToken cancellationToken = default);
 
-        Task<UserDto> ResolveGoogleLoginAsync(
-            string email);
+        Task<LoginApiResult> ResolveGoogleLoginAsync(
+            string email,
+            CancellationToken cancellationToken = default);
 
         Task<GoogleSignupCallbackResult>
             ProcessGoogleSignupAsync(
                 string email,
                 string? googleDisplayName,
-                string roleName);
+                string roleName,
+                CancellationToken cancellationToken = default);
     }
+
+    public sealed record LoginApiResult(
+        UserDto User,
+        string RoleName,
+        string AccessToken,
+        DateTime ExpiresAtUtc);
 }

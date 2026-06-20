@@ -6,6 +6,7 @@ using MangaManagementSystem.Web.Components;
 using MangaManagementSystem.Web.Helpers;
 using MangaManagementSystem.Web.Services;
 using MangaManagementSystem.Web.Services.Api;
+using MangaManagementSystem.Web.Services.EditorialBoard;
 using MangaManagementSystem.Web.Options;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -31,6 +32,7 @@ namespace MangaManagementSystem.Web
 
             builder.Services.AddMemoryCache();
             builder.Services.Configure<ApiSettings>(builder.Configuration.GetSection(ApiSettings.SectionName));
+            builder.Services.AddScoped<ApiAuthorizationMessageHandler>();
 
             builder.Services
                 .AddOptions<InternalApiOptions>()
@@ -48,6 +50,16 @@ namespace MangaManagementSystem.Web
                 var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
                 client.BaseAddress = new Uri(settings.Value.BaseUrl);
             });
+            builder.Services
+                .AddHttpClient<IEditorialBoardApiClient, EditorialBoardApiClient>((sp, client) =>
+                {
+                    var settings =
+                        sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+
+                    client.BaseAddress =
+                        new Uri(settings.Value.BaseUrl);
+                })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
             builder.Services.AddHttpClient<IAuthApiClient, AuthApiClient>((sp, client) =>
             {
                 var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
@@ -58,11 +70,16 @@ namespace MangaManagementSystem.Web
                 var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
                 client.BaseAddress = new Uri(settings.Value.BaseUrl);
             });
-            builder.Services.AddHttpClient<IMangakaSeriesApiClient, MangakaSeriesApiClient>((sp, client) =>
-            {
-                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
-                client.BaseAddress = new Uri(settings.Value.BaseUrl);
-            });
+            builder.Services
+                .AddHttpClient<IMangakaSeriesApiClient, MangakaSeriesApiClient>((sp, client) =>
+                {
+                    var settings =
+                        sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+
+                    client.BaseAddress =
+                        new Uri(settings.Value.BaseUrl);
+                })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
             builder.Services.AddHttpClient<IProfilePasswordApiClient, ProfilePasswordApiClient>((sp, client) =>
             {
                 var settings =
@@ -94,7 +111,9 @@ namespace MangaManagementSystem.Web
 
                 client.BaseAddress =
                     new Uri(settings.Value.BaseUrl);
-            });            builder.Services.AddHttpContextAccessor();
+            });
+
+            builder.Services.AddHttpContextAccessor();
             builder.Services.AddAntiforgery();
 
             builder.Services.AddAuthentication(options =>
@@ -225,15 +244,28 @@ namespace MangaManagementSystem.Web
 
                 try
                 {
-                    var user = await authApi.LoginAsync(username, password);
+                    var loginResult =
+                        await authApi.LoginAsync(
+                            username,
+                            password);
 
-                    if (string.IsNullOrWhiteSpace(user.RoleName))
+                    if (string.IsNullOrWhiteSpace(
+                            loginResult.RoleName))
                     {
-                        return Results.Redirect($"/login?error={AuthErrorCodes.InvalidCredentials}");
+                        return Results.Redirect(
+                            $"/login?error={AuthErrorCodes.InvalidCredentials}");
                     }
 
-                    await SignInApplicationUserAsync(context, user, user.RoleName);
-                    return Results.Redirect(GetDashboardRedirectUrl(user.RoleName));
+                    await SignInApplicationUserAsync(
+                        context,
+                        loginResult.User,
+                        loginResult.RoleName,
+                        loginResult.AccessToken,
+                        loginResult.ExpiresAtUtc);
+
+                    return Results.Redirect(
+                        GetDashboardRedirectUrl(
+                            loginResult.RoleName));
                 }
                 catch (ApiClientException ex)
                 {
@@ -296,13 +328,15 @@ namespace MangaManagementSystem.Web
 
                     try
                     {
-                        var user =
+                        var loginResult =
                             await authApi
                                 .ResolveGoogleLoginAsync(
                                     email);
 
                         if (string.IsNullOrWhiteSpace(
-                                user.RoleName))
+                                loginResult.RoleName)
+                            || string.IsNullOrWhiteSpace(
+                                loginResult.AccessToken))
                         {
                             throw new ApiClientException(
                                 AuthErrorCodes
@@ -312,14 +346,9 @@ namespace MangaManagementSystem.Web
                                     .Forbidden);
                         }
 
-                        await SignInApplicationUserAsync(
+                        return await SignInAndRedirectAsync(
                             context,
-                            user,
-                            user.RoleName);
-
-                        return Results.Redirect(
-                            GetDashboardRedirectUrl(
-                                user.RoleName));
+                            loginResult);
                     }
                     catch (ApiClientException ex)
                     {
@@ -440,10 +469,14 @@ namespace MangaManagementSystem.Web
                             && !string.IsNullOrWhiteSpace(
                                 signupResult.RoleName))
                         {
+                            var loginResult =
+                                await authApi
+                                    .ResolveGoogleLoginAsync(
+                                        email);
+
                             return await SignInAndRedirectAsync(
                                 context,
-                                signupResult.User,
-                                signupResult.RoleName);
+                                loginResult);
                         }
 
                         await context.SignOutAsync(
@@ -775,26 +808,66 @@ app.MapPost(
             app.Run();
         }
 
-        private static async Task SignInApplicationUserAsync(HttpContext context, UserDto user, string roleName)
+        private static async Task
+            SignInApplicationUserAsync(
+                HttpContext context,
+                UserDto user,
+                string roleName,
+                string? accessToken = null,
+                DateTime? expiresAtUtc = null)
         {
-            var claims = new List<Claim>
-            {
-                new(ClaimTypes.NameIdentifier, user.UserId.ToString()),
-                new(ClaimTypes.Name, user.Username),
-                new(ClaimTypes.Email, user.Email),
-                new(ClaimTypes.Role, roleName)
-            };
+            var claims =
+                new List<Claim>
+                {
+                    new(
+                        ClaimTypes.NameIdentifier,
+                        user.UserId.ToString()),
+                    new(
+                        ClaimTypes.Name,
+                        user.Username),
+                    new(
+                        ClaimTypes.Email,
+                        user.Email),
+                    new(
+                        ClaimTypes.Role,
+                        roleName)
+                };
 
-            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-            var principal = new ClaimsPrincipal(identity);
+            if (!string.IsNullOrWhiteSpace(
+                    accessToken))
+            {
+                claims.Add(
+                    new Claim(
+                        "api_access_token",
+                        accessToken));
+            }
+
+            var identity =
+                new ClaimsIdentity(
+                    claims,
+                    CookieAuthenticationDefaults
+                        .AuthenticationScheme);
+
+            var principal =
+                new ClaimsPrincipal(identity);
+
+            var cookieExpiresAt =
+                expiresAtUtc.HasValue
+                    ? new DateTimeOffset(
+                        DateTime.SpecifyKind(
+                            expiresAtUtc.Value,
+                            DateTimeKind.Utc))
+                    : DateTimeOffset.UtcNow
+                        .AddDays(14);
 
             await context.SignInAsync(
-                CookieAuthenticationDefaults.AuthenticationScheme,
+                CookieAuthenticationDefaults
+                    .AuthenticationScheme,
                 principal,
                 new AuthenticationProperties
                 {
                     IsPersistent = true,
-                    ExpiresUtc = DateTimeOffset.UtcNow.AddDays(14)
+                    ExpiresUtc = cookieExpiresAt
                 });
         }
 
@@ -893,10 +966,10 @@ app.MapPost(
             "/editor",
 
         "Editorial Board Member" =>
-            "/board",
+            "/demo/mangaflow/editorial",
 
         "Editorial Board Chief" =>
-            "/board-chief",
+            "/demo/mangaflow/editorial",
 
         _ =>
             "/access-denied"
@@ -904,11 +977,18 @@ app.MapPost(
 
         private static async Task<IResult> SignInAndRedirectAsync(
             HttpContext context,
-            UserDto user,
-            string roleName)
+            LoginApiResult loginResult)
         {
-            await SignInApplicationUserAsync(context, user, roleName);
-            return Results.Redirect(GetDashboardRedirectUrl(roleName));
+            await SignInApplicationUserAsync(
+                context,
+                loginResult.User,
+                loginResult.RoleName,
+                loginResult.AccessToken,
+                loginResult.ExpiresAtUtc);
+
+            return Results.Redirect(
+                GetDashboardRedirectUrl(
+                    loginResult.RoleName));
         }
     }
 }

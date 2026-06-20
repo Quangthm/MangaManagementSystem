@@ -1,3 +1,4 @@
+using MangaManagementSystem.Application.Features.EditorialBoard.Repositories;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Domain.Interfaces;
 using MangaManagementSystem.Infrastructure.Options;
@@ -48,6 +49,7 @@ namespace MangaManagementSystem.Infrastructure
             services.AddScoped<IAuditEventRepository, AuditEventRepository>();
             services.AddScoped<IEditorDashboardRepository, EditorDashboardRepository>();
             services.AddScoped<IEditorChapterReviewRepository, EditorChapterReviewRepository>();
+            services.AddScoped<IEditorialBoardRepository, EditorialBoardRepository>();
 
             // Unit of Work
             services.AddScoped<IUnitOfWork, UnitOfWork>();
