@@ -1,8 +1,10 @@
-﻿/*
+/*
     Mock serialized series data for MangaManagementSystem app testing.
 
     What this creates:
     - 1 SERIALIZED series
+    - Normalized Genre/SeriesGenre rows
+    - Normalized Tag/SeriesTag rows
     - Series contributors: Mangaka, Assistant, Tantou Editor
     - 2 chapters
     - 3 pages
@@ -77,6 +79,13 @@ END;
 
 DECLARE @SeriesId UNIQUEIDENTIFIER = '10000000-0000-0000-0000-000000000001';
 DECLARE @SeriesCoverFileId UNIQUEIDENTIFIER = '10000000-0000-0000-0000-000000000101';
+
+DECLARE @ActionGenreId UNIQUEIDENTIFIER = '11000000-0000-0000-0000-000000000001';
+DECLARE @FantasyGenreId UNIQUEIDENTIFIER = '11000000-0000-0000-0000-000000000002';
+
+DECLARE @OriginalWorkTagId UNIQUEIDENTIFIER = '12000000-0000-0000-0000-000000000001';
+DECLARE @MagicTagId UNIQUEIDENTIFIER = '12000000-0000-0000-0000-000000000002';
+DECLARE @FoundFamilyTagId UNIQUEIDENTIFIER = '12000000-0000-0000-0000-000000000003';
 
 DECLARE @Chapter1Id UNIQUEIDENTIFIER = '20000000-0000-0000-0000-000000000001';
 DECLARE @Chapter2Id UNIQUEIDENTIFIER = '20000000-0000-0000-0000-000000000002';
@@ -222,7 +231,6 @@ INSERT INTO manga.Series
     title,
     slug,
     synopsis,
-    genre,
     cover_file_id,
     status_code,
     content_language_code,
@@ -234,7 +242,6 @@ SELECT
     N'Mock Serialized Series',
     N'mock-serialized-series',
     N'A mock serialized manga series used for dashboard, chapter, page, task, and annotation testing.',
-    N'Action Fantasy',
     @SeriesCoverFileId,
     N'SERIALIZED',
     N'ja',
@@ -246,6 +253,205 @@ WHERE NOT EXISTS
     FROM manga.Series s
     WHERE s.series_id = @SeriesId
        OR s.slug = N'mock-serialized-series'
+);
+
+----------------------------------------------------------------------
+-- Normalized genres
+-- Genres are broad story categories. The script uses existing rows by
+-- genre_name when available, otherwise it creates the needed seed rows.
+----------------------------------------------------------------------
+
+INSERT INTO manga.Genre
+(
+    genre_id,
+    genre_name,
+    description
+)
+SELECT
+    v.genre_id,
+    v.genre_name,
+    v.description
+FROM
+(
+    VALUES
+    (
+        @ActionGenreId,
+        N'Action',
+        N'Fast-paced stories with combat, conflict, or physical intensity.'
+    ),
+    (
+        @FantasyGenreId,
+        N'Fantasy',
+        N'Stories involving magical, mythical, supernatural, or imaginary worlds.'
+    )
+) AS v(genre_id, genre_name, description)
+WHERE NOT EXISTS
+(
+    SELECT 1
+    FROM manga.Genre g
+    WHERE g.genre_id = v.genre_id
+       OR g.genre_name = v.genre_name
+);
+
+SELECT TOP (1)
+    @ActionGenreId = g.genre_id
+FROM manga.Genre g
+WHERE g.genre_name = N'Action';
+
+SELECT TOP (1)
+    @FantasyGenreId = g.genre_id
+FROM manga.Genre g
+WHERE g.genre_name = N'Fantasy';
+
+IF @ActionGenreId IS NULL
+BEGIN
+    ;THROW 59904, 'Action genre id was not found or created.', 1;
+END;
+
+IF @FantasyGenreId IS NULL
+BEGIN
+    ;THROW 59905, 'Fantasy genre id was not found or created.', 1;
+END;
+
+----------------------------------------------------------------------
+-- Normalized tags
+-- Tags are specific tropes, themes, settings, traits, or source labels.
+-- Do not duplicate broad genre names as tags.
+----------------------------------------------------------------------
+
+INSERT INTO manga.Tag
+(
+    tag_id,
+    tag_name,
+    description
+)
+SELECT
+    v.tag_id,
+    v.tag_name,
+    v.description
+FROM
+(
+    VALUES
+    (
+        @OriginalWorkTagId,
+        N'Original Work',
+        N'An original series concept rather than an adaptation.'
+    ),
+    (
+        @MagicTagId,
+        N'Magic',
+        N'Story elements involving magic systems, spells, or supernatural powers.'
+    ),
+    (
+        @FoundFamilyTagId,
+        N'Found Family',
+        N'Characters form a meaningful chosen-family bond during the story.'
+    )
+) AS v(tag_id, tag_name, description)
+WHERE NOT EXISTS
+(
+    SELECT 1
+    FROM manga.Tag t
+    WHERE t.tag_id = v.tag_id
+       OR t.tag_name = v.tag_name
+);
+
+SELECT TOP (1)
+    @OriginalWorkTagId = t.tag_id
+FROM manga.Tag t
+WHERE t.tag_name = N'Original Work';
+
+SELECT TOP (1)
+    @MagicTagId = t.tag_id
+FROM manga.Tag t
+WHERE t.tag_name = N'Magic';
+
+SELECT TOP (1)
+    @FoundFamilyTagId = t.tag_id
+FROM manga.Tag t
+WHERE t.tag_name = N'Found Family';
+
+IF @OriginalWorkTagId IS NULL
+BEGIN
+    ;THROW 59906, 'Original Work tag id was not found or created.', 1;
+END;
+
+IF @MagicTagId IS NULL
+BEGIN
+    ;THROW 59907, 'Magic tag id was not found or created.', 1;
+END;
+
+IF @FoundFamilyTagId IS NULL
+BEGIN
+    ;THROW 59908, 'Found Family tag id was not found or created.', 1;
+END;
+
+----------------------------------------------------------------------
+-- Series-genre links
+----------------------------------------------------------------------
+
+INSERT INTO manga.SeriesGenre
+(
+    series_id,
+    genre_id
+)
+SELECT
+    v.series_id,
+    v.genre_id
+FROM
+(
+    VALUES
+    (
+        @SeriesId,
+        @ActionGenreId
+    ),
+    (
+        @SeriesId,
+        @FantasyGenreId
+    )
+) AS v(series_id, genre_id)
+WHERE NOT EXISTS
+(
+    SELECT 1
+    FROM manga.SeriesGenre sg
+    WHERE sg.series_id = v.series_id
+      AND sg.genre_id = v.genre_id
+);
+
+----------------------------------------------------------------------
+-- Series-tag links
+----------------------------------------------------------------------
+
+INSERT INTO manga.SeriesTag
+(
+    series_id,
+    tag_id
+)
+SELECT
+    v.series_id,
+    v.tag_id
+FROM
+(
+    VALUES
+    (
+        @SeriesId,
+        @OriginalWorkTagId
+    ),
+    (
+        @SeriesId,
+        @MagicTagId
+    ),
+    (
+        @SeriesId,
+        @FoundFamilyTagId
+    )
+) AS v(series_id, tag_id)
+WHERE NOT EXISTS
+(
+    SELECT 1
+    FROM manga.SeriesTag st
+    WHERE st.series_id = v.series_id
+      AND st.tag_id = v.tag_id
 );
 
 ----------------------------------------------------------------------
@@ -803,7 +1009,23 @@ SELECT
     s.title,
     s.slug,
     s.status_code,
-    s.publication_frequency_code
+    s.publication_frequency_code,
+    Genres =
+    (
+        SELECT STRING_AGG(g.genre_name, N', ')
+        FROM manga.SeriesGenre sg
+        INNER JOIN manga.Genre g
+            ON g.genre_id = sg.genre_id
+        WHERE sg.series_id = s.series_id
+    ),
+    Tags =
+    (
+        SELECT STRING_AGG(t.tag_name, N', ')
+        FROM manga.SeriesTag st
+        INNER JOIN manga.Tag t
+            ON t.tag_id = st.tag_id
+        WHERE st.series_id = s.series_id
+    )
 FROM manga.Series s
 WHERE s.series_id = @SeriesId;
 
