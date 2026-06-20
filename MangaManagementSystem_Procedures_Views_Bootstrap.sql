@@ -1333,7 +1333,7 @@ END;
             proposal_version_no,
             proposal_title,
             synopsis_snapshot,
-            genre_snapshot,
+
             proposal_file_id,
             status_code,
             submitted_by_user_id,
