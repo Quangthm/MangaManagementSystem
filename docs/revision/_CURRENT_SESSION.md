@@ -1,88 +1,59 @@
-# _CURRENT_SESSION — Fix Phase 4 ReferenceDataRepository DI runtime error
+# _CURRENT_SESSION — Genre/Tag Picker Stability Rollback Fix
 
-**Started:** 2026-06-21T12:00:00Z
+**Started:** 2026-06-21T10:00:00Z
 **Agent:** OpenCode
-**Branch:** feature/Mangaka
-**Goal:** Fix DI startup error: `IApplicationDbContext` not resolvable in `ReferenceDataRepository`
+**Branch:** feature/Mangaka (ahead of origin by 1)
+**Goal:** Rollback broken GenreTagSelectionField component, restore reliable inline picker, fix card "+N more" display, keep tag preservation fix
 **Status:** DONE
 
 ---
 
-## 0. Context loaded
+## 4. Progress log
 
-- [x] `docs/agents/AGENTS.md`
-- [x] `docs/agents/AI_AGENT_SKILLS_GUIDE.md`
-- [x] `docs/agents/SESSION_RULE.md`
-- [x] `docs/agents/RESUME_PACK.md`
-- [x] `docs/context.md`
-- [x] `docs/revision/Mangaka/2026-06-20-series-genre-tag-reference-ui.md`
+### 2026-06-21T10:05:00Z — Session started
+- Loaded all context files
+- Git inspection: 1 dirty file (MangakaDashboard.razor), 3 untracked
+- HEAD commit (da4f9b7) has stable inline picker
+- GenreTagSelectionField has double-toggle bug (checkbox not ReadOnly + row onclick)
+- Card display clips "+N more" text
+- Next: Implement edits
 
----
+### 2026-06-21T10:15:00Z — Edits applied
+- Replaced GenreTagSelectionField in create dialog with inline chip display + picker buttons
+- Replaced GenreTagSelectionField in edit dialog with inline chip display + picker buttons
+- Added back inline genre picker dialog and tag picker dialog (from HEAD, with fixes)
+- Added back all picker C# state/methods with minimum genre enforcement
+- Fixed card display to show chip-based genre representation
+- Kept tag preservation fix in SaveDraftEditAsync
+- Removed unused TruncatedGenreDisplay method
+- Deleted unused GenreTagSelectionField.razor and GenreTagPickerDialog.razor
+- Fixed accidental _cancelDraftDialogOpen variable removal
 
-## 1. Verified state at start
-
-```
-## feature/Mangaka...origin/feature/Mangaka
- M MangaManagementSystem/src/MangaManagementSystem.Infrastructure/DependencyInjection.cs
- M MangaManagementSystem/src/MangaManagementSystem.Web/Components/Pages/Mangaka/MangakaDashboard.razor
- M MangaManagementSystem/src/MangaManagementSystem.Web/Program.cs
-?? MangaManagementSystem/src/MangaManagementSystem.API/Controllers/ReferenceDataController.cs
-?? MangaManagementSystem/src/MangaManagementSystem.Application/Features/ReferenceData/...
-?? MangaManagementSystem/src/MangaManagementSystem.Domain/Interfaces/IReferenceDataRepository.cs
-?? MangaManagementSystem/src/MangaManagementSystem.Infrastructure/Repositories/ReferenceDataRepository.cs
-?? MangaManagementSystem/src/MangaManagementSystem.Web/Services/Api/IReferenceDataApiClient.cs
-?? MangaManagementSystem/src/MangaManagementSystem.Web/Services/Api/ReferenceDataApiClient.cs
-?? docs/revision/Mangaka/2026-06-20-series-genre-tag-reference-ui.md
-```
+### 2026-06-21T10:25:00Z — Build verified
+- Build: 0 errors, 59 warnings (baseline ~60, all pre-existing)
+- No new warnings from changed files
 
 ---
 
-## 2. Task scope
+## 5. Files changed this session
 
-### In scope
-- Fix `ReferenceDataRepository` DI resolution error
+| Path | Change | Verified |
+|------|--------|----------|
+| `Components/Pages/Mangaka/MangakaDashboard.razor` | Restored inline picker, fixed card display, kept tag preservation | Yes |
+| `Components/Shared/GenreTagSelectionField.razor` | Deleted (unused, broken component) | Yes |
+| `Components/Shared/GenreTagPickerDialog.razor` | Deleted (unused, superseded) | Yes |
+| `docs/revision/_CURRENT_SESSION.md` | Created session note | Yes |
 
-### Out of scope
-- All unrelated workflows
+## 6. Commands run
 
----
+| Command | Result | Notes |
+|---------|--------|-------|
+| `dotnet build --no-incremental` | 0 errors, 59 warnings | Baseline warnings only |
 
-## 3. Root cause
+## 7. Build/manual verification
 
-`ReferenceDataRepository` constructor injected `IApplicationDbContext`, but the project's DI system does not register `IApplicationDbContext`. The existing `GenericRepository<T>` and all concrete repositories (SeriesRepository, ChapterRepository, etc.) inject the **concrete** `ApplicationDbContext`.
+### Build
+0 errors, 59 warnings (all pre-existing baseline)
 
-`ApplicationDbContext` implements `IApplicationDbContext` (defined in same file), and `AddDbContext<ApplicationDbContext>` registers the concrete type, not the interface.
-
-No duplicate registration of `IReferenceDataRepository` was found. The user may have seen the aggregate exception listing types multiple times during resolution attempts.
-
-### Fix
-
-Changed `ReferenceDataRepository` constructor from `IApplicationDbContext` to `ApplicationDbContext`.
-
----
-
-## 4. Files changed
-
-| File | Change |
-|------|--------|
-| `Infrastructure/Repositories/ReferenceDataRepository.cs` | Constructor: `IApplicationDbContext` → `ApplicationDbContext` |
-
----
-
-## 5. Build result
-
-```
-dotnet build MangaManagementSystem/MangaManagementSystem.sln --no-incremental
-0 errors, 65 warnings
-```
-
----
-
-## 6. Manual verification
-
-- [ ] App starts without DI error
-- [ ] `GET /api/reference/genres` returns genre list
-- [ ] `GET /api/reference/tags` returns tag list
-- [ ] `/mangaka` loads without error
-- [ ] Create Draft dialog shows genre/tag checkboxes
-- [ ] Edit Draft dialog opens with pre-selected genres/tags
+### Manual smoke
+Not run; build-only verification completed.
