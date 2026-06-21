@@ -146,10 +146,10 @@
                     </div>
 
                     @* Search *@
-                    <div style="width: 220px; flex-shrink: 0;">
+                    <div style="width: 200px; flex-shrink: 0;">
                         <MudTextField T="string" @bind-Value="_searchText"
                                        @bind-Value:after="ResetDashboardPage"
-                                       Placeholder="Search by title or genre"
+                                       Placeholder="Search by title"
                                        Adornment="Adornment.Start"
                                        AdornmentIcon="@Icons.Material.Filled.Search"
                                        Variant="Variant.Outlined" Margin="Margin.Dense"
@@ -169,6 +169,72 @@
                             <MudSelectItem T="string" Value="@("title")">Title A-Z</MudSelectItem>
                         </MudSelect>
                     </div>
+                </div>
+
+                @* ── Genre/Tag filter row ── *@
+                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 20px;">
+                    <ReferenceMultiSelectFilter TItem="GenreDto"
+                                                Label="Genre"
+                                                SearchPlaceholder="Search genres..."
+                                                EmptyText="No genres found."
+                                                HighlightColor="#eef2ff"
+                                                Items="_availableGenres"
+                                                SelectedIds="_filterGenreIds.ToList()"
+                                                GetItemId="g => g.GenreId"
+                                                GetItemName="g => g.GenreName"
+                                                GetItemDescription="g => g.Description"
+                                                SelectedIdsChanged="(HashSet<Guid> ids) => { _filterGenreIds = ids; ResetDashboardPage(); }" />
+                    <ReferenceMultiSelectFilter TItem="TagDto"
+                                                Label="Tag"
+                                                SearchPlaceholder="Search tags..."
+                                                EmptyText="No tags found."
+                                                HighlightColor="#f0fdf4"
+                                                Items="_availableTags"
+                                                SelectedIds="_filterTagIds.ToList()"
+                                                GetItemId="t => t.TagId"
+                                                GetItemName="t => t.TagName"
+                                                GetItemDescription="t => t.Description"
+                                                SelectedIdsChanged="(HashSet<Guid> ids) => { _filterTagIds = ids; ResetDashboardPage(); }" />
+                    @if (_filterGenreIds.Count > 0)
+                    {
+                        <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                            @foreach (var gid in _filterGenreIds)
+                            {
+                                var g = _availableGenres.FirstOrDefault(gg => gg.GenreId == gid);
+                                if (g != null)
+                                {
+                                    <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #eef2ff; color: #4f46e5; border-radius: 10px; font-size: 0.68rem; font-weight: 500; white-space: nowrap;">
+                                        @g.GenreName
+                                        <span @onclick="@(() => { _filterGenreIds.Remove(gid); ResetDashboardPage(); })" style="cursor: pointer; font-size: 14px; line-height: 1; color: #818cf8;">&times;</span>
+                                    </span>
+                                }
+                            }
+                        </div>
+                    }
+                    @if (_filterTagIds.Count > 0)
+                    {
+                        <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                            @foreach (var tid in _filterTagIds)
+                            {
+                                var t = _availableTags.FirstOrDefault(tt => tt.TagId == tid);
+                                if (t != null)
+                                {
+                                    <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #f0fdf4; color: #059669; border-radius: 10px; font-size: 0.68rem; font-weight: 500; white-space: nowrap;">
+                                        @t.TagName
+                                        <span @onclick="@(() => { _filterTagIds.Remove(tid); ResetDashboardPage(); })" style="cursor: pointer; font-size: 14px; line-height: 1; color: #6ee7b7;">&times;</span>
+                                    </span>
+                                }
+                            }
+                        </div>
+                    }
+                    @if (_filterGenreIds.Count > 0 || _filterTagIds.Count > 0)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
+                                   OnClick="@(() => { _filterGenreIds.Clear(); _filterTagIds.Clear(); ResetDashboardPage(); })"
+                                   Style="font-size: 0.72rem; text-transform: none;">
+                            Clear filters
+                        </MudButton>
+                    }
                 </div>
 
                 @if (AllFilteredSeries.Count == 0)
@@ -700,8 +766,9 @@
 </MudOverlay>
 
 @* ── New Series Draft Modal (creates manga.Series with status PROPOSAL_DRAFT) ── *@
-<MudOverlay Visible="@_newSeriesDialogOpen" OnClick="@(() => _newSeriesDialogOpen = false)">
-    <MudCard Style="width: 480px; max-width: 90vw; margin: 5% auto 0; border-radius: 14px; max-height: calc(100vh - 48px); overflow-y: auto;" @onclick:stopPropagation>
+<MudOverlay Visible="@_newSeriesDialogOpen" OnClick="@(() => _newSeriesDialogOpen = false)"
+            Style="display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 24px 0;">
+    <MudCard Style="width: 480px; max-width: 90vw; border-radius: 14px; max-height: calc(100vh - 48px); overflow-y: auto;" @onclick:stopPropagation>
         <MudCardContent Style="padding: 0;">
             @* Modal Header *@
             <div style="padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between;">
@@ -746,46 +813,154 @@
 
                     <div class="mb-3">
                         <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 6px;">Genre *</span>
-                        <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px;">
-                            @foreach (var gid in _newDraftGenreIds)
-                            {
-                                var genre = _availableGenres.FirstOrDefault(g => g.GenreId == gid);
-                                if (genre != null)
+                        @if (_genrePickerOpen && !_genrePickerForEdit)
+                        {
+                            @* ── Inline Genre Picker ── *@
+                            <div style="display: flex; flex-direction: column; gap: 10px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; background: #fafafe;">
+                                <MudTextField T="string" @bind-Value="_genrePickerSearch"
+                                              @bind-Value:after="ResetGenrePickerPage"
+                                              Placeholder="Search by name or description..."
+                                              Adornment="Adornment.Start"
+                                              AdornmentIcon="@Icons.Material.Filled.Search"
+                                              Variant="Variant.Outlined" Margin="Margin.Dense"
+                                              Immediate="true" FullWidth="true" />
+                                @if (FilteredPickerGenres.Count == 0)
                                 {
-                                    <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #eef2ff; color: #4f46e5; border-radius: 12px; font-size: 0.72rem; font-weight: 500;">
-                                        @genre.GenreName
-                                        <span @onclick="@(() => RemoveNewDraftGenre(genre.GenreId))" style="cursor: pointer; font-size: 14px; line-height: 1; margin-left: 1px; color: #818cf8;">&times;</span>
-                                    </span>
+                                    <div style="color: #94a3b8; font-size: 0.8rem; text-align: center; padding: 16px;">No genres found.</div>
                                 }
-                            }
-                            @if (_newDraftGenreIds.Count == 0)
-                            {
-                                <span style="color: #94a3b8; font-size: 0.75rem; font-style: italic;">No genres selected</span>
-                            }
-                        </div>
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OpenGenrePicker(false))">Add / Manage Genres</MudButton>
+                                else
+                                {
+                                    <div style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;">
+                                        @foreach (var g in PagedPickerGenres)
+                                        {
+                                            var sel = _genrePickerSelection.Contains(g.GenreId);
+                                            <div @onclick="@(() => TogglePickerGenre(g.GenreId))"
+                                                 style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; background: @(sel ? "#eef2ff" : "transparent");">
+                                                <div>
+                                                    <div style="font-size: 0.8rem; font-weight: 500; color: #111827;">@g.GenreName</div>
+                                                    @if (!string.IsNullOrWhiteSpace(g.Description))
+                                                    {
+                                                        <div style="font-size: 0.66rem; color: #64748b; line-height: 1.3;">@g.Description</div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                    if (GenrePickerTotalPages > 1)
+                                    {
+                                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(_genrePickerPage <= 1)" OnClick="@(() => _genrePickerPage--)">Prev</MudButton>
+                                            <span style="font-size: 0.74rem; color: #64748b;">@_genrePickerPage / @GenrePickerTotalPages</span>
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(_genrePickerPage >= GenrePickerTotalPages)" OnClick="@(() => _genrePickerPage++)">Next</MudButton>
+                                        </div>
+                                    }
+                                }
+                                <div style="display: flex; gap: 8px;">
+                                    <MudButton Size="Size.Small" Variant="Variant.Outlined" FullWidth="true" OnClick="CloseGenrePicker">Cancel</MudButton>
+                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                                               Disabled="@(_genrePickerSelection.Count == 0)"
+                                               OnClick="ApplyGenrePicker">Apply</MudButton>
+                                </div>
+                                @if (_genrePickerSelection.Count == 0)
+                                {
+                                    <div style="font-size: 0.7rem; color: #dc2626; text-align: center;">At least one genre is required.</div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px;">
+                                @foreach (var gid in _newDraftGenreIds)
+                                {
+                                    var genre = _availableGenres.FirstOrDefault(g => g.GenreId == gid);
+                                    if (genre != null)
+                                    {
+                                        <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #eef2ff; color: #4f46e5; border-radius: 12px; font-size: 0.72rem; font-weight: 500;">
+                                            @genre.GenreName
+                                            <span @onclick="@(() => RemoveNewDraftGenre(genre.GenreId))" style="cursor: pointer; font-size: 14px; line-height: 1; margin-left: 1px; color: #818cf8;">&times;</span>
+                                        </span>
+                                    }
+                                }
+                                @if (_newDraftGenreIds.Count == 0)
+                                {
+                                    <span style="color: #94a3b8; font-size: 0.75rem; font-style: italic;">No genres selected</span>
+                                }
+                            </div>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OpenGenrePicker(false))">Add / Manage Genres</MudButton>
+                        }
                     </div>
 
                     <div class="mb-3">
                         <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 6px;">Tags (optional)</span>
-                        <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px;">
-                            @foreach (var tid in _newDraftTagIds)
-                            {
-                                var tag = _availableTags.FirstOrDefault(t => t.TagId == tid);
-                                if (tag != null)
+                        @if (_tagPickerOpen && !_tagPickerForEdit)
+                        {
+                            @* ── Inline Tag Picker ── *@
+                            <div style="display: flex; flex-direction: column; gap: 10px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; background: #fafafe;">
+                                <MudTextField T="string" @bind-Value="_tagPickerSearch"
+                                              @bind-Value:after="ResetTagPickerPage"
+                                              Placeholder="Search by name or description..."
+                                              Adornment="Adornment.Start"
+                                              AdornmentIcon="@Icons.Material.Filled.Search"
+                                              Variant="Variant.Outlined" Margin="Margin.Dense"
+                                              Immediate="true" FullWidth="true" />
+                                @if (FilteredPickerTags.Count == 0)
                                 {
-                                    <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #f0fdf4; color: #059669; border-radius: 12px; font-size: 0.72rem; font-weight: 500;">
-                                        @tag.TagName
-                                        <span @onclick="@(() => RemoveNewDraftTag(tag.TagId))" style="cursor: pointer; font-size: 14px; line-height: 1; margin-left: 1px; color: #6ee7b7;">&times;</span>
-                                    </span>
+                                    <div style="color: #94a3b8; font-size: 0.8rem; text-align: center; padding: 16px;">No tags found.</div>
                                 }
-                            }
-                            @if (_newDraftTagIds.Count == 0)
-                            {
-                                <span style="color: #94a3b8; font-size: 0.75rem; font-style: italic;">No tags selected</span>
-                            }
-                        </div>
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OpenTagPicker(false))">Add / Manage Tags</MudButton>
+                                else
+                                {
+                                    <div style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;">
+                                        @foreach (var t in PagedPickerTags)
+                                        {
+                                            var sel = _tagPickerSelection.Contains(t.TagId);
+                                            <div @onclick="@(() => TogglePickerTag(t.TagId))"
+                                                 style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; background: @(sel ? "#f0fdf4" : "transparent");">
+                                                <div>
+                                                    <div style="font-size: 0.8rem; font-weight: 500; color: #111827;">@t.TagName</div>
+                                                    @if (!string.IsNullOrWhiteSpace(t.Description))
+                                                    {
+                                                        <div style="font-size: 0.66rem; color: #64748b; line-height: 1.3;">@t.Description</div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                    if (TagPickerTotalPages > 1)
+                                    {
+                                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(_tagPickerPage <= 1)" OnClick="@(() => _tagPickerPage--)">Prev</MudButton>
+                                            <span style="font-size: 0.74rem; color: #64748b;">@_tagPickerPage / @TagPickerTotalPages</span>
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(_tagPickerPage >= TagPickerTotalPages)" OnClick="@(() => _tagPickerPage++)">Next</MudButton>
+                                        </div>
+                                    }
+                                }
+                                <div style="display: flex; gap: 8px;">
+                                    <MudButton Size="Size.Small" Variant="Variant.Outlined" FullWidth="true" OnClick="CloseTagPicker">Cancel</MudButton>
+                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" OnClick="ApplyTagPicker">Apply</MudButton>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px;">
+                                @foreach (var tid in _newDraftTagIds)
+                                {
+                                    var tag = _availableTags.FirstOrDefault(t => t.TagId == tid);
+                                    if (tag != null)
+                                    {
+                                        <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #f0fdf4; color: #059669; border-radius: 12px; font-size: 0.72rem; font-weight: 500;">
+                                            @tag.TagName
+                                            <span @onclick="@(() => RemoveNewDraftTag(tag.TagId))" style="cursor: pointer; font-size: 14px; line-height: 1; margin-left: 1px; color: #6ee7b7;">&times;</span>
+                                        </span>
+                                    }
+                                }
+                                @if (_newDraftTagIds.Count == 0)
+                                {
+                                    <span style="color: #94a3b8; font-size: 0.75rem; font-style: italic;">No tags selected</span>
+                                }
+                            </div>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OpenTagPicker(false))">Add / Manage Tags</MudButton>
+                        }
                     </div>
 
                     <MudSelect T="string" Label="Content Language" @bind-Value="_newDraftLanguage"
@@ -844,8 +1019,9 @@
 
 @* ── Edit Draft Modal (BF-SERIES-002 — Edit Series Draft Profile) ── *@
 @* Cover editing only allowed for PROPOSAL_DRAFT; status guard enforced by stored procedure. *@
-<MudOverlay Visible="@_draftDetailsOpen" OnClick="@(() => _draftDetailsOpen = false)">
-    <MudCard Style="width: 540px; max-width: 94vw; margin: 3% auto 0; border-radius: 14px; max-height: calc(100vh - 48px); overflow-y: auto;" @onclick:stopPropagation>
+<MudOverlay Visible="@_draftDetailsOpen" OnClick="@(() => _draftDetailsOpen = false)"
+            Style="display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 24px 0;">
+    <MudCard Style="width: 540px; max-width: 94vw; border-radius: 14px; max-height: calc(100vh - 48px); overflow-y: auto;" @onclick:stopPropagation>
         <MudCardContent Style="padding: 0;">
             <div style="padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between;">
                 <div>
@@ -927,46 +1103,154 @@
 
                 <div class="mb-3">
                     <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 6px;">Genre *</span>
-                    <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px;">
-                        @foreach (var gid in _editGenreIds)
-                        {
-                            var genre = _availableGenres.FirstOrDefault(g => g.GenreId == gid);
-                            if (genre != null)
+                    @if (_genrePickerOpen && _genrePickerForEdit)
+                    {
+                        @* ── Inline Genre Picker (Edit) ── *@
+                        <div style="display: flex; flex-direction: column; gap: 10px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; background: #fafafe;">
+                            <MudTextField T="string" @bind-Value="_genrePickerSearch"
+                                          @bind-Value:after="ResetGenrePickerPage"
+                                          Placeholder="Search by name or description..."
+                                          Adornment="Adornment.Start"
+                                          AdornmentIcon="@Icons.Material.Filled.Search"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense"
+                                          Immediate="true" FullWidth="true" />
+                            @if (FilteredPickerGenres.Count == 0)
                             {
-                                <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #eef2ff; color: #4f46e5; border-radius: 12px; font-size: 0.72rem; font-weight: 500;">
-                                    @genre.GenreName
-                                    <span @onclick="@(() => RemoveEditGenre(genre.GenreId))" style="cursor: pointer; font-size: 14px; line-height: 1; margin-left: 1px; color: #818cf8;">&times;</span>
-                                </span>
+                                <div style="color: #94a3b8; font-size: 0.8rem; text-align: center; padding: 16px;">No genres found.</div>
                             }
-                        }
-                        @if (_editGenreIds.Count == 0)
-                        {
-                            <span style="color: #94a3b8; font-size: 0.75rem; font-style: italic;">No genres selected</span>
-                        }
-                    </div>
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OpenGenrePicker(true))">Add / Manage Genres</MudButton>
+                            else
+                            {
+                                <div style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;">
+                                    @foreach (var g in PagedPickerGenres)
+                                    {
+                                        var sel = _genrePickerSelection.Contains(g.GenreId);
+                                        <div @onclick="@(() => TogglePickerGenre(g.GenreId))"
+                                             style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; background: @(sel ? "#eef2ff" : "transparent");">
+                                            <div>
+                                                <div style="font-size: 0.8rem; font-weight: 500; color: #111827;">@g.GenreName</div>
+                                                @if (!string.IsNullOrWhiteSpace(g.Description))
+                                                {
+                                                    <div style="font-size: 0.66rem; color: #64748b; line-height: 1.3;">@g.Description</div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                                if (GenrePickerTotalPages > 1)
+                                {
+                                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(_genrePickerPage <= 1)" OnClick="@(() => _genrePickerPage--)">Prev</MudButton>
+                                        <span style="font-size: 0.74rem; color: #64748b;">@_genrePickerPage / @GenrePickerTotalPages</span>
+                                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(_genrePickerPage >= GenrePickerTotalPages)" OnClick="@(() => _genrePickerPage++)">Next</MudButton>
+                                    </div>
+                                }
+                            }
+                            <div style="display: flex; gap: 8px;">
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" FullWidth="true" OnClick="CloseGenrePicker">Cancel</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                                           Disabled="@(_genrePickerSelection.Count == 0)"
+                                           OnClick="ApplyGenrePicker">Apply</MudButton>
+                            </div>
+                            @if (_genrePickerSelection.Count == 0)
+                            {
+                                <div style="font-size: 0.7rem; color: #dc2626; text-align: center;">At least one genre is required.</div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px;">
+                            @foreach (var gid in _editGenreIds)
+                            {
+                                var genre = _availableGenres.FirstOrDefault(g => g.GenreId == gid);
+                                if (genre != null)
+                                {
+                                    <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #eef2ff; color: #4f46e5; border-radius: 12px; font-size: 0.72rem; font-weight: 500;">
+                                        @genre.GenreName
+                                        <span @onclick="@(() => RemoveEditGenre(genre.GenreId))" style="cursor: pointer; font-size: 14px; line-height: 1; margin-left: 1px; color: #818cf8;">&times;</span>
+                                    </span>
+                                }
+                            }
+                            @if (_editGenreIds.Count == 0)
+                            {
+                                <span style="color: #94a3b8; font-size: 0.75rem; font-style: italic;">No genres selected</span>
+                            }
+                        </div>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OpenGenrePicker(true))">Add / Manage Genres</MudButton>
+                    }
                 </div>
 
                 <div class="mb-3">
                     <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 6px;">Tags (optional)</span>
-                    <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px;">
-                        @foreach (var tid in _editTagIds)
-                        {
-                            var tag = _availableTags.FirstOrDefault(t => t.TagId == tid);
-                            if (tag != null)
+                    @if (_tagPickerOpen && _tagPickerForEdit)
+                    {
+                        @* ── Inline Tag Picker (Edit) ── *@
+                        <div style="display: flex; flex-direction: column; gap: 10px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; background: #fafafe;">
+                            <MudTextField T="string" @bind-Value="_tagPickerSearch"
+                                          @bind-Value:after="ResetTagPickerPage"
+                                          Placeholder="Search by name or description..."
+                                          Adornment="Adornment.Start"
+                                          AdornmentIcon="@Icons.Material.Filled.Search"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense"
+                                          Immediate="true" FullWidth="true" />
+                            @if (FilteredPickerTags.Count == 0)
                             {
-                                <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #f0fdf4; color: #059669; border-radius: 12px; font-size: 0.72rem; font-weight: 500;">
-                                    @tag.TagName
-                                    <span @onclick="@(() => RemoveEditTag(tag.TagId))" style="cursor: pointer; font-size: 14px; line-height: 1; margin-left: 1px; color: #6ee7b7;">&times;</span>
-                                </span>
+                                <div style="color: #94a3b8; font-size: 0.8rem; text-align: center; padding: 16px;">No tags found.</div>
                             }
-                        }
-                        @if (_editTagIds.Count == 0)
-                        {
-                            <span style="color: #94a3b8; font-size: 0.75rem; font-style: italic;">No tags selected</span>
-                        }
-                    </div>
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OpenTagPicker(true))">Add / Manage Tags</MudButton>
+                            else
+                            {
+                                <div style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;">
+                                    @foreach (var t in PagedPickerTags)
+                                    {
+                                        var sel = _tagPickerSelection.Contains(t.TagId);
+                                        <div @onclick="@(() => TogglePickerTag(t.TagId))"
+                                             style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; background: @(sel ? "#f0fdf4" : "transparent");">
+                                            <div>
+                                                <div style="font-size: 0.8rem; font-weight: 500; color: #111827;">@t.TagName</div>
+                                                @if (!string.IsNullOrWhiteSpace(t.Description))
+                                                {
+                                                    <div style="font-size: 0.66rem; color: #64748b; line-height: 1.3;">@t.Description</div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                                if (TagPickerTotalPages > 1)
+                                {
+                                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(_tagPickerPage <= 1)" OnClick="@(() => _tagPickerPage--)">Prev</MudButton>
+                                        <span style="font-size: 0.74rem; color: #64748b;">@_tagPickerPage / @TagPickerTotalPages</span>
+                                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(_tagPickerPage >= TagPickerTotalPages)" OnClick="@(() => _tagPickerPage++)">Next</MudButton>
+                                    </div>
+                                }
+                            }
+                            <div style="display: flex; gap: 8px;">
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" FullWidth="true" OnClick="CloseTagPicker">Cancel</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" OnClick="ApplyTagPicker">Apply</MudButton>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px;">
+                            @foreach (var tid in _editTagIds)
+                            {
+                                var tag = _availableTags.FirstOrDefault(t => t.TagId == tid);
+                                if (tag != null)
+                                {
+                                    <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #f0fdf4; color: #059669; border-radius: 12px; font-size: 0.72rem; font-weight: 500;">
+                                        @tag.TagName
+                                        <span @onclick="@(() => RemoveEditTag(tag.TagId))" style="cursor: pointer; font-size: 14px; line-height: 1; margin-left: 1px; color: #6ee7b7;">&times;</span>
+                                    </span>
+                                }
+                            }
+                            @if (_editTagIds.Count == 0)
+                            {
+                                <span style="color: #94a3b8; font-size: 0.75rem; font-style: italic;">No tags selected</span>
+                            }
+                        </div>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OpenTagPicker(true))">Add / Manage Tags</MudButton>
+                    }
                 </div>
 
                 <MudSelect T="string" Label="Content Language" @bind-Value="_editLanguage"
@@ -1136,140 +1420,6 @@
                                OnClick="SubmitProposalAsync">
                         @(_proposalSubmitting ? "Submitting..." : "Submit Proposal")
                     </MudButton>
-                </div>
-            </div>
-        </MudCardContent>
-    </MudCard>
-</MudOverlay>
-
-@* ── Genre Picker Dialog ── *@
-<MudOverlay Visible="@_genrePickerOpen" OnClick="@CloseGenrePicker">
-    <MudCard Style="width: 380px; max-width: 90vw; max-height: 80vh; margin: 5% auto 0; border-radius: 14px;" @onclick:stopPropagation>
-        <MudCardContent Style="padding: 0;">
-            <div style="padding: 16px 20px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between;">
-                <div style="font-weight: 700; font-size: 0.95rem; color: #111827;">Manage Genres</div>
-                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="@CloseGenrePicker" />
-            </div>
-            <div style="padding: 16px 20px; display: flex; flex-direction: column; gap: 12px;">
-                <MudTextField T="string" @bind-Value="_genrePickerSearch"
-                              @bind-Value:after="ResetGenrePickerPage"
-                              Placeholder="Search by name or description..."
-                              Adornment="Adornment.Start"
-                              AdornmentIcon="@Icons.Material.Filled.Search"
-                              Variant="Variant.Outlined" Margin="Margin.Dense"
-                              Immediate="true" FullWidth="true" />
-                @if (FilteredPickerGenres.Count == 0)
-                {
-                    <div style="color: #94a3b8; font-size: 0.85rem; text-align: center; padding: 24px;">No genres found.</div>
-                }
-                else
-                {
-                    <div style="max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;">
-                        @foreach (var g in PagedPickerGenres)
-                        {
-                            var sel = _genrePickerSelection.Contains(g.GenreId);
-                            <div @onclick="@(() => TogglePickerGenre(g.GenreId))"
-                                 style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; background: @(sel ? "#eef2ff" : "transparent");">
-                                <div>
-                                    <div style="font-size: 0.82rem; font-weight: 500; color: #111827;">@g.GenreName</div>
-                                    @if (!string.IsNullOrWhiteSpace(g.Description))
-                                    {
-                                        <div style="font-size: 0.68rem; color: #64748b; line-height: 1.3;">@g.Description</div>
-                                    }
-                                </div>
-                            </div>
-                        }
-                    </div>
-                    if (GenrePickerTotalPages > 1)
-                    {
-                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 4px 0;">
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined"
-                                       Disabled="@(_genrePickerPage <= 1)"
-                                       OnClick="@(() => { _genrePickerPage--; })">
-                                Prev
-                            </MudButton>
-                            <span style="font-size: 0.78rem; color: #64748b;">@_genrePickerPage / @GenrePickerTotalPages</span>
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined"
-                                       Disabled="@(_genrePickerPage >= GenrePickerTotalPages)"
-                                       OnClick="@(() => { _genrePickerPage++; })">
-                                Next
-                            </MudButton>
-                        </div>
-                    }
-                    <div style="display: flex; gap: 8px; padding-top: 4px;">
-                        <MudButton Variant="Variant.Outlined" FullWidth="true" OnClick="@CloseGenrePicker">Cancel</MudButton>
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
-                                   Disabled="@(_genrePickerSelection.Count == 0)"
-                                   OnClick="@ApplyGenrePicker">Apply</MudButton>
-                    </div>
-                    @if (_genrePickerSelection.Count == 0)
-                    {
-                        <div style="font-size: 0.72rem; color: #dc2626; text-align: center;">At least one genre is required.</div>
-                    }
-                }
-            </div>
-        </MudCardContent>
-    </MudCard>
-</MudOverlay>
-
-@* ── Tag Picker Dialog ── *@
-<MudOverlay Visible="@_tagPickerOpen" OnClick="@CloseTagPicker">
-    <MudCard Style="width: 380px; max-width: 90vw; max-height: 80vh; margin: 5% auto 0; border-radius: 14px;" @onclick:stopPropagation>
-        <MudCardContent Style="padding: 0;">
-            <div style="padding: 16px 20px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between;">
-                <div style="font-weight: 700; font-size: 0.95rem; color: #111827;">Manage Tags</div>
-                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="@CloseTagPicker" />
-            </div>
-            <div style="padding: 16px 20px; display: flex; flex-direction: column; gap: 12px;">
-                <MudTextField T="string" @bind-Value="_tagPickerSearch"
-                              @bind-Value:after="ResetTagPickerPage"
-                              Placeholder="Search by name or description..."
-                              Adornment="Adornment.Start"
-                              AdornmentIcon="@Icons.Material.Filled.Search"
-                              Variant="Variant.Outlined" Margin="Margin.Dense"
-                              Immediate="true" FullWidth="true" />
-                @if (FilteredPickerTags.Count == 0)
-                {
-                    <div style="color: #94a3b8; font-size: 0.85rem; text-align: center; padding: 24px;">No tags found.</div>
-                }
-                else
-                {
-                    <div style="max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;">
-                        @foreach (var t in PagedPickerTags)
-                        {
-                            var sel = _tagPickerSelection.Contains(t.TagId);
-                            <div @onclick="@(() => TogglePickerTag(t.TagId))"
-                                 style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; background: @(sel ? "#f0fdf4" : "transparent");">
-                                <div>
-                                    <div style="font-size: 0.82rem; font-weight: 500; color: #111827;">@t.TagName</div>
-                                    @if (!string.IsNullOrWhiteSpace(t.Description))
-                                    {
-                                        <div style="font-size: 0.68rem; color: #64748b; line-height: 1.3;">@t.Description</div>
-                                    }
-                                </div>
-                            </div>
-                        }
-                    </div>
-                    if (TagPickerTotalPages > 1)
-                    {
-                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 4px 0;">
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined"
-                                       Disabled="@(_tagPickerPage <= 1)"
-                                       OnClick="@(() => { _tagPickerPage--; })">
-                                Prev
-                            </MudButton>
-                            <span style="font-size: 0.78rem; color: #64748b;">@_tagPickerPage / @TagPickerTotalPages</span>
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined"
-                                       Disabled="@(_tagPickerPage >= TagPickerTotalPages)"
-                                       OnClick="@(() => { _tagPickerPage++; })">
-                                Next
-                            </MudButton>
-                        </div>
-                    }
-                }
-                <div style="display: flex; gap: 8px; padding-top: 4px;">
-                    <MudButton Variant="Variant.Outlined" FullWidth="true" OnClick="@CloseTagPicker">Cancel</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" OnClick="@ApplyTagPicker">Apply</MudButton>
                 </div>
             </div>
         </MudCardContent>
@@ -2123,6 +2273,8 @@
     private string _selectedFilter = "All";
     private string _searchText = "";
     private string _sortMode = "recent"; // "recent" | "newest" | "title"
+    private HashSet<Guid> _filterGenreIds = new();
+    private HashSet<Guid> _filterTagIds = new();
 
     private static readonly (string Label, string[] Statuses)[] FilterGroups =
     [
@@ -2151,13 +2303,26 @@
             if (group.Statuses is { Length: > 0 })
                 result = result.Where(s => group.Statuses.Contains(s.StatusCode));
 
-            // Search filter
+            // Title search only
             if (!string.IsNullOrWhiteSpace(_searchText))
             {
                 var term = _searchText.Trim();
                 result = result.Where(s =>
-                    s.Title.Contains(term, StringComparison.OrdinalIgnoreCase) ||
-                    s.GenreDisplay.Contains(term, StringComparison.OrdinalIgnoreCase));
+                    s.Title.Contains(term, StringComparison.OrdinalIgnoreCase));
+            }
+
+            // Genre filter — show series that contain ALL selected genres
+            if (_filterGenreIds.Count > 0)
+            {
+                result = result.Where(s =>
+                    _filterGenreIds.All(fgId => s.Genres.Any(g => g.GenreId == fgId)));
+            }
+
+            // Tag filter — show series that contain ALL selected tags
+            if (_filterTagIds.Count > 0)
+            {
+                result = result.Where(s =>
+                    _filterTagIds.All(ftId => s.Tags.Any(t => t.TagId == ftId)));
             }
 
             // Sort
@@ -2176,8 +2341,8 @@
     {
         get
         {
-            if (!string.IsNullOrWhiteSpace(_searchText))
-                return "No series match your search.";
+            if (!string.IsNullOrWhiteSpace(_searchText) || _filterGenreIds.Count > 0 || _filterTagIds.Count > 0)
+                return "No series match your filters.";
 
             return _selectedFilter switch
             {

@@ -178,8 +178,6 @@ namespace MangaManagementSystem.Application.Features.Mangaka.Series.Commands.Upd
                 SeriesId = command.SeriesId,
                 Title = title,
                 Slug = slug,
-                Genres = new List<GenreDto>(),
-                Tags = new List<TagDto>(),
                 Synopsis = synopsis,
                 ContentLanguageCode = contentLanguageCode,
                 PublicationFrequencyCode = publicationFrequencyCode,
