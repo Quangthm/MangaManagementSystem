@@ -7,7 +7,9 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -86,7 +88,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             string title,
             string slug,
             string synopsis,
-            string genre,
+            IReadOnlyList<Guid> genreIds,
+            IReadOnlyList<Guid> tagIds,
             string contentLanguageCode,
             Guid? sourceSeriesId,
             string? publicationFrequencyCode,
@@ -107,7 +110,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             cmd.Parameters.Add(new SqlParameter("@title", SqlDbType.NVarChar, 200) { Value = title });
             cmd.Parameters.Add(new SqlParameter("@slug", SqlDbType.NVarChar, 220) { Value = slug });
             cmd.Parameters.Add(new SqlParameter("@synopsis", SqlDbType.NVarChar, -1) { Value = synopsis });
-            cmd.Parameters.Add(new SqlParameter("@genre", SqlDbType.NVarChar, 100) { Value = genre });
+            cmd.Parameters.Add(new SqlParameter("@genre_ids_json", SqlDbType.NVarChar, -1) { Value = SerializeGuidArray(genreIds) });
+            cmd.Parameters.Add(new SqlParameter("@tag_ids_json", SqlDbType.NVarChar, -1) { Value = SerializeGuidArray(tagIds) });
             cmd.Parameters.Add(new SqlParameter("@content_language_code", SqlDbType.NVarChar, 10) { Value = contentLanguageCode });
             cmd.Parameters.Add(new SqlParameter("@source_series_id", SqlDbType.UniqueIdentifier) { Value = (object?)sourceSeriesId ?? DBNull.Value });
             cmd.Parameters.Add(new SqlParameter("@publication_frequency_code", SqlDbType.NVarChar, 50) { Value = (object?)publicationFrequencyCode ?? DBNull.Value });
@@ -190,7 +194,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             string title,
             string slug,
             string synopsis,
-            string genre,
+            IReadOnlyList<Guid> genreIds,
+            IReadOnlyList<Guid> tagIds,
             string contentLanguageCode,
             string? publicationFrequencyCode,
             string? coverOriginalFileName,
@@ -211,7 +216,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             cmd.Parameters.Add(new SqlParameter("@title", SqlDbType.NVarChar, 200) { Value = title });
             cmd.Parameters.Add(new SqlParameter("@slug", SqlDbType.NVarChar, 220) { Value = slug });
             cmd.Parameters.Add(new SqlParameter("@synopsis", SqlDbType.NVarChar, -1) { Value = synopsis });
-            cmd.Parameters.Add(new SqlParameter("@genre", SqlDbType.NVarChar, 100) { Value = genre });
+            cmd.Parameters.Add(new SqlParameter("@genre_ids_json", SqlDbType.NVarChar, -1) { Value = SerializeGuidArray(genreIds) });
+            cmd.Parameters.Add(new SqlParameter("@tag_ids_json", SqlDbType.NVarChar, -1) { Value = SerializeGuidArray(tagIds) });
             cmd.Parameters.Add(new SqlParameter("@content_language_code", SqlDbType.NVarChar, 10) { Value = contentLanguageCode });
             cmd.Parameters.Add(new SqlParameter("@publication_frequency_code", SqlDbType.NVarChar, 50) { Value = (object?)publicationFrequencyCode ?? DBNull.Value });
 
@@ -407,6 +413,16 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     cancellationToken);
 
             return (series.SeriesId, series.Slug, series.Title, canAccess);
+        }
+
+        private static string SerializeGuidArray(IEnumerable<Guid> ids)
+        {
+            Guid[] cleanedIds = ids
+                .Where(id => id != Guid.Empty)
+                .Distinct()
+                .ToArray();
+
+            return JsonSerializer.Serialize(cleanedIds);
         }
     }
 }

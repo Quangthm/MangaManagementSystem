@@ -16,16 +16,21 @@
 
 At the start of every OpenCode session, read these files first:
 
-1. `docs/agents/AI_AGENT_SKILLS_GUIDE.md`
-2. `docs/context.md`
-3. `docs/business-rules.md`
-4. `docs/business-flows-use-cases.md`
-5. `docs/functional-requirements.md`
-6. `docs/ui-spec.md`
-7. `docs/user-stories.md`
-8. The newest relevant handoff under `docs/revision/`
+1. `docs/agents/AGENTS.md`
+2. `docs/agents/AI_AGENT_SKILLS_GUIDE.md`
+3. `docs/agents/SESSION_RULE.md`
+4. `docs/agents/RESUME_PACK.md`
+5. `docs/context.md`
+6. `docs/business-rules.md`
+7. `docs/business-flows-use-cases.md`
+8. `docs/functional-requirements.md`
+9. `docs/ui-spec.md`
+10. `docs/user-stories.md`
+11. The newest relevant handoff under `docs/revision/`
 
-If file names differ by casing or version, use the current file names in `docs/`, `docs/Skills/`, and `docs/revision/`.
+If file names differ by casing or version, use the current file names in `docs/`, `docs/agents/`, and `docs/revision/`.
+
+`docs/agents/PROMPT_PLAYBOOK.md` is a reusable prompt-template file for the user. Agents do not need to read it at the start of every session unless the task is specifically about writing prompts for another AI agent.
 
 Before editing code:
 
@@ -44,7 +49,7 @@ When documents conflict, follow this order:
 1. Latest explicit user instruction in the current session.
 2. Latest uploaded/updated business docs in `docs/`.
 3. Latest relevant handoff in `docs/revision/`.
-4. `docs/Skills/AI_AGENT_SKILLS_GUIDE.md`.
+4. `docs/agents/AI_AGENT_SKILLS_GUIDE.md`.
 5. Existing code behavior.
 6. Older handoffs or older generated plans.
 

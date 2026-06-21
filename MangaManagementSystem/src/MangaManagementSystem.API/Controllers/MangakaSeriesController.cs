@@ -90,7 +90,8 @@ namespace MangaManagementSystem.API.Controllers
                 ActorUserId:              actorUserId,
                 Title:                    request.Title,
                 Synopsis:                 request.Synopsis,
-                Genre:                    request.Genre,
+                GenreIds:                 request.GenreIds ?? new List<Guid>(),
+                TagIds:                   request.TagIds ?? new List<Guid>(),
                 ContentLanguageCode:      request.ContentLanguageCode,
                 Slug:                     request.Slug,
                 PublicationFrequencyCode: request.PublicationFrequencyCode,
@@ -203,9 +204,9 @@ namespace MangaManagementSystem.API.Controllers
                 return BadRequest(new ApiErrorResponse("A title is required."));
             }
 
-            if (string.IsNullOrWhiteSpace(request.Genre))
+            if (request.GenreIds == null || request.GenreIds.Count == 0 || request.GenreIds.All(id => id == Guid.Empty))
             {
-                return BadRequest(new ApiErrorResponse("A genre is required."));
+                return BadRequest(new ApiErrorResponse("At least one valid genre is required."));
             }
 
             byte[]? coverBytes       = null;
@@ -226,7 +227,8 @@ namespace MangaManagementSystem.API.Controllers
                 SeriesId:                 seriesId,
                 Title:                    request.Title,
                 Synopsis:                 request.Synopsis,
-                Genre:                    request.Genre,
+                GenreIds:                 request.GenreIds ?? new List<Guid>(),
+                TagIds:                   request.TagIds ?? new List<Guid>(),
                 ContentLanguageCode:      request.ContentLanguageCode,
                 PublicationFrequencyCode: request.PublicationFrequencyCode,
                 Slug:                     request.Slug,

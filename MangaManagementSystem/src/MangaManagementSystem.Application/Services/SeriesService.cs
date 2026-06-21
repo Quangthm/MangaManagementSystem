@@ -131,7 +131,8 @@ namespace MangaManagementSystem.Application.Services
                     title,
                     slug,
                     synopsis,
-                    genre,
+                    new List<Guid>(), // Transitional: genre IDs not yet supported through legacy service
+                    new List<Guid>(), // Transitional: tag IDs not yet supported through legacy service
                     contentLanguageCode,
                     dto.SourceSeriesId,
                     publicationFrequencyCode,

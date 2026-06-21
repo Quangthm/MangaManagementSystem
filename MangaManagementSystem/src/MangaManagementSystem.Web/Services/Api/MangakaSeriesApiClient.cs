@@ -53,7 +53,8 @@ namespace MangaManagementSystem.Web.Services.Api
             Guid actorUserId,
             string title,
             string synopsis,
-            string genre,
+            IReadOnlyList<Guid> genreIds,
+            IReadOnlyList<Guid> tagIds,
             string? contentLanguageCode = null,
             string? slug = null,
             string? publicationFrequencyCode = null,
@@ -66,7 +67,18 @@ namespace MangaManagementSystem.Web.Services.Api
             using var form = new MultipartFormDataContent();
             form.Add(new StringContent(title), "Title");
             form.Add(new StringContent(synopsis), "Synopsis");
-            form.Add(new StringContent(genre), "Genre");
+
+            foreach (var genreId in genreIds ?? Array.Empty<Guid>())
+            {
+                if (genreId != Guid.Empty)
+                    form.Add(new StringContent(genreId.ToString()), "GenreIds");
+            }
+
+            foreach (var tagId in tagIds ?? Array.Empty<Guid>())
+            {
+                if (tagId != Guid.Empty)
+                    form.Add(new StringContent(tagId.ToString()), "TagIds");
+            }
 
             if (!string.IsNullOrWhiteSpace(contentLanguageCode))
             {
@@ -180,7 +192,8 @@ namespace MangaManagementSystem.Web.Services.Api
             Guid seriesId,
             string title,
             string synopsis,
-            string genre,
+            IReadOnlyList<Guid> genreIds,
+            IReadOnlyList<Guid> tagIds,
             string contentLanguageCode,
             string? publicationFrequencyCode = null,
             string? slug = null,
@@ -192,7 +205,18 @@ namespace MangaManagementSystem.Web.Services.Api
             using var form = new MultipartFormDataContent();
             form.Add(new StringContent(title), "Title");
             form.Add(new StringContent(synopsis), "Synopsis");
-            form.Add(new StringContent(genre), "Genre");
+
+            foreach (var genreId in genreIds ?? Array.Empty<Guid>())
+            {
+                if (genreId != Guid.Empty)
+                    form.Add(new StringContent(genreId.ToString()), "GenreIds");
+            }
+
+            foreach (var tagId in tagIds ?? Array.Empty<Guid>())
+            {
+                if (tagId != Guid.Empty)
+                    form.Add(new StringContent(tagId.ToString()), "TagIds");
+            }
             form.Add(new StringContent(contentLanguageCode), "ContentLanguageCode");
 
             if (!string.IsNullOrWhiteSpace(publicationFrequencyCode))
