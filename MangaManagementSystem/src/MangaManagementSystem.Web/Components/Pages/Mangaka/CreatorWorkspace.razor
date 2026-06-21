@@ -781,7 +781,7 @@ else
             if (series != null)
             {
                 SeriesTitle = series.Title;
-                SeriesSubtitle = series.Genre;
+                SeriesSubtitle = string.Join(", ", series.Genres.Select(g => g.GenreName));
                 
                 var chapters = await ChapterService.GetChaptersBySeriesIdAsync(id);
                 if (chapters != null && chapters.Any())

@@ -103,13 +103,18 @@
                             </div>
 
                             @* Genres *@
-                            @if (!string.IsNullOrWhiteSpace(_series.Genre))
+                            @if (_series.Genres.Count > 0)
                             {
                                 <div style="margin-bottom: 14px;">
                                     <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; display: block; margin-bottom: 4px;">Genres</span>
-                                    <span style="background: #f1f5f9; color: #475569; font-size: 0.72rem; padding: 3px 10px; border-radius: 12px; font-weight: 500;">
-                                        @_series.Genre
-                                    </span>
+                                    <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                                        @foreach (var g in _series.Genres)
+                                        {
+                                            <span style="background: #f1f5f9; color: #475569; font-size: 0.72rem; padding: 3px 10px; border-radius: 12px; font-weight: 500;">
+                                                @g.GenreName
+                                            </span>
+                                        }
+                                    </div>
                                 </div>
                             }
 
