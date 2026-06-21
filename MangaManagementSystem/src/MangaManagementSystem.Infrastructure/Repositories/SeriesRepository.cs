@@ -385,6 +385,35 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         private static readonly string[] AllowedWorkspaceRoles = { "Mangaka", "Tantou Editor", "Assistant" };
 
         /// <inheritdoc />
+        /// <summary>
+        /// Returns a single series by id where the specified actor is an active Mangaka contributor,
+        /// with CoverFile, Genres, and Tags eagerly loaded. Same scoping as the dashboard list query
+        /// but targeted to one series id. Returns null when the series is not found or the actor is
+        /// not an active contributor.
+        /// </summary>
+        public async Task<Series?> GetByContributorAndSeriesIdAsync(
+            Guid actorUserId,
+            Guid seriesId,
+            CancellationToken cancellationToken = default)
+        {
+            return await _context.Series
+                .AsNoTracking()
+                .Include(s => s.CoverFile)
+                .Include(s => s.Genres)
+                .Include(s => s.Tags)
+                .FirstOrDefaultAsync(
+                    s => s.SeriesId == seriesId &&
+                         _context.SeriesContributors.Any(sc =>
+                             sc.SeriesId == s.SeriesId &&
+                             sc.UserId == actorUserId &&
+                             sc.EndDate == null &&
+                             sc.User != null &&
+                             sc.User.StatusCode == "ACTIVE" &&
+                             sc.User.Role != null &&
+                             sc.User.Role.RoleName == "Mangaka"),
+                    cancellationToken);
+        }
+
         public async Task<(Guid SeriesId, string Slug, string Title, bool CanAccess)?>
             GetWorkspaceEntryBySlugAsync(
                 string slug,

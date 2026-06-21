@@ -428,7 +428,7 @@
                     <div style="width: 240px; flex-shrink: 0;">
                         <MudTextField T="string" @bind-Value="_proposalSearchText"
                                        @bind-Value:after="ResetProposalPage"
-                                       Placeholder="Search by title or genre"
+                                       Placeholder="Search by title"
                                        Adornment="Adornment.Start"
                                        AdornmentIcon="@Icons.Material.Filled.Search"
                                        Variant="Variant.Outlined" Margin="Margin.Dense"
@@ -448,6 +448,72 @@
                             <MudSelectItem T="string" Value="@("status")">Status</MudSelectItem>
                         </MudSelect>
                     </div>
+                </div>
+
+                @* ── Proposal Genre/Tag filter row ── *@
+                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 20px;">
+                    <ReferenceMultiSelectFilter TItem="GenreDto"
+                                                Label="Genre"
+                                                SearchPlaceholder="Search genres..."
+                                                EmptyText="No genres found."
+                                                HighlightColor="#eef2ff"
+                                                Items="_availableGenres"
+                                                SelectedIds="_proposalFilterGenreIds.ToList()"
+                                                GetItemId="g => g.GenreId"
+                                                GetItemName="g => g.GenreName"
+                                                GetItemDescription="g => g.Description"
+                                                SelectedIdsChanged="(HashSet<Guid> ids) => { _proposalFilterGenreIds = ids; ResetProposalPage(); }" />
+                    <ReferenceMultiSelectFilter TItem="TagDto"
+                                                Label="Tag"
+                                                SearchPlaceholder="Search tags..."
+                                                EmptyText="No tags found."
+                                                HighlightColor="#f0fdf4"
+                                                Items="_availableTags"
+                                                SelectedIds="_proposalFilterTagIds.ToList()"
+                                                GetItemId="t => t.TagId"
+                                                GetItemName="t => t.TagName"
+                                                GetItemDescription="t => t.Description"
+                                                SelectedIdsChanged="(HashSet<Guid> ids) => { _proposalFilterTagIds = ids; ResetProposalPage(); }" />
+                    @if (_proposalFilterGenreIds.Count > 0)
+                    {
+                        <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                            @foreach (var gid in _proposalFilterGenreIds)
+                            {
+                                var g = _availableGenres.FirstOrDefault(gg => gg.GenreId == gid);
+                                if (g != null)
+                                {
+                                    <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #eef2ff; color: #4f46e5; border-radius: 10px; font-size: 0.68rem; font-weight: 500; white-space: nowrap;">
+                                        @g.GenreName
+                                        <span @onclick="@(() => { _proposalFilterGenreIds.Remove(gid); ResetProposalPage(); })" style="cursor: pointer; font-size: 14px; line-height: 1; color: #818cf8;">&times;</span>
+                                    </span>
+                                }
+                            }
+                        </div>
+                    }
+                    @if (_proposalFilterTagIds.Count > 0)
+                    {
+                        <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                            @foreach (var tid in _proposalFilterTagIds)
+                            {
+                                var t = _availableTags.FirstOrDefault(tt => tt.TagId == tid);
+                                if (t != null)
+                                {
+                                    <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #f0fdf4; color: #059669; border-radius: 10px; font-size: 0.68rem; font-weight: 500; white-space: nowrap;">
+                                        @t.TagName
+                                        <span @onclick="@(() => { _proposalFilterTagIds.Remove(tid); ResetProposalPage(); })" style="cursor: pointer; font-size: 14px; line-height: 1; color: #6ee7b7;">&times;</span>
+                                    </span>
+                                }
+                            }
+                        </div>
+                    }
+                    @if (_proposalFilterGenreIds.Count > 0 || _proposalFilterTagIds.Count > 0)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
+                                   OnClick="@(() => { _proposalFilterGenreIds.Clear(); _proposalFilterTagIds.Clear(); ResetProposalPage(); })"
+                                   Style="font-size: 0.72rem; text-transform: none;">
+                            Clear filters
+                        </MudButton>
+                    }
                 </div>
 
                 @if (AllFilteredProposals.Count == 0)
@@ -1540,6 +1606,8 @@
     private int _proposalPage = 1;
     private const int ProposalPageSize = 8;
     private List<MangakaSeriesProposalDto> _proposalData = [];
+    private HashSet<Guid> _proposalFilterGenreIds = new();
+    private HashSet<Guid> _proposalFilterTagIds = new();
 
     private static readonly (string Label, string[] Statuses)[] ProposalFilterGroups =
     [
@@ -1572,8 +1640,19 @@
                 var term = _proposalSearchText.Trim();
                 result = result.Where(p =>
                     p.SeriesTitle.Contains(term, StringComparison.OrdinalIgnoreCase) ||
-                    p.ProposalTitle.Contains(term, StringComparison.OrdinalIgnoreCase) ||
-                    p.Genres.Any(g => g.GenreName.Contains(term, StringComparison.OrdinalIgnoreCase)));
+                    p.ProposalTitle.Contains(term, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (_proposalFilterGenreIds.Count > 0)
+            {
+                result = result.Where(p =>
+                    _proposalFilterGenreIds.All(fgId => p.Genres.Any(g => g.GenreId == fgId)));
+            }
+
+            if (_proposalFilterTagIds.Count > 0)
+            {
+                result = result.Where(p =>
+                    _proposalFilterTagIds.All(ftId => p.Tags.Any(t => t.TagId == ftId)));
             }
 
             result = _proposalSortMode switch
@@ -2068,48 +2147,62 @@
             var idx = _seriesData.FindIndex(s => s.Id == _detailSeries.Id);
             if (idx >= 0)
             {
-                var matchedGenreDtos = _editGenreIds
-                    .Select(id => _availableGenres.FirstOrDefault(g => g.GenreId == id))
-                    .Where(g => g != null)
-                    .Select(g => new GenreDto(g!.GenreId, g.GenreName, g.Description))
-                    .ToList();
-                var matchedTagDtos = _editTagIds
-                    .Select(id => _availableTags.FirstOrDefault(t => t.TagId == id))
-                    .Where(t => t != null)
-                    .Select(t => new TagDto(t!.TagId, t.TagName, t.Description))
-                    .ToList();
+                // Refresh this single card from the API to get accurate UpdatedAtUtc and CoverUrl.
+                var freshDto = await MangakaSeriesApiClient.GetMySeriesCardByIdAsync(
+                    _currentUserId.Value, _detailSeries.Id);
 
-                var updated = _seriesData[idx] with
+                if (freshDto is not null)
                 {
-                    Title = result.Title,
-                    GenreDisplay = matchedGenreDtos.Count > 0
-                        ? string.Join(", ", matchedGenreDtos.Select(g => g.GenreName))
-                        : "No genres",
-                    Genres = matchedGenreDtos,
-                    Tags = matchedTagDtos,
-                    Synopsis = result.Synopsis,
-                    ContentLanguageCode = result.ContentLanguageCode,
-                    Slug = result.Slug,
-                    PublicationFrequencyCode = result.PublicationFrequencyCode,
-                    // Use the new cover URL if one was uploaded; otherwise keep the existing one
-                    CoverUrl = result.NewCoverUrl ?? _seriesData[idx].CoverUrl
-                };
-                _seriesData[idx] = updated;
-                // Also update the detail series reference so the modal reflects the change
-                _detailSeries = updated;
-                _editTitle = result.Title;
-                _editSynopsis = result.Synopsis;
-                // _editGenreIds and _editTagIds are already current — do NOT overwrite from result
-                _editLanguage = result.ContentLanguageCode;
-                if (result.NewCoverUrl != null)
+                    var fresh = new SeriesCardData(
+                        Id: freshDto.SeriesId,
+                        Title: freshDto.Title,
+                        GenreDisplay: string.Join(", ", freshDto.Genres.Select(g => g.GenreName)),
+                        Genres: freshDto.Genres,
+                        Tags: freshDto.Tags,
+                        StatusCode: freshDto.StatusCode,
+                        Slug: freshDto.Slug,
+                        Synopsis: freshDto.Synopsis,
+                        ContentLanguageCode: freshDto.ContentLanguageCode,
+                        CoverUrl: freshDto.CoverUrl,
+                        CreatedAtUtc: freshDto.CreatedAtUtc,
+                        UpdatedAtUtc: freshDto.UpdatedAtUtc,
+                        PublicationFrequencyCode: freshDto.PublicationFrequencyCode
+                    );
+                    _seriesData[idx] = fresh;
+                    _detailSeries = fresh;
+                }
+                else
                 {
-                    _editCoverPreviewUrl = null; // clear local preview; real URL is now in CoverUrl
-                    ClearEditCover();
+                    // Fallback: use command result + local selections if server query returned null.
+                    // This should be rare — it means the server couldn't find the series or the
+                    // actor lost contributor access between the update and the read.
+                    var matchedGenreDtos = _editGenreIds
+                        .Select(id => _availableGenres.FirstOrDefault(g => g.GenreId == id))
+                        .Where(g => g != null)
+                        .Select(g => new GenreDto(g!.GenreId, g.GenreName, g.Description))
+                        .ToList();
+                    var matchedTagDtos = _editTagIds
+                        .Select(id => _availableTags.FirstOrDefault(t => t.TagId == id))
+                        .Where(t => t != null)
+                        .Select(t => new TagDto(t!.TagId, t.TagName, t.Description))
+                        .ToList();
+
+                    _seriesData[idx] = _seriesData[idx] with
+                    {
+                        Title = result.Title,
+                        GenreDisplay = matchedGenreDtos.Count > 0
+                            ? string.Join(", ", matchedGenreDtos.Select(g => g.GenreName))
+                            : "No genres",
+                        Genres = matchedGenreDtos,
+                        Tags = matchedTagDtos,
+                        Synopsis = result.Synopsis,
+                        ContentLanguageCode = result.ContentLanguageCode,
+                        Slug = result.Slug,
+                        PublicationFrequencyCode = result.PublicationFrequencyCode,
+                        CoverUrl = result.NewCoverUrl ?? _seriesData[idx].CoverUrl
+                    };
                 }
             }
-
-            // Reload the dashboard list from the API so timestamps and card data are fresh.
-            await LoadSeriesAsync();
 
             Snackbar.Add("Draft profile saved.", Severity.Success);
             _draftDetailsOpen = false;

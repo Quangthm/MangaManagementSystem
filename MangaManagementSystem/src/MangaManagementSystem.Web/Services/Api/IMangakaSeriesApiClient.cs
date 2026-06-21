@@ -91,5 +91,14 @@ namespace MangaManagementSystem.Web.Services.Api
         Task<IReadOnlyList<MangakaSeriesProposalDto>> GetMySeriesProposalsAsync(
             Guid actorUserId,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Returns a single series card by id where the actor is an active Mangaka contributor.
+        /// Same scoping as GetMySeriesAsync but targeted. Returns null when not found or not authorized.
+        /// </summary>
+        Task<SeriesDto?> GetMySeriesCardByIdAsync(
+            Guid actorUserId,
+            Guid seriesId,
+            CancellationToken cancellationToken = default);
     }
 }

@@ -123,5 +123,16 @@ namespace MangaManagementSystem.Domain.Interfaces
                 string slug,
                 Guid actorUserId,
                 CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Returns a single series by id where the specified actor is an active contributor,
+        /// with CoverFile, Genres, and Tags eagerly loaded for card rendering.
+        /// Same scoping as <see cref="GetByActiveContributorWithCoverAsync"/> but targeted.
+        /// Returns null if the series does not exist or the actor is not an active contributor.
+        /// </summary>
+        Task<Series?> GetByContributorAndSeriesIdAsync(
+            Guid actorUserId,
+            Guid seriesId,
+            CancellationToken cancellationToken = default);
     }
 }

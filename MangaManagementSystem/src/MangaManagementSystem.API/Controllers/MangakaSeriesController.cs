@@ -9,6 +9,7 @@ using MangaManagementSystem.Application.Features.Mangaka.Series.Commands.CancelS
 using MangaManagementSystem.Application.Features.Mangaka.Series.Commands.CreateSeriesDraft;
 using MangaManagementSystem.Application.Features.Mangaka.Series.Commands.UpdateSeriesDraft;
 using MangaManagementSystem.Application.Features.Mangaka.Series.Queries.GetMyMangakaSeries;
+using MangaManagementSystem.Application.Features.Mangaka.Series.Queries.GetMyMangakaSeriesCardById;
 using MangaManagementSystem.Application.Features.Mangaka.SeriesProposals.Commands.SubmitSeriesProposal;
 using MangaManagementSystem.Application.Features.Mangaka.SeriesProposals.Queries.GetMySeriesProposals;
 using MediatR;
@@ -339,6 +340,43 @@ namespace MangaManagementSystem.API.Controllers
                     "Unexpected error loading series for actor {ActorUserId}.", actorUserId);
                 return Problem(
                     detail: "We could not load your series right now. Please try again later.",
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
+        }
+
+        /// <summary>
+        /// Returns a single series card by id where the logged-in actor is an active Mangaka contributor.
+        /// Same scoping as GET /api/mangaka/series/my-series but targeted to one series.
+        /// Returns 404 when the series is not found or the actor is not an active contributor.
+        /// Uses MediatR/CQRS — all orchestration is in GetMyMangakaSeriesCardByIdQueryHandler.
+        /// Route: GET /api/mangaka/series/{seriesId}/card
+        /// </summary>
+        [HttpGet("{seriesId:guid}/card")]
+        public async Task<IActionResult> GetMySeriesCardByIdAsync(
+            Guid seriesId,
+            CancellationToken cancellationToken)
+        {
+            if (!TryResolveActorUserId(out Guid actorUserId))
+            {
+                return BadRequest(new ApiErrorResponse(
+                    "Could not identify the requesting user. Please sign in again."));
+            }
+
+            var query = new GetMyMangakaSeriesCardByIdQuery(actorUserId, seriesId);
+
+            try
+            {
+                var result = await _mediator.Send(query, cancellationToken);
+                if (result is null)
+                    return NotFound(new ApiErrorResponse("Series not found or you do not have access to it."));
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Unexpected error loading series card {SeriesId} for actor {ActorUserId}.", seriesId, actorUserId);
+                return Problem(
+                    detail: "We could not load the series card right now. Please try again later.",
                     statusCode: StatusCodes.Status500InternalServerError);
             }
         }
