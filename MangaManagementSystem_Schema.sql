@@ -301,7 +301,20 @@ CREATE TABLE manga.SeriesTag
         FOREIGN KEY (tag_id)
         REFERENCES manga.Tag(tag_id)
 );
+CREATE NONCLUSTERED INDEX ix_series_genre_genre_id_series_id
+ON manga.SeriesGenre
+(
+    genre_id,
+    series_id
+);
 GO
+
+CREATE NONCLUSTERED INDEX ix_series_tag_tag_id_series_id
+ON manga.SeriesTag
+(
+    tag_id,
+    series_id
+);
 CREATE TABLE manga.SeriesContributor (
 	series_contributor_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_series_contributor_id DEFAULT NEWID() CONSTRAINT pk_series_contributor PRIMARY KEY,
 	series_id UNIQUEIDENTIFIER NOT NULL,
