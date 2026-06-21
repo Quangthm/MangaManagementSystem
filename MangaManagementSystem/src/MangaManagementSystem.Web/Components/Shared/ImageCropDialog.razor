@@ -1,0 +1,345 @@
+@using System.Globalization
+@inject IJSRuntime JSRuntime
+@inject ISnackbar Snackbar
+
+<div class="mf-crop-overlay"
+     @onclick="CancelAsync">
+
+    <section class="mf-crop-dialog"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="image-crop-title"
+             @onclick:stopPropagation="true">
+
+        <header class="mf-crop-header">
+            <div>
+                <h2 id="image-crop-title">Adjust Crop</h2>
+                <p>Drag the image to reposition it and use the slider to zoom.</p>
+            </div>
+
+            <button type="button"
+                    class="mf-crop-close"
+                    aria-label="Close image crop editor"
+                    disabled="@_busy"
+                    @onclick="CancelAsync">
+                ×
+            </button>
+        </header>
+
+        <div class="mf-crop-body">
+            <div class="mf-crop-stage">
+                <canvas id="@CropCanvasId"
+                        class="@(_ready ? "mf-crop-canvas is-ready" : "mf-crop-canvas")"
+                        width="480"
+                        height="480">
+                </canvas>
+
+                @if (!_ready)
+                {
+                    <div class="mf-crop-loading">
+                        Loading image...
+                    </div>
+                }
+            </div>
+
+            <aside class="mf-crop-controls">
+                <div>
+                    <strong>@CropDescription</strong>
+                    <p>@HelperText</p>
+                </div>
+
+                <label for="@($"{CropCanvasId}-zoom")">Zoom</label>
+
+                <div class="mf-crop-zoom-row">
+                    <button type="button"
+                            title="Zoom out"
+                            disabled="@(!_ready || _busy)"
+                            @onclick="ZoomOutAsync">
+                        −
+                    </button>
+
+                    <input id="@($"{CropCanvasId}-zoom")"
+                           type="range"
+                           min="1"
+                           max="3"
+                           step="0.01"
+                           value="@_zoom.ToString(CultureInfo.InvariantCulture)"
+                           disabled="@(!_ready || _busy)"
+                           @oninput="ZoomChangedAsync" />
+
+                    <button type="button"
+                            title="Zoom in"
+                            disabled="@(!_ready || _busy)"
+                            @onclick="ZoomInAsync">
+                        +
+                    </button>
+                </div>
+
+                <button type="button"
+                        class="mf-crop-reset"
+                        disabled="@(!_ready || _busy)"
+                        @onclick="ResetCropAsync">
+                    Reset position and zoom
+                </button>
+
+                <div class="mf-crop-help">
+                    <span>Drag the image inside the fixed crop frame.</span>
+                </div>
+            </aside>
+        </div>
+
+        <footer class="mf-crop-footer">
+            <button type="button"
+                    class="mf-crop-cancel"
+                    disabled="@_busy"
+                    @onclick="CancelAsync">
+                Cancel
+            </button>
+
+            <button type="button"
+                    class="mf-crop-confirm"
+                    disabled="@(!_ready || _busy)"
+                    @onclick="ConfirmAsync">
+                @(_busy ? "Processing..." : "Use This Image")
+            </button>
+        </footer>
+    </section>
+</div>
+
+@code {
+    /// <summary>
+    /// Data URL of the source image to crop.
+    /// </summary>
+    [Parameter] public string SourceDataUrl { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Aspect ratio of the crop area (width / height).
+    /// Default: 2/3 (portrait).
+    /// </summary>
+    [Parameter] public double AspectRatio { get; set; } = 2.0 / 3.0;
+
+    /// <summary>
+    /// Output image width in pixels.
+    /// </summary>
+    [Parameter] public int OutputWidth { get; set; } = 800;
+
+    /// <summary>
+    /// Output image height in pixels.
+    /// </summary>
+    [Parameter] public int OutputHeight { get; set; } = 1200;
+
+    /// <summary>
+    /// Output content type. Default: "image/png".
+    /// </summary>
+    [Parameter] public string OutputContentType { get; set; } = "image/png";
+
+    /// <summary>
+    /// Short description displayed above the controls (e.g. "2:3 portrait crop").
+    /// </summary>
+    [Parameter] public string CropDescription { get; set; } = "2:3 portrait crop";
+
+    /// <summary>
+    /// Helper text shown below the crop description.
+    /// </summary>
+    [Parameter] public string HelperText { get; set; } = "Covers are displayed in a 2:3 portrait frame. Please crop your image to choose the visible cover area.";
+
+    /// <summary>
+    /// Output file name prefix. A "-cropped.png" suffix is appended.
+    /// </summary>
+    [Parameter] public string OutputFileNamePrefix { get; set; } = "series-cover";
+
+    /// <summary>
+    /// Fired when the user confirms the crop.
+    /// </summary>
+    [Parameter] public EventCallback<(byte[] Bytes, string FileName, string ContentType)> OnConfirm { get; set; }
+
+    /// <summary>
+    /// Fired when the user cancels the crop dialog.
+    /// </summary>
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private const string CropCanvasId = "image-crop-canvas";
+    private const long MaxUploadBytes = 10 * 1024 * 1024;
+
+    private IJSObjectReference? _jsModule;
+    private bool _ready;
+    private bool _busy;
+    private bool _initialized;
+    private double _zoom = 1;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_initialized || string.IsNullOrWhiteSpace(SourceDataUrl))
+            return;
+
+        _initialized = true;
+
+        try
+        {
+            _jsModule ??=
+                await JSRuntime.InvokeAsync<IJSObjectReference>(
+                    "import",
+                    "./js/image-crop.js?v=20260621-01");
+
+            await _jsModule.InvokeVoidAsync(
+                "initialize",
+                CropCanvasId,
+                SourceDataUrl,
+                AspectRatio);
+
+            _ready = true;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(
+                $"Unable to open image crop editor: {ex.Message}",
+                Severity.Error);
+
+            await OnCancel.InvokeAsync();
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task ZoomChangedAsync(ChangeEventArgs args)
+    {
+        if (!_ready || _jsModule == null) return;
+
+        if (!double.TryParse(
+                args.Value?.ToString(),
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out var zoom))
+        {
+            return;
+        }
+
+        await SetZoomAsync(zoom);
+    }
+
+    private async Task ZoomOutAsync()
+    {
+        await SetZoomAsync(_zoom - 0.1);
+    }
+
+    private async Task ZoomInAsync()
+    {
+        await SetZoomAsync(_zoom + 0.1);
+    }
+
+    private async Task SetZoomAsync(double zoom)
+    {
+        if (!_ready || _jsModule == null) return;
+
+        _zoom = Math.Clamp(zoom, 1, 3);
+
+        await _jsModule.InvokeVoidAsync(
+            "setZoom",
+            CropCanvasId,
+            _zoom);
+    }
+
+    private async Task ResetCropAsync()
+    {
+        if (!_ready || _jsModule == null) return;
+
+        _zoom = 1;
+
+        await _jsModule.InvokeVoidAsync(
+            "reset",
+            CropCanvasId);
+    }
+
+    private async Task ConfirmAsync()
+    {
+        if (!_ready || _jsModule == null || _busy) return;
+
+        _busy = true;
+
+        try
+        {
+            await using var croppedStreamReference =
+                await _jsModule.InvokeAsync<IJSStreamReference>(
+                    "exportCroppedImageStream",
+                    CropCanvasId,
+                    OutputWidth,
+                    OutputHeight);
+
+            await using var croppedStream =
+                await croppedStreamReference.OpenReadStreamAsync(
+                    maxAllowedSize: MaxUploadBytes);
+
+            using var memoryStream =
+                new MemoryStream();
+
+            await croppedStream.CopyToAsync(
+                memoryStream);
+
+            var croppedBytes =
+                memoryStream.ToArray();
+
+            if (croppedBytes.Length == 0)
+            {
+                throw new InvalidOperationException(
+                    "The cropped image is empty.");
+            }
+
+            var fileName =
+                $"{OutputFileNamePrefix}-cropped.png";
+
+            await OnConfirm.InvokeAsync((croppedBytes, fileName, OutputContentType));
+        }
+        catch (Exception ex)
+        {
+            var message =
+                $"Unable to crop image: {ex.Message}";
+
+            Snackbar.Add(
+                message,
+                Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        if (_busy) return;
+
+        await DisposeJsAsync();
+
+        await OnCancel.InvokeAsync();
+    }
+
+    private async Task DisposeJsAsync()
+    {
+        if (_jsModule != null && _ready)
+        {
+            try
+            {
+                await _jsModule.InvokeVoidAsync(
+                    "dispose",
+                    CropCanvasId);
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+
+        _ready = false;
+        _initialized = false;
+        _zoom = 1;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await DisposeJsAsync();
+
+        if (_jsModule != null)
+        {
+            await _jsModule.DisposeAsync();
+        }
+    }
+}

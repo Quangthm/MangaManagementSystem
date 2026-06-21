@@ -1050,17 +1050,24 @@
                         <div style="font-size: 0.78rem; font-weight: 600; color: #374151; margin-bottom: 6px;">Series Cover (optional)</div>
                         @if (_draftCoverFileName != null)
                         {
-                            <div style="position: relative; display: flex; align-items: center; gap: 8px; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fafafe;">
-                                <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" Style="font-size: 20px; color: #4f46e5;" />
-                                <span style="flex: 1; font-size: 0.82rem; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@_draftCoverFileName</span>
-                                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
-                                               Style="color: #dc2626;"
-                                               OnClick="@(() => { _draftCoverBytes = null; _draftCoverFileName = null; _draftCoverContentType = null; })" />
+                            <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                                @if (_draftCoverPreviewUrl != null)
+                                {
+                                    <img src="@_draftCoverPreviewUrl" alt="Cover preview"
+                                         style="width: 80px; height: 120px; object-fit: cover; border-radius: 8px; border: 2px solid #6366f1;" />
+                                }
+                                <div style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fafafe;">
+                                    <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" Style="font-size: 18px; color: #4f46e5;" />
+                                    <span style="flex: 1; font-size: 0.78rem; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@_draftCoverFileName</span>
+                                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                                                   Style="color: #dc2626;"
+                                                   OnClick="@ClearCreateCover" />
+                                </div>
                             </div>
                         }
                         else
                         {
-                            <MudFileUpload T="IBrowserFile" FilesChanged="@(async (IBrowserFile f) => { if (f == null) return; _draftCoverFileName = f.Name; _draftCoverContentType = f.ContentType; using var s = f.OpenReadStream(5*1024*1024); using var ms = new MemoryStream(); await s.CopyToAsync(ms); _draftCoverBytes = ms.ToArray(); })">
+                            <MudFileUpload T="IBrowserFile" FilesChanged="@OnCreateCoverChanged">
                                 <ActivatorContent>
                                     <div style="border: 1.5px dashed #c7d2fe; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; background: #fafafe;">
                                         <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" Style="font-size: 28px; color: #a5b4fc;" />
@@ -1492,6 +1499,21 @@
     </MudCard>
 </MudOverlay>
 
+@* ── Cover Crop Dialog ── *@
+@if (_showCoverCropDialog && !string.IsNullOrWhiteSpace(_coverCropSourceDataUrl))
+{
+    <ImageCropDialog SourceDataUrl="@_coverCropSourceDataUrl"
+                     AspectRatio="@(2.0/3.0)"
+                     OutputWidth="800"
+                     OutputHeight="1200"
+                     OutputContentType="image/png"
+                     CropDescription="2:3 portrait crop"
+                     OutputFileNamePrefix="series-cover"
+                     HelperText="Covers are displayed in a 2:3 portrait frame. Please crop your image to choose the visible cover area."
+                     OnConfirm="@OnCoverCropConfirmed"
+                     OnCancel="@OnCoverCropCancelled" />
+}
+
 @code {
     private string _activeTab = "current";
     private bool _newSeriesDialogOpen;
@@ -1507,6 +1529,7 @@
     private byte[]? _draftCoverBytes;
     private string? _draftCoverFileName;
     private string? _draftCoverContentType;
+    private string? _draftCoverPreviewUrl; // cropped data: URI for create modal preview
 
     // ── Edit Draft modal state (BF-SERIES-002) ────────────────────────────────
     private bool _draftDetailsOpen;
@@ -1527,13 +1550,19 @@
     private string? _editCoverContentType;
     private string? _editCoverPreviewUrl; // data: URI for immediate preview
 
+    // ── Cover crop dialog state ──────────────────────────────────────────────
+    private bool _showCoverCropDialog;
+    private string? _coverCropSourceDataUrl;
+    private string? _coverCropSourceFileName;
+    private bool _coverCropIsForCreate; // true = update create fields, false = update edit fields
+
     // ── Review Status modal state ────────────────────────────────────────────
     private bool _reviewStatusOpen;
     private SeriesCardData? _reviewSeries;
 
     // ── Dashboard modal state ──
     private bool IsAnyDashboardModalOpen =>
-        _cancelDraftDialogOpen || _newSeriesDialogOpen || _draftDetailsOpen || _reviewStatusOpen || _submitProposalDialogOpen || _genrePickerOpen || _tagPickerOpen;
+        _cancelDraftDialogOpen || _newSeriesDialogOpen || _draftDetailsOpen || _reviewStatusOpen || _submitProposalDialogOpen || _genrePickerOpen || _tagPickerOpen || _showCoverCropDialog;
 
     // ── Dashboard pagination ──
     private int _dashboardPage = 1;
@@ -2099,17 +2128,107 @@
             using var stream = file.OpenReadStream(maxCoverBytes);
             using var ms = new MemoryStream();
             await stream.CopyToAsync(ms);
-            _editCoverBytes = ms.ToArray();
-            _editCoverFileName = file.Name;
-            _editCoverContentType = file.ContentType;
-            // Generate a data: URI so the user sees a preview before saving
-            _editCoverPreviewUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(_editCoverBytes)}";
+            var bytes = ms.ToArray();
+
+            _coverCropSourceDataUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(bytes)}";
+            _coverCropSourceFileName = file.Name;
+            _coverCropIsForCreate = false;
+            _showCoverCropDialog = true;
         }
         catch (Exception)
         {
             Snackbar.Add("Failed to read the selected cover image. Please try again.", Severity.Error);
-            ClearEditCover();
         }
+    }
+
+    private async Task OnCreateCoverChanged(IBrowserFile file)
+    {
+        if (file == null) return;
+
+        const long maxCoverBytes = 5 * 1024 * 1024;
+
+        var allowedCoverTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "image/png", "image/jpeg", "image/webp"
+        };
+
+        var allowedCoverExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".png", ".jpg", ".jpeg", ".webp"
+        };
+
+        var ext = Path.GetExtension(file.Name);
+        if (!allowedCoverExtensions.Contains(ext))
+        {
+            Snackbar.Add("Only PNG, JPG, and WEBP images are accepted as series covers.", Severity.Warning);
+            return;
+        }
+
+        if (!allowedCoverTypes.Contains(file.ContentType))
+        {
+            Snackbar.Add("The selected file type is not accepted. Please upload a PNG, JPG, or WEBP image.", Severity.Warning);
+            return;
+        }
+
+        if (file.Size > maxCoverBytes)
+        {
+            Snackbar.Add("The cover image exceeds the maximum size of 5 MB.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            using var stream = file.OpenReadStream(maxCoverBytes);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            var bytes = ms.ToArray();
+
+            _coverCropSourceDataUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(bytes)}";
+            _coverCropSourceFileName = file.Name;
+            _coverCropIsForCreate = true;
+            _showCoverCropDialog = true;
+        }
+        catch (Exception)
+        {
+            Snackbar.Add("Failed to read the selected cover image. Please try again.", Severity.Error);
+        }
+    }
+
+    private async Task OnCoverCropConfirmed((byte[] Bytes, string FileName, string ContentType) result)
+    {
+        _showCoverCropDialog = false;
+        _coverCropSourceDataUrl = null;
+        _coverCropSourceFileName = null;
+
+        if (_coverCropIsForCreate)
+        {
+            _draftCoverBytes = result.Bytes;
+            _draftCoverFileName = result.FileName;
+            _draftCoverContentType = result.ContentType;
+            _draftCoverPreviewUrl = $"data:{result.ContentType};base64,{Convert.ToBase64String(result.Bytes)}";
+        }
+        else
+        {
+            _editCoverBytes = result.Bytes;
+            _editCoverFileName = result.FileName;
+            _editCoverContentType = result.ContentType;
+            _editCoverPreviewUrl = $"data:{result.ContentType};base64,{Convert.ToBase64String(result.Bytes)}";
+        }
+    }
+
+    private async Task OnCoverCropCancelled()
+    {
+        _showCoverCropDialog = false;
+        _coverCropSourceDataUrl = null;
+        _coverCropSourceFileName = null;
+    }
+
+    private void ClearCreateCover()
+    {
+        _draftCoverBytes = null;
+        _draftCoverFileName = null;
+        _draftCoverContentType = null;
+        _draftCoverPreviewUrl = null;
     }
 
     private async Task SaveDraftEditAsync()
@@ -2142,69 +2261,57 @@
                 coverContentType: _editCoverContentType,
                 cancellationToken: default);
 
-            // Update the in-memory card to reflect the saved changes.
-            // Preserve genres/tags from current selection because the handler DTO returns empty lists.
+            // Update succeeded — now refresh this single card from the API.
             var idx = _seriesData.FindIndex(s => s.Id == _detailSeries.Id);
             if (idx >= 0)
             {
-                // Refresh this single card from the API to get accurate UpdatedAtUtc and CoverUrl.
-                var freshDto = await MangakaSeriesApiClient.GetMySeriesCardByIdAsync(
-                    _currentUserId.Value, _detailSeries.Id);
-
-                if (freshDto is not null)
+                try
                 {
-                    var fresh = new SeriesCardData(
-                        Id: freshDto.SeriesId,
-                        Title: freshDto.Title,
-                        GenreDisplay: string.Join(", ", freshDto.Genres.Select(g => g.GenreName)),
-                        Genres: freshDto.Genres,
-                        Tags: freshDto.Tags,
-                        StatusCode: freshDto.StatusCode,
-                        Slug: freshDto.Slug,
-                        Synopsis: freshDto.Synopsis,
-                        ContentLanguageCode: freshDto.ContentLanguageCode,
-                        CoverUrl: freshDto.CoverUrl,
-                        CreatedAtUtc: freshDto.CreatedAtUtc,
-                        UpdatedAtUtc: freshDto.UpdatedAtUtc,
-                        PublicationFrequencyCode: freshDto.PublicationFrequencyCode
-                    );
-                    _seriesData[idx] = fresh;
-                    _detailSeries = fresh;
-                }
-                else
-                {
-                    // Fallback: use command result + local selections if server query returned null.
-                    // This should be rare — it means the server couldn't find the series or the
-                    // actor lost contributor access between the update and the read.
-                    var matchedGenreDtos = _editGenreIds
-                        .Select(id => _availableGenres.FirstOrDefault(g => g.GenreId == id))
-                        .Where(g => g != null)
-                        .Select(g => new GenreDto(g!.GenreId, g.GenreName, g.Description))
-                        .ToList();
-                    var matchedTagDtos = _editTagIds
-                        .Select(id => _availableTags.FirstOrDefault(t => t.TagId == id))
-                        .Where(t => t != null)
-                        .Select(t => new TagDto(t!.TagId, t.TagName, t.Description))
-                        .ToList();
+                    var freshDto = await MangakaSeriesApiClient.GetMySeriesCardByIdAsync(
+                        _currentUserId.Value, _detailSeries.Id);
 
-                    _seriesData[idx] = _seriesData[idx] with
+                    if (freshDto is not null)
                     {
-                        Title = result.Title,
-                        GenreDisplay = matchedGenreDtos.Count > 0
-                            ? string.Join(", ", matchedGenreDtos.Select(g => g.GenreName))
-                            : "No genres",
-                        Genres = matchedGenreDtos,
-                        Tags = matchedTagDtos,
-                        Synopsis = result.Synopsis,
-                        ContentLanguageCode = result.ContentLanguageCode,
-                        Slug = result.Slug,
-                        PublicationFrequencyCode = result.PublicationFrequencyCode,
-                        CoverUrl = result.NewCoverUrl ?? _seriesData[idx].CoverUrl
-                    };
+                        var fresh = new SeriesCardData(
+                            Id: freshDto.SeriesId,
+                            Title: freshDto.Title,
+                            GenreDisplay: string.Join(", ", freshDto.Genres.Select(g => g.GenreName)),
+                            Genres: freshDto.Genres,
+                            Tags: freshDto.Tags,
+                            StatusCode: freshDto.StatusCode,
+                            Slug: freshDto.Slug,
+                            Synopsis: freshDto.Synopsis,
+                            ContentLanguageCode: freshDto.ContentLanguageCode,
+                            CoverUrl: freshDto.CoverUrl,
+                            CreatedAtUtc: freshDto.CreatedAtUtc,
+                            UpdatedAtUtc: freshDto.UpdatedAtUtc,
+                            PublicationFrequencyCode: freshDto.PublicationFrequencyCode
+                        );
+                        _seriesData[idx] = fresh;
+                        _detailSeries = fresh;
+                        Snackbar.Add("Draft profile saved.", Severity.Success);
+                    }
+                    else
+                    {
+                        // Server returned 404 — this series is no longer available to this user.
+                        // Do NOT fabricate a fake card from command result + local selections.
+                        _seriesData.RemoveAt(idx);
+                        _detailSeries = null;
+                        Snackbar.Add(
+                            "The draft was saved, but this series is no longer available in your dashboard. Please refresh if needed.",
+                            Severity.Warning);
+                    }
+                }
+                catch (Exception)
+                {
+                    // Targeted card refresh failed (network/server error), but the update did succeed.
+                    // Keep the existing card unchanged — it may be stale but is safer than fabricating data.
+                    Snackbar.Add(
+                        "The draft was saved, but the card could not be refreshed. Please reload the page.",
+                        Severity.Warning);
                 }
             }
 
-            Snackbar.Add("Draft profile saved.", Severity.Success);
             _draftDetailsOpen = false;
         }
         catch (Exception ex)
@@ -2617,6 +2724,7 @@
             _draftCoverBytes = null;
             _draftCoverFileName = null;
             _draftCoverContentType = null;
+            _draftCoverPreviewUrl = null;
             _newSeriesDialogOpen = false;
         }
         catch (Exception ex)
