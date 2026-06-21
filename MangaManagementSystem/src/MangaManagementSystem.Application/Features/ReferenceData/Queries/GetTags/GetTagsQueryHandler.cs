@@ -24,7 +24,7 @@ namespace MangaManagementSystem.Application.Features.ReferenceData.Queries.GetTa
         {
             var tags = await _repository.GetTagsAsync(cancellationToken);
             return tags
-                .Select(t => new TagDto(t.TagId, t.TagName))
+                .Select(t => new TagDto(t.TagId, t.TagName, t.Description))
                 .ToList();
         }
     }

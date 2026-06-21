@@ -24,7 +24,7 @@ namespace MangaManagementSystem.Application.Features.ReferenceData.Queries.GetGe
         {
             var genres = await _repository.GetGenresAsync(cancellationToken);
             return genres
-                .Select(g => new GenreDto(g.GenreId, g.GenreName))
+                .Select(g => new GenreDto(g.GenreId, g.GenreName, g.Description))
                 .ToList();
         }
     }
