@@ -200,6 +200,58 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             }
         }
 
+        public async Task<IReadOnlyList<AdminFileResourceDetail>>
+            GetStorageCleanupCandidatesAsync(
+                CancellationToken cancellationToken = default)
+        {
+            var connection =
+                _context.Database.GetDbConnection();
+
+            var shouldClose =
+                connection.State != ConnectionState.Open;
+
+            if (shouldClose)
+            {
+                await connection.OpenAsync(
+                    cancellationToken);
+            }
+
+            try
+            {
+                await using var command =
+                    connection.CreateCommand();
+
+                command.CommandText =
+                    "manga.usp_FileResource_GetStorageCleanupCandidates";
+
+                command.CommandType =
+                    CommandType.StoredProcedure;
+
+                var items =
+                    new List<AdminFileResourceDetail>();
+
+                await using var reader =
+                    await command.ExecuteReaderAsync(
+                        cancellationToken);
+
+                while (await reader.ReadAsync(
+                    cancellationToken))
+                {
+                    items.Add(
+                        ReadDetail(reader));
+                }
+
+                return items;
+            }
+            finally
+            {
+                if (shouldClose)
+                {
+                    await connection.CloseAsync();
+                }
+            }
+        }
+
         public async Task SoftDeleteAdminAsync(
             Guid actorUserId,
             Guid fileResourceId,
@@ -260,6 +312,82 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             }
         }
 
+        public async Task UpdateStorageCleanupResultAsync(
+            Guid actorUserId,
+            Guid fileResourceId,
+            string storageCleanupStatus,
+            string? cleanupError,
+            string? cleanupReason,
+            CancellationToken cancellationToken = default)
+        {
+            var connection =
+                _context.Database.GetDbConnection();
+
+            var shouldClose =
+                connection.State != ConnectionState.Open;
+
+            if (shouldClose)
+            {
+                await connection.OpenAsync(
+                    cancellationToken);
+            }
+
+            try
+            {
+                await using var command =
+                    connection.CreateCommand();
+
+                command.CommandText =
+                    "manga.usp_FileResource_UpdateStorageCleanupResult";
+
+                command.CommandType =
+                    CommandType.StoredProcedure;
+
+                AddParameter(
+                    command,
+                    "@actor_user_id",
+                    SqlDbType.UniqueIdentifier,
+                    actorUserId);
+
+                AddParameter(
+                    command,
+                    "@file_resource_id",
+                    SqlDbType.UniqueIdentifier,
+                    fileResourceId);
+
+                AddParameter(
+                    command,
+                    "@storage_cleanup_status",
+                    SqlDbType.NVarChar,
+                    storageCleanupStatus,
+                    20);
+
+                AddParameter(
+                    command,
+                    "@cleanup_error",
+                    SqlDbType.NVarChar,
+                    cleanupError,
+                    1000);
+
+                AddParameter(
+                    command,
+                    "@cleanup_reason",
+                    SqlDbType.NVarChar,
+                    cleanupReason,
+                    500);
+
+                await command.ExecuteNonQueryAsync(
+                    cancellationToken);
+            }
+            finally
+            {
+                if (shouldClose)
+                {
+                    await connection.CloseAsync();
+                }
+            }
+        }
+
         private static AdminFileResourceListItem
             ReadListItem(
                 DbDataReader reader)
@@ -306,7 +434,25 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     "deleted_by_username"),
                 GetNullableString(
                     reader,
-                    "deleted_by_display_name"));
+                    "deleted_by_display_name"),
+                GetRequiredString(
+                    reader,
+                    "storage_cleanup_status"),
+                GetNullableUtcDateTime(
+                    reader,
+                    "storage_cleaned_at_utc"),
+                GetNullableGuid(
+                    reader,
+                    "storage_cleaned_by_user_id"),
+                GetNullableString(
+                    reader,
+                    "storage_cleaned_by_username"),
+                GetNullableString(
+                    reader,
+                    "storage_cleaned_by_display_name"),
+                GetNullableString(
+                    reader,
+                    "storage_cleanup_error"));
         }
 
         private static AdminFileResourceDetail
@@ -362,6 +508,24 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 GetNullableString(
                     reader,
                     "deleted_by_display_name"),
+                GetRequiredString(
+                    reader,
+                    "storage_cleanup_status"),
+                GetNullableUtcDateTime(
+                    reader,
+                    "storage_cleaned_at_utc"),
+                GetNullableGuid(
+                    reader,
+                    "storage_cleaned_by_user_id"),
+                GetNullableString(
+                    reader,
+                    "storage_cleaned_by_username"),
+                GetNullableString(
+                    reader,
+                    "storage_cleaned_by_display_name"),
+                GetNullableString(
+                    reader,
+                    "storage_cleanup_error"),
                 reader.GetInt64(
                     reader.GetOrdinal(
                         "reference_count")));

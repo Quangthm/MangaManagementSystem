@@ -925,13 +925,21 @@ BEGIN
         fr.deleted_at_utc,
         fr.deleted_by_user_id,
         deleter.username AS deleted_by_username,
-        deleter.display_name AS deleted_by_display_name
+        deleter.display_name AS deleted_by_display_name,
+        fr.storage_cleanup_status,
+        fr.storage_cleaned_at_utc,
+        fr.storage_cleaned_by_user_id,
+        cleaner.username AS storage_cleaned_by_username,
+        cleaner.display_name AS storage_cleaned_by_display_name,
+        fr.storage_cleanup_error
     INTO #filtered_files
     FROM manga.FileResource fr
     LEFT JOIN auth.Users uploader
         ON uploader.user_id = fr.uploaded_by_user_id
     LEFT JOIN auth.Users deleter
         ON deleter.user_id = fr.deleted_by_user_id
+    LEFT JOIN auth.Users cleaner
+        ON cleaner.user_id = fr.storage_cleaned_by_user_id
     WHERE
         (
             @normalized_search IS NULL
@@ -986,7 +994,13 @@ BEGIN
         deleted_at_utc,
         deleted_by_user_id,
         deleted_by_username,
-        deleted_by_display_name
+        deleted_by_display_name,
+        storage_cleanup_status,
+        storage_cleaned_at_utc,
+        storage_cleaned_by_user_id,
+        storage_cleaned_by_username,
+        storage_cleaned_by_display_name,
+        storage_cleanup_error
     FROM #filtered_files
     ORDER BY
         uploaded_at_utc DESC,
@@ -1047,6 +1061,12 @@ BEGIN
         fr.deleted_by_user_id,
         deleter.username AS deleted_by_username,
         deleter.display_name AS deleted_by_display_name,
+        fr.storage_cleanup_status,
+        fr.storage_cleaned_at_utc,
+        fr.storage_cleaned_by_user_id,
+        cleaner.username AS storage_cleaned_by_username,
+        cleaner.display_name AS storage_cleaned_by_display_name,
+        fr.storage_cleanup_error,
         CAST
         (
             (
@@ -1097,7 +1117,230 @@ BEGIN
         ON uploader.user_id = fr.uploaded_by_user_id
     LEFT JOIN auth.Users deleter
         ON deleter.user_id = fr.deleted_by_user_id
+    LEFT JOIN auth.Users cleaner
+        ON cleaner.user_id = fr.storage_cleaned_by_user_id
     WHERE fr.file_resource_id = @file_resource_id;
+END;
+GO
+CREATE OR ALTER PROCEDURE manga.usp_FileResource_UpdateStorageCleanupResult
+    @actor_user_id UNIQUEIDENTIFIER,
+    @file_resource_id UNIQUEIDENTIFIER,
+    @storage_cleanup_status NVARCHAR(20),
+    @cleanup_error NVARCHAR(1000) = NULL,
+    @cleanup_reason NVARCHAR(500) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+
+    DECLARE @normalized_storage_cleanup_status NVARCHAR(20) =
+        UPPER(LTRIM(RTRIM(COALESCE(@storage_cleanup_status, N''))));
+
+    DECLARE @normalized_cleanup_error NVARCHAR(1000) =
+        NULLIF(LTRIM(RTRIM(@cleanup_error)), N'');
+
+    DECLARE @normalized_cleanup_reason NVARCHAR(500) =
+        NULLIF(LTRIM(RTRIM(@cleanup_reason)), N'');
+
+    DECLARE @old_file_purpose_code NVARCHAR(50);
+    DECLARE @old_original_file_name NVARCHAR(260);
+    DECLARE @old_cloudinary_public_id NVARCHAR(255);
+    DECLARE @old_content_type NVARCHAR(100);
+    DECLARE @old_storage_cleanup_status NVARCHAR(20);
+
+    DECLARE @detail_json NVARCHAR(MAX);
+    DECLARE @audit_entity_id NVARCHAR(100);
+
+    BEGIN TRY
+        IF @actor_user_id IS NULL
+        BEGIN
+            ;THROW 54040, 'Actor user id is required.', 1;
+        END;
+
+        IF @file_resource_id IS NULL
+        BEGIN
+            ;THROW 54041, 'File resource id is required.', 1;
+        END;
+
+        IF @normalized_storage_cleanup_status NOT IN
+        (
+            N'CLEANED',
+            N'MISSING',
+            N'FAILED'
+        )
+        BEGIN
+            ;THROW 54042, 'Storage cleanup status must be CLEANED, MISSING, or FAILED.', 1;
+        END;
+
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        SELECT
+            @old_file_purpose_code = file_purpose_code,
+            @old_original_file_name = original_file_name,
+            @old_cloudinary_public_id = cloudinary_public_id,
+            @old_content_type = content_type,
+            @old_storage_cleanup_status = storage_cleanup_status
+        FROM manga.FileResource WITH (UPDLOCK, HOLDLOCK)
+        WHERE file_resource_id = @file_resource_id;
+
+        IF @old_file_purpose_code IS NULL
+        BEGIN
+            ;THROW 54043, 'File resource does not exist.', 1;
+        END;
+
+        IF @normalized_storage_cleanup_status = N'FAILED'
+        BEGIN
+            UPDATE manga.FileResource
+            SET
+                storage_cleanup_status = N'FAILED',
+                storage_cleaned_at_utc = NULL,
+                storage_cleaned_by_user_id = NULL,
+                storage_cleanup_error = @normalized_cleanup_error
+            WHERE file_resource_id = @file_resource_id;
+        END
+        ELSE
+        BEGIN
+            UPDATE manga.FileResource
+            SET
+                storage_cleanup_status = @normalized_storage_cleanup_status,
+                storage_cleaned_at_utc = SYSUTCDATETIME(),
+                storage_cleaned_by_user_id = @actor_user_id,
+                storage_cleanup_error = NULL
+            WHERE file_resource_id = @file_resource_id;
+        END;
+
+        SELECT @detail_json =
+        (
+            SELECT
+                @file_resource_id AS file_resource_id,
+                @old_file_purpose_code AS file_purpose_code,
+                @old_original_file_name AS original_file_name,
+                @old_cloudinary_public_id AS cloudinary_public_id,
+                @old_content_type AS content_type,
+                @old_storage_cleanup_status AS previous_storage_cleanup_status,
+                @normalized_storage_cleanup_status AS cleanup_result,
+                @normalized_cleanup_reason AS cleanup_reason,
+                @normalized_cleanup_error AS cleanup_error
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        SET @audit_entity_id =
+            CONVERT(NVARCHAR(36), @file_resource_id);
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @actor_user_id,
+            @action_code = N'FILE_RESOURCE_STORAGE_CLEANED',
+            @entity_type = N'FileResource',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1
+           AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH
+END;
+GO
+CREATE OR ALTER PROCEDURE manga.usp_FileResource_GetStorageCleanupCandidates
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT
+        fr.file_resource_id,
+        fr.file_purpose_code,
+        fr.original_file_name,
+        fr.cloudinary_public_id,
+        fr.cloudinary_secure_url,
+        fr.content_type,
+        fr.file_size_bytes,
+        fr.sha256_hash,
+        fr.uploaded_by_user_id,
+        uploader.username AS uploaded_by_username,
+        uploader.display_name AS uploaded_by_display_name,
+        fr.uploaded_at_utc,
+        fr.deleted_at_utc,
+        fr.deleted_by_user_id,
+        deleter.username AS deleted_by_username,
+        deleter.display_name AS deleted_by_display_name,
+        fr.storage_cleanup_status,
+        fr.storage_cleaned_at_utc,
+        fr.storage_cleaned_by_user_id,
+        cleaner.username AS storage_cleaned_by_username,
+        cleaner.display_name AS storage_cleaned_by_display_name,
+        fr.storage_cleanup_error,
+        CAST
+        (
+            (
+                SELECT COUNT_BIG(1)
+                FROM auth.Users u
+                WHERE u.avatar_file_id = fr.file_resource_id
+            )
+            +
+            (
+                SELECT COUNT_BIG(1)
+                FROM auth.Users u
+                WHERE u.portfolio_file_id = fr.file_resource_id
+            )
+            +
+            (
+                SELECT COUNT_BIG(1)
+                FROM manga.Series s
+                WHERE s.cover_file_id = fr.file_resource_id
+            )
+            +
+            (
+                SELECT COUNT_BIG(1)
+                FROM manga.SeriesProposal sp
+                WHERE sp.proposal_file_id = fr.file_resource_id
+            )
+            +
+            (
+                SELECT COUNT_BIG(1)
+                FROM manga.SeriesProposal sp
+                WHERE sp.markup_file_id = fr.file_resource_id
+            )
+            +
+            (
+                SELECT COUNT_BIG(1)
+                FROM manga.ChapterPageVersion cpv
+                WHERE cpv.page_file_id = fr.file_resource_id
+            )
+            +
+            (
+                SELECT COUNT_BIG(1)
+                FROM manga.ChapterEditorialReview cer
+                WHERE cer.markup_file_id = fr.file_resource_id
+            )
+            AS BIGINT
+        ) AS reference_count
+    FROM manga.FileResource fr
+    LEFT JOIN auth.Users uploader
+        ON uploader.user_id = fr.uploaded_by_user_id
+    LEFT JOIN auth.Users deleter
+        ON deleter.user_id = fr.deleted_by_user_id
+    LEFT JOIN auth.Users cleaner
+        ON cleaner.user_id = fr.storage_cleaned_by_user_id
+    WHERE fr.deleted_at_utc IS NOT NULL
+      AND fr.storage_cleanup_status IN (N'AVAILABLE', N'FAILED')
+    ORDER BY
+        fr.deleted_at_utc ASC,
+        fr.file_resource_id ASC;
 END;
 GO
 CREATE OR ALTER PROCEDURE manga.usp_Admin_FileResource_SoftDelete
@@ -3179,7 +3422,8 @@ BEGIN
             BEGIN TRAN;
         END;
 
-       IF ISJSON(@page_region_ids_json, ARRAY) <> 1
+       IF ISJSON(@page_region_ids_json) <> 1
+   OR LEFT(LTRIM(@page_region_ids_json), 1) <> N'['
 BEGIN
     ;THROW 57901, 'page_region_ids_json must be a valid JSON array of page region IDs.', 1;
 END;
@@ -3774,7 +4018,8 @@ BEGIN
         --------------------------------------------------------------------
 -- 1. Validate JSON array and parse region IDs.
 --------------------------------------------------------------------
-IF ISJSON(@page_region_ids_json, ARRAY) <> 1
+IF ISJSON(@page_region_ids_json) <> 1
+   OR LEFT(LTRIM(@page_region_ids_json), 1) <> N'['
 BEGIN
     ;THROW 57901, 'page_region_ids_json must be a valid JSON array of page region IDs.', 1;
 END;

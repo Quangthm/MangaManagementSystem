@@ -81,7 +81,8 @@ namespace MangaManagementSystem.Application.Features.Admin.Files.Queries
                 return null;
             }
 
-            var normalized = value.Trim();
+            var normalized =
+                value.Trim();
 
             if (normalized.Length > maximumLength)
             {
@@ -121,7 +122,8 @@ namespace MangaManagementSystem.Application.Features.Admin.Files.Queries
                     "Delete reason is required.");
             }
 
-            var normalized = value.Trim();
+            var normalized =
+                value.Trim();
 
             if (normalized.Length > 500)
             {
@@ -145,6 +147,7 @@ namespace MangaManagementSystem.Application.Features.Admin.Files.Queries
                     "image/jpg",
                     "image/gif",
                     "image/webp",
+                    "image/svg+xml",
                     "application/pdf"
                 };
 
@@ -166,6 +169,12 @@ namespace MangaManagementSystem.Application.Features.Admin.Files.Queries
                 item.DeletedByUserId,
                 item.DeletedByUsername,
                 item.DeletedByDisplayName,
+                item.StorageCleanupStatus,
+                item.StorageCleanedAtUtc,
+                item.StorageCleanedByUserId,
+                item.StorageCleanedByUsername,
+                item.StorageCleanedByDisplayName,
+                item.StorageCleanupError,
                 item.DeletedAtUtc.HasValue);
         }
 
@@ -176,8 +185,8 @@ namespace MangaManagementSystem.Application.Features.Admin.Files.Queries
                 item.DeletedAtUtc.HasValue;
 
             var canPreview =
-                !isDeleted
-                && PreviewableContentTypes.Contains(
+                isDeleted
+                || PreviewableContentTypes.Contains(
                     item.ContentType);
 
             return new AdminFileDetailDto(
@@ -195,6 +204,12 @@ namespace MangaManagementSystem.Application.Features.Admin.Files.Queries
                 item.DeletedByUserId,
                 item.DeletedByUsername,
                 item.DeletedByDisplayName,
+                item.StorageCleanupStatus,
+                item.StorageCleanedAtUtc,
+                item.StorageCleanedByUserId,
+                item.StorageCleanedByUsername,
+                item.StorageCleanedByDisplayName,
+                item.StorageCleanupError,
                 item.ReferenceCount,
                 isDeleted,
                 canPreview,
@@ -215,6 +230,8 @@ namespace MangaManagementSystem.Application.Features.Admin.Files.Queries
                 item.ContentType,
                 item.FileSizeBytes,
                 item.DeletedAtUtc,
+                item.StorageCleanupStatus,
+                item.StorageCleanedAtUtc,
                 isDeleted,
                 !isDeleted
                     && PreviewableContentTypes.Contains(

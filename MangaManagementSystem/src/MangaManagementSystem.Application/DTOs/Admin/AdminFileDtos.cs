@@ -15,6 +15,12 @@
         Guid? DeletedByUserId,
         string? DeletedByUsername,
         string? DeletedByDisplayName,
+        string StorageCleanupStatus,
+        DateTime? StorageCleanedAtUtc,
+        Guid? StorageCleanedByUserId,
+        string? StorageCleanedByUsername,
+        string? StorageCleanedByDisplayName,
+        string? StorageCleanupError,
         bool IsDeleted);
 
     public sealed record AdminFilePageDto(
@@ -39,6 +45,12 @@
         Guid? DeletedByUserId,
         string? DeletedByUsername,
         string? DeletedByDisplayName,
+        string StorageCleanupStatus,
+        DateTime? StorageCleanedAtUtc,
+        Guid? StorageCleanedByUserId,
+        string? StorageCleanedByUsername,
+        string? StorageCleanedByDisplayName,
+        string? StorageCleanupError,
         long ReferenceCount,
         bool IsDeleted,
         bool CanPreview,
@@ -51,6 +63,21 @@
         string ContentType,
         long FileSizeBytes,
         DateTime? DeletedAtUtc,
+        string StorageCleanupStatus,
+        DateTime? StorageCleanedAtUtc,
         bool IsDeleted,
         bool CanPreview);
+
+    public sealed record AdminFileStorageCleanupResultDto(
+        Guid FileResourceId,
+        string Status,
+        string StorageCleanupStatus,
+        string Message);
+
+    public sealed record AdminFileStorageCleanupBatchResultDto(
+        int TotalCandidates,
+        int Cleaned,
+        int Missing,
+        int Failed,
+        int Skipped);
 }

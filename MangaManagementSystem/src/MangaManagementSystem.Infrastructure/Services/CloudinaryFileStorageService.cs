@@ -7,7 +7,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using System.Security.Cryptography;
 
-
 namespace MangaManagementSystem.Infrastructure.Services
 {
     public class CloudinaryFileStorageService : IFileStorageService
@@ -43,10 +42,19 @@ namespace MangaManagementSystem.Infrastructure.Services
             "USER_AVATAR"
         };
 
-        public CloudinaryFileStorageService(Cloudinary cloudinary, IOptions<CloudinarySettings> options)
+        public CloudinaryFileStorageService(
+            Cloudinary cloudinary,
+            IOptions<CloudinarySettings> options)
         {
-            _cloudinary = cloudinary ?? throw new ArgumentNullException(nameof(cloudinary));
-            _settings = options?.Value ?? throw new ArgumentNullException(nameof(options));
+            _cloudinary =
+                cloudinary
+                ?? throw new ArgumentNullException(
+                    nameof(cloudinary));
+
+            _settings =
+                options?.Value
+                ?? throw new ArgumentNullException(
+                    nameof(options));
         }
 
         public async Task<FileUploadResultDto> UploadFileAsync(
@@ -56,61 +64,86 @@ namespace MangaManagementSystem.Infrastructure.Services
         {
             if (file == null)
             {
-                throw new ArgumentNullException(nameof(file));
+                throw new ArgumentNullException(
+                    nameof(file));
             }
 
             if (string.IsNullOrWhiteSpace(filePurposeCode))
             {
-                throw new ArgumentException("File purpose is required.", nameof(filePurposeCode));
+                throw new ArgumentException(
+                    "File purpose is required.",
+                    nameof(filePurposeCode));
             }
 
             if (!ValidPurposes.Contains(filePurposeCode))
             {
-                throw new InvalidOperationException($"Invalid file purpose code: {filePurposeCode}");
+                throw new InvalidOperationException(
+                    $"Invalid file purpose code: {filePurposeCode}");
             }
 
             if (file.Length <= 0)
             {
-                throw new InvalidOperationException("File is empty.");
+                throw new InvalidOperationException(
+                    "File is empty.");
             }
 
             if (file.Length > MaxFileSizeBytes)
             {
-                throw new InvalidOperationException($"File exceeds maximum allowed size of {MaxFileSizeBytes} bytes.");
+                throw new InvalidOperationException(
+                    $"File exceeds maximum allowed size of {MaxFileSizeBytes} bytes.");
             }
 
-            var contentType = file.ContentType?.ToLowerInvariant() ?? string.Empty;
-            var isImage = AllowedImageContentTypes.Contains(contentType);
-            var isRaw = AllowedRawContentTypes.Contains(contentType);
+            var contentType =
+                file.ContentType?.ToLowerInvariant()
+                ?? string.Empty;
 
-            ValidateFileTypeForPurpose(filePurposeCode, isImage, isRaw);
+            var isImage =
+                AllowedImageContentTypes.Contains(
+                    contentType);
+
+            var isRaw =
+                AllowedRawContentTypes.Contains(
+                    contentType);
+
+            ValidateFileTypeForPurpose(
+                filePurposeCode,
+                isImage,
+                isRaw);
 
             byte[] fileBytes;
+
             using (var ms = new MemoryStream())
             {
                 await file.CopyToAsync(ms);
                 fileBytes = ms.ToArray();
             }
 
-            var sha256Hash = ComputeSha256Hash(fileBytes);
-            var originalFileName = Path.GetFileName(file.FileName);
-            var folder = BuildFolderForPurpose(filePurposeCode);
+            var sha256Hash =
+                ComputeSha256Hash(fileBytes);
 
-            var uploadResult = await UploadToCloudinaryAsync(
-                fileBytes,
-                originalFileName,
-                contentType,
-                folder,
-                isImage);
+            var originalFileName =
+                Path.GetFileName(file.FileName);
+
+            var folder =
+                BuildFolderForPurpose(filePurposeCode);
+
+            var uploadResult =
+                await UploadToCloudinaryAsync(
+                    fileBytes,
+                    originalFileName,
+                    contentType,
+                    folder,
+                    isImage);
 
             return new FileUploadResultDto(
                 uploadResult.PublicId ?? string.Empty,
-                uploadResult.SecureUrl?.ToString() ?? uploadResult.Url?.ToString() ?? string.Empty,
+                uploadResult.SecureUrl?.ToString()
+                    ?? uploadResult.Url?.ToString()
+                    ?? string.Empty,
                 contentType,
                 fileBytes.LongLength,
                 originalFileName,
-                sha256Hash
-            );
+                sha256Hash);
         }
 
         public async Task<FileUploadResultDto> UploadFileAsync(
@@ -122,74 +155,155 @@ namespace MangaManagementSystem.Infrastructure.Services
         {
             if (fileBytes == null)
             {
-                throw new ArgumentNullException(nameof(fileBytes));
+                throw new ArgumentNullException(
+                    nameof(fileBytes));
             }
 
             if (string.IsNullOrWhiteSpace(originalFileName))
             {
-                throw new ArgumentException("Original file name is required.", nameof(originalFileName));
+                throw new ArgumentException(
+                    "Original file name is required.",
+                    nameof(originalFileName));
             }
 
             if (string.IsNullOrWhiteSpace(filePurposeCode))
             {
-                throw new ArgumentException("File purpose is required.", nameof(filePurposeCode));
+                throw new ArgumentException(
+                    "File purpose is required.",
+                    nameof(filePurposeCode));
             }
 
             if (!ValidPurposes.Contains(filePurposeCode))
             {
-                throw new InvalidOperationException($"Invalid file purpose code: {filePurposeCode}");
+                throw new InvalidOperationException(
+                    $"Invalid file purpose code: {filePurposeCode}");
             }
 
             if (fileBytes.LongLength <= 0)
             {
-                throw new InvalidOperationException("File is empty.");
+                throw new InvalidOperationException(
+                    "File is empty.");
             }
 
             if (fileBytes.LongLength > MaxFileSizeBytes)
             {
-                throw new InvalidOperationException($"File exceeds maximum allowed size of {MaxFileSizeBytes} bytes.");
+                throw new InvalidOperationException(
+                    $"File exceeds maximum allowed size of {MaxFileSizeBytes} bytes.");
             }
 
-            var normalizedContentType = contentType?.ToLowerInvariant() ?? string.Empty;
-            var isImage = AllowedImageContentTypes.Contains(normalizedContentType);
-            var isRaw = AllowedRawContentTypes.Contains(normalizedContentType);
+            var normalizedContentType =
+                contentType?.ToLowerInvariant()
+                ?? string.Empty;
 
-            ValidateFileTypeForPurpose(filePurposeCode, isImage, isRaw);
+            var isImage =
+                AllowedImageContentTypes.Contains(
+                    normalizedContentType);
 
-            var sha256Hash = ComputeSha256Hash(fileBytes);
-            var safeOriginalFileName = Path.GetFileName(originalFileName);
-            var folder = BuildFolderForPurpose(filePurposeCode);
+            var isRaw =
+                AllowedRawContentTypes.Contains(
+                    normalizedContentType);
 
-            var uploadResult = await UploadToCloudinaryAsync(
-                fileBytes,
-                safeOriginalFileName,
-                normalizedContentType,
-                folder,
-                isImage);
+            ValidateFileTypeForPurpose(
+                filePurposeCode,
+                isImage,
+                isRaw);
+
+            var sha256Hash =
+                ComputeSha256Hash(fileBytes);
+
+            var safeOriginalFileName =
+                Path.GetFileName(originalFileName);
+
+            var folder =
+                BuildFolderForPurpose(filePurposeCode);
+
+            var uploadResult =
+                await UploadToCloudinaryAsync(
+                    fileBytes,
+                    safeOriginalFileName,
+                    normalizedContentType,
+                    folder,
+                    isImage);
 
             return new FileUploadResultDto(
                 uploadResult.PublicId ?? string.Empty,
-                uploadResult.SecureUrl?.ToString() ?? uploadResult.Url?.ToString() ?? string.Empty,
+                uploadResult.SecureUrl?.ToString()
+                    ?? uploadResult.Url?.ToString()
+                    ?? string.Empty,
                 normalizedContentType,
                 fileBytes.LongLength,
                 safeOriginalFileName,
-                sha256Hash
-            );
+                sha256Hash);
         }
 
-        public async Task DeleteFileAsync(string publicId, string resourceType)
+        public async Task<FileStorageDeleteResultDto> DeleteFileAsync(
+            string publicId,
+            string resourceType)
         {
             if (string.IsNullOrWhiteSpace(publicId))
             {
-                return;
+                return new FileStorageDeleteResultDto(
+                    false,
+                    false,
+                    "Cloudinary public id is required.");
             }
 
-            var delParams = new DeletionParams(publicId)
+            try
             {
-                ResourceType = resourceType == "raw" ? ResourceType.Raw : ResourceType.Image
-            };
+                var deletionParams =
+                    new DeletionParams(publicId)
+                    {
+                        ResourceType =
+                            string.Equals(
+                                resourceType,
+                                "raw",
+                                StringComparison.OrdinalIgnoreCase)
+                                ? ResourceType.Raw
+                                : ResourceType.Image
+                    };
 
-            await _cloudinary.DestroyAsync(delParams);
+                var result =
+                    await _cloudinary.DestroyAsync(
+                        deletionParams);
+
+                var resultText =
+                    result.Result ?? string.Empty;
+
+                if (string.Equals(
+                        resultText,
+                        "ok",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return new FileStorageDeleteResultDto(
+                        true,
+                        false,
+                        null);
+                }
+
+                if (string.Equals(
+                        resultText,
+                        "not found",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return new FileStorageDeleteResultDto(
+                        false,
+                        true,
+                        "Cloudinary asset was not found.");
+                }
+
+                return new FileStorageDeleteResultDto(
+                    false,
+                    false,
+                    result.Error?.Message
+                    ?? $"Cloudinary delete returned result: {resultText}");
+            }
+            catch (Exception ex)
+            {
+                return new FileStorageDeleteResultDto(
+                    false,
+                    false,
+                    ex.Message);
+            }
         }
 
         private async Task<UploadResult> UploadToCloudinaryAsync(
@@ -203,84 +317,126 @@ namespace MangaManagementSystem.Infrastructure.Services
 
             if (isImage)
             {
-                var uploadParams = new ImageUploadParams
-                {
-                    File = new FileDescription(originalFileName, new MemoryStream(fileBytes)),
-                    Folder = folder,
-                    UseFilename = true,
-                    UniqueFilename = true,
-                    Overwrite = false
-                };
+                var uploadParams =
+                    new ImageUploadParams
+                    {
+                        File =
+                            new FileDescription(
+                                originalFileName,
+                                new MemoryStream(fileBytes)),
 
-                uploadResult = await _cloudinary.UploadAsync(uploadParams);
+                        Folder = folder,
+                        UseFilename = true,
+                        UniqueFilename = true,
+                        Overwrite = false
+                    };
+
+                uploadResult =
+                    await _cloudinary.UploadAsync(
+                        uploadParams);
             }
             else
             {
-                var uploadParams = new RawUploadParams
-                {
-                    File = new FileDescription(originalFileName, new MemoryStream(fileBytes)),
-                    Folder = folder,
-                    UseFilename = true,
-                    UniqueFilename = true,
-                    Overwrite = false
-                };
+                var uploadParams =
+                    new RawUploadParams
+                    {
+                        File =
+                            new FileDescription(
+                                originalFileName,
+                                new MemoryStream(fileBytes)),
 
-                var rawResult = await _cloudinary.UploadAsync(uploadParams);
-                uploadResult = rawResult as UploadResult;
+                        Folder = folder,
+                        UseFilename = true,
+                        UniqueFilename = true,
+                        Overwrite = false
+                    };
+
+                var rawResult =
+                    await _cloudinary.UploadAsync(
+                        uploadParams);
+
+                uploadResult =
+                    rawResult as UploadResult;
             }
 
-            if (uploadResult == null || uploadResult.StatusCode != System.Net.HttpStatusCode.OK)
+            if (uploadResult == null
+                || uploadResult.StatusCode != System.Net.HttpStatusCode.OK)
             {
-                throw new InvalidOperationException("Cloudinary upload failed.");
+                throw new InvalidOperationException(
+                    "Cloudinary upload failed.");
             }
 
             return uploadResult;
         }
 
-        private static void ValidateFileTypeForPurpose(string filePurposeCode, bool isImage, bool isRaw)
+        private static void ValidateFileTypeForPurpose(
+            string filePurposeCode,
+            bool isImage,
+            bool isRaw)
         {
-            if (filePurposeCode == "USER_AVATAR" && !isImage)
+            if (filePurposeCode == "USER_AVATAR"
+                && !isImage)
             {
-                throw new InvalidOperationException("Avatar upload only supports image files.");
+                throw new InvalidOperationException(
+                    "Avatar upload only supports image files.");
             }
 
-            if (filePurposeCode == "REGISTRATION_PORTFOLIO" && !isRaw)
+            if (filePurposeCode == "REGISTRATION_PORTFOLIO"
+                && !isRaw)
             {
-                throw new InvalidOperationException("Portfolio upload only supports PDF, DOC, or DOCX files.");
+                throw new InvalidOperationException(
+                    "Portfolio upload only supports PDF, DOC, or DOCX files.");
             }
 
-            if (filePurposeCode == "SERIES_COVER" && !isImage)
+            if (filePurposeCode == "SERIES_COVER"
+                && !isImage)
             {
-                throw new InvalidOperationException("Series cover upload only supports image files.");
+                throw new InvalidOperationException(
+                    "Series cover upload only supports image files.");
             }
 
-            if (filePurposeCode == "CHAPTER_PAGE_VERSION" && !isImage)
+            if (filePurposeCode == "CHAPTER_PAGE_VERSION"
+                && !isImage)
             {
-                throw new InvalidOperationException("Chapter page upload only supports image files.");
+                throw new InvalidOperationException(
+                    "Chapter page upload only supports image files.");
             }
 
             if (!isImage && !isRaw)
             {
-                throw new InvalidOperationException("Unsupported file type.");
+                throw new InvalidOperationException(
+                    "Unsupported file type.");
             }
         }
 
-        private static string BuildFolderForPurpose(string purpose) => purpose switch
+        private static string BuildFolderForPurpose(
+            string purpose)
         {
-            "REGISTRATION_PORTFOLIO" => "registration_portfolios",
-            "USER_AVATAR" => "avatars",
-            "SERIES_COVER" => "series/covers",
-            "SERIES_PROPOSAL" => "series/proposals",
-            "CHAPTER_PAGE_VERSION" => "chapters/pages",
-            "EDITORIAL_ATTACHMENT" => "editorial/attachments",
-            _ => "misc"
-        };
+            return purpose switch
+            {
+                "REGISTRATION_PORTFOLIO" => "registration_portfolios",
+                "USER_AVATAR" => "avatars",
+                "SERIES_COVER" => "series/covers",
+                "SERIES_PROPOSAL" => "series/proposals",
+                "CHAPTER_PAGE_VERSION" => "chapters/pages",
+                "EDITORIAL_ATTACHMENT" => "editorial/attachments",
+                _ => "misc"
+            };
+        }
 
-        private static string ComputeSha256Hash(byte[] fileBytes)
+        private static string ComputeSha256Hash(
+            byte[] fileBytes)
         {
-            using var sha = SHA256.Create();
-            var hash = sha.ComputeHash(fileBytes);
-            return BitConverter.ToString(hash).Replace("-", string.Empty).ToLowerInvariant();
+            using var sha =
+                SHA256.Create();
+
+            var hash =
+                sha.ComputeHash(fileBytes);
+
+            return BitConverter
+                .ToString(hash)
+                .Replace("-", string.Empty)
+                .ToLowerInvariant();
         }
     }
 }

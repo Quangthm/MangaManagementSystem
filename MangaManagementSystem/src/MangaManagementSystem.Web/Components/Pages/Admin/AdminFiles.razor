@@ -21,7 +21,13 @@
     }
 
     .phase6-file-dialog-card {
-        width: min(640px, 100%);
+        width: min(720px, 100%);
+        max-height: calc(100vh - 32px);
+        overflow-y: auto;
+    }
+
+    .phase6-file-preview-card {
+        width: min(1120px, 100%);
         max-height: calc(100vh - 32px);
         overflow-y: auto;
     }
@@ -34,6 +40,30 @@
         overflow-wrap: anywhere;
         font-family: monospace;
         font-size: 0.78rem;
+    }
+
+    .phase6-preview-stage {
+        min-height: 360px;
+        background: #f3f4f6;
+        border-radius: 12px;
+        padding: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .phase6-preview-image {
+        max-width: 90vw;
+        max-height: 70vh;
+        object-fit: contain;
+        border-radius: 8px;
+        box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+        background: #ffffff;
+    }
+
+    .phase6-action-row {
+        gap: 8px;
+        flex-wrap: wrap;
     }
 </style>
 
@@ -48,7 +78,7 @@
             <MudText Typo="Typo.body1"
                      Class="mf-muted">
                 Review file metadata, use controlled preview/download,
-                and soft-delete files with an audited reason.
+                soft-delete files, and clean deleted files from storage.
             </MudText>
         </div>
 
@@ -185,12 +215,23 @@
                     </MudText>
                 </div>
 
-                <MudButton Variant="Variant.Outlined"
-                           Color="Color.Default"
-                           Disabled="_isLoading"
-                           OnClick="RefreshAsync">
-                    Refresh
-                </MudButton>
+                <MudStack Row="true"
+                          Spacing="2"
+                          Class="phase6-action-row">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Warning"
+                               Disabled="@(_isLoading || !CanCleanupAny)"
+                               OnClick="OpenCleanupAllDialog">
+                        Cleanup All
+                    </MudButton>
+
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Default"
+                               Disabled="_isLoading"
+                               OnClick="RefreshAsync">
+                        Refresh
+                    </MudButton>
+                </MudStack>
             </div>
 
             <MudTable T="AdminFileListItemDto"
@@ -206,6 +247,7 @@
                     <MudTh>Uploaded By</MudTh>
                     <MudTh>Uploaded</MudTh>
                     <MudTh>Status</MudTh>
+                    <MudTh>Storage</MudTh>
                     <MudTh>Actions</MudTh>
                 </HeaderContent>
 
@@ -259,6 +301,22 @@
                         }
                     </MudTd>
 
+                    <MudTd DataLabel="Storage">
+                        <MudChip T="string"
+                                 Color="@GetStorageChipColor(context.StorageCleanupStatus)"
+                                 Size="Size.Small">
+                            @FormatStorageStatus(context.StorageCleanupStatus)
+                        </MudChip>
+
+                        @if (!string.IsNullOrWhiteSpace(context.StorageCleanupError))
+                        {
+                            <MudText Typo="Typo.caption"
+                                     Color="Color.Error">
+                                Cleanup error
+                            </MudText>
+                        }
+                    </MudTd>
+
                     <MudTd DataLabel="Actions">
                         <MudStack Row="true"
                                   Spacing="1"
@@ -273,7 +331,7 @@
                             <MudButton Size="Size.Small"
                                        Variant="Variant.Outlined"
                                        Disabled="@(_isLoading || !CanPreview(context))"
-                                       OnClick="@(() => PreviewAsync(context.FileResourceId))">
+                                       OnClick="@(() => PreviewAsync(context))">
                                 Preview
                             </MudButton>
 
@@ -290,6 +348,14 @@
                                        Disabled="@(_isLoading || context.IsDeleted)"
                                        OnClick="@(() => OpenDeleteDialog(context))">
                                 Soft Delete
+                            </MudButton>
+
+                            <MudButton Size="Size.Small"
+                                       Variant="Variant.Filled"
+                                       Color="Color.Warning"
+                                       Disabled="@(_isLoading || !CanCleanup(context))"
+                                       OnClick="@(() => OpenCleanupDialog(context))">
+                                Cleanup
                             </MudButton>
                         </MudStack>
                     </MudTd>
@@ -402,6 +468,30 @@
                 <MudItem xs="12" sm="6">
                     <MudText Typo="Typo.caption"
                              Class="mf-muted">
+                        Status
+                    </MudText>
+
+                    <MudText>
+                        @(_selectedDetail.IsDeleted ? "Deleted" : "Active")
+                    </MudText>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption"
+                             Class="mf-muted">
+                        Storage
+                    </MudText>
+
+                    <MudChip T="string"
+                             Color="@GetStorageChipColor(_selectedDetail.StorageCleanupStatus)"
+                             Size="Size.Small">
+                        @FormatStorageStatus(_selectedDetail.StorageCleanupStatus)
+                    </MudChip>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption"
+                             Class="mf-muted">
                         Uploaded by
                     </MudText>
 
@@ -423,6 +513,43 @@
                         @FormatDate(_selectedDetail.UploadedAtUtc)
                     </MudText>
                 </MudItem>
+
+                @if (_selectedDetail.StorageCleanedAtUtc.HasValue)
+                {
+                    <MudItem xs="12" sm="6">
+                        <MudText Typo="Typo.caption"
+                                 Class="mf-muted">
+                            Storage cleaned by
+                        </MudText>
+
+                        <MudText>
+                            @FormatUser(
+                                _selectedDetail.StorageCleanedByDisplayName,
+                                _selectedDetail.StorageCleanedByUsername,
+                                _selectedDetail.StorageCleanedByUserId)
+                        </MudText>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudText Typo="Typo.caption"
+                                 Class="mf-muted">
+                            Storage cleaned at
+                        </MudText>
+
+                        <MudText>
+                            @FormatNullableDate(_selectedDetail.StorageCleanedAtUtc)
+                        </MudText>
+                    </MudItem>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(_selectedDetail.StorageCleanupError))
+                {
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Error">
+                            @_selectedDetail.StorageCleanupError
+                        </MudAlert>
+                    </MudItem>
+                }
 
                 <MudItem xs="12">
                     <MudText Typo="Typo.caption"
@@ -520,6 +647,224 @@
     </div>
 }
 
+@if (_cleanupTarget is not null)
+{
+    <div class="phase6-file-dialog-backdrop"
+         role="presentation">
+        <MudPaper Class="phase6-file-dialog-card pa-5 mf-card"
+                  Elevation="12">
+            <MudText Typo="Typo.h5"
+                     Class="mb-2">
+                Cleanup File
+            </MudText>
+
+            <MudAlert Severity="Severity.Warning"
+                      Class="mb-4">
+                This action permanently deletes the physical file from Cloudinary.
+                The database record and audit history will be preserved.
+                This action cannot be undone.
+            </MudAlert>
+
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.caption"
+                             Class="mf-muted">
+                        File
+                    </MudText>
+
+                    <MudText Class="phase6-file-name">
+                        @_cleanupTarget.OriginalFileName
+                    </MudText>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption"
+                             Class="mf-muted">
+                        Status
+                    </MudText>
+
+                    <MudText>
+                        Deleted
+                    </MudText>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption"
+                             Class="mf-muted">
+                        Storage
+                    </MudText>
+
+                    <MudText>
+                        @FormatStorageStatus(_cleanupTarget.StorageCleanupStatus)
+                    </MudText>
+                </MudItem>
+            </MudGrid>
+
+            <MudTextField T="string"
+                          @bind-Value="_cleanupReason"
+                          Label="Cleanup reason optional"
+                          Variant="Variant.Outlined"
+                          Lines="3"
+                          Counter="500"
+                          MaxLength="500"
+                          Immediate="true"
+                          Class="mt-4" />
+
+            <MudStack Row="true"
+                      Justify="Justify.FlexEnd"
+                      Spacing="2"
+                      Class="mt-4">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Default"
+                           Disabled="_isCleaning"
+                           OnClick="CloseCleanupDialog">
+                    Cancel
+                </MudButton>
+
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Warning"
+                           Disabled="_isCleaning"
+                           OnClick="ConfirmCleanupAsync">
+                    @(_isCleaning ? "Cleaning..." : "Confirm Cleanup")
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    </div>
+}
+
+@if (_isCleanupAllDialogOpen)
+{
+    <div class="phase6-file-dialog-backdrop"
+         role="presentation">
+        <MudPaper Class="phase6-file-dialog-card pa-5 mf-card"
+                  Elevation="12">
+            <MudText Typo="Typo.h5"
+                     Class="mb-2">
+                Cleanup All Deleted Files
+            </MudText>
+
+            <MudAlert Severity="Severity.Warning"
+                      Class="mb-4">
+                This action will permanently delete all deleted files that are still present in Cloudinary.
+                Database records and audit history will be preserved.
+                This action cannot be undone.
+            </MudAlert>
+
+            <MudText Typo="Typo.body2"
+                     Class="mb-2">
+                Files visible on this page that are eligible:
+                @_cleanupAllVisibleCandidateCount
+            </MudText>
+
+            <MudText Typo="Typo.caption"
+                     Class="mf-muted">
+                The server will process all eligible deleted files, not only the current page.
+            </MudText>
+
+            <MudStack Row="true"
+                      Justify="Justify.FlexEnd"
+                      Spacing="2"
+                      Class="mt-4">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Default"
+                           Disabled="_isCleaningAll"
+                           OnClick="CloseCleanupAllDialog">
+                    Cancel
+                </MudButton>
+
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Warning"
+                           Disabled="_isCleaningAll"
+                           OnClick="ConfirmCleanupAllAsync">
+                    @(_isCleaningAll ? "Cleaning..." : "Confirm Cleanup All")
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    </div>
+}
+
+@if (_previewContent is not null
+    && _previewTarget is not null
+    && !string.IsNullOrWhiteSpace(_previewDataUrl))
+{
+    <div class="phase6-file-dialog-backdrop"
+         role="presentation">
+        <MudPaper Class="phase6-file-preview-card pa-5 mf-card"
+                  Elevation="12">
+            <div class="d-flex justify-space-between align-center mb-4">
+                <MudText Typo="Typo.h5">
+                    File Preview
+                </MudText>
+
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Default"
+                           OnClick="ClosePreviewDialog">
+                    Close
+                </MudButton>
+            </div>
+
+            <MudGrid Class="mb-4">
+                <MudItem xs="12" md="6">
+                    <MudText Typo="Typo.caption"
+                             Class="mf-muted">
+                        File name
+                    </MudText>
+
+                    <MudText Class="phase6-file-name">
+                        @_previewTarget.OriginalFileName
+                    </MudText>
+                </MudItem>
+
+                <MudItem xs="12" sm="6" md="3">
+                    <MudText Typo="Typo.caption"
+                             Class="mf-muted">
+                        Content type
+                    </MudText>
+
+                    <MudText>
+                        @_previewContent.ContentType
+                    </MudText>
+                </MudItem>
+
+                <MudItem xs="12" sm="6" md="3">
+                    <MudText Typo="Typo.caption"
+                             Class="mf-muted">
+                        Size
+                    </MudText>
+
+                    <MudText>
+                        @FormatFileSize(_previewTarget.FileSizeBytes)
+                    </MudText>
+                </MudItem>
+            </MudGrid>
+
+            <div class="phase6-preview-stage">
+                <img src="@_previewDataUrl"
+                     alt="@_previewTarget.OriginalFileName"
+                     class="phase6-preview-image" />
+            </div>
+
+            <MudStack Row="true"
+                      Justify="Justify.FlexEnd"
+                      Spacing="2"
+                      Class="mt-4">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Default"
+                           OnClick="ClosePreviewDialog">
+                    Close
+                </MudButton>
+
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Disabled="@(_previewTarget.IsDeleted || _previewContent.IsPlaceholder)"
+                           OnClick="@(() => DownloadAsync(_previewTarget.FileResourceId))">
+                    Download
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    </div>
+}
+
 @code {
     private const string AllFilter = "__ALL_PURPOSES__";
     private const string ActiveState = "ACTIVE";
@@ -553,10 +898,23 @@
     private int _pageSize = 20;
     private bool _isLoading;
     private bool _isDeleting;
+    private bool _isCleaning;
+    private bool _isCleaningAll;
+    private bool _isCleanupAllDialogOpen;
+    private int _cleanupAllVisibleCandidateCount;
     private string? _loadError;
+
     private AdminFileDetailDto? _selectedDetail;
+
     private AdminFileListItemDto? _deleteTarget;
     private string _deleteReason = string.Empty;
+
+    private AdminFileListItemDto? _cleanupTarget;
+    private string _cleanupReason = string.Empty;
+
+    private AdminFileContentResult? _previewContent;
+    private AdminFileListItemDto? _previewTarget;
+    private string? _previewDataUrl;
 
     private int DisplayTotalPages =>
         Math.Max(
@@ -566,6 +924,9 @@
     private bool CanMoveNext =>
         _page.TotalPages > 0
         && _pageNumber < _page.TotalPages;
+
+    private bool CanCleanupAny =>
+        _page.Items.Any(CanCleanup);
 
     protected override async Task OnInitializedAsync()
     {
@@ -719,7 +1080,7 @@
     }
 
     private async Task PreviewAsync(
-        Guid fileResourceId)
+        AdminFileListItemDto file)
     {
         _isLoading = true;
 
@@ -728,7 +1089,27 @@
             var content =
                 await AdminFileApiClient
                     .GetPreviewAsync(
-                        fileResourceId);
+                        file.FileResourceId);
+
+            if (IsImageContentType(
+                    content.ContentType))
+            {
+                _previewContent = content;
+                _previewTarget = file;
+                _previewDataUrl =
+                    $"data:{content.ContentType};base64,{Convert.ToBase64String(content.Content)}";
+
+                if (content.IsPlaceholder)
+                {
+                    Snackbar.Add(
+                        "A safe placeholder was shown because the file is "
+                        + (content.PlaceholderReason ?? "unavailable")
+                        + ".",
+                        Severity.Info);
+                }
+
+                return;
+            }
 
             using var stream =
                 new MemoryStream(
@@ -764,6 +1145,13 @@
         {
             _isLoading = false;
         }
+    }
+
+    private void ClosePreviewDialog()
+    {
+        _previewContent = null;
+        _previewTarget = null;
+        _previewDataUrl = null;
     }
 
     private async Task DownloadAsync(
@@ -862,6 +1250,142 @@
         }
     }
 
+    private void OpenCleanupDialog(
+        AdminFileListItemDto file)
+    {
+        if (!CanCleanup(file))
+        {
+            Snackbar.Add(
+                "This file cannot be cleaned from storage.",
+                Severity.Warning);
+
+            return;
+        }
+
+        _cleanupTarget = file;
+        _cleanupReason = string.Empty;
+    }
+
+    private void CloseCleanupDialog()
+    {
+        if (_isCleaning)
+        {
+            return;
+        }
+
+        _cleanupTarget = null;
+        _cleanupReason = string.Empty;
+    }
+
+    private async Task ConfirmCleanupAsync()
+    {
+        if (_cleanupTarget is null)
+        {
+            return;
+        }
+
+        _isCleaning = true;
+
+        try
+        {
+            var result =
+                await AdminFileApiClient
+                    .CleanupAsync(
+                        _cleanupTarget.FileResourceId,
+                        string.IsNullOrWhiteSpace(_cleanupReason)
+                            ? null
+                            : _cleanupReason.Trim());
+
+            var severity =
+                string.Equals(
+                    result.StorageCleanupStatus,
+                    "FAILED",
+                    StringComparison.OrdinalIgnoreCase)
+                    ? Severity.Error
+                    : Severity.Success;
+
+            Snackbar.Add(
+                result.Message,
+                severity);
+
+            _cleanupTarget = null;
+            _cleanupReason = string.Empty;
+
+            await LoadFilesAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(
+                ex.Message,
+                Severity.Error);
+        }
+        finally
+        {
+            _isCleaning = false;
+        }
+    }
+
+    private void OpenCleanupAllDialog()
+    {
+        _cleanupAllVisibleCandidateCount =
+            _page.Items.Count(CanCleanup);
+
+        if (_cleanupAllVisibleCandidateCount <= 0)
+        {
+            Snackbar.Add(
+                "No cleanup candidates are visible on the current page.",
+                Severity.Info);
+
+            return;
+        }
+
+        _isCleanupAllDialogOpen = true;
+    }
+
+    private void CloseCleanupAllDialog()
+    {
+        if (_isCleaningAll)
+        {
+            return;
+        }
+
+        _isCleanupAllDialogOpen = false;
+        _cleanupAllVisibleCandidateCount = 0;
+    }
+
+    private async Task ConfirmCleanupAllAsync()
+    {
+        _isCleaningAll = true;
+
+        try
+        {
+            var result =
+                await AdminFileApiClient
+                    .CleanupDeletedAsync();
+
+            Snackbar.Add(
+                $"Cleanup completed. Cleaned: {result.Cleaned}; Missing: {result.Missing}; Failed: {result.Failed}; Skipped: {result.Skipped}.",
+                result.Failed > 0
+                    ? Severity.Warning
+                    : Severity.Success);
+
+            _isCleanupAllDialogOpen = false;
+            _cleanupAllVisibleCandidateCount = 0;
+
+            await LoadFilesAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(
+                ex.Message,
+                Severity.Error);
+        }
+        finally
+        {
+            _isCleaningAll = false;
+        }
+    }
+
     private static bool CanPreview(
         AdminFileListItemDto file)
     {
@@ -870,13 +1394,67 @@
             return true;
         }
 
-        return file.ContentType.StartsWith(
-                "image/",
-                StringComparison.OrdinalIgnoreCase)
+        return IsImageContentType(file.ContentType)
             || string.Equals(
                 file.ContentType,
                 "application/pdf",
                 StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool CanCleanup(
+        AdminFileListItemDto file)
+    {
+        if (!file.IsDeleted)
+        {
+            return false;
+        }
+
+        return !string.Equals(
+                file.StorageCleanupStatus,
+                "CLEANED",
+                StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(
+                file.StorageCleanupStatus,
+                "MISSING",
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsImageContentType(
+        string contentType)
+    {
+        return contentType.StartsWith(
+                "image/",
+                StringComparison.OrdinalIgnoreCase)
+            || string.Equals(
+                contentType,
+                "image/svg+xml",
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static Color GetStorageChipColor(
+        string storageStatus)
+    {
+        return storageStatus.ToUpperInvariant() switch
+        {
+            "AVAILABLE" => Color.Success,
+            "CLEANED" => Color.Info,
+            "MISSING" => Color.Warning,
+            "FAILED" => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private static string FormatStorageStatus(
+        string storageStatus)
+    {
+        return storageStatus.ToUpperInvariant() switch
+        {
+            "AVAILABLE" => "Available",
+            "CLEANED" => "Cleaned",
+            "MISSING" => "Missing",
+            "FAILED" => "Failed",
+            _ => storageStatus
+        };
     }
 
     private static string? NormalizeFilter(

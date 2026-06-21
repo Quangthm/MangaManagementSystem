@@ -23,6 +23,14 @@ namespace MangaManagementSystem.Web.Services.Api
             string deleteReason,
             CancellationToken cancellationToken = default);
 
+        Task<AdminFileStorageCleanupResultDto> CleanupAsync(
+            Guid fileResourceId,
+            string? reason,
+            CancellationToken cancellationToken = default);
+
+        Task<AdminFileStorageCleanupBatchResultDto> CleanupDeletedAsync(
+            CancellationToken cancellationToken = default);
+
         Task<AdminFileContentResult> GetPreviewAsync(
             Guid fileResourceId,
             CancellationToken cancellationToken = default);

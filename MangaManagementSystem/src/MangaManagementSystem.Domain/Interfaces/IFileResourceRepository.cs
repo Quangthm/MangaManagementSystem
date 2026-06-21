@@ -26,7 +26,13 @@ namespace MangaManagementSystem.Domain.Interfaces
         DateTime? DeletedAtUtc,
         Guid? DeletedByUserId,
         string? DeletedByUsername,
-        string? DeletedByDisplayName);
+        string? DeletedByDisplayName,
+        string StorageCleanupStatus,
+        DateTime? StorageCleanedAtUtc,
+        Guid? StorageCleanedByUserId,
+        string? StorageCleanedByUsername,
+        string? StorageCleanedByDisplayName,
+        string? StorageCleanupError);
 
     public sealed record AdminFileResourceDetail(
         Guid FileResourceId,
@@ -45,6 +51,12 @@ namespace MangaManagementSystem.Domain.Interfaces
         Guid? DeletedByUserId,
         string? DeletedByUsername,
         string? DeletedByDisplayName,
+        string StorageCleanupStatus,
+        DateTime? StorageCleanedAtUtc,
+        Guid? StorageCleanedByUserId,
+        string? StorageCleanedByUsername,
+        string? StorageCleanedByDisplayName,
+        string? StorageCleanupError,
         long ReferenceCount);
 
     public interface IFileResourceRepository
@@ -61,10 +73,22 @@ namespace MangaManagementSystem.Domain.Interfaces
             Guid fileResourceId,
             CancellationToken cancellationToken = default);
 
+        Task<IReadOnlyList<AdminFileResourceDetail>>
+            GetStorageCleanupCandidatesAsync(
+                CancellationToken cancellationToken = default);
+
         Task SoftDeleteAdminAsync(
             Guid actorUserId,
             Guid fileResourceId,
             string deleteReason,
+            CancellationToken cancellationToken = default);
+
+        Task UpdateStorageCleanupResultAsync(
+            Guid actorUserId,
+            Guid fileResourceId,
+            string storageCleanupStatus,
+            string? cleanupError,
+            string? cleanupReason,
             CancellationToken cancellationToken = default);
     }
 }

@@ -89,6 +89,13 @@ CREATE TABLE manga.FileResource (
 	uploaded_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_file_resource_uploaded_at_utc DEFAULT(SYSUTCDATETIME()),
 	deleted_at_utc DATETIME2(0) NULL,
 	deleted_by_user_id UNIQUEIDENTIFIER NULL,
+
+	storage_cleanup_status NVARCHAR(20) NOT NULL
+		CONSTRAINT df_file_resource_storage_cleanup_status DEFAULT(N'AVAILABLE'),
+	storage_cleaned_at_utc DATETIME2(0) NULL,
+	storage_cleaned_by_user_id UNIQUEIDENTIFIER NULL,
+	storage_cleanup_error NVARCHAR(1000) NULL,
+
 	CONSTRAINT ck_file_resource_file_purpose_code CHECK (
 		file_purpose_code IN (
 			N'SERIES_PROPOSAL',
@@ -99,7 +106,9 @@ CREATE TABLE manga.FileResource (
 			N'USER_AVATAR'
 			)
 		),
+
 	CONSTRAINT ck_file_resource_file_size_positive CHECK (file_size_bytes > 0),
+
 	CONSTRAINT ck_file_resource_deleted_pair CHECK (
 		(
 			deleted_at_utc IS NULL
@@ -110,9 +119,42 @@ CREATE TABLE manga.FileResource (
 			AND deleted_by_user_id IS NOT NULL
 			)
 		),
+
+	CONSTRAINT ck_file_resource_storage_cleanup_status CHECK (
+		storage_cleanup_status IN (
+			N'AVAILABLE',
+			N'CLEANED',
+			N'MISSING',
+			N'FAILED'
+			)
+		),
+
+	CONSTRAINT ck_file_resource_storage_cleanup_pair CHECK (
+		(
+			storage_cleanup_status IN (N'AVAILABLE', N'FAILED')
+			AND storage_cleaned_at_utc IS NULL
+			AND storage_cleaned_by_user_id IS NULL
+			)
+		OR (
+			storage_cleanup_status IN (N'CLEANED', N'MISSING')
+			AND storage_cleaned_at_utc IS NOT NULL
+			AND storage_cleaned_by_user_id IS NOT NULL
+			)
+		),
+
 	CONSTRAINT uq_file_resource_cloudinary_public_id UNIQUE (cloudinary_public_id),
-	CONSTRAINT fk_file_resource_deleted_by_user FOREIGN KEY (deleted_by_user_id) REFERENCES auth.Users(user_id),
-	CONSTRAINT fk_file_resource_uploaded_by_user FOREIGN KEY (uploaded_by_user_id) REFERENCES auth.Users(user_id)
+
+	CONSTRAINT fk_file_resource_deleted_by_user
+		FOREIGN KEY (deleted_by_user_id)
+		REFERENCES auth.Users(user_id),
+
+	CONSTRAINT fk_file_resource_storage_cleaned_by_user
+		FOREIGN KEY (storage_cleaned_by_user_id)
+		REFERENCES auth.Users(user_id),
+
+	CONSTRAINT fk_file_resource_uploaded_by_user
+		FOREIGN KEY (uploaded_by_user_id)
+		REFERENCES auth.Users(user_id)
 	);
 
 CREATE INDEX ix_file_resource_purpose_code ON manga.FileResource (file_purpose_code);

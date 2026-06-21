@@ -15,20 +15,21 @@ namespace MangaManagementSystem.Web.Services.Api
             "X-File-Placeholder";
 
         private readonly HttpClient _httpClient;
+
         private readonly ILogger<AdminFileApiClient>
             _logger;
+
         private readonly AuthenticationStateProvider
             _authenticationStateProvider;
+
         private readonly InternalApiOptions
             _internalApiOptions;
 
         public AdminFileApiClient(
             HttpClient httpClient,
             ILogger<AdminFileApiClient> logger,
-            AuthenticationStateProvider
-                authenticationStateProvider,
-            IOptions<InternalApiOptions>
-                internalApiOptions)
+            AuthenticationStateProvider authenticationStateProvider,
+            IOptions<InternalApiOptions> internalApiOptions)
         {
             _httpClient = httpClient;
             _logger = logger;
@@ -38,16 +39,15 @@ namespace MangaManagementSystem.Web.Services.Api
                 internalApiOptions.Value;
         }
 
-        public async Task<AdminFilePageDto>
-            SearchAsync(
-                string? search = null,
-                string? filePurposeCode = null,
-                string? deletedState = "ACTIVE",
-                DateTime? fromUtc = null,
-                DateTime? toUtc = null,
-                int pageNumber = 1,
-                int pageSize = 20,
-                CancellationToken cancellationToken = default)
+        public async Task<AdminFilePageDto> SearchAsync(
+            string? search = null,
+            string? filePurposeCode = null,
+            string? deletedState = "ACTIVE",
+            DateTime? fromUtc = null,
+            DateTime? toUtc = null,
+            int pageNumber = 1,
+            int pageSize = 20,
+            CancellationToken cancellationToken = default)
         {
             var query =
                 new List<string>
@@ -106,10 +106,9 @@ namespace MangaManagementSystem.Web.Services.Api
                     cancellationToken);
         }
 
-        public async Task<AdminFileDetailDto?>
-            GetByIdAsync(
-                Guid fileResourceId,
-                CancellationToken cancellationToken = default)
+        public async Task<AdminFileDetailDto?> GetByIdAsync(
+            Guid fileResourceId,
+            CancellationToken cancellationToken = default)
         {
             using var request =
                 await CreateAuthorizedRequestAsync(
@@ -121,8 +120,7 @@ namespace MangaManagementSystem.Web.Services.Api
                     request,
                     cancellationToken);
 
-            if (response.StatusCode ==
-                HttpStatusCode.NotFound)
+            if (response.StatusCode == HttpStatusCode.NotFound)
             {
                 return null;
             }
@@ -138,11 +136,10 @@ namespace MangaManagementSystem.Web.Services.Api
                     cancellationToken);
         }
 
-        public async Task<AdminFileDetailDto>
-            SoftDeleteAsync(
-                Guid fileResourceId,
-                string deleteReason,
-                CancellationToken cancellationToken = default)
+        public async Task<AdminFileDetailDto> SoftDeleteAsync(
+            Guid fileResourceId,
+            string deleteReason,
+            CancellationToken cancellationToken = default)
         {
             using var request =
                 await CreateAuthorizedRequestAsync(
@@ -172,10 +169,67 @@ namespace MangaManagementSystem.Web.Services.Api
                     cancellationToken);
         }
 
-        public Task<AdminFileContentResult>
-            GetPreviewAsync(
-                Guid fileResourceId,
+        public async Task<AdminFileStorageCleanupResultDto> CleanupAsync(
+            Guid fileResourceId,
+            string? reason,
+            CancellationToken cancellationToken = default)
+        {
+            using var request =
+                await CreateAuthorizedRequestAsync(
+                    HttpMethod.Post,
+                    $"api/admin/files/{fileResourceId:D}/cleanup");
+
+            request.Content =
+                JsonContent.Create(
+                    new
+                    {
+                        reason
+                    });
+
+            using var response =
+                await _httpClient.SendAsync(
+                    request,
+                    cancellationToken);
+
+            LogFailure(
+                response,
+                "Cleanup Admin file storage");
+
+            return await ApiResponseReader
+                .ReadRequiredAsync<AdminFileStorageCleanupResultDto>(
+                    response,
+                    "The Admin File API returned an empty cleanup response.",
+                    cancellationToken);
+        }
+
+        public async Task<AdminFileStorageCleanupBatchResultDto>
+            CleanupDeletedAsync(
                 CancellationToken cancellationToken = default)
+        {
+            using var request =
+                await CreateAuthorizedRequestAsync(
+                    HttpMethod.Post,
+                    "api/admin/files/cleanup-deleted");
+
+            using var response =
+                await _httpClient.SendAsync(
+                    request,
+                    cancellationToken);
+
+            LogFailure(
+                response,
+                "Cleanup deleted Admin files");
+
+            return await ApiResponseReader
+                .ReadRequiredAsync<AdminFileStorageCleanupBatchResultDto>(
+                    response,
+                    "The Admin File API returned an empty cleanup batch response.",
+                    cancellationToken);
+        }
+
+        public Task<AdminFileContentResult> GetPreviewAsync(
+            Guid fileResourceId,
+            CancellationToken cancellationToken = default)
         {
             return GetContentAsync(
                 fileResourceId,
@@ -183,10 +237,9 @@ namespace MangaManagementSystem.Web.Services.Api
                 cancellationToken);
         }
 
-        public Task<AdminFileContentResult>
-            GetDownloadAsync(
-                Guid fileResourceId,
-                CancellationToken cancellationToken = default)
+        public Task<AdminFileContentResult> GetDownloadAsync(
+            Guid fileResourceId,
+            CancellationToken cancellationToken = default)
         {
             return GetContentAsync(
                 fileResourceId,
@@ -194,11 +247,10 @@ namespace MangaManagementSystem.Web.Services.Api
                 cancellationToken);
         }
 
-        private async Task<AdminFileContentResult>
-            GetContentAsync(
-                Guid fileResourceId,
-                string operation,
-                CancellationToken cancellationToken)
+        private async Task<AdminFileContentResult> GetContentAsync(
+            Guid fileResourceId,
+            string operation,
+            CancellationToken cancellationToken)
         {
             using var request =
                 await CreateAuthorizedRequestAsync(
@@ -274,8 +326,7 @@ namespace MangaManagementSystem.Web.Services.Api
             var principal =
                 authenticationState.User;
 
-            if (principal.Identity?.IsAuthenticated
-                != true)
+            if (principal.Identity?.IsAuthenticated != true)
             {
                 throw new InvalidOperationException(
                     "You must be logged in as an administrator.");

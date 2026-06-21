@@ -46,6 +46,9 @@ namespace MangaManagementSystem.API.Controllers
             internal const string AlreadyDeleted =
                 "ADMIN_FILE_ALREADY_DELETED";
 
+            internal const string AlreadyCleaned =
+                "ADMIN_FILE_STORAGE_ALREADY_CLEANED";
+
             internal const string Deleted =
                 "ADMIN_FILE_DELETED";
 
@@ -64,27 +67,22 @@ namespace MangaManagementSystem.API.Controllers
 
         private readonly ISender _sender;
         private readonly IUserService _userService;
-        private readonly IHttpClientFactory
-            _httpClientFactory;
-        private readonly ILogger<AdminFilesController>
-            _logger;
-        private readonly InternalApiOptions
-            _internalApiOptions;
+        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly ILogger<AdminFilesController> _logger;
+        private readonly InternalApiOptions _internalApiOptions;
 
         public AdminFilesController(
             ISender sender,
             IUserService userService,
             IHttpClientFactory httpClientFactory,
             ILogger<AdminFilesController> logger,
-            IOptions<InternalApiOptions>
-                internalApiOptions)
+            IOptions<InternalApiOptions> internalApiOptions)
         {
             _sender = sender;
             _userService = userService;
             _httpClientFactory = httpClientFactory;
             _logger = logger;
-            _internalApiOptions =
-                internalApiOptions.Value;
+            _internalApiOptions = internalApiOptions.Value;
         }
 
         [HttpGet]
@@ -125,10 +123,7 @@ namespace MangaManagementSystem.API.Controllers
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(
-                    new ApiErrorResponse(
-                        AdminFileErrorCodes.InvalidRequest,
-                        ex.Message));
+                return MapInvalidOperationException(ex);
             }
             catch (SqlException ex)
             {
@@ -175,10 +170,7 @@ namespace MangaManagementSystem.API.Controllers
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(
-                    new ApiErrorResponse(
-                        AdminFileErrorCodes.InvalidRequest,
-                        ex.Message));
+                return MapInvalidOperationException(ex);
             }
             catch (SqlException ex)
             {
@@ -231,10 +223,7 @@ namespace MangaManagementSystem.API.Controllers
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(
-                    new ApiErrorResponse(
-                        AdminFileErrorCodes.InvalidRequest,
-                        ex.Message));
+                return MapInvalidOperationException(ex);
             }
             catch (SqlException ex)
             {
@@ -246,6 +235,99 @@ namespace MangaManagementSystem.API.Controllers
                     ex,
                     "Failed to soft-delete file resource {FileResourceId}.",
                     fileResourceId);
+
+                return AdminFileRequestFailed();
+            }
+        }
+
+        [HttpPost("{fileResourceId:guid}/cleanup")]
+        public async Task<IActionResult> CleanupAsync(
+            Guid fileResourceId,
+            [FromBody] AdminFileCleanupRequest? request,
+            CancellationToken cancellationToken)
+        {
+            var authorization =
+                await ResolveAdminActorAsync();
+
+            if (authorization.Error is not null)
+            {
+                return authorization.Error;
+            }
+
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(
+                    new ApiErrorResponse(
+                        AdminFileErrorCodes.InvalidRequest,
+                        "Cleanup reason cannot exceed 500 characters."));
+            }
+
+            try
+            {
+                var result =
+                    await _sender.Send(
+                        new CleanupAdminFileStorageCommand(
+                            authorization.Actor!.UserId,
+                            fileResourceId,
+                            request?.Reason),
+                        cancellationToken);
+
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return MapInvalidOperationException(ex);
+            }
+            catch (SqlException ex)
+            {
+                return MapSqlException(ex);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to cleanup storage for file resource {FileResourceId}.",
+                    fileResourceId);
+
+                return AdminFileRequestFailed();
+            }
+        }
+
+        [HttpPost("cleanup-deleted")]
+        public async Task<IActionResult> CleanupDeletedAsync(
+            CancellationToken cancellationToken)
+        {
+            var authorization =
+                await ResolveAdminActorAsync();
+
+            if (authorization.Error is not null)
+            {
+                return authorization.Error;
+            }
+
+            try
+            {
+                var result =
+                    await _sender.Send(
+                        new CleanupDeletedAdminFilesCommand(
+                            authorization.Actor!.UserId),
+                        cancellationToken);
+
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return MapInvalidOperationException(ex);
+            }
+            catch (SqlException ex)
+            {
+                return MapSqlException(ex);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to cleanup deleted Admin file resources.");
 
                 return AdminFileRequestFailed();
             }
@@ -273,11 +355,10 @@ namespace MangaManagementSystem.API.Controllers
                 cancellationToken);
         }
 
-        private async Task<IActionResult>
-            GetControlledContentAsync(
-                Guid fileResourceId,
-                bool asDownload,
-                CancellationToken cancellationToken)
+        private async Task<IActionResult> GetControlledContentAsync(
+            Guid fileResourceId,
+            bool asDownload,
+            CancellationToken cancellationToken)
         {
             var authorization =
                 await ResolveAdminActorAsync();
@@ -300,10 +381,7 @@ namespace MangaManagementSystem.API.Controllers
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(
-                    new ApiErrorResponse(
-                        AdminFileErrorCodes.InvalidRequest,
-                        ex.Message));
+                return MapInvalidOperationException(ex);
             }
             catch (SqlException ex)
             {
@@ -323,24 +401,40 @@ namespace MangaManagementSystem.API.Controllers
             {
                 return asDownload
                     ? FileNotFound()
-                    : SafePlaceholder(
-                        "missing");
+                    : SafePlaceholder("missing");
             }
 
             if (source.IsDeleted)
             {
-                return asDownload
-                    ? StatusCode(
+                if (asDownload)
+                {
+                    return StatusCode(
                         StatusCodes.Status410Gone,
                         new ApiErrorResponse(
                             AdminFileErrorCodes.Deleted,
-                            "The file has been deleted and is no longer available for download."))
-                    : SafePlaceholder(
-                        "deleted");
+                            "The file has been deleted and is no longer available for download."));
+                }
+
+                if (string.Equals(
+                        source.StorageCleanupStatus,
+                        "CLEANED",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return SafePlaceholder("cleaned");
+                }
+
+                if (string.Equals(
+                        source.StorageCleanupStatus,
+                        "MISSING",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return SafePlaceholder("missing");
+                }
+
+                return SafePlaceholder("deleted");
             }
 
-            if (!asDownload
-                && !source.CanPreview)
+            if (!asDownload && !source.CanPreview)
             {
                 return StatusCode(
                     StatusCodes.Status415UnsupportedMediaType,
@@ -376,17 +470,14 @@ namespace MangaManagementSystem.API.Controllers
                         storageUri,
                         cancellationToken);
 
-                if (remote.StatusCode ==
-                    HttpStatusCode.NotFound)
+                if (remote.StatusCode == HttpStatusCode.NotFound)
                 {
                     return asDownload
                         ? FileNotFound()
-                        : SafePlaceholder(
-                            "missing");
+                        : SafePlaceholder("missing");
                 }
 
-                if (remote.StatusCode !=
-                    HttpStatusCode.OK
+                if (remote.StatusCode != HttpStatusCode.OK
                     || remote.Bytes is null)
                 {
                     _logger.LogWarning(
@@ -404,8 +495,7 @@ namespace MangaManagementSystem.API.Controllers
                 Response.Headers.CacheControl =
                     "no-store, no-cache, max-age=0";
 
-                Response.Headers[
-                    "X-Content-Type-Options"] =
+                Response.Headers["X-Content-Type-Options"] =
                     "nosniff";
 
                 if (asDownload)
@@ -417,8 +507,7 @@ namespace MangaManagementSystem.API.Controllers
                             source.OriginalFileName));
                 }
 
-                Response.Headers[
-                    "Content-Security-Policy"] =
+                Response.Headers["Content-Security-Policy"] =
                     "default-src 'none'; sandbox";
 
                 return File(
@@ -453,10 +542,9 @@ namespace MangaManagementSystem.API.Controllers
             }
         }
 
-        private async Task<RemoteFileResult>
-            FetchRemoteFileAsync(
-                Uri storageUri,
-                CancellationToken cancellationToken)
+        private async Task<RemoteFileResult> FetchRemoteFileAsync(
+            Uri storageUri,
+            CancellationToken cancellationToken)
         {
             var client =
                 _httpClientFactory.CreateClient(
@@ -473,16 +561,14 @@ namespace MangaManagementSystem.API.Controllers
                     HttpCompletionOption.ResponseHeadersRead,
                     cancellationToken);
 
-            if (response.StatusCode !=
-                HttpStatusCode.OK)
+            if (response.StatusCode != HttpStatusCode.OK)
             {
                 return new RemoteFileResult(
                     response.StatusCode,
                     null);
             }
 
-            if (response.Content.Headers.ContentLength
-                    is long contentLength
+            if (response.Content.Headers.ContentLength is long contentLength
                 && contentLength > MaximumProxyBytes)
             {
                 throw new FileContentTooLargeException();
@@ -533,12 +619,52 @@ namespace MangaManagementSystem.API.Controllers
                 memoryStream.ToArray());
         }
 
+        private IActionResult MapInvalidOperationException(
+            InvalidOperationException exception)
+        {
+            if (exception.Message.Contains(
+                    "active administrator",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    new ApiErrorResponse(
+                        AdminFileErrorCodes.AccessDenied,
+                        "The current account is not an active administrator."));
+            }
+
+            if (exception.Message.Contains(
+                    "does not exist",
+                    StringComparison.OrdinalIgnoreCase)
+                || exception.Message.Contains(
+                    "not found",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return FileNotFound();
+            }
+
+            if (exception.Message.Contains(
+                    "already been cleaned",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return Conflict(
+                    new ApiErrorResponse(
+                        AdminFileErrorCodes.AlreadyCleaned,
+                        exception.Message));
+            }
+
+            return BadRequest(
+                new ApiErrorResponse(
+                    AdminFileErrorCodes.InvalidRequest,
+                    exception.Message));
+        }
+
         private IActionResult MapSqlException(
             SqlException exception)
         {
             return exception.Number switch
             {
-                54001 =>
+                54001 or 54043 =>
                     FileNotFound(),
 
                 54002 =>
@@ -557,7 +683,8 @@ namespace MangaManagementSystem.API.Controllers
                 54010 or 54012 or 54013 or 54014
                     or 54015 or 54020 or 54021
                     or 54030 or 54031 or 54032
-                    or 54034 =>
+                    or 54034 or 54040 or 54041
+                    or 54042 =>
                     BadRequest(
                         new ApiErrorResponse(
                             AdminFileErrorCodes.InvalidRequest,
@@ -610,35 +737,42 @@ namespace MangaManagementSystem.API.Controllers
             string reason)
         {
             var normalizedReason =
-                string.Equals(
-                    reason,
-                    "deleted",
-                    StringComparison.OrdinalIgnoreCase)
-                    ? "deleted"
-                    : "missing";
+                reason.ToLowerInvariant() switch
+                {
+                    "deleted" => "deleted",
+                    "cleaned" => "cleaned",
+                    _ => "missing"
+                };
 
-            const string svg =
+            var label =
+                normalizedReason switch
+                {
+                    "cleaned" => "File already cleaned from storage",
+                    "deleted" => "File unavailable",
+                    _ => "File unavailable"
+                };
+
+            var svg =
                 "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"640\" height=\"360\" viewBox=\"0 0 640 360\">"
                 + "<rect width=\"640\" height=\"360\" fill=\"#f3f4f6\"/>"
                 + "<rect x=\"190\" y=\"78\" width=\"260\" height=\"204\" rx=\"16\" fill=\"#ffffff\" stroke=\"#9ca3af\" stroke-width=\"4\"/>"
                 + "<path d=\"M240 222l58-60 45 45 31-31 46 46\" fill=\"none\" stroke=\"#9ca3af\" stroke-width=\"10\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>"
                 + "<circle cx=\"278\" cy=\"134\" r=\"18\" fill=\"#9ca3af\"/>"
-                + "<text x=\"320\" y=\"320\" text-anchor=\"middle\" font-family=\"Arial, sans-serif\" font-size=\"22\" fill=\"#4b5563\">File unavailable</text>"
+                + "<text x=\"320\" y=\"320\" text-anchor=\"middle\" font-family=\"Arial, sans-serif\" font-size=\"22\" fill=\"#4b5563\">"
+                + WebUtility.HtmlEncode(label)
+                + "</text>"
                 + "</svg>";
 
             Response.Headers.CacheControl =
                 "no-store, no-cache, max-age=0";
 
-            Response.Headers[
-                "X-Content-Type-Options"] =
+            Response.Headers["X-Content-Type-Options"] =
                 "nosniff";
 
-            Response.Headers[
-                "Content-Security-Policy"] =
+            Response.Headers["Content-Security-Policy"] =
                 "default-src 'none'; sandbox";
 
-            Response.Headers[
-                "X-File-Placeholder"] =
+            Response.Headers["X-File-Placeholder"] =
                 normalizedReason;
 
             return File(
@@ -646,9 +780,7 @@ namespace MangaManagementSystem.API.Controllers
                 "image/svg+xml");
         }
 
-        private async Task<(
-            UserDto? Actor,
-            IActionResult? Error)>
+        private async Task<(UserDto? Actor, IActionResult? Error)>
             ResolveAdminActorAsync()
         {
             if (!Request.Headers.TryGetValue(
@@ -750,8 +882,7 @@ namespace MangaManagementSystem.API.Controllers
                     UriKind.Absolute,
                     out var candidate)
                 || candidate.Scheme != Uri.UriSchemeHttps
-                || (!candidate.IsDefaultPort
-                    && candidate.Port != 443)
+                || (!candidate.IsDefaultPort && candidate.Port != 443)
                 || !IsAllowedCloudinaryHost(
                     candidate.Host))
             {
@@ -823,12 +954,10 @@ namespace MangaManagementSystem.API.Controllers
                 Encoding.UTF8.GetBytes(
                     expectedKey);
 
-            return suppliedBytes.Length ==
-                    expectedBytes.Length
-                && CryptographicOperations
-                    .FixedTimeEquals(
-                        suppliedBytes,
-                        expectedBytes);
+            return suppliedBytes.Length == expectedBytes.Length
+                && CryptographicOperations.FixedTimeEquals(
+                    suppliedBytes,
+                    expectedBytes);
         }
 
         private sealed record RemoteFileResult(

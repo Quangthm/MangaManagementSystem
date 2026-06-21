@@ -8,4 +8,14 @@ namespace MangaManagementSystem.Application.Features.Admin.Files.Commands
         Guid FileResourceId,
         string? DeleteReason)
         : IRequest<AdminFileDetailDto>;
+
+    public sealed record CleanupAdminFileStorageCommand(
+        Guid ActorUserId,
+        Guid FileResourceId,
+        string? Reason)
+        : IRequest<AdminFileStorageCleanupResultDto>;
+
+    public sealed record CleanupDeletedAdminFilesCommand(
+        Guid ActorUserId)
+        : IRequest<AdminFileStorageCleanupBatchResultDto>;
 }

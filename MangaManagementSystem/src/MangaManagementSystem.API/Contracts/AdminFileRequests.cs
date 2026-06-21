@@ -6,4 +6,8 @@ namespace MangaManagementSystem.API.Contracts
         [Required]
         [MaxLength(500)]
         string DeleteReason);
+
+    public sealed record AdminFileCleanupRequest(
+        [MaxLength(500)]
+        string? Reason);
 }
