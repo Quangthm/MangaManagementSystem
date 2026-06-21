@@ -39,7 +39,6 @@ namespace MangaManagementSystem.Application.Services
                 Title = dto.Title,
                 Slug = dto.Slug,
                 Synopsis = dto.Synopsis,
-                Genre = dto.Genre,
                 CoverFileId = dto.CoverFileId,
                 StatusCode = dto.StatusCode,
                 ContentLanguageCode = dto.ContentLanguageCode,
@@ -186,7 +185,6 @@ namespace MangaManagementSystem.Application.Services
             entity.Title = dto.Title;
             entity.Slug = dto.Slug;
             entity.Synopsis = dto.Synopsis;
-            entity.Genre = dto.Genre;
             entity.CoverFileId = dto.CoverFileId;
             entity.StatusCode = dto.StatusCode;
             entity.ContentLanguageCode = dto.ContentLanguageCode;
@@ -221,7 +219,7 @@ namespace MangaManagementSystem.Application.Services
             s.Title,
             s.Slug,
             s.Synopsis,
-            s.Genre,
+            string.Join(", ", s.Genres.Select(g => g.GenreName)),
             s.CoverFileId,
             s.StatusCode,
             s.ContentLanguageCode,

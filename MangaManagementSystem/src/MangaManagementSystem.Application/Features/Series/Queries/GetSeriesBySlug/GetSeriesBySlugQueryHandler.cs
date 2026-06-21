@@ -80,7 +80,7 @@ namespace MangaManagementSystem.Application.Features.Series.Queries.GetSeriesByS
                 series.Slug,
                 series.Title,
                 series.Synopsis,
-                series.Genre,
+                string.Join(", ", series.Genres.Select(g => g.GenreName)),
                 series.StatusCode,
                 series.ContentLanguageCode,
                 series.PublicationFrequencyCode,

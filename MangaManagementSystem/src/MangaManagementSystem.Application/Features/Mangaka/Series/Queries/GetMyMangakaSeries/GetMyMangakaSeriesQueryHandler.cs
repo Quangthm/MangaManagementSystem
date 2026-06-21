@@ -37,7 +37,7 @@ namespace MangaManagementSystem.Application.Features.Mangaka.Series.Queries.GetM
             s.Title,
             s.Slug,
             s.Synopsis,
-            s.Genre,
+            string.Join(", ", s.Genres.Select(g => g.GenreName)),
             s.CoverFileId,
             s.StatusCode,
             s.ContentLanguageCode,
