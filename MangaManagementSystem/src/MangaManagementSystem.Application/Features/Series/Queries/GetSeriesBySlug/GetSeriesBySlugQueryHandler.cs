@@ -80,7 +80,8 @@ namespace MangaManagementSystem.Application.Features.Series.Queries.GetSeriesByS
                 series.Slug,
                 series.Title,
                 series.Synopsis,
-                string.Join(", ", series.Genres.Select(g => g.GenreName)),
+                MapGenres(series.Genres),
+                MapTags(series.Tags),
                 series.StatusCode,
                 series.ContentLanguageCode,
                 series.PublicationFrequencyCode,
@@ -91,6 +92,22 @@ namespace MangaManagementSystem.Application.Features.Series.Queries.GetSeriesByS
                 size,
                 totalChapterCount,
                 totalPages);
+        }
+
+        private static IReadOnlyList<GenreDto> MapGenres(IEnumerable<Domain.Entities.Genre> genres)
+        {
+            return genres
+                .OrderBy(g => g.GenreName)
+                .Select(g => new GenreDto(g.GenreId, g.GenreName))
+                .ToList();
+        }
+
+        private static IReadOnlyList<TagDto> MapTags(IEnumerable<Domain.Entities.Tag> tags)
+        {
+            return tags
+                .OrderBy(t => t.TagName)
+                .Select(t => new TagDto(t.TagId, t.TagName))
+                .ToList();
         }
     }
 }

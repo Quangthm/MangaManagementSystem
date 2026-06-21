@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace MangaManagementSystem.Application.DTOs.Manga
@@ -9,7 +10,8 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         short ProposalVersionNo,
         string ProposalTitle,
         string SynopsisSnapshot,
-        string GenreSnapshot,
+        IReadOnlyList<GenreDto> Genres,
+        IReadOnlyList<TagDto> Tags,
         Guid ProposalFileId,
         string StatusCode,
         Guid SubmittedByUserId,
@@ -30,7 +32,8 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         short ProposalVersionNo,
         string ProposalTitle,
         string SynopsisSnapshot,
-        string GenreSnapshot,
+        IReadOnlyList<GenreDto> Genres,
+        IReadOnlyList<TagDto> Tags,
         string StatusCode,
         Guid SubmittedByUserId,
         string SubmitterDisplayName,
@@ -80,7 +83,8 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         string? SeriesCoverUrl,
         short ProposalVersionNo,
         string ProposalTitle,
-        string GenreSnapshot,
+        IReadOnlyList<GenreDto> Genres,
+        IReadOnlyList<TagDto> Tags,
         string SynopsisSnapshot,
         string ProposalStatusCode,
         string? SeriesStatusCode,
@@ -128,7 +132,8 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         short ProposalVersionNo,
         string ProposalTitle,
         string SynopsisSnapshot,
-        string GenreSnapshot,
+        IReadOnlyList<GenreDto> Genres,
+        IReadOnlyList<TagDto> Tags,
         string StatusCode,
         DateTime SubmittedAtUtc,
         DateTime? WithdrawnAtUtc,

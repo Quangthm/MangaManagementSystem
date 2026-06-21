@@ -26,6 +26,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         {
             return await _dbContext.Set<SeriesProposal>()
                 .Include(sp => sp.Series!).ThenInclude(s => s.CoverFile)
+                .Include(sp => sp.Series!).ThenInclude(s => s.Genres)
+                .Include(sp => sp.Series!).ThenInclude(s => s.Tags)
                 .Include(sp => sp.SubmittedByUser)
                 .Include(sp => sp.ReviewedByUser)
                 .Include(sp => sp.ProposalFile)
@@ -58,7 +60,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         public async Task<List<SeriesProposal>> GetEditorialQueueAsync(string? statusCode, Guid? seriesId, Guid? submittedByUserId, Guid? reviewedByUserId, CancellationToken ct = default)
         {
             var query = _dbContext.Set<SeriesProposal>()
-                .Include(sp => sp.Series)
+                .Include(sp => sp.Series).ThenInclude(s => s.Genres)
+                .Include(sp => sp.Series).ThenInclude(s => s.Tags)
                 .Include(sp => sp.SubmittedByUser)
                 .Include(sp => sp.ReviewedByUser)
                 .Include(sp => sp.ProposalFile)
@@ -88,7 +91,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         {
             return await _dbContext.Set<SeriesProposal>()
                 .AsNoTracking()
-                .Include(sp => sp.Series)
+                .Include(sp => sp.Series).ThenInclude(s => s.Genres)
+                .Include(sp => sp.Series).ThenInclude(s => s.Tags)
                 .Include(sp => sp.SubmittedByUser)
                 .Include(sp => sp.ReviewedByUser)
                 .Include(sp => sp.ProposalFile)

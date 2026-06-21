@@ -219,7 +219,8 @@ namespace MangaManagementSystem.Application.Services
             s.Title,
             s.Slug,
             s.Synopsis,
-            string.Join(", ", s.Genres.Select(g => g.GenreName)),
+            MapGenres(s.Genres),
+            MapTags(s.Tags),
             s.CoverFileId,
             s.StatusCode,
             s.ContentLanguageCode,
@@ -234,5 +235,21 @@ namespace MangaManagementSystem.Application.Services
                 ? s.CoverFile?.CloudinarySecureUrl
                 : null
         );
+
+        private static IReadOnlyList<GenreDto> MapGenres(IEnumerable<Genre> genres)
+        {
+            return genres
+                .OrderBy(g => g.GenreName)
+                .Select(g => new GenreDto(g.GenreId, g.GenreName))
+                .ToList();
+        }
+
+        private static IReadOnlyList<TagDto> MapTags(IEnumerable<Tag> tags)
+        {
+            return tags
+                .OrderBy(t => t.TagName)
+                .Select(t => new TagDto(t.TagId, t.TagName))
+                .ToList();
+        }
     }
 }

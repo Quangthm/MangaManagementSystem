@@ -81,7 +81,8 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Quer
                 SeriesCoverUrl: proposal.Series?.CoverFile?.CloudinarySecureUrl,
                 ProposalVersionNo: proposal.ProposalVersionNo,
                 ProposalTitle: proposal.ProposalTitle,
-                GenreSnapshot: proposal.GenreSnapshot,
+                Genres: MapGenres(proposal.Series?.Genres),
+                Tags: MapTags(proposal.Series?.Tags),
                 SynopsisSnapshot: proposal.SynopsisSnapshot,
                 ProposalStatusCode: proposal.StatusCode,
                 SeriesStatusCode: proposal.Series?.StatusCode,
@@ -105,6 +106,24 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Quer
                 CanRequestRevision: canActOnDecision,
                 CanPassToBoard: canActOnDecision,
                 CanCancel: canActOnDecision);
+        }
+
+        private static IReadOnlyList<GenreDto> MapGenres(IEnumerable<Domain.Entities.Genre>? genres)
+        {
+            return genres?
+                .OrderBy(g => g.GenreName)
+                .Select(g => new GenreDto(g.GenreId, g.GenreName))
+                .ToList()
+                ?? new List<GenreDto>();
+        }
+
+        private static IReadOnlyList<TagDto> MapTags(IEnumerable<Domain.Entities.Tag>? tags)
+        {
+            return tags?
+                .OrderBy(t => t.TagName)
+                .Select(t => new TagDto(t.TagId, t.TagName))
+                .ToList()
+                ?? new List<TagDto>();
         }
     }
 }

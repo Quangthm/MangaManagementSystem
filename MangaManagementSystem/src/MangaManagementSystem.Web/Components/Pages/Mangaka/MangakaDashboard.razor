@@ -245,7 +245,7 @@
                                 <div style="color: #111827; font-weight: 700; font-size: 0.9rem; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@series.Title</div>
 
                                 <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                                    <span style="background: #f1f5f9; color: #475569; font-size: 0.65rem; padding: 2px 8px; border-radius: 12px; font-weight: 500; height: 22px; display: flex; align-items: center;">@series.Genre</span>
+                                    <span style="background: #f1f5f9; color: #475569; font-size: 0.65rem; padding: 2px 8px; border-radius: 12px; font-weight: 500; height: 22px; display: flex; align-items: center;">@series.GenreDisplay</span>
                                     <span style="background: @SeriesStatusHelper.BadgeColor(series.StatusCode); color: @SeriesStatusHelper.TextColor(series.StatusCode); font-size: 0.65rem; padding: 2px 8px; border-radius: 12px; font-weight: 600; height: 22px; display: flex; align-items: center;">@SeriesStatusHelper.DisplayName(series.StatusCode)</span>
                                 </div>
 
@@ -559,10 +559,10 @@
                     </div>
                 }
 
-                @* Genre snapshot *@
+                @* Genre display from series metadata *@
                 <div>
                     <div style="font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 4px;">Genre</div>
-                    <div style="font-size: 0.85rem; color: #111827;">@_selectedProposal.GenreSnapshot</div>
+                    <div style="font-size: 0.85rem; color: #111827;">@string.Join(", ", _selectedProposal.Genres.Select(g => g.GenreName))</div>
                 </div>
 
                 @* Synopsis snapshot (bounded scrollable box) *@
@@ -1201,7 +1201,7 @@
                 result = result.Where(p =>
                     p.SeriesTitle.Contains(term, StringComparison.OrdinalIgnoreCase) ||
                     p.ProposalTitle.Contains(term, StringComparison.OrdinalIgnoreCase) ||
-                    p.GenreSnapshot.Contains(term, StringComparison.OrdinalIgnoreCase));
+                    p.Genres.Any(g => g.GenreName.Contains(term, StringComparison.OrdinalIgnoreCase)));
             }
 
             result = _proposalSortMode switch
@@ -1415,7 +1415,7 @@
         // Seed the edit form fields from the current card data
         _editTitle = series.Title;
         _editSynopsis = series.Synopsis ?? "";
-        _editGenre = series.Genre;
+        _editGenre = series.GenreDisplay;
         _editLanguage = series.ContentLanguageCode ?? "ja";
         _editFrequency = series.PublicationFrequencyCode;
         _draftSavingEdit = false;
@@ -1526,7 +1526,7 @@
                 var updated = _seriesData[idx] with
                 {
                     Title = result.Title,
-                    Genre = result.Genre,
+                    GenreDisplay = string.Join(", ", result.Genres.Select(g => g.GenreName)),
                     Synopsis = result.Synopsis,
                     ContentLanguageCode = result.ContentLanguageCode,
                     Slug = result.Slug,
@@ -1539,7 +1539,7 @@
                 _detailSeries = updated;
                 _editTitle = result.Title;
                 _editSynopsis = result.Synopsis;
-                _editGenre = result.Genre;
+                _editGenre = string.Join(", ", result.Genres.Select(g => g.GenreName));
                 _editLanguage = result.ContentLanguageCode;
                 if (result.NewCoverUrl != null)
                 {
@@ -1743,7 +1743,7 @@
                 var term = _searchText.Trim();
                 result = result.Where(s =>
                     s.Title.Contains(term, StringComparison.OrdinalIgnoreCase) ||
-                    s.Genre.Contains(term, StringComparison.OrdinalIgnoreCase));
+                    s.GenreDisplay.Contains(term, StringComparison.OrdinalIgnoreCase));
             }
 
             // Sort
@@ -1863,7 +1863,7 @@
             _seriesData = dtos.Select(s => new SeriesCardData(
                 Id: s.SeriesId,
                 Title: s.Title,
-                Genre: s.Genre,
+                GenreDisplay: string.Join(", ", s.Genres.Select(g => g.GenreName)),
                 StatusCode: s.StatusCode,
                 Slug: s.Slug,
                 Synopsis: s.Synopsis,
@@ -1913,7 +1913,7 @@
             _seriesData.Add(new SeriesCardData(
                 Id: created.SeriesId,
                 Title: created.Title,
-                Genre: _newDraftGenre,
+                GenreDisplay: _newDraftGenre,
                 StatusCode: created.StatusCode,
                 Slug: created.Slug,
                 Synopsis: string.IsNullOrWhiteSpace(_newDraftSynopsis) ? created.Title : _newDraftSynopsis.Trim(),
@@ -1956,7 +1956,7 @@
     private record SeriesCardData(
         Guid Id,
         string Title,
-        string Genre,
+        string GenreDisplay,
         string StatusCode,
         string Slug,
         string? Synopsis,

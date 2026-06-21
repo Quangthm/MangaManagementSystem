@@ -37,6 +37,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         {
             return await _context.Series
                 .Include(s => s.Chapters)
+                .Include(s => s.Genres)
+                .Include(s => s.Tags)
                 .FirstOrDefaultAsync(s => s.SeriesId == seriesId);
         }
 
@@ -52,6 +54,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             return await _context.Series
                 .AsNoTracking()
                 .Include(s => s.CoverFile)
+                .Include(s => s.Genres)
+                .Include(s => s.Tags)
                 .Where(s => _context.SeriesContributors.Any(sc =>
                     sc.SeriesId == s.SeriesId &&
                     sc.UserId == actorUserId &&
@@ -71,6 +75,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         {
             return await _context.Series
                 .Include(s => s.CoverFile)
+                .Include(s => s.Genres)
+                .Include(s => s.Tags)
                 .AsNoTracking()
                 .ToListAsync();
         }
@@ -333,6 +339,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             var series = await _context.Series
                 .AsNoTracking()
                 .Include(s => s.CoverFile)
+                .Include(s => s.Genres)
+                .Include(s => s.Tags)
                 .FirstOrDefaultAsync(s => s.Slug == slug, cancellationToken);
 
             if (series is null)

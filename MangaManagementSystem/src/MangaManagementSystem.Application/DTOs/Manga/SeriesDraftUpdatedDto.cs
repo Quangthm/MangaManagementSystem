@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace MangaManagementSystem.Application.DTOs.Manga
 {
@@ -12,7 +13,8 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         public Guid SeriesId { get; init; }
         public string Title { get; init; } = string.Empty;
         public string Slug { get; init; } = string.Empty;
-        public string Genre { get; init; } = string.Empty;
+        public IReadOnlyList<GenreDto> Genres { get; init; } = new List<GenreDto>();
+        public IReadOnlyList<TagDto> Tags { get; init; } = new List<TagDto>();
         public string Synopsis { get; init; } = string.Empty;
         public string ContentLanguageCode { get; init; } = string.Empty;
         public string? PublicationFrequencyCode { get; init; }

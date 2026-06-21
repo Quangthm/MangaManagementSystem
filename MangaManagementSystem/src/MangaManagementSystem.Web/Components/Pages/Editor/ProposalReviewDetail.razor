@@ -79,7 +79,7 @@
                         </MudText>
 
                         <MudText Typo="Typo.subtitle2" Class="mf-muted mt-3">Genre</MudText>
-                        <MudText Class="mb-3">@_proposal.GenreSnapshot</MudText>
+                        <MudText Class="mb-3">@string.Join(", ", _proposal.Genres.Select(g => g.GenreName))</MudText>
 
                         <MudText Typo="Typo.subtitle2" Class="mf-muted mt-3">Synopsis</MudText>
                         <MudPaper Elevation="0" Class="pa-3" Style="background:var(--mud-palette-background-grey);">
