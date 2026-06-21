@@ -7,6 +7,7 @@
 @inject ISnackbar Snackbar
 @inject IChapterPageTaskService TaskService
 @inject IMangakaSeriesApiClient MangakaSeriesApiClient
+@inject IReferenceDataApiClient ReferenceDataApiClient
 @inject IProfileApiClient ProfileApiClient
 @inject AuthenticationStateProvider AuthStateProvider
 @using MangaManagementSystem.Application.Common
@@ -730,13 +731,33 @@
                                   Placeholder="Describe the story, world, and main characters..."
                                   Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true" Lines="3" />
 
-                    <MudSelect T="string" Label="Genre" @bind-Value="_newDraftGenre"
-                               Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true">
-                        @foreach (var g in _genres)
+                    <div class="mb-3">
+                        <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 6px;">Genre *</span>
+                        @foreach (var g in _availableGenres)
                         {
-                            <MudSelectItem Value="@g">@g</MudSelectItem>
+                            <MudCheckBox T="bool"
+                                         Checked="@_newDraftGenreIds.Contains(g.GenreId)"
+                                         CheckedChanged="@((bool v) => ToggleId(g.GenreId, v, _newDraftGenreIds))"
+                                         Dense="true" Class="mr-3 mb-1"
+                                         Style="display:inline-flex;">
+                                <span style="font-size:0.78rem;">@g.GenreName</span>
+                            </MudCheckBox>
                         }
-                    </MudSelect>
+                    </div>
+
+                    <div class="mb-3">
+                        <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 6px;">Tags (optional)</span>
+                        @foreach (var t in _availableTags)
+                        {
+                            <MudCheckBox T="bool"
+                                         Checked="@_newDraftTagIds.Contains(t.TagId)"
+                                         CheckedChanged="@((bool v) => ToggleId(t.TagId, v, _newDraftTagIds))"
+                                         Dense="true" Class="mr-3 mb-1"
+                                         Style="display:inline-flex;">
+                                <span style="font-size:0.78rem;">@t.TagName</span>
+                            </MudCheckBox>
+                        }
+                    </div>
 
                     <MudSelect T="string" Label="Content Language" @bind-Value="_newDraftLanguage"
                                Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true">
@@ -782,7 +803,7 @@
                     </div>
 
                     <MudButton Variant="Variant.Filled" FullWidth="true"
-                               Disabled="@(_draftSaving || string.IsNullOrWhiteSpace(_newDraftTitle) || string.IsNullOrWhiteSpace(_newDraftGenre))"
+                               Disabled="@(_draftSaving || string.IsNullOrWhiteSpace(_newDraftTitle) || _newDraftGenreIds.Count == 0)"
                                OnClick="CreateSeriesDraft">
                         @(_draftSaving ? "Creating..." : "Create Draft")
                     </MudButton>
@@ -875,13 +896,33 @@
                 <MudTextField Label="Synopsis / Description" @bind-Value="_editSynopsis"
                               Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true" Lines="3" />
 
-                <MudSelect T="string" Label="Genre" @bind-Value="_editGenre"
-                           Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true">
-                    @foreach (var g in _genres)
+                <div class="mb-3">
+                    <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 6px;">Genre *</span>
+                    @foreach (var g in _availableGenres)
                     {
-                        <MudSelectItem Value="@g">@g</MudSelectItem>
+                        <MudCheckBox T="bool"
+                                     Checked="@_editGenreIds.Contains(g.GenreId)"
+                                     CheckedChanged="@((bool v) => ToggleId(g.GenreId, v, _editGenreIds))"
+                                     Dense="true" Class="mr-3 mb-1"
+                                     Style="display:inline-flex;">
+                            <span style="font-size:0.78rem;">@g.GenreName</span>
+                        </MudCheckBox>
                     }
-                </MudSelect>
+                </div>
+
+                <div class="mb-3">
+                    <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 6px;">Tags (optional)</span>
+                    @foreach (var t in _availableTags)
+                    {
+                        <MudCheckBox T="bool"
+                                     Checked="@_editTagIds.Contains(t.TagId)"
+                                     CheckedChanged="@((bool v) => ToggleId(t.TagId, v, _editTagIds))"
+                                     Dense="true" Class="mr-3 mb-1"
+                                     Style="display:inline-flex;">
+                            <span style="font-size:0.78rem;">@t.TagName</span>
+                        </MudCheckBox>
+                    }
+                </div>
 
                 <MudSelect T="string" Label="Content Language" @bind-Value="_editLanguage"
                            Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true">
@@ -907,7 +948,7 @@
                         Cancel
                     </MudButton>
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
-                               Disabled="@(_draftSavingEdit || string.IsNullOrWhiteSpace(_editTitle) || string.IsNullOrWhiteSpace(_editGenre))"
+                               Disabled="@(_draftSavingEdit || string.IsNullOrWhiteSpace(_editTitle) || _editGenreIds.Count == 0)"
                                OnClick="SaveDraftEditAsync">
                         @(_draftSavingEdit ? "Saving..." : "Save Changes")
                     </MudButton>
@@ -1064,7 +1105,8 @@
 
     private string _newDraftTitle = "";
     private string _newDraftSynopsis = "";
-    private string _newDraftGenre = "";
+    private HashSet<Guid> _newDraftGenreIds = new();
+    private HashSet<Guid> _newDraftTagIds = new();
     private string _newDraftLanguage = "ja";
     private string? _newDraftFrequency;
     private byte[]? _draftCoverBytes;
@@ -1078,7 +1120,8 @@
     // Editable form fields — populated when the modal opens
     private string _editTitle = "";
     private string _editSynopsis = "";
-    private string _editGenre = "";
+    private HashSet<Guid> _editGenreIds = new();
+    private HashSet<Guid> _editTagIds = new();
     private string _editLanguage = "ja";
     private string? _editFrequency;
     private bool _draftSavingEdit;
@@ -1295,6 +1338,25 @@
         }
     }
 
+    private async Task LoadReferenceDataAsync()
+    {
+        try
+        {
+            _availableGenres = await ReferenceDataApiClient.GetGenresAsync();
+            _availableTags = await ReferenceDataApiClient.GetTagsAsync();
+        }
+        catch
+        {
+            _availableGenres = Array.Empty<GenreDto>();
+            _availableTags = Array.Empty<TagDto>();
+        }
+    }
+
+    private static void ToggleId(Guid id, bool add, HashSet<Guid> set)
+    {
+        if (add) set.Add(id); else set.Remove(id);
+    }
+
     // ── Cancel Draft state ────────────────────────────────────────────────────────
     private bool _cancelDraftDialogOpen;
     private Guid _cancelDraftSeriesId;
@@ -1412,10 +1474,10 @@
     {
         _openSeriesActionMenuId = null;
         _detailSeries = series;
-        // Seed the edit form fields from the current card data
         _editTitle = series.Title;
         _editSynopsis = series.Synopsis ?? "";
-        _editGenre = series.GenreDisplay;
+        _editGenreIds = new HashSet<Guid>(series.Genres.Select(g => g.GenreId));
+        _editTagIds = new HashSet<Guid>(series.Tags.Select(t => t.TagId));
         _editLanguage = series.ContentLanguageCode ?? "ja";
         _editFrequency = series.PublicationFrequencyCode;
         _draftSavingEdit = false;
@@ -1492,7 +1554,7 @@
 
     private async Task SaveDraftEditAsync()
     {
-        if (string.IsNullOrWhiteSpace(_editTitle) || string.IsNullOrWhiteSpace(_editGenre)) return;
+        if (string.IsNullOrWhiteSpace(_editTitle) || _editGenreIds.Count == 0) return;
 
         if (_currentUserId is null || _currentUserId == Guid.Empty)
         {
@@ -1510,8 +1572,8 @@
                 seriesId: _detailSeries.Id,
                 title: _editTitle.Trim(),
                 synopsis: string.IsNullOrWhiteSpace(_editSynopsis) ? _editTitle.Trim() : _editSynopsis.Trim(),
-                genreIds: new List<Guid>(),
-                tagIds: new List<Guid>(),
+                genreIds: _editGenreIds.ToList(),
+                tagIds: _editTagIds.ToList(),
                 contentLanguageCode: _editLanguage,
                 publicationFrequencyCode: _editFrequency,
                 slug: null, // auto-derived from title in the handler
@@ -1528,6 +1590,8 @@
                 {
                     Title = result.Title,
                     GenreDisplay = string.Join(", ", result.Genres.Select(g => g.GenreName)),
+                    Genres = result.Genres,
+                    Tags = result.Tags,
                     Synopsis = result.Synopsis,
                     ContentLanguageCode = result.ContentLanguageCode,
                     Slug = result.Slug,
@@ -1540,7 +1604,8 @@
                 _detailSeries = updated;
                 _editTitle = result.Title;
                 _editSynopsis = result.Synopsis;
-                _editGenre = string.Join(", ", result.Genres.Select(g => g.GenreName));
+                _editGenreIds = new HashSet<Guid>(result.Genres.Select(g => g.GenreId));
+                _editTagIds = new HashSet<Guid>(result.Tags.Select(t => t.TagId));
                 _editLanguage = result.ContentLanguageCode;
                 if (result.NewCoverUrl != null)
                 {
@@ -1684,7 +1749,8 @@
         }
     }
 
-    private static readonly string[] _genres = ["Tiên hiệp", "Wuxia", "Xianxia", "Action", "Fantasy", "Romance", "Horror", "Slice of Life"];
+    private IReadOnlyList<GenreDto> _availableGenres = Array.Empty<GenreDto>();
+    private IReadOnlyList<TagDto> _availableTags = Array.Empty<TagDto>();
 
     private readonly (string Code, string Label)[] _languages =
     [
@@ -1848,6 +1914,7 @@
         await LoadSeriesAsync();
         await LoadTasksAsync();
         await LoadProposalTrackingAsync();
+        await LoadReferenceDataAsync();
     }
 
     private async Task LoadSeriesAsync()
@@ -1865,6 +1932,8 @@
                 Id: s.SeriesId,
                 Title: s.Title,
                 GenreDisplay: string.Join(", ", s.Genres.Select(g => g.GenreName)),
+                Genres: s.Genres,
+                Tags: s.Tags,
                 StatusCode: s.StatusCode,
                 Slug: s.Slug,
                 Synopsis: s.Synopsis,
@@ -1883,7 +1952,7 @@
 
     private async Task CreateSeriesDraft()
     {
-        if (string.IsNullOrWhiteSpace(_newDraftTitle) || string.IsNullOrWhiteSpace(_newDraftGenre)) return;
+        if (string.IsNullOrWhiteSpace(_newDraftTitle) || _newDraftGenreIds.Count == 0) return;
 
         if (_currentUserId is null || _currentUserId == Guid.Empty)
         {
@@ -1902,8 +1971,8 @@
                 actorUserId: _currentUserId.Value,
                 title: _newDraftTitle.Trim(),
                 synopsis: string.IsNullOrWhiteSpace(_newDraftSynopsis) ? _newDraftTitle.Trim() : _newDraftSynopsis.Trim(),
-                genreIds: new List<Guid>(),
-                tagIds: new List<Guid>(),
+                genreIds: _newDraftGenreIds.ToList(),
+                tagIds: _newDraftTagIds.ToList(),
                 contentLanguageCode: _newDraftLanguage,
                 slug: null,
                 publicationFrequencyCode: _newDraftFrequency,
@@ -1915,7 +1984,9 @@
             _seriesData.Add(new SeriesCardData(
                 Id: created.SeriesId,
                 Title: created.Title,
-                GenreDisplay: _newDraftGenre,
+                GenreDisplay: string.Join(", ", _availableGenres.Where(g => _newDraftGenreIds.Contains(g.GenreId)).Select(g => g.GenreName)),
+                Genres: _availableGenres.Where(g => _newDraftGenreIds.Contains(g.GenreId)).ToList(),
+                Tags: _availableTags.Where(t => _newDraftTagIds.Contains(t.TagId)).ToList(),
                 StatusCode: created.StatusCode,
                 Slug: created.Slug,
                 Synopsis: string.IsNullOrWhiteSpace(_newDraftSynopsis) ? created.Title : _newDraftSynopsis.Trim(),
@@ -1934,7 +2005,8 @@
             _draftCreated = false;
             _newDraftTitle = "";
             _newDraftSynopsis = "";
-            _newDraftGenre = "";
+            _newDraftGenreIds.Clear();
+            _newDraftTagIds.Clear();
             _newDraftLanguage = "ja";
             _newDraftFrequency = null;
             _draftCoverBytes = null;
@@ -1959,6 +2031,8 @@
         Guid Id,
         string Title,
         string GenreDisplay,
+        IReadOnlyList<GenreDto> Genres,
+        IReadOnlyList<TagDto> Tags,
         string StatusCode,
         string Slug,
         string? Synopsis,

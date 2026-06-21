@@ -62,6 +62,11 @@ namespace MangaManagementSystem.Web
                 client.BaseAddress =
                     new Uri(settings.Value.BaseUrl);
             });
+            builder.Services.AddHttpClient<IReferenceDataApiClient, ReferenceDataApiClient>((sp, client) =>
+            {
+                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                client.BaseAddress = new Uri(settings.Value.BaseUrl);
+            });
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddAntiforgery();
 
