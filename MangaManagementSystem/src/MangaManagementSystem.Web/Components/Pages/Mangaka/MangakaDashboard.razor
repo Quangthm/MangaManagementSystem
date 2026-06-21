@@ -701,7 +701,7 @@
 
 @* ── New Series Draft Modal (creates manga.Series with status PROPOSAL_DRAFT) ── *@
 <MudOverlay Visible="@_newSeriesDialogOpen" OnClick="@(() => _newSeriesDialogOpen = false)">
-    <MudCard Style="width: 480px; max-width: 90vw; margin: 5% auto 0; border-radius: 14px;" @onclick:stopPropagation>
+    <MudCard Style="width: 480px; max-width: 90vw; margin: 5% auto 0; border-radius: 14px; max-height: calc(100vh - 48px); overflow-y: auto;" @onclick:stopPropagation>
         <MudCardContent Style="padding: 0;">
             @* Modal Header *@
             <div style="padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between;">
@@ -845,9 +845,9 @@
 @* ── Edit Draft Modal (BF-SERIES-002 — Edit Series Draft Profile) ── *@
 @* Cover editing only allowed for PROPOSAL_DRAFT; status guard enforced by stored procedure. *@
 <MudOverlay Visible="@_draftDetailsOpen" OnClick="@(() => _draftDetailsOpen = false)">
-    <MudCard Style="width: 540px; max-width: 94vw; margin: 3% auto 0; border-radius: 14px; max-height: 92vh; overflow-y: auto;" @onclick:stopPropagation>
+    <MudCard Style="width: 540px; max-width: 94vw; margin: 3% auto 0; border-radius: 14px; max-height: calc(100vh - 48px); overflow-y: auto;" @onclick:stopPropagation>
         <MudCardContent Style="padding: 0;">
-            <div style="padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: #fff; z-index: 2;">
+            <div style="padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between;">
                 <div>
                     <div style="font-weight: 700; font-size: 1rem; color: #111827;">Edit Draft</div>
                     <div style="color: #94a3b8; font-size: 0.72rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px;"
@@ -1170,7 +1170,6 @@
                             var sel = _genrePickerSelection.Contains(g.GenreId);
                             <div @onclick="@(() => TogglePickerGenre(g.GenreId))"
                                  style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; background: @(sel ? "#eef2ff" : "transparent");">
-                                <MudCheckBox T="bool" Checked="@sel" Dense="true" ReadOnly="true" />
                                 <div>
                                     <div style="font-size: 0.82rem; font-weight: 500; color: #111827;">@g.GenreName</div>
                                     @if (!string.IsNullOrWhiteSpace(g.Description))
@@ -1241,7 +1240,6 @@
                             var sel = _tagPickerSelection.Contains(t.TagId);
                             <div @onclick="@(() => TogglePickerTag(t.TagId))"
                                  style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; background: @(sel ? "#f0fdf4" : "transparent");">
-                                <MudCheckBox T="bool" Checked="@sel" Dense="true" ReadOnly="true" />
                                 <div>
                                     <div style="font-size: 0.82rem; font-weight: 500; color: #111827;">@t.TagName</div>
                                     @if (!string.IsNullOrWhiteSpace(t.Description))
@@ -1959,6 +1957,9 @@
                     ClearEditCover();
                 }
             }
+
+            // Reload the dashboard list from the API so timestamps and card data are fresh.
+            await LoadSeriesAsync();
 
             Snackbar.Add("Draft profile saved.", Severity.Success);
             _draftDetailsOpen = false;
