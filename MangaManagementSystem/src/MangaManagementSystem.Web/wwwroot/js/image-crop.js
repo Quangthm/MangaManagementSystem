@@ -476,6 +476,18 @@ export function reset(canvasId) {
     drawCropper(state);
 }
 
+export function getImageDimensions(canvasId) {
+    const state =
+        getState(canvasId);
+
+    return {
+        naturalWidth: state.image.naturalWidth,
+        naturalHeight: state.image.naturalHeight,
+        cropSourceWidth: state.cropWidth / state.baseScale,
+        cropSourceHeight: state.cropHeight / state.baseScale
+    };
+}
+
 export async function exportCroppedImageStream(
     canvasId,
     outputWidth = 800,

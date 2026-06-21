@@ -111,8 +111,8 @@ Reusable Blazor crop dialog component with parameters:
 |-----------|------|---------|-------|
 | `SourceDataUrl` | `string` | required | Data URL of image to crop |
 | `AspectRatio` | `double` | `2.0/3.0` | Width/height ratio |
-| `OutputWidth` | `int` | `800` | Output image width |
-| `OutputHeight` | `int` | `1200` | Output image height (2:3 with 800) |
+| `OutputWidth` | `int` | `1000` | Output image width |
+| `OutputHeight` | `int` | `1500` | Output image height (2:3 with 1000) |
 | `OutputContentType` | `string` | `"image/png"` | PNG for safety/consistency |
 | `CropDescription` | `string` | `"2:3 portrait crop"` | Display label |
 | `HelperText` | `string` | Cover helper text | Shown below description |
@@ -146,7 +146,8 @@ Reusable Blazor crop dialog component with parameters:
 
 - **Content type:** `image/png` (safe, universally supported, matches avatar cropper pattern)
 - **File name:** `series-cover-cropped.png`
-- **Output size:** 800 x 1200 px (2:3 portrait)
+- **Output size:** 1000 × 1500 px (2:3 portrait)
+- **Small image behavior:** Images smaller than 1000×1500 are still accepted; a warning is shown: "This image is smaller than the recommended cover size. It will be resized to 1000×1500, but the final cover may look blurry."
 
 ### Backend impact
 
