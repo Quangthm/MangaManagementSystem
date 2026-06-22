@@ -61,6 +61,23 @@
     private int _overdueCount;
     private string _subtitle = "Loading tasks…";
 
+    private IEnumerable<ChapterPageTaskDto> _filteredTasks
+    {
+        get
+        {
+            if (_tasks == null) return Enumerable.Empty<ChapterPageTaskDto>();
+            return _activeFilter switch
+            {
+                0 => _tasks,
+                1 => _tasks.Where(t => t.StatusCode == "ASSIGNED"),
+                2 => _tasks.Where(t => t.StatusCode == "UNDER_REVIEW"),
+                3 => _tasks.Where(t => t.StatusCode == "COMPLETED"),
+                4 => _tasks.Where(t => t.StatusCode == "CANCELLED"),
+                _ => _tasks
+            };
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         await LoadTasksAsync();
