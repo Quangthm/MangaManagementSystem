@@ -248,7 +248,10 @@ namespace MangaManagementSystem.Application.Services
                 CompletedOutputUrl: completedFile?.CloudinarySecureUrl,
                 CreatedByDisplayName: t.CreatedByUser?.DisplayName,
                 CreatedAtUtc: t.CreatedAtUtc,
-                UpdatedAtUtc: t.UpdatedAtUtc
+                UpdatedAtUtc: t.UpdatedAtUtc,
+                SeriesSlug: series?.Slug,
+                ChapterId: chapter?.ChapterId,
+                SourceChapterPageVersionId: firstRegion?.ChapterPageVersionId
             );
         }
 
@@ -297,7 +300,10 @@ namespace MangaManagementSystem.Application.Services
                 PageImageUrl: pageFile?.CloudinarySecureUrl,
                 CompensationAmount: t.CompensationAmount,
                 AssignedUsername: t.AssignedToUser?.Username,
-                CompletedOutputUrl: completedFile?.CloudinarySecureUrl
+                CompletedOutputUrl: completedFile?.CloudinarySecureUrl,
+                SeriesSlug: series?.Slug,
+                ChapterId: chapter?.ChapterId,
+                SourceChapterPageVersionId: firstRegion?.ChapterPageVersionId
             );
         }
     }

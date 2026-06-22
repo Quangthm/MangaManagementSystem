@@ -80,7 +80,7 @@
                 @foreach (var nav in _navItems)
                 {
                     var isActive = _activeTab == nav.Id;
-                    <button @onclick="() => _activeTab = nav.Id"
+                    <button @onclick="@(() => HandleNavClick(nav.Id))"
                             style="display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: none; border-radius: 8px; cursor: pointer; width: 100%; text-align: left; font-size: 0.85rem; font-weight: @(isActive ? 600 : 500); background: @(isActive ? "#eef2ff" : "transparent"); color: @(isActive ? "#4f46e5" : "#64748b");">
                         <MudIcon Icon="@nav.Icon" Size="Size.Small" Style="font-size: 18px; flex-shrink: 0;" />
                         <span>@nav.Label</span>
@@ -2114,7 +2114,7 @@
                 break;
             case "SERIALIZED":
                 if (!string.IsNullOrWhiteSpace(series.Slug))
-                    Nav.NavigateTo($"/series/{series.Slug}");
+                    Nav.NavigateTo($"/series/{series.Slug}?returnUrl={Uri.EscapeDataString("/mangaka")}");
                 else
                     Snackbar.Add("Series page is not available yet.", Severity.Info);
                 break;
@@ -2551,6 +2551,18 @@
         new("proposals", "Series Proposals", Icons.Material.Filled.Description),
         new("review", "Assistant Review", Icons.Material.Filled.AssignmentTurnedIn),
     ];
+
+    private void HandleNavClick(string navId)
+    {
+        if (navId == "review")
+        {
+            Nav.NavigateTo("/mangaka/review-submissions");
+        }
+        else
+        {
+            _activeTab = navId;
+        }
+    }
 
     private string _currentDisplayName = "Mangaka";
     private string _currentRoleName = "Mangaka";

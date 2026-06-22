@@ -9,9 +9,17 @@
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthStateProvider
+@using MangaManagementSystem.Web.Services
 
 <MangakaLayout>
     <div class="mf-page">
+        <MudButton Variant="Variant.Text"
+                   StartIcon="@Icons.Material.Filled.ArrowBack"
+                   Style="color: #64748b; margin-bottom: 16px;"
+                   OnClick="@(() => Nav.NavigateTo("/mangaka"))">
+            Back to Mangaka Dashboard
+        </MudButton>
+
         <div class="mf-page-header">
             <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Review Assistant Submissions</MudText>
             <MudText Typo="Typo.body1" Class="mf-muted">Review and approve completed tasks from your assistants</MudText>
@@ -156,12 +164,28 @@
                                 {
                                     <MudText Typo="Typo.body2" Class="mt-2"><strong>Submitted Output:</strong></MudText>
                                     <MudImage Src="@task.CompletedOutputUrl" Alt="Submitted output" MaxHeight="200" Class="mt-1 rounded" ObjectFit="ObjectFit.Contain" />
+                                    @if (!string.IsNullOrWhiteSpace(task.SeriesSlug) && task.ChapterId.HasValue)
+                                    {
+                                        <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary"
+                                                   StartIcon="@Icons.Material.Filled.OpenInNew" Class="mt-1"
+                                                   OnClick="@(() => Nav.NavigateTo(BuildWorkspaceLink(task)))">
+                                            View in Workspace
+                                        </MudButton>
+                                    }
                                 }
 
                                 @if (!string.IsNullOrWhiteSpace(task.PageImageUrl))
                                 {
                                     <MudText Typo="Typo.body2" Class="mt-2"><strong>Original Page:</strong></MudText>
                                     <MudImage Src="@task.PageImageUrl" Alt="Original page" MaxHeight="150" Class="mt-1 rounded" ObjectFit="ObjectFit.Contain" />
+                                    @if (!string.IsNullOrWhiteSpace(task.SeriesSlug) && task.ChapterId.HasValue)
+                                    {
+                                        <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary"
+                                                   StartIcon="@Icons.Material.Filled.OpenInNew" Class="mt-1"
+                                                   OnClick="@(() => Nav.NavigateTo(BuildWorkspaceLink(task)))">
+                                            View in Workspace
+                                        </MudButton>
+                                    }
                                 }
 
                                 @if (task.StatusCode == "UNDER_REVIEW")
@@ -424,5 +448,15 @@
         return _availableAssistants
             .Where(n => n.Contains(searchText, StringComparison.OrdinalIgnoreCase))
             .ToList();
+    }
+
+    /// <summary>
+    /// Builds a workspace link for a task card, including returnUrl back to this page.
+    /// Route: /series/{slug}/workspace?chapterId={id}&amp;returnUrl=/mangaka/review-submissions
+    /// </summary>
+    private static string BuildWorkspaceLink(ChapterPageTaskDto task)
+    {
+        var baseUrl = $"/series/{task.SeriesSlug}/workspace?chapterId={task.ChapterId}";
+        return SafeReturnUrl.AppendReturnUrl(baseUrl, "/mangaka/review-submissions");
     }
 }

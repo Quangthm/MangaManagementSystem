@@ -30,7 +30,11 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         string? CompletedOutputUrl = null,
         string? CreatedByDisplayName = null,
         DateTime? CreatedAtUtc = null,
-        DateTime? UpdatedAtUtc = null
+        DateTime? UpdatedAtUtc = null,
+        // Workspace link fields (read-model only, no DB change)
+        string? SeriesSlug = null,
+        Guid? ChapterId = null,
+        Guid? SourceChapterPageVersionId = null
     );
 
     public record CreateChapterPageTaskDto(
