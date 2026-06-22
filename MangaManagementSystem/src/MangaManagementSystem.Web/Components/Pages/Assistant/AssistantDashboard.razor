@@ -1,4 +1,4 @@
-﻿@page "/assistant"
+@page "/assistant"
 
 @inject NavigationManager Nav
 @using Microsoft.AspNetCore.Authorization
@@ -130,7 +130,7 @@
         _loadError = null;
         try
         {
-            _tasks = await AssistantTaskClient.GetAssignedTasksAsync(_currentUserId);
+            _tasks = (await TaskService.GetAssignedTasksForAssistantAsync(_currentUserId)).ToList();
             _assignedCount = _tasks.Count(t => t.StatusCode == "ASSIGNED");
             var now = DateTime.UtcNow;
             _dueSoon = _tasks.Where(t => t.DueAtUtc.HasValue && t.DueAtUtc.Value >= now && t.DueAtUtc.Value <= now.AddDays(3) && t.StatusCode != "COMPLETED" && t.StatusCode != "CANCELLED").ToList();
