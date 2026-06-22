@@ -1,6 +1,11 @@
 @page "/editor"
 @using Microsoft.AspNetCore.Authorization
+@using System.Security.Claims
+@using MangaManagementSystem.Application.DTOs.Editor
+@using MangaManagementSystem.Web.Services
+@using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Tantou Editor")]
+@inject IEditorDashboardApiClient EditorDashboardApiClient
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
@@ -11,149 +16,217 @@
             <MudText Typo="Typo.body1" Class="mf-muted">Review submissions and guide manga through editorial process</MudText>
         </div>
 
-        <!-- Stats Row -->
-        <MudGrid Class="mb-6">
-            <MudItem xs="12" sm="6" md="3">
-                <MudPaper Class="pa-4 mf-card text-center" Elevation="0">
-                    <MudText Typo="Typo.h4" Class="font-weight-bold mf-gradient-text">@_pendingProposals</MudText>
-                    <MudText Typo="Typo.body2" Class="mf-muted mt-1">Pending Proposals</MudText>
-                    <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" Class="mt-2" OnClick="@(() => Nav.NavigateTo("/editor/proposals"))">
-                        Review Queue
-                    </MudButton>
-                </MudPaper>
-            </MudItem>
-            <MudItem xs="12" sm="6" md="3">
-                <MudPaper Class="pa-4 mf-card text-center" Elevation="0">
-                    <MudText Typo="Typo.h4" Class="font-weight-bold mf-gradient-text">@_chaptersUnderReview</MudText>
-                    <MudText Typo="Typo.body2" Class="mf-muted mt-1">Chapters Under Review</MudText>
-                    <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" Class="mt-2" OnClick="@(() => Nav.NavigateTo("/editor/chapters"))">
-                        Review Queue
-                    </MudButton>
-                </MudPaper>
-            </MudItem>
-            <MudItem xs="12" sm="6" md="3">
-                <MudPaper Class="pa-4 mf-card text-center" Elevation="0">
-                    <MudText Typo="Typo.h4" Class="font-weight-bold mf-gradient-text">@_pendingTasks</MudText>
-                    <MudText Typo="Typo.body2" Class="mf-muted mt-1">Pending Annotations</MudText>
-                    <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" Class="mt-2" OnClick="@(() => Nav.NavigateTo("/editor/annotations"))">
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" Class="my-6" />
+        }
+        else if (_error != null)
+        {
+            <MudAlert Severity="Severity.Error" Class="my-4">
+                @_error
+                <MudButton Variant="Variant.Text" Color="Color.Inherit" Class="ml-3" OnClick="LoadDashboard" StartIcon="@Icons.Material.Filled.Refresh">
+                    Retry
+                </MudButton>
+            </MudAlert>
+        }
+        else if (_dashboard != null)
+        {
+            <!-- Stats Row -->
+            <MudGrid Class="mb-6">
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-4 mf-card text-center" Elevation="0">
+                        <MudText Typo="Typo.h4" Class="font-weight-bold mf-gradient-text">@_dashboard.PendingProposalCount</MudText>
+                        <MudText Typo="Typo.body2" Class="mf-muted mt-1">Pending Proposals</MudText>
+                        <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" Class="mt-2" OnClick="@(() => Nav.NavigateTo("/editor/proposals"))">
+                            Review Queue
+                        </MudButton>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-4 mf-card text-center" Elevation="0">
+                        <MudText Typo="Typo.h4" Class="font-weight-bold mf-gradient-text">@_dashboard.ChaptersUnderReviewCount</MudText>
+                        <MudText Typo="Typo.body2" Class="mf-muted mt-1">Chapters Under Review</MudText>
+                        <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" Class="mt-2" OnClick="@(() => Nav.NavigateTo("/editor/chapters"))">
+                            Review Queue
+                        </MudButton>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-4 mf-card text-center" Elevation="0">
+                        <MudText Typo="Typo.h4" Class="font-weight-bold mf-gradient-text">@_dashboard.PendingAnnotationCount</MudText>
+                        <MudText Typo="Typo.body2" Class="mf-muted mt-1">Pending Annotations</MudText>
+                        <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" Class="mt-2" OnClick="@(() => Nav.NavigateTo("/editor/annotations"))">
+                            View All
+                        </MudButton>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-4 mf-card text-center" Elevation="0">
+                        <MudText Typo="Typo.h4" Class="font-weight-bold mf-gradient-text">@_dashboard.SerializedSeriesCount</MudText>
+                        <MudText Typo="Typo.body2" Class="mf-muted mt-1">Serialized Series</MudText>
+                        <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" Class="mt-2" OnClick="@(() => Nav.NavigateTo("/ranking"))">
+                            View Ranking
+                        </MudButton>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+
+            <!-- Proposals Queue -->
+            <MudPaper Class="pa-5 mf-card mb-6" Elevation="0">
+                <div class="mf-section-header">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold">Proposal Review Queue</MudText>
+                    <MudChip T="string" Color="Color.Info" Size="Size.Small">@_dashboard.PendingProposalCount Active</MudChip>
+                </div>
+
+                @if (_dashboard.ProposalReviewQueue.Count == 0)
+                {
+                    <MudPaper Class="pa-8 text-center mf-card" Elevation="0">
+                        <MudIcon Icon="@Icons.Material.Outlined.CheckCircle" Size="Size.Large" Color="Color.Success" Class="mb-3" />
+                        <MudText Typo="Typo.h6">All Caught Up!</MudText>
+                        <MudText Class="mf-muted">No pending proposals to review.</MudText>
+                    </MudPaper>
+                }
+                else
+                {
+                    <MudTable Items="_dashboard.ProposalReviewQueue" Hover="true">
+                        <HeaderContent>
+                            <MudTh>Series</MudTh>
+                            <MudTh>Version</MudTh>
+                            <MudTh>Submitted By</MudTh>
+                            <MudTh>Submitted</MudTh>
+                            <MudTh>Status</MudTh>
+                            <MudTh>Actions</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Series">
+                                <MudText Typo="Typo.body1" Class="font-weight-bold">@context.SeriesTitle</MudText>
+                                <MudText Typo="Typo.caption" Class="mf-muted">@context.ProposalTitle</MudText>
+                            </MudTd>
+                            <MudTd DataLabel="Version">@($"v{context.ProposalVersionNo}")</MudTd>
+                            <MudTd DataLabel="Submitted By">@context.SubmittedByDisplayName</MudTd>
+                            <MudTd DataLabel="Submitted">@context.SubmittedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</MudTd>
+                            <MudTd DataLabel="Status"><MudChip T="string" Color="Color.Warning" Size="Size.Small">@context.StatusCode.Replace("_", " ")</MudChip></MudTd>
+                            <MudTd DataLabel="Actions">
+                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => OpenProposal(context.SeriesProposalId))">
+                                    Review
+                                </MudButton>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+            </MudPaper>
+
+            <!-- Recent Series -->
+            <MudPaper Class="pa-5 mf-card" Elevation="0">
+                <div class="mf-section-header">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold">Recent Series Activity</MudText>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="@(() => Nav.NavigateTo("/editor/series"))">
                         View All
                     </MudButton>
-                </MudPaper>
-            </MudItem>
-            <MudItem xs="12" sm="6" md="3">
-                <MudPaper Class="pa-4 mf-card text-center" Elevation="0">
-                    <MudText Typo="Typo.h4" Class="font-weight-bold mf-gradient-text">@_rankedSeries</MudText>
-                    <MudText Typo="Typo.body2" Class="mf-muted mt-1">Serialized Series</MudText>
-                    <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" Class="mt-2" OnClick="@(() => Nav.NavigateTo("/editor/series"))">
-                        View Series
-                    </MudButton>
-                </MudPaper>
-            </MudItem>
-        </MudGrid>
+                </div>
 
-        <!-- Proposals Queue -->
-        <MudPaper Class="pa-5 mf-card mb-6" Elevation="0">
-            <div class="mf-section-header">
-                <MudText Typo="Typo.h6" Class="font-weight-bold">Proposal Review Queue</MudText>
-                <MudChip T="string" Color="Color.Info" Size="Size.Small">@_pendingProposals Active</MudChip>
-            </div>
-
-            @if (_pendingProposals == 0)
-            {
-                <MudPaper Class="pa-8 text-center mf-card" Elevation="0">
-                    <MudIcon Icon="mdi-check-all" Size="Size.Large" Color="Color.Success" Class="mb-3" />
-                    <MudText Typo="Typo.h6">All Caught Up!</MudText>
-                    <MudText Class="mf-muted">No pending proposals to review.</MudText>
-                </MudPaper>
-            }
-            else
-            {
-                <MudTable Items="Proposals" Hover="true">
-                    <HeaderContent>
-                        <MudTh>Series</MudTh>
-                        <MudTh>Version</MudTh>
-                        <MudTh>Submitted By</MudTh>
-                        <MudTh>Submitted</MudTh>
-                        <MudTh>Status</MudTh>
-                        <MudTh>Actions</MudTh>
-                    </HeaderContent>
-                    <RowTemplate>
-                        <MudTd>@context.Title</MudTd>
-                        <MudTd>v@context.Version</MudTd>
-                        <MudTd>@context.SubmittedBy</MudTd>
-                        <MudTd>@context.SubmittedAt.ToString("MMM d, yyyy")</MudTd>
-                        <MudTd><MudChip T="string" Color="Color.Warning" Size="Size.Small">@context.Status</MudChip></MudTd>
-                        <MudTd>
-                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => OpenProposal(context.SeriesId))">
-                            Review
-                        </MudButton>
-                        </MudTd>
-                    </RowTemplate>
-                </MudTable>
-            }
-        </MudPaper>
-
-        <!-- Recent Series -->
-        <MudPaper Class="pa-5 mf-card" Elevation="0">
-            <div class="mf-section-header">
-                <MudText Typo="Typo.h6" Class="font-weight-bold">Recent Series Activity</MudText>
-                <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="@(() => Nav.NavigateTo("/editor/series"))">
-                    View All
-                </MudButton>
-            </div>
-
-            <MudTable Items="RecentSeries" Hover="true">
-                <HeaderContent>
-                    <MudTh>Title</MudTh>
-                    <MudTh>Status</MudTh>
-                    <MudTh>Latest Chapter</MudTh>
-                    <MudTh>Last Activity</MudTh>
-                </HeaderContent>
-                <RowTemplate>
-                    <MudTd><MudLink Href="@($"/editor/series/{context.SeriesId}")">@context.Title</MudLink></MudTd>
-                    <MudTd><MudChip T="string" Color="@GetStatusColor(context.StatusCode)" Size="Size.Small">@context.StatusCode</MudChip></MudTd>
-                    <MudTd>@context.LatestChapter</MudTd>
-                    <MudTd>@context.LastActivity.ToString("MMM d, HH:mm")</MudTd>
-                </RowTemplate>
-            </MudTable>
-        </MudPaper>
+                @if (_dashboard.RecentSeriesActivity.Count == 0)
+                {
+                    <MudPaper Class="pa-8 text-center mf-card" Elevation="0">
+                        <MudIcon Icon="@Icons.Material.Outlined.Inbox" Size="Size.Large" Class="mb-3 mf-muted" />
+                        <MudText Typo="Typo.h6">No Recent Activity</MudText>
+                        <MudText Class="mf-muted">There are no series to display yet.</MudText>
+                    </MudPaper>
+                }
+                else
+                {
+                    <MudTable Items="_dashboard.RecentSeriesActivity" Hover="true">
+                        <HeaderContent>
+                            <MudTh>Title</MudTh>
+                            <MudTh>Status</MudTh>
+                            <MudTh>Latest Chapter</MudTh>
+                            <MudTh>Last Activity</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            @{
+                                var seriesHref = SeriesNavigationUrlBuilder.BuildEditorSeriesOrProposalHref(
+                                    context.CanOpenSeriesSlugPage,
+                                    context.SeriesSlug,
+                                    context.LatestProposalId,
+                                    "/editor");
+                            }
+                            <MudTd DataLabel="Title">
+                                @if (seriesHref != null)
+                                {
+                                    <MudLink Href="@seriesHref">@context.SeriesTitle</MudLink>
+                                }
+                                else
+                                {
+                                    <MudText>@context.SeriesTitle</MudText>
+                                }
+                            </MudTd>
+                            <MudTd DataLabel="Status"><MudChip T="string" Color="@GetStatusColor(context.StatusCode)" Size="Size.Small">@context.StatusCode.Replace("_", " ")</MudChip></MudTd>
+                            <MudTd DataLabel="Latest Chapter">@(string.IsNullOrWhiteSpace(context.LatestChapterLabel) ? "—" : context.LatestChapterLabel)</MudTd>
+                            <MudTd DataLabel="Last Activity">@(context.LastActivityAtUtc.HasValue ? context.LastActivityAtUtc.Value.ToLocalTime().ToString("MMM d, HH:mm") : "—")</MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+            </MudPaper>
+        }
     </div>
 </EditorLayout>
 
 @code {
-    private int _pendingProposals = 3;
-    private int _chaptersUnderReview = 5;
-    private int _pendingTasks = 8;
-    private int _rankedSeries = 12;
+    private EditorDashboardDto? _dashboard;
+    private bool _loading = true;
+    private string? _error;
+    private Guid _currentUserId;
 
-    private readonly List<ProposalRow> Proposals = new()
-    {
-        new(Guid.Parse("c1d2e3f4-2001-4000-8000-000000000001"), "Crimson Moon Academy", 2, "Ken Sato", DateTime.UtcNow.AddDays(-2), "UNDER_EDITORIAL_REVIEW"),
-        new(Guid.Parse("c1d2e3f4-2002-4000-8000-000000000002"), "Neon Samurai Path", 1, "Yuki Tanaka", DateTime.UtcNow.AddDays(-5), "UNDER_EDITORIAL_REVIEW"),
-        new(Guid.Parse("c1d2e3f4-2003-4000-8000-000000000003"), "Lunar Eclipse Academy", 3, "Hiroshi Yamamoto", DateTime.UtcNow.AddDays(-1), "UNDER_BOARD_REVIEW")
-    };
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
 
-    private readonly List<SeriesRow> RecentSeries = new()
+    protected override async Task OnInitializedAsync()
     {
-        new(Guid.Parse("c1d2e3f4-3001-4000-8000-000000000001"), "Crimson Moon Academy", "SERIALIZED", "Ch. 44", DateTime.UtcNow.AddDays(-1)),
-        new(Guid.Parse("c1d2e3f4-3002-4000-8000-000000000002"), "Neon Samurai Path", "SERIALIZED", "Ch. 18", DateTime.UtcNow.AddDays(-3)),
-        new(Guid.Parse("c1d2e3f4-3003-4000-8000-000000000003"), "Shadow Garden Tales", "HIATUS", "Ch. 8", DateTime.UtcNow.AddDays(-7))
-    };
+        if (AuthState != null)
+        {
+            var authState = await AuthState;
+            var idClaim = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (Guid.TryParse(idClaim, out var userId))
+            {
+                _currentUserId = userId;
+            }
+        }
+
+        await LoadDashboard();
+    }
+
+    private async Task LoadDashboard()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _dashboard = await EditorDashboardApiClient.GetDashboardAsync(_currentUserId);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load dashboard: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
 
     private Color GetStatusColor(string status) => status switch
     {
         "SERIALIZED" => Color.Success,
         "HIATUS" => Color.Warning,
         "CANCELLED" => Color.Error,
-        "PROPOSAL_DRAFT" => Color.Info,
+        "COMPLETED" => Color.Info,
+        "UNDER_EDITORIAL_REVIEW" => Color.Warning,
+        "UNDER_BOARD_REVIEW" => Color.Info,
+        "PROPOSAL_DRAFT" => Color.Default,
         _ => Color.Default
     };
 
-    private void OpenProposal(Guid seriesId)
+    private void OpenProposal(Guid seriesProposalId)
     {
-        Nav.NavigateTo($"/editor/proposals/{seriesId}");
+        Nav.NavigateTo($"/editor/proposals/{seriesProposalId}");
     }
-
-    private record ProposalRow(Guid SeriesId, string Title, int Version, string SubmittedBy, DateTime SubmittedAt, string Status);
-    private record SeriesRow(Guid SeriesId, string Title, string StatusCode, string LatestChapter, DateTime LastActivity);
 }

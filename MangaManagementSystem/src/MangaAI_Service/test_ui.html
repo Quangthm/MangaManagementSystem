@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manga AI Editor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            min-height: 100vh; color: #e0e0e0;
+        }
+
+        /* ── TOP BAR ─────────────────────────── */
+        .topbar {
+            display: flex; align-items: center; gap: 10px;
+            padding: 12px 20px;
+            background: rgba(0,0,0,0.4);
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            flex-wrap: wrap;
+        }
+        .topbar h1 {
+            font-size: 18px; font-weight: 700;
+            background: linear-gradient(90deg, #f7971e, #ffd200);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            margin-right: 16px;
+        }
+        input[type="file"] {
+            padding: 7px 12px; border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.06); color: #fff; font-size: 13px;
+        }
+        .btn {
+            padding: 8px 16px; border: none; border-radius: 6px;
+            font-weight: 600; cursor: pointer; font-size: 13px;
+            transition: all 0.2s; color: #fff; white-space: nowrap;
+        }
+        .btn:hover { transform: translateY(-1px); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+        .btn-red { background: linear-gradient(135deg, #e74c3c, #c0392b); }
+        .btn-green { background: linear-gradient(135deg, #27ae60, #2ecc71); }
+        .btn-blue { background: linear-gradient(135deg, #2980b9, #3498db); }
+        .btn-orange { background: linear-gradient(135deg, #e67e22, #f39c12); }
+        .btn-purple { background: linear-gradient(135deg, #8e44ad, #9b59b6); }
+        .btn-dark { background: rgba(255,255,255,0.1); }
+        .btn-dark:hover { background: rgba(255,255,255,0.2); }
+        .btn-sm { padding: 5px 10px; font-size: 11px; }
+
+        .separator { width: 1px; height: 28px; background: rgba(255,255,255,0.15); }
+
+        /* ── TOOLBAR ─────────────────────────── */
+        .toolbar {
+            display: flex; align-items: center; gap: 6px;
+            padding: 8px 20px;
+            background: rgba(0,0,0,0.25);
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .toolbar label { font-size: 12px; color: #aaa; margin-right: 4px; }
+        .tool-btn {
+            padding: 6px 14px; border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 5px; background: rgba(255,255,255,0.05);
+            color: #ccc; font-size: 12px; cursor: pointer; transition: all 0.2s;
+        }
+        .tool-btn:hover { background: rgba(255,255,255,0.12); }
+        .tool-btn.active { background: rgba(52,152,219,0.3); border-color: #3498db; color: #fff; }
+
+        /* ── MAIN LAYOUT ─────────────────────── */
+        .main { display: flex; height: calc(100vh - 95px); }
+
+        /* Canvas area */
+        .canvas-wrap {
+            flex: 1; overflow: auto; position: relative;
+            background: rgba(0,0,0,0.3);
+            display: flex; justify-content: center; align-items: flex-start;
+            padding: 16px;
+        }
+        #mangaCanvas { cursor: crosshair; display: block; }
+
+        /* Sidebar */
+        .sidebar {
+            width: 360px; min-width: 360px;
+            background: rgba(0,0,0,0.35);
+            border-left: 1px solid rgba(255,255,255,0.08);
+            display: flex; flex-direction: column;
+        }
+        .sidebar-header {
+            padding: 14px 16px; font-size: 14px; font-weight: 600;
+            color: #ffd200; border-bottom: 1px solid rgba(255,255,255,0.08);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .sidebar-body { flex: 1; overflow-y: auto; padding: 10px 12px; }
+
+        /* Region cards */
+        .region-card {
+            background: rgba(255,255,255,0.05); border-radius: 8px;
+            padding: 12px; margin-bottom: 10px;
+            border-left: 4px solid #555; cursor: pointer;
+            transition: all 0.2s; position: relative;
+        }
+        .region-card:hover { background: rgba(255,255,255,0.08); }
+        .region-card.selected { border-left-color: #3498db; background: rgba(52,152,219,0.1); }
+        .region-card.has-translation { border-left-color: #2ecc71; }
+        .region-card .card-top {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 6px;
+        }
+        .region-card h4 { font-size: 13px; color: #ffd200; margin: 0; }
+        .region-card .coords { font-size: 11px; color: #777; }
+        .region-card .text-row { margin-top: 6px; font-size: 12px; line-height: 1.5; }
+        .region-card .text-row span.lbl { color: #888; }
+        .region-card .text-row .original { color: #e74c3c; }
+        .region-card .text-row .translated { color: #2ecc71; }
+        .region-card input[type="text"], .region-card textarea {
+            width: 100%; padding: 5px 8px; margin-top: 4px;
+            border: 1px solid rgba(255,255,255,0.15); border-radius: 4px;
+            background: rgba(0,0,0,0.3); color: #fff; font-size: 12px;
+            font-family: inherit; resize: vertical;
+        }
+        .region-card .card-actions { display: flex; gap: 4px; margin-top: 8px; }
+
+        .check-box {
+            width: 16px; height: 16px; border-radius: 3px;
+            border: 2px solid #555; cursor: pointer;
+            display: inline-flex; align-items: center; justify-content: center;
+            transition: all 0.2s; flex-shrink: 0;
+        }
+        .check-box.checked { border-color: #3498db; background: #3498db; }
+        .check-box.checked::after { content: '✓'; color: #fff; font-size: 11px; }
+
+        /* Loader */
+        .loader {
+            display: none; padding: 12px; text-align: center; font-size: 14px;
+            background: linear-gradient(90deg, #f7971e, #ffd200);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            font-weight: 600;
+        }
+
+        /* Status bar */
+        .statusbar {
+            padding: 6px 16px; font-size: 11px; color: #777;
+            border-top: 1px solid rgba(255,255,255,0.06);
+            background: rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+
+<!-- ── TOP BAR ────────────────────────────── -->
+<div class="topbar">
+    <h1>🎨 Manga AI Editor</h1>
+    <input type="file" id="imageUpload" accept="image/*">
+    <div class="separator"></div>
+    <button class="btn btn-red" id="btnSegment" onclick="doSegment()">🔍 Phân vùng AI</button>
+    <button class="btn btn-green" id="btnTranslateSelected" onclick="doTranslateSelected()">🌐 Dịch vùng đã chọn</button>
+    <button class="btn btn-orange" id="btnTranslateAll" onclick="doTranslateAll()">🌐 Dịch tất cả</button>
+    <div class="separator"></div>
+    <button class="btn btn-blue" id="btnSave" onclick="doSave()">💾 Lưu kết quả</button>
+    <button class="btn btn-purple" onclick="doDeleteSelected()">🗑️ Xóa vùng đã chọn</button>
+</div>
+
+<!-- ── TOOLBAR ─────────────────────────────── -->
+<div class="toolbar">
+    <label>Công cụ:</label>
+    <button class="tool-btn active" data-tool="select" onclick="setTool('select')">🖱️ Chọn</button>
+    <button class="tool-btn" data-tool="draw" onclick="setTool('draw')">✏️ Vẽ vùng mới</button>
+    <button class="tool-btn" data-tool="move" onclick="setTool('move')">✋ Di chuyển</button>
+    <button class="tool-btn" data-tool="delete" onclick="setTool('delete')">❌ Xóa vùng</button>
+    <div class="separator" style="height:20px;margin:0 8px;"></div>
+    <button class="btn btn-dark btn-sm" onclick="selectAll()">Chọn tất cả</button>
+    <button class="btn btn-dark btn-sm" onclick="deselectAll()">Bỏ chọn tất cả</button>
+</div>
+
+<div id="loader" class="loader">⏳ AI đang xử lý… Vui lòng chờ…</div>
+
+<!-- ── MAIN ────────────────────────────────── -->
+<div class="main">
+    <div class="canvas-wrap">
+        <canvas id="mangaCanvas" width="600" height="400"></canvas>
+    </div>
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <span>📋 Danh sách vùng (<span id="regionCount">0</span>)</span>
+            <span id="selectedCount" style="font-size:11px;color:#3498db;">0 đã chọn</span>
+        </div>
+        <div class="sidebar-body" id="sidebarBody">
+            <p style="color:#555;font-size:13px;text-align:center;margin-top:40px;">
+                Chọn ảnh manga → bấm "Phân vùng AI"<br>hoặc dùng công cụ ✏️ để vẽ thủ công.
+            </p>
+        </div>
+    </div>
+</div>
+
+<div class="statusbar" id="statusbar">Sẵn sàng.</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════
+let regions = [];          // [{id, x, y, width, height, selected, originalText, translatedText}]
+let currentTool = 'select';
+let currentFile = null;
+let originalImg = null;
+let imageBase64 = null;
+
+// Drawing state
+let isDrawing = false;
+let drawStart = {x:0, y:0};
+
+// Moving state
+let isMoving = false;
+let moveRegionId = null;
+let moveOffset = {x:0, y:0};
+
+let nextId = 1;
+
+const canvas = document.getElementById('mangaCanvas');
+const ctx = canvas.getContext('2d');
+const sidebar = document.getElementById('sidebarBody');
+
+// ══════════════════════════════════════════════════════
+// FILE UPLOAD
+// ══════════════════════════════════════════════════════
+document.getElementById('imageUpload').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    currentFile = file;
+    regions = []; nextId = 1;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        imageBase64 = ev.target.result;
+        const img = new Image();
+        img.onload = () => {
+            originalImg = img;
+            canvas.width = img.width;
+            canvas.height = img.height;
+            redraw();
+            renderSidebar();
+            setStatus('Đã tải ảnh. Bấm "Phân vùng AI" hoặc vẽ vùng thủ công.');
+        };
+        img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+});
+
+// ══════════════════════════════════════════════════════
+// TOOLS
+// ══════════════════════════════════════════════════════
+function setTool(tool) {
+    currentTool = tool;
+    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector(`[data-tool="${tool}"]`).classList.add('active');
+    canvas.style.cursor = {select:'default', draw:'crosshair', move:'grab', delete:'pointer'}[tool];
+    setStatus(`Công cụ: ${{select:'Chọn vùng', draw:'Vẽ vùng mới', move:'Di chuyển', delete:'Xóa vùng (click)'}[tool]}`);
+}
+
+// ══════════════════════════════════════════════════════
+// CANVAS MOUSE EVENTS
+// ══════════════════════════════════════════════════════
+canvas.addEventListener('mousedown', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const mx = (e.clientX - rect.left) * scaleX;
+    const my = (e.clientY - rect.top) * scaleY;
+
+    if (currentTool === 'draw') {
+        isDrawing = true;
+        drawStart = {x: mx, y: my};
+    }
+    else if (currentTool === 'select') {
+        const hit = hitTest(mx, my);
+        if (hit) {
+            hit.selected = !hit.selected;
+            redraw(); renderSidebar();
+        }
+    }
+    else if (currentTool === 'delete') {
+        const hit = hitTest(mx, my);
+        if (hit) {
+            regions = regions.filter(r => r.id !== hit.id);
+            redraw(); renderSidebar();
+            setStatus(`Đã xóa vùng #${hit.id}`);
+        }
+    }
+    else if (currentTool === 'move') {
+        const hit = hitTest(mx, my);
+        if (hit) {
+            isMoving = true;
+            moveRegionId = hit.id;
+            moveOffset = {x: mx - hit.x, y: my - hit.y};
+            canvas.style.cursor = 'grabbing';
+        }
+    }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const mx = (e.clientX - rect.left) * scaleX;
+    const my = (e.clientY - rect.top) * scaleY;
+
+    if (isDrawing) {
+        redraw();
+        const w = mx - drawStart.x, h = my - drawStart.y;
+        ctx.strokeStyle = 'rgba(52,152,219,0.9)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.strokeRect(drawStart.x, drawStart.y, w, h);
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(52,152,219,0.1)';
+        ctx.fillRect(drawStart.x, drawStart.y, w, h);
+    }
+    if (isMoving) {
+        const r = regions.find(r => r.id === moveRegionId);
+        if (r) {
+            r.x = Math.max(0, Math.min(canvas.width - r.width, mx - moveOffset.x));
+            r.y = Math.max(0, Math.min(canvas.height - r.height, my - moveOffset.y));
+            redraw();
+        }
+    }
+});
+
+canvas.addEventListener('mouseup', (e) => {
+    if (isDrawing) {
+        isDrawing = false;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const mx = (e.clientX - rect.left) * scaleX;
+        const my = (e.clientY - rect.top) * scaleY;
+        let x = Math.min(drawStart.x, mx);
+        let y = Math.min(drawStart.y, my);
+        let w = Math.abs(mx - drawStart.x);
+        let h = Math.abs(my - drawStart.y);
+        if (w > 15 && h > 15) {
+            regions.push({
+                id: nextId++,
+                x: Math.round(x), y: Math.round(y),
+                width: Math.round(w), height: Math.round(h),
+                selected: true, originalText: '', translatedText: '',
+                confidence: 1.0, manual: true
+            });
+            redraw(); renderSidebar();
+            setStatus(`Đã vẽ vùng thủ công #${nextId - 1}`);
+        } else {
+            redraw();
+        }
+    }
+    if (isMoving) {
+        isMoving = false;
+        canvas.style.cursor = 'grab';
+        renderSidebar();
+    }
+});
+
+function hitTest(mx, my) {
+    for (let i = regions.length - 1; i >= 0; i--) {
+        const r = regions[i];
+        if (mx >= r.x && mx <= r.x + r.width && my >= r.y && my <= r.y + r.height) return r;
+    }
+    return null;
+}
+
+// ══════════════════════════════════════════════════════
+// DRAWING
+// ══════════════════════════════════════════════════════
+function redraw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (originalImg) ctx.drawImage(originalImg, 0, 0);
+
+    regions.forEach((r, idx) => {
+        const isSelected = r.selected;
+        const hasText = r.translatedText && r.translatedText.length > 0;
+
+        // Fill
+        ctx.fillStyle = isSelected ? 'rgba(52,152,219,0.12)' : (hasText ? 'rgba(46,204,113,0.08)' : 'rgba(255,255,255,0.04)');
+        ctx.fillRect(r.x, r.y, r.width, r.height);
+
+        // Border
+        ctx.lineWidth = isSelected ? 3 : 2;
+        ctx.strokeStyle = isSelected ? '#3498db' : (hasText ? '#2ecc71' : 'rgba(255,255,255,0.4)');
+        ctx.strokeRect(r.x, r.y, r.width, r.height);
+
+        // Label
+        const label = `#${r.id}`;
+        ctx.font = '600 12px Inter, sans-serif';
+        const tw = ctx.measureText(label).width + 8;
+        ctx.fillStyle = isSelected ? '#3498db' : (hasText ? '#2ecc71' : '#666');
+        ctx.fillRect(r.x, r.y - 18, tw, 18);
+        ctx.fillStyle = '#fff';
+        ctx.fillText(label, r.x + 4, r.y - 5);
+
+        // Manual badge
+        if (r.manual) {
+            ctx.fillStyle = '#e67e22';
+            ctx.fillRect(r.x + tw + 2, r.y - 18, 50, 18);
+            ctx.fillStyle = '#fff';
+            ctx.font = '500 10px Inter, sans-serif';
+            ctx.fillText('Thủ công', r.x + tw + 6, r.y - 5);
+        }
+    });
+}
+
+// ══════════════════════════════════════════════════════
+// SIDEBAR
+// ══════════════════════════════════════════════════════
+function renderSidebar() {
+    document.getElementById('regionCount').textContent = regions.length;
+    document.getElementById('selectedCount').textContent = regions.filter(r => r.selected).length + ' đã chọn';
+
+    if (regions.length === 0) {
+        sidebar.innerHTML = '<p style="color:#555;font-size:13px;text-align:center;margin-top:40px;">Chưa có vùng nào.</p>';
+        return;
+    }
+
+    let html = '';
+    regions.forEach(r => {
+        const sel = r.selected ? 'selected' : '';
+        const hasTr = r.translatedText ? 'has-translation' : '';
+        html += `
+        <div class="region-card ${sel} ${hasTr}" id="card-${r.id}" onclick="toggleSelect(${r.id})">
+            <div class="card-top">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <div class="check-box ${r.selected?'checked':''}" onclick="event.stopPropagation();toggleSelect(${r.id})"></div>
+                    <h4>#${r.id} ${r.manual?'<span style=\"color:#e67e22;font-size:10px;\">Thủ công</span>':''}</h4>
+                </div>
+                <span class="coords">X:${r.x} Y:${r.y} W:${r.width} H:${r.height}</span>
+            </div>`;
+
+        if (r.originalText !== undefined) {
+            html += `
+            <div class="text-row">
+                <span class="lbl">OCR:</span>
+                <input type="text" value="${escHtml(r.originalText)}" onchange="event.stopPropagation();regions.find(x=>x.id===${r.id}).originalText=this.value" onclick="event.stopPropagation()" placeholder="(chưa có)">
+            </div>
+            <div class="text-row">
+                <span class="lbl">Dịch:</span>
+                <input type="text" value="${escHtml(r.translatedText)}" onchange="event.stopPropagation();regions.find(x=>x.id===${r.id}).translatedText=this.value" onclick="event.stopPropagation()" placeholder="(chưa dịch)">
+            </div>`;
+        }
+
+        html += `
+            <div class="card-actions">
+                <button class="btn btn-dark btn-sm" onclick="event.stopPropagation();scrollToRegion(${r.id})">📍 Tìm</button>
+                <button class="btn btn-dark btn-sm" onclick="event.stopPropagation();deleteRegion(${r.id})">🗑️ Xóa</button>
+            </div>
+        </div>`;
+    });
+    sidebar.innerHTML = html;
+}
+
+function escHtml(value) {
+    if (value === null || value === undefined) {
+        return '';
+    }
+
+    return String(value).replace(/[&<>"']/g, function (ch) {
+        switch (ch) {
+            case '&':  return '&amp;';
+            case '<':  return '&lt;';
+            case '>':  return '&gt;';
+            case '"':  return '&quot;';
+            case "'":  return '&#39;';
+            default:   return ch;
+        }
+    });
+}
+
+function toggleSelect(id) {
+    const r = regions.find(x => x.id === id);
+    if (r) { r.selected = !r.selected; redraw(); renderSidebar(); }
+}
+
+function selectAll() { regions.forEach(r => r.selected = true); redraw(); renderSidebar(); }
+function deselectAll() { regions.forEach(r => r.selected = false); redraw(); renderSidebar(); }
+
+function deleteRegion(id) {
+    regions = regions.filter(r => r.id !== id);
+    redraw(); renderSidebar();
+}
+
+function scrollToRegion(id) {
+    const r = regions.find(x => x.id === id);
+    if (!r) return;
+    // Flash animation
+    const origSelected = r.selected;
+    r.selected = true; redraw();
+    setTimeout(() => { r.selected = origSelected; redraw(); }, 800);
+}
+
+// ══════════════════════════════════════════════════════
+// API CALLS
+// ══════════════════════════════════════════════════════
+function setLoading(on) {
+    document.getElementById('loader').style.display = on ? 'block' : 'none';
+    document.querySelectorAll('.btn').forEach(b => b.disabled = on);
+}
+function setStatus(msg) { document.getElementById('statusbar').textContent = msg; }
+
+// 1. Phân vùng AI
+async function doSegment() {
+    if (!currentFile) { alert('Chọn ảnh trước!'); return; }
+    setLoading(true); setStatus('Đang phân vùng AI…');
+    const formData = new FormData();
+    formData.append('file', currentFile);
+    try {
+        const res = await fetch('/api/ai/segment', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.status === 'success') {
+            // Giữ lại các vùng thủ công đã vẽ
+            const manualRegions = regions.filter(r => r.manual);
+            regions = data.regions.map(r => ({
+                id: nextId++, x: r.x, y: r.y, width: r.width, height: r.height,
+                selected: false, originalText: '', translatedText: '',
+                confidence: r.confidence, manual: false
+            }));
+            regions.push(...manualRegions);
+            redraw(); renderSidebar();
+            setStatus(`AI tìm thấy ${data.total_regions} vùng bong bóng. Chọn vùng muốn dịch rồi bấm "Dịch vùng đã chọn".`);
+        } else {
+            setStatus('Lỗi: ' + data.error);
+        }
+    } catch (err) { setStatus('Lỗi server: ' + err); }
+    finally { setLoading(false); }
+}
+
+// 2. Dịch vùng đã chọn
+async function doTranslateSelected() {
+    const selected = regions.filter(r => r.selected);
+    if (selected.length === 0) { alert('Hãy chọn ít nhất 1 vùng!'); return; }
+    if (!imageBase64) { alert('Chưa có ảnh!'); return; }
+
+    setLoading(true); setStatus(`Đang dịch ${selected.length} vùng…`);
+    try {
+        const res = await fetch('/api/ai/translate-selected', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                image_base64: imageBase64,
+                regions: selected.map(r => ({ x: r.x, y: r.y, width: r.width, height: r.height }))
+            })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+            data.regions.forEach((dr, idx) => {
+                selected[idx].originalText = dr.originalText;
+                selected[idx].translatedText = dr.translatedText;
+            });
+            // Update image if clean version available
+            if (data.clean_image_base64) {
+                const img = new Image();
+                img.onload = () => { originalImg = img; redraw(); };
+                img.src = data.clean_image_base64;
+            }
+            renderSidebar();
+            setStatus(`Đã dịch ${selected.length} vùng thành công!`);
+        } else { setStatus('Lỗi: ' + data.error); }
+    } catch (err) { setStatus('Lỗi server: ' + err); }
+    finally { setLoading(false); }
+}
+
+// 3. Dịch tất cả
+async function doTranslateAll() {
+    if (!currentFile) { alert('Chọn ảnh trước!'); return; }
+    setLoading(true); setStatus('Đang dịch tất cả…');
+    const formData = new FormData();
+    formData.append('file', currentFile);
+    try {
+        const res = await fetch('/api/ai/clean-and-translate', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.status === 'success') {
+            const manualRegions = regions.filter(r => r.manual);
+            regions = data.regions.map(r => ({
+                id: nextId++, x: r.x, y: r.y, width: r.width, height: r.height,
+                selected: false, originalText: r.originalText, translatedText: r.translatedText,
+                confidence: 0.9, manual: false
+            }));
+            regions.push(...manualRegions);
+            if (data.clean_image_base64) {
+                const img = new Image();
+                img.onload = () => { originalImg = img; redraw(); renderSidebar(); };
+                img.src = data.clean_image_base64;
+            } else { redraw(); renderSidebar(); }
+            setStatus(`Đã dịch ${data.regions.length} vùng.`);
+        } else { setStatus('Lỗi: ' + data.error); }
+    } catch (err) { setStatus('Lỗi server: ' + err); }
+    finally { setLoading(false); }
+}
+
+// 4. Xóa vùng đã chọn
+function doDeleteSelected() {
+    const count = regions.filter(r => r.selected).length;
+    if (count === 0) { alert('Chưa chọn vùng nào!'); return; }
+    regions = regions.filter(r => !r.selected);
+    redraw(); renderSidebar();
+    setStatus(`Đã xóa ${count} vùng.`);
+}
+
+// 5. Lưu kết quả
+function doSave() {
+    if (regions.length === 0) { alert('Chưa có vùng nào để lưu!'); return; }
+    const output = regions.map(r => ({
+        id: r.id, x: r.x, y: r.y, width: r.width, height: r.height,
+        originalText: r.originalText, translatedText: r.translatedText,
+        manual: r.manual || false
+    }));
+    const blob = new Blob([JSON.stringify(output, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'manga_regions.json';
+    a.click();
+    setStatus(`Đã lưu ${regions.length} vùng thành file JSON.`);
+}
+</script>
+</body>
+</html>

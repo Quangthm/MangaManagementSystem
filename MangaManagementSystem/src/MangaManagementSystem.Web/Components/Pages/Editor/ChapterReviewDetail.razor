@@ -1,176 +1,226 @@
 @page "/editor/chapters/{ChapterId:guid}"
 @using Microsoft.AspNetCore.Authorization
+@using System.Security.Claims
+@using MangaManagementSystem.Application.DTOs.Editor
+@using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Tantou Editor")]
+@inject IEditorChapterReviewApiClient ChapterReviewApiClient
 @inject NavigationManager Nav
-@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthStateProvider
 
 <EditorLayout>
     <div class="mf-page">
         <div class="mf-page-header">
-            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-                <div>
-                    <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Chapter Review</MudText>
-                    <MudText Typo="Typo.body1" Class="mf-muted">Crimson Moon Academy - Ch. 45 "The Shadow Rises"</MudText>
-                </div>
-                <MudChip T="string" Color="Color.Warning" Size="Size.Medium">UNDER_REVIEW</MudChip>
-            </MudStack>
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="GoBack" Class="mb-2">Back to Chapters</MudButton>
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Chapter Review</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Read-only chapter overview. Use the workspace to review pages and annotations.</MudText>
         </div>
 
-        <MudGrid>
-            <!-- Page Preview Area -->
-            <MudItem xs="12" md="8">
-                <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
-                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Page @_currentPage of @_totalPages</MudText>
-
-                    <!-- Canvas placeholder for page display -->
-                    <div class="mf-canvas" style="min-height:520px">
-                        <MudStack AlignItems="AlignItems.Center" Spacing="2">
-                            <MudIcon Icon="mdi-image-outline" Size="Size.Large" Color="Color.Secondary" />
-                            <MudText Typo="Typo.h6" Class="mf-muted">Page @_currentPage Preview</MudText>
-                            <MudText Class="mf-muted">Chapter page version image will render here via FileResource</MudText>
-                        </MudStack>
-                    </div>
-
-                    <!-- Compact page selector -->
-                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-4">
-                        <MudButton Variant="Variant.Outlined" Size="Size.Small" Disabled="@(_currentPage <= 1)" OnClick="PrevPage">‹ Prev</MudButton>
-                        <MudSelect T="int" Value="_currentPage" ValueChanged="GoToPage" Variant="Variant.Outlined"
-                                   Dense="true" Style="min-width:110px; max-width:130px">
-                            @for (int i = 1; i <= _totalPages; i++)
-                            {
-                                var pageNo = i;
-                                <MudSelectItem Value="@pageNo">Page @pageNo</MudSelectItem>
-                            }
-                        </MudSelect>
-                        <MudText Typo="Typo.body2" Class="mf-muted">of @_totalPages</MudText>
-                        <MudButton Variant="Variant.Outlined" Size="Size.Small" Disabled="@(_currentPage >= _totalPages)" OnClick="NextPage">Next ›</MudButton>
-                    </MudStack>
-                </MudPaper>
-
-                <!-- Annotations for current page -->
-                <MudPaper Class="pa-5 mf-card" Elevation="0">
-                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
-                        <MudText Typo="Typo.h6" Class="font-weight-bold">Page Annotations</MudText>
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="AddAnnotation">Add Annotation</MudButton>
-                    </MudStack>
-
-                    @if (!_annotations.Any())
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" Class="my-6" />
+        }
+        else if (_accessDenied)
+        {
+            <MudPaper Class="pa-8 text-center mf-card" Elevation="0">
+                <MudIcon Icon="@Icons.Material.Outlined.Block" Size="Size.Large" Color="Color.Error" Class="mb-3" />
+                <MudText Typo="Typo.h6">Access Denied</MudText>
+                <MudText Class="mf-muted">You do not have access to this chapter review.</MudText>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="GoBack">Back to Chapters</MudButton>
+            </MudPaper>
+        }
+        else if (_error != null)
+        {
+            <MudAlert Severity="Severity.Error" Class="my-4">
+                @_error
+                <MudButton Variant="Variant.Text" Color="Color.Inherit" Class="ml-3" OnClick="LoadDetail" StartIcon="@Icons.Material.Filled.Refresh">
+                    Retry
+                </MudButton>
+            </MudAlert>
+        }
+        else if (_detail != null)
+        {
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+                <div>
+                    <MudText Typo="Typo.h5" Class="font-weight-bold">@_detail.SeriesTitle — @_detail.ChapterNumberLabel</MudText>
+                    @if (!string.IsNullOrWhiteSpace(_detail.ChapterTitle))
                     {
-                        <MudText Class="mf-muted">No annotations for this page yet.</MudText>
+                        <MudText Class="mf-muted">"@_detail.ChapterTitle"</MudText>
                     }
-                    else
-                    {
-                        <MudList T="AnnotationRow">
-                            @foreach (var ann in _annotations)
+                </div>
+                <MudChip T="string" Color="@GetStatusColor(_detail.StatusCode)" Size="Size.Medium">@_detail.StatusCode.Replace("_", " ")</MudChip>
+            </MudStack>
+
+            <MudGrid>
+                <!-- Pages -->
+                <MudItem xs="12" md="8">
+                    <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold">Pages (@_detail.PageCount)</MudText>
+                            @if (_detail.CanOpenWorkspace && !string.IsNullOrWhiteSpace(_detail.WorkspaceUrl))
                             {
-                                <MudListItem T="AnnotationRow" Value="@ann">
-                                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-                                        <div>
-                                            <MudChip T="string" Color="Color.Secondary" Size="Size.Small">@ann.IssueType</MudChip>
-                                            <MudText>@ann.Text</MudText>
-                                            <MudText Typo="Typo.caption" Class="mf-muted">By @ann.Author - @ann.CreatedAt.ToString("MMM d, HH:mm")</MudText>
-                                        </div>
-                                        @if (!ann.IsResolved)
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                           StartIcon="@Icons.Material.Filled.OpenInNew"
+                                           OnClick="@(() => Nav.NavigateTo(_detail.WorkspaceUrl!))">
+                                    Review in Workspace
+                                </MudButton>
+                            }
+                        </MudStack>
+
+                        @if (_detail.Pages.Count == 0)
+                        {
+                            <MudText Class="mf-muted">No pages have been uploaded for this chapter yet.</MudText>
+                        }
+                        else
+                        {
+                            <MudTable Items="_detail.Pages" Hover="true" Dense="true">
+                                <HeaderContent>
+                                    <MudTh>Page</MudTh>
+                                    <MudTh>Current Version</MudTh>
+                                    <MudTh>Preview</MudTh>
+                                </HeaderContent>
+                                <RowTemplate>
+                                    <MudTd DataLabel="Page">@context.PageNumber</MudTd>
+                                    <MudTd DataLabel="Current Version">@(context.CurrentVersionNo.HasValue ? $"v{context.CurrentVersionNo}" : "—")</MudTd>
+                                    <MudTd DataLabel="Preview">
+                                        @if (!string.IsNullOrWhiteSpace(context.CurrentVersionFileUrl))
                                         {
-                                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Success" OnClick="@(() => ResolveAnnotation(ann))">Resolve</MudButton>
+                                            <MudLink Href="@context.CurrentVersionFileUrl" Target="_blank">Open image</MudLink>
                                         }
                                         else
                                         {
-                                            <MudChip T="string" Color="Color.Success" Size="Size.Small">Resolved</MudChip>
+                                            <MudText Class="mf-muted">No image</MudText>
                                         }
-                                    </MudStack>
-                                </MudListItem>
-                            }
-                        </MudList>
-                    }
-                </MudPaper>
-            </MudItem>
+                                    </MudTd>
+                                </RowTemplate>
+                            </MudTable>
+                        }
+                    </MudPaper>
 
-            <!-- Right panel - Editorial Decision -->
-            <MudItem xs="12" md="4">
-                <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
-                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Chapter Info</MudText>
-                    <MudText><strong>Series:</strong> Crimson Moon Academy</MudText>
-                    <MudText><strong>Chapter:</strong> Ch. 45</MudText>
-                    <MudText><strong>Title:</strong> The Shadow Rises</MudText>
-                    <MudText><strong>Pages:</strong> @_totalPages</MudText>
-                    <MudText><strong>Submitted:</strong> Jun 4, 2026</MudText>
-                    <MudText><strong>Creator:</strong> Ken Sato</MudText>
-                </MudPaper>
+                    <!-- Open annotations -->
+                    <MudPaper Class="pa-5 mf-card" Elevation="0">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Open Annotations</MudText>
+                        @if (_detail.OpenAnnotations.Count == 0)
+                        {
+                            <MudText Class="mf-muted">No open annotations for this chapter.</MudText>
+                        }
+                        else
+                        {
+                            <MudList T="EditorChapterReviewAnnotationDto">
+                                @foreach (var ann in _detail.OpenAnnotations)
+                                {
+                                    <MudListItem T="EditorChapterReviewAnnotationDto" Value="@ann">
+                                        <div>
+                                            <MudChip T="string" Color="Color.Secondary" Size="Size.Small">@ann.IssueTypeCode.Replace("_", " ")</MudChip>
+                                            <MudText>@ann.Comment</MudText>
+                                            <MudText Typo="Typo.caption" Class="mf-muted">
+                                                By @(string.IsNullOrWhiteSpace(ann.CreatedByDisplayName) ? "Unknown" : ann.CreatedByDisplayName) - @ann.CreatedAtUtc.ToLocalTime().ToString("MMM d, HH:mm")
+                                            </MudText>
+                                        </div>
+                                    </MudListItem>
+                                }
+                            </MudList>
+                        }
+                    </MudPaper>
+                </MudItem>
 
-                <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
-                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Editorial Decision</MudText>
-                    <MudSelect T="string" Label="Decision" @bind-Value="_decision" Variant="Variant.Outlined" FullWidth="true" Class="mb-3">
-                        <MudSelectItem Value="@("APPROVED")">Approve</MudSelectItem>
-                        <MudSelectItem Value="@("REVISION_REQUESTED")">Request Revision</MudSelectItem>
-                        <MudSelectItem Value="@("CANCELLED")">Cancel Chapter</MudSelectItem>
-                        <MudSelectItem Value="@("ON_HOLD")">Place On Hold</MudSelectItem>
-                    </MudSelect>
+                <!-- Chapter info -->
+                <MudItem xs="12" md="4">
+                    <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Chapter Info</MudText>
+                        <MudText><strong>Series:</strong> @_detail.SeriesTitle</MudText>
+                        <MudText><strong>Chapter:</strong> @_detail.ChapterNumberLabel</MudText>
+                        <MudText><strong>Title:</strong> @(_detail.ChapterTitle ?? "—")</MudText>
+                        <MudText><strong>Status:</strong> @_detail.StatusCode.Replace("_", " ")</MudText>
+                        <MudText><strong>Pages:</strong> @_detail.PageCount</MudText>
+                        <MudText><strong>Current versions:</strong> @_detail.CurrentVersionCount</MudText>
+                        <MudText><strong>Created:</strong> @_detail.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</MudText>
+                        <MudText><strong>Creator:</strong> @(_detail.SubmittedByDisplayName ?? "—")</MudText>
+                    </MudPaper>
 
-                    <MudTextField Label="Comments" @bind-Value="_comments" Lines="5" Variant="Variant.Outlined" FullWidth="true" Class="mb-3" />
-
-                    @if (_decision != "APPROVED")
+                    @if (_detail.CanOpenWorkspace && !string.IsNullOrWhiteSpace(_detail.WorkspaceUrl))
                     {
-                        <MudAlert Severity="Severity.Warning" Class="mb-3">
-                            Non-approval decisions require meaningful comments or markup.
-                        </MudAlert>
+                        <MudPaper Class="pa-5 mf-card" Elevation="0">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">Review</MudText>
+                            <MudText Class="mb-3 mf-muted">Open the chapter workspace to review pages, annotations, and record editorial decisions.</MudText>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                                       StartIcon="@Icons.Material.Filled.OpenInNew"
+                                       OnClick="@(() => Nav.NavigateTo(_detail.WorkspaceUrl!))">
+                                Review in Workspace
+                            </MudButton>
+                        </MudPaper>
                     }
-
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" OnClick="SubmitDecision" Disabled="@(!CanSubmit)">
-                        Submit Decision
-                    </MudButton>
-                </MudPaper>
-
-                <MudPaper Class="pa-5 mf-card" Elevation="0">
-                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Review History</MudText>
-                    <MudTimeline>
-                        <MudTimelineItem Color="Color.Info">Chapter submitted for review</MudTimelineItem>
-                        <MudTimelineItem Color="Color.Warning">Editorial review in progress</MudTimelineItem>
-                    </MudTimeline>
-                </MudPaper>
-            </MudItem>
-        </MudGrid>
+                </MudItem>
+            </MudGrid>
+        }
     </div>
 </EditorLayout>
 
 @code {
     [Parameter] public Guid ChapterId { get; set; }
 
-    [SupplyParameterFromQuery(Name = "page")]
-    public int? PageQuery { get; set; }
+    private EditorChapterReviewDetailDto? _detail;
+    private bool _loading = true;
+    private bool _accessDenied;
+    private string? _error;
+    private Guid _currentUserId;
 
-    private int _currentPage = 1;
-    private int _totalPages = 24;
-
-    protected override void OnParametersSet()
+    protected override async Task OnInitializedAsync()
     {
-        if (PageQuery.HasValue && PageQuery.Value >= 1 && PageQuery.Value <= _totalPages)
-            _currentPage = PageQuery.Value;
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (Guid.TryParse(idClaim, out var userId))
+            {
+                _currentUserId = userId;
+            }
+        }
+
+        await LoadDetail();
     }
 
-    private string _decision = "APPROVED";
-    private string _comments = string.Empty;
-
-    private bool CanSubmit => _decision == "APPROVED" || !string.IsNullOrWhiteSpace(_comments);
-
-    private readonly List<AnnotationRow> _annotations = new()
+    private async Task LoadDetail()
     {
-        new("DIALOGUE_ERROR", "Panel 3 speech bubble text overflows bounding box", "Editor Tanaka", DateTime.UtcNow.AddHours(-2), false),
-        new("SHADING_ERROR", "Background gradient inconsistent with previous page", "Editor Tanaka", DateTime.UtcNow.AddHours(-1), false),
-        new("CONTINUITY_ERROR", "Character outfit differs from previous chapter reference", "Editor Suzuki", DateTime.UtcNow.AddDays(-1), true)
+        _loading = true;
+        _error = null;
+        _accessDenied = false;
+        try
+        {
+            var result = await ChapterReviewApiClient.GetReviewDetailAsync(_currentUserId, ChapterId);
+            if (result.AccessDenied)
+            {
+                _accessDenied = true;
+                _detail = null;
+            }
+            else if (result.Succeeded)
+            {
+                _detail = result.Detail;
+            }
+            else
+            {
+                _error = result.ErrorMessage ?? "Failed to load chapter review.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load chapter review: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void GoBack() => Nav.NavigateTo("/editor/chapters");
+
+    private Color GetStatusColor(string status) => status switch
+    {
+        "UNDER_REVIEW" => Color.Warning,
+        "REVISION_REQUESTED" => Color.Error,
+        "ON_HOLD" => Color.Info,
+        "APPROVED" => Color.Success,
+        _ => Color.Default
     };
-
-    private void PrevPage() { if (_currentPage > 1) _currentPage--; }
-    private void NextPage() { if (_currentPage < _totalPages) _currentPage++; }
-    private void GoToPage(int page) => _currentPage = page;
-
-    private void AddAnnotation() => Snackbar.Add("Annotation creation dialog — connects to PageRegion workflow", Severity.Info);
-    private void ResolveAnnotation(AnnotationRow ann) => Snackbar.Add($"Resolved: {ann.IssueType}", Severity.Success);
-
-    private void SubmitDecision()
-    {
-        Snackbar.Add($"Decision submitted: {_decision}", _decision == "APPROVED" ? Severity.Success : Severity.Warning);
-    }
-
-    private record AnnotationRow(string IssueType, string Text, string Author, DateTime CreatedAt, bool IsResolved);
 }

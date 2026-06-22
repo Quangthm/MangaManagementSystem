@@ -70,16 +70,31 @@
 | BR-FILE-004 | A file resource is considered active when `deleted_at_utc IS NULL`. Application queries must exclude deleted file resources unless the user is viewing historical or audit data. | Active draft |
 | BR-FILE-005 | A user avatar, when uploaded, is stored as a `FileResource` and referenced from the user account. | Active draft |
 | BR-FILE-006 | A user avatar file must use `file_purpose_code = USER_AVATAR`. | Active draft |
-| BR-FILE-007 | Series cover images, proposal files, chapter page-version files, editorial attachment/markup files, portfolio files, task reference files, and user avatars should all use `FileResource` instead of storing Cloudinary fields directly in business tables. | Active draft |
+| BR-FILE-007 | Series cover images, proposal files, chapter page-version files, editorial attachment/markup files, portfolio files, and user avatars should all use `FileResource` instead of storing Cloudinary fields directly in business tables. | Active draft |
 | BR-FILE-008 | In normal UI contexts, when a referenced file is deleted or unavailable, the system should display a safe placeholder instead of exposing a broken file reference. | Active draft |
 | BR-FILE-009 | Files used as `ChapterPageVersion` content, including accepted AI/translation output or accepted assistant output, must use `file_purpose_code = CHAPTER_PAGE_VERSION`. | Active draft |
-| BR-FILE-010 | Files attached only as task instructions, examples, or reference material must use `file_purpose_code = TASK_REFERENCE`. | Active draft |
 | BR-FILE-011 | Every `FileResource` must store a required `sha256_hash` calculated from the exact uploaded file bytes before the file metadata is saved. | Active draft |
 | BR-FILE-012 | `sha256_hash` may be used for file integrity checking, duplicate detection, and audit traceability, but it should not be treated as a global uniqueness rule because the same file may be validly reused in different workflow contexts. | Active draft |
 | BR-FILE-013 | The system may optionally check `sha256_hash` before creating a new `FileResource` to detect whether an active file with the same content already exists. | Optional MVP |
-| BR-FILE-014 | Optional duplicate-file warnings may be shown for repeated registration portfolios, repeated proposal files, repeated series covers, repeated chapter page-version files, repeated task references, repeated editorial attachments, or repeated avatars. | Optional MVP |
+| BR-FILE-014 | Optional duplicate-file warnings may be shown for repeated registration portfolios, repeated proposal files, repeated series covers, repeated chapter page-version files, repeated editorial attachments, or repeated avatars. | Optional MVP |
 | BR-FILE-015 | Duplicate-file warnings are advisory usability messages; they should not automatically block uploads unless a specific workflow later defines blocking behavior. | Optional MVP |
 | BR-FILE-016 | Some duplicate-file warnings may be omitted from the MVP UI when implementation time is limited, as long as `sha256_hash` is still stored for future detection, integrity checks, and audit traceability. | Optional MVP |
+| BR-FILE-017 | The system must validate uploaded file extensions and content types according to the file purpose code before uploading to Cloudinary or saving file metadata. | Active draft |
+| BR-FILE-018 | `SERIES_PROPOSAL` files must be formal proposal documents only and may use `.pdf`, `.doc`, or `.docx` in MVP. Markdown, plain text, and image files are not accepted for this purpose. | Active draft |
+| BR-FILE-019 | Image-only file purposes, including `SERIES_COVER`, `CHAPTER_PAGE_VERSION`, and `USER_AVATAR`, may use `.jpg`, `.jpeg`, `.png`, or `.webp` in MVP. | Active draft |
+| BR-FILE-020 | Mixed document/image purposes, including `EDITORIAL_ATTACHMENT` and `REGISTRATION_PORTFOLIO`, may use `.pdf`, `.doc`, `.docx`, `.jpg`, `.jpeg`, `.png`, or `.webp` in MVP. | Active draft |
+
+### MVP File Purpose Upload Format Matrix
+
+| File purpose code | Allowed extensions | Allowed content types | Cloudinary resource type | Notes |
+|---|---|---|---|---|
+| `SERIES_PROPOSAL` | `.pdf`, `.doc`, `.docx` | `application/pdf`, `application/msword`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | `raw` | Formal series proposal documents only. Markdown, plain text, and image files are not accepted for proposal submission in MVP. |
+| `SERIES_COVER` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Series cover image. |
+| `CHAPTER_PAGE_VERSION` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Official manga page image/version output. |
+| `EDITORIAL_ATTACHMENT` | `.pdf`, `.doc`, `.docx`, `.jpg`, `.jpeg`, `.png`, `.webp` | Proposal-document content types plus `image/jpeg`, `image/png`, `image/webp` | `raw` for documents; `image` for images | Editorial markup, review attachments, or supporting screenshots/documents. |
+| `REGISTRATION_PORTFOLIO` | `.pdf`, `.doc`, `.docx`, `.jpg`, `.jpeg`, `.png`, `.webp` | Proposal-document content types plus `image/jpeg`, `image/png`, `image/webp` | `raw` for documents; `image` for images | Optional portfolio submitted for account approval/profile review. |
+| `USER_AVATAR` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | User profile/avatar image. |
+
 
 ---
 
@@ -108,20 +123,23 @@
 | BR-USER-019 | Updating `display_name` must not change `username`, `email`, role, account status, password, or account approval state. | Active draft |
 | BR-USER-020 | Display name changes should be recorded in the audit log for traceability. | Active draft |
 | BR-USER-021 | The system should reject empty or whitespace-only display names after trimming. | Active draft |
-
+| BR-USER-022 | A user may update their own avatar and portfolio file | Active draft |
 ---
 
 ## 5. Series
 
 | Rule ID | Business Rule | Review Status |
 |---|---|---|
-| BR-SERIES-001 | Each series is identified internally by immutable `series_id` GUID; no separate a separate human-readable business identifier is used in the MVP schema. | Active draft |
+| BR-SERIES-001 | Each series is identified internally by immutable `series_id` GUID; no separate human-readable business identifier is used in the MVP schema. | Active draft |
 | BR-SERIES-002 | Each series must have a unique URL slug. | Active draft |
 | BR-SERIES-003 | Each series must have one lifecycle status from the approved status list. | Active draft |
 | BR-SERIES-004 | A series becomes `SERIALIZED` after it has passed proposal, editorial, and board approval and is accepted into the production/publication workflow. | Active draft |
 | BR-SERIES-005 | Each series must declare one primary content language. | Active draft |
-| BR-SERIES-006 | In MVP, genre is stored as simple text metadata for display. | Active draft |
-| BR-SERIES-007 | A series cover image must be stored as a `FileResource` and should have the file purpose `SERIES_COVER`. | Active draft |
+| BR-SERIES-006 | Series genres are normalized through `manga.Genre` and `manga.SeriesGenre`; a series may have multiple genres. | Active draft |
+| BR-SERIES-006A | Series tags are normalized through `manga.Tag` and `manga.SeriesTag`; a series may have multiple tags. | Active draft |
+| BR-SERIES-006B | Genres represent broad story categories, while tags represent more specific tropes, themes, settings, character traits, source/context labels, or content descriptors. | Active draft |
+| BR-SERIES-006C | Genres and tags are current series metadata and are not stored as proposal-history snapshot tables in MVP. | Active draft |
+| BR-SERIES-007 | A series cover image is current series metadata, must be stored as a `FileResource`, and should have the file purpose `SERIES_COVER` when provided. | Active draft |
 | BR-SERIES-008 | A series may optionally reference another series as its source version. | Active draft |
 | BR-SERIES-009 | A series cannot reference itself as its own source series. | Active draft |
 | BR-SERIES-010 | Series ownership and contributor membership are managed through `SeriesContributor` instead of storing a lead Mangaka directly in `Series`. | Active draft |
@@ -136,7 +154,7 @@
 | BR-SERIES-019 | While a series is still in `PROPOSAL_DRAFT`, the backend may automatically regenerate the slug when the Mangaka changes the title and saves the draft. | Active draft |
 | BR-SERIES-020 | Once a series leaves `PROPOSAL_DRAFT`, the slug must be locked for normal workflow so the future `/series/{slug}` URL remains stable. | Active draft |
 | BR-SERIES-021 | The stable main series URL uses `/series/{slug}` and becomes meaningful primarily after the series reaches `SERIALIZED`. | Active draft |
-| BR-SERIES-022 | Normal Mangaka profile updates to title, slug, synopsis, genre, cover, content language, source series, and publication frequency are allowed only while the series is in `PROPOSAL_DRAFT`. | Active draft |
+| BR-SERIES-022 | Normal Mangaka profile updates to title, slug, synopsis, genres, tags, cover, content language, source series, and publication frequency are allowed only while the series is in `PROPOSAL_DRAFT`. | Active draft |
 | BR-SERIES-023 | After a series leaves `PROPOSAL_DRAFT`, normal profile editing is locked; later changes require a separate controlled workflow, board/chief procedure, or future administrative correction process. | Active draft |
 | BR-SERIES-024 | After serialization, Mangaka production work continues through chapters, pages, page versions, regions, tasks, and the authorized chapter workspace rather than by editing the locked series profile. | Active draft |
 | BR-SERIES-025 | When a Mangaka creates a new series draft, the system must create the `Series` row and an active `SeriesContributor` row for that Mangaka in the same backend workflow or transaction, so that the creator is immediately recognized as an active Mangaka contributor for the draft. | Active draft |
@@ -145,7 +163,7 @@
 
 | Rule ID | Future Information | Review Status |
 |---|---|---|
-| FI-SERIES-001 | Genre may later be normalized into lookup/junction tables for cleaner filtering and reporting. | Future information |
+| FI-SERIES-001 | Additional public-facing discovery metadata, moderation workflows, or controlled vocabulary management may be expanded later if the MVP needs richer catalogue/search behavior. | Future information |
 
 ---
 
@@ -160,7 +178,7 @@
 | BR-SC-005 | A contributor with `end_date IS NULL` is considered an active contributor. | Active draft |
 | BR-SC-006 | Historical contributor rows should be preserved after a contributor leaves a series. | Active draft |
 | BR-SC-007 | A contributor’s `end_date` cannot be earlier than their `start_date`. | Active draft |
-| BR-SC-008 | Before a series can proceed beyond proposal draft into formal review or production workflow, it should have at least one active Mangaka contributor and one active Tantou Editor contributor, determined from the contributors’ `auth.Users.role_id`. | Active draft |
+| BR-SC-008 | A series submitted from `PROPOSAL_DRAFT` into `UNDER_EDITORIAL_REVIEW` must have at least one active Mangaka contributor, but it does not require an active Tantou Editor contributor at first submission. Submitted proposals appear in the editorial review queue for active Tantou Editors to claim or handle later. | Active draft |
 
 ---
 
@@ -171,7 +189,8 @@
 | BR-PROP-001 | A `SeriesProposal` row represents one formal submitted proposal version for a series. | Active draft |
 | BR-PROP-002 | A series may have multiple proposal versions over time. | Active draft |
 | BR-PROP-003 | Proposal version numbers must be positive and unique within the same series. | Active draft |
-| BR-PROP-004 | A submitted proposal must preserve submission-time snapshots of review-relevant series information, including proposal title, synopsis, genre, and proposal file. | Active draft |
+| BR-PROP-004 | A submitted proposal must preserve submission-time snapshots of review-relevant submitted content, including proposal title, synopsis, and the proposal file. | Active draft |
+| BR-PROP-004A | `SeriesProposal` does not snapshot genres, tags, or the current series cover file in MVP; reviewers read current genres, tags, and cover from the locked `Series` metadata during review. | Active draft |
 | BR-PROP-005 | A submitted series proposal must include a proposal file stored as a `FileResource` with purpose `SERIES_PROPOSAL`. | Active draft |
 | BR-PROP-006 | `SeriesProposal` does not store draft proposal editing; a row is created only when the proposal is formally submitted for editorial review. | Active draft |
 | BR-PROP-007 | Once a `SeriesProposal` row is created, its submitted snapshot fields should remain locked. | Active draft |
@@ -182,7 +201,8 @@
 | BR-PROP-012 | Editorial review information may be stored directly in `SeriesProposal` because each proposal version receives at most one editorial review. | Active draft |
 | BR-PROP-013 | `UNDER_BOARD_REVIEW` means the proposal passed editorial review and is waiting for board voting/decision. | Active draft |
 | BR-PROP-014 | `APPROVED` means the proposal was approved by the board, not merely by the editor. | Active draft |
-| BR-PROP-015 | Editorial revision or editorial cancellation requires comments or a markup file, enforced by the application workflow. | Active draft |
+| BR-PROP-015 | Editorial revision requires non-empty comments and may optionally include a markup file. | Active draft |
+| BR-PROP-015A | Editorial cancellation requires both non-empty comments and a markup file. | Active draft |
 | BR-PROP-016 | Board rejection or board cancellation reasons are handled by board poll/vote records, not by editorial review comments. | Active draft |
 | BR-PROP-017 | Proposal lists should support retrieval by series, status, submitter, and reviewer. | Active draft |
 | BR-PROP-018 | The latest proposal version for a series should be quickly retrievable. | Active draft |
@@ -191,7 +211,7 @@
 | BR-PROP-021 | The proposal file represents the supporting material used by editors and board members to evaluate the series concept. | Active draft |
 | BR-PROP-022 | The system does not require a fixed minimum number of completed manga pages for proposal submission in MVP. | Active draft |
 | BR-PROP-023 | Any minimum page/sample requirement is treated as an editorial policy outside the MVP database constraints. | Active draft |
-
+| BR-PROP-024 | First proposal submission does not require an assigned active Tantou Editor. The submitted proposal must become visible in the editorial review queue for active Tantou Editors. | Active draft |
 ---
 
 ## 8. Board Poll
@@ -320,7 +340,7 @@
 | BR-WORKSPACE-004 | The workspace main viewing area should display the selected page version with available overlays such as page regions and annotations. | Active draft |
 | BR-WORKSPACE-005 | The workspace right panel contains tools and actions such as AI segmentation, AI/OCR translation support, annotation actions, page-version actions, and role-specific workflow actions. | Active draft |
 | BR-WORKSPACE-006 | AI tools in the workspace are available to all Authorized Page Workspace Users who have access to the relevant chapter/page version. | Active draft |
-| BR-WORKSPACE-007 | Role-specific actions remain permission-gated; for example, Mangaka may assign page regions as assistant tasks, Assistants may work on assigned tasks, and Tantou Editors may create review annotations or review feedback. | Active draft |
+| BR-WORKSPACE-007 | Role-specific actions remain permission-gated; for example, Mangaka may assign page regions as assistant tasks, Assistants may work on assigned tasks, Mangaka may create production-tracking annotations, and Tantou Editors may create or manage editorial-review annotations according to annotation permission rules. | Active draft |
 | BR-WORKSPACE-008 | Editorial Board Members are not considered Authorized Page Workspace Users by default unless a future permission explicitly grants workspace access. | Active draft |
 | BR-WORKSPACE-009 | Workspace entry may come from the main series URL, a dashboard, an editorial review queue, an assistant task list, or another authorized workflow list. | Active draft |
 | BR-WORKSPACE-010 | The workspace back action should return to the main `/series/{slug}` page by default when the user entered from the series page. | Active draft |
@@ -345,13 +365,20 @@
 | BR-ANN-010 | An annotation must contain non-empty annotation text. | Active draft |
 | BR-ANN-011 | Each annotation must record the user who created it. | Active draft |
 | BR-ANN-012 | Each annotation must record the time it was created. | Active draft |
-| BR-ANN-013 | Only authorized users, such as Tantou Editors, Mangaka reviewers, or assigned users, may create annotations according to workflow permissions. | Active draft |
+| BR-ANN-013 | Only active Mangaka contributors and active Tantou Editor contributors with access to the owning series/page workspace may create annotations in MVP. Assistants, Board roles, and Admin do not create annotations in MVP. | Active draft |
 | BR-ANN-014 | A page annotation may be created from existing saved `PageRegion` records, newly created `PageRegion` records, or a combination of both. | Active draft |
 | BR-ANN-015 | If an annotation is resolved, both resolver and resolved timestamp must be recorded. | Active draft |
 | BR-ANN-016 | If an annotation is unresolved, both `resolved_by_user_id` and `resolved_at_utc` must be NULL. | Active draft |
 | BR-ANN-017 | Resolving an annotation marks the feedback as handled but must not delete the annotation or its linked region records. | Active draft |
 | BR-ANN-018 | When a new page version is uploaded, old annotations remain available through their linked regions for traceability and comparison. | Active draft |
 | BR-ANN-019 | Annotation issue types are fixed for MVP and are enforced by database constraint rather than a separate lookup table. | Active draft |
+| BR-ANN-020 | An annotation created by a Mangaka is treated as production-tracking feedback. It may be resolved by an active Mangaka contributor on the same series or by an active Tantou Editor contributor on the same series. | Active draft |
+| BR-ANN-021 | An annotation created by a Tantou Editor is treated as editorial-review feedback. It may be resolved only by an active Tantou Editor contributor on the same series. Mangaka users must not resolve Tantou Editor-created annotations. | Active draft |
+| BR-ANN-022 | Active Mangaka contributors may update unresolved annotation text only for annotations created by Mangaka users on the same series. | Active draft |
+| BR-ANN-023 | Active Tantou Editor contributors may update unresolved annotation text for annotations created by either Mangaka users or Tantou Editors on the same series when the text needs clarification for production tracking or editorial review. | Active draft |
+| BR-ANN-024 | Resolved annotations should not be edited in MVP; any correction to resolved feedback should use a new annotation or a future correction workflow. | Active draft |
+| BR-ANN-025 | The MVP does not add an annotation-origin column. Stored procedures determine creation and resolution permissions by joining `ChapterPageAnnotation.annotated_by_user_id` to the creator's current role and by deriving the owning series through `ChapterPageAnnotationRegion → PageRegion → ChapterPageVersion → ChapterPage → Chapter`. | Active draft |
+| BR-ANN-026 | Annotation text updates must be audit-logged with old text, new text, actor user, owning series/page context, and optional update reason when available. | Active draft |
 
 ## 14. Page Task
 

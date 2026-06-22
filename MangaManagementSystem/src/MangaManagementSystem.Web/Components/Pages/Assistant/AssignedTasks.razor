@@ -1,16 +1,19 @@
 ﻿@page "/assistant/tasks"
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@using MangaManagementSystem.Application.DTOs.Manga
+@using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Assistant")]
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthStateProvider
-@inject MangaManagementSystem.Application.Interfaces.IChapterPageTaskService TaskService
+@inject IAssistantTaskApiClient AssistantTaskClient
 
 <AssistantLayout>
     <div class="mf-page">
         <div class="mf-page-header">
             <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Assigned Tasks</MudText>
-            <MudText Typo="Typo.body1" Class="mf-muted">@_subtitle</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Tasks assigned to you</MudText>
         </div>
 
         @if (_loading)
@@ -21,67 +24,98 @@
         {
             <MudAlert Severity="Severity.Error">Failed to load tasks: @_error</MudAlert>
         }
-        else if (_tasks == null || !_tasks.Any())
-        {
-            <MudGrid>
-                <MudItem xs="12">
-                    <MudPaper Class="pa-6 text-center mf-card"><MudText>No assigned tasks found.</MudText></MudPaper>
-                </MudItem>
-            </MudGrid>
-        }
         else
         {
-            <MudGrid Class="mb-6"><MudItem xs="12" md="3"><StatCard Label="Assigned" Value="@_assignedCount.ToString()" /></MudItem><MudItem xs="12" md="3"><StatCard Label="Under Review" Value="@_underReviewCount.ToString()" /></MudItem><MudItem xs="12" md="3"><StatCard Label="Completed" Value="@_completedCount.ToString()" /></MudItem><MudItem xs="12" md="3"><StatCard Label="Overdue" Value="@_overdueCount.ToString()" /></MudItem></MudGrid>
-            <MudGrid>
-                @foreach (var t in _tasks)
-                {
-                    <MudItem xs="12" md="6">
-                        <MudPaper Class="pa-5 mf-card" Elevation="0">
-                            <MudStack Row="true" Justify="Justify.SpaceBetween"><MudText Typo="Typo.h6" Class="font-weight-bold">@t.TypeCode</MudText><MudChip T="string" Color="Color.Info" Size="Size.Small">@t.StatusCode</MudChip></MudStack>
-                            <MudText class="mf-muted">Task Id: @t.ChapterPageTaskId</MudText>
-                            <MudText Typo="Typo.body2" Class="mt-2">Priority: @t.PriorityLevel â€¢ Due: @FormatDate(t.DueAtUtc)</MudText>
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"/assistant/task/{t.ChapterPageTaskId}")" Class="mt-3">Open Task</MudButton>
-                        </MudPaper>
-                    </MudItem>
-                }
+            <MudGrid Class="mb-6">
+                <MudItem xs="12" md="3"><StatCard Label="Assigned" Value="@_assignedCount.ToString()" Description="Awaiting your work" /></MudItem>
+                <MudItem xs="12" md="3"><StatCard Label="Under Review" Value="@_underReviewCount.ToString()" Description="Submitted for review" /></MudItem>
+                <MudItem xs="12" md="3"><StatCard Label="Completed" Value="@_completedCount.ToString()" Description="Approved tasks" /></MudItem>
+                <MudItem xs="12" md="3"><StatCard Label="Overdue" Value="@_overdueCount.ToString()" Description="Past due date" /></MudItem>
             </MudGrid>
+
+            @if (_tasks == null || !_tasks.Any())
+            {
+                <MudGrid>
+                    <MudItem xs="12">
+                        <MudPaper Class="pa-6 text-center mf-card"><MudText>No assigned tasks found.</MudText></MudPaper>
+                    </MudItem>
+                </MudGrid>
+            }
+            else
+            {
+                <MudGrid>
+                    @foreach (var t in _tasks)
+                    {
+                        <MudItem xs="12" md="6">
+                            <MudPaper Class="pa-5 mf-card" Elevation="0">
+                                <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                    <MudText Typo="Typo.h6" Class="font-weight-bold">@t.TypeCode</MudText>
+                                    <StatusBadge Status="@t.StatusCode" />
+                                </MudStack>
+                                <MudText Typo="Typo.body2" Class="mt-2">
+                                    @if (!string.IsNullOrWhiteSpace(t.SeriesTitle))
+                                    {
+                                        <span class="mf-muted">@t.SeriesTitle</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(t.ChapterNumberLabel))
+                                    {
+                                        <span class="mf-muted"> • @t.ChapterNumberLabel</span>
+                                    }
+                                    @if (t.PageNo.HasValue)
+                                    {
+                                        <span class="mf-muted"> • Page @t.PageNo.Value</span>
+                                    }
+                                </MudText>
+                                <MudText Typo="Typo.body2" Class="mt-1">
+                                    Due: <TimestampDisplay Value="@t.DueAtUtc" EmptyText="No deadline set" />
+                                </MudText>
+                                @if (t.CompensationAmount.HasValue)
+                                {
+                                    <MudText Typo="Typo.caption" Class="mt-1">
+                                        <span class="mf-muted">Compensation: @t.CompensationAmount.Value.ToString("C2")</span>
+                                    </MudText>
+                                }
+                                @if (t.PageRegions.Any())
+                                {
+                                    <MudText Typo="Typo.caption" Class="mt-1 mf-muted">
+                                        Regions: @t.PageRegions.Count
+                                    </MudText>
+                                }
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"/assistant/task/{t.ChapterPageTaskId}")" Class="mt-3">Open Task</MudButton>
+                            </MudPaper>
+                        </MudItem>
+                    }
+                </MudGrid>
+            }
         }
 
     </div>
 </AssistantLayout>
 
 @code {
-    private int _activeFilter = 0;
-
-
+    private Guid _currentUserId;
     private bool _loading = true;
     private string? _error;
-    private IEnumerable<MangaManagementSystem.Application.DTOs.Manga.ChapterPageTaskDto>? _tasks;
+    private IReadOnlyList<ChapterPageTaskDto>? _tasks;
+
     private int _assignedCount;
     private int _underReviewCount;
     private int _completedCount;
     private int _overdueCount;
-    private string _subtitle = "Loading tasksâ€¦";
-
-    private IEnumerable<ChapterPageTaskDto> _filteredTasks
-    {
-        get
-        {
-            if (_tasks == null) return Enumerable.Empty<ChapterPageTaskDto>();
-            return _activeFilter switch
-            {
-                0 => _tasks,
-                1 => _tasks.Where(t => t.StatusCode == "ASSIGNED"),
-                2 => _tasks.Where(t => t.StatusCode == "UNDER_REVIEW"),
-                3 => _tasks.Where(t => t.StatusCode == "COMPLETED"),
-                4 => _tasks.Where(t => t.StatusCode == "CANCELLED"),
-                _ => _tasks
-            };
-        }
-    }
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (Guid.TryParse(idClaim, out var userId))
+            {
+                _currentUserId = userId;
+            }
+        }
+
         await LoadTasksAsync();
     }
 
@@ -91,34 +125,15 @@
         _error = null;
         try
         {
-            var auth = await AuthStateProvider.GetAuthenticationStateAsync();
-            var user = auth.User;
-            if (user?.Identity?.IsAuthenticated != true)
-            {
-                _tasks = Array.Empty<MangaManagementSystem.Application.DTOs.Manga.ChapterPageTaskDto>();
-                return;
-            }
-
-            var idClaim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
-            if (!Guid.TryParse(idClaim?.Value, out var uid))
-            {
-                _tasks = Array.Empty<MangaManagementSystem.Application.DTOs.Manga.ChapterPageTaskDto>();
-                return;
-            }
-
-            var tasks = (await TaskService.GetChapterPageTasksByAssignedUserIdAsync(uid)).ToList();
-            _tasks = tasks;
+            _tasks = await AssistantTaskClient.GetAssignedTasksAsync(_currentUserId);
 
             var now = DateTime.UtcNow;
-            _assignedCount = tasks.Count(t => t.StatusCode == "ASSIGNED");
-            _underReviewCount = tasks.Count(t => t.StatusCode == "UNDER_REVIEW");
-            _completedCount = tasks.Count(t => t.StatusCode == "COMPLETED");
-            _overdueCount = tasks.Count(t =>
-                t.DueAtUtc.HasValue
-                && t.DueAtUtc.Value < now
-                && t.StatusCode != "COMPLETED"
-                && t.StatusCode != "CANCELLED");
-            _subtitle = $"{tasks.Count} task{(tasks.Count == 1 ? "" : "s")} requiring your attention";
+            _assignedCount = _tasks.Count(t => t.StatusCode == "ASSIGNED");
+            _underReviewCount = _tasks.Count(t => t.StatusCode == "UNDER_REVIEW");
+            _completedCount = _tasks.Count(t => t.StatusCode == "COMPLETED");
+            _overdueCount = _tasks.Count(t =>
+                t.DueAtUtc.HasValue && t.DueAtUtc.Value < now &&
+                t.StatusCode != "COMPLETED" && t.StatusCode != "CANCELLED");
         }
         catch (Exception ex)
         {
@@ -129,9 +144,6 @@
             _loading = false;
         }
     }
-
-    private string FormatDate(DateTime? value) => value.HasValue ? value.Value.ToLocalTime().ToString("g") : "â€”";
-
 }
 
 

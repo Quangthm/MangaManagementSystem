@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
 
 namespace MangaManagementSystem.Domain.Entities
 {
@@ -20,6 +21,11 @@ namespace MangaManagementSystem.Domain.Entities
         public Guid CreatedByUserId { get; set; }
         public User? CreatedByUser { get; set; }
         public DateTime? UpdatedAtUtc { get; set; }
+
+        // Page context is derived through linked PageRegions
+        // (ChapterPageTask -> PageRegions -> ChapterPageVersion -> ChapterPage -> Chapter).
+        // Mapped to the manga.ChapterPageTaskRegion junction table via EF skip navigation.
+        public ICollection<PageRegion> PageRegions { get; set; } = new List<PageRegion>();
     }
 }
 

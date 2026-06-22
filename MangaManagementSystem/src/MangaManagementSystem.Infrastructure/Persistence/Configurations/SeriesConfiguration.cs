@@ -19,7 +19,6 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
             builder.Property(s => s.Title).IsRequired().HasMaxLength(200);
             builder.Property(s => s.Slug).IsRequired().HasMaxLength(220);
             builder.Property(s => s.Synopsis).IsRequired();
-            builder.Property(s => s.Genre).IsRequired().HasMaxLength(100);
             builder.Property(s => s.StatusCode).HasMaxLength(50).HasDefaultValue("PROPOSAL_DRAFT");
             builder.Property(s => s.ContentLanguageCode).HasMaxLength(10).HasDefaultValue("ja");
             builder.Property(s => s.PublicationFrequencyCode).HasMaxLength(20);

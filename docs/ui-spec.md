@@ -30,6 +30,8 @@
 |---|---|---|
 | `/mangaka/series/drafts` | Mangaka draft list and draft management entry point. | Mangaka |
 | `/mangaka/series/drafts/{seriesId}` | Optional full draft detail/edit page if modal is not enough. | Mangaka contributor |
+| `/editor/proposals` | Editorial proposal queue, prioritizing unclaimed submitted proposals. | Tantou Editor |
+| `/editor/proposals/{proposalId}` | Proposal review detail page for request revision, cancel, or pass to board. | Tantou Editor contributor / authorized Tantou Editor |
 | `/series/{slug}` | Stable main series page after serialization; future public reader URL can reuse it. | Authorized now; public in future |
 | `/workspace/chapters/{chapterId}` | Central authorized chapter workspace. | Authorized Page Workspace User |
 | `/workspace/chapters/{chapterId}?page={pageNumber}` | Workspace opened with selected page. | Authorized Page Workspace User |
@@ -60,10 +62,10 @@ Allow Mangaka to create, view, edit, and submit their own series drafts before f
 
 | Element | Behavior |
 |---|---|
-| Draft table/card grid | Shows series title, status, genre, language, proposed frequency, last updated time, and action buttons. |
+| Draft table/card grid | Shows series title, status, genres, tags, language, proposed frequency, last updated time, and action buttons. |
 | Create Draft button | Opens the create draft modal. |
 | Edit button | Opens the edit draft modal for a `PROPOSAL_DRAFT` series. |
-| Submit Proposal button | Opens proposal submission flow for eligible draft. |
+| Submit Proposal button | Opens proposal submission flow for an eligible `PROPOSAL_DRAFT` series and requires a proposal file upload. |
 | Disabled edit state | If series is not `PROPOSAL_DRAFT`, edit controls are disabled and explain that profile is locked after draft. |
 
 ### Draft row/card fields
@@ -71,7 +73,8 @@ Allow Mangaka to create, view, edit, and submit their own series drafts before f
 - Cover thumbnail or placeholder
 - Title
 - `status_code`
-- Genre
+- Genres
+- Tags
 - Content language
 - `publication_frequency_code` as proposed frequency
 - Slug preview
@@ -88,7 +91,8 @@ Allow Mangaka to create, view, edit, and submit their own series drafts before f
 | Title | Yes | Backend generates slug from this field. |
 | Slug preview | Read-only for MVP | Shows backend-style preview; actual saved slug is computed on save. |
 | Synopsis | Yes | Required by current database schema. |
-| Genre | Yes | Simple text for MVP. |
+| Genres | Yes | Multi-select from `manga.Genre`, saved through `manga.SeriesGenre`. |
+| Tags | No | Optional multi-select from `manga.Tag`, saved through `manga.SeriesTag`. |
 | Content language | Yes | `ja`, `en`, `vi`. |
 | Cover image | No | Must reference `FileResource` with `SERIES_COVER` purpose if provided. |
 | Source series | No | Cannot reference itself. |
@@ -127,7 +131,62 @@ Mangaka clicks Save
 
 ---
 
-## 5. Main Series Page
+## 5. Proposal Submission Modal
+
+### Purpose
+
+Allow a Mangaka contributor to formally submit a `PROPOSAL_DRAFT` series for editorial review with a required proposal file.
+
+### Fields
+
+| Field | Required | Notes |
+|---|---:|---|
+| Proposal file | Yes | Stored as `FileResource` with purpose `SERIES_PROPOSAL`; accepts only `.pdf`, `.doc`, and `.docx` in MVP. |
+| Confirmation checkbox | Yes | Confirms the submitted proposal title, synopsis, and proposal file will be locked after submission. |
+
+### Submission behavior
+
+```text
+Mangaka clicks Submit Proposal
+→ UI opens proposal submission modal
+→ Mangaka selects required proposal file
+→ Backend validates actor is an active Mangaka contributor
+→ Backend uploads proposal file to Cloudinary and calculates SHA-256
+→ Backend calls proposal submission stored procedure with required file metadata
+→ Database creates FileResource and SeriesProposal
+→ Database updates Series.status_code to UNDER_EDITORIAL_REVIEW
+→ UI removes normal draft editing controls and shows submitted review status
+```
+
+### Important notes
+
+- First proposal submission does not require an active Tantou Editor contributor to already be assigned to the series.
+- Proposal submission accepts formal document files only: `.pdf`, `.doc`, and `.docx`. Markdown, plain text, and image files are not accepted for `SERIES_PROPOSAL` in MVP.
+- Submitted proposals should appear in the editorial proposal queue for active Tantou Editors.
+- The queue may prioritize proposals that do not yet have any active Tantou Editor contributor, but the database should still allow multiple active Tantou Editor contributors for a series.
+- After submission, normal series profile editing is locked until revision returns the series to `PROPOSAL_DRAFT`.
+- Proposal review screens display current series cover, genres, and tags from locked series metadata during review.
+- `SeriesProposal` does not snapshot the current cover file, genres, or tags in MVP.
+
+---
+
+## 5.1 MVP File Upload Acceptance Matrix
+
+### MVP File Purpose Upload Format Matrix
+
+| File purpose code | Allowed extensions | Allowed content types | Cloudinary resource type | Notes |
+|---|---|---|---|---|
+| `SERIES_PROPOSAL` | `.pdf`, `.doc`, `.docx` | `application/pdf`, `application/msword`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | `raw` | Formal series proposal documents only. Markdown, plain text, and image files are not accepted for proposal submission in MVP. |
+| `SERIES_COVER` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Series cover image. |
+| `CHAPTER_PAGE_VERSION` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Official manga page image/version output. |
+| `EDITORIAL_ATTACHMENT` | `.pdf`, `.doc`, `.docx`, `.jpg`, `.jpeg`, `.png`, `.webp` | Proposal-document content types plus `image/jpeg`, `image/png`, `image/webp` | `raw` for documents; `image` for images | Editorial markup, review attachments, or supporting screenshots/documents. |
+| `REGISTRATION_PORTFOLIO` | `.pdf`, `.doc`, `.docx`, `.jpg`, `.jpeg`, `.png`, `.webp` | Proposal-document content types plus `image/jpeg`, `image/png`, `image/webp` | `raw` for documents; `image` for images | Optional portfolio submitted for account approval/profile review. |
+| `USER_AVATAR` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | User profile/avatar image. |
+
+
+---
+
+## 6. Main Series Page
 
 ### Route
 
@@ -143,7 +202,7 @@ A unified series page that can later become the public reader-facing series URL.
 
 | Section | Content |
 |---|---|
-| Header | Cover, title, status badge, genre, language, publication frequency. |
+| Header | Current cover, title, status badge, genres, tags, language, publication frequency. |
 | Synopsis panel | Current series synopsis. |
 | Chapter list | Chapters under the series with status and planned/released dates. |
 | Role action panel | Buttons shown based on current user role and permission. |
@@ -160,7 +219,32 @@ A unified series page that can later become the public reader-facing series URL.
 
 ---
 
-## 6. Authorized Chapter Workspace
+---
+
+## 7. Tantou Editor Proposal Queue
+
+### Purpose
+
+Allow active Tantou Editors to find newly submitted proposals and choose/claim proposals for editorial handling.
+
+### Main UI elements
+
+| Element | Behavior |
+|---|---|
+| Proposal queue table | Shows submitted proposals with status `UNDER_EDITORIAL_REVIEW`. |
+| Unclaimed priority filter | Prioritizes proposals without active Tantou Editor contributors, but does not hide already-claimed proposals. |
+| Claim / Join Review button | Adds the Tantou Editor as a `SeriesContributor` when permitted. Multiple Tantou Editors may contribute to the same series. |
+| Open Review button | Opens the proposal review detail page. |
+
+### Review actions
+
+| Action | Required input | Result |
+|---|---|---|
+| Request revision | Non-empty comments; optional markup file | Proposal becomes `REVISION_REQUESTED`; series returns to `PROPOSAL_DRAFT`. |
+| Cancel proposal | Non-empty comments and required markup file | Proposal and series become `CANCELLED`. |
+| Pass to board | Optional comments/markup depending on workflow | Proposal and series become `UNDER_BOARD_REVIEW`. |
+
+## 8. Authorized Chapter Workspace
 
 ### Route
 
@@ -247,9 +331,9 @@ Display selected content.
 
 | Role | Actions |
 |---|---|
-| Mangaka | Save/adjust regions when permitted, assign selected page regions as tasks to Assistants, review task output, upload new page versions, submit chapter for review. Task page context is derived from selected regions, not from a direct task `chapter_page_id`. |
+| Mangaka | Save/adjust regions when permitted, create production-tracking annotations, update/resolve Mangaka-created annotations, assign selected page regions as tasks to Assistants, review task output, upload new page versions, submit chapter for review. Mangaka cannot update or resolve Tantou Editor-created annotations. Task page context is derived from selected regions, not from a direct task `chapter_page_id`. |
 | Assistant | View assigned regions/tasks, upload task output as a page version for the same logical page derived from the linked task regions when allowed, mark work ready for review. |
-| Tantou Editor | Add annotations linked to one or more page regions, resolve annotations when permitted, review regions/page context, request revision or approve/cancel chapter through chapter review workflow. |
+| Tantou Editor | Add editorial-review annotations linked to one or more page regions, update unresolved annotation text when permitted, resolve Mangaka-created or Tantou Editor-created annotations, review regions/page context, request revision or approve/cancel chapter through chapter review workflow. |
 | Editorial Board Member | No workspace access by default. |
 | Editorial Board Chief | No workspace access by default unless future permission grants it. |
 | Admin | No manga production actions. |
@@ -320,8 +404,9 @@ For MVP, symbolic `returnContext` is safer and easier to avoid open-redirect mis
 | Use AI segmentation | Yes | Yes, in accessible workspace | Yes | No by default | No by default | No production actions |
 | Use AI/OCR translation support | Yes | Yes, in accessible workspace | Yes | No by default | No by default | No production actions |
 | Assign page-region task | Yes | No | No | No | No | No |
-| Create review annotation | Possibly, if permitted | No | Yes | No | No | No |
-| Resolve annotation | Possibly, if permitted | No | Yes | No | No | No |
+| Create annotation | Yes, as production-tracking annotation when active contributor | No | Yes, as editorial-review annotation when active contributor | No | No | No |
+| Update annotation text | Mangaka-created unresolved annotations only | No | Mangaka-created or Tantou Editor-created unresolved annotations | No | No | No |
+| Resolve annotation | Mangaka-created annotations only | No | Mangaka-created or Tantou Editor-created annotations | No | No | No |
 | Submit chapter for review | Yes | No | No | No | No | No |
 | Final chapter review decision | No | No | Yes | No | No | No |
 
@@ -349,4 +434,7 @@ For MVP, symbolic `returnContext` is safer and easier to avoid open-redirect mis
 - Workspace has right tools/actions panel.
 - AI tools are available to all Authorized Page Workspace Users with access.
 - Role-specific actions remain permission-gated.
+- Mangaka can create production-tracking annotations and update/resolve Mangaka-created annotations.
+- Mangaka cannot update or resolve Tantou Editor-created annotations.
+- Tantou Editors can create editorial-review annotations and update/resolve both Mangaka-created and Tantou Editor-created annotations when they are active contributors for the series.
 - Back navigation returns to `/series/{slug}` by default or to the original workflow context when provided.

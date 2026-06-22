@@ -1,269 +1,1312 @@
-@page "/mangaka/workspace/{SeriesId:guid}"
+@page "/series/{Slug}/workspace"
 @using Microsoft.AspNetCore.Authorization
-@attribute [Authorize(Roles = "Mangaka")]
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@using System.Text.Json
+@using MangaManagementSystem.Application.Interfaces
+@using MangaManagementSystem.Web.Services.Api
+@using MangaManagementSystem.Web.Services
+@attribute [Authorize(Roles = "Mangaka,Tantou Editor,Assistant")]
 @inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
 @inject ISeriesService SeriesService
+@inject IChapterService ChapterService
+@inject ISeriesApiClient SeriesApiClient
+@inject AuthenticationStateProvider AuthStateProvider
 
-<MangakaLayout>
-    <div class="mf-page">
-        <div class="mf-page-header">
-            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-                <div>
-                    <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">@WorkspaceTitle</MudText>
-                    <MudText Typo="Typo.body1" Class="mf-muted">@WorkspaceSubtitle</MudText>
-                </div>
-                <MudButton Variant="@(_taskPanelOpen ? Variant.Filled : Variant.Outlined)"
-                           Color="Color.Primary"
-                           StartIcon="@Icons.Material.Filled.Assignment"
-                           OnClick="@(() => _taskPanelOpen = !_taskPanelOpen)">
-                    @(_taskPanelOpen ? "Close Task" : "Assign Task")
-                </MudButton>
-            </MudStack>
+@if (_accessDenied)
+{
+    <div style="min-height: 100vh; background: #f8fafc; display: flex; align-items: center; justify-content: center;">
+        <div style="max-width: 480px; text-align: center; padding: 40px 24px;">
+            <MudIcon Icon="@Icons.Material.Filled.Lock" Style="font-size: 56px; color: #cbd5e1; margin-bottom: 16px;" />
+            <div style="font-weight: 700; font-size: 1.2rem; color: #111827; margin-bottom: 8px;">Workspace Access Denied</div>
+            <div style="color: #64748b; font-size: 0.9rem; margin-bottom: 24px;">
+                You are not an active contributor for this series, or the series was not found.
+            </div>
+            <MudButton Variant="Variant.Outlined" OnClick="@(() => Nav.NavigateTo(BackHref))">
+                Back to Series
+            </MudButton>
+        </div>
+    </div>
+}
+else
+{
+<div class="mf-workspace-container">
+    <!-- Header -->
+    <header class="mf-workspace-header px-4 py-2 d-flex justify-space-between align-center" style="position: relative;">
+        <div class="d-flex align-center">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="@BackHref" Class="mr-2" />
+            <MudText Typo="Typo.h6" Class="font-weight-bold">@SeriesTitle</MudText>
+            <MudText Typo="Typo.caption" Class="mf-muted ml-2 mt-1">@SeriesSubtitle</MudText>
+        </div>
+        
+        <div class="d-flex align-center text-center mx-auto" style="position: absolute; left: 50%; transform: translateX(-50%);">
+            @if (SelectedChapter > 0 && SelectedPage > 0)
+            {
+                <MudText Typo="Typo.h6" Class="font-weight-bold mr-4">Chapter @SelectedChapter - Page @SelectedPage</MudText>
+                <MudText Typo="Typo.caption" Class="mf-muted">1200 x 1650 px &bull; Last saved 2 min ago</MudText>
+            }
+            else
+            {
+                <MudText Typo="Typo.h6" Class="font-weight-bold mf-muted">No Pages Selected</MudText>
+            }
         </div>
 
-        <!-- Hierarchy breadcrumb -->
-        <MudBreadcrumbs Items="BreadcrumbItems" Class="px-0 mb-3" />
+        <div class="d-flex align-center gap-2">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Save" Class="mr-2" OnClick="SaveProgress">Save Current Version</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.FileDownload" DisableElevation="true" OnClick="ExportCurrentPage">Export</MudButton>
+        </div>
+    </header>
 
-        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4 mf-demo-banner">
-            <MudText Typo="Typo.caption" Class="font-weight-bold">Demo workspace preview</MudText>
-            <MudText Class="mt-1">Demo workspace preview — chapter/page data is not wired to backend yet.</MudText>
-        </MudAlert>
+    <div class="mf-workspace-body d-flex flex-grow-1 overflow-hidden">
+        
+        <!-- Left Sidebar -->
+        <aside class="mf-workspace-sidebar py-4 d-flex flex-column border-r-1 mud-border-lines-default" style="width: 250px; flex-shrink: 0; background-color: white; height: 100%; overflow: hidden;">
+            <MudNavMenu Class="mud-width-full flex-grow-1" Style="overflow-y: auto;">
+                <div class="d-flex align-center py-2 px-4 @(ActiveLeftTab == 0 ? "font-weight-bold" : "mf-muted")" Style="@(ActiveLeftTab == 0 ? "color: var(--mud-palette-primary); background: #f3f4f6; border-radius: 8px; margin: 0 16px; cursor: pointer;" : "margin: 0 16px; cursor: pointer;")" @onclick="() => SetLeftTab(0)">
+                    <MudIcon Icon="@Icons.Material.Filled.List" Class="mr-4" />
+                    <MudText>Chapter Manager</MudText>
+                </div>
+                <div class="d-flex align-center py-2 px-4 mt-1 @(ActiveLeftTab == 1 ? "font-weight-bold" : "mf-muted")" Style="@(ActiveLeftTab == 1 ? "color: var(--mud-palette-primary); background: #f3f4f6; border-radius: 8px; margin: 0 16px; cursor: pointer;" : "margin: 0 16px; cursor: pointer;")" @onclick="() => SetLeftTab(1)">
+                    <MudIcon Icon="@Icons.Material.Filled.Group" Class="mr-4" />
+                    <MudText>Assistant Directory</MudText>
+                </div>
+                
+                @if (ActiveLeftTab == 0)
+                {
+                    <div class="px-4 mt-6 mb-2">
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" StartIcon="@Icons.Material.Filled.Add" Class="rounded-lg" OnClick="AddNewChapter">New Chapter</MudButton>
+                    </div>
+                    
+                    <MudText Typo="Typo.caption" Class="mf-muted px-4 font-weight-bold mt-4 mb-2 d-block">CHAPTERS</MudText>
+                    
+                    <MudList T="int" Class="px-2">
+                        @foreach (var chapter in Chapters)
+                        {
+                            var isCurrent = (chapter.Id == SelectedChapter);
+                            var bgClass = isCurrent ? "background-color: #f3f4f6;" : "";
+                            var textColor = isCurrent ? Color.Primary : Color.Default;
+                            
+                            <MudListItem Class="rounded-lg" Style="@bgClass" OnClick="@(async () => await SelectChapter(chapter.Id))">
+                                <div class="d-flex justify-space-between align-center">
+                                    <div class="d-flex align-center">
+                                        <MudIconButton 
+                                            Icon="@(chapter.IsCompleted ? Icons.Material.Filled.CheckCircle : Icons.Material.Outlined.Circle)" 
+                                            Color="@(chapter.IsCompleted ? Color.Success : (isCurrent ? Color.Primary : Color.Default))" 
+                                            Size="Size.Small" 
+                                            Class="mr-3 pa-1" 
+                                            OnClick="@(() => ToggleChapterStatus(chapter.Id))" />
+                                        <div>
+                                            <MudText Typo="Typo.body2" Class="font-weight-bold" Color="@textColor">Chapter @chapter.Id</MudText>
+                                            <MudText Typo="Typo.caption" Class="mf-muted">@chapter.PageCount pages</MudText>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex align-center">
+                                        @if (isCurrent)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Class="mr-2">Active</MudChip>
+                                        }
+                                        else if (!chapter.IsCompleted)
+                                        {
+                                            <MudText Typo="Typo.caption" Class="mf-muted mr-2">Draft</MudText>
+                                        }
+                                        <div @onclick:stopPropagation="true">
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => DeleteChapter(chapter.Id))" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </MudListItem>
+                        }
+                    </MudList>
+                }
+                else if (ActiveLeftTab == 1)
+                {
+                    <div class="px-4 mt-6 mb-2">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" StartIcon="@Icons.Material.Filled.PersonAdd" Class="rounded-lg" DisableElevation="true">Invite Assistant</MudButton>
+                    </div>
 
-        <MudGrid>
-            <!-- LEFT: Compact navigator card -->
-            <MudItem xs="12" md="3">
-                <MudPaper Class="pa-4 mf-card" Elevation="0">
-                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-1">Workspace Navigator</MudText>
-                    <MudText Typo="Typo.caption" Class="mf-muted mb-3 d-block">Switch chapter and page preview</MudText>
+                    <div class="d-flex justify-space-between align-center px-4 mt-4 mb-2">
+                        <MudText Typo="Typo.caption" Class="mf-muted font-weight-bold">ASSISTANTS</MudText>
+                        <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">@Assistants.Count</MudChip>
+                    </div>
 
-                    <!-- Chapter prev/next + dropdown -->
-                    <MudText Typo="Typo.caption" Class="mf-muted mb-1 d-block">Chapter</MudText>
-                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-4">
-                        <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft"
-                                       Size="Size.Small"
-                                       Disabled="@(CurrentChapterIndex <= 0)"
-                                       OnClick="PrevChapter" />
-                        <MudSelect T="int" Value="SelectedChapterNo" ValueChanged="OnChapterSelected"
-                                   Variant="Variant.Outlined" Dense="true"
-                                   Style="flex:1; min-width:0;">
-                            @foreach (var chapter in CurrentSeries.Chapters)
-                            {
-                                <MudSelectItem Value="@chapter.Number">Ch. @chapter.Number — @chapter.Name</MudSelectItem>
-                            }
-                        </MudSelect>
-                        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight"
-                                       Size="Size.Small"
-                                       Disabled="@(CurrentChapterIndex >= CurrentSeries.Chapters.Count - 1)"
-                                       OnClick="NextChapter" />
-                    </MudStack>
+                    <MudList T="int" Class="px-2">
+                        @foreach (var ast in Assistants)
+                        {
+                            var initials = string.Join("", ast.Name.Split(' ').Select(n => n[0]));
+                            <MudListItem Class="rounded-lg mb-1 pa-2">
+                                <div class="d-flex align-center justify-space-between w-100">
+                                    <div class="d-flex align-center">
+                                        <div style="position: relative;" class="mr-3">
+                                            <MudAvatar Size="Size.Medium" Color="@ast.AvatarColor" Style="font-weight: bold;">@initials</MudAvatar>
+                                            <div style="position: absolute; bottom: 0; right: 0; width: 12px; height: 12px; background-color: @(ast.IsOnline ? "var(--mud-palette-success)" : "#94a3b8"); border-radius: 50%; border: 2px solid white;"></div>
+                                        </div>
+                                        <div>
+                                            <MudText Typo="Typo.body2" Class="font-weight-bold">@ast.Name</MudText>
+                                            <MudText Typo="Typo.caption" Class="mf-muted d-block" Style="line-height: 1.2;">@ast.Role</MudText>
+                                            <MudText Typo="Typo.caption" Color="@(ast.ActiveTasks > 0 ? Color.Primary : Color.Default)" Class="d-block" Style="font-size: 0.7rem; margin-top: 2px;">
+                                                @(ast.ActiveTasks > 0 ? $"{ast.ActiveTasks} active task(s)" : "No active tasks")
+                                            </MudText>
+                                        </div>
+                                    </div>
+                                    <MudIconButton Icon="@Icons.Material.Filled.ChatBubbleOutline" Size="Size.Small" Color="Color.Default" Class="mf-muted" />
+                                </div>
+                            </MudListItem>
+                        }
+                    </MudList>
+                }
+            </MudNavMenu>
+        </aside>
 
-                    <!-- Page prev/next navigator -->
-                    <MudText Typo="Typo.caption" Class="mf-muted mb-1 d-block">Page</MudText>
-                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Spacing="1">
-                        <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft"
-                                       Size="Size.Small"
-                                       Disabled="@(SelectedPage <= 1)"
-                                       OnClick="PrevPage" />
-                        <MudText Typo="Typo.body2" Class="font-weight-bold" Style="white-space:nowrap;">
-                            @SelectedPage / @SelectedChapterPageCount
-                        </MudText>
-                        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight"
-                                       Size="Size.Small"
-                                       Disabled="@(SelectedPage >= SelectedChapterPageCount || SelectedChapterPageCount == 0)"
-                                       OnClick="NextPage" />
-                    </MudStack>
-
-                    <MudDivider Class="my-3" />
-                    <MudText Typo="Typo.caption" Class="mf-muted">
-                        Ch. @SelectedChapterNo @SelectedChapterName &nbsp;·&nbsp; Pg. @SelectedPage of @SelectedChapterPageCount
-                    </MudText>
-                </MudPaper>
-            </MudItem>
-
-            <!-- CENTER: Page preview canvas -->
-            <MudItem xs="12" md="9">
-                <MudPaper Class="pa-5 mf-card" Elevation="0">
-                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
-                        <div>
-                            <MudText Typo="Typo.h6">@WorkspaceTitle</MudText>
-                            <MudText Typo="Typo.caption" Class="mf-muted">
-                                Chapter @SelectedChapterNo @SelectedChapterName · Page @SelectedPage of @SelectedChapterPageCount
-                            </MudText>
+        <!-- Main Canvas Area -->
+        <main class="flex-grow-1 d-flex flex-column" style="min-width: 0; background-color: #f8fafc; position: relative;">
+            
+            <!-- Canvas Toolbar -->
+            <div class="d-flex justify-center mt-4" style="position: absolute; top: 0; left: 0; right: 0; z-index: 10;">
+                <MudPaper Elevation="2" Class="d-flex align-center rounded-pill px-2 py-1" Style="background: white;">
+                    <MudTooltip Text="Select Tool"><MudIconButton Icon="@Icons.Material.Filled.NearMe" Color="@(CurrentTool == "select" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("select"))" Size="Size.Small" /></MudTooltip>
+                    <MudTooltip Text="Region Tool"><MudIconButton Icon="@Icons.Material.Filled.CropFree" Color="@(CurrentTool == "draw" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("draw"))" Size="Size.Small" /></MudTooltip>
+                    <MudTooltip Text="Brush Tool"><MudIconButton Icon="@Icons.Material.Filled.Brush" Color="@(CurrentTool == "brush" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("brush"))" Size="Size.Small" /></MudTooltip>
+                    <MudTooltip Text="Pin Tool"><MudIconButton Icon="@Icons.Material.Filled.PushPin" Color="@(CurrentTool == "pin" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("pin"))" Size="Size.Small" /></MudTooltip>
+                    
+                    @if (CurrentTool == "brush")
+                    {
+                        <div class="d-flex align-center ml-2 mr-2">
+                            <input type="color" value="@BrushColor" @onchange="OnBrushColorChanged" style="width: 24px; height: 24px; border: none; padding: 0; cursor: pointer; border-radius: 4px;" />
+                            <input type="range" min="1" max="100" value="@BrushSize" @onchange="OnBrushSizeChanged" style="width: 80px; margin-left: 8px;" />
                         </div>
-                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                            <MudChip T="string" Color="Color.Secondary" Size="Size.Small">Demo</MudChip>
-                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
-                                       StartIcon="@Icons.Material.Filled.Assignment"
-                                       OnClick="@(() => _taskPanelOpen = true)">Assign Task</MudButton>
-                        </MudStack>
-                    </MudStack>
+                    }
 
-                    <div class="mf-canvas">
-                        <MudStack AlignItems="AlignItems.Center" Spacing="1">
-                            <MudIcon Icon="@Icons.Material.Outlined.Image" Size="Size.Large" />
-                            <MudText Typo="Typo.h6" Class="font-weight-bold">Preview canvas</MudText>
-                            <MudText Typo="Typo.body2">Chapter @SelectedChapterNo · Page @SelectedPage</MudText>
-                            <MudText Typo="Typo.caption" Class="mf-muted">Regions, annotations, and task assignment preview</MudText>
+                    <InputFile id="fileInput" OnChange="HandleFileUpload" hidden accept="image/*" multiple />
+                    <MudTooltip Text="Upload Pages"><MudIconButton HtmlTag="label" for="fileInput" Icon="@Icons.Material.Filled.UploadFile" Color="Color.Dark" Size="Size.Small" /></MudTooltip>
+
+                    <MudTooltip Text="Auto Segment Panels"><MudIconButton Icon="@Icons.Material.Filled.DashboardCustomize" Color="Color.Secondary" OnClick="RunSegmentAI" Disabled="@IsProcessing" Size="Size.Small" /></MudTooltip>
+                    <MudTooltip Text="Translate Selected"><MudIconButton Icon="@Icons.Material.Filled.Translate" Color="Color.Info" OnClick="RunTranslateAI" Disabled="@IsProcessing" Size="Size.Small" /></MudTooltip>
+                    <MudTooltip Text="Approve Selected"><MudIconButton Icon="@Icons.Material.Filled.Check" Color="Color.Success" OnClick="ApproveSelectedRegions" Size="Size.Small" /></MudTooltip>
+                    <MudTooltip Text="Delete Selected"><MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" OnClick="DeleteSelectedRegions" Size="Size.Small" /></MudTooltip>
+                    <MudDivider Vertical="true" FlexItem="true" Class="mx-2" />
+                    <MudTooltip Text="Zoom In"><MudIconButton Icon="@Icons.Material.Filled.ZoomIn" OnClick="ZoomIn" Size="Size.Small" /></MudTooltip>
+                    <MudTooltip Text="Zoom Out"><MudIconButton Icon="@Icons.Material.Filled.ZoomOut" OnClick="ZoomOut" Size="Size.Small" /></MudTooltip>
+                    <MudTooltip Text="Undo"><MudIconButton Icon="@Icons.Material.Filled.Undo" OnClick="Undo" Disabled="@(!CanUndo)" Size="Size.Small" /></MudTooltip>
+                    <MudTooltip Text="Redo"><MudIconButton Icon="@Icons.Material.Filled.Redo" OnClick="Redo" Disabled="@(!CanRedo)" Size="Size.Small" /></MudTooltip>
+                </MudPaper>
+                
+            </div>
+
+            <!-- Canvas Container -->
+            <div class="flex-grow-1" style="position: relative; overflow: hidden; background-color: #e5e5e5;">
+                @if (UploadedPages.Any())
+                {
+                    var currentPage = UploadedPages[ActivePageIndex];
+                    if (currentPage.Versions.Count > 0)
+                    {
+                        <div style="position: absolute; top: 16px; right: 16px; z-index: 10;" class="d-flex flex-column align-end">
+                            <MudPaper Elevation="2" Class="px-3 py-2 rounded-lg d-flex align-center gap-2 mb-2" Style="background: white;">
+                                <MudText Typo="Typo.caption" Class="font-weight-bold mr-2">VERSIONS:</MudText>
+                                @for (int i = 0; i < currentPage.Versions.Count; i++)
+                                {
+                                    int idx = i;
+                                    <MudChip T="string" 
+                                             Size="Size.Small" 
+                                             Color="@(currentPage.ActiveVersionIndex == idx ? Color.Primary : Color.Default)" 
+                                             Variant="@(currentPage.ActiveVersionIndex == idx ? Variant.Filled : Variant.Outlined)"
+                                             OnClick="@(async () => await SwitchVersion(idx))">
+                                        v@(currentPage.Versions[idx].VersionNo)
+                                    </MudChip>
+                                }
+                            </MudPaper>
+                            <div class="d-flex flex-column align-end gap-2">
+                                <MudButton Variant="Variant.Filled" Color="Color.Secondary" Size="Size.Small" StartIcon="@Icons.Material.Filled.NoteAdd" DisableElevation="true" OnClick="SaveAsNewVersion">Create New Version</MudButton>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small" StartIcon="@Icons.Material.Filled.Delete" DisableElevation="true" OnClick="DeleteCurrentVersion" Disabled="@(currentPage.Versions.Count <= 1)">Delete</MudButton>
+                            </div>
+                        </div>
+                    }
+                }
+                <div id="ai-canvas-container" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0;">
+                    <canvas id="ai-canvas" style="position: absolute; left: 0; top: 0; background: white; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); transform-origin: top left;"></canvas>
+                </div>
+            </div>
+
+            <!-- Bottom Pagination -->
+            <div class="d-flex justify-center align-center py-2 bg-white border-t-1 mud-border-lines-default">
+                @if (UploadedPages.Any())
+                {
+                    <MudPagination Count="@UploadedPages.Count" Selected="@(ActivePageIndex + 1)" SelectedChanged="OnPageChanged" Variant="Variant.Filled" Color="Color.Primary" Class="mx-2" />
+                    
+                    <MudDivider Vertical="true" FlexItem="true" Class="mx-2" />
+                    <MudTooltip Text="Delete Current Page">
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="DeleteCurrentPage" />
+                    </MudTooltip>
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Class="mf-muted">No pages uploaded yet.</MudText>
+                }
+            </div>
+
+        </main>
+
+        <!-- Right Panel (Tasks) -->
+        <aside class="mf-workspace-right-panel py-4 border-l-1 mud-border-lines-default d-flex flex-column" style="width: 320px; flex-shrink: 0; background-color: white; height: 100%; overflow: hidden;">
+            <div class="px-4 mb-4" style="flex-shrink: 0;">
+                <MudText Typo="Typo.h6" Class="font-weight-bold">Task Panel</MudText>
+                <MudText Typo="Typo.body2" Class="mf-muted">Create and assign production tasks</MudText>
+            </div>
+
+            <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pt-4" Color="Color.Transparent" Class="workspace-tabs">
+                <MudTabPanel Text="Tasks">
+                    <div class="px-4 mb-6" style="flex-shrink: 0;">
+                <MudPaper Elevation="0" Class="pa-4 border-1 mud-border-lines-default rounded-lg">
+                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-3">NEW TASK</MudText>
+                    
+                    <MudSelect T="string" Label="Task Type" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" Value="@TaskType" ValueChanged="OnTaskTypeChanged">
+                        <MudSelectItem Value="@("Background")">
+                            <div class="d-flex align-center"><MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" Color="Color.Info" Class="mr-2"/> Background</div>
+                        </MudSelectItem>
+                        <MudSelectItem Value="@("Tone Shading")">
+                            <div class="d-flex align-center"><MudIcon Icon="@Icons.Material.Filled.Texture" Size="Size.Small" Color="Color.Warning" Class="mr-2"/> Tone Shading</div>
+                        </MudSelectItem>
+                        <MudSelectItem Value="@("SFX")">
+                            <div class="d-flex align-center"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" Color="Color.Success" Class="mr-2"/> SFX</div>
+                        </MudSelectItem>
+                        <MudSelectItem Value="@("Cleanup")">
+                            <div class="d-flex align-center"><MudIcon Icon="@Icons.Material.Filled.AutoFixHigh" Size="Size.Small" Color="Color.Secondary" Class="mr-2"/> Cleanup</div>
+                        </MudSelectItem>
+                    </MudSelect>
+
+                    <MudSelect T="string" Label="Assign to Assistant" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" Value="@Assistant" ValueChanged="OnAssistantChanged">
+                        <MudSelectItem Value="@("Li Wei")">
+                            <div class="d-flex align-center"><MudAvatar Size="Size.Small" Color="Color.Primary" Class="mr-2" Style="width:24px; height:24px; font-size:10px;">LW</MudAvatar> Li Wei</div>
+                        </MudSelectItem>
+                        <MudSelectItem Value="@("Chen Ming")">
+                            <div class="d-flex align-center"><MudAvatar Size="Size.Small" Color="Color.Secondary" Class="mr-2" Style="width:24px; height:24px; font-size:10px;">CM</MudAvatar> Chen Ming</div>
+                        </MudSelectItem>
+                        <MudSelectItem Value="@("Wang Fei")">
+                            <div class="d-flex align-center"><MudAvatar Size="Size.Small" Color="Color.Success" Class="mr-2" Style="width:24px; height:24px; font-size:10px;">WF</MudAvatar> Wang Fei</div>
+                        </MudSelectItem>
+                    </MudSelect>
+
+                    <MudTextField T="string" Label="Task description..." @bind-Value="TaskDescription" Variant="Variant.Outlined" Lines="3" Margin="Margin.Dense" Class="mb-3" />
+
+                    <div class="d-flex flex-column mb-3">
+                        <MudText Typo="Typo.caption" Class="mf-muted mb-1">Panel Target (Hold Shift to select multiple)</MudText>
+                        <div class="d-flex flex-wrap gap-1">
+                            @if (SelectedRegions.Any())
+                            {
+                                @foreach (var reg in SelectedRegions)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled">Panel @reg.Id (X:@Math.Round(reg.X) Y:@Math.Round(reg.Y) W:@Math.Round(reg.Width) H:@Math.Round(reg.Height))</MudChip>
+                                }
+                            }
+                            else if (SelectedPage > 0)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined">Page @SelectedPage</MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">No Page Selected</MudChip>
+                            }
+                        </div>
+                    </div>
+
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateTask">Create Task</MudButton>
+                </MudPaper>
+            </div>
+
+            <div class="px-4" style="flex-grow: 1; overflow-y: auto;">
+                  <div class="d-flex justify-space-between align-center mb-3">
+                      <MudText Typo="Typo.subtitle2" Class="font-weight-bold">ACTIVE TASKS</MudText>
+                      <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">@ActiveTasks.Count</MudChip>
+                  </div>
+
+                  <MudStack Spacing="2">
+                      @foreach (var task in ActiveTasks)
+                      {
+                          var icon = task.Type switch {
+                              "Background" => Icons.Material.Filled.Image,
+                              "Tone Shading" => Icons.Material.Filled.Texture,
+                              "SFX" => Icons.Material.Filled.CheckCircle,
+                              _ => Icons.Material.Filled.Assignment
+                          };
+                          var iconColor = task.Status == "Done" ? Color.Success : Color.Info;
+                          var chipColor = task.Status switch {
+                              "Done" => Color.Success,
+                              "Review" => Color.Warning,
+                              "In Progress" => Color.Info,
+                              _ => Color.Default
+                          };
+                          var initials = string.Join("", task.Assistant.Split(' ').Select(n => n[0]));
+                          
+                          <MudPaper Elevation="0" Class="pa-3 border-1 mud-border-lines-default rounded-lg">
+                              <div class="d-flex justify-space-between">
+                                  <div class="d-flex">
+                                      <MudIcon Icon="@icon" Size="Size.Small" Color="@iconColor" Class="mr-2 mt-1" />
+                                      <div>
+                                          <MudText Typo="Typo.body2" Class="@(task.Status == "Done" ? "font-weight-bold text-decoration-line-through" : "font-weight-bold")">@task.Type &bull; @task.Target</MudText>
+                                          <MudText Typo="Typo.caption" Class="mf-muted d-flex align-center mt-1">
+                                              <MudAvatar Size="Size.Small" Color="Color.Primary" Class="mr-1" Style="width:16px; height:16px; font-size:8px;">@initials</MudAvatar> @task.Assistant
+                                          </MudText>
+                                      </div>
+                                  </div>
+                                  <div class="d-flex align-center" @onclick:stopPropagation="true">
+                                      <MudChip T="string" Size="Size.Small" Color="@chipColor" Variant="Variant.Outlined" OnClick="@(() => CycleTaskStatus(task))" Style="cursor: pointer;">@task.Status</MudChip>
+                                      <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Default" Class="ml-1" OnClick="@(() => DeleteTask(task.Id))" />
+                                  </div>
+                              </div>
+                          </MudPaper>
+                      }
+                  </MudStack>
+            </div>
+                </MudTabPanel>
+                
+                <MudTabPanel Text="Annotations">
+                    <div class="px-4 mb-6" style="flex-shrink: 0;">
+                        <MudPaper Elevation="0" Class="pa-4 border-1 mud-border-lines-default rounded-lg">
+                            <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-3">NEW ANNOTATION</MudText>
+                            
+                            <MudSelect T="string" Label="Issue Type" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" @bind-Value="AnnotationType">
+                                <MudSelectItem Value="@("Typo")">Typo</MudSelectItem>
+                                <MudSelectItem Value="@("Translation Error")">Translation Error</MudSelectItem>
+                                <MudSelectItem Value="@("Redraw Needed")">Redraw Needed</MudSelectItem>
+                                <MudSelectItem Value="@("Formatting")">Formatting</MudSelectItem>
+                                <MudSelectItem Value="@("Other")">Other</MudSelectItem>
+                            </MudSelect>
+
+                            <MudTextField T="string" Label="Comment..." @bind-Value="AnnotationComment" Variant="Variant.Outlined" Lines="3" Margin="Margin.Dense" Class="mb-3" />
+                            <div class="d-flex flex-column mt-3">
+                                <MudText Typo="Typo.caption" Class="mf-muted mb-1">Target</MudText>
+                                <div class="d-flex flex-wrap gap-1">
+                                    @if (PendingPinX.HasValue && PendingPinY.HasValue)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Filled">Pin at (@Math.Round(PendingPinX.Value), @Math.Round(PendingPinY.Value))</MudChip>
+                                    }
+                                    else if (SelectedRegions.Any())
+                                    {
+                                        @foreach(var reg in SelectedRegions)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled">Panel @reg.Id</MudChip>
+                                        }
+                                    }
+                                    else if (SelectedPage > 0)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined">Page @SelectedPage</MudChip>
+                                    }
+                                    else
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">No Page Selected</MudChip>
+                                    }
+                                </div>
+                            </div>
+
+                            <MudButton Variant="Variant.Filled" Color="Color.Warning" FullWidth="true" StartIcon="@Icons.Material.Filled.AddComment" OnClick="CreateAnnotation">Add Annotation</MudButton>
+                        </MudPaper>
+                    </div>
+
+                    <div class="px-4" style="flex-grow: 1; overflow-y: auto;">
+                        <div class="d-flex justify-space-between align-center mb-3">
+                            <MudText Typo="Typo.subtitle2" Class="font-weight-bold">PAGE ISSUES</MudText>
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text">@ActiveAnnotations.Count(a => a.PageNumber == SelectedPage)</MudChip>
+                        </div>
+
+                        <MudStack Spacing="2">
+                            @foreach (var ann in ActiveAnnotations.Where(a => a.PageNumber == SelectedPage))
+                            {
+                                var annColor = ann.IsResolved ? Color.Success : Color.Error;
+                                <MudPaper Elevation="0" Class="pa-3 border-1 mud-border-lines-default rounded-lg">
+                                    <div class="d-flex justify-space-between align-start">
+                                        <div class="d-flex flex-column">
+                                            <div class="d-flex align-center mb-1">
+                                                <MudChip T="string" Size="Size.Small" Color="@annColor" Variant="Variant.Outlined" Class="mr-2 mt-0">@ann.Type</MudChip>
+                                                <MudText Typo="Typo.caption" Class="font-weight-bold">@ann.Target</MudText>
+                                            </div>
+                                            <MudText Typo="Typo.body2" Class="mb-2">@ann.Comment</MudText>
+                                            <MudText Typo="Typo.caption" Class="mf-muted d-flex align-center">
+                                                <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Class="mr-1" Style="font-size: 12px;"/> @ann.Author
+                                            </MudText>
+                                        </div>
+                                        <div>
+                                            @if (!ann.IsResolved)
+                                            {
+                                                <MudTooltip Text="Resolve Issue"><MudIconButton Icon="@Icons.Material.Filled.Check" Size="Size.Small" Color="Color.Success" OnClick="@(() => ResolveAnnotation(ann.Id))" /></MudTooltip>
+                                            }
+                                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Default" Class="ml-1" OnClick="@(() => DeleteAnnotation(ann.Id))" />
+                                        </div>
+                                    </div>
+                                </MudPaper>
+                            }
                         </MudStack>
                     </div>
-                </MudPaper>
-            </MudItem>
-        </MudGrid>
+                </MudTabPanel>
+            </MudTabs>
+        </aside>
+
     </div>
+</div>
+}
 
-    <!-- Right-side Task Assignment drawer — overlays viewport, no scroll needed -->
-    <MudDrawer @bind-Open="_taskPanelOpen"
-               Anchor="Anchor.End"
-               Variant="DrawerVariant.Temporary"
-               Elevation="4"
-               Width="400px"
-               ClipMode="DrawerClipMode.Never">
-        <MudDrawerHeader>
-            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Style="width:100%">
-                <div>
-                    <MudText Typo="Typo.h6" Class="font-weight-bold">Assign Task</MudText>
-                    <MudText Typo="Typo.caption" Class="mf-muted">
-                        Chapter @SelectedChapterNo, Page @SelectedPage
-                    </MudText>
-                </div>
-                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
-                               OnClick="@(() => _taskPanelOpen = false)" />
-            </MudStack>
-        </MudDrawerHeader>
-
-        <div class="pa-4">
-            <MudSelect T="string" Label="Task Type" @bind-Value="TaskType"
-                       Variant="Variant.Outlined" Class="mb-3">
-                <MudSelectItem Value="@("Tone Shading")">Tone Shading</MudSelectItem>
-                <MudSelectItem Value="@("Background Drawing")">Background Drawing</MudSelectItem>
-                <MudSelectItem Value="@("Cleanup")">Cleanup</MudSelectItem>
-            </MudSelect>
-
-            <MudTextField Label="Assign to" @bind-Value="AssistantName"
-                          Variant="Variant.Outlined" Class="mb-3" />
-
-            <MudTextField Label="Instructions" Lines="4" @bind-Value="Instructions"
-                          Variant="Variant.Outlined" Class="mb-3" />
-
-            <MudAlert Severity="Severity.Warning" Class="mb-3">
-                <MudText Typo="Typo.caption" Class="font-weight-bold">Coming Soon</MudText>
-                <MudText Class="mt-1">Task assignment requires backend implementation.</MudText>
-            </MudAlert>
-
-            <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Primary"
-                       Class="mb-2" Disabled="true">Assign Task (Disabled)</MudButton>
-            <MudButton FullWidth="true" Variant="Variant.Text" Disabled="true">Save Draft (Disabled)</MudButton>
-        </div>
-    </MudDrawer>
-</MangakaLayout>
+<style>
+    body { margin: 0; padding: 0; overflow: hidden; }
+    .mf-workspace-container {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        width: 100vw;
+        background-color: #ffffff;
+    }
+    .mf-workspace-header {
+        border-bottom: 1px solid var(--mud-palette-lines-default);
+    }
+    .workspace-tabs {
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .workspace-tabs .mud-tabs-panels {
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .workspace-tabs .mud-tab-panel {
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+</style>
 
 @code {
+    [Parameter] public string Slug { get; set; } = string.Empty;
+    [SupplyParameterFromQuery] public string? chapterId { get; set; }
+    [SupplyParameterFromQuery] public string? returnUrl { get; set; }
 
-    [Parameter] public Guid SeriesId { get; set; }
+    private string? SeriesId { get; set; }
+    private bool _accessDenied = false;
+    private Guid? _currentUserId;
 
-    private int SelectedChapterNo { get; set; }
-    private int SelectedPage { get; set; } = 1;
-    private bool _taskPanelOpen = false;
-    private string TaskType { get; set; } = "Tone Shading";
-    private string AssistantName { get; set; } = "";
-    private string Instructions { get; set; } = "";
+    /// <summary>
+    /// Context-aware back-navigation URL. When the workspace is opened from the Editor chapter
+    /// review flow with a safe returnUrl, the back arrow returns there. Otherwise it falls back
+    /// to the series page.
+    /// </summary>
+    private string BackHref => SafeReturnUrl.Resolve(returnUrl, $"/series/{Slug}");
 
-    // Real series header context (loaded from ISeriesService when the id resolves).
-    // Chapter/page data below stays demo-only and is clearly labelled in the UI.
-    private string? _realSeriesTitle;
-    private string? _realSeriesStatus;
+    private int SelectedChapter { get; set; } = 0;
+    private int SelectedPage { get; set; } = 0;
+    private List<RegionModel> SelectedRegions = new();
+    
+    private int ActiveLeftTab = 0; // 0 for Chapters, 1 for Assistants
 
-    private string WorkspaceTitle => _realSeriesTitle ?? CurrentSeries.Title;
-
-    private string WorkspaceSubtitle => _realSeriesTitle != null
-        ? $"{_realSeriesStatus} · live series · demo workspace"
-        : CurrentSeries.Subtitle;
-
-    private SeriesDetail CurrentSeries { get; set; } = new();
-
-    private int CurrentChapterIndex =>
-        CurrentSeries.Chapters.FindIndex(c => c.Number == SelectedChapterNo);
-
-    private int SelectedChapterPageCount =>
-        CurrentSeries.Chapters.FirstOrDefault(c => c.Number == SelectedChapterNo)?.PageCount ?? 0;
-
-    private string SelectedChapterName =>
-        CurrentSeries.Chapters.FirstOrDefault(c => c.Number == SelectedChapterNo)?.Name is { Length: > 0 } name
-            ? $"· {name}"
-            : string.Empty;
-
-    private List<BreadcrumbItem> BreadcrumbItems => new()
+    private void SetLeftTab(int tabIndex)
     {
-        new BreadcrumbItem(WorkspaceTitle, href: null, disabled: true),
-        new BreadcrumbItem($"Chapter {SelectedChapterNo}", href: null, disabled: true),
-        new BreadcrumbItem($"Page {SelectedPage}", href: null, disabled: true)
+        ActiveLeftTab = tabIndex;
+        StateHasChanged();
+    }
+
+    public class AssistantModel
+    {
+        public string Name { get; set; } = "";
+        public string Role { get; set; } = "";
+        public bool IsOnline { get; set; }
+        public int ActiveTasks { get; set; }
+        public Color AvatarColor { get; set; }
+    }
+
+    private List<AssistantModel> Assistants = new()
+    {
+        new AssistantModel { Name = "Li Wei", Role = "Background Artist", IsOnline = true, ActiveTasks = 2, AvatarColor = Color.Primary },
+        new AssistantModel { Name = "Chen Ming", Role = "Tone Specialist", IsOnline = false, ActiveTasks = 1, AvatarColor = Color.Secondary },
+        new AssistantModel { Name = "Wang Fei", Role = "SFX & Cleanup", IsOnline = true, ActiveTasks = 0, AvatarColor = Color.Success }
     };
+    
+    private string TaskType { get; set; } = "Background";
+    private string Assistant { get; set; } = "Li Wei";
+    private string TaskDescription { get; set; } = "";
+    
+    private void OnTaskTypeChanged(string value) => TaskType = value;
+    private void OnAssistantChanged(string value) => Assistant = value;
+
+    // Task logic
+    public class ProductionTask
+    {
+        public int Id { get; set; }
+        public string Type { get; set; } = "";
+        public string Target { get; set; } = "";
+        public string Assistant { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string Status { get; set; } = "";
+    }
+    
+    private List<ProductionTask> ActiveTasks = new();
+
+    private void CreateTask()
+    {
+        int newId = ActiveTasks.Any() ? ActiveTasks.Max(t => t.Id) + 1 : 1;
+        
+        string target;
+        if (SelectedRegions.Any())
+        {
+            var targets = SelectedRegions.Select(r => $"Panel {r.Id} [X:{Math.Round(r.X)}, Y:{Math.Round(r.Y)}, W:{Math.Round(r.Width)}, H:{Math.Round(r.Height)}]");
+            target = string.Join("\n", targets);
+        }
+        else
+        {
+            target = $"Page {SelectedPage}";
+        }
+
+        ActiveTasks.Insert(0, new ProductionTask 
+        { 
+            Id = newId, 
+            Type = TaskType, 
+            Assistant = Assistant, 
+            Target = target, 
+            Description = TaskDescription, 
+            Status = "Todo" 
+        });
+        TaskDescription = ""; // Reset form
+        Snackbar.Add("Task assigned successfully!", Severity.Success);
+    }
+    
+    private void CycleTaskStatus(ProductionTask task)
+    {
+        task.Status = task.Status switch
+        {
+            "Todo" => "In Progress",
+            "In Progress" => "Review",
+            "Review" => "Done",
+            _ => "Todo"
+        };
+        StateHasChanged();
+    }
+
+    private async Task DeleteTask(int taskId)
+    {
+        bool? result = await DialogService.ShowMessageBox(
+            "Delete Task", 
+            "Are you sure you want to delete this task?", 
+            yesText: "Delete", cancelText: "Cancel");
+
+        if (result == true)
+        {
+            var task = ActiveTasks.FirstOrDefault(t => t.Id == taskId);
+            if (task != null)
+            {
+                ActiveTasks.Remove(task);
+                StateHasChanged();
+            }
+        }
+    }
+
+    // Annotation logic (Stream B)
+    public class AnnotationModel
+    {
+        public int Id { get; set; }
+        public string Type { get; set; } = "";
+        public string Comment { get; set; } = "";
+        public string Target { get; set; } = "";
+        public string Author { get; set; } = "Editor";
+        public bool IsResolved { get; set; } = false;
+        public double? X { get; set; }
+        public double? Y { get; set; }
+        public int PageNumber { get; set; }
+    }
+
+    private string AnnotationType { get; set; } = "Typo";
+    private string AnnotationComment { get; set; } = "";
+    private double? PendingPinX = null;
+    private double? PendingPinY = null;
+    
+    // JS Invokable for handling Pin drops
+    [JSInvokable]
+    public void OnPinAdded(double x, double y)
+    {
+        PendingPinX = x;
+        PendingPinY = y;
+        SelectedRegions.Clear();
+        StateHasChanged();
+        // Optional: you could force switch to the Annotations tab here if needed
+    }
+
+    [JSInvokable]
+    public void OnToolChangedFromJS(string tool)
+    {
+        CurrentTool = tool;
+        StateHasChanged();
+    }
+    
+    private List<AnnotationModel> ActiveAnnotations = new();
+
+    private async Task CreateAnnotation()
+    {
+        if (string.IsNullOrWhiteSpace(AnnotationComment))
+        {
+            Snackbar.Add("Please enter a comment.", Severity.Warning);
+            return;
+        }
+
+        int newId = ActiveAnnotations.Any() ? ActiveAnnotations.Max(t => t.Id) + 1 : 1;
+        
+        string target;
+        if (PendingPinX.HasValue && PendingPinY.HasValue)
+            target = $"Pin at ({Math.Round(PendingPinX.Value)}, {Math.Round(PendingPinY.Value)})";
+        else if (SelectedRegions.Any())
+        {
+            var targets = SelectedRegions.Select(r => $"Panel {r.Id} [X:{Math.Round(r.X)}, Y:{Math.Round(r.Y)}, W:{Math.Round(r.Width)}, H:{Math.Round(r.Height)}]");
+            target = string.Join("\n", targets);
+        }
+        else
+            target = $"Whole Page ({SelectedPage})";
+
+        ActiveAnnotations.Insert(0, new AnnotationModel 
+        { 
+            Id = newId, 
+            Type = AnnotationType, 
+            Comment = AnnotationComment, 
+            Target = target,
+            X = PendingPinX,
+            Y = PendingPinY,
+            PageNumber = SelectedPage
+        });
+        
+        AnnotationComment = ""; // Reset
+        PendingPinX = null;
+        PendingPinY = null;
+        
+        Snackbar.Add("Annotation added!", Severity.Success);
+        await SyncAnnotationsToJS();
+    }
+
+    private async Task SyncAnnotationsToJS()
+    {
+        if (_module != null)
+        {
+            var pageAnnotations = ActiveAnnotations.Where(a => a.PageNumber == SelectedPage || a.PageNumber == 0).ToList();
+            await _module.InvokeVoidAsync("syncAnnotations", pageAnnotations);
+        }
+    }
+
+    private async Task ResolveAnnotation(int id)
+    {
+        var ann = ActiveAnnotations.FirstOrDefault(a => a.Id == id);
+        if (ann != null)
+        {
+            ann.IsResolved = true;
+            Snackbar.Add("Issue resolved.", Severity.Success);
+            await SyncAnnotationsToJS();
+            StateHasChanged();
+        }
+    }
+
+    private async Task DeleteAnnotation(int id)
+    {
+        bool? result = await DialogService.ShowMessageBox(
+            "Delete Annotation", 
+            "Are you sure you want to delete this annotation?", 
+            yesText: "Delete", cancelText: "Cancel");
+
+        if (result == true)
+        {
+            var ann = ActiveAnnotations.FirstOrDefault(a => a.Id == id);
+            if (ann != null)
+            {
+                ActiveAnnotations.Remove(ann);
+                await SyncAnnotationsToJS();
+                StateHasChanged();
+            }
+        }
+    }
+
+    // Chapter logic
+    public class ChapterModel
+    {
+        public int Id { get; set; }
+        public int PageCount { get; set; }
+        public bool IsCompleted { get; set; }
+        public List<PageModel> Pages { get; set; } = new();
+    }
+
+    private List<ChapterModel> Chapters = new();
+    private string SeriesTitle = "The Supreme Cultivation Manual";
+    private string SeriesSubtitle = "Σ┐«Σ╗Öτºÿτ▒ì - Ti├¬n hiß╗çp";
 
     protected override async Task OnInitializedAsync()
     {
-        CurrentSeries = LoadDemoSeries();
-        SelectedChapterNo = CurrentSeries.Chapters.FirstOrDefault()?.Number ?? 1;
-        SelectedPage = 1;
+        await base.OnInitializedAsync();
 
-        // Best-effort: load the real series title for the header. Failure or a
-        // missing id falls back silently to the demo title.
+        // Resolve actor user ID from auth state.
         try
         {
-            var series = await SeriesService.GetSeriesByIdAsync(SeriesId);
-            if (series != null)
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var idClaim = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (Guid.TryParse(idClaim, out var uid))
+                _currentUserId = uid;
+        }
+        catch { }
+
+        // Workspace access guard: resolve slug → SeriesId and verify series-specific access.
+        if (string.IsNullOrWhiteSpace(Slug) || !_currentUserId.HasValue)
+        {
+            _accessDenied = true;
+            return;
+        }
+
+        try
+        {
+            var entry = await SeriesApiClient.GetWorkspaceEntryAsync(_currentUserId.Value, Slug);
+            if (entry is null || !entry.CanAccess)
             {
-                _realSeriesTitle = series.Title;
-                _realSeriesStatus = series.StatusCode;
+                _accessDenied = true;
+                return;
             }
+
+            SeriesId = entry.SeriesId.ToString();
         }
         catch
         {
-            // Keep demo title; workspace must render regardless of DB state.
+            _accessDenied = true;
+            return;
         }
+
+        await LoadSeriesDataAsync();
     }
 
-    private void OnChapterSelected(int chapterNo)
+    private async Task LoadSeriesDataAsync()
     {
-        SelectedChapterNo = chapterNo;
-        SelectedPage = 1;
-    }
-
-    private void PrevChapter()
-    {
-        var idx = CurrentChapterIndex;
-        if (idx > 0)
-            OnChapterSelected(CurrentSeries.Chapters[idx - 1].Number);
-    }
-
-    private void NextChapter()
-    {
-        var idx = CurrentChapterIndex;
-        if (idx < CurrentSeries.Chapters.Count - 1)
-            OnChapterSelected(CurrentSeries.Chapters[idx + 1].Number);
-    }
-
-    private void PrevPage() { if (SelectedPage > 1) SelectedPage--; }
-    private void NextPage() { if (SelectedPage < SelectedChapterPageCount) SelectedPage++; }
-
-    // Intentional demo data: named chapters illustrate the navigator/canvas flow.
-    private static SeriesDetail LoadDemoSeries() => new()
-    {
-        Title = "Demo Series",
-        Subtitle = "Demo workspace preview",
-        Chapters = new()
+        if (!string.IsNullOrWhiteSpace(SeriesId) && Guid.TryParse(SeriesId, out Guid id))
         {
-            new ChapterInfo(1, "Opening Scene", 12),
-            new ChapterInfo(2, "First Conflict", 16),
-            new ChapterInfo(3, "Board Review Draft", 18)
+            var series = await SeriesService.GetSeriesByIdAsync(id);
+            if (series != null)
+            {
+                SeriesTitle = series.Title;
+                SeriesSubtitle = string.Join(", ", series.Genres.Select(g => g.GenreName));
+                
+                var chapters = await ChapterService.GetChaptersBySeriesIdAsync(id);
+                if (chapters != null && chapters.Any())
+                {
+                    Chapters = chapters.Select((c, i) => new ChapterModel 
+                    { 
+                        Id = int.TryParse(c.ChapterNumberLabel, out int num) ? num : (i + 1), 
+                        PageCount = 0, // Placeholder, update if you have page counts
+                        IsCompleted = c.StatusCode == "PUBLISHED"
+                    }).OrderBy(c => c.Id).ToList();
+                    
+                    if (Chapters.Any())
+                    {
+                        SelectedChapter = Chapters.First().Id;
+                    }
+                }
+                else
+                {
+                    Chapters = new List<ChapterModel>();
+                }
+                return;
+            }
         }
-    };
-
-    private class SeriesDetail
-    {
-        public string Title { get; set; } = "";
-        public string Subtitle { get; set; } = "";
-        public List<ChapterInfo> Chapters { get; set; } = new();
+        
+        SetupDefaultSeries();
     }
 
-    private record ChapterInfo(int Number, string Name, int PageCount);
+    private void SetupDefaultSeries()
+    {
+        SeriesTitle = "The Supreme Cultivation Manual";
+        SeriesSubtitle = "Σ┐«Σ╗Öτºÿτ▒ì - Ti├¬n hiß╗çp";
+        Chapters = new List<ChapterModel>
+        {
+            new ChapterModel { Id = 40, PageCount = 11, IsCompleted = true },
+            new ChapterModel { Id = 41, PageCount = 9, IsCompleted = true },
+            new ChapterModel { Id = 42, PageCount = 12, IsCompleted = false },
+            new ChapterModel { Id = 43, PageCount = 8, IsCompleted = false },
+            new ChapterModel { Id = 44, PageCount = 6, IsCompleted = false }
+        };
+        SelectedChapter = 42;
+    }
+
+    private async Task SelectChapter(int chapterId)
+    {
+        SelectedChapter = chapterId;
+        ActivePageIndex = 0;
+        if (UploadedPages.Any())
+        {
+            await LoadPage(0);
+        }
+        else if (_module != null)
+        {
+            await _module.InvokeVoidAsync("loadImage", "");
+        }
+        StateHasChanged();
+    }
+
+    private void ToggleChapterStatus(int chapterId)
+    {
+        var chapter = Chapters.FirstOrDefault(c => c.Id == chapterId);
+        if (chapter != null)
+        {
+            chapter.IsCompleted = !chapter.IsCompleted;
+            StateHasChanged();
+        }
+    }
+
+    private async Task AddNewChapter()
+    {
+        int newId = Chapters.Any() ? Chapters.Max(c => c.Id) + 1 : 1;
+        Chapters.Add(new ChapterModel { Id = newId, PageCount = 0, IsCompleted = false });
+        await SelectChapter(newId);
+        Snackbar.Add($"Created Chapter {newId}", Severity.Success);
+    }
+
+    private async Task DeleteChapter(int chapterId)
+    {
+        bool? result = await DialogService.ShowMessageBox(
+            "Delete Chapter", 
+            "Are you sure you want to delete this chapter?", 
+            yesText: "Delete", cancelText: "Cancel");
+            
+        if (result == true)
+        {
+            var chapter = Chapters.FirstOrDefault(c => c.Id == chapterId);
+            if (chapter != null)
+            {
+                Chapters.Remove(chapter);
+                if (SelectedChapter == chapterId)
+                {
+                    if (Chapters.Any())
+                    {
+                        await SelectChapter(Chapters.First().Id);
+                    }
+                    else
+                    {
+                        SelectedChapter = 0;
+                        ActivePageIndex = 0;
+                        if (_module != null)
+                        {
+                            await _module.InvokeVoidAsync("loadImage", "");
+                        }
+                    }
+                }
+                StateHasChanged();
+            }
+        }
+    }
+
+    // Multi-page logic
+    public class PageVersionModel
+    {
+        public int VersionNo { get; set; }
+        public string DataUrl { get; set; } = "";
+        public string Note { get; set; } = "";
+        public string? Regions { get; set; } = null;
+    }
+
+    public class PageModel
+    {
+        public List<PageVersionModel> Versions { get; set; } = new();
+        public int ActiveVersionIndex { get; set; } = 0;
+    }
+    
+    private List<PageModel> UploadedPages 
+    {
+        get 
+        {
+            var chap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
+            return chap != null ? chap.Pages : new List<PageModel>();
+        }
+    }
+    private int ActivePageIndex = 0;
+
+    // AI Canvas logic
+    private IJSObjectReference _module = null!;
+    private bool IsProcessing = false;
+    private string CurrentTool = "select";
+    private bool CanUndo = false;
+    private bool CanRedo = false;
+    
+    // Brush settings
+    private string BrushColor { get; set; } = "#ffffff";
+    private int BrushSize { get; set; } = 20;
+
+    private async Task OnBrushColorChanged(ChangeEventArgs e)
+    {
+        BrushColor = e.Value?.ToString() ?? "#ffffff";
+        await _module.InvokeVoidAsync("setBrushSettings", BrushColor, BrushSize);
+    }
+    
+    private async Task OnBrushSizeChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int size))
+        {
+            BrushSize = size;
+            await _module.InvokeVoidAsync("setBrushSettings", BrushColor, BrushSize);
+        }
+    }
+
+    private DotNetObjectReference<CreatorWorkspace>? _objRef;
+
+    private void SaveProgress()
+    {
+        Snackbar.Add("Progress saved successfully!", Severity.Success);
+    }
+
+    private void ExportCurrentPage()
+    {
+        Snackbar.Add("Page exported successfully!", Severity.Info);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var version = DateTime.Now.Ticks;
+            _module = await JS.InvokeAsync<IJSObjectReference>("import", $"/js/mangaAiCanvas.js?v={version}");
+            _objRef = DotNetObjectReference.Create(this);
+            await _module.InvokeVoidAsync("initCanvas", "ai-canvas", "ai-canvas-container", _objRef);
+            
+            // Wait for user to upload an image.
+            Snackbar.Add("Please upload an image to begin.", Severity.Info);
+        }
+    }
+
+    private async Task HandleFileUpload(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            if (SelectedChapter == 0)
+            {
+                if (!Chapters.Any())
+                {
+                    await AddNewChapter();
+                }
+                else
+                {
+                    Snackbar.Add("Please select a chapter first.", Severity.Warning);
+                    return;
+                }
+            }
+
+            var files = e.GetMultipleFiles(100);
+            if (files.Any())
+            {
+                foreach (var file in files)
+                {
+                    using var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 20);
+                    using var memoryStream = new MemoryStream();
+                    await stream.CopyToAsync(memoryStream);
+                    var base64 = Convert.ToBase64String(memoryStream.ToArray());
+                    var dataUrl = $"data:{file.ContentType};base64,{base64}";
+                    
+                    var activeChap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
+                    if (activeChap != null)
+                    {
+                        var newPage = new PageModel();
+                        newPage.Versions.Add(new PageVersionModel { VersionNo = 1, DataUrl = dataUrl, Note = "Original Upload" });
+                        activeChap.Pages.Add(newPage);
+                    }
+                }
+                
+                var chap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
+                if (chap != null) chap.PageCount = chap.Pages.Count;
+
+                await LoadPage(ActivePageIndex == 0 ? 0 : ActivePageIndex);
+                Snackbar.Add($"Loaded {files.Count} page(s) successfully!", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error uploading: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void OnPageChanged(int pageNumber)
+    {
+        // MudPagination pageNumber is 1-indexed
+        _ = LoadPage(pageNumber - 1);
+    }
+
+    private async Task LoadPage(int index)
+    {
+        if (index >= 0 && index < UploadedPages.Count)
+        {
+            var page = UploadedPages[index];
+            
+            ActivePageIndex = index;
+            SelectedPage = index + 1; // update the header number
+            
+            if (page.Versions.Any())
+            {
+                var activeVersion = page.Versions[page.ActiveVersionIndex];
+                await _module.InvokeVoidAsync("loadImage", activeVersion.DataUrl);
+                if (!string.IsNullOrEmpty(activeVersion.Regions))
+                {
+                    await _module.InvokeVoidAsync("loadRegions", activeVersion.Regions);
+                }
+                else
+                {
+                    await _module.InvokeVoidAsync("loadRegions", "[]");
+                }
+            }
+            
+            await SyncAnnotationsToJS();
+            StateHasChanged();
+        }
+    }
+
+    private async Task DeleteCurrentPage()
+    {
+        if (UploadedPages.Any())
+        {
+            bool? result = await DialogService.ShowMessageBox(
+                "Delete Page", 
+                "Are you sure you want to delete this page?", 
+                yesText: "Delete", cancelText: "Cancel");
+
+            if (result == true)
+            {
+                UploadedPages.RemoveAt(ActivePageIndex);
+                
+                var activeChap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
+                if (activeChap != null) activeChap.PageCount = UploadedPages.Count;
+
+                if (UploadedPages.Count == 0)
+                {
+                    ActivePageIndex = 0;
+                    if (_module != null)
+                        await _module.InvokeVoidAsync("loadImage", ""); // clear canvas
+                    Snackbar.Add("All pages deleted.", Severity.Info);
+                }
+                else
+                {
+                    if (ActivePageIndex >= UploadedPages.Count)
+                        ActivePageIndex = UploadedPages.Count - 1;
+                    await LoadPage(ActivePageIndex);
+                }
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task SwitchVersion(int versionIndex, bool isDeleting = false)
+    {
+        if (UploadedPages.Count > ActivePageIndex)
+        {
+            var page = UploadedPages[ActivePageIndex];
+            
+            // Auto-save the current canvas background before switching
+            if (!isDeleting && page.Versions.Any() && _module != null)
+            {
+                page.Versions[page.ActiveVersionIndex].DataUrl = await _module.InvokeAsync<string>("exportImage");
+            }
+
+            if (versionIndex >= 0 && versionIndex < page.Versions.Count)
+            {
+                page.ActiveVersionIndex = versionIndex;
+                var activeVersion = page.Versions[versionIndex];
+                if (_module != null)
+                {
+                    await _module.InvokeVoidAsync("loadImage", activeVersion.DataUrl);
+                    if (!string.IsNullOrEmpty(activeVersion.Regions))
+                    {
+                        await _module.InvokeVoidAsync("loadRegions", activeVersion.Regions);
+                    }
+                    else
+                    {
+                        await _module.InvokeVoidAsync("loadRegions", "[]");
+                    }
+                }
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task SaveAsNewVersion()
+    {
+        if (UploadedPages.Any() && _module != null)
+        {
+            var dataUrl = await _module.InvokeAsync<string>("exportImage");
+            var page = UploadedPages[ActivePageIndex];
+            
+            int nextVersionNo = page.Versions.Any() ? page.Versions.Max(v => v.VersionNo) + 1 : 1;
+            
+            page.Versions.Add(new PageVersionModel 
+            {
+                VersionNo = nextVersionNo,
+                Regions = "[]", // DO NOT CLONE REGIONS!
+                DataUrl = dataUrl,
+                Note = $"New Version {nextVersionNo}"
+            });
+            page.ActiveVersionIndex = page.Versions.Count - 1;
+            await SwitchVersion(page.ActiveVersionIndex);
+            
+            Snackbar.Add($"Created New Version {nextVersionNo}", Severity.Success);
+            StateHasChanged();
+        }
+    }
+
+    private async Task UploadNewVersion(IBrowserFile file)
+    {
+        if (file != null && UploadedPages.Any())
+        {
+            try
+            {
+                using var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 20);
+                using var memoryStream = new MemoryStream();
+                await stream.CopyToAsync(memoryStream);
+                var base64 = Convert.ToBase64String(memoryStream.ToArray());
+                var dataUrl = $"data:{file.ContentType};base64,{base64}";
+                
+                var page = UploadedPages[ActivePageIndex];
+                int nextVersionNo = page.Versions.Any() ? page.Versions.Max(v => v.VersionNo) + 1 : 1;
+                
+                page.Versions.Add(new PageVersionModel
+                {
+                    VersionNo = nextVersionNo,
+                    Regions = "[]",
+                    DataUrl = dataUrl,
+                    Note = $"Uploaded Revision {nextVersionNo}"
+                });
+                
+                page.ActiveVersionIndex = page.Versions.Count - 1;
+                await SwitchVersion(page.ActiveVersionIndex);
+                Snackbar.Add($"Uploaded Revision {nextVersionNo}", Severity.Success);
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Failed to upload revision: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private async Task DeleteCurrentVersion()
+    {
+        if (UploadedPages.Any())
+        {
+            var page = UploadedPages[ActivePageIndex];
+            if (page.Versions.Count > 1)
+            {
+                bool? result = await DialogService.ShowMessageBox(
+                    "Delete Version", 
+                    $"Are you sure you want to delete Version {page.Versions[page.ActiveVersionIndex].VersionNo}?", 
+                    yesText: "Delete", cancelText: "Cancel");
+
+                if (result == true)
+                {
+                    page.Versions.RemoveAt(page.ActiveVersionIndex);
+                    // Switch to the previous version
+                    int nextIndex = Math.Max(0, page.Versions.Count - 1);
+                    await SwitchVersion(nextIndex, isDeleting: true);
+                    Snackbar.Add("Version deleted.", Severity.Info);
+                }
+            }
+        }
+    }
+
+    private async Task SetTool(string tool)
+    {
+        CurrentTool = tool;
+        await _module.InvokeVoidAsync("setTool", tool);
+    }
+
+    private async Task ZoomIn() => await _module.InvokeVoidAsync("zoom", 1.2);
+    private async Task ZoomOut() => await _module.InvokeVoidAsync("zoom", 0.8);
+
+    private async Task ApproveSelectedRegions() => await _module.InvokeVoidAsync("approveSelectedRegions");
+    private async Task DeleteSelectedRegions() => await _module.InvokeVoidAsync("deleteSelectedRegions");
+
+    private async Task Undo() => await _module.InvokeVoidAsync("undo");
+    private async Task Redo() => await _module.InvokeVoidAsync("redo");
+
+    private async Task RunSegmentAI()
+    {
+        IsProcessing = true;
+        StateHasChanged();
+        
+        Snackbar.Add("Running Segmentation...", Severity.Info);
+        var successSegment = await _module.InvokeAsync<bool>("callSegmentAPI");
+        
+        IsProcessing = false;
+        StateHasChanged();
+        
+        if (successSegment) {
+            Snackbar.Add("Segmentation complete.", Severity.Success);
+        } else {
+            Snackbar.Add("Segmentation failed.", Severity.Error);
+        }
+    }
+
+    private async Task RunTranslateAI()
+    {
+        IsProcessing = true;
+        StateHasChanged();
+        
+        Snackbar.Add("Running Translation...", Severity.Info);
+        var successTranslate = await _module.InvokeAsync<bool>("callTranslateAPI");
+        
+        IsProcessing = false;
+        StateHasChanged();
+        
+        if (successTranslate) {
+            Snackbar.Add("Translation complete.", Severity.Success);
+            if (UploadedPages.Any())
+            {
+                var page = UploadedPages[ActivePageIndex];
+                if (page.Versions.Any())
+                {
+                    page.Versions[page.ActiveVersionIndex].DataUrl = await _module.InvokeAsync<string>("exportImage");
+                }
+            }
+        } else {
+            Snackbar.Add("Translation failed.", Severity.Error);
+        }
+    }
+
+    [JSInvokable]
+    public void OnRegionsUpdated(string newRegionsStr, bool canUndo, bool canRedo)
+    {
+        CanUndo = canUndo;
+        CanRedo = canRedo;
+        
+        if (UploadedPages.Count > ActivePageIndex)
+        {
+            var page = UploadedPages[ActivePageIndex];
+            if (page.Versions.Any())
+            {
+                page.Versions[page.ActiveVersionIndex].Regions = newRegionsStr;
+            }
+        }
+        
+        SelectedRegions.Clear();
+        if (!string.IsNullOrEmpty(newRegionsStr))
+        {
+            try
+            {
+                var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var allRegions = System.Text.Json.JsonSerializer.Deserialize<List<RegionModel>>(newRegionsStr, options);
+                if (allRegions != null)
+                {
+                    SelectedRegions = allRegions.Where(r => r.Selected).ToList();
+                }
+            }
+            catch { }
+        }
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        _objRef?.Dispose();
+    }
+
+    public class RegionModel
+    {
+        public int Id { get; set; }
+        public double X { get; set; }
+        public double Y { get; set; }
+        public double Width { get; set; }
+        public double Height { get; set; }
+        public bool Selected { get; set; }
+        public string? OriginalText { get; set; }
+        public string? TranslatedText { get; set; }
+    }
 }

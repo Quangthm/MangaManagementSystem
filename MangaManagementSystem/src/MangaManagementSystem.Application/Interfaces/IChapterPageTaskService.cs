@@ -8,8 +8,23 @@ namespace MangaManagementSystem.Application.Interfaces
     {
         Task<ChapterPageTaskDto> CreateChapterPageTaskAsync(CreateChapterPageTaskDto dto);
         Task<ChapterPageTaskDto?> GetChapterPageTaskByIdAsync(Guid id);
+        Task<ChapterPageTaskDto?> GetChapterPageTaskByIdWithRegionsAsync(Guid id);
         Task<IEnumerable<ChapterPageTaskDto>> GetChapterPageTasksByAssignedUserIdAsync(Guid assignedToUserId);
+        Task<IEnumerable<ChapterPageTaskDto>> GetChapterPageTasksByAssignedUserIdWithRegionsAsync(Guid assignedToUserId);
+        Task<IEnumerable<ChapterPageTaskDto>> GetChapterPageTasksByCreatorUserIdAsync(Guid creatorUserId);
         Task<ChapterPageTaskDto?> UpdateChapterPageTaskAsync(UpdateChapterPageTaskDto dto);
         Task<bool> DeleteChapterPageTaskAsync(Guid id);
+
+        // Assistant read operations
+        Task<IEnumerable<ChapterPageTaskDto>> GetAssignedTasksForAssistantAsync(Guid assistantUserId);
+        Task<ChapterPageTaskDto?> GetAssignedTaskDetailForAssistantAsync(Guid assistantUserId, Guid taskId);
+
+        // Mangaka task lifecycle actions
+        Task ApproveTaskAsync(Guid actorUserId, Guid taskId, string? completionNote);
+        Task ReturnTaskForReworkAsync(Guid actorUserId, Guid taskId, string reason);
+        Task CancelTaskAsync(Guid actorUserId, Guid taskId, string reason);
+
+        // Mangaka: tasks created by this user (for review submissions view)
+        Task<IEnumerable<ChapterPageTaskDto>> GetTasksForReviewByCreatorAsync(Guid creatorUserId);
     }
 }

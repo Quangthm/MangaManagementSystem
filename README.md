@@ -45,15 +45,15 @@ Do **not** treat this repository as production-ready.
 |---|---|
 | Users and accounts | One MVP role per account. New users start as `PENDING_APPROVAL`. Admin can activate, reject, or disable accounts. Rejected accounts cannot log in and keep their email/username reserved in MVP. Users have a display name for readable UI identity. |
 | File management | Store actual media in Cloudinary and store file references/metadata in the system. Uploaded files keep a content fingerprint to support traceability, integrity checks, and optional duplicate-file warnings. |
-| Series management | Manage series profile, unique code, unique slug, lifecycle status, primary language, genre text, cover image, and optional source series reference. |
+| Series management | Manage series profile, unique slug, lifecycle status, primary language, cover image, normalized genres, normalized tags, publication frequency, and optional source series reference. Genres are stored through `Genre`/`SeriesGenre`; tags are stored through `Tag`/`SeriesTag`. `series_id` is the internal identity; `slug` is the URL identity. No separate `series_code` is used in MVP. |
 | Series contributors | Manage team membership through `SeriesContributor`, not a direct lead Mangaka field on `Series`. |
-| Series proposals | Store formal submitted proposal versions in `SeriesProposal`. Revisions create new proposal rows. |
+| Series proposals | Store formal submitted proposal versions in `SeriesProposal`. Revisions create new proposal rows. Proposal history keeps important submitted proposal content such as proposal title, synopsis, proposal file, version number, status, and submission metadata; it does not snapshot genres, tags, or cover file. Review screens read current genres, tags, and cover from the locked series metadata. |
 | Board workflow | Use `SeriesBoardPoll` and `SeriesBoardVote`. Editorial Board Chief opens, closes, and cancels board polls, specifies publication frequency when opening `START_SERIALIZATION` polls, can also vote, and board results are computed from votes. |
 | Chapters and pages | Use `Chapter`, `ChapterPage`, and `ChapterPageVersion`. |
 | Chapter submission | Submit chapters by changing `Chapter.status_code` to `UNDER_REVIEW`; do not create a separate `ChapterSubmission` table. |
 | Page regions | Store accepted AI/manual regions as `PageRegion` records linked to `ChapterPageVersion`. |
 | Annotations | Store annotations through linked `PageRegion` records, not direct annotation coordinates. |
-| Page tasks | Use page-based `ChapterPageTask` and optional `ChapterPageTaskRegion` links. |
+| Page tasks | Use `ChapterPageTask` as the task header and `ChapterPageTaskRegion` to link one or more target regions; page context is derived from linked regions. |
 | Editorial review | Store final chapter-level review decisions in `ChapterEditorialReview`. |
 | Publication planning | Use chapter-level planned release dates and release timestamps. Mangaka may provide/update preferred publication frequency only while the series is in `PROPOSAL_DRAFT`; Editorial Board Chief specifies official frequency in a `START_SERIALIZATION` poll, and an approved poll applies that frequency. After board decision, Mangaka may request a change through in-app notification, but only Editorial Board Chief may directly change the official frequency with a required audit reason. |
 | Ranking | Use simulated/manual reader vote input entered by Editorial Board Members and time-based `SeriesRankingSnapshot`. |
@@ -120,15 +120,21 @@ The project uses both role-based actors and shared permission-based actor groups
 
 ### 5.2 Series and Proposal Workflow
 
-1. Mangaka creates or maintains a series profile.
-2. The series team is managed through `SeriesContributor`.
-3. Mangaka submits a formal proposal version through `SeriesProposal`.
-4. Tantou Editor reviews the submitted proposal directly on the proposal record.
-5. If the proposal passes editorial review, it moves to board review.
-6. Editorial Board Chief opens a valid `START_SERIALIZATION` board poll and specifies the publication frequency to apply if the poll is approved.
-7. Editorial Board Chief and Editorial Board Members vote through `SeriesBoardVote`.
-8. When the poll closes, the system computes the result from vote counts.
-9. If approved, the computed result updates the series/proposal status and applies the board-specified publication frequency as the official frequency.
+1. Mangaka creates or maintains a series profile while the series is in `PROPOSAL_DRAFT`, including current cover, normalized genres, normalized tags, language, and proposed publication frequency.
+2. The series team is managed through `SeriesContributor`; the draft creator is an active Mangaka contributor.
+3. Mangaka submits a formal proposal version with a required proposal file stored through `FileResource` using purpose `SERIES_PROPOSAL`.
+4. Submission requires at least one active Mangaka contributor, but it does not require an active Tantou Editor to already be assigned.
+5. Submission creates a `SeriesProposal` row, stores submission-time proposal-content snapshots, and moves both the proposal and series to `UNDER_EDITORIAL_REVIEW`. `SeriesProposal` does not snapshot genres, tags, or cover file; review screens read those from the current locked `Series`, `SeriesGenre`, and `SeriesTag` metadata.
+6. Newly submitted proposals appear in the editorial review queue for active Tantou Editors.
+7. Tantou Editors may choose/claim or be assigned to handle proposals from the queue; multiple Tantou Editors may be contributors to the same series.
+8. During editorial review, a Tantou Editor may request revision, cancel the proposal, or pass the proposal to board review.
+9. Revision requires non-empty comments and may include an optional markup file; the series returns to `PROPOSAL_DRAFT` for a new proposal version.
+10. Editorial cancellation requires both non-empty comments and a markup file; the submitted proposal and related series become `CANCELLED`.
+11. If the proposal passes editorial review, it moves to `UNDER_BOARD_REVIEW` for board voting.
+12. Editorial Board Chief opens a valid `START_SERIALIZATION` board poll and specifies the publication frequency to apply if the poll is approved.
+13. Editorial Board Chief and Editorial Board Members vote through `SeriesBoardVote`.
+14. When the poll closes, the system computes the result from vote counts.
+15. If approved, the computed result updates the series/proposal status and applies the board-specified publication frequency as the official frequency.
 
 ### 5.3 Chapter and Page Workflow
 
@@ -149,7 +155,7 @@ The project uses both role-based actors and shared permission-based actor groups
 4. New AI regions should be compared against existing saved regions to reduce duplicates.
 5. Annotations are linked to `PageRegion`, not stored as direct annotation coordinates.
 6. Whole-page feedback is represented by a manually created full-page region.
-7. Page tasks are created through `ChapterPageTask` and may target one or more regions through `ChapterPageTaskRegion`.
+7. Page tasks are created through `ChapterPageTask` and target one or more regions through `ChapterPageTaskRegion`.
 8. Assistants submit task output as a new page version.
 9. Mangaka or a Tantou Editor, when permitted by workflow rules, reviews the submitted page version before the task is completed.
 
@@ -244,14 +250,22 @@ Key rules:
 
 ### 7.3 Series, Contributors, and Proposals
 
-Handles series profile records, contributor membership, and formal proposal submission versions.
+Handles series profile records, normalized genres and tags, contributor membership, and formal proposal submission versions.
 
 Key rules:
 
-- Series must have unique system codes and slugs.
+- Series use `series_id` as the internal identity and `slug` as the URL identity; no separate `series_code` is used in MVP.
 - Series ownership is handled through `SeriesContributor`.
+- Genres are normalized through `manga.Genre` and `manga.SeriesGenre`.
+- Tags are normalized through `manga.Tag` and `manga.SeriesTag`.
+- Genres describe broad story categories such as Action, Fantasy, Romance, and Horror.
+- Tags describe specific tropes, themes, settings, character traits, source labels, or story elements such as Isekai, School Life, Revenge, Magic, or Based on a Novel.
+- Genre and tag editing follows the same series-profile editability rule: Mangaka may edit them while the series profile is editable, normally during `PROPOSAL_DRAFT`.
+- When a series is under editorial or board review, current cover, genres, and tags are locked with the series profile and are displayed from current series metadata.
 - Proposal revisions create new `SeriesProposal` rows.
 - Submitted proposal snapshot fields should not be edited directly.
+- `SeriesProposal` stores important submitted proposal content/history, such as proposal title, synopsis, proposal file, version number, status, and submission metadata.
+- `SeriesProposal` does not snapshot genre, tag, or cover-file metadata in MVP.
 - Editorial review information may be stored directly in `SeriesProposal` for MVP.
 
 ### 7.4 Page Versioning and Page Workspace
@@ -272,9 +286,9 @@ Handles page-based work assignments and assistant submissions.
 
 Key rules:
 
-- Each task targets one logical page.
+- Each task derives its logical page context from one or more linked `PageRegion` records.
 - Each task is assigned to one assistant or authorized user.
-- A task may target multiple page regions through `ChapterPageTaskRegion`.
+- A task targets one or more page regions through `ChapterPageTaskRegion`.
 - Task status values are `ASSIGNED`, `UNDER_REVIEW`, `COMPLETED`, and `CANCELLED`.
 - Reassignment should create a new task instead of changing the original assignee.
 
@@ -355,6 +369,8 @@ AI must **not**:
 | Display identity | Use `display_name` for readable UI display while keeping `username` as the login/system identifier. |
 | File references | Business tables reference system file records; Cloudinary details stay inside file metadata. |
 | File fingerprints | Store a file fingerprint for uploaded business files to support traceability, integrity checks, and optional duplicate warnings without globally blocking file reuse. |
+| Series genres and tags | Use normalized current metadata: `Genre`/`SeriesGenre` for broad story categories and `Tag`/`SeriesTag` for specific tropes, themes, settings, character traits, source labels, or story elements. Do not store genre/tag text as proposal history tables in MVP. |
+| Proposal snapshots | `SeriesProposal` snapshots important submitted proposal content, not derived/current metadata. It does not snapshot genre, tag, or cover file; review screens load current locked series metadata for those values. |
 | Chapter submission | Use `Chapter.status_code = UNDER_REVIEW`; do not create `ChapterSubmission`. |
 | Board decision and publication frequency | Editorial Board Chief owns normal board poll opening, closing, and cancellation; must specify publication frequency for `START_SERIALIZATION`; approved `START_SERIALIZATION` results apply that frequency; compute result from `SeriesBoardPoll` and `SeriesBoardVote`; do not create `SeriesBoardDecision`. |
 | Translation | Do not create structured translation tables for MVP; save final edited/translated page as `ChapterPageVersion`. |

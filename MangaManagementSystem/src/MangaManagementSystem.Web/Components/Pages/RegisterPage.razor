@@ -1,8 +1,8 @@
 @page "/register"
 @using Microsoft.AspNetCore.WebUtilities
 @using MangaManagementSystem.Web.Options
-@using MangaManagementSystem.Web.Services
-@inject IAuthService AuthService
+@using MangaManagementSystem.Web.Services.Api
+@inject IRegistrationApiClient RegistrationClient
 @inject ISnackbar Snackbar
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
@@ -244,6 +244,13 @@
         _isSendingOtp = true;
         try
         {
+            if (_recaptchaWidgetId is null)
+            {
+                Snackbar.Add("reCAPTCHA is not available. Please refresh the page and try again.", Severity.Error);
+                _isSendingOtp = false;
+                return;
+            }
+
             var token = await JSRuntime.InvokeAsync<string>("recaptchaInterop.getResponse", _recaptchaWidgetId);
             if (string.IsNullOrWhiteSpace(token))
             {
@@ -261,13 +268,7 @@
                 return;
             }
 
-            // Build DTO including optional portfolio
-            var request = new RegisterDto(_username, _email, _password, _roleName, _displayName,
-                PortfolioFileName: _selectedFileName == string.Empty ? null : _selectedFileName,
-                PortfolioContentType: string.IsNullOrEmpty(_selectedFileContentType) ? null : _selectedFileContentType,
-                PortfolioFileBytes: _selectedFileBytes);
-
-            await AuthService.SendRegistrationOtpAsync(request);
+            await RegistrationClient.SendOtpAsync(_username, _email, _password, _roleName, _displayName);
             _isOtpSent = true;
             Snackbar.Add("Verification code sent. Enter the 6-digit OTP to complete registration.", Severity.Success);
         }
@@ -344,7 +345,13 @@
         _isVerifyingOtp = true;
         try
         {
-            var created = await AuthService.CompleteRegistrationWithOtpAsync(_email, _otpCode);
+            var hasPortfolio = _selectedFileBytes is not null;
+            var created = await RegistrationClient.CompleteRegistrationAsync(
+                _email,
+                _otpCode,
+                portfolioFileBytes: hasPortfolio ? _selectedFileBytes : null,
+                portfolioFileName: hasPortfolio && _selectedFileName != string.Empty ? _selectedFileName : null,
+                portfolioContentType: hasPortfolio && !string.IsNullOrEmpty(_selectedFileContentType) ? _selectedFileContentType : null);
 
             // Determine portfolio presence using returned UserDto.PortfolioFileId
             if (created?.PortfolioFileId != null && created.PortfolioFileId != Guid.Empty)
@@ -375,11 +382,25 @@
         }
     }
 
-    private void ResetRegistration()
+    private async Task ResetRegistration()
     {
         _isOtpSent = false;
         _otpCode = string.Empty;
         _recaptchaWidgetId = null;
+
+        if (_recaptchaWidgetId.HasValue)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("recaptchaInterop.reset", _recaptchaWidgetId.Value);
+            }
+            catch
+            {
+                // Widget may have been destroyed; fall through and re-render.
+                _recaptchaWidgetId = null;
+                _recaptchaRendered = false;
+            }
+        }
     }
 
     private void GoToLogin()
@@ -389,21 +410,28 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!_isOtpSent)
+        if (_recaptchaRendered || _isOtpSent)
         {
-            try
+            return;
+        }
+
+        try
+        {
+            var siteKey = RecaptchaOptions.Value.SiteKey;
+            var widgetId = await JSRuntime.InvokeAsync<int>("recaptchaInterop.render", "register-recaptcha", siteKey);
+            if (widgetId > -1)
             {
-                var siteKey = RecaptchaOptions.Value.SiteKey;
-                _recaptchaWidgetId = await JSRuntime.InvokeAsync<int?>("recaptchaInterop.render", "register-recaptcha", siteKey);
+                _recaptchaWidgetId = widgetId;
+                _recaptchaRendered = true;
             }
-            catch (Exception ex)
+            else
             {
-                Console.WriteLine("Error rendering register reCAPTCHA: " + ex.Message);
+                Console.WriteLine("Warning: reCAPTCHA could not be rendered (widgetId = {0})", widgetId);
             }
         }
-        else
+        catch (Exception ex)
         {
-            _recaptchaWidgetId = null;
+            Console.WriteLine("Warning: reCAPTCHA render failed: " + ex.Message);
         }
     }
 }

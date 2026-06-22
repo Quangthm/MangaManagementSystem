@@ -1,0 +1,56 @@
+@namespace MangaManagementSystem.Web.Components.Shared
+
+<MudChip T="string" Color="@GetColor()" Size="@Size" Class="@Class" @attributes="@Attributes">
+    @Label
+</MudChip>
+
+@code {
+    private static readonly Dictionary<string, Color> StatusColors = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "ACTIVE", Color.Success },
+        { "PENDING_APPROVAL", Color.Warning },
+        { "REJECTED", Color.Error },
+        { "DISABLED", Color.Default },
+        { "ASSIGNED", Color.Info },
+        { "UNDER_REVIEW", Color.Warning },
+        { "COMPLETED", Color.Success },
+        { "CANCELLED", Color.Error },
+        { "APPROVED", Color.Success },
+        { "DRAFT", Color.Default },
+        { "SUBMITTED", Color.Info },
+        { "IN_REVIEW", Color.Secondary },
+        { "PENDING", Color.Info },
+        { "ON_HOLD", Color.Info },
+        { "REVISION_REQUESTED", Color.Error },
+        { "SERIALIZED", Color.Success },
+        { "HIATUS", Color.Warning },
+        { "PROPOSAL_DRAFT", Color.Info },
+        { "OPEN", Color.Warning },
+        { "RESOLVED", Color.Success }
+    };
+
+    [Parameter] public string? Status { get; set; }
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public Size Size { get; set; } = Size.Small;
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public IDictionary<string, object>? Attributes { get; set; }
+
+    private Color GetColor()
+    {
+        if (string.IsNullOrWhiteSpace(Status))
+        {
+            return Color.Default;
+        }
+
+        return StatusColors.TryGetValue(Status.Trim(), out var color) ? color : Color.Default;
+    }
+
+    protected override void OnParametersSet()
+    {
+        // Ensure Label defaults to Status if not provided
+        if (string.IsNullOrWhiteSpace(Label) && !string.IsNullOrWhiteSpace(Status))
+        {
+            Label = Status.Trim();
+        }
+    }
+}

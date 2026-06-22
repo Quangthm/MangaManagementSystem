@@ -1,7 +1,13 @@
 @page "/assistant/task/{TaskId:guid}"
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@using MangaManagementSystem.Application.DTOs.Manga
+@using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Assistant")]
 @inject NavigationManager Nav
+@inject IAssistantTaskApiClient AssistantTaskClient
+@inject AuthenticationStateProvider AuthStateProvider
 
 <AssistantLayout>
     <div class="mf-page">
@@ -10,22 +16,258 @@
             <MudText Typo="Typo.body1" Class="mf-muted">Review assignment details and reference material</MudText>
         </div>
 
-        <MudGrid>
-            <MudItem xs="12" md="8">
-                <MudPaper Class="pa-5 mf-card" Elevation="0"><MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Page Preview - @TaskId</MudText><div class="mf-canvas">AI-assisted region suggestion preview</div></MudPaper>
-            </MudItem>
-            <MudItem xs="12" md="4">
-                <MudPaper Class="pa-5 mf-card mb-4" Elevation="0"><MudText Typo="Typo.h6">Task Description</MudText><MudText class="mf-muted">Apply tone shading to the highlighted regions. Please review AI-suggested areas and adjust as needed.</MudText></MudPaper>
-                <MudPaper Class="pa-5 mf-card mb-4" Elevation="0"><MudText Typo="Typo.h6">Task Notes</MudText><MudText>Assigned: Takahashi Yuki</MudText><MudText>Due: May 22, 2026</MudText><MudText>Estimated: 3 hours</MudText></MudPaper>
-                <MudPaper Class="pa-5 mf-card" Elevation="0"><MudText Typo="Typo.h6" Class="mb-3">Quick Actions</MudText><MudStack><MudButton Variant="Variant.Outlined">Download Reference Files</MudButton><MudButton Variant="Variant.Outlined">View Previous Chapter</MudButton><MudButton Variant="Variant.Outlined">Message Lead Artist</MudButton><MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"/assistant/studio/{TaskId}")">Open Studio Workspace</MudButton></MudStack></MudPaper>
-            </MudItem>
-        </MudGrid>
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error">Failed to load task: @_error</MudAlert>
+        }
+        else if (_task is null)
+        {
+            <MudAlert Severity="Severity.Warning">Task not found or not assigned to you.</MudAlert>
+        }
+        else
+        {
+            <MudGrid>
+                <MudItem xs="12" md="8">
+                    <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
+                            <div>
+                                <MudText Typo="Typo.h6" Class="font-weight-bold">@_task.TypeCode</MudText>
+                                @if (!string.IsNullOrWhiteSpace(_task.TaskTitle))
+                                {
+                                    <MudText Typo="Typo.body2">@_task.TaskTitle</MudText>
+                                }
+                            </div>
+                            <StatusBadge Status="@_task.StatusCode" />
+                        </MudStack>
 
+                        <MudPaper Class="pa-4 mb-3" Elevation="0" Style="background-color:#f5f5f5;">
+                            @if (!string.IsNullOrWhiteSpace(_task.SeriesTitle) || !string.IsNullOrWhiteSpace(_task.ChapterNumberLabel) || _task.PageNo.HasValue)
+                            {
+                                <MudStack Spacing="1">
+                                    @if (!string.IsNullOrWhiteSpace(_task.SeriesTitle))
+                                    {
+                                        <MudText Typo="Typo.body2"><strong>Series:</strong> @_task.SeriesTitle</MudText>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(_task.ChapterNumberLabel))
+                                    {
+                                        <MudText Typo="Typo.body2"><strong>Chapter:</strong> @_task.ChapterNumberLabel</MudText>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(_task.ChapterTitle))
+                                    {
+                                        <MudText Typo="Typo.body2"><strong>Chapter Title:</strong> @_task.ChapterTitle</MudText>
+                                    }
+                                    @if (_task.PageNo.HasValue)
+                                    {
+                                        <MudText Typo="Typo.body2"><strong>Page:</strong> @_task.PageNo.Value</MudText>
+                                    }
+                                </MudStack>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.body2" Class="mf-muted">Series/Chapter information not available.</MudText>
+                            }
+                        </MudPaper>
+
+                        <MudStack Spacing="2">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold">Task Description</MudText>
+                            @if (!string.IsNullOrWhiteSpace(_task.TaskDescription))
+                            {
+                                <MudText Class="mf-muted">@_task.TaskDescription</MudText>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.body2" Class="mf-muted">No description available.</MudText>
+                            }
+                        </MudStack>
+                    </MudPaper>
+
+                    @if (_task.PageRegions.Any())
+                    {
+                        <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Assigned Page Regions</MudText>
+                            <MudTable Items="@_task.PageRegions" Hover="true" RowsPerPage="10" Elevation="0">
+                                <HeaderContent>
+                                    <MudTh>Type</MudTh>
+                                    <MudTh>Label</MudTh>
+                                    <MudTh>X</MudTh>
+                                    <MudTh>Y</MudTh>
+                                    <MudTh>Width</MudTh>
+                                    <MudTh>Height</MudTh>
+                                </HeaderContent>
+                                <RowTemplate>
+                                    <MudTd>@context.TypeCode</MudTd>
+                                    <MudTd>@context.RegionLabel</MudTd>
+                                    <MudTd>@context.X</MudTd>
+                                    <MudTd>@context.Y</MudTd>
+                                    <MudTd>@context.Width</MudTd>
+                                    <MudTd>@context.Height</MudTd>
+                                </RowTemplate>
+                            </MudTable>
+                        </MudPaper>
+                    }
+
+                    @* Annotations for assigned regions *@
+                    <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Annotations</MudText>
+                        @if (_annotations == null)
+                        {
+                            <MudText Typo="Typo.body2" Class="mf-muted">Loading annotations...</MudText>
+                        }
+                        else if (!_annotations.Any())
+                        {
+                            <MudText Typo="Typo.body2" Class="mf-muted">No annotations for the assigned regions.</MudText>
+                        }
+                        else
+                        {
+                            <MudTable Items="@_annotations" Hover="true" RowsPerPage="10" Elevation="0" Dense="true">
+                                <HeaderContent>
+                                    <MudTh>Issue Type</MudTh>
+                                    <MudTh>Annotation</MudTh>
+                                    <MudTh>By</MudTh>
+                                    <MudTh>Created</MudTh>
+                                    <MudTh>Status</MudTh>
+                                    <MudTh>Regions</MudTh>
+                                </HeaderContent>
+                                <RowTemplate>
+                                    <MudTd>@context.IssueTypeCode</MudTd>
+                                    <MudTd Style="max-width:300px;overflow:hidden;text-overflow:ellipsis;">@context.AnnotationText</MudTd>
+                                    <MudTd>@(context.AnnotatedByDisplayName ?? "—")</MudTd>
+                                    <MudTd><TimestampDisplay Value="@context.CreatedAtUtc" EmptyText="—" /></MudTd>
+                                    <MudTd>
+                                        @if (context.ResolvedAtUtc.HasValue)
+                                        {
+                                            <MudChip T="string" Color="Color.Success" Size="Size.Small">Resolved</MudChip>
+                                        }
+                                        else
+                                        {
+                                            <MudChip T="string" Color="Color.Warning" Size="Size.Small">Open</MudChip>
+                                        }
+                                    </MudTd>
+                                    <MudTd>@context.PageRegions.Count</MudTd>
+                                </RowTemplate>
+                            </MudTable>
+                        }
+                    </MudPaper>
+
+                    @if (!string.IsNullOrWhiteSpace(_task.PageImageUrl))
+                    {
+                        <MudPaper Class="pa-5 mf-card" Elevation="0">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Source Page Image</MudText>
+                            <MudImage Src="@_task.PageImageUrl" Class="mf-page-image" MaxHeight="400" ObjectFit="ObjectFit.Contain" />
+                            <MudButton Variant="Variant.Text" Size="Size.Small" Href="@_task.PageImageUrl" Target="_blank" Class="mt-2">
+                                Download Source Image
+                            </MudButton>
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <MudPaper Class="pa-5 mf-card" Elevation="0">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Page Image</MudText>
+                            <MudText Typo="Typo.body2" Class="mf-muted">Page image data not available.</MudText>
+                        </MudPaper>
+                    }
+                </MudItem>
+
+                <MudItem xs="12" md="4">
+                    <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Task Metadata</MudText>
+                        <MudStack Spacing="1">
+                            <MudText><strong>Type:</strong> @_task.TypeCode</MudText>
+                            <MudText><strong>Status:</strong> @_task.StatusCode</MudText>
+                            <MudText><strong>Priority:</strong> @_task.PriorityLevel</MudText>
+                            <MudText><strong>Due:</strong> <TimestampDisplay Value="@_task.DueAtUtc" EmptyText="No deadline set" /></MudText>
+                            @if (_task.CompensationAmount.HasValue)
+                            {
+                                <MudText><strong>Compensation:</strong> @_task.CompensationAmount.Value.ToString("C2")</MudText>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(_task.AssignedToDisplayName))
+                            {
+                                <MudText><strong>Assigned To:</strong> @_task.AssignedToDisplayName</MudText>
+                            }
+                        </MudStack>
+                    </MudPaper>
+
+                    @if (_task.CompletedPageVersionId.HasValue && !string.IsNullOrWhiteSpace(_task.CompletedOutputUrl))
+                    {
+                        <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Submitted Output</MudText>
+                            <MudImage Src="@_task.CompletedOutputUrl" MaxHeight="200" ObjectFit="ObjectFit.Contain" Class="rounded" />
+                            <MudText Typo="Typo.caption" Class="mf-muted mt-1">Version ID: @_task.CompletedPageVersionId</MudText>
+                        </MudPaper>
+                    }
+
+                    <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Actions</MudText>
+                        <MudStack Spacing="2">
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"/assistant/studio/{_task.ChapterPageTaskId}")">Open Studio Workspace</MudButton>
+                            @if (_task.StatusCode == "ASSIGNED")
+                            {
+                                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="@($"/assistant/task/{_task.ChapterPageTaskId}/submit")">Submit Work</MudButton>
+                            }
+                            else
+                            {
+                                <MudButton Variant="Variant.Outlined" Disabled="true">Submit Work (Status: @_task.StatusCode)</MudButton>
+                            }
+                            <MudButton Variant="Variant.Text" Href="/assistant/tasks">Back to Tasks</MudButton>
+                        </MudStack>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        }
     </div>
 </AssistantLayout>
 
 @code {
-
     [Parameter] public Guid TaskId { get; set; }
 
+    private Guid _currentUserId;
+    private bool _loading = true;
+    private string? _error;
+    private ChapterPageTaskDto? _task;
+    private IReadOnlyList<ChapterPageAnnotationDto>? _annotations;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (Guid.TryParse(idClaim, out var userId))
+            {
+                _currentUserId = userId;
+            }
+        }
+
+        await LoadTaskAsync();
+    }
+
+    private async Task LoadTaskAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _task = await AssistantTaskClient.GetTaskDetailAsync(_currentUserId, TaskId);
+
+            // Load annotations for this task's regions (non-blocking)
+            if (_task != null)
+            {
+                _annotations = await AssistantTaskClient.GetTaskAnnotationsAsync(_currentUserId, TaskId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
 }

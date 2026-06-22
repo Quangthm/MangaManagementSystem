@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace MangaManagementSystem.Application.DTOs.Manga
@@ -8,7 +9,8 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         string Title,
         string Slug,
         string Synopsis,
-        string Genre,
+        IReadOnlyList<GenreDto> Genres,
+        IReadOnlyList<TagDto> Tags,
         Guid? CoverFileId,
         string StatusCode,
         string ContentLanguageCode,
@@ -16,7 +18,13 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         DateTime CreatedAtUtc,
         DateTime? UpdatedAtUtc,
         Guid? UpdatedByUserId,
-        string? PublicationFrequencyCode
+        string? PublicationFrequencyCode,
+        /// <summary>
+        /// Cloudinary secure URL for the series cover image, if a cover FileResource exists
+        /// and has not been soft-deleted. Null when no cover has been uploaded.
+        /// Display-only — do not use for upload or update workflows.
+        /// </summary>
+        string? CoverUrl = null
     );
 
     public record CreateSeriesDto(
@@ -41,6 +49,7 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         [MaxLength(50)] string StatusCode,
         [MaxLength(10)] string ContentLanguageCode,
         Guid? SourceSeriesId,
-        [MaxLength(20)] string? PublicationFrequencyCode
+        [MaxLength(20)] string? PublicationFrequencyCode,
+        Guid? UpdatedByUserId
     );
 }

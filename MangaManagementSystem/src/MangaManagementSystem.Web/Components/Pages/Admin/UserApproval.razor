@@ -21,7 +21,7 @@
         <MudText Typo="Typo.body2" Class="mf-muted mb-3">Review pending user registrations that require admin approval.</MudText>
 
         <MudPaper Class="pa-5 mf-card" Elevation="0">
-            @if (_isLoadingPendingUsers)
+            @if (_isLoading)
             {
                 <MudProgressLinear Indeterminate="true" Class="mb-4" />
             }
@@ -36,13 +36,13 @@
                         <MudAlert Severity="Severity.Warning" Class="mt-3">Rejected accounts cannot log in. This action can be reviewed in the system records.</MudAlert>
                     </DialogContent>
                     <DialogActions>
-                        <MudButton Variant="Variant.Text" Disabled="@IsBusy" OnClick="CancelReject">Cancel</MudButton>
-                        <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="@IsBusy" OnClick="ConfirmRejectAsync">Reject</MudButton>
+                        <MudButton Variant="Variant.Text" OnClick="CancelReject">Cancel</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="ConfirmRejectAsync">Reject</MudButton>
                     </DialogActions>
                 </MudDialog>
             }
 
-            @if (!_isLoadingPendingUsers && !_pendingUsers.Any())
+            @if (!_isLoading && !_pendingUsers.Any())
             {
                 <MudPaper Class="pa-8 mf-card text-center" Elevation="0">
                     <MudAvatar Color="Color.Primary" Size="Size.Large" Class="mx-auto mb-3">✓</MudAvatar>
@@ -69,11 +69,11 @@
                         <MudTd DataLabel="Name">@(context.DisplayName ?? "-")</MudTd>
                         <MudTd DataLabel="Username">@context.Username</MudTd>
                         <MudTd DataLabel="Email">@context.Email</MudTd>
-                        <MudTd DataLabel="Role">@MapRoleName(context.RoleId)</MudTd>
+                        <MudTd DataLabel="Role">@(context.RoleName ?? "-")</MudTd>
                         <MudTd DataLabel="Portfolio">
                             @if (context.PortfolioFileId.HasValue)
                             {
-                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@IsBusy" OnClick="@(()=>ViewPortfolioAsync(context.PortfolioFileId.Value))">View Portfolio</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(()=>ViewPortfolioAsync(context.PortfolioFileId.Value))">View Portfolio</MudButton>
                             }
                             else
                             {
@@ -143,26 +143,17 @@
     private const string PendingStatus = "PENDING_APPROVAL";
 
     private readonly List<UserDto> _pendingUsers = new();
-    private Dictionary<Guid, Guid> _selectedRolesByUserId = new();
-    private bool _isLoadingPendingUsers;
+    private bool _isLoading;
     private Guid? _processingUserId;
-
-    private string MapRoleName(Guid roleId) => roleId == Guid.Empty ? "Unknown" : "Member";
 
     private async Task LoadPendingUsersAsync()
     {
-        if (_isLoadingPendingUsers)
-        {
-            return;
-        }
-
-        _isLoadingPendingUsers = true;
+        _isLoading = true;
         try
         {
             var users = await UserService.GetUsersByStatusAsync(PendingStatus);
             _pendingUsers.Clear();
             _pendingUsers.AddRange(users);
-            _selectedRolesByUserId = users.ToDictionary(u => u.UserId, u => u.RoleId);
         }
         catch (Exception ex)
         {
@@ -170,28 +161,11 @@
         }
         finally
         {
-            _isLoadingPendingUsers = false;
+            _isLoading = false;
         }
     }
 
-    private Guid GetSelectedRole(Guid userId)
-    {
-        if (_selectedRolesByUserId.TryGetValue(userId, out var roleId))
-        {
-            return roleId;
-        }
-
-        return _pendingUsers.FirstOrDefault(u => u.UserId == userId)?.RoleId ?? Guid.Empty;
-    }
-
-    private void SetSelectedRole(Guid userId, Guid roleId)
-    {
-        _selectedRolesByUserId[userId] = roleId;
-    }
-
-    private bool IsBusy => _isLoadingPendingUsers || _processingUserId.HasValue;
-
-    private bool IsRowBusy(Guid userId) => IsBusy || _processingUserId == userId;
+    private bool IsRowBusy(Guid userId) => _isLoading || _processingUserId == userId;
 
     private async Task<Guid> GetCurrentAdminUserIdAsync()
     {
@@ -288,13 +262,9 @@
     private bool _showRejectConfirm;
     private UserDto? _rejectTarget;
 
-    private void RejectAsync(UserDto user)
+    private async Task RejectAsync(UserDto user)
     {
-        if (IsBusy)
-        {
-            return;
-        }
-
+        // Open confirmation dialog
         _rejectTarget = user;
         _showRejectConfirm = true;
     }

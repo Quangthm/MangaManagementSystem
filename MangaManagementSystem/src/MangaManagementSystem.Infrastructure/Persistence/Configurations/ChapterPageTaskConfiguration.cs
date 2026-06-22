@@ -22,6 +22,35 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
             builder.HasOne(t => t.AssignedToUser).WithMany().HasForeignKey(t => t.AssignedToUserId);
             builder.HasOne(t => t.CreatedByUser).WithMany().HasForeignKey(t => t.CreatedByUserId);
             builder.HasOne(t => t.CompletedPageVersion).WithMany().HasForeignKey(t => t.CompletedPageVersionId);
+
+            // Many-to-many through the existing manga.ChapterPageTaskRegion junction table.
+            builder.HasMany(t => t.PageRegions)
+                .WithMany(r => r.Tasks)
+                .UsingEntity<Dictionary<string, object>>(
+                    "ChapterPageTaskRegion",
+                    right => right
+                        .HasOne<PageRegion>()
+                        .WithMany()
+                        .HasForeignKey("PageRegionId")
+                        .HasConstraintName("fk_chapter_page_task_region_region"),
+                    left => left
+                        .HasOne<ChapterPageTask>()
+                        .WithMany()
+                        .HasForeignKey("ChapterPageTaskId")
+                        .HasConstraintName("fk_chapter_page_task_region_task"),
+                    join =>
+                    {
+                        join.ToTable("ChapterPageTaskRegion", "manga");
+
+                        join.HasKey("ChapterPageTaskId", "PageRegionId")
+                            .HasName("pk_chapter_page_task_region");
+
+                        join.Property<Guid>("ChapterPageTaskId")
+                            .HasColumnName("chapter_page_task_id");
+
+                        join.Property<Guid>("PageRegionId")
+                            .HasColumnName("page_region_id");
+                    });
         }
     }
 }

@@ -1,9 +1,15 @@
 @page "/editor/series"
+@using System
 @using Microsoft.AspNetCore.Authorization
+@using System.Security.Claims
+@using MangaManagementSystem.Application.DTOs.Editor
+@using MangaManagementSystem.Web.Services
+@using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Tantou Editor")]
+@inject IEditorSeriesApiClient EditorSeriesApiClient
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
-@inject ISeriesService SeriesService
+@inject AuthenticationStateProvider AuthStateProvider
 
 <EditorLayout>
     <div class="mf-page">
@@ -13,6 +19,11 @@
         </div>
 
         <MudPaper Class="pa-5 mf-card" Elevation="0">
+            <div class="d-flex align-center mb-4">
+                <MudSpacer />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadSeriesAsync" StartIcon="@Icons.Material.Filled.Refresh">Refresh</MudButton>
+            </div>
+
             @if (_loading)
             {
                 <MudProgressLinear Indeterminate="true" />
@@ -21,17 +32,17 @@
             {
                 <MudAlert Severity="Severity.Error">Failed to load series: @_error</MudAlert>
             }
-            else if (_series == null || !_series.Any())
+            else if (_series == null || _series.Count == 0)
             {
                 <MudPaper Class="pa-8 text-center mf-card" Elevation="0">
-                    <MudIcon Icon="mdi-book-open-page-variant" Size="Size.Large" Color="Color.Secondary" Class="mb-3" />
+                    <MudIcon Icon="@Icons.Material.Outlined.LibraryBooks" Size="Size.Large" Color="Color.Secondary" Class="mb-3" />
                     <MudText Typo="Typo.h6">No series available yet</MudText>
                     <MudText Class="mf-muted mt-1">New series will appear here once they enter the editorial pipeline.</MudText>
                 </MudPaper>
             }
             else
             {
-                <MudTable Items="_series" Hover="true" Dense="true">
+                <MudTable Items="_series" Hover="true" Dense="true" RowsPerPage="15">
                     <HeaderContent>
                         <MudTh>Title</MudTh>
                         <MudTh>Slug</MudTh>
@@ -42,13 +53,33 @@
                     <RowTemplate>
                         <MudTd>@context.Title</MudTd>
                         <MudTd>@context.Slug</MudTd>
-                        <MudTd><MudChip T="string" Color="@GetStatusColor(context.StatusCode)" Size="Size.Small">@context.StatusCode</MudChip></MudTd>
-                        <MudTd>@context.CreatedAtUtc.ToString("MMM d, yyyy")</MudTd>
+                        <MudTd><MudChip T="string" Color="@GetStatusColor(context.StatusCode)" Size="Size.Small">@context.StatusCode.Replace("_", " ")</MudChip></MudTd>
+                        <MudTd>@context.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</MudTd>
                         <MudTd>
-                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
-                                       OnClick="@(() => ViewSeries(context.SeriesId))">
-                                Review
-                            </MudButton>
+                            @{
+                                var viewHref = SeriesNavigationUrlBuilder.BuildEditorSeriesOrProposalHref(
+                                    context.CanOpenSeriesSlugPage, context.Slug, context.LatestProposalId, "/editor/series");
+                            }
+                            @if (CanReview(context))
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                           OnClick="@(() => Nav.NavigateTo(SeriesNavigationUrlBuilder.BuildEditorSeriesOrProposalHref(false, null, context.LatestProposalId, "/editor/series")!))">
+                                    Review
+                                </MudButton>
+                            }
+                            else if (viewHref != null)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default"
+                                           OnClick="@(() => Nav.NavigateTo(viewHref))">
+                                    @(context.CanOpenSeriesSlugPage ? "View Series" : "View")
+                                </MudButton>
+                            }
+                            else
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="true">
+                                    View
+                                </MudButton>
+                            }
                         </MudTd>
                     </RowTemplate>
                 </MudTable>
@@ -60,7 +91,15 @@
 @code {
     private bool _loading = true;
     private string? _error;
-    private IEnumerable<SeriesRow>? _series;
+    private IReadOnlyList<EditorSeriesDto>? _series;
+    private Guid _currentUserId;
+
+    private const string StatusUnderEditorialReview = "UNDER_EDITORIAL_REVIEW";
+
+    private static bool CanReview(EditorSeriesDto s) =>
+        s.LatestProposalId.HasValue &&
+        string.Equals(s.StatusCode, StatusUnderEditorialReview, StringComparison.Ordinal) &&
+        string.Equals(s.LatestProposalStatusCode, StatusUnderEditorialReview, StringComparison.Ordinal);
 
     private Color GetStatusColor(string status) => status switch
     {
@@ -75,6 +114,17 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (Guid.TryParse(idClaim, out var userId))
+            {
+                _currentUserId = userId;
+            }
+        }
+
         await LoadSeriesAsync();
     }
 
@@ -84,27 +134,17 @@
         _error = null;
         try
         {
-            var series = await SeriesService.GetAllSeriesAsync();
-            _series = series.Select(s => new SeriesRow(
-                s.SeriesId,
-                s.Title,
-                s.Slug,
-                s.StatusCode,
-                s.CreatedAtUtc
-            ));
+            var result = await EditorSeriesApiClient.GetSeriesAsync(_currentUserId);
+            _series = result.Series;
         }
         catch (Exception ex)
         {
             _error = ex.Message;
+            _series = null;
         }
         finally
         {
             _loading = false;
         }
     }
-
-    private void ViewSeries(Guid seriesId) =>
-        Nav.NavigateTo($"/editor/series/{seriesId}");
-
-    private record SeriesRow(Guid SeriesId, string Title, string Slug, string StatusCode, DateTime CreatedAtUtc);
 }
