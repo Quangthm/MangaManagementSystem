@@ -80,9 +80,12 @@ namespace MangaManagementSystem.Application.Features.Mangaka.Series.Commands.Upd
 
             IReadOnlyList<Guid> tagIds = CleanGuidList(command.TagIds ?? Array.Empty<Guid>());
 
-            string synopsis = string.IsNullOrWhiteSpace(command.Synopsis)
-                ? title
-                : command.Synopsis.Trim();
+            if (string.IsNullOrWhiteSpace(command.Synopsis))
+            {
+                throw new InvalidOperationException("Synopsis / Description is required.");
+            }
+
+            string synopsis = command.Synopsis.Trim();
 
             string contentLanguageCode = string.IsNullOrWhiteSpace(command.ContentLanguageCode)
                 ? "ja"
