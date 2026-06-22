@@ -385,7 +385,7 @@ export async function initialize(
     );
 
     // Compute crop dimensions that fit inside the canvas.
-    const padding = 70;
+    const padding = 40;
 
     let cropWidth, cropHeight;
 

@@ -3,116 +3,134 @@
 @inject IJSRuntime JSRuntime
 @inject ISnackbar Snackbar
 
-<div class="mf-crop-overlay"
-     @onclick="CancelAsync">
+<MudOverlay Visible="true" OnClick="CancelAsync" DarkBackground="true">
+    <div style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; padding: 24px;"
+         @onclick:stopPropagation>
 
-    <section class="mf-crop-dialog"
-             role="dialog"
-             aria-modal="true"
-             aria-labelledby="image-crop-title"
-             @onclick:stopPropagation="true">
+        <MudCard Style="width: 960px; max-width: 94vw; max-height: 90vh; border-radius: 14px;"
+                 Class="d-flex flex-column">
+            <MudCardContent Style="padding: 0; display: flex; flex-direction: column; flex: 1; min-height: 0;">
 
-        <header class="mf-crop-header">
-            <div>
-                <h2 id="image-crop-title">Adjust Crop</h2>
-                <p>Drag the image to reposition it and use the slider to zoom.</p>
-            </div>
-
-            <button type="button"
-                    class="mf-crop-close"
-                    aria-label="Close image crop editor"
-                    disabled="@_busy"
-                    @onclick="CancelAsync">
-                ×
-            </button>
-        </header>
-
-        <div class="mf-crop-body">
-            <div class="mf-crop-stage">
-                <canvas id="@CropCanvasId"
-                        class="@(_ready ? "mf-crop-canvas is-ready" : "mf-crop-canvas")"
-                        width="480"
-                        height="480">
-                </canvas>
-
-                @if (!_ready)
-                {
-                    <div class="mf-crop-loading">
-                        Loading image...
+                @* Header *@
+                <div style="padding: 18px 24px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+                    <div>
+                        <MudText Typo="Typo.h6" Style="font-weight: 800; color: #0f172a; margin: 0;">Adjust Crop</MudText>
+                        <MudText Typo="Typo.body2" Style="color: #64748b; margin: 4px 0 0;">
+                            Drag the image to reposition it and use the slider to zoom.
+                        </MudText>
                     </div>
-                }
-            </div>
-
-            <aside class="mf-crop-controls">
-                <div>
-                    <strong>@CropDescription</strong>
-                    <p>@HelperText</p>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                   Size="Size.Small"
+                                   Style="color: #64748b;"
+                                   Disabled="@_busy"
+                                   OnClick="@CancelAsync"
+                                   aria-label="Close crop editor" />
                 </div>
 
-                <label for="@($"{CropCanvasId}-zoom")">Zoom</label>
+                @* Body *@
+                <div style="padding: 24px; display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 26px; align-items: start; flex: 1; min-height: 0; overflow-y: auto;">
 
-                <div class="mf-crop-zoom-row">
-                    <button type="button"
-                            title="Zoom out"
-                            disabled="@(!_ready || _busy)"
-                            @onclick="ZoomOutAsync">
-                        −
-                    </button>
-
-                    <input id="@($"{CropCanvasId}-zoom")"
-                           type="range"
-                           min="1"
-                           max="3"
-                           step="0.01"
-                           value="@_zoom.ToString(CultureInfo.InvariantCulture)"
-                           disabled="@(!_ready || _busy)"
-                           @oninput="ZoomChangedAsync" />
-
-                    <button type="button"
-                            title="Zoom in"
-                            disabled="@(!_ready || _busy)"
-                            @onclick="ZoomInAsync">
-                        +
-                    </button>
-                </div>
-
-                <button type="button"
-                        class="mf-crop-reset"
-                        disabled="@(!_ready || _busy)"
-                        @onclick="ResetCropAsync">
-                    Reset position and zoom
-                </button>
-
-                @if (_showUpscaleWarning)
-                {
-                    <div style="padding: 10px 14px; border-radius: 10px; background: #fef3c7; color: #92400e; font-size: 12px; line-height: 1.4; border: 1px solid #fcd34d;">
-                        This image is smaller than the recommended cover size. It will be resized to 1000×1500, but the final cover may look blurry.
+                    @* Canvas area *@
+                    <div style="display: flex; align-items: center; justify-content: center; min-width: 0;">
+                        <div style="position: relative; width: 100%; max-width: @($"{CanvasPixelSize}px");">
+                            <canvas id="@CanvasId"
+                                    class="@(_ready ? "mf-crop-canvas is-ready" : "mf-crop-canvas")"
+                                    width="@CanvasPixelSize"
+                                    height="@CanvasPixelSize"
+                                    style="width: 100%; border-radius: 16px; background: #0f172a; cursor: grab;
+                                           touch-action: none; box-shadow: 0 14px 34px rgba(15, 23, 42, 0.25);
+                                           opacity: @(_ready ? "1" : "0"); transition: opacity .18s ease;">
+                            </canvas>
+                            @if (!_ready)
+                            {
+                                <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #64748b; font-weight: 700;">
+                                    Loading image...
+                                </div>
+                            }
+                        </div>
                     </div>
-                }
 
-                <div class="mf-crop-help">
-                    <span>Drag the image inside the fixed crop frame.</span>
+                    @* Controls *@
+                    <div style="display: flex; flex-direction: column; gap: 14px;">
+                        <div>
+                            <MudText Typo="Typo.body2" Style="font-weight: 700; color: #0f172a;">@CropDescription</MudText>
+                            <MudText Typo="Typo.caption" Style="color: #64748b; margin-top: 3px;">@HelperText</MudText>
+                        </div>
+
+                        <MudText Typo="Typo.caption" Style="font-weight: 700; color: #334155;">Zoom</MudText>
+
+                        <div style="display: grid; grid-template-columns: 38px minmax(0, 1fr) 38px; gap: 9px; align-items: center;">
+                            <MudButton Variant="Variant.Outlined"
+                                       Size="Size.Small"
+                                       Style="min-width: 38px; height: 38px; padding: 0;"
+                                       Disabled="@(!_ready || _busy)"
+                                       OnClick="ZoomOutAsync">
+                                −
+                            </MudButton>
+
+                            <MudSlider Min="1" Max="3" Step="0.01"
+                                       Value="@_zoom"
+                                       ValueChanged="@((double v) => SetZoomAsync(v))"
+                                       Disabled="@(!_ready || _busy)"
+                                       Immediate="true" />
+
+                            <MudButton Variant="Variant.Outlined"
+                                       Size="Size.Small"
+                                       Style="min-width: 38px; height: 38px; padding: 0;"
+                                       Disabled="@(!_ready || _busy)"
+                                       OnClick="ZoomInAsync">
+                                +
+                            </MudButton>
+                        </div>
+
+                        <MudButton Variant="Variant.Outlined"
+                                   Size="Size.Small"
+                                   FullWidth="true"
+                                   Disabled="@(!_ready || _busy)"
+                                   OnClick="ResetCropAsync">
+                            Reset position and zoom
+                        </MudButton>
+
+                        @if (_showUpscaleWarning)
+                        {
+                            <MudAlert Severity="Severity.Warning"
+                                      Dense="true"
+                                      Style="font-size: 12px;">
+                                This image is smaller than the recommended cover size. It will be resized to 1000×1500, but the final cover may look blurry.
+                            </MudAlert>
+                        }
+
+                        <div style="padding: 14px; border-radius: 12px; background: #f8fafc; color: #64748b; font-size: 12px; line-height: 1.4;">
+                            Drag the image inside the fixed crop frame.
+                        </div>
+                    </div>
                 </div>
-            </aside>
-        </div>
 
-        <footer class="mf-crop-footer">
-            <button type="button"
-                    class="mf-crop-cancel"
-                    disabled="@_busy"
-                    @onclick="CancelAsync">
-                Cancel
-            </button>
+                @* Footer *@
+                <div style="padding: 18px 24px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 12px;">
+                    <MudButton Variant="Variant.Outlined"
+                               Disabled="@_busy"
+                               OnClick="CancelAsync">
+                        Cancel
+                    </MudButton>
 
-            <button type="button"
-                    class="mf-crop-confirm"
-                    disabled="@(!_ready || _busy)"
-                    @onclick="ConfirmAsync">
-                @(_busy ? "Processing..." : "Use This Image")
-            </button>
-        </footer>
-    </section>
-</div>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Disabled="@(!_ready || _busy)"
+                               OnClick="ConfirmAsync">
+                        @(_busy ? "Processing..." : "Use This Image")
+                    </MudButton>
+                </div>
+            </MudCardContent>
+        </MudCard>
+    </div>
+</MudOverlay>
+
+<style>
+    .mf-crop-canvas.is-dragging {
+        cursor: grabbing;
+    }
+</style>
 
 @code {
     /// <summary>
@@ -166,7 +184,8 @@
     /// </summary>
     [Parameter] public EventCallback OnCancel { get; set; }
 
-    private const string CropCanvasId = "image-crop-canvas";
+    private const string CanvasId = "image-crop-canvas";
+    private const int CanvasPixelSize = 640;
     private const long MaxUploadBytes = 10 * 1024 * 1024;
 
     private IJSObjectReference? _jsModule;
@@ -190,17 +209,17 @@
             _jsModule ??=
                 await JSRuntime.InvokeAsync<IJSObjectReference>(
                     "import",
-                    "./js/image-crop.js?v=20260621-01");
+                    "./js/image-crop.js?v=20260621-02");
 
             await _jsModule.InvokeVoidAsync(
                 "initialize",
-                CropCanvasId,
+                CanvasId,
                 SourceDataUrl,
                 AspectRatio);
 
             var dims = await _jsModule.InvokeAsync<JsonElement>(
                 "getImageDimensions",
-                CropCanvasId);
+                CanvasId);
 
             _sourceImageWidth = dims.GetProperty("naturalWidth").GetDouble();
             _sourceImageHeight = dims.GetProperty("naturalHeight").GetDouble();
@@ -257,8 +276,10 @@
 
         await _jsModule.InvokeVoidAsync(
             "setZoom",
-            CropCanvasId,
+            CanvasId,
             _zoom);
+
+        StateHasChanged();
     }
 
     private async Task ResetCropAsync()
@@ -269,7 +290,9 @@
 
         await _jsModule.InvokeVoidAsync(
             "reset",
-            CropCanvasId);
+            CanvasId);
+
+        StateHasChanged();
     }
 
     private async Task ConfirmAsync()
@@ -283,7 +306,7 @@
             await using var croppedStreamReference =
                 await _jsModule.InvokeAsync<IJSStreamReference>(
                     "exportCroppedImageStream",
-                    CropCanvasId,
+                    CanvasId,
                     OutputWidth,
                     OutputHeight);
 
@@ -343,7 +366,7 @@
             {
                 await _jsModule.InvokeVoidAsync(
                     "dispose",
-                    CropCanvasId);
+                    CanvasId);
             }
             catch (JSDisconnectedException)
             {

@@ -34,6 +34,7 @@
 - Cloudinary stores actual files.
 - SQL Server stores file metadata in `manga.FileResource`.
 - Audit procedures resolve `actor_role_name` internally from `actor_user_id`; callers should not pass role-name text to audit.
+- For series cover uploads from the Web UI, the selected source image may be cropped in the browser before upload; the backend should receive only the cropped image file as the actual `SERIES_COVER`.
 - `username` is the login/system identifier.
 - `display_name` is the user-facing identity shown in UI.
 - If `display_name` is not provided, the system defaults it to `username`.
@@ -347,7 +348,7 @@ manga.usp_FileResource_Create
 | File purpose code | Allowed extensions | Allowed content types | Cloudinary resource type | Notes |
 |---|---|---|---|---|
 | `SERIES_PROPOSAL` | `.pdf`, `.doc`, `.docx` | `application/pdf`, `application/msword`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | `raw` | Formal series proposal documents only. Markdown, plain text, and image files are not accepted for proposal submission in MVP. |
-| `SERIES_COVER` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Series cover image. |
+| `SERIES_COVER` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Series cover image. In the Web draft UI, the selected source image is cropped client-side first, and the cropped `1000×1500` PNG is uploaded as the actual cover. |
 | `CHAPTER_PAGE_VERSION` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Official manga page image/version output. |
 | `EDITORIAL_ATTACHMENT` | `.pdf`, `.doc`, `.docx`, `.jpg`, `.jpeg`, `.png`, `.webp` | Proposal-document content types plus `image/jpeg`, `image/png`, `image/webp` | `raw` for documents; `image` for images | Editorial markup, review attachments, or supporting screenshots/documents. |
 | `REGISTRATION_PORTFOLIO` | `.pdf`, `.doc`, `.docx`, `.jpg`, `.jpeg`, `.png`, `.webp` | Proposal-document content types plus `image/jpeg`, `image/png`, `image/webp` | `raw` for documents; `image` for images | Optional portfolio submitted for account approval/profile review. |
@@ -468,6 +469,8 @@ Mangaka opens /mangaka/series/drafts
 → Mangaka clicks Create Draft
 → UI shows create draft popup/modal
 → Mangaka enters title, synopsis, one or more genres, optional tags, content language, optional source series, optional proposed publication frequency, and optional cover image
+→ If a cover image is selected, the UI opens a 2:3 portrait crop preview dialog
+→ Mangaka confirms the crop, and the UI produces a `1000×1500` PNG from the selected visible area
 → Backend validates the form and confirms the actor is an active Mangaka
 → Backend generates slug from title
 → Backend resolves slug uniqueness
@@ -499,7 +502,11 @@ audit.usp_AuditEvent_Append
 - Genres are selected from `manga.Genre` and linked through `manga.SeriesGenre`.
 - Tags are selected from `manga.Tag` and linked through `manga.SeriesTag`.
 - Genres and tags are current series metadata; they are not duplicated into proposal snapshot tables in MVP.
-- If a cover image is provided, C# uploads to Cloudinary first, then passes Cloudinary metadata to SQL.
+- If a cover image is provided through the Web UI, the original selected file is used only in the browser for crop preview; the backend receives the cropped image file.
+- The MVP cover crop target is a 2:3 portrait image output as `1000×1500` PNG.
+- Smaller source images may be upscaled to `1000×1500`; the UI should warn that the final cover may look blurry.
+- No original/cropped dual storage and no crop metadata are stored for `SERIES_COVER` in MVP.
+- If a cover image is provided, C# uploads the resulting file to Cloudinary first, then passes Cloudinary metadata to SQL.
 - SQL creates the `FileResource` row inside the series creation workflow.
 - If SQL fails after Cloudinary upload, the backend should attempt to delete the uploaded Cloudinary asset to avoid orphaned files.
 - The creator must be added as an active `SeriesContributor` in the same database workflow/transaction as the `Series` creation.
@@ -526,6 +533,8 @@ Mangaka opens /mangaka/series/drafts
 → Mangaka selects a draft series
 → UI opens edit draft popup/modal
 → Mangaka updates title, synopsis, genres, tags, content language, optional source series, optional proposed publication frequency, and optional cover image
+→ If a replacement cover image is selected, the UI opens a 2:3 portrait crop preview dialog
+→ Mangaka confirms the crop, and the UI produces a `1000×1500` PNG from the selected visible area
 → Backend validates the form and confirms the actor is an active Mangaka contributor of the selected series
 → Backend confirms the series is still PROPOSAL_DRAFT
 → If title changed, backend regenerates slug from title and resolves slug uniqueness
@@ -555,6 +564,9 @@ audit.usp_AuditEvent_Append
 - `publication_frequency_code` is treated as Mangaka's proposed/preferred frequency during draft; board serialization/frequency override is handled by a separate board procedure.
 - Genres and tags are updated as current series metadata through `SeriesGenre` and `SeriesTag` while the draft remains editable.
 - The procedure should rely on database constraints for simple `CHECK`, `UNIQUE`, `NOT NULL`, and FK enforcement, while still validating actor permission and workflow state.
+- After a successful update, the UI should refresh only the affected series card through a scoped read query instead of reloading the full dashboard list.
+- If the scoped card read returns `404`/`NULL`, the UI must not fabricate a card from local form state; it should remove or mark the card unavailable and warn the user.
+- If the scoped card read fails because of a network/server error, the UI may keep the existing card unchanged and warn that the visible card may be stale.
 
 ### System Should Try To
 

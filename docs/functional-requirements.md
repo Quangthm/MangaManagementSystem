@@ -96,7 +96,7 @@
 | File purpose code | Allowed extensions | Allowed content types | Cloudinary resource type | Notes |
 |---|---|---|---|---|
 | `SERIES_PROPOSAL` | `.pdf`, `.doc`, `.docx` | `application/pdf`, `application/msword`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | `raw` | Formal series proposal documents only. Markdown, plain text, and image files are not accepted for proposal submission in MVP. |
-| `SERIES_COVER` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Series cover image. |
+| `SERIES_COVER` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Series cover image. The Web draft UI may upload the cropped `1000×1500` PNG result as the actual cover file. |
 | `CHAPTER_PAGE_VERSION` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Official manga page image/version output. |
 | `EDITORIAL_ATTACHMENT` | `.pdf`, `.doc`, `.docx`, `.jpg`, `.jpeg`, `.png`, `.webp` | Proposal-document content types plus `image/jpeg`, `image/png`, `image/webp` | `raw` for documents; `image` for images | Editorial markup, review attachments, or supporting screenshots/documents. |
 | `REGISTRATION_PORTFOLIO` | `.pdf`, `.doc`, `.docx`, `.jpg`, `.jpeg`, `.png`, `.webp` | Proposal-document content types plus `image/jpeg`, `image/png`, `image/webp` | `raw` for documents; `image` for images | Optional portfolio submitted for account approval/profile review. |
@@ -149,6 +149,12 @@
 | FR-SERIES-007C | The system shall treat genres and tags as current series metadata rather than proposal-history snapshot records in MVP. | BR-SERIES-006C |
 | FR-SERIES-008 | The system shall allow a series to reference an optional current cover image through `FileResource`. | BR-SERIES-007 |
 | FR-SERIES-009 | The system shall require series cover images to use the `SERIES_COVER` file purpose when provided. | BR-SERIES-007 |
+| FR-SERIES-009A | The system shall allow Mangaka users to crop a selected series cover image in the browser before upload when the Web UI cropper is available. | BR-SERIES-007A |
+| FR-SERIES-009B | The system shall lock the MVP series cover crop area to a 2:3 portrait ratio. | BR-SERIES-007C |
+| FR-SERIES-009C | The system shall upload the cropped series cover image as the actual `SERIES_COVER` file instead of uploading the original selected source image. | BR-SERIES-007A, BR-SERIES-007B |
+| FR-SERIES-009D | The system shall not require crop metadata or original/cropped dual-file storage for `SERIES_COVER` in MVP. | BR-SERIES-007B |
+| FR-SERIES-009E | The current Web cropper shall output the MVP series cover crop as a `1000×1500` image file. | BR-SERIES-007C |
+| FR-SERIES-009F | The system should warn users when the selected source image is smaller than the recommended cover output size and may look blurry after upscaling. | BR-SERIES-007D |
 | FR-SERIES-010 | The system shall allow a series to optionally reference another series as its source version. | BR-SERIES-008 |
 | FR-SERIES-011 | The system shall prevent a series from referencing itself as its source series. | BR-SERIES-009 |
 | FR-SERIES-012 | The system shall manage series ownership and contributor membership through `SeriesContributor` instead of `lead_mangaka_user_id` on `Series`. | BR-SERIES-010 |
@@ -211,6 +217,9 @@
 | FR-PROP-018 | The system shall allow proposal lists to be retrieved by series, status, submitter, and reviewer. | BR-PROP-017 |
 | FR-PROP-019 | The system shall allow the latest proposal version for a series to be retrieved. | BR-PROP-018 |
 | FR-PROP-020 | The system shall allow editorial and board queues to be filtered by proposal status. | BR-PROP-019 |
+| FR-PROP-020A | The system shall allow Mangaka proposal tracking lists to search by proposal or series title. | BR-PROP-017, BR-PROP-019 |
+| FR-PROP-020B | The system shall allow Mangaka proposal tracking lists to filter by selected current series genres and tags. | BR-PROP-017, BR-PROP-019 |
+| FR-PROP-020C | The system shall keep Mangaka proposal text search separate from genre/tag filters. | BR-PROP-017, BR-PROP-019 |
 | FR-PROP-021 | The system shall allow reviewed proposal records to be searched by reviewer for admin/editor tracking. | BR-PROP-020 |
 | FR-PROP-022 | The system shall treat the proposal file as supporting material for editor and board evaluation. | BR-PROP-021 |
 | FR-PROP-023 | The system shall not require a fixed minimum number of completed manga pages for proposal submission in MVP. | BR-PROP-022 |
