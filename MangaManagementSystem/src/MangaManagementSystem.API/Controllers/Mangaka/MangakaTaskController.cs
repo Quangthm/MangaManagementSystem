@@ -244,7 +244,126 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             }
         }
 
+        /// <summary>
+        /// Get eligible assistants for task reassignment.
+        /// Route: GET /api/mangaka/tasks/{taskId}/eligible-assistants
+        /// </summary>
+        [HttpGet("{taskId:guid}/eligible-assistants")]
+        public async Task<IActionResult> GetEligibleAssistantsAsync(Guid taskId)
+        {
+            if (taskId == Guid.Empty)
+            {
+                return BadRequest("Invalid task ID.");
+            }
+
+            if (!TryResolveActorUserId(out Guid actorUserId))
+            {
+                return BadRequest("Could not identify the requesting user. Please sign in again.");
+            }
+
+            try
+            {
+                var assistants = await _taskService.GetEligibleAssistantsForTaskAsync(actorUserId, taskId);
+                return Ok(assistants);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading eligible assistants for task {TaskId}.", taskId);
+                return Problem(
+                    detail: "Could not load eligible assistants right now. Please try again later.",
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
+        }
+
+        /// <summary>
+        /// Reassign a task to a different assistant.
+        /// Route: POST /api/mangaka/tasks/{taskId}/reassign
+        /// </summary>
+        [HttpPost("{taskId:guid}/reassign")]
+        public async Task<IActionResult> ReassignTaskAsync(
+            Guid taskId,
+            [FromBody] ReassignChapterPageTaskRequest? request)
+        {
+            if (taskId == Guid.Empty)
+            {
+                return BadRequest("Invalid task ID.");
+            }
+
+            if (!TryResolveActorUserId(out Guid actorUserId))
+            {
+                return BadRequest("Could not identify the requesting user. Please sign in again.");
+            }
+
+            if (request == null)
+            {
+                return BadRequest("Request body is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Reason))
+            {
+                return BadRequest("A reason is required when reassigning a task.");
+            }
+
+            if (request.NewAssignedToUserId == Guid.Empty)
+            {
+                return BadRequest("New assigned user is required.");
+            }
+
+            try
+            {
+                var result = await _taskService.ReassignTaskAsync(actorUserId, taskId, request);
+
+                // Notify new assistant about the assignment
+                await TryNotifyAssistantByUserIdAsync(request.NewAssignedToUserId, actorUserId,
+                    "TASK_ASSIGNED", "New Task Assignment",
+                    "A task has been reassigned to you.");
+
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Microsoft.Data.SqlClient.SqlException ex)
+            {
+                _logger.LogWarning(ex, "SQL error reassigning task {TaskId}.", taskId);
+                return BadRequest(MapSqlException(ex));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error reassigning task {TaskId}.", taskId);
+                return Problem(
+                    detail: "Could not reassign task right now. Please try again later.",
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
+        }
+
         // --- Helpers ---
+
+        private async Task TryNotifyAssistantByUserIdAsync(Guid recipientUserId, Guid actorUserId, string typeCode, string title, string message)
+        {
+            try
+            {
+                if (recipientUserId != Guid.Empty)
+                {
+                    await _notificationService.CreateNotificationAsync(new CreateNotificationDto(
+                        RecipientUserId: recipientUserId,
+                        NotificationTypeCode: typeCode,
+                        Title: title,
+                        Message: message,
+                        RelatedEntityType: "ChapterPageTask",
+                        RelatedEntityId: Guid.Empty));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to send notification to user {RecipientUserId}. Non-blocking.", recipientUserId);
+            }
+        }
 
         private async Task TryNotifyAssistantAsync(Guid taskId, Guid actorUserId, string typeCode, string title, string message)
         {
@@ -274,9 +393,14 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         {
             return ex.Number switch
             {
-                58201 or 58301 or 58401 => "Could not acquire task lock. Please try again.",
-                58202 or 58302 or 58402 => "Task does not exist.",
+                58201 or 58301 or 58401 or 58501 => "Could not acquire task lock. Please try again.",
+                58202 or 58302 or 58402 or 58502 => "Task does not exist.",
                 58203 or 58303 or 58403 => ex.Message,
+                // Reassignment SP errors
+                58503 => "Completed or cancelled tasks cannot be reassigned.",
+                58504 => "New assigned user must be different from the current assignee.",
+                58505 => "A reason is required when reassigning a task.",
+                58508 => "New assigned user must be an active contributor of the same series.",
                 _ => ex.Message
             };
         }

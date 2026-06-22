@@ -201,6 +201,11 @@
                                                    OnClick="@(() => OpenReturnDialog(task))">
                                             Return for Rework
                                         </MudButton>
+                                        <MudButton Variant="Variant.Outlined" Color="Color.Info" Size="Size.Small"
+                                                   Disabled="@_actionInProgress"
+                                                   OnClick="@(() => OpenReassignDialog(task))">
+                                            Reassign
+                                        </MudButton>
                                         <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
                                                    Disabled="@_actionInProgress"
                                                    OnClick="@(() => OpenCancelDialog(task))">
@@ -211,6 +216,11 @@
                                 else if (task.StatusCode == "ASSIGNED")
                                 {
                                     <MudStack Row="true" Class="mt-3" Spacing="2">
+                                        <MudButton Variant="Variant.Outlined" Color="Color.Info" Size="Size.Small"
+                                                   Disabled="@_actionInProgress"
+                                                   OnClick="@(() => OpenReassignDialog(task))">
+                                            Reassign
+                                        </MudButton>
                                         <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
                                                    Disabled="@_actionInProgress"
                                                    OnClick="@(() => OpenCancelDialog(task))">
@@ -251,6 +261,53 @@
             </DialogActions>
         </MudDialog>
 
+        @* Reassign Dialog *@
+        <MudDialog @bind-Visible="_showReassignDialog" Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
+            <TitleContent>Reassign Task</TitleContent>
+            <DialogContent>
+                @if (_reassignDialogTask != null)
+                {
+                    <MudText Class="mb-2">
+                        <strong>Current Assignee:</strong> @(_reassignDialogTask.AssignedToDisplayName ?? _reassignDialogTask.AssignedUsername ?? "Unknown")
+                    </MudText>
+                }
+                @if (_loadingAssistants)
+                {
+                    <MudProgressLinear Indeterminate="true" Class="mb-3" />
+                }
+                else if (!_eligibleAssistants.Any())
+                {
+                    <MudAlert Severity="Severity.Warning" Class="mb-3">No eligible assistants found for this series.</MudAlert>
+                }
+                else
+                {
+                    <MudSelect T="Guid?" Label="New Assistant" @bind-Value="_selectedNewAssistantUserId"
+                               Variant="Variant.Outlined" Required="true" Class="mb-3">
+                        @foreach (var assistant in _eligibleAssistants)
+                        {
+                            <MudSelectItem T="Guid?" Value="@assistant.UserId">
+                                @assistant.DisplayName @(assistant.Username != null ? $"(@{assistant.Username})" : "")
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+                <MudTextField @bind-Value="_reassignReason" Label="Reason for Reassignment" Lines="3"
+                              Variant="Variant.Outlined" Required="true" Counter="500" MaxLength="500"
+                              HelperText="Required. Max 500 characters." />
+                <MudTextField @bind-Value="_reassignDescription" Label="Updated Task Description (optional)" Lines="3"
+                              Variant="Variant.Outlined" Class="mt-3"
+                              HelperText="Leave empty to keep the original description." />
+            </DialogContent>
+            <DialogActions>
+                <MudButton OnClick="@(() => _showReassignDialog = false)">Cancel</MudButton>
+                <MudButton Color="Color.Info" Variant="Variant.Filled"
+                           Disabled="@(!_selectedNewAssistantUserId.HasValue || string.IsNullOrWhiteSpace(_reassignReason) || _actionInProgress || _loadingAssistants)"
+                           OnClick="ConfirmReassign">
+                    Reassign
+                </MudButton>
+            </DialogActions>
+        </MudDialog>
+
     </div>
 </MangakaLayout>
 
@@ -271,6 +328,15 @@
     private string _returnReason = string.Empty;
     private string _cancelReason = string.Empty;
     private Guid _dialogTaskId;
+
+    // Reassign dialog state
+    private bool _showReassignDialog;
+    private bool _loadingAssistants;
+    private ChapterPageTaskDto? _reassignDialogTask;
+    private string _reassignReason = string.Empty;
+    private string _reassignDescription = string.Empty;
+    private Guid? _selectedNewAssistantUserId;
+    private IReadOnlyList<EligibleAssistantDto> _eligibleAssistants = Array.Empty<EligibleAssistantDto>();
 
     private IEnumerable<ChapterPageTaskDto> _filteredTasks =>
         ApplyFilters(_tasks);
@@ -356,6 +422,27 @@
         }
     }
 
+    /// <summary>
+    /// Shared post-mutation refresh: reloads full task list, clears dialog/action state,
+    /// and invokes StateHasChanged to guarantee UI re-render.
+    /// </summary>
+    private async Task RefreshTasksAfterMutationAsync()
+    {
+        _showReturnDialog = false;
+        _showCancelDialog = false;
+        _showReassignDialog = false;
+        _returnReason = string.Empty;
+        _cancelReason = string.Empty;
+        _reassignReason = string.Empty;
+        _reassignDescription = string.Empty;
+        _selectedNewAssistantUserId = null;
+        _eligibleAssistants = Array.Empty<EligibleAssistantDto>();
+        _dialogTaskId = Guid.Empty;
+
+        await LoadTasksAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
     // StoredProc: usp_ChapterPageTask_MarkCompleted
     private async Task ApproveTask(Guid taskId)
     {
@@ -364,7 +451,7 @@
         {
             await MangakaTaskClient.ApproveTaskAsync(_currentUserId, taskId);
             Snackbar.Add("Task approved successfully.", Severity.Success);
-            await LoadTasksAsync();
+            await RefreshTasksAfterMutationAsync();
         }
         catch (Exception ex)
         {
@@ -391,7 +478,7 @@
         {
             await MangakaTaskClient.ReturnTaskForReworkAsync(_currentUserId, _dialogTaskId, _returnReason.Trim());
             Snackbar.Add("Task returned for rework.", Severity.Success);
-            await LoadTasksAsync();
+            await RefreshTasksAfterMutationAsync();
         }
         catch (Exception ex)
         {
@@ -418,11 +505,67 @@
         {
             await MangakaTaskClient.CancelTaskAsync(_currentUserId, _dialogTaskId, _cancelReason.Trim());
             Snackbar.Add("Task cancelled.", Severity.Success);
-            await LoadTasksAsync();
+            await RefreshTasksAfterMutationAsync();
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Failed to cancel: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _actionInProgress = false;
+        }
+    }
+
+    // --- Reassign ---
+
+    private async Task OpenReassignDialog(ChapterPageTaskDto task)
+    {
+        _dialogTaskId = task.ChapterPageTaskId;
+        _reassignDialogTask = task;
+        _reassignReason = string.Empty;
+        _reassignDescription = string.Empty;
+        _selectedNewAssistantUserId = null;
+        _eligibleAssistants = Array.Empty<EligibleAssistantDto>();
+        _showReassignDialog = true;
+        _loadingAssistants = true;
+
+        try
+        {
+            _eligibleAssistants = await MangakaTaskClient.GetEligibleAssistantsAsync(_currentUserId, task.ChapterPageTaskId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load eligible assistants: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loadingAssistants = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task ConfirmReassign()
+    {
+        if (!_selectedNewAssistantUserId.HasValue || string.IsNullOrWhiteSpace(_reassignReason))
+            return;
+
+        _actionInProgress = true;
+        _showReassignDialog = false;
+        try
+        {
+            var request = new ReassignChapterPageTaskRequest(
+                _selectedNewAssistantUserId.Value,
+                _reassignReason.Trim(),
+                string.IsNullOrWhiteSpace(_reassignDescription) ? null : _reassignDescription.Trim());
+
+            await MangakaTaskClient.ReassignTaskAsync(_currentUserId, _dialogTaskId, request);
+            Snackbar.Add("Task reassigned successfully.", Severity.Success);
+            await RefreshTasksAfterMutationAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to reassign: {ex.Message}", Severity.Error);
         }
         finally
         {

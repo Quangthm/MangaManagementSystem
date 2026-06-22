@@ -64,4 +64,30 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         Guid? CompletedPageVersionId,
         [Required] IReadOnlyList<Guid> PageRegionIds
     );
+
+    /// <summary>
+    /// Eligible assistant for task reassignment dropdown.
+    /// </summary>
+    public sealed record EligibleAssistantDto(
+        Guid UserId,
+        string DisplayName,
+        string? Username
+    );
+
+    /// <summary>
+    /// Request to reassign a task to a different assistant.
+    /// </summary>
+    public sealed record ReassignChapterPageTaskRequest(
+        [Required] Guid NewAssignedToUserId,
+        [Required][MaxLength(500)] string Reason,
+        string? UpdatedTaskDescription
+    );
+
+    /// <summary>
+    /// Result of task reassignment.
+    /// </summary>
+    public sealed record ReassignChapterPageTaskResult(
+        Guid OldChapterPageTaskId,
+        Guid NewChapterPageTaskId
+    );
 }
