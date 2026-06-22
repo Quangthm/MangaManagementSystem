@@ -7,7 +7,7 @@
 @using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Assistant")]
-@inject MangaManagementSystem.Application.Interfaces.IChapterPageTaskService TaskService
+@inject IAssistantTaskApiClient AssistantTaskClient
 @inject AuthenticationStateProvider AuthStateProvider
 @inject ISnackbar Snackbar
 
