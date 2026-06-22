@@ -15,10 +15,14 @@
 		}
 		else
 		{
-			<MudMenu OffsetY="true">
+			<MudMenu>
 				<ActivatorContent>
-					<MudAvatar Size="Size.Medium" Image="@_avatarUrl" Class="mf-avatar" Color="Color.Primary">
-						@if (string.IsNullOrEmpty(_avatarUrl))
+					<MudAvatar Size="Size.Medium" Class="mf-avatar" Color="Color.Primary">
+						@if (!string.IsNullOrEmpty(_avatarUrl))
+						{
+							<img src="@_avatarUrl" alt="Avatar" style="width:100%;height:100%;object-fit:cover;" />
+						}
+						else
 						{
 							@(_initial ?? "?")
 						}
@@ -74,7 +78,7 @@
 				}
 			}
 		}
-		catch (Exception ex)
+		catch (Exception)
 		{
 			// Non-fatal; show placeholder avatar
 			Snackbar.Add("Failed to load profile info.", Severity.Warning);
@@ -89,7 +93,6 @@
 	{
 		// Show a simple modal with profile info. For now this is a placeholder that
 		// shows read-only username/email/role/status and informs what update actions are available.
-		var title = "Profile";
 		var content = "Profile editing, avatar upload, and password change are temporarily unavailable in the current build.";
 		Snackbar.Add(content, Severity.Info);
 	}

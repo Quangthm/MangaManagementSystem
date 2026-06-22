@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace MangaManagementSystem.Infrastructure.Repositories
 {
-    internal class repositories
+    internal class Repositories
     {
     }
 }

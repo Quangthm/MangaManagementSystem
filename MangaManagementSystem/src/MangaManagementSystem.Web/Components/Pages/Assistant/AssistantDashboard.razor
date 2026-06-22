@@ -92,26 +92,6 @@
                 </MudItem>
             </MudGrid>
 
-            <MudPaper Class="pa-4 mt-4 mf-card">
-                <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">Task Detail Preview</MudText>
-                @if (_selectedTask == null)
-                {
-                    <MudText class="mf-muted">Select a task to view details.</MudText>
-                }
-                else
-                {
-                    <MudGrid>
-                        <MudItem xs="12" md="8">
-                            <MudText Typo="Typo.subtitle1">Task Id: @_selectedTask.ChapterPageTaskId</MudText>
-                            <MudText class="mf-muted">Type: @_selectedTask.TypeCode</MudText>
-                        </MudItem>
-                        <MudItem xs="12" md="4">
-                            <MudText class="mf-muted">Due: @FormatDate(_selectedTask.DueAtUtc)</MudText>
-                            <MudChip T="string" Color="@GetStatusColor(_selectedTask.StatusCode)">@_selectedTask.StatusCode</MudChip>
-                        </MudItem>
-                    </MudGrid>
-                }
-            </MudPaper>
         }
     </div>
 </AssistantLayout>
@@ -121,7 +101,6 @@
     private string? _loadError;
     private IEnumerable<ChapterPageTaskDto>? _tasks;
     private IEnumerable<ChapterPageTaskDto>? _dueSoon;
-    private ChapterPageTaskDto? _selectedTask;
     private int? _assignedCount;
     private int? _dueSoonCount;
     private int? _underReviewCount;

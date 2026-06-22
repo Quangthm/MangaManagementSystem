@@ -144,7 +144,7 @@ namespace MangaManagementSystem.Application.Services
 
                 return MapToDto(created);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 // If database work failed after Cloudinary upload, attempt to clean up Cloudinary asset
                 if (!string.IsNullOrEmpty(portfolioPublicId))

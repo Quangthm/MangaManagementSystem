@@ -8,10 +8,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 {
     public class SeriesRepository : GenericRepository<Series>, ISeriesRepository
     {
-        private readonly ApplicationDbContext _context;
         public SeriesRepository(ApplicationDbContext context) : base(context)
         {
-            _context = context;
         }
 
         public async Task<Series?> GetSeriesWithChaptersAsync(Guid seriesId)

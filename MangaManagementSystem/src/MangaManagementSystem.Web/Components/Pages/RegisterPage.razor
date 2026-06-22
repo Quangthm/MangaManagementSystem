@@ -215,7 +215,6 @@
     private byte[]? _selectedFileBytes;
     private string _fileValidationError = string.Empty;
     private int? _recaptchaWidgetId;
-    private bool _recaptchaRendered;
 
     protected override void OnInitialized()
     {
@@ -380,7 +379,6 @@
     {
         _isOtpSent = false;
         _otpCode = string.Empty;
-        _recaptchaRendered = false;
         _recaptchaWidgetId = null;
     }
 

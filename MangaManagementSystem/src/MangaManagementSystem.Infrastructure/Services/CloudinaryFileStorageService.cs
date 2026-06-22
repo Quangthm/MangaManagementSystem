@@ -206,7 +206,7 @@ namespace MangaManagementSystem.Infrastructure.Services
             return new FileUploadResultDto(
                 uploadResult.PublicId ?? string.Empty,
                 uploadResult.SecureUrl?.ToString() ?? uploadResult.Url?.ToString() ?? string.Empty,
-                contentType,
+                contentType ?? "application/octet-stream",
                 fileBytes.LongLength,
                 originalFileName,
                 sha256Hash
