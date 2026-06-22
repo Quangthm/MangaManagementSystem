@@ -1,4 +1,4 @@
-﻿using MangaManagementSystem.Domain.Entities;
+using MangaManagementSystem.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -19,10 +19,10 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
             builder.Property(t => t.DueAtUtc).IsRequired();
             builder.Property(t => t.CompensationAmount).HasPrecision(12, 2);
             builder.Property(t => t.CreatedAtUtc).IsRequired();
+            builder.HasOne(t => t.ChapterPage).WithMany().HasForeignKey(t => t.ChapterPageId);
             builder.HasOne(t => t.AssignedToUser).WithMany().HasForeignKey(t => t.AssignedToUserId);
             builder.HasOne(t => t.CreatedByUser).WithMany().HasForeignKey(t => t.CreatedByUserId);
             builder.HasOne(t => t.CompletedPageVersion).WithMany().HasForeignKey(t => t.CompletedPageVersionId);
         }
     }
 }
-

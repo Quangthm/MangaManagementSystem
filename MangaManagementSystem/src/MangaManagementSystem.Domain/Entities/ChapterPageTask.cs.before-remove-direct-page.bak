@@ -1,10 +1,12 @@
-﻿using System;
+using System;
 
 namespace MangaManagementSystem.Domain.Entities
 {
     public class ChapterPageTask
     {
         public Guid ChapterPageTaskId { get; set; }
+        public Guid ChapterPageId { get; set; }
+        public ChapterPage? ChapterPage { get; set; }
         public Guid AssignedToUserId { get; set; }
         public User? AssignedToUser { get; set; }
         public string TypeCode { get; set; } = null!;
@@ -22,4 +24,3 @@ namespace MangaManagementSystem.Domain.Entities
         public DateTime? UpdatedAtUtc { get; set; }
     }
 }
-
