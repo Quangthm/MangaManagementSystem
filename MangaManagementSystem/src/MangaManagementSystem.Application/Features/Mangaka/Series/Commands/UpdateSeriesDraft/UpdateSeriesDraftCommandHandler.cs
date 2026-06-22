@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using MangaManagementSystem.Application.Common;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Interfaces;
@@ -68,11 +72,13 @@ namespace MangaManagementSystem.Application.Features.Mangaka.Series.Commands.Upd
                 throw new InvalidOperationException("A title is required.");
             }
 
-            string genre = command.Genre?.Trim() ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(genre))
+            IReadOnlyList<Guid> genreIds = CleanGuidList(command.GenreIds);
+            if (genreIds.Count == 0)
             {
-                throw new InvalidOperationException("A genre is required.");
+                throw new InvalidOperationException("At least one genre is required.");
             }
+
+            IReadOnlyList<Guid> tagIds = CleanGuidList(command.TagIds ?? Array.Empty<Guid>());
 
             string synopsis = string.IsNullOrWhiteSpace(command.Synopsis)
                 ? title
@@ -140,7 +146,8 @@ namespace MangaManagementSystem.Application.Features.Mangaka.Series.Commands.Upd
                     title: title,
                     slug: slug,
                     synopsis: synopsis,
-                    genre: genre,
+                    genreIds: genreIds,
+                    tagIds: tagIds,
                     contentLanguageCode: contentLanguageCode,
                     publicationFrequencyCode: publicationFrequencyCode,
                     coverOriginalFileName: coverOriginalFileName,
@@ -171,7 +178,6 @@ namespace MangaManagementSystem.Application.Features.Mangaka.Series.Commands.Upd
                 SeriesId = command.SeriesId,
                 Title = title,
                 Slug = slug,
-                Genre = genre,
                 Synopsis = synopsis,
                 ContentLanguageCode = contentLanguageCode,
                 PublicationFrequencyCode = publicationFrequencyCode,
@@ -199,6 +205,14 @@ namespace MangaManagementSystem.Application.Features.Mangaka.Series.Commands.Upd
                     "Failed to clean up cover image {PublicId} from Cloudinary after failure. Reason: {Reason}",
                     publicId, reason);
             }
+        }
+
+        private static IReadOnlyList<Guid> CleanGuidList(IEnumerable<Guid> ids)
+        {
+            return ids
+                .Where(id => id != Guid.Empty)
+                .Distinct()
+                .ToArray();
         }
     }
 }

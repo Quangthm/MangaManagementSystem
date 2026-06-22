@@ -39,7 +39,6 @@ namespace MangaManagementSystem.Application.Services
                 Title = dto.Title,
                 Slug = dto.Slug,
                 Synopsis = dto.Synopsis,
-                Genre = dto.Genre,
                 CoverFileId = dto.CoverFileId,
                 StatusCode = dto.StatusCode,
                 ContentLanguageCode = dto.ContentLanguageCode,
@@ -132,7 +131,8 @@ namespace MangaManagementSystem.Application.Services
                     title,
                     slug,
                     synopsis,
-                    genre,
+                    new List<Guid>(), // Transitional: genre IDs not yet supported through legacy service
+                    new List<Guid>(), // Transitional: tag IDs not yet supported through legacy service
                     contentLanguageCode,
                     dto.SourceSeriesId,
                     publicationFrequencyCode,
@@ -186,7 +186,6 @@ namespace MangaManagementSystem.Application.Services
             entity.Title = dto.Title;
             entity.Slug = dto.Slug;
             entity.Synopsis = dto.Synopsis;
-            entity.Genre = dto.Genre;
             entity.CoverFileId = dto.CoverFileId;
             entity.StatusCode = dto.StatusCode;
             entity.ContentLanguageCode = dto.ContentLanguageCode;
@@ -221,7 +220,8 @@ namespace MangaManagementSystem.Application.Services
             s.Title,
             s.Slug,
             s.Synopsis,
-            s.Genre,
+            MapGenres(s.Genres),
+            MapTags(s.Tags),
             s.CoverFileId,
             s.StatusCode,
             s.ContentLanguageCode,
@@ -236,5 +236,21 @@ namespace MangaManagementSystem.Application.Services
                 ? s.CoverFile?.CloudinarySecureUrl
                 : null
         );
+
+        private static IReadOnlyList<GenreDto> MapGenres(IEnumerable<Genre> genres)
+        {
+            return genres
+                .OrderBy(g => g.GenreName)
+                .Select(g => new GenreDto(g.GenreId, g.GenreName))
+                .ToList();
+        }
+
+        private static IReadOnlyList<TagDto> MapTags(IEnumerable<Tag> tags)
+        {
+            return tags
+                .OrderBy(t => t.TagName)
+                .Select(t => new TagDto(t.TagId, t.TagName))
+                .ToList();
+        }
     }
 }

@@ -7,7 +7,9 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -37,6 +39,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         {
             return await _context.Series
                 .Include(s => s.Chapters)
+                .Include(s => s.Genres)
+                .Include(s => s.Tags)
                 .FirstOrDefaultAsync(s => s.SeriesId == seriesId);
         }
 
@@ -52,6 +56,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             return await _context.Series
                 .AsNoTracking()
                 .Include(s => s.CoverFile)
+                .Include(s => s.Genres)
+                .Include(s => s.Tags)
                 .Where(s => _context.SeriesContributors.Any(sc =>
                     sc.SeriesId == s.SeriesId &&
                     sc.UserId == actorUserId &&
@@ -71,6 +77,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         {
             return await _context.Series
                 .Include(s => s.CoverFile)
+                .Include(s => s.Genres)
+                .Include(s => s.Tags)
                 .AsNoTracking()
                 .ToListAsync();
         }
@@ -80,7 +88,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             string title,
             string slug,
             string synopsis,
-            string genre,
+            IReadOnlyList<Guid> genreIds,
+            IReadOnlyList<Guid> tagIds,
             string contentLanguageCode,
             Guid? sourceSeriesId,
             string? publicationFrequencyCode,
@@ -101,7 +110,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             cmd.Parameters.Add(new SqlParameter("@title", SqlDbType.NVarChar, 200) { Value = title });
             cmd.Parameters.Add(new SqlParameter("@slug", SqlDbType.NVarChar, 220) { Value = slug });
             cmd.Parameters.Add(new SqlParameter("@synopsis", SqlDbType.NVarChar, -1) { Value = synopsis });
-            cmd.Parameters.Add(new SqlParameter("@genre", SqlDbType.NVarChar, 100) { Value = genre });
+            cmd.Parameters.Add(new SqlParameter("@genre_ids_json", SqlDbType.NVarChar, -1) { Value = SerializeGuidArray(genreIds) });
+            cmd.Parameters.Add(new SqlParameter("@tag_ids_json", SqlDbType.NVarChar, -1) { Value = SerializeGuidArray(tagIds) });
             cmd.Parameters.Add(new SqlParameter("@content_language_code", SqlDbType.NVarChar, 10) { Value = contentLanguageCode });
             cmd.Parameters.Add(new SqlParameter("@source_series_id", SqlDbType.UniqueIdentifier) { Value = (object?)sourceSeriesId ?? DBNull.Value });
             cmd.Parameters.Add(new SqlParameter("@publication_frequency_code", SqlDbType.NVarChar, 50) { Value = (object?)publicationFrequencyCode ?? DBNull.Value });
@@ -184,7 +194,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             string title,
             string slug,
             string synopsis,
-            string genre,
+            IReadOnlyList<Guid> genreIds,
+            IReadOnlyList<Guid> tagIds,
             string contentLanguageCode,
             string? publicationFrequencyCode,
             string? coverOriginalFileName,
@@ -205,7 +216,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             cmd.Parameters.Add(new SqlParameter("@title", SqlDbType.NVarChar, 200) { Value = title });
             cmd.Parameters.Add(new SqlParameter("@slug", SqlDbType.NVarChar, 220) { Value = slug });
             cmd.Parameters.Add(new SqlParameter("@synopsis", SqlDbType.NVarChar, -1) { Value = synopsis });
-            cmd.Parameters.Add(new SqlParameter("@genre", SqlDbType.NVarChar, 100) { Value = genre });
+            cmd.Parameters.Add(new SqlParameter("@genre_ids_json", SqlDbType.NVarChar, -1) { Value = SerializeGuidArray(genreIds) });
+            cmd.Parameters.Add(new SqlParameter("@tag_ids_json", SqlDbType.NVarChar, -1) { Value = SerializeGuidArray(tagIds) });
             cmd.Parameters.Add(new SqlParameter("@content_language_code", SqlDbType.NVarChar, 10) { Value = contentLanguageCode });
             cmd.Parameters.Add(new SqlParameter("@publication_frequency_code", SqlDbType.NVarChar, 50) { Value = (object?)publicationFrequencyCode ?? DBNull.Value });
 
@@ -333,6 +345,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             var series = await _context.Series
                 .AsNoTracking()
                 .Include(s => s.CoverFile)
+                .Include(s => s.Genres)
+                .Include(s => s.Tags)
                 .FirstOrDefaultAsync(s => s.Slug == slug, cancellationToken);
 
             if (series is null)
@@ -371,6 +385,35 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         private static readonly string[] AllowedWorkspaceRoles = { "Mangaka", "Tantou Editor", "Assistant" };
 
         /// <inheritdoc />
+        /// <summary>
+        /// Returns a single series by id where the specified actor is an active Mangaka contributor,
+        /// with CoverFile, Genres, and Tags eagerly loaded. Same scoping as the dashboard list query
+        /// but targeted to one series id. Returns null when the series is not found or the actor is
+        /// not an active contributor.
+        /// </summary>
+        public async Task<Series?> GetByContributorAndSeriesIdAsync(
+            Guid actorUserId,
+            Guid seriesId,
+            CancellationToken cancellationToken = default)
+        {
+            return await _context.Series
+                .AsNoTracking()
+                .Include(s => s.CoverFile)
+                .Include(s => s.Genres)
+                .Include(s => s.Tags)
+                .FirstOrDefaultAsync(
+                    s => s.SeriesId == seriesId &&
+                         _context.SeriesContributors.Any(sc =>
+                             sc.SeriesId == s.SeriesId &&
+                             sc.UserId == actorUserId &&
+                             sc.EndDate == null &&
+                             sc.User != null &&
+                             sc.User.StatusCode == "ACTIVE" &&
+                             sc.User.Role != null &&
+                             sc.User.Role.RoleName == "Mangaka"),
+                    cancellationToken);
+        }
+
         public async Task<(Guid SeriesId, string Slug, string Title, bool CanAccess)?>
             GetWorkspaceEntryBySlugAsync(
                 string slug,
@@ -399,6 +442,16 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     cancellationToken);
 
             return (series.SeriesId, series.Slug, series.Title, canAccess);
+        }
+
+        private static string SerializeGuidArray(IEnumerable<Guid> ids)
+        {
+            Guid[] cleanedIds = ids
+                .Where(id => id != Guid.Empty)
+                .Distinct()
+                .ToArray();
+
+            return JsonSerializer.Serialize(cleanedIds);
         }
     }
 }

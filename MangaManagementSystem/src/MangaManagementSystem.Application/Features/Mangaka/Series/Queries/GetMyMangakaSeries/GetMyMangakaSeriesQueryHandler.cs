@@ -37,7 +37,8 @@ namespace MangaManagementSystem.Application.Features.Mangaka.Series.Queries.GetM
             s.Title,
             s.Slug,
             s.Synopsis,
-            s.Genre,
+            MapGenres(s.Genres),
+            MapTags(s.Tags),
             s.CoverFileId,
             s.StatusCode,
             s.ContentLanguageCode,
@@ -50,5 +51,21 @@ namespace MangaManagementSystem.Application.Features.Mangaka.Series.Queries.GetM
                 ? s.CoverFile?.CloudinarySecureUrl
                 : null
         );
+
+        private static IReadOnlyList<GenreDto> MapGenres(IEnumerable<Domain.Entities.Genre> genres)
+        {
+            return genres
+                .OrderBy(g => g.GenreName)
+                .Select(g => new GenreDto(g.GenreId, g.GenreName))
+                .ToList();
+        }
+
+        private static IReadOnlyList<TagDto> MapTags(IEnumerable<Domain.Entities.Tag> tags)
+        {
+            return tags
+                .OrderBy(t => t.TagName)
+                .Select(t => new TagDto(t.TagId, t.TagName))
+                .ToList();
+        }
     }
 }
