@@ -96,13 +96,13 @@
             if (user.IsInRole("Editorial Board Member"))
             {
                 _showRankingLink = true;
-                Nav.NavigateTo("/board");
+                Nav.NavigateTo("/demo/mangaflow/editorial");
                 return;
             }
             if (user.IsInRole("Editorial Board Chief"))
             {
                 _showRankingLink = true;
-                Nav.NavigateTo("/board-chief");
+                Nav.NavigateTo("/demo/mangaflow/editorial");
                 return;
             }
         }
