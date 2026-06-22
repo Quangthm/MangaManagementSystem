@@ -11,10 +11,10 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
             builder.ToTable("SeriesProposal", "manga");
             builder.HasKey(sp => sp.SeriesProposalId);
             builder.Property(sp => sp.SeriesProposalId).ValueGeneratedOnAdd();
+            builder.Ignore(sp => sp.GenreSnapshot); // Genre snapshot column removed from DB; to be replaced by Series.Genres join in Phase 2
             builder.Property(sp => sp.ProposalVersionNo).IsRequired();
             builder.Property(sp => sp.ProposalTitle).IsRequired().HasMaxLength(200);
             builder.Property(sp => sp.SynopsisSnapshot).IsRequired();
-            builder.Property(sp => sp.GenreSnapshot).IsRequired().HasMaxLength(100);
             builder.Property(sp => sp.StatusCode).HasMaxLength(50).HasDefaultValue("UNDER_EDITORIAL_REVIEW");
             builder.Property(sp => sp.SubmittedAtUtc).IsRequired();
             builder.Property(sp => sp.Comments);

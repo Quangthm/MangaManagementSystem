@@ -1,4 +1,4 @@
-using MangaManagementSystem.Application.DTOs.Manga;
+﻿using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
@@ -74,6 +74,7 @@ namespace MangaManagementSystem.Application.Services
 
             _unitOfWork.ChapterPageTasks.Update(entity);
             await _unitOfWork.SaveChangesAsync();
+
             return MapToDto(entity);
         }
 
@@ -88,6 +89,7 @@ namespace MangaManagementSystem.Application.Services
             entity.PageRegions.Clear();
             _unitOfWork.ChapterPageTasks.Delete(entity);
             await _unitOfWork.SaveChangesAsync();
+
             return true;
         }
 

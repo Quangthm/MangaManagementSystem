@@ -29,7 +29,8 @@ The MVP should stay focused and avoid unnecessary tables unless a table represen
 |---|---|
 | Users and accounts | Use one MVP role per account. New users start as `PENDING_APPROVAL`. Admin activates, rejects, or disables accounts. Each user has a non-unique `display_name` for UI display; if not provided during registration or external login, it defaults to the username. Users may update their own display name without entering their account password. |
 | File management | Store actual media in Cloudinary; store metadata and references in `manga.FileResource`. Every file resource must store a backend-calculated `sha256_hash`; duplicate-file warnings based on this hash are optional MVP usability behavior and may be implemented only where time allows. |
-| Series management | Manage series profile, unique slug, lifecycle status, primary language, genre text, cover image, publication frequency, and optional source series reference. `series_id` is the internal backend identity; `slug` is the stable URL identity after serialization. No separate `series_code` is used in MVP. |
+| Series cover crop | The Web UI may crop a selected cover image in the browser before upload. The current MVP cover output is a `1000×1500` PNG in a 2:3 portrait ratio; the cropped file is the actual `SERIES_COVER`, while the original source image and crop metadata are not stored. |
+| Series management | Manage series profile, unique slug, lifecycle status, primary language, normalized genres, normalized tags, current cover image, publication frequency, and optional source series reference. `series_id` is the internal backend identity; `slug` is the stable URL identity after serialization. No separate `series_code` is used in MVP. |
 | Series contributors | Manage team membership through `SeriesContributor`, not a direct lead Mangaka column on `Series`. |
 | Series proposals | Store formal submitted proposal versions in `SeriesProposal`; revisions create new proposal rows. |
 | Board workflow | Use `SeriesBoardPoll` and `SeriesBoardVote`; Editorial Board Chief opens, closes, and cancels board polls, specifies publication frequency when opening `START_SERIALIZATION` polls, may also vote, and board results are computed from votes. Do **not** use a separate `SeriesBoardDecision` table. |
@@ -170,6 +171,21 @@ The project uses **permission-based actor grouping** for shared features and rol
 - SQL stored procedures should receive validated file metadata and do not need to duplicate extension/MIME validation.
 
 
+### Series cover crop implementation note
+
+- For series cover uploads from the Web draft UI, the selected source image is cropped in the browser before upload.
+- The current MVP output is a `1000×1500` PNG using a 2:3 portrait ratio.
+- The backend still receives a normal image file and uses the existing `FileResource` / Cloudinary workflow.
+- The original selected image is not uploaded or stored separately.
+- No crop metadata is stored in MVP.
+- Source images smaller than `1000×1500` may be upscaled, but the UI should warn that the final cover may look blurry.
+
+### Crop implementation reuse note
+
+- Avatar/profile crop and series cover crop currently use separate Web implementations.
+- Current decision: keep them separate until both workflows are smoke-tested, because the avatar crop is stable and the series cover crop is newly added.
+- If a future refactor is approved, migrate avatar cropping toward the reusable `ImageCropDialog` pattern in phases rather than changing both crop workflows at once.
+
 ## 4.4 Users and Accounts
 
 - Each account has exactly one MVP role.
@@ -195,8 +211,10 @@ The project uses **permission-based actor grouping** for shared features and rol
 - Each series has one lifecycle status from the approved list.
 - A series becomes `SERIALIZED` after passing proposal, editorial, and board approval.
 - Each series declares one primary content language.
-- Genre is simple text metadata for MVP.
-- Cover images use `FileResource` and should use file purpose `SERIES_COVER`.
+- Genres are normalized through `manga.Genre` and `manga.SeriesGenre`, allowing a series to have multiple broad story categories.
+- Tags are normalized through `manga.Tag` and `manga.SeriesTag`, allowing a series to have multiple specific tropes, settings, character traits, themes, source/context labels, or content descriptors.
+- Genres and tags are current series metadata, not proposal-history snapshot tables in MVP.
+- Cover images are current series metadata, use `FileResource`, and should use file purpose `SERIES_COVER`.
 - A series may reference another series as its source version but cannot reference itself.
 - Series ownership and contributor membership are managed through `SeriesContributor`.
 - A series may have multiple contributors.
@@ -213,7 +231,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 - `SeriesProposal` stores one formal submitted proposal version.
 - A series can have multiple proposal versions.
 - Proposal version numbers must be positive and unique within the same series.
-- A submitted proposal preserves snapshots of proposal title, synopsis, genre, and proposal file.
+- A submitted proposal preserves snapshots of proposal title, synopsis, and proposal file only; it does not snapshot genres, tags, or the current series cover file in MVP.
 - A submitted proposal must include a `FileResource` with purpose `SERIES_PROPOSAL`.
 - First proposal submission does not require an already assigned Tantou Editor; the submitted proposal becomes visible in the editorial review queue for active Tantou Editors.
 - `SeriesProposal` does not store draft proposal editing.
@@ -323,7 +341,13 @@ The project uses **permission-based actor grouping** for shared features and rol
 - Each annotation must have a valid issue type.
 - Annotation text must be non-empty.
 - Creator and created time must be recorded.
-- Authorized users such as Tantou Editors, Mangaka reviewers, or assigned users may create annotations according to permissions.
+- For MVP, annotation creation is allowed only for active Mangaka contributors and active Tantou Editor contributors with access to the owning series/page workspace.
+- Mangaka-created annotations are production-tracking feedback. They may be resolved by active Mangaka contributors on the same series or active Tantou Editor contributors on the same series.
+- Tantou Editor-created annotations are editorial-review feedback. They may be resolved only by active Tantou Editor contributors on the same series; Mangaka users must not resolve them.
+- Active Mangaka contributors may update unresolved annotation text only for Mangaka-created annotations on the same series.
+- Active Tantou Editor contributors may update unresolved annotation text for either Mangaka-created or Tantou Editor-created annotations on the same series when clarification is needed.
+- Resolved annotations should not be edited in MVP.
+- The MVP does not add a new annotation-origin column. Stored procedures should guard permissions using `annotated_by_user_id`, the creator's current role, the actor's current role, active account status, active series contributor membership, and the owning series derived from linked regions.
 - A page annotation may be created from existing saved regions, newly created regions, or both.
 - Resolved annotations must record resolver and resolved timestamp.
 - Unresolved annotations must have `resolved_by_user_id` and `resolved_at_utc` as `NULL`.
@@ -492,6 +516,10 @@ When implementing, functional requirements should remain traceable to source bus
 
 - `manga.FileResource`
 - `manga.Series`
+- `manga.Genre`
+- `manga.SeriesGenre`
+- `manga.Tag`
+- `manga.SeriesTag`
 - `manga.SeriesContributor`
 - `manga.SeriesProposal`
 - `manga.SeriesBoardPoll`

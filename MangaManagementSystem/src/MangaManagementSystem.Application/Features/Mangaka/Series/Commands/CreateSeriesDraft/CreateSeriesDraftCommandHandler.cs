@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using MangaManagementSystem.Application.Common;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Interfaces;
@@ -74,12 +78,14 @@ namespace MangaManagementSystem.Application.Features.Mangaka.Series.Commands.Cre
                     "A title is required to create a series draft.");
             }
 
-            string genre = command.Genre?.Trim() ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(genre))
+            IReadOnlyList<Guid> genreIds = CleanGuidList(command.GenreIds);
+            if (genreIds.Count == 0)
             {
                 throw new InvalidOperationException(
-                    "A genre is required to create a series draft.");
+                    "At least one genre is required to create a series draft.");
             }
+
+            IReadOnlyList<Guid> tagIds = CleanGuidList(command.TagIds ?? Array.Empty<Guid>());
 
             string synopsis = string.IsNullOrWhiteSpace(command.Synopsis)
                 ? title
@@ -183,7 +189,8 @@ namespace MangaManagementSystem.Application.Features.Mangaka.Series.Commands.Cre
                         title:                     title,
                         slug:                      slug,
                         synopsis:                  synopsis,
-                        genre:                     genre,
+                        genreIds:                  genreIds,
+                        tagIds:                    tagIds,
                         contentLanguageCode:        contentLanguageCode,
                         sourceSeriesId:             command.SourceSeriesId,
                         publicationFrequencyCode:   publicationFrequencyCode,
@@ -236,6 +243,14 @@ namespace MangaManagementSystem.Application.Features.Mangaka.Series.Commands.Cre
                     "Failed to clean up cover image {PublicId} from Cloudinary after failure. Reason: {Reason}",
                     publicId, reason);
             }
+        }
+
+        private static IReadOnlyList<Guid> CleanGuidList(IEnumerable<Guid> ids)
+        {
+            return ids
+                .Where(id => id != Guid.Empty)
+                .Distinct()
+                .ToArray();
         }
     }
 }

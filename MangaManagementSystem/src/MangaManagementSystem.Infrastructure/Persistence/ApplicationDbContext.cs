@@ -18,6 +18,7 @@ namespace MangaManagementSystem.Infrastructure.Persistence
         public DbSet<SeriesBoardPoll> SeriesBoardPolls => Set<SeriesBoardPoll>();
         public DbSet<SeriesBoardVote> SeriesBoardVotes => Set<SeriesBoardVote>();
         public DbSet<SeriesBoardPollVoteSummary> SeriesBoardPollVoteSummaries => Set<SeriesBoardPollVoteSummary>();
+        public DbSet<ActiveSeriesContributor> ActiveSeriesContributors => Set<ActiveSeriesContributor>();
         public DbSet<Chapter> Chapters => Set<Chapter>();
         public DbSet<ChapterPage> ChapterPages => Set<ChapterPage>();
         public DbSet<ChapterPageVersion> ChapterPageVersions => Set<ChapterPageVersion>();
@@ -28,6 +29,8 @@ namespace MangaManagementSystem.Infrastructure.Persistence
         public DbSet<SeriesRankingSnapshot> SeriesRankingSnapshots => Set<SeriesRankingSnapshot>();
         public DbSet<ChapterReaderVoteSnapshot> ChapterReaderVoteSnapshots => Set<ChapterReaderVoteSnapshot>();
         public DbSet<Notification> Notifications => Set<Notification>();
+        public DbSet<Genre> Genres => Set<Genre>();
+        public DbSet<Tag> Tags => Set<Tag>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -37,6 +40,26 @@ namespace MangaManagementSystem.Infrastructure.Persistence
             builder.Entity<SeriesBoardPollVoteSummary>()
                 .ToView("vw_SeriesBoardPollVoteSummary", "manga")
                 .HasNoKey();
+
+            builder.Entity<ActiveSeriesContributor>()
+                .ToView("vw_ActiveSeriesContributor", "manga")
+                .HasNoKey();
+
+            builder.Entity<Series>()
+                .HasMany(s => s.Genres)
+                .WithMany(g => g.Series)
+                .UsingEntity("SeriesGenre",
+                    l => l.HasOne(typeof(Genre)).WithMany().HasForeignKey("genre_id"),
+                    r => r.HasOne(typeof(Series)).WithMany().HasForeignKey("series_id"),
+                    j => j.ToTable("SeriesGenre", "manga"));
+
+            builder.Entity<Series>()
+                .HasMany(s => s.Tags)
+                .WithMany(t => t.Series)
+                .UsingEntity("SeriesTag",
+                    l => l.HasOne(typeof(Tag)).WithMany().HasForeignKey("tag_id"),
+                    r => r.HasOne(typeof(Series)).WithMany().HasForeignKey("series_id"),
+                    j => j.ToTable("SeriesTag", "manga"));
         }
     }
 
@@ -52,6 +75,7 @@ namespace MangaManagementSystem.Infrastructure.Persistence
         DbSet<SeriesBoardPoll> SeriesBoardPolls { get; }
         DbSet<SeriesBoardVote> SeriesBoardVotes { get; }
         DbSet<SeriesBoardPollVoteSummary> SeriesBoardPollVoteSummaries { get; }
+        DbSet<ActiveSeriesContributor> ActiveSeriesContributors { get; }
         DbSet<Chapter> Chapters { get; }
         DbSet<ChapterPage> ChapterPages { get; }
         DbSet<ChapterPageVersion> ChapterPageVersions { get; }
@@ -62,6 +86,8 @@ namespace MangaManagementSystem.Infrastructure.Persistence
         DbSet<SeriesRankingSnapshot> SeriesRankingSnapshots { get; }
         DbSet<ChapterReaderVoteSnapshot> ChapterReaderVoteSnapshots { get; }
         DbSet<Notification> Notifications { get; }
+        DbSet<Genre> Genres { get; }
+        DbSet<Tag> Tags { get; }
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     }
 }

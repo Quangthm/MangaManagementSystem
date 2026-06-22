@@ -453,7 +453,22 @@ function renderSidebar() {
     sidebar.innerHTML = html;
 }
 
-function escHtml(s) { return (s||'').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+function escHtml(value) {
+    if (value === null || value === undefined) {
+        return '';
+    }
+
+    return String(value).replace(/[&<>"']/g, function (ch) {
+        switch (ch) {
+            case '&':  return '&amp;';
+            case '<':  return '&lt;';
+            case '>':  return '&gt;';
+            case '"':  return '&quot;';
+            case "'":  return '&#39;';
+            default:   return ch;
+        }
+    });
+}
 
 function toggleSelect(id) {
     const r = regions.find(x => x.id === id);

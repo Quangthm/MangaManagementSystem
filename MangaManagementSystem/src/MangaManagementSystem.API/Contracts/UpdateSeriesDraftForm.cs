@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using Microsoft.AspNetCore.Http;
 
 namespace MangaManagementSystem.API.Contracts
@@ -13,7 +15,8 @@ namespace MangaManagementSystem.API.Contracts
     {
         public string Title { get; init; } = string.Empty;
         public string Synopsis { get; init; } = string.Empty;
-        public string Genre { get; init; } = string.Empty;
+        public List<Guid> GenreIds { get; init; } = new();
+        public List<Guid> TagIds { get; init; } = new();
         public string ContentLanguageCode { get; init; } = "ja";
         public string? PublicationFrequencyCode { get; init; }
         public string? Slug { get; init; }

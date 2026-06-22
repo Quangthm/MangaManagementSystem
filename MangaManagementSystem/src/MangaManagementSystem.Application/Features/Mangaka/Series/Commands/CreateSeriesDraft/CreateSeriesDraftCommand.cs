@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MediatR;
 
@@ -18,7 +20,8 @@ namespace MangaManagementSystem.Application.Features.Mangaka.Series.Commands.Cre
         Guid ActorUserId,
         string Title,
         string Synopsis,
-        string Genre,
+        IReadOnlyList<Guid> GenreIds,
+        IReadOnlyList<Guid> TagIds,
         string? ContentLanguageCode,
         string? Slug,
         string? PublicationFrequencyCode,

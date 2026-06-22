@@ -1231,7 +1231,6 @@ BEGIN
 
     DECLARE @proposal_title NVARCHAR(200);
     DECLARE @synopsis_snapshot NVARCHAR(MAX);
-    DECLARE @genre_snapshot NVARCHAR(100);
     DECLARE @current_series_status_code NVARCHAR(50);
     DECLARE @submitted_at_utc DATETIME2(0) = SYSUTCDATETIME();
 
@@ -1270,7 +1269,6 @@ BEGIN
         SELECT
             @proposal_title = s.title,
             @synopsis_snapshot = s.synopsis,
-            @genre_snapshot = s.genre,
             @current_series_status_code = s.status_code
         FROM manga.Series s WITH (UPDLOCK, HOLDLOCK)
         WHERE s.series_id = @series_id;
@@ -1293,22 +1291,16 @@ BEGIN
         -- 4. Submitter must be an ACTIVE Mangaka contributor of this series.
         --------------------------------------------------------------------
         IF NOT EXISTS
-        (
-            SELECT 1
-            FROM manga.SeriesContributor sc
-            INNER JOIN auth.Users u
-                ON u.user_id = sc.user_id
-            INNER JOIN auth.Roles r
-                ON r.role_id = u.role_id
-            WHERE sc.series_id = @series_id
-              AND sc.user_id = @submitted_by_user_id
-              AND sc.end_date IS NULL
-              AND u.status_code = N'ACTIVE'
-              AND r.role_name = N'Mangaka'
-        )
-        BEGIN
-            ;THROW 57004, 'Submitter must be an active Mangaka contributor of this series.', 1;
-        END;
+(
+    SELECT 1
+    FROM manga.vw_ActiveSeriesContributor ascx
+    WHERE ascx.series_id = @series_id
+      AND ascx.user_id = @submitted_by_user_id
+      AND ascx.role_name = N'Mangaka'
+)
+BEGIN
+    ;THROW 57004, 'Submitter must be an active Mangaka contributor of this series.', 1;
+END;
 
         --------------------------------------------------------------------
         -- 5. Generate next proposal version number.
@@ -1341,7 +1333,7 @@ BEGIN
             proposal_version_no,
             proposal_title,
             synopsis_snapshot,
-            genre_snapshot,
+
             proposal_file_id,
             status_code,
             submitted_by_user_id,
@@ -1359,7 +1351,6 @@ BEGIN
             @proposal_version_no,
             @proposal_title,
             @synopsis_snapshot,
-            @genre_snapshot,
             @proposal_file_resource_id,
             N'UNDER_EDITORIAL_REVIEW',
             @submitted_by_user_id,
@@ -1483,22 +1474,16 @@ BEGIN
         -- 3. Actor must be an active Mangaka contributor of this series
         --------------------------------------------------------------------
         IF NOT EXISTS
-        (
-            SELECT 1
-            FROM manga.SeriesContributor sc
-            INNER JOIN auth.Users u
-                ON u.user_id = sc.user_id
-            INNER JOIN auth.Roles r
-                ON r.role_id = u.role_id
-            WHERE sc.series_id = @series_id
-              AND sc.user_id = @actor_user_id
-              AND sc.end_date IS NULL
-              AND u.status_code = N'ACTIVE'
-              AND r.role_name = N'Mangaka'
-        )
-        BEGIN
-            ;THROW 57104, 'Only an active Mangaka contributor can cancel this draft series.', 1;
-        END;
+(
+    SELECT 1
+    FROM manga.vw_ActiveSeriesContributor ascx
+    WHERE ascx.series_id = @series_id
+      AND ascx.user_id = @actor_user_id
+      AND ascx.role_name = N'Mangaka'
+)
+BEGIN
+    ;THROW 57104, 'Only an active Mangaka contributor can cancel this draft series.', 1;
+END;
 
         --------------------------------------------------------------------
         -- 4. Cancel draft series
@@ -1759,7 +1744,16 @@ CREATE OR ALTER PROCEDURE manga.usp_Series_Create
     @title NVARCHAR(200),
     @slug NVARCHAR(220),
     @synopsis NVARCHAR(MAX),
-    @genre NVARCHAR(100),
+
+    -- Normalized metadata
+    -- Required: at least one valid existing genre_id.
+    -- Example: N'["guid-1","guid-2"]'
+    @genre_ids_json NVARCHAR(MAX),
+
+    -- Optional: zero or more valid existing tag_id values.
+    -- Example: N'["guid-1","guid-2"]'
+    @tag_ids_json NVARCHAR(MAX) = NULL,
+
     @content_language_code NVARCHAR(10) = N'ja',
     @source_series_id UNIQUEIDENTIFIER = NULL,
     @publication_frequency_code NVARCHAR(50) = NULL,
@@ -1787,6 +1781,7 @@ BEGIN
             BEGIN TRAN;
         END;
 
+        SET @new_series_id = NULL;
         SET @cover_file_resource_id = NULL;
 
         --------------------------------------------------------------------
@@ -1807,7 +1802,117 @@ BEGIN
         END;
 
         --------------------------------------------------------------------
-        -- 2. Optional cover metadata group validation
+        -- 2. Validate and parse genre IDs JSON
+        --------------------------------------------------------------------
+        SET @genre_ids_json = NULLIF(LTRIM(RTRIM(@genre_ids_json)), N'');
+
+        IF @genre_ids_json IS NULL
+        BEGIN
+            ;THROW 57302, 'At least one genre id is required.', 1;
+        END;
+
+        IF ISJSON(@genre_ids_json) <> 1
+           OR LEFT(LTRIM(@genre_ids_json), 1) <> N'['
+        BEGIN
+            ;THROW 57303, 'Genre ids must be a JSON array.', 1;
+        END;
+
+        DECLARE @genre_ids TABLE
+        (
+            genre_id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY
+        );
+
+        IF EXISTS
+        (
+            SELECT 1
+            FROM OPENJSON(@genre_ids_json) j
+            WHERE TRY_CONVERT(UNIQUEIDENTIFIER, j.[value]) IS NULL
+        )
+        BEGIN
+            ;THROW 57304, 'Genre ids JSON contains an invalid GUID value.', 1;
+        END;
+
+        INSERT INTO @genre_ids
+        (
+            genre_id
+        )
+        SELECT DISTINCT
+            TRY_CONVERT(UNIQUEIDENTIFIER, j.[value]) AS genre_id
+        FROM OPENJSON(@genre_ids_json) j;
+
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM @genre_ids
+        )
+        BEGIN
+            ;THROW 57305, 'At least one genre id is required.', 1;
+        END;
+
+        IF EXISTS
+        (
+            SELECT 1
+            FROM @genre_ids gi
+            LEFT JOIN manga.Genre g
+                ON g.genre_id = gi.genre_id
+            WHERE g.genre_id IS NULL
+        )
+        BEGIN
+            ;THROW 57306, 'Genre ids JSON contains a genre id that does not exist.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 3. Validate and parse tag IDs JSON
+        -- Tags are optional. NULL or [] means no tags.
+        --------------------------------------------------------------------
+        SET @tag_ids_json = NULLIF(LTRIM(RTRIM(@tag_ids_json)), N'');
+
+        DECLARE @tag_ids TABLE
+        (
+            tag_id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY
+        );
+
+        IF @tag_ids_json IS NOT NULL
+        BEGIN
+            IF ISJSON(@tag_ids_json) <> 1
+               OR LEFT(LTRIM(@tag_ids_json), 1) <> N'['
+            BEGIN
+                ;THROW 57307, 'Tag ids must be a JSON array.', 1;
+            END;
+
+            IF EXISTS
+            (
+                SELECT 1
+                FROM OPENJSON(@tag_ids_json) j
+                WHERE TRY_CONVERT(UNIQUEIDENTIFIER, j.[value]) IS NULL
+            )
+            BEGIN
+                ;THROW 57308, 'Tag ids JSON contains an invalid GUID value.', 1;
+            END;
+
+            INSERT INTO @tag_ids
+            (
+                tag_id
+            )
+            SELECT DISTINCT
+                TRY_CONVERT(UNIQUEIDENTIFIER, j.[value]) AS tag_id
+            FROM OPENJSON(@tag_ids_json) j;
+
+            IF EXISTS
+            (
+                SELECT 1
+                FROM @tag_ids ti
+                LEFT JOIN manga.Tag t
+                    ON t.tag_id = ti.tag_id
+                WHERE t.tag_id IS NULL
+            )
+            BEGIN
+                ;THROW 57309, 'Tag ids JSON contains a tag id that does not exist.', 1;
+            END;
+        END;
+
+        --------------------------------------------------------------------
+        -- 4. Optional cover metadata group validation
         --------------------------------------------------------------------
         DECLARE @has_cover_metadata BIT = 0;
 
@@ -1832,11 +1937,11 @@ BEGIN
                OR @cover_sha256_hash IS NULL
            )
         BEGIN
-            ;THROW 57302, 'Cover file metadata is incomplete.', 1;
+            ;THROW 57310, 'Cover file metadata is incomplete.', 1;
         END;
 
         --------------------------------------------------------------------
-        -- 3. Create FileResource for cover if metadata exists
+        -- 5. Create FileResource for cover if metadata exists
         --------------------------------------------------------------------
         IF @has_cover_metadata = 1
         BEGIN
@@ -1853,12 +1958,15 @@ BEGIN
         END;
 
         --------------------------------------------------------------------
-        -- 4. Insert series draft
+        -- 6. Insert series draft
         --
         -- Table defaults should handle:
         -- - series_id = NEWID()
         -- - status_code = PROPOSAL_DRAFT
         -- - created_at_utc = SYSUTCDATETIME()
+        --
+        -- Genre is no longer stored on manga.Series.
+        -- Genres/tags are linked below through junction tables.
         --------------------------------------------------------------------
         DECLARE @created_series TABLE
         (
@@ -1870,7 +1978,6 @@ BEGIN
             title,
             slug,
             synopsis,
-            genre,
             cover_file_id,
             content_language_code,
             source_series_id,
@@ -1883,7 +1990,6 @@ BEGIN
             @title,
             @slug,
             @synopsis,
-            @genre,
             @cover_file_resource_id,
             @content_language_code,
             @source_series_id,
@@ -1895,7 +2001,33 @@ BEGIN
         FROM @created_series;
 
         --------------------------------------------------------------------
-        -- 5. Add creator as initial contributor
+        -- 7. Insert normalized series genres
+        --------------------------------------------------------------------
+        INSERT INTO manga.SeriesGenre
+        (
+            series_id,
+            genre_id
+        )
+        SELECT
+            @new_series_id,
+            gi.genre_id
+        FROM @genre_ids gi;
+
+        --------------------------------------------------------------------
+        -- 8. Insert normalized series tags
+        --------------------------------------------------------------------
+        INSERT INTO manga.SeriesTag
+        (
+            series_id,
+            tag_id
+        )
+        SELECT
+            @new_series_id,
+            ti.tag_id
+        FROM @tag_ids ti;
+
+        --------------------------------------------------------------------
+        -- 9. Add creator as initial contributor
         --------------------------------------------------------------------
         DECLARE @new_series_contributor_id UNIQUEIDENTIFIER;
 
@@ -1907,7 +2039,7 @@ BEGIN
             @new_series_contributor_id = @new_series_contributor_id OUTPUT;
 
         --------------------------------------------------------------------
-        -- 6. Audit
+        -- 10. Audit
         --------------------------------------------------------------------
         DECLARE @audit_entity_id NVARCHAR(100) =
             CONVERT(NVARCHAR(36), @new_series_id);
@@ -1918,7 +2050,24 @@ BEGIN
                 @title AS title,
                 @slug AS slug,
                 @synopsis AS synopsis,
-                @genre AS genre,
+                JSON_QUERY
+                (
+                    (
+                        SELECT
+                            gi.genre_id
+                        FROM @genre_ids gi
+                        FOR JSON PATH
+                    )
+                ) AS genre_ids,
+                JSON_QUERY
+                (
+                    (
+                        SELECT
+                            ti.tag_id
+                        FROM @tag_ids ti
+                        FOR JSON PATH
+                    )
+                ) AS tag_ids,
                 @content_language_code AS content_language_code,
                 @source_series_id AS source_series_id,
                 @publication_frequency_code AS publication_frequency_code,
@@ -1980,7 +2129,16 @@ CREATE OR ALTER PROCEDURE manga.usp_Series_UpdateProfile
     @title                          NVARCHAR(200),
     @slug                           NVARCHAR(220),
     @synopsis                       NVARCHAR(MAX),
-    @genre                          NVARCHAR(100),
+
+    -- Normalized metadata
+    -- Required: at least one existing genre_id.
+    -- Example: N'["guid-1","guid-2"]'
+    @genre_ids_json                 NVARCHAR(MAX),
+
+    -- Optional: NULL or [] means no tags.
+    -- Example: N'["guid-1","guid-2"]'
+    @tag_ids_json                   NVARCHAR(MAX) = NULL,
+
     @content_language_code          NVARCHAR(10)  = N'ja',
     @publication_frequency_code     NVARCHAR(50)  = NULL,
 
@@ -2013,6 +2171,8 @@ BEGIN
             SET @started_tran = 1;
             BEGIN TRAN;
         END;
+
+        SET @new_cover_file_resource_id = NULL;
 
         --------------------------------------------------------------------
         -- 1. Serialize profile updates per series.
@@ -2060,25 +2220,160 @@ BEGIN
         IF NOT EXISTS
         (
             SELECT 1
-            FROM manga.SeriesContributor sc
-            INNER JOIN auth.Users u
-                ON u.user_id = sc.user_id
-            INNER JOIN auth.Roles r
-                ON r.role_id = u.role_id
-            WHERE sc.series_id = @series_id
-              AND sc.user_id   = @actor_user_id
-              AND sc.end_date  IS NULL
-              AND u.status_code = N'ACTIVE'
-              AND r.role_name   = N'Mangaka'
+            FROM manga.vw_ActiveSeriesContributor ascx
+            WHERE ascx.series_id = @series_id
+              AND ascx.user_id = @actor_user_id
+              AND ascx.role_name = N'Mangaka'
         )
         BEGIN
             ;THROW 57404, 'Only an active Mangaka contributor can update this series profile.', 1;
         END;
 
         --------------------------------------------------------------------
-        -- 5. Validate cover metadata group (all-or-nothing).
+        -- 5. Validate and parse genre IDs JSON.
         --------------------------------------------------------------------
-        IF @cover_original_file_name    IS NOT NULL
+        SET @genre_ids_json = NULLIF(LTRIM(RTRIM(@genre_ids_json)), N'');
+
+        IF @genre_ids_json IS NULL
+        BEGIN
+            ;THROW 57405, 'At least one genre id is required.', 1;
+        END;
+
+        IF ISJSON(@genre_ids_json) <> 1
+           OR LEFT(LTRIM(@genre_ids_json), 1) <> N'['
+        BEGIN
+            ;THROW 57406, 'Genre ids must be a JSON array.', 1;
+        END;
+
+        DECLARE @genre_ids TABLE
+        (
+            genre_id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY
+        );
+
+        IF EXISTS
+        (
+            SELECT 1
+            FROM OPENJSON(@genre_ids_json) j
+            WHERE TRY_CONVERT(UNIQUEIDENTIFIER, j.[value]) IS NULL
+        )
+        BEGIN
+            ;THROW 57407, 'Genre ids JSON contains an invalid GUID value.', 1;
+        END;
+
+        INSERT INTO @genre_ids
+        (
+            genre_id
+        )
+        SELECT DISTINCT
+            TRY_CONVERT(UNIQUEIDENTIFIER, j.[value]) AS genre_id
+        FROM OPENJSON(@genre_ids_json) j;
+
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM @genre_ids
+        )
+        BEGIN
+            ;THROW 57408, 'At least one genre id is required.', 1;
+        END;
+
+        IF EXISTS
+        (
+            SELECT 1
+            FROM @genre_ids gi
+            LEFT JOIN manga.Genre g
+                ON g.genre_id = gi.genre_id
+            WHERE g.genre_id IS NULL
+        )
+        BEGIN
+            ;THROW 57409, 'Genre ids JSON contains a genre id that does not exist.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 6. Validate and parse tag IDs JSON.
+        -- Tags are optional. NULL or [] means clear all tags.
+        --------------------------------------------------------------------
+        SET @tag_ids_json = NULLIF(LTRIM(RTRIM(@tag_ids_json)), N'');
+
+        DECLARE @tag_ids TABLE
+        (
+            tag_id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY
+        );
+
+        IF @tag_ids_json IS NOT NULL
+        BEGIN
+            IF ISJSON(@tag_ids_json) <> 1
+               OR LEFT(LTRIM(@tag_ids_json), 1) <> N'['
+            BEGIN
+                ;THROW 57410, 'Tag ids must be a JSON array.', 1;
+            END;
+
+            IF EXISTS
+            (
+                SELECT 1
+                FROM OPENJSON(@tag_ids_json) j
+                WHERE TRY_CONVERT(UNIQUEIDENTIFIER, j.[value]) IS NULL
+            )
+            BEGIN
+                ;THROW 57411, 'Tag ids JSON contains an invalid GUID value.', 1;
+            END;
+
+            INSERT INTO @tag_ids
+            (
+                tag_id
+            )
+            SELECT DISTINCT
+                TRY_CONVERT(UNIQUEIDENTIFIER, j.[value]) AS tag_id
+            FROM OPENJSON(@tag_ids_json) j;
+
+            IF EXISTS
+            (
+                SELECT 1
+                FROM @tag_ids ti
+                LEFT JOIN manga.Tag t
+                    ON t.tag_id = ti.tag_id
+                WHERE t.tag_id IS NULL
+            )
+            BEGIN
+                ;THROW 57412, 'Tag ids JSON contains a tag id that does not exist.', 1;
+            END;
+        END;
+
+        --------------------------------------------------------------------
+        -- 7. Capture old genre/tag links for audit.
+        --------------------------------------------------------------------
+        DECLARE @old_genre_ids TABLE
+        (
+            genre_id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY
+        );
+
+        DECLARE @old_tag_ids TABLE
+        (
+            tag_id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY
+        );
+
+        INSERT INTO @old_genre_ids
+        (
+            genre_id
+        )
+        SELECT
+            sg.genre_id
+        FROM manga.SeriesGenre sg
+        WHERE sg.series_id = @series_id;
+
+        INSERT INTO @old_tag_ids
+        (
+            tag_id
+        )
+        SELECT
+            st.tag_id
+        FROM manga.SeriesTag st
+        WHERE st.series_id = @series_id;
+
+        --------------------------------------------------------------------
+        -- 8. Validate cover metadata group (all-or-nothing).
+        --------------------------------------------------------------------
+        IF @cover_original_file_name       IS NOT NULL
            OR @cover_cloudinary_public_id  IS NOT NULL
            OR @cover_cloudinary_secure_url IS NOT NULL
            OR @cover_content_type          IS NOT NULL
@@ -2089,8 +2384,9 @@ BEGIN
         END;
 
         IF @has_cover_metadata = 1
-           AND (
-               @cover_original_file_name    IS NULL
+           AND
+           (
+               @cover_original_file_name       IS NULL
                OR @cover_cloudinary_public_id  IS NULL
                OR @cover_cloudinary_secure_url IS NULL
                OR @cover_content_type          IS NULL
@@ -2098,24 +2394,21 @@ BEGIN
                OR @cover_sha256_hash           IS NULL
            )
         BEGIN
-            ;THROW 57405, 'Cover file metadata is incomplete. Pass all six cover fields or none.', 1;
+            ;THROW 57413, 'Cover file metadata is incomplete. Pass all six cover fields or none.', 1;
         END;
 
         --------------------------------------------------------------------
-        -- 6. Soft-delete old cover FileResource if a new cover is supplied.
+        -- 9. Soft-delete old cover FileResource if a new cover is supplied.
         --------------------------------------------------------------------
-        SET @new_cover_file_resource_id = NULL;
-
         IF @has_cover_metadata = 1
         BEGIN
             IF @old_cover_file_id IS NOT NULL
             BEGIN
                 EXEC manga.usp_FileResource_SoftDelete
-                    @file_resource_id  = @old_cover_file_id,
+                    @file_resource_id   = @old_cover_file_id,
                     @deleted_by_user_id = @actor_user_id;
             END;
 
-            -- Create new SERIES_COVER FileResource.
             EXEC manga.usp_FileResource_Create
                 @file_purpose_code     = N'SERIES_COVER',
                 @original_file_name    = @cover_original_file_name,
@@ -2129,27 +2422,61 @@ BEGIN
         END;
 
         --------------------------------------------------------------------
-        -- 7. Update series profile.
-        --    Only update cover_file_id when a new cover was provided.
+        -- 10. Update series profile.
+        -- Genre/tag metadata is no longer stored on manga.Series.
+        -- It is replaced in manga.SeriesGenre and manga.SeriesTag below.
         --------------------------------------------------------------------
         UPDATE manga.Series
         SET
             title                       = @title,
             slug                        = @slug,
             synopsis                    = @synopsis,
-            genre                       = @genre,
             content_language_code       = @content_language_code,
             publication_frequency_code  = @publication_frequency_code,
-            cover_file_id               = CASE WHEN @has_cover_metadata = 1
-                                               THEN @new_cover_file_resource_id
-                                               ELSE cover_file_id
+            cover_file_id               = CASE
+                                              WHEN @has_cover_metadata = 1
+                                                  THEN @new_cover_file_resource_id
+                                              ELSE cover_file_id
                                           END,
             updated_at_utc              = @updated_at_utc,
             updated_by_user_id          = @actor_user_id
         WHERE series_id = @series_id;
 
         --------------------------------------------------------------------
-        -- 8. Audit.
+        -- 11. Replace normalized series genres.
+        --------------------------------------------------------------------
+        DELETE FROM manga.SeriesGenre
+        WHERE series_id = @series_id;
+
+        INSERT INTO manga.SeriesGenre
+        (
+            series_id,
+            genre_id
+        )
+        SELECT
+            @series_id,
+            gi.genre_id
+        FROM @genre_ids gi;
+
+        --------------------------------------------------------------------
+        -- 12. Replace normalized series tags.
+        -- NULL or [] clears all tags.
+        --------------------------------------------------------------------
+        DELETE FROM manga.SeriesTag
+        WHERE series_id = @series_id;
+
+        INSERT INTO manga.SeriesTag
+        (
+            series_id,
+            tag_id
+        )
+        SELECT
+            @series_id,
+            ti.tag_id
+        FROM @tag_ids ti;
+
+        --------------------------------------------------------------------
+        -- 13. Audit.
         --------------------------------------------------------------------
         DECLARE @audit_entity_id NVARCHAR(100) =
             CONVERT(NVARCHAR(36), @series_id);
@@ -2157,15 +2484,51 @@ BEGIN
         DECLARE @detail_json NVARCHAR(MAX) =
         (
             SELECT
-                @series_id                      AS series_id,
-                @title                          AS title,
-                @slug                           AS slug,
-                @genre                          AS genre,
-                @content_language_code          AS content_language_code,
-                @publication_frequency_code     AS publication_frequency_code,
-                @has_cover_metadata             AS cover_updated,
-                @new_cover_file_resource_id     AS new_cover_file_resource_id,
-                @old_cover_file_id              AS old_cover_file_id
+                @series_id                  AS series_id,
+                @title                      AS title,
+                @slug                       AS slug,
+                @synopsis                   AS synopsis,
+                JSON_QUERY
+                (
+                    (
+                        SELECT
+                            og.genre_id
+                        FROM @old_genre_ids og
+                        FOR JSON PATH
+                    )
+                ) AS old_genre_ids,
+                JSON_QUERY
+                (
+                    (
+                        SELECT
+                            gi.genre_id
+                        FROM @genre_ids gi
+                        FOR JSON PATH
+                    )
+                ) AS new_genre_ids,
+                JSON_QUERY
+                (
+                    (
+                        SELECT
+                            ot.tag_id
+                        FROM @old_tag_ids ot
+                        FOR JSON PATH
+                    )
+                ) AS old_tag_ids,
+                JSON_QUERY
+                (
+                    (
+                        SELECT
+                            ti.tag_id
+                        FROM @tag_ids ti
+                        FOR JSON PATH
+                    )
+                ) AS new_tag_ids,
+                @content_language_code      AS content_language_code,
+                @publication_frequency_code AS publication_frequency_code,
+                @has_cover_metadata         AS cover_updated,
+                @new_cover_file_resource_id AS new_cover_file_resource_id,
+                @old_cover_file_id          AS old_cover_file_id
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
         );
 
@@ -2218,25 +2581,21 @@ BEGIN
         -- selected chapter_page_version_id.
         --------------------------------------------------------------------
         IF NOT EXISTS
-        (
-             SELECT 1
-    FROM auth.Users u
-    INNER JOIN manga.ChapterPageVersion cpv
-        ON cpv.chapter_page_version_id = @chapter_page_version_id
+(
+    SELECT 1
+    FROM manga.ChapterPageVersion cpv
     INNER JOIN manga.ChapterPage cp
         ON cp.chapter_page_id = cpv.chapter_page_id
     INNER JOIN manga.Chapter ch
         ON ch.chapter_id = cp.chapter_id
-    INNER JOIN manga.SeriesContributor sc
-        ON sc.series_id = ch.series_id
-       AND sc.user_id = u.user_id
-    WHERE u.user_id = @actor_user_id
-      AND u.status_code = N'ACTIVE'
-      AND sc.end_date IS NULL
-        )
-        BEGIN
-            ;THROW 57411, 'User is not an active contributor for the series that owns this page version.', 1;
-        END;
+    INNER JOIN manga.vw_ActiveSeriesContributor ascx
+        ON ascx.series_id = ch.series_id
+       AND ascx.user_id = @actor_user_id
+    WHERE cpv.chapter_page_version_id = @chapter_page_version_id
+)
+BEGIN
+    ;THROW 57411, 'User is not an active contributor for the series that owns this page version.', 1;
+END;
 
         --------------------------------------------------------------------
         -- 2. Validate JSON input
@@ -2487,38 +2846,59 @@ BEGIN
     ;THROW 57902, 'All page regions must exist and belong to the same chapter page version.', 1;
 END;
 
-        --------------------------------------------------------------------
         DECLARE @owning_series_id UNIQUEIDENTIFIER;
 
-        SELECT TOP (1)
-            @owning_series_id = ch.series_id
-        FROM @parsed_page_region_ids parsed
-        INNER JOIN manga.PageRegion pr
-            ON pr.page_region_id = parsed.page_region_id
-        INNER JOIN manga.ChapterPageVersion cpv
-            ON cpv.chapter_page_version_id = pr.chapter_page_version_id
-        INNER JOIN manga.ChapterPage cp
-            ON cp.chapter_page_id = cpv.chapter_page_id
-        INNER JOIN manga.Chapter ch
-            ON ch.chapter_id = cp.chapter_id;
+SELECT TOP (1)
+    @owning_series_id = ch.series_id
+FROM @parsed_page_region_ids parsed
+INNER JOIN manga.PageRegion pr
+    ON pr.page_region_id = parsed.page_region_id
+INNER JOIN manga.ChapterPageVersion cpv
+    ON cpv.chapter_page_version_id = pr.chapter_page_version_id
+INNER JOIN manga.ChapterPage cp
+    ON cp.chapter_page_id = cpv.chapter_page_id
+INNER JOIN manga.Chapter ch
+    ON ch.chapter_id = cp.chapter_id;
 
-        --------------------------------------------------------------------
-        -- 4. Actor must be active contributor for the owning series.
-        --------------------------------------------------------------------
-        IF NOT EXISTS
-        (
-            SELECT 1
-            FROM manga.SeriesContributor sc
-INNER JOIN auth.Users u
-    ON u.user_id = sc.user_id
-WHERE sc.series_id = @owning_series_id
-  AND sc.user_id = @actor_user_id
-  AND sc.end_date IS NULL
-  AND u.status_code = N'ACTIVE'
-        )
-        BEGIN
-            ;THROW 57504, 'User is not an active contributor for the series that owns these page regions.', 1;
-        END;
+--------------------------------------------------------------------
+-- 4. Actor must be active.
+--------------------------------------------------------------------
+DECLARE @actor_role_name NVARCHAR(30);
+
+SELECT
+    @actor_role_name = r.role_name
+FROM auth.Users u
+INNER JOIN auth.Roles r
+    ON r.role_id = u.role_id
+WHERE u.user_id = @actor_user_id
+  AND u.status_code = N'ACTIVE';
+
+IF @actor_role_name IS NULL
+BEGIN
+    ;THROW 57501, 'Actor user is not active or was not found.', 1;
+END;
+
+--------------------------------------------------------------------
+-- 5. Actor must be active contributor for the owning series.
+--------------------------------------------------------------------
+IF NOT EXISTS
+(
+    SELECT 1
+    FROM manga.vw_ActiveSeriesContributor ascx
+    WHERE ascx.series_id = @owning_series_id
+      AND ascx.user_id = @actor_user_id
+)
+BEGIN
+    ;THROW 57504, 'User is not an active contributor for the series that owns these page regions.', 1;
+END;
+
+--------------------------------------------------------------------
+-- 6. Only Mangaka and Tantou Editor can create annotations in MVP.
+--------------------------------------------------------------------
+IF @actor_role_name NOT IN (N'Mangaka', N'Tantou Editor')
+BEGIN
+    ;THROW 57505, 'Only Mangaka or Tantou Editor contributors can create page annotations.', 1;
+END;
 
 
         --------------------------------------------------------------------
@@ -2658,7 +3038,7 @@ BEGIN
         --------------------------------------------------------------------
         -- 7. Actor must be active contributor for the owning series
         --------------------------------------------------------------------
-        IF NOT EXISTS
+       IF NOT EXISTS
 (
     SELECT 1
     FROM manga.ChapterPageAnnotationRegion cpar
@@ -2670,14 +3050,10 @@ BEGIN
         ON cp.chapter_page_id = cpv.chapter_page_id
     INNER JOIN manga.Chapter ch
         ON ch.chapter_id = cp.chapter_id
-    INNER JOIN manga.SeriesContributor sc
-    ON sc.series_id = ch.series_id
-INNER JOIN auth.Users u
-    ON u.user_id = sc.user_id
-WHERE cpar.chapter_page_annotation_id = @chapter_page_annotation_id
-  AND sc.user_id = @actor_user_id
-  AND sc.end_date IS NULL
-  AND u.status_code = N'ACTIVE'
+    INNER JOIN manga.vw_ActiveSeriesContributor ascx
+        ON ascx.series_id = ch.series_id
+       AND ascx.user_id = @actor_user_id
+    WHERE cpar.chapter_page_annotation_id = @chapter_page_annotation_id
 )
 BEGIN
     ;THROW 57807, 'User is not an active contributor for the series that owns this annotation.', 1;
@@ -2753,6 +3129,233 @@ END;
             cpa.resolved_by_user_id
         FROM manga.ChapterPageAnnotation cpa
         WHERE cpa.chapter_page_annotation_id = @chapter_page_annotation_id;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH;
+END;
+GO
+CREATE OR ALTER PROCEDURE manga.usp_ChapterPageAnnotation_UpdateText
+    @actor_user_id UNIQUEIDENTIFIER,
+    @chapter_page_annotation_id UNIQUEIDENTIFIER,
+    @new_annotation_text NVARCHAR(MAX),
+    @update_reason NVARCHAR(500) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+    DECLARE @lock_result INT;
+    DECLARE @lock_resource NVARCHAR(255);
+
+    DECLARE @old_annotation_text NVARCHAR(MAX);
+    DECLARE @trimmed_new_annotation_text NVARCHAR(MAX);
+    DECLARE @annotated_by_user_id UNIQUEIDENTIFIER;
+    DECLARE @resolved_at_utc DATETIME2(0);
+
+    DECLARE @owning_series_id UNIQUEIDENTIFIER;
+    DECLARE @owning_chapter_id UNIQUEIDENTIFIER;
+    DECLARE @chapter_page_version_id UNIQUEIDENTIFIER;
+
+    DECLARE @actor_role_name NVARCHAR(30);
+    DECLARE @creator_role_name NVARCHAR(30);
+
+    DECLARE @audit_entity_id NVARCHAR(100);
+    DECLARE @detail_json NVARCHAR(MAX);
+
+    BEGIN TRY
+        SET @trimmed_new_annotation_text = LTRIM(RTRIM(@new_annotation_text));
+
+        
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        SET @lock_resource =
+            N'manga_chapter_page_annotation_text_update_'
+            + CONVERT(NVARCHAR(36), @chapter_page_annotation_id);
+
+        EXEC @lock_result = sys.sp_getapplock
+            @Resource = @lock_resource,
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 10000;
+
+        IF @lock_result < 0
+        BEGIN
+            ;THROW 57922, 'Could not acquire annotation text update lock.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 1. Read annotation row under lock.
+        --------------------------------------------------------------------
+        SELECT
+            @old_annotation_text = cpa.annotation_text,
+            @annotated_by_user_id = cpa.annotated_by_user_id,
+            @resolved_at_utc = cpa.resolved_at_utc
+        FROM manga.ChapterPageAnnotation cpa WITH (UPDLOCK, HOLDLOCK)
+        WHERE cpa.chapter_page_annotation_id = @chapter_page_annotation_id;
+
+        IF @annotated_by_user_id IS NULL
+        BEGIN
+            ;THROW 57923, 'Chapter page annotation was not found.', 1;
+        END;
+
+        IF @resolved_at_utc IS NOT NULL
+        BEGIN
+            ;THROW 57924, 'Resolved annotations cannot be edited.', 1;
+        END;
+
+        IF @old_annotation_text = @trimmed_new_annotation_text
+        BEGIN
+            ;THROW 57925, 'The new annotation text is the same as the current annotation text.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 2. Derive owning series/chapter/page-version context.
+        --------------------------------------------------------------------
+        SELECT TOP (1)
+            @owning_series_id = ch.series_id,
+            @owning_chapter_id = ch.chapter_id,
+            @chapter_page_version_id = pr.chapter_page_version_id
+        FROM manga.ChapterPageAnnotationRegion cpar
+        INNER JOIN manga.PageRegion pr
+            ON pr.page_region_id = cpar.page_region_id
+        INNER JOIN manga.ChapterPageVersion cpv
+            ON cpv.chapter_page_version_id = pr.chapter_page_version_id
+        INNER JOIN manga.ChapterPage cp
+            ON cp.chapter_page_id = cpv.chapter_page_id
+        INNER JOIN manga.Chapter ch
+            ON ch.chapter_id = cp.chapter_id
+        WHERE cpar.chapter_page_annotation_id = @chapter_page_annotation_id;
+
+        IF @owning_series_id IS NULL
+        BEGIN
+            ;THROW 57926, 'Could not derive owning series for this annotation.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 3. Resolve active actor role.
+        --------------------------------------------------------------------
+       SELECT
+    @actor_role_name = r.role_name
+FROM auth.Users u
+INNER JOIN auth.Roles r
+    ON r.role_id = u.role_id
+WHERE u.user_id = @actor_user_id
+  AND u.status_code = N'ACTIVE';
+
+IF @actor_role_name IS NULL
+BEGIN
+    ;THROW 57927, 'Actor user is not active or was not found.', 1;
+END;
+
+--------------------------------------------------------------------
+-- 4. Resolve annotation creator role.
+--------------------------------------------------------------------
+SELECT
+    @creator_role_name = r.role_name
+FROM auth.Users u
+INNER JOIN auth.Roles r
+    ON r.role_id = u.role_id
+WHERE u.user_id = @annotated_by_user_id;
+
+IF @creator_role_name IS NULL
+BEGIN
+    ;THROW 57928, 'Annotation creator role could not be resolved.', 1;
+END;
+
+--------------------------------------------------------------------
+-- 5. Actor must be active contributor for the owning series.
+--------------------------------------------------------------------
+IF NOT EXISTS
+(
+    SELECT 1
+    FROM manga.vw_ActiveSeriesContributor ascx
+    WHERE ascx.series_id = @owning_series_id
+      AND ascx.user_id = @actor_user_id
+)
+BEGIN
+    ;THROW 57929, 'Actor is not an active contributor for the owning series.', 1;
+END;
+
+        --------------------------------------------------------------------
+        -- 6. Permission rule:
+        --
+        -- Mangaka-created annotation:
+        --   - Mangaka contributor may update
+        --   - Tantou Editor contributor may update
+        --
+        -- Tantou Editor-created annotation:
+        --   - only Tantou Editor contributor may update
+        --------------------------------------------------------------------
+        IF NOT
+        (
+            (
+                @creator_role_name = N'Mangaka'
+                AND @actor_role_name IN (N'Mangaka', N'Tantou Editor')
+            )
+            OR
+            (
+                @creator_role_name = N'Tantou Editor'
+                AND @actor_role_name = N'Tantou Editor'
+            )
+        )
+        BEGIN
+            ;THROW 57930, 'Actor does not have permission to update this annotation text.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 7. Update annotation text.
+        --
+        -- If your table later has updated_at_utc / updated_by_user_id,
+        -- add those columns to this UPDATE.
+        --------------------------------------------------------------------
+        UPDATE manga.ChapterPageAnnotation
+        SET annotation_text = @trimmed_new_annotation_text
+        WHERE chapter_page_annotation_id = @chapter_page_annotation_id;
+
+        --------------------------------------------------------------------
+        -- 8. Audit.
+        --------------------------------------------------------------------
+        SET @audit_entity_id =
+            CONVERT(NVARCHAR(36), @chapter_page_annotation_id);
+
+        SELECT @detail_json =
+        (
+            SELECT
+                @chapter_page_annotation_id AS chapter_page_annotation_id,
+                @owning_series_id AS series_id,
+                @owning_chapter_id AS chapter_id,
+                @chapter_page_version_id AS chapter_page_version_id,
+                @annotated_by_user_id AS annotated_by_user_id,
+                @creator_role_name AS creator_role_name,
+                @actor_role_name AS actor_role_name,
+                @old_annotation_text AS old_annotation_text,
+                @trimmed_new_annotation_text AS new_annotation_text,
+                @update_reason AS update_reason
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @actor_user_id,
+            @action_code = N'CHAPTER_PAGE_ANNOTATION_TEXT_UPDATED',
+            @entity_type = N'ChapterPageAnnotation',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
 
         IF @started_tran = 1
         BEGIN
@@ -2865,24 +3468,16 @@ END;
 IF NOT EXISTS
 (
     SELECT 1
-FROM manga.SeriesContributor sc
-INNER JOIN auth.Users u
-    ON u.user_id = sc.user_id
-WHERE sc.series_id = @owning_series_id
-  AND sc.user_id = @actor_user_id
-  AND sc.end_date IS NULL
-  AND u.status_code = N'ACTIVE'
+    FROM manga.vw_ActiveSeriesContributor ascx
+    WHERE ascx.series_id = @owning_series_id
+      AND ascx.user_id = @actor_user_id
 )
 OR NOT EXISTS
 (
     SELECT 1
-    FROM manga.SeriesContributor sc
-    INNER JOIN auth.Users u
-        ON u.user_id = sc.user_id
-    WHERE sc.series_id = @owning_series_id
-      AND sc.user_id = @assigned_to_user_id
-      AND sc.end_date IS NULL
-      AND u.status_code = N'ACTIVE'
+    FROM manga.vw_ActiveSeriesContributor ascx
+    WHERE ascx.series_id = @owning_series_id
+      AND ascx.user_id = @assigned_to_user_id
 )
 BEGIN
     ;THROW 57908, 'Actor and assigned user must both be active contributors for the series that owns these page regions.', 1;
@@ -3056,7 +3651,7 @@ BEGIN
         --------------------------------------------------------------------
         -- 4. Actor must be active Mangaka contributor
         --------------------------------------------------------------------
-       IF NOT EXISTS
+      IF NOT EXISTS
 (
     SELECT 1
     FROM manga.ChapterPageTaskRegion tr
@@ -3068,22 +3663,15 @@ BEGIN
         ON cp.chapter_page_id = cpv.chapter_page_id
     INNER JOIN manga.Chapter ch
         ON ch.chapter_id = cp.chapter_id
-    INNER JOIN manga.SeriesContributor sc
-        ON sc.series_id = ch.series_id
-    INNER JOIN auth.Users u
-        ON u.user_id = sc.user_id
-    INNER JOIN auth.Roles r
-        ON r.role_id = u.role_id
+    INNER JOIN manga.vw_ActiveSeriesContributor ascx
+        ON ascx.series_id = ch.series_id
+       AND ascx.user_id = @actor_user_id
     WHERE tr.chapter_page_task_id = @chapter_page_task_id
-      AND sc.user_id = @actor_user_id
-      AND sc.end_date IS NULL
-      AND u.status_code = N'ACTIVE'
-      AND r.role_name = N'Mangaka'
+      AND ascx.role_name = N'Mangaka'
 )
 BEGIN
     ;THROW 58306, 'Only an active Mangaka contributor can cancel this task.', 1;
 END;
-
         --------------------------------------------------------------------
         -- 5. Cancel task
         --------------------------------------------------------------------
@@ -3228,31 +3816,26 @@ BEGIN
         --
         -- Derive series through the old task's existing PageRegion links.
         --------------------------------------------------------------------
-        IF NOT EXISTS
-        (
-            SELECT 1
-            FROM manga.ChapterPageTaskRegion tr
-            INNER JOIN manga.PageRegion pr
-                ON pr.page_region_id = tr.page_region_id
-            INNER JOIN manga.ChapterPageVersion cpv
-                ON cpv.chapter_page_version_id = pr.chapter_page_version_id
-            INNER JOIN manga.ChapterPage cp
-                ON cp.chapter_page_id = cpv.chapter_page_id
-            INNER JOIN manga.Chapter ch
-                ON ch.chapter_id = cp.chapter_id
-            INNER JOIN manga.SeriesContributor sc
-                ON sc.series_id = ch.series_id
-            INNER JOIN auth.Users u
-                ON u.user_id = sc.user_id
-            WHERE tr.chapter_page_task_id = @chapter_page_task_id
-              AND sc.user_id = @new_assigned_to_user_id
-              AND sc.end_date IS NULL
-              AND u.status_code = N'ACTIVE'
-        )
-        BEGIN
-            ;THROW 58508, 'New assigned user must be an active contributor of the same series as the existing task.', 1;
-        END;
-
+       IF NOT EXISTS
+(
+    SELECT 1
+    FROM manga.ChapterPageTaskRegion tr
+    INNER JOIN manga.PageRegion pr
+        ON pr.page_region_id = tr.page_region_id
+    INNER JOIN manga.ChapterPageVersion cpv
+        ON cpv.chapter_page_version_id = pr.chapter_page_version_id
+    INNER JOIN manga.ChapterPage cp
+        ON cp.chapter_page_id = cpv.chapter_page_id
+    INNER JOIN manga.Chapter ch
+        ON ch.chapter_id = cp.chapter_id
+    INNER JOIN manga.vw_ActiveSeriesContributor ascx
+        ON ascx.series_id = ch.series_id
+       AND ascx.user_id = @new_assigned_to_user_id
+    WHERE tr.chapter_page_task_id = @chapter_page_task_id
+)
+BEGIN
+    ;THROW 58508, 'New assigned user must be an active contributor of the same series as the existing task.', 1;
+END;
         --------------------------------------------------------------------
         -- 4. Cancel old task
         --------------------------------------------------------------------
@@ -3587,17 +4170,11 @@ BEGIN
         ON cp.chapter_page_id = cpv.chapter_page_id
     INNER JOIN manga.Chapter ch
         ON ch.chapter_id = cp.chapter_id
-    INNER JOIN manga.SeriesContributor sc
-        ON sc.series_id = ch.series_id
-    INNER JOIN auth.Users u
-        ON u.user_id = sc.user_id
-    INNER JOIN auth.Roles r
-        ON r.role_id = u.role_id
+    INNER JOIN manga.vw_ActiveSeriesContributor ascx
+        ON ascx.series_id = ch.series_id
+       AND ascx.user_id = @actor_user_id
     WHERE tr.chapter_page_task_id = @chapter_page_task_id
-      AND sc.user_id = @actor_user_id
-      AND sc.end_date IS NULL
-      AND u.status_code = N'ACTIVE'
-      AND r.role_name = N'Mangaka'
+      AND ascx.role_name = N'Mangaka'
 )
 BEGIN
     ;THROW 58206, 'Only an active Mangaka contributor can mark this task complete.', 1;
@@ -3732,17 +4309,11 @@ BEGIN
         ON cp.chapter_page_id = cpv.chapter_page_id
     INNER JOIN manga.Chapter ch
         ON ch.chapter_id = cp.chapter_id
-    INNER JOIN manga.SeriesContributor sc
-        ON sc.series_id = ch.series_id
-    INNER JOIN auth.Users u
-        ON u.user_id = sc.user_id
-    INNER JOIN auth.Roles r
-        ON r.role_id = u.role_id
+    INNER JOIN manga.vw_ActiveSeriesContributor ascx
+        ON ascx.series_id = ch.series_id
+       AND ascx.user_id = @actor_user_id
     WHERE tr.chapter_page_task_id = @chapter_page_task_id
-      AND sc.user_id = @actor_user_id
-      AND sc.end_date IS NULL
-      AND u.status_code = N'ACTIVE'
-      AND r.role_name = N'Mangaka'
+      AND ascx.role_name = N'Mangaka'
 )
 BEGIN
     ;THROW 58406, 'Only an active Mangaka contributor can return this task for rework.', 1;
@@ -4077,24 +4648,17 @@ END;
         --------------------------------------------------------------------
         -- 3. Actor must be the active Tantou Editor contributor for this series
         --------------------------------------------------------------------
-        IF NOT EXISTS
-        (
-            SELECT 1
-            FROM manga.SeriesContributor sc
-            INNER JOIN auth.Users u
-                ON u.user_id = sc.user_id
-            INNER JOIN auth.Roles r
-                ON r.role_id = u.role_id
-            WHERE sc.series_id = @series_id
-              AND sc.user_id = @actor_user_id
-              AND sc.end_date IS NULL
-              AND u.status_code = N'ACTIVE'
-              AND r.role_name = N'Tantou Editor'
-        )
-        BEGIN
-            ;THROW 57406, 'Only the active Tantou Editor contributor for this series can request revision.', 1;
-        END;
-
+       IF NOT EXISTS
+(
+    SELECT 1
+    FROM manga.vw_ActiveSeriesContributor ascx
+    WHERE ascx.series_id = @series_id
+      AND ascx.user_id = @actor_user_id
+      AND ascx.role_name = N'Tantou Editor'
+)
+BEGIN
+    ;THROW 57406, 'Only the active Tantou Editor contributor for this series can request revision.', 1;
+END;
      
         --------------------------------------------------------------------
         -- 5. Optional markup FileResource
@@ -4277,22 +4841,16 @@ BEGIN
         -- 3. Actor must be the active Tantou Editor contributor for this series
         --------------------------------------------------------------------
         IF NOT EXISTS
-        (
-            SELECT 1
-            FROM manga.SeriesContributor sc
-            INNER JOIN auth.Users u
-                ON u.user_id = sc.user_id
-            INNER JOIN auth.Roles r
-                ON r.role_id = u.role_id
-            WHERE sc.series_id = @series_id
-              AND sc.user_id = @actor_user_id
-              AND sc.end_date IS NULL
-              AND u.status_code = N'ACTIVE'
-              AND r.role_name = N'Tantou Editor'
-        )
-        BEGIN
-            ;THROW 57506, 'Only the active Tantou Editor contributor for this series can pass the proposal to board.', 1;
-        END;
+(
+    SELECT 1
+    FROM manga.vw_ActiveSeriesContributor ascx
+    WHERE ascx.series_id = @series_id
+      AND ascx.user_id = @actor_user_id
+      AND ascx.role_name = N'Tantou Editor'
+)
+BEGIN
+    ;THROW 57506, 'Only the active Tantou Editor contributor for this series can pass the proposal to board.', 1;
+END;
 
         --------------------------------------------------------------------
         -- 4. Optional markup FileResource
@@ -4474,22 +5032,16 @@ BEGIN
         -- 3. Actor must be an active Tantou Editor contributor of this series
         --------------------------------------------------------------------
         IF NOT EXISTS
-        (
-            SELECT 1
-            FROM manga.SeriesContributor sc
-            INNER JOIN auth.Users u
-                ON u.user_id = sc.user_id
-            INNER JOIN auth.Roles r
-                ON r.role_id = u.role_id
-            WHERE sc.series_id = @series_id
-              AND sc.user_id = @actor_user_id
-              AND sc.end_date IS NULL
-              AND u.status_code = N'ACTIVE'
-              AND r.role_name = N'Tantou Editor'
-        )
-        BEGIN
-            ;THROW 57606, 'Only an active Tantou Editor contributor for this series can cancel the proposal during editorial review.', 1;
-        END;
+(
+    SELECT 1
+    FROM manga.vw_ActiveSeriesContributor ascx
+    WHERE ascx.series_id = @series_id
+      AND ascx.user_id = @actor_user_id
+      AND ascx.role_name = N'Tantou Editor'
+)
+BEGIN
+    ;THROW 57606, 'Only an active Tantou Editor contributor for this series can cancel the proposal during editorial review.', 1;
+END;
 
        IF LTRIM(RTRIM(@comments)) = N''
 BEGIN
@@ -4821,13 +5373,5 @@ BEGIN
     BEGIN
         COMMIT;
     END;
-END;
-<<<<<<< Updated upstream
-GO
-=======
-GO
-
-
-
->>>>>>> Stashed changes
+END;`r`nGO
 
