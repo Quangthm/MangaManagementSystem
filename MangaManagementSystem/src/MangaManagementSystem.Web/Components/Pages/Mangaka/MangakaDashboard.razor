@@ -1048,35 +1048,41 @@
                     @* Optional Series Cover Upload (purpose SERIES_COVER) *@
                     <div>
                         <div style="font-size: 0.78rem; font-weight: 600; color: #374151; margin-bottom: 6px;">Series Cover (optional)</div>
-                        @if (_draftCoverFileName != null)
-                        {
-                            <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
-                                @if (_draftCoverPreviewUrl != null)
-                                {
+
+                        <div style="display: flex; align-items: center; gap: 18px; flex-wrap: wrap;">
+                            @if (_draftCoverPreviewUrl != null)
+                            {
+                                <div style="flex-shrink: 0; cursor: pointer;" @onclick="OpenCoverPreview">
                                     <img src="@_draftCoverPreviewUrl" alt="Cover preview"
-                                         style="width: 80px; height: 120px; object-fit: cover; border-radius: 8px; border: 2px solid #6366f1;" />
-                                }
-                                <div style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fafafe;">
-                                    <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" Style="font-size: 18px; color: #4f46e5;" />
-                                    <span style="flex: 1; font-size: 0.78rem; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@_draftCoverFileName</span>
-                                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
-                                                   Style="color: #dc2626;"
-                                                   OnClick="@ClearCreateCover" />
+                                         style="width: 120px; height: 180px; object-fit: cover; border-radius: 10px; border: 2px solid #6366f1;" />
                                 </div>
-                            </div>
-                        }
-                        else
-                        {
-                            <MudFileUpload T="IBrowserFile" FilesChanged="@OnCreateCoverChanged">
-                                <ActivatorContent>
-                                    <div style="border: 1.5px dashed #c7d2fe; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; background: #fafafe;">
-                                        <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" Style="font-size: 28px; color: #a5b4fc;" />
-                                        <div style="color: #64748b; font-size: 0.75rem; font-weight: 500;">Click to upload cover art</div>
-                                        <div style="color: #94a3b8; font-size: 0.65rem;">PNG, JPG, WEBP · Max 5MB</div>
+                            }
+
+                            <div style="flex: 1; min-width: 200px;">
+                                @if (_draftCoverFileName != null)
+                                {
+                                    <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fafafe;">
+                                        <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" Style="color: #4f46e5;" />
+                                        <span style="flex: 1; font-size: 0.8rem; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@_draftCoverFileName</span>
+                                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                                                       Style="color: #dc2626;"
+                                                       OnClick="@ClearCreateCover" />
                                     </div>
-                                </ActivatorContent>
-                            </MudFileUpload>
-                        }
+                                }
+                                else
+                                {
+                                    <MudFileUpload T="IBrowserFile" FilesChanged="@OnCreateCoverChanged">
+                                        <ActivatorContent>
+                                            <div style="border: 1.5px dashed #c7d2fe; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; background: #fafafe;">
+                                                <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" Style="font-size: 24px; color: #a5b4fc;" />
+                                                <div style="color: #64748b; font-size: 0.75rem; font-weight: 500;">Click to upload cover art</div>
+                                                <div style="color: #94a3b8; font-size: 0.65rem;">PNG, JPG, WEBP · Max 5MB</div>
+                                            </div>
+                                        </ActivatorContent>
+                                    </MudFileUpload>
+                                }
+                            </div>
+                        </div>
                     </div>
 
                     <MudButton Variant="Variant.Filled" FullWidth="true"
@@ -1108,51 +1114,54 @@
 
             <div style="padding: 24px; display: flex; flex-direction: column; gap: 16px;">
 
-                @* Cover section *@
+                @* Cover section — inline layout: preview beside upload zone *@
                 <div>
                     <div style="font-size: 0.78rem; font-weight: 600; color: #374151; margin-bottom: 8px;">Series Cover</div>
 
-                    @* Preview: new selection takes priority, then existing cover *@
-                    @if (_editCoverPreviewUrl != null)
-                    {
-                        <div style="display: flex; justify-content: center; margin-bottom: 10px;">
-                            <img src="@_editCoverPreviewUrl" alt="New cover preview"
-                                 style="width: 80px; height: 113px; object-fit: cover; border-radius: 8px; border: 2px solid #6366f1;" />
-                        </div>
-                    }
-                    else if (!string.IsNullOrWhiteSpace(_detailSeries?.CoverUrl))
-                    {
-                        <div style="display: flex; justify-content: center; margin-bottom: 10px;">
-                            <div style="position: relative; display: inline-block;">
+                    <div style="display: flex; align-items: center; gap: 18px; flex-wrap: wrap;">
+                        @* Preview: new selection takes priority, then existing cover *@
+                        @if (_editCoverPreviewUrl != null)
+                        {
+                            <div style="flex-shrink: 0; cursor: pointer;" @onclick="OpenCoverPreview">
+                                <img src="@_editCoverPreviewUrl" alt="New cover preview"
+                                     style="width: 120px; height: 180px; object-fit: cover; border-radius: 10px; border: 2px solid #6366f1;" />
+                            </div>
+                        }
+                        else if (!string.IsNullOrWhiteSpace(_detailSeries?.CoverUrl))
+                        {
+                            <div style="flex-shrink: 0; position: relative; display: inline-block; cursor: pointer;" @onclick="OpenCoverPreview">
                                 <img src="@_detailSeries.CoverUrl" alt="Current cover"
-                                     style="width: 80px; height: 113px; object-fit: cover; border-radius: 8px; border: 1px solid #e2e8f0;" />
+                                     style="width: 120px; height: 180px; object-fit: cover; border-radius: 10px; border: 1px solid #e2e8f0;" />
                                 <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); background: #f1f5f9; color: #64748b; font-size: 0.6rem; padding: 1px 6px; border-radius: 6px; white-space: nowrap;">Current</div>
                             </div>
-                        </div>
-                    }
+                        }
 
-                    @if (_editCoverFileName != null)
-                    {
-                        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fafafe;">
-                            <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" Style="color: #4f46e5;" />
-                            <span style="flex: 1; font-size: 0.8rem; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@_editCoverFileName</span>
-                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
-                                           Style="color: #dc2626;"
-                                           OnClick="@ClearEditCover" />
-                        </div>
-                    }
-                    else
-                    {
-                        <MudFileUpload T="IBrowserFile" FilesChanged="@OnEditCoverChanged">
-                            <ActivatorContent>
-                                <div style="border: 1.5px dashed #c7d2fe; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; background: #fafafe;">
-                                    <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" Style="font-size: 24px; color: #a5b4fc;" />
-                                    <div style="color: #64748b; font-size: 0.75rem; font-weight: 500;">Click to replace cover</div>
-                                    <div style="color: #94a3b8; font-size: 0.65rem;">PNG, JPG, WEBP · Max 5 MB</div>
+                        @* Upload zone *@
+                        <div style="flex: 1; min-width: 200px;">
+                            @if (_editCoverFileName != null)
+                            {
+                                <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fafafe;">
+                                    <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" Style="color: #4f46e5;" />
+                                    <span style="flex: 1; font-size: 0.8rem; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@_editCoverFileName</span>
+                                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                                                   Style="color: #dc2626;"
+                                                   OnClick="@ClearEditCover" />
                                 </div>
-                            </ActivatorContent>
-                        </MudFileUpload>
-                    }
+                            }
+                            else
+                            {
+                                <MudFileUpload T="IBrowserFile" FilesChanged="@OnEditCoverChanged">
+                                    <ActivatorContent>
+                                        <div style="border: 1.5px dashed #c7d2fe; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; background: #fafafe;">
+                                            <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" Style="font-size: 24px; color: #a5b4fc;" />
+                                            <div style="color: #64748b; font-size: 0.75rem; font-weight: 500;">Click to replace cover</div>
+                                            <div style="color: #94a3b8; font-size: 0.65rem;">PNG, JPG, WEBP · Max 5 MB</div>
+                                        </div>
+                                    </ActivatorContent>
+                                </MudFileUpload>
+                            }
+                        </div>
+                    </div>
                 </div>
 
                 @* Profile fields *@
@@ -1172,7 +1181,7 @@
                 </div>
 
                 <MudTextField Label="Synopsis / Description" @bind-Value="_editSynopsis"
-                              Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true" Lines="3" />
+                              Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true" Lines="6" />
 
                 <div class="mb-3">
                     <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 6px;">Genre *</span>
@@ -1514,6 +1523,33 @@
                      OnCancel="@OnCoverCropCancelled" />
 }
 
+@* ── Cover Preview Popup ── *@
+@if (_showCoverPreviewDialog)
+{
+    <MudOverlay Visible="true" OnClick="CloseCoverPreview" DarkBackground="true">
+        <div style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; padding: 24px;" @onclick:stopPropagation>
+            <MudCard Style="width: 520px; max-width: 94vw; max-height: 85vh; border-radius: 14px;" Class="d-flex flex-column">
+                <MudCardContent Style="padding: 0;">
+                    <div style="padding: 18px 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between;">
+                        <MudText Typo="Typo.h6" Style="font-weight: 800; color: #0f172a; margin: 0;">Series Cover Preview</MudText>
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                                       OnClick="CloseCoverPreview" />
+                    </div>
+                    <div style="padding: 24px; display: flex; justify-content: center;">
+                        <img src="@_coverPreviewUrl" alt="Series cover"
+                             style="max-width: 100%; max-height: 420px; object-fit: contain; border-radius: 10px;" />
+                    </div>
+                    <div style="padding: 14px 24px; border-top: 1px solid #f1f5f9; display: flex; justify-content: flex-end;">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CloseCoverPreview">
+                            Close
+                        </MudButton>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </div>
+    </MudOverlay>
+}
+
 @code {
     private string _activeTab = "current";
     private bool _newSeriesDialogOpen;
@@ -1556,13 +1592,17 @@
     private string? _coverCropSourceFileName;
     private bool _coverCropIsForCreate; // true = update create fields, false = update edit fields
 
+    // ── Cover preview popup state ────────────────────────────────────────────
+    private bool _showCoverPreviewDialog;
+    private string? _coverPreviewUrl;
+
     // ── Review Status modal state ────────────────────────────────────────────
     private bool _reviewStatusOpen;
     private SeriesCardData? _reviewSeries;
 
     // ── Dashboard modal state ──
     private bool IsAnyDashboardModalOpen =>
-        _cancelDraftDialogOpen || _newSeriesDialogOpen || _draftDetailsOpen || _reviewStatusOpen || _submitProposalDialogOpen || _genrePickerOpen || _tagPickerOpen || _showCoverCropDialog;
+        _cancelDraftDialogOpen || _newSeriesDialogOpen || _draftDetailsOpen || _reviewStatusOpen || _submitProposalDialogOpen || _genrePickerOpen || _tagPickerOpen || _showCoverCropDialog || _showCoverPreviewDialog;
 
     // ── Dashboard pagination ──
     private int _dashboardPage = 1;
@@ -2082,6 +2122,24 @@
         _editCoverPreviewUrl = null;
     }
 
+    private void OpenCoverPreview()
+    {
+        var url = _editCoverPreviewUrl
+                  ?? _draftCoverPreviewUrl
+                  ?? _detailSeries?.CoverUrl;
+
+        if (string.IsNullOrWhiteSpace(url)) return;
+
+        _coverPreviewUrl = url;
+        _showCoverPreviewDialog = true;
+    }
+
+    private void CloseCoverPreview()
+    {
+        _showCoverPreviewDialog = false;
+        _coverPreviewUrl = null;
+    }
+
     /// <summary>
     /// Pre-read IBrowserFile bytes immediately for cover replacement.
     /// Validates image type (PNG/JPG/WEBP) and size (max 5 MB).
@@ -2235,6 +2293,12 @@
     {
         if (string.IsNullOrWhiteSpace(_editTitle) || _editGenreIds.Count == 0) return;
 
+        if (string.IsNullOrWhiteSpace(_editSynopsis))
+        {
+            Snackbar.Add("Synopsis / Description is required.", Severity.Warning);
+            return;
+        }
+
         if (_currentUserId is null || _currentUserId == Guid.Empty)
         {
             Snackbar.Add("Could not identify the signed-in user. Please sign in again.", Severity.Error);
@@ -2250,7 +2314,7 @@
                 actorUserId: _currentUserId.Value,
                 seriesId: _detailSeries.Id,
                 title: _editTitle.Trim(),
-                synopsis: string.IsNullOrWhiteSpace(_editSynopsis) ? _editTitle.Trim() : _editSynopsis.Trim(),
+                synopsis: _editSynopsis.Trim(),
                 genreIds: _editGenreIds.ToList(),
                 tagIds: _editTagIds.ToList(),
                 contentLanguageCode: _editLanguage,
