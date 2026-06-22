@@ -22,6 +22,7 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         string? ChapterNumberLabel = null,
         string? ChapterTitle = null,
         int? PageNo = null,
+        int? PageVersionNo = null,
         string? PageImageUrl = null,
         decimal? CompensationAmount = null,
         string? AssignedUsername = null,
