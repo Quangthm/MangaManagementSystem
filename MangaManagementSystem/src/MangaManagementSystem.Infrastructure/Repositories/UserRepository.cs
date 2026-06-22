@@ -14,16 +14,12 @@ namespace MangaManagementSystem.Infrastructure.Repositories
     public class UserRepository : GenericRepository<User>, IUserRepository
     {
         public UserRepository(ApplicationDbContext context) : base(context)
-        private readonly ApplicationDbContext _context;
+        {
+        }
 
         private IQueryable<User> UsersWithRole()
         {
             return _context.Users.Include(user => user.Role);
-        }
-
-        public UserRepository(ApplicationDbContext context)
-            : base(context)
-        {
         }
 
         public async Task<User?> GetByEmailAsync(string email)

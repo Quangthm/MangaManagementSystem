@@ -28,8 +28,6 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         // Constraint/foreign-key/check violation numbers.
         private const int ErrCheckConstraint = 547;
 
-        private readonly ApplicationDbContext _context;
-
         public SeriesRepository(ApplicationDbContext context) : base(context)
         {
         }

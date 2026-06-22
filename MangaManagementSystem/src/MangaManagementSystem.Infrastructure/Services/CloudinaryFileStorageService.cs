@@ -234,14 +234,6 @@ namespace MangaManagementSystem.Infrastructure.Services
                 throw new InvalidOperationException("Cloudinary upload failed.");
             }
 
-            return new FileUploadResultDto(
-                uploadResult.PublicId ?? string.Empty,
-                uploadResult.SecureUrl?.ToString() ?? uploadResult.Url?.ToString() ?? string.Empty,
-                contentType ?? "application/octet-stream",
-                fileBytes.LongLength,
-                originalFileName,
-                sha256Hash
-            );
             return uploadResult;
         }
 

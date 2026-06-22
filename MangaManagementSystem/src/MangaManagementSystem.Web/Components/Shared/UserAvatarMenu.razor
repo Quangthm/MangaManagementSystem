@@ -9,42 +9,9 @@
 @inject IUserService UserService
 @inject IFileResourceService FileResourceService
 @inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
 
 <AuthorizeView>
-	<Authorized>
-		@if (_loading)
-		{
-			<MudSkeleton Width="36px" Height="36px" />
-		}
-		else
-		{
-			<MudMenu>
-				<ActivatorContent>
-					<MudAvatar Size="Size.Medium" Class="mf-avatar" Color="Color.Primary">
-						@if (!string.IsNullOrEmpty(_avatarUrl))
-						{
-							<img src="@_avatarUrl" alt="Avatar" style="width:100%;height:100%;object-fit:cover;" />
-						}
-						else
-						{
-							@(_initial ?? "?")
-						}
-					</MudAvatar>
-				</ActivatorContent>
-				<ChildContent>
-					<MudMenuItem OnClick="OpenProfile">View / Edit Profile</MudMenuItem>
-					<MudMenuItem OnClick="ChangePassword">Change Password</MudMenuItem>
-					<MudDivider />
-					<MudMenuItem>
-    <LogoutForm />
-</MudMenuItem>
-				</ChildContent>
-			</MudMenu>
-		}
-	</Authorized>
-	<NotAuthorized>
-		<MudButton Href="/login" Variant="Variant.Text">Sign in</MudButton>
-	</NotAuthorized>
     <Authorized>
         @if (_loading)
         {
@@ -59,7 +26,7 @@
         }
         else
         {
-            <MudMenu OffsetY="true">
+            <MudMenu>
                 <ActivatorContent>
                     <button type="button"
                             class="mf-user-profile-card"
@@ -143,6 +110,7 @@
     private bool _loading = true;
     private bool _profileLoadInProgress;
     private bool _disposed;
+    private Guid _userId;
 
 	protected override async Task OnInitializedAsync()
 	{

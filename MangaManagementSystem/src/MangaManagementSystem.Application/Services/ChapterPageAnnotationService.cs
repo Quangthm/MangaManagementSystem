@@ -26,7 +26,7 @@ namespace MangaManagementSystem.Application.Services
                 dto.AnnotatedByUserId,
                 dto.PageRegionIds,
                 dto.IssueTypeCode,
-                dto.AnnotationText);
+                dto.AnnotationText ?? string.Empty);
 
             // Reload with regions
             var entity = await _unitOfWork.ChapterPageAnnotations.GetByIdWithRegionsAsync(newAnnotationId);
