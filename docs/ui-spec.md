@@ -98,6 +98,27 @@ Allow Mangaka to create, view, edit, and submit their own series drafts before f
 | Source series | No | Cannot reference itself. |
 | Publication frequency | No | `WEEKLY`, `MONTHLY`, `IRREGULAR`; treated as Mangaka proposed frequency during draft. |
 
+### Cover crop behavior
+
+When the user selects a series cover image in the create or edit draft modal, the UI should open a crop preview dialog before upload.
+
+| Element | Behavior |
+|---|---|
+| Crop ratio | Locked to 2:3 portrait. |
+| Crop controls | User can drag, zoom, reposition, reset, confirm, or cancel. |
+| Output file | Confirming the crop produces a `1000×1500` PNG. |
+| Upload behavior | The cropped PNG becomes the selected cover file and the original source image is not uploaded. |
+| Preview | The modal may show a smaller preview such as `80×120`; this is display scaling only. |
+| Smaller source image | Allowed, but the UI should warn that the final cover may look blurry after upscaling. |
+| Cancel behavior | Cancelling the crop should not replace the current selected/current cover. |
+| Storage behavior | No original/cropped dual storage and no crop metadata are required in MVP. |
+
+Suggested helper text:
+
+```text
+Covers are displayed in a 2:3 portrait frame. Please crop your image to choose the visible cover area.
+```
+
 ### Create-specific behavior
 
 When creating a new series draft, the backend must create both:
@@ -118,7 +139,7 @@ Mangaka clicks Save
 → Backend generates slug from title
 → Backend resolves slug uniqueness
 → Backend calls stored procedure
-→ UI refreshes draft list/detail
+→ UI refreshes the affected draft card/detail using server-confirmed data
 ```
 
 ### Slug behavior
@@ -170,6 +191,26 @@ Mangaka clicks Submit Proposal
 
 ---
 
+## 5A. Mangaka Proposal Tracking Filters
+
+### Purpose
+
+Allow Mangaka users to track their own submitted proposal history and review status with filters that match the current normalized genre/tag model.
+
+### Search and filter behavior
+
+| Element | Behavior |
+|---|---|
+| Text search | Filters by proposal title and/or series title only. It should not match genre or tag names. |
+| Genre filter | Uses selected genre IDs from current series metadata. |
+| Tag filter | Uses selected tag IDs from current series metadata. |
+| Genre/tag matching | Uses ALL-match behavior for selected genres/tags. |
+| Clear filters | Clears selected genre/tag filters without necessarily clearing status chips or search text. |
+| Status chips | Continue to filter by proposal workflow status. |
+| Sort | Existing sort behavior remains available. |
+
+---
+
 ## 5.1 MVP File Upload Acceptance Matrix
 
 ### MVP File Purpose Upload Format Matrix
@@ -177,7 +218,7 @@ Mangaka clicks Submit Proposal
 | File purpose code | Allowed extensions | Allowed content types | Cloudinary resource type | Notes |
 |---|---|---|---|---|
 | `SERIES_PROPOSAL` | `.pdf`, `.doc`, `.docx` | `application/pdf`, `application/msword`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | `raw` | Formal series proposal documents only. Markdown, plain text, and image files are not accepted for proposal submission in MVP. |
-| `SERIES_COVER` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Series cover image. |
+| `SERIES_COVER` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Series cover image. In the Web draft UI, the cropped `1000×1500` PNG is uploaded as the actual cover. |
 | `CHAPTER_PAGE_VERSION` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Official manga page image/version output. |
 | `EDITORIAL_ATTACHMENT` | `.pdf`, `.doc`, `.docx`, `.jpg`, `.jpeg`, `.png`, `.webp` | Proposal-document content types plus `image/jpeg`, `image/png`, `image/webp` | `raw` for documents; `image` for images | Editorial markup, review attachments, or supporting screenshots/documents. |
 | `REGISTRATION_PORTFOLIO` | `.pdf`, `.doc`, `.docx`, `.jpg`, `.jpeg`, `.png`, `.webp` | Proposal-document content types plus `image/jpeg`, `image/png`, `image/webp` | `raw` for documents; `image` for images | Optional portfolio submitted for account approval/profile review. |
