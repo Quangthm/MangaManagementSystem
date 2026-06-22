@@ -96,30 +96,52 @@ namespace MangaManagementSystem.Application.Services
             var all = await _unitOfWork.PageRegions.GetAllAsync();
             var existing = all.Where(r => r.ChapterPageVersionId == chapterPageVersionId).ToList();
 
-            // Delete existing
+            // Create or update
+            foreach (var dto in dtos)
+            {
+                var existingRegion = string.IsNullOrEmpty(dto.RegionLabel) 
+                    ? null 
+                    : existing.FirstOrDefault(r => r.RegionLabel == dto.RegionLabel);
+
+                if (existingRegion != null)
+                {
+                    // Update
+                    existingRegion.TypeCode = dto.TypeCode;
+                    existingRegion.X = dto.X;
+                    existingRegion.Y = dto.Y;
+                    existingRegion.Width = dto.Width;
+                    existingRegion.Height = dto.Height;
+                    existingRegion.ConfidenceScore = dto.ConfidenceScore;
+                    existingRegion.SourceType = dto.SourceType;
+                    existingRegion.OriginalText = dto.OriginalText;
+                    _unitOfWork.PageRegions.Update(existingRegion);
+                    existing.Remove(existingRegion);
+                }
+                else
+                {
+                    // Create new
+                    var entity = new PageRegion
+                    {
+                        ChapterPageVersionId = chapterPageVersionId,
+                        TypeCode = dto.TypeCode,
+                        RegionLabel = dto.RegionLabel,
+                        X = dto.X,
+                        Y = dto.Y,
+                        Width = dto.Width,
+                        Height = dto.Height,
+                        ConfidenceScore = dto.ConfidenceScore,
+                        SourceType = dto.SourceType,
+                        OriginalText = dto.OriginalText,
+                        CreatedAtUtc = DateTime.UtcNow
+                    };
+                    await _unitOfWork.PageRegions.AddAsync(entity);
+                }
+            }
+
+            // Delete remaining (which were not in the new dtos)
             foreach (var r in existing)
             {
                 _unitOfWork.PageRegions.Delete(r);
-            }
-
-            // Create new ones
-            foreach (var dto in dtos)
-            {
-                var entity = new PageRegion
-                {
-                    ChapterPageVersionId = chapterPageVersionId, // Ensure it overrides just in case
-                    TypeCode = dto.TypeCode,
-                    RegionLabel = dto.RegionLabel,
-                    X = dto.X,
-                    Y = dto.Y,
-                    Width = dto.Width,
-                    Height = dto.Height,
-                    ConfidenceScore = dto.ConfidenceScore,
-                    SourceType = dto.SourceType,
-                    OriginalText = dto.OriginalText,
-                    CreatedAtUtc = DateTime.UtcNow
-                };
-                await _unitOfWork.PageRegions.AddAsync(entity);
             }
 
             await _unitOfWork.SaveChangesAsync();

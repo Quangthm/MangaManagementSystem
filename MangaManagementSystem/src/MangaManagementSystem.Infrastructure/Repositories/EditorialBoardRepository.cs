@@ -1,16 +1,17 @@
-﻿using System.Data;
+using System.Data;
 using System.Data.Common;
 using MangaManagementSystem.Application.Features.EditorialBoard.Dtos;
 using MangaManagementSystem.Application.Features.EditorialBoard.Repositories;
 using Microsoft.EntityFrameworkCore;
+using MangaManagementSystem.Infrastructure.Persistence;
 
 namespace MangaManagementSystem.Infrastructure.Repositories;
 
 public sealed class EditorialBoardRepository : IEditorialBoardRepository
 {
-    private readonly MangaManagementDbContext _dbContext;
+    private readonly ApplicationDbContext _dbContext;
 
-    public EditorialBoardRepository(MangaManagementDbContext dbContext)
+    public EditorialBoardRepository(ApplicationDbContext dbContext)
     {
         _dbContext = dbContext;
     }
@@ -294,7 +295,21 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             "NO_DECISION" => "No Decision",
             "PENDING" => "Voting in Progress",
             "INVALIDATED" => "Cancelled",
-            _ => resultCode
         };
+    }
+
+    public Task<IReadOnlyList<EditorialBoardPollDto>> GetOpenPollsAsync(Guid currentUserId, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task<OpenSeriesBoardPollResultDto> OpenPollAsync(OpenSeriesBoardPollRequestDto request, Guid chiefUserId, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task<CastSeriesBoardVoteResultDto> CastVoteAsync(CastSeriesBoardVoteRequestDto request, Guid voterUserId, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
     }
 }

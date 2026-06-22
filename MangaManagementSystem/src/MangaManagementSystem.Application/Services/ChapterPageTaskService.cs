@@ -79,12 +79,13 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<bool> DeleteChapterPageTaskAsync(Guid id)
         {
-            var entity = await _unitOfWork.ChapterPageTasks.GetByIdAsync(id);
+            var entity = await _unitOfWork.ChapterPageTasks.GetByIdWithRegionsAsync(id);
             if (entity == null)
             {
                 return false;
             }
 
+            entity.PageRegions.Clear();
             _unitOfWork.ChapterPageTasks.Delete(entity);
             await _unitOfWork.SaveChangesAsync();
             return true;

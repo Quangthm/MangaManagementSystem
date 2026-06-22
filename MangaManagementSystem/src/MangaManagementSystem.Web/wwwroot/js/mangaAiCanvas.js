@@ -1,3 +1,4 @@
+export function createMangaCanvasInstance() {
 let canvas, ctx, container;
 let dotNetRef;
 let originalImg = null;
@@ -48,12 +49,12 @@ let historyIndex = -1;
 
 let selectionDiv = null;
 
-export function syncAnnotations(anns) {
+function syncAnnotations(anns) {
     annotations = anns || [];
     redraw();
 }
 
-export function initCanvas(canvasId, containerId, dotnet) {
+function initCanvas(canvasId, containerId, dotnet) {
     canvas = document.getElementById(canvasId);
     container = document.getElementById(containerId);
     ctx = canvas.getContext('2d');
@@ -173,18 +174,8 @@ function setupEvents() {
                 pos.y >= r.y && pos.y <= r.y + r.height);
             
             if (hit) {
-                if (e.shiftKey || e.ctrlKey) {
-                    hit.selected = !hit.selected;
-                    syncToBlazor();
-                    redraw();
-                } else {
-                    if (!hit.selected) {
-                        regions.forEach(r => r.selected = false);
-                        hit.selected = true;
-                        syncToBlazor();
-                        redraw();
-                    }
-                }
+                // User requested double-click to toggle selection (on/off). 
+                // So single mousedown no longer changes selection, but still allows dragging.
                 isDraggingRegion = true;
                 targetRegion = hit;
                 dragOffsetX = pos.x - hit.x;
@@ -372,7 +363,9 @@ function setupEvents() {
             pos.y >= r.y && pos.y <= r.y + r.height);
         
         if (hit) {
-            dotNetRef.invokeMethodAsync('OnRegionDoubleClicked', hit.id);
+            hit.selected = !hit.selected;
+            syncToBlazor();
+            redraw();
         }
     });
 
@@ -433,7 +426,7 @@ function applyTransform() {
 
 let currentDataUrl = null;
 
-export function loadImage(dataUrl) {
+function loadImage(dataUrl) {
     currentDataUrl = dataUrl;
     return new Promise((resolve) => {
         if (!dataUrl) {
@@ -449,6 +442,10 @@ export function loadImage(dataUrl) {
         }
         const img = new Image();
         img.crossOrigin = 'anonymous';
+        img.onerror = () => {
+            console.error('Failed to load image from URL:', dataUrl);
+            resolve();
+        };
         img.onload = () => {
             originalImg = img;
             backgroundCanvas.width = img.width;
@@ -511,12 +508,12 @@ function dataURItoBlob(dataURI) {
     return new Blob([ab], {type: mimeString});
 }
 
-export function setTool(tool) {
+function setTool(tool) {
     currentTool = tool;
     container.style.cursor = tool === 'pan' ? 'grab' : 'crosshair';
 }
 
-export function zoom(factor) {
+function zoom(factor) {
     const newScale = scale * factor;
     const cx = container.clientWidth / 2;
     const cy = container.clientHeight / 2;
@@ -526,7 +523,7 @@ export function zoom(factor) {
     applyTransform();
 }
 
-export function resetZoom() {
+function resetZoom() {
     if(!originalImg) return;
     scale = Math.min(container.clientWidth / originalImg.width, container.clientHeight / originalImg.height);
     panX = (container.clientWidth - originalImg.width * scale) / 2;
@@ -534,12 +531,12 @@ export function resetZoom() {
     applyTransform();
 }
 
-export function setTypography(config) {
+function setTypography(config) {
     typo = { ...typo, ...config };
     redraw();
 }
 
-export function updateRegionData(id, data) {
+function updateRegionData(id, data) {
     const index = regions.findIndex(r => r.id === id);
     if (index !== -1) {
         regions[index] = { ...regions[index], ...data };
@@ -548,7 +545,7 @@ export function updateRegionData(id, data) {
     }
 }
 
-export function loadRegions(savedRegionsStr) {
+function loadRegions(savedRegionsStr) {
     if (!savedRegionsStr) {
         regions = [];
     } else if (typeof savedRegionsStr === 'string') {
@@ -569,20 +566,20 @@ export function loadRegions(savedRegionsStr) {
     redraw();
 }
 
-export function selectRegion(id) {
+function selectRegion(id) {
     regions.forEach(r => r.selected = (r.id === id));
     syncToBlazor();
     redraw();
 }
 
-export function deleteRegion(id) {
+function deleteRegion(id) {
     regions = regions.filter(r => r.id !== id);
     saveState();
     syncToBlazor();
     redraw();
 }
 
-export function deleteSelectedRegions() {
+function deleteSelectedRegions() {
     const hasSelected = regions.some(r => r.selected);
     if (!hasSelected) return;
     
@@ -594,7 +591,7 @@ export function deleteSelectedRegions() {
     }
 }
 
-export function approveSelectedRegions() {
+function approveSelectedRegions() {
     regions.forEach(r => {
         if (r.selected) r.isSuggested = false;
     });
@@ -603,7 +600,7 @@ export function approveSelectedRegions() {
     redraw();
 }
 
-export function setBrushSettings(color, size) {
+function setBrushSettings(color, size) {
     brushColor = color;
     brushSize = size;
 }
@@ -704,8 +701,8 @@ function redraw() {
 
     // Draw annotations (Pins)
     annotations.forEach(ann => {
-        const ax = ann.x ?? ann.X;
-        const ay = ann.y ?? ann.Y;
+        const ax = ann.pinX ?? ann.PinX ?? ann.x ?? ann.X;
+        const ay = ann.pinY ?? ann.PinY ?? ann.y ?? ann.Y;
         const isResolved = ann.isResolved ?? ann.IsResolved ?? false;
         
         if (ax != null && ay != null) {
@@ -854,7 +851,7 @@ function saveState() {
     if (typeof dotNetRef !== 'undefined' && dotNetRef) syncToBlazor();
 }
 
-export function undo() {
+function undo() {
     if (historyIndex > 0) {
         historyIndex--;
         const state = historyStack[historyIndex];
@@ -880,7 +877,7 @@ export function undo() {
     }
 }
 
-export function redo() {
+function redo() {
     if (historyIndex < historyStack.length - 1) {
         historyIndex++;
         const state = historyStack[historyIndex];
@@ -930,7 +927,7 @@ function calculateIoU(box1, box2) {
     const iou = interArea / parseFloat(box1Area + box2Area - interArea);
     return iou;
 }
-export async function callSegmentAPI() {
+async function callSegmentAPI() {
     if (!currentDataUrl) return false;
     try {
         let blob;
@@ -988,7 +985,7 @@ export async function callSegmentAPI() {
     return false;
 }
 
-export async function callTranslateAPI() {
+async function callTranslateAPI() {
     let targets = regions.filter(r => r.selected);
     if (targets.length === 0) targets = regions; // Fallback to all if none selected
     if (targets.length === 0) return "no_regions";
@@ -1067,7 +1064,7 @@ export async function callTranslateAPI() {
     return "error";
 }
 
-export function exportImage() {
+function exportImage() {
     try {
         return backgroundCanvas.toDataURL('image/png');
     } catch (e) {
@@ -1076,7 +1073,32 @@ export function exportImage() {
     }
 }
 
-export function exportRegions() {
+function exportRegions() {
     return JSON.stringify(regions);
 }
 
+
+
+    return {
+        syncAnnotations,
+        initCanvas,
+        loadImage,
+        setTool,
+        zoom,
+        resetZoom,
+        setTypography,
+        updateRegionData,
+        loadRegions,
+        selectRegion,
+        deleteRegion,
+        deleteSelectedRegions,
+        approveSelectedRegions,
+        setBrushSettings,
+        undo,
+        redo,
+        exportImage,
+        exportRegions,
+        callSegmentAPI,
+        callTranslateAPI
+    };
+}

@@ -49,7 +49,28 @@ namespace MangaManagementSystem.Application.Services
             var entity = await _unitOfWork.Chapters.GetByIdAsync(id);
             if (entity != null)
             {
-                _unitOfWork.Chapters.Delete(entity);
+                await _unitOfWork.Chapters.DeleteWithDependenciesAsync(id);
+            }
+        }
+
+        public async Task UpdateChapterStatusAsync(Guid id, string statusCode)
+        {
+            var entity = await _unitOfWork.Chapters.GetByIdAsync(id);
+            if (entity != null)
+            {
+                entity.StatusCode = statusCode;
+                _unitOfWork.Chapters.Update(entity);
+                await _unitOfWork.SaveChangesAsync();
+            }
+        }
+
+        public async Task UpdateChapterTitleAsync(Guid id, string newTitle)
+        {
+            var entity = await _unitOfWork.Chapters.GetByIdAsync(id);
+            if (entity != null)
+            {
+                entity.ChapterTitle = newTitle;
+                _unitOfWork.Chapters.Update(entity);
                 await _unitOfWork.SaveChangesAsync();
             }
         }

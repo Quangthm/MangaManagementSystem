@@ -65,14 +65,26 @@ namespace MangaManagementSystem.Application.Services
         public async Task<bool> DeleteChapterPageAsync(Guid id, Guid? deletedByUserId = null)
         {
             var entity = await _unitOfWork.ChapterPages.GetByIdAsync(id);
-            if (entity == null || entity.DeletedAtUtc != null)
+            if (entity == null)
             {
                 return false;
             }
 
-            entity.DeletedAtUtc = DateTime.UtcNow;
-            entity.DeletedByUserId = deletedByUserId;
-            _unitOfWork.ChapterPages.Update(entity);
+            var tasks = await _unitOfWork.ChapterPageTasks.GetByChapterPageIdWithRegionsAsync(id);
+            foreach (var task in tasks)
+            {
+                task.PageRegions.Clear();
+                _unitOfWork.ChapterPageTasks.Delete(task);
+            }
+
+            var annotations = await _unitOfWork.ChapterPageAnnotations.GetByChapterPageIdWithRegionsAsync(id);
+            foreach (var annotation in annotations)
+            {
+                annotation.PageRegions.Clear();
+                _unitOfWork.ChapterPageAnnotations.Delete(annotation);
+            }
+
+            _unitOfWork.ChapterPages.Delete(entity);
             await _unitOfWork.SaveChangesAsync();
             return true;
         }

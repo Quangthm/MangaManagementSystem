@@ -82,12 +82,13 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<bool> DeleteChapterPageAnnotationAsync(Guid id)
         {
-            var entity = await _unitOfWork.ChapterPageAnnotations.GetByIdAsync(id);
+            var entity = await _unitOfWork.ChapterPageAnnotations.GetByIdWithRegionsAsync(id);
             if (entity == null)
             {
                 return false;
             }
 
+            entity.PageRegions.Clear();
             _unitOfWork.ChapterPageAnnotations.Delete(entity);
             await _unitOfWork.SaveChangesAsync();
             return true;

@@ -31,42 +31,34 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             decimal? compensationAmount,
             IReadOnlyList<Guid> pageRegionIds)
         {
-            var task = new ChapterPageTask
-            {
-                ChapterPageTaskId = Guid.NewGuid(),
-                AssignedToUserId = assignedToUserId,
-                TypeCode = typeCode,
-                TaskTitle = taskTitle,
-                TaskDescription = taskDescription,
-                PriorityLevel = priorityLevel,
-                DueAtUtc = dueAtUtc,
-                CompensationAmount = compensationAmount ?? 0m,
-                CreatedByUserId = actorUserId,
-                CreatedAtUtc = DateTime.UtcNow,
-                StatusCode = "ASSIGNED"
-            };
+            var conn = _context.Database.GetDbConnection();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "manga.usp_ChapterPageTask_Create";
+            cmd.CommandType = CommandType.StoredProcedure;
 
-            if (pageRegionIds != null && pageRegionIds.Any())
-            {
-                // Create unique IDs to attach
-                var uniqueIds = pageRegionIds.Distinct().ToList();
-                foreach (var regionId in uniqueIds)
-                {
-                    // Check if already tracked to avoid InvalidOperationException
-                    var trackedRegion = _context.PageRegions.Local.FirstOrDefault(r => r.PageRegionId == regionId);
-                    if (trackedRegion == null)
-                    {
-                        trackedRegion = new PageRegion { PageRegionId = regionId };
-                        _context.PageRegions.Attach(trackedRegion);
-                    }
-                    task.PageRegions.Add(trackedRegion);
-                }
-            }
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@actor_user_id", System.Data.SqlDbType.UniqueIdentifier) { Value = actorUserId });
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@assigned_to_user_id", System.Data.SqlDbType.UniqueIdentifier) { Value = assignedToUserId });
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@type_code", System.Data.SqlDbType.NVarChar, 50) { Value = typeCode });
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@task_title", System.Data.SqlDbType.NVarChar, 200) { Value = taskTitle });
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@task_description", System.Data.SqlDbType.NVarChar, -1) { Value = taskDescription });
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@priority_level", System.Data.SqlDbType.TinyInt) { Value = priorityLevel });
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@due_at_utc", System.Data.SqlDbType.DateTime2) { Value = dueAtUtc });
+            
+            var compParam = new Microsoft.Data.SqlClient.SqlParameter("@compensation_amount", System.Data.SqlDbType.Decimal) { Precision = 12, Scale = 2 };
+            if (compensationAmount.HasValue) compParam.Value = compensationAmount.Value; else compParam.Value = 0m;
+            cmd.Parameters.Add(compParam);
 
-            await _context.ChapterPageTasks.AddAsync(task);
-            await _context.SaveChangesAsync();
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@page_region_ids_json", System.Data.SqlDbType.NVarChar, -1) { Value = System.Text.Json.JsonSerializer.Serialize(pageRegionIds) });
+            
+            var newIdParam = new Microsoft.Data.SqlClient.SqlParameter("@new_chapter_page_task_id", System.Data.SqlDbType.UniqueIdentifier) { Direction = ParameterDirection.Output };
+            cmd.Parameters.Add(newIdParam);
 
-            return task.ChapterPageTaskId;
+            if (conn.State != ConnectionState.Open)
+                await conn.OpenAsync();
+
+            await cmd.ExecuteNonQueryAsync();
+
+            return (Guid)newIdParam.Value;
         }
 
         public async Task<ChapterPageTask?> GetByIdWithRegionsAsync(Guid id)

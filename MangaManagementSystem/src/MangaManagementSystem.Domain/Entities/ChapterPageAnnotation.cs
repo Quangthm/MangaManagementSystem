@@ -15,7 +15,6 @@ namespace MangaManagementSystem.Domain.Entities
         public DateTime? ResolvedAtUtc { get; set; }
         public Guid? ResolvedByUserId { get; set; }
         public User? ResolvedByUser { get; set; }
-        public DateTime CreatedAtUtc { get; set; }
 
         // Annotation region context is represented through linked PageRegions.
         // Mapped to the manga.ChapterPageAnnotationRegion junction table via EF skip navigation.

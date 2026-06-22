@@ -26,36 +26,25 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             string issueTypeCode,
             string annotationText)
         {
-            var annotation = new ChapterPageAnnotation
-            {
-                ChapterPageAnnotationId = Guid.NewGuid(),
-                AnnotatedByUserId = actorUserId,
-                IssueTypeCode = issueTypeCode,
-                AnnotationText = annotationText,
-                CreatedAtUtc = DateTime.UtcNow
-            };
+            var conn = _context.Database.GetDbConnection();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "manga.usp_ChapterPageAnnotation_Create";
+            cmd.CommandType = CommandType.StoredProcedure;
 
-            if (pageRegionIds != null && pageRegionIds.Any())
-            {
-                // Create unique IDs to attach
-                var uniqueIds = pageRegionIds.Distinct().ToList();
-                foreach (var regionId in uniqueIds)
-                {
-                    // Check if already tracked to avoid InvalidOperationException
-                    var trackedRegion = _context.PageRegions.Local.FirstOrDefault(r => r.PageRegionId == regionId);
-                    if (trackedRegion == null)
-                    {
-                        trackedRegion = new PageRegion { PageRegionId = regionId };
-                        _context.PageRegions.Attach(trackedRegion);
-                    }
-                    annotation.PageRegions.Add(trackedRegion);
-                }
-            }
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@actor_user_id", System.Data.SqlDbType.UniqueIdentifier) { Value = actorUserId });
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@issue_type_code", System.Data.SqlDbType.NVarChar, 50) { Value = issueTypeCode });
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@annotation_text", System.Data.SqlDbType.NVarChar, 1000) { Value = annotationText });
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@page_region_ids_json", System.Data.SqlDbType.NVarChar, -1) { Value = System.Text.Json.JsonSerializer.Serialize(pageRegionIds) });
+            
+            var newIdParam = new Microsoft.Data.SqlClient.SqlParameter("@new_chapter_page_annotation_id", System.Data.SqlDbType.UniqueIdentifier) { Direction = ParameterDirection.Output };
+            cmd.Parameters.Add(newIdParam);
 
-            await _context.ChapterPageAnnotations.AddAsync(annotation);
-            await _context.SaveChangesAsync();
+            if (conn.State != ConnectionState.Open)
+                await conn.OpenAsync();
 
-            return annotation.ChapterPageAnnotationId;
+            await cmd.ExecuteNonQueryAsync();
+
+            return (Guid)newIdParam.Value;
         }
 
         public async Task<ChapterPageAnnotation?> GetByIdWithRegionsAsync(Guid id)
