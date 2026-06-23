@@ -80,11 +80,13 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 where r.RoleName == "Assistant"
                       && u.StatusCode == "ACTIVE"
                       && !activeContributorUserIds.Contains(u.UserId)
-                select new EligibleAssistantContributorDto(
+                select new
+                {
                     u.UserId,
                     u.DisplayName,
                     u.Username,
-                    u.Email);
+                    u.Email
+                };
 
             if (!string.IsNullOrWhiteSpace(search))
             {
@@ -97,7 +99,13 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
             return await query
                 .OrderBy(x => x.DisplayName)
+                .ThenBy(x => x.Username)
                 .Take(50)
+                .Select(x => new EligibleAssistantContributorDto(
+                    x.UserId,
+                    x.DisplayName,
+                    x.Username,
+                    x.Email))
                 .ToListAsync(cancellationToken);
         }
 
