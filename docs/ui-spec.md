@@ -449,11 +449,12 @@ Submitted output preview when available
 
 ### Return for Rework dialog
 
-| Field                      | Behavior                                                         |
-| -------------------------- | ---------------------------------------------------------------- |
-| Current assistant          | Display only.                                                    |
-| Updated task description   | Required or strongly expected as the new instruction for rework. |
-| Submitted output reference | May remain visible for reviewer context.                         |
+| Field                      | Behavior                                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------------------------ |
+| Dialog title               | Return for Rework.                                                                               |
+| Current assistant          | Display only.                                                                                    |
+| Updated task instructions  | Required. Textarea with helper text "Explain what the Assistant should revise before resubmitting." |
+| Submit button              | Return for Rework.                                                                               |
 
 Behavior:
 

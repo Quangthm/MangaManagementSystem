@@ -395,7 +395,10 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             {
                 58201 or 58301 or 58401 or 58501 => "Could not acquire task lock. Please try again.",
                 58202 or 58302 or 58402 or 58502 => "Task does not exist.",
-                58203 or 58303 or 58403 => ex.Message,
+                58203 => "This task cannot be cancelled because it is not in the expected status.",
+                58303 => "This task cannot be approved because it is not currently under review.",
+                58403 => "Only tasks currently under review can be returned for rework.",
+                58406 => "You must be an active contributor of this series to return a task for rework.",
                 // Reassignment SP errors
                 58503 => "Completed or cancelled tasks cannot be reassigned.",
                 58504 => "New assigned user must be different from the current assignee.",

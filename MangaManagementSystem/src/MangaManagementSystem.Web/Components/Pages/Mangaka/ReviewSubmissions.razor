@@ -237,10 +237,17 @@
 
         @* Return for Rework Dialog *@
         <MudDialog @bind-Visible="_showReturnDialog" Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
-            <TitleContent>Return Task for Rework</TitleContent>
+            <TitleContent>Return for Rework</TitleContent>
             <DialogContent>
-                <MudText Class="mb-3">Provide rework instructions for the assistant:</MudText>
-                <MudTextField @bind-Value="_returnReason" Label="Rework Instructions" Lines="4" Variant="Variant.Outlined" Required="true" />
+                @if (_returnDialogTask != null)
+                {
+                    <MudText Class="mb-2">
+                        <strong>Current Assistant:</strong> @(_returnDialogTask.AssignedToDisplayName ?? _returnDialogTask.AssignedUsername ?? "Unknown")
+                    </MudText>
+                }
+                <MudTextField @bind-Value="_returnReason" Label="Updated task instructions" Lines="4"
+                              Variant="Variant.Outlined" Required="true"
+                              HelperText="Explain what the Assistant should revise before resubmitting." />
             </DialogContent>
             <DialogActions>
                 <MudButton OnClick="@(() => _showReturnDialog = false)">Cancel</MudButton>
@@ -328,6 +335,7 @@
     private string _returnReason = string.Empty;
     private string _cancelReason = string.Empty;
     private Guid _dialogTaskId;
+    private ChapterPageTaskDto? _returnDialogTask;
 
     // Reassign dialog state
     private bool _showReassignDialog;
@@ -432,6 +440,7 @@
         _showCancelDialog = false;
         _showReassignDialog = false;
         _returnReason = string.Empty;
+        _returnDialogTask = null;
         _cancelReason = string.Empty;
         _reassignReason = string.Empty;
         _reassignDescription = string.Empty;
@@ -466,6 +475,7 @@
     private void OpenReturnDialog(ChapterPageTaskDto task)
     {
         _dialogTaskId = task.ChapterPageTaskId;
+        _returnDialogTask = task;
         _returnReason = string.Empty;
         _showReturnDialog = true;
     }
