@@ -185,7 +185,7 @@ namespace MangaManagementSystem.Application.Services
                     r.CreatedByUserId,
                     r.UpdatedByUserId)).ToList(),
                 AssignedToDisplayName: t.AssignedToUser?.DisplayName,
-                AssignedUsername: t.AssignedToUser?.Username
+                AssignedUsername: t.AssignedToUser?.Username,
                 CreatedAtUtc: t.CreatedAtUtc
             );
         }

@@ -822,18 +822,5 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         };
     }
 
-    public Task<IReadOnlyList<EditorialBoardPollDto>> GetOpenPollsAsync(Guid currentUserId, CancellationToken cancellationToken)
-    {
-        throw new NotImplementedException();
-    }
-
-    public Task<OpenSeriesBoardPollResultDto> OpenPollAsync(OpenSeriesBoardPollRequestDto request, Guid chiefUserId, CancellationToken cancellationToken)
-    {
-        throw new NotImplementedException();
-    }
-
-    public Task<CastSeriesBoardVoteResultDto> CastVoteAsync(CastSeriesBoardVoteRequestDto request, Guid voterUserId, CancellationToken cancellationToken)
-    {
-        throw new NotImplementedException();
-    }
+  
 }
