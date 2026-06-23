@@ -1,4 +1,4 @@
-﻿USE MangaManagementDB;
+USE MangaManagementDB;
 GO
 CREATE OR ALTER PROCEDURE audit.usp_AuditEvent_Append
     @actor_user_id      UNIQUEIDENTIFIER = NULL,
