@@ -121,17 +121,16 @@
                                     }
                                 </MudText>
 
-                                <MudText Typo="Typo.body2" Class="mt-1"
-                                          Style="@(isOverdue ? "color: var(--mud-palette-error); font-weight: 600;" : "")">
-                                    Due: <TimestampDisplay Value="@t.DueAtUtc" EmptyText="No deadline set" />
-                                </MudText>
-
-                                @if (t.CompensationAmount.HasValue)
-                                {
-                                    <MudText Typo="Typo.caption" Class="mt-1">
-                                        <span class="mf-muted">Compensation: @t.CompensationAmount.Value.ToString("C2")</span>
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-1">
+                                    <MudText Typo="Typo.caption" Class="mf-muted">
+                                        Assigned: <TimestampDisplay Value="@t.CreatedAtUtc" EmptyText="-" ShowTime="false" />
                                     </MudText>
-                                }
+                                    <MudText Typo="Typo.caption" Class="mf-muted">&bull;</MudText>
+                                    <MudText Typo="Typo.body2"
+                                              Style="@(isOverdue ? "color: var(--mud-palette-error); font-weight: 600;" : "")">
+                                        Due: <TimestampDisplay Value="@t.DueAtUtc" EmptyText="No deadline set" />
+                                    </MudText>
+                                </MudStack>
 
                                 @if (t.PageRegions.Any())
                                 {

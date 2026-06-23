@@ -30,7 +30,7 @@ namespace MangaManagementSystem.Application.Services
                 dto.TaskTitle,
                 dto.TaskDescription,
                 (byte)dto.PriorityLevel,
-                dto.DueAtUtc ?? DateTime.UtcNow,
+                dto.DueAtUtc ?? DateTime.UtcNow.AddDays(7),
                 dto.CompensationAmount,
                 dto.PageRegionIds);
 
@@ -176,7 +176,8 @@ namespace MangaManagementSystem.Application.Services
                     r.SourceType,
                     r.OriginalText,
                     r.CreatedByUserId,
-                    r.UpdatedByUserId)).ToList()
+                    r.UpdatedByUserId)).ToList(),
+                CreatedAtUtc: t.CreatedAtUtc
             );
         }
 
@@ -372,6 +373,7 @@ namespace MangaManagementSystem.Application.Services
                 CompensationAmount: t.CompensationAmount,
                 AssignedUsername: t.AssignedToUser?.Username,
                 CompletedOutputUrl: completedFile?.CloudinarySecureUrl,
+                CreatedAtUtc: t.CreatedAtUtc,
                 SeriesSlug: series?.Slug,
                 ChapterId: chapter?.ChapterId,
                 SourceChapterPageVersionId: firstRegion?.ChapterPageVersionId
