@@ -17,4 +17,8 @@ public interface IEditorialBoardApiClient
         Guid pollId,
         CastVoteRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<FinalizePollResult?> FinalizeApprovalAsync(
+        Guid pollId,
+        CancellationToken cancellationToken = default);
 }
