@@ -282,3 +282,17 @@ Warnings are existing project warnings unrelated to this implementation.
 
 \- Cleanup flow avoids Cloudinary checks during admin list/reload.
 
+
+## Follow-up SQL Source Alignment
+
+After checking root SQL scripts, the source SQL files were also aligned with the cleanup flow:
+
+- MangaManagementSystem_Schema.sql
+  - Added storage_cleaned_at_utc.
+  - Added storage_cleanup_error.
+  - Added ix_file_resource_storage_cleanup_candidates.
+
+- MangaManagementSystem_Procedures_Views_Bootstrap.sql
+  - Updated manga.usp_FileResource_SoftDelete to reset storage cleanup fields when a file is soft-deleted.
+
+No SQL was executed against a real database.
