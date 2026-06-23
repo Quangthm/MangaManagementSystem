@@ -22,6 +22,7 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         string? ChapterNumberLabel = null,
         string? ChapterTitle = null,
         int? PageNo = null,
+        int? PageVersionNo = null,
         string? PageImageUrl = null,
         decimal? CompensationAmount = null,
         string? AssignedUsername = null,
@@ -29,7 +30,11 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         string? CompletedOutputUrl = null,
         string? CreatedByDisplayName = null,
         DateTime? CreatedAtUtc = null,
-        DateTime? UpdatedAtUtc = null
+        DateTime? UpdatedAtUtc = null,
+        // Workspace link fields (read-model only, no DB change)
+        string? SeriesSlug = null,
+        Guid? ChapterId = null,
+        Guid? SourceChapterPageVersionId = null
     );
 
     public record CreateChapterPageTaskDto(
@@ -58,5 +63,31 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         decimal? CompensationAmount,
         Guid? CompletedPageVersionId,
         [Required] IReadOnlyList<Guid> PageRegionIds
+    );
+
+    /// <summary>
+    /// Eligible assistant for task reassignment dropdown.
+    /// </summary>
+    public sealed record EligibleAssistantDto(
+        Guid UserId,
+        string DisplayName,
+        string? Username
+    );
+
+    /// <summary>
+    /// Request to reassign a task to a different assistant.
+    /// </summary>
+    public sealed record ReassignChapterPageTaskRequest(
+        [Required] Guid NewAssignedToUserId,
+        [Required][MaxLength(500)] string Reason,
+        string? UpdatedTaskDescription
+    );
+
+    /// <summary>
+    /// Result of task reassignment.
+    /// </summary>
+    public sealed record ReassignChapterPageTaskResult(
+        Guid OldChapterPageTaskId,
+        Guid NewChapterPageTaskId
     );
 }
