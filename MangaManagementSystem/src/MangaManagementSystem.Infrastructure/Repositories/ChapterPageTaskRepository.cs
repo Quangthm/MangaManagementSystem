@@ -201,5 +201,80 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .OrderByDescending(t => t.UpdatedAtUtc ?? t.CreatedAtUtc)
                 .ToListAsync();
         }
+
+        // --- Reassign task to different assistant SP wrapper ---
+
+        public async Task<Guid> AssignToDifferentUserAsync(
+            Guid actorUserId,
+            Guid chapterPageTaskId,
+            Guid newAssignedToUserId,
+            string reason,
+            string updatedTaskDescription)
+        {
+            var conn = _context.Database.GetDbConnection();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "manga.usp_ChapterPageTask_AssignToDifferentUser";
+            cmd.CommandType = CommandType.StoredProcedure;
+
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@actor_user_id", System.Data.SqlDbType.UniqueIdentifier) { Value = actorUserId });
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@chapter_page_task_id", System.Data.SqlDbType.UniqueIdentifier) { Value = chapterPageTaskId });
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@new_assigned_to_user_id", System.Data.SqlDbType.UniqueIdentifier) { Value = newAssignedToUserId });
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@reason", System.Data.SqlDbType.NVarChar, 500) { Value = reason });
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@updated_task_description", System.Data.SqlDbType.NVarChar, -1)
+            {
+                Value = string.IsNullOrWhiteSpace(updatedTaskDescription) ? (object)DBNull.Value : updatedTaskDescription
+            });
+
+            var outParam = new Microsoft.Data.SqlClient.SqlParameter("@new_chapter_page_task_id", System.Data.SqlDbType.UniqueIdentifier) { Direction = System.Data.ParameterDirection.Output };
+            cmd.Parameters.Add(outParam);
+
+            if (conn.State != ConnectionState.Open)
+                await conn.OpenAsync();
+
+            await cmd.ExecuteNonQueryAsync();
+
+            return outParam.Value == DBNull.Value ? Guid.Empty : (Guid)outParam.Value;
+        }
+
+        // --- Eligible assistants for task reassignment ---
+
+        public async Task<IReadOnlyList<(Guid UserId, string DisplayName, string? Username)>> GetEligibleAssistantsForTaskAsync(Guid taskId)
+        {
+            // Derive seriesId and current assignee from task's region chain using explicit joins
+            // to avoid CS8602 warnings from chained nullable navigation properties.
+            var taskContext = await (
+                from t in _context.ChapterPageTasks.AsNoTracking()
+                where t.ChapterPageTaskId == taskId
+                from r in t.PageRegions
+                join cpv in _context.Set<Domain.Entities.ChapterPageVersion>()
+                    on r.ChapterPageVersionId equals cpv.ChapterPageVersionId
+                join cp in _context.Set<Domain.Entities.ChapterPage>()
+                    on cpv.ChapterPageId equals cp.ChapterPageId
+                join ch in _context.Set<Domain.Entities.Chapter>()
+                    on cp.ChapterId equals ch.ChapterId
+                select new { ch.SeriesId, t.AssignedToUserId }
+            ).FirstOrDefaultAsync();
+
+            if (taskContext == null || taskContext.SeriesId == Guid.Empty)
+                return Array.Empty<(Guid, string, string?)>();
+
+            // Query active contributors for this series with Assistant role, exclude current assignee
+            var assistants = await _context.ActiveSeriesContributors
+                .AsNoTracking()
+                .Where(asc => asc.SeriesId == taskContext.SeriesId
+                           && asc.RoleName == "Assistant"
+                           && asc.UserStatusCode == "ACTIVE"
+                           && asc.UserId != taskContext.AssignedToUserId)
+                .Join(_context.Users,
+                    asc => asc.UserId,
+                    u => u.UserId,
+                    (asc, u) => new { u.UserId, u.DisplayName, u.Username })
+                .OrderBy(x => x.DisplayName)
+                .ToListAsync();
+
+            return assistants
+                .Select(a => (a.UserId, a.DisplayName ?? a.Username, (string?)a.Username))
+                .ToList();
+        }
     }
 }

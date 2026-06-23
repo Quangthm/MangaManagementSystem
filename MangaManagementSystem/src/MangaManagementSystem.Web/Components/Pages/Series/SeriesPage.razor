@@ -41,7 +41,7 @@
             <div style="color: #64748b; font-size: 0.9rem; margin-bottom: 24px;">
                 No series was found for the URL <code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">/series/@Slug</code>.
             </div>
-            <MudButton Variant="Variant.Outlined" OnClick="@(() => Nav.NavigateTo("/mangaka"))">
+            <MudButton Variant="Variant.Outlined" OnClick="@(() => Nav.NavigateTo(BackUrl))">
                 Back to Dashboard
             </MudButton>
         </div>
@@ -156,7 +156,7 @@
                                 {
                                     <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="false"
                                                StartIcon="@Icons.Material.Filled.OpenInNew"
-                                               OnClick="@(() => Nav.NavigateTo($"/series/{Slug}/workspace"))">
+                                               OnClick="@(() => Nav.NavigateTo(SafeReturnUrl.AppendReturnUrl($"/series/{Slug}/workspace", returnUrl)))">
                                         Open Workspace
                                     </MudButton>
                                 }
@@ -202,7 +202,7 @@
                         @foreach (var ch in _series.Chapters)
                         {
                             <div style="padding: 12px 24px; border-bottom: 1px solid #f8fafc; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: background 0.12s;"
-                                 @onclick="@(() => Nav.NavigateTo($"/series/{Slug}/workspace?chapterId={ch.ChapterId}"))"
+                                 @onclick="@(() => Nav.NavigateTo(SafeReturnUrl.AppendReturnUrl($"/series/{Slug}/workspace?chapterId={ch.ChapterId}", returnUrl)))"
                                  onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
                                 <div style="display: flex; align-items: center; gap: 12px;">
                                     <span style="font-weight: 700; font-size: 0.85rem; color: #111827; min-width: 60px;">Ch. @ch.ChapterNumberLabel</span>
@@ -385,7 +385,7 @@
     private bool _seriesSynopsisExpanded;
     private Guid? _currentUserId;
 
-    private string BackUrl => SafeReturnUrl.Resolve(returnUrl, "/mangaka");
+    private string BackUrl => SafeReturnUrl.Resolve(returnUrl, "/dashboard");
 
     private static string LanguageLabel(string? code) => code switch
     {

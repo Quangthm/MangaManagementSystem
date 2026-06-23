@@ -9,9 +9,17 @@
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthStateProvider
+@using MangaManagementSystem.Web.Services
 
 <MangakaLayout>
     <div class="mf-page">
+        <MudButton Variant="Variant.Text"
+                   StartIcon="@Icons.Material.Filled.ArrowBack"
+                   Style="color: #64748b; margin-bottom: 16px;"
+                   OnClick="@(() => Nav.NavigateTo("/mangaka"))">
+            Back to Mangaka Dashboard
+        </MudButton>
+
         <div class="mf-page-header">
             <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Review Assistant Submissions</MudText>
             <MudText Typo="Typo.body1" Class="mf-muted">Review and approve completed tasks from your assistants</MudText>
@@ -27,7 +35,6 @@
         }
         else
         {
-            <!-- Stat cards -->
             <MudGrid Class="mb-4">
                 <MudItem xs="12" md="3"><StatCard Label="Under Review" Value="@_underReviewCount.ToString()" Description="Awaiting your decision" /></MudItem>
                 <MudItem xs="12" md="3"><StatCard Label="Assigned" Value="@_assignedCount.ToString()" Description="Active tasks" /></MudItem>
@@ -35,15 +42,43 @@
                 <MudItem xs="12" md="3"><StatCard Label="Cancelled" Value="@_cancelledCount.ToString()" Description="Cancelled tasks" /></MudItem>
             </MudGrid>
 
-            <!-- Filter -->
             <MudPaper Class="pa-4 mb-4 mf-card" Elevation="0">
-                <MudSelect T="string" Label="Filter by Status" Value="@_statusFilter" ValueChanged="OnFilterChanged" Variant="Variant.Outlined" Style="max-width:280px;">
-                    <MudSelectItem Value="@("ALL")">All Tasks</MudSelectItem>
-                    <MudSelectItem Value="@("UNDER_REVIEW")">Under Review</MudSelectItem>
-                    <MudSelectItem Value="@("ASSIGNED")">Assigned</MudSelectItem>
-                    <MudSelectItem Value="@("COMPLETED")">Completed</MudSelectItem>
-                    <MudSelectItem Value="@("CANCELLED")">Cancelled</MudSelectItem>
-                </MudSelect>
+                <MudGrid>
+                    <MudItem xs="12" md="3">
+                        <MudTextField @bind-Value="_searchText" Label="Search by series or chapter"
+                                       Variant="Variant.Outlined" Immediate="true"
+                                       Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" />
+                    </MudItem>
+                    <MudItem xs="12" md="3">
+                        <MudSelect T="string" Label="Task Type" Value="@_typeFilter" ValueChanged="OnTypeFilterChanged"
+                                    Variant="Variant.Outlined" Clearable="true">
+                            <MudSelectItem Value="@("BACKGROUND")">Background</MudSelectItem>
+                            <MudSelectItem Value="@("SHADING")">Shading</MudSelectItem>
+                            <MudSelectItem Value="@("EFFECTS")">Effects</MudSelectItem>
+                            <MudSelectItem Value="@("CLEANUP")">Cleanup</MudSelectItem>
+                            <MudSelectItem Value="@("DIALOGUE")">Dialogue</MudSelectItem>
+                            <MudSelectItem Value="@("TYPESETTING")">Typesetting</MudSelectItem>
+                            <MudSelectItem Value="@("REVIEW")">Review</MudSelectItem>
+                            <MudSelectItem Value="@("OTHER")">Other</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" md="3">
+                        <MudAutocomplete T="string" Label="Assistant" Value="@_assistantFilter"
+                                          Variant="Variant.Outlined" Clearable="true"
+                                          SearchFunc="@SearchAssistants" ResetValueOnEmptyText="false"
+                                          CoerceText="true" CoerceValue="false" />
+                    </MudItem>
+                    <MudItem xs="12" md="3">
+                        <MudSelect T="string" Label="Status" Value="@_statusFilter" ValueChanged="OnFilterChanged"
+                                    Variant="Variant.Outlined">
+                            <MudSelectItem Value="@("ALL")">All Tasks</MudSelectItem>
+                            <MudSelectItem Value="@("UNDER_REVIEW")">Under Review</MudSelectItem>
+                            <MudSelectItem Value="@("ASSIGNED")">Assigned</MudSelectItem>
+                            <MudSelectItem Value="@("COMPLETED")">Completed</MudSelectItem>
+                            <MudSelectItem Value="@("CANCELLED")">Cancelled</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                </MudGrid>
             </MudPaper>
 
             @if (!_filteredTasks.Any())
@@ -62,40 +97,97 @@
                         <MudItem xs="12" md="6">
                             <MudPaper Class="pa-5 mf-card" Elevation="0">
                                 <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
-                                    <MudText Typo="Typo.h6" Class="font-weight-bold">@task.TypeCode</MudText>
+                                    <MudChip T="string" Color="Color.Primary" Size="Size.Small">@task.TypeCode</MudChip>
                                     <StatusBadge Status="@task.StatusCode" />
                                 </MudStack>
 
-                                <MudText Class="mf-muted mb-1">
-                                    Assigned to: @(task.AssignedToDisplayName ?? task.AssignedUsername ?? "Unknown")
-                                </MudText>
-                                @if (!string.IsNullOrWhiteSpace(task.SeriesTitle))
-                                {
-                                    <MudText Typo="Typo.body2" Class="mf-muted">@task.SeriesTitle @(task.ChapterNumberLabel != null ? $" • {task.ChapterNumberLabel}" : "") @(task.PageNo.HasValue ? $" • Page {task.PageNo}" : "")</MudText>
-                                }
                                 @if (!string.IsNullOrWhiteSpace(task.TaskTitle))
                                 {
                                     <MudText Typo="Typo.body2" Class="mt-1"><strong>@task.TaskTitle</strong></MudText>
                                 }
+
+                                @if (!string.IsNullOrWhiteSpace(task.SeriesTitle))
+                                {
+                                    <MudText Typo="Typo.body2" Class="mt-1 mf-muted">
+                                        <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Small" Class="mr-1" />
+                                        @task.SeriesTitle
+                                    </MudText>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(task.ChapterNumberLabel) || task.PageNo.HasValue || task.PageVersionNo.HasValue)
+                                {
+                                    <MudText Typo="Typo.body2" Class="mt-1 mf-muted">
+                                        <MudIcon Icon="@Icons.Material.Filled.Article" Size="Size.Small" Class="mr-1" />
+                                        @if (!string.IsNullOrWhiteSpace(task.ChapterNumberLabel))
+                                        {
+                                            <span>@task.ChapterNumberLabel</span>
+                                        }
+                                        @if (task.PageNo.HasValue)
+                                        {
+                                            <span> • Pg. @task.PageNo.Value</span>
+                                        }
+                                        @if (task.PageVersionNo.HasValue)
+                                        {
+                                            <span> • v@(task.PageVersionNo.Value)</span>
+                                        }
+                                    </MudText>
+                                }
+
                                 <MudText Typo="Typo.body2" Class="mt-1 mf-muted">
-                                    Due: <TimestampDisplay Value="@task.DueAtUtc" EmptyText="No deadline" />
+                                    <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Class="mr-1" />
+                                    @(task.AssignedToDisplayName ?? task.AssignedUsername ?? "Unknown")
                                 </MudText>
 
-                                @* Submitted output preview *@
+                                <MudStack Row="true" Class="mt-1" Spacing="3">
+                                    <MudText Typo="Typo.body2" Class="mf-muted">
+                                        Priority: @task.PriorityLevel
+                                    </MudText>
+                                    <MudText Typo="Typo.body2" Class="mf-muted">
+                                        Due: <TimestampDisplay Value="@task.DueAtUtc" EmptyText="No deadline" />
+                                    </MudText>
+                                </MudStack>
+
+                                @if (task.PageRegions.Any())
+                                {
+                                    <MudText Typo="Typo.caption" Class="mt-1 mf-muted">
+                                        Regions: @task.PageRegions.Count
+                                    </MudText>
+                                }
+
+                                @if (task.CompensationAmount.HasValue)
+                                {
+                                    <MudText Typo="Typo.caption" Class="mt-1 mf-muted">
+                                        Compensation: @task.CompensationAmount.Value.ToString("C2")
+                                    </MudText>
+                                }
+
                                 @if (task.StatusCode == "UNDER_REVIEW" && !string.IsNullOrWhiteSpace(task.CompletedOutputUrl))
                                 {
                                     <MudText Typo="Typo.body2" Class="mt-2"><strong>Submitted Output:</strong></MudText>
                                     <MudImage Src="@task.CompletedOutputUrl" Alt="Submitted output" MaxHeight="200" Class="mt-1 rounded" ObjectFit="ObjectFit.Contain" />
+                                    @if (!string.IsNullOrWhiteSpace(task.SeriesSlug) && task.ChapterId.HasValue)
+                                    {
+                                        <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary"
+                                                   StartIcon="@Icons.Material.Filled.OpenInNew" Class="mt-1"
+                                                   OnClick="@(() => Nav.NavigateTo(BuildWorkspaceLink(task)))">
+                                            View in Workspace
+                                        </MudButton>
+                                    }
                                 }
 
-                                @* Original page image *@
                                 @if (!string.IsNullOrWhiteSpace(task.PageImageUrl))
                                 {
                                     <MudText Typo="Typo.body2" Class="mt-2"><strong>Original Page:</strong></MudText>
                                     <MudImage Src="@task.PageImageUrl" Alt="Original page" MaxHeight="150" Class="mt-1 rounded" ObjectFit="ObjectFit.Contain" />
+                                    @if (!string.IsNullOrWhiteSpace(task.SeriesSlug) && task.ChapterId.HasValue)
+                                    {
+                                        <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary"
+                                                   StartIcon="@Icons.Material.Filled.OpenInNew" Class="mt-1"
+                                                   OnClick="@(() => Nav.NavigateTo(BuildWorkspaceLink(task)))">
+                                            View in Workspace
+                                        </MudButton>
+                                    }
                                 }
 
-                                @* Action buttons *@
                                 @if (task.StatusCode == "UNDER_REVIEW")
                                 {
                                     <MudStack Row="true" Class="mt-3" Spacing="2">
@@ -109,6 +201,11 @@
                                                    OnClick="@(() => OpenReturnDialog(task))">
                                             Return for Rework
                                         </MudButton>
+                                        <MudButton Variant="Variant.Outlined" Color="Color.Info" Size="Size.Small"
+                                                   Disabled="@_actionInProgress"
+                                                   OnClick="@(() => OpenReassignDialog(task))">
+                                            Reassign
+                                        </MudButton>
                                         <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
                                                    Disabled="@_actionInProgress"
                                                    OnClick="@(() => OpenCancelDialog(task))">
@@ -119,6 +216,11 @@
                                 else if (task.StatusCode == "ASSIGNED")
                                 {
                                     <MudStack Row="true" Class="mt-3" Spacing="2">
+                                        <MudButton Variant="Variant.Outlined" Color="Color.Info" Size="Size.Small"
+                                                   Disabled="@_actionInProgress"
+                                                   OnClick="@(() => OpenReassignDialog(task))">
+                                            Reassign
+                                        </MudButton>
                                         <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
                                                    Disabled="@_actionInProgress"
                                                    OnClick="@(() => OpenCancelDialog(task))">
@@ -159,6 +261,53 @@
             </DialogActions>
         </MudDialog>
 
+        @* Reassign Dialog *@
+        <MudDialog @bind-Visible="_showReassignDialog" Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
+            <TitleContent>Reassign Task</TitleContent>
+            <DialogContent>
+                @if (_reassignDialogTask != null)
+                {
+                    <MudText Class="mb-2">
+                        <strong>Current Assignee:</strong> @(_reassignDialogTask.AssignedToDisplayName ?? _reassignDialogTask.AssignedUsername ?? "Unknown")
+                    </MudText>
+                }
+                @if (_loadingAssistants)
+                {
+                    <MudProgressLinear Indeterminate="true" Class="mb-3" />
+                }
+                else if (!_eligibleAssistants.Any())
+                {
+                    <MudAlert Severity="Severity.Warning" Class="mb-3">No eligible assistants found for this series.</MudAlert>
+                }
+                else
+                {
+                    <MudSelect T="Guid?" Label="New Assistant" @bind-Value="_selectedNewAssistantUserId"
+                               Variant="Variant.Outlined" Required="true" Class="mb-3">
+                        @foreach (var assistant in _eligibleAssistants)
+                        {
+                            <MudSelectItem T="Guid?" Value="@assistant.UserId">
+                                @assistant.DisplayName @(assistant.Username != null ? $"(@{assistant.Username})" : "")
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+                <MudTextField @bind-Value="_reassignReason" Label="Reason for Reassignment" Lines="3"
+                              Variant="Variant.Outlined" Required="true" Counter="500" MaxLength="500"
+                              HelperText="Required. Max 500 characters." />
+                <MudTextField @bind-Value="_reassignDescription" Label="Updated Task Description (optional)" Lines="3"
+                              Variant="Variant.Outlined" Class="mt-3"
+                              HelperText="Leave empty to keep the original description." />
+            </DialogContent>
+            <DialogActions>
+                <MudButton OnClick="@(() => _showReassignDialog = false)">Cancel</MudButton>
+                <MudButton Color="Color.Info" Variant="Variant.Filled"
+                           Disabled="@(!_selectedNewAssistantUserId.HasValue || string.IsNullOrWhiteSpace(_reassignReason) || _actionInProgress || _loadingAssistants)"
+                           OnClick="ConfirmReassign">
+                    Reassign
+                </MudButton>
+            </DialogActions>
+        </MudDialog>
+
     </div>
 </MangakaLayout>
 
@@ -167,6 +316,9 @@
     private bool _loading = true;
     private string? _error;
     private IReadOnlyList<ChapterPageTaskDto> _tasks = Array.Empty<ChapterPageTaskDto>();
+    private string _searchText = string.Empty;
+    private string _typeFilter = string.Empty;
+    private string _assistantFilter = string.Empty;
     private string _statusFilter = "ALL";
     private bool _actionInProgress;
 
@@ -177,13 +329,64 @@
     private string _cancelReason = string.Empty;
     private Guid _dialogTaskId;
 
+    // Reassign dialog state
+    private bool _showReassignDialog;
+    private bool _loadingAssistants;
+    private ChapterPageTaskDto? _reassignDialogTask;
+    private string _reassignReason = string.Empty;
+    private string _reassignDescription = string.Empty;
+    private Guid? _selectedNewAssistantUserId;
+    private IReadOnlyList<EligibleAssistantDto> _eligibleAssistants = Array.Empty<EligibleAssistantDto>();
+
     private IEnumerable<ChapterPageTaskDto> _filteredTasks =>
-        _statusFilter == "ALL" ? _tasks : _tasks.Where(t => t.StatusCode == _statusFilter);
+        ApplyFilters(_tasks);
+
+    private IEnumerable<ChapterPageTaskDto> ApplyFilters(IEnumerable<ChapterPageTaskDto> source)
+    {
+        var query = source.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(_searchText))
+        {
+            var search = _searchText.Trim();
+            query = query.Where(t =>
+                (t.SeriesTitle != null && t.SeriesTitle.Contains(search, StringComparison.OrdinalIgnoreCase)) ||
+                (t.ChapterNumberLabel != null && t.ChapterNumberLabel.Contains(search, StringComparison.OrdinalIgnoreCase)) ||
+                (t.ChapterTitle != null && t.ChapterTitle.Contains(search, StringComparison.OrdinalIgnoreCase)) ||
+                (t.TaskTitle != null && t.TaskTitle.Contains(search, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(_typeFilter))
+        {
+            query = query.Where(t => t.TypeCode == _typeFilter);
+        }
+
+        if (!string.IsNullOrWhiteSpace(_assistantFilter))
+        {
+            query = query.Where(t =>
+                (t.AssignedToDisplayName != null && t.AssignedToDisplayName.Equals(_assistantFilter, StringComparison.OrdinalIgnoreCase)) ||
+                (t.AssignedUsername != null && t.AssignedUsername.Equals(_assistantFilter, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        if (_statusFilter != "ALL")
+        {
+            query = query.Where(t => t.StatusCode == _statusFilter);
+        }
+
+        return query;
+    }
 
     private int _underReviewCount => _tasks.Count(t => t.StatusCode == "UNDER_REVIEW");
     private int _assignedCount => _tasks.Count(t => t.StatusCode == "ASSIGNED");
     private int _completedCount => _tasks.Count(t => t.StatusCode == "COMPLETED");
     private int _cancelledCount => _tasks.Count(t => t.StatusCode == "CANCELLED");
+
+    private IEnumerable<string> _availableAssistants =>
+        _tasks
+            .Select(t => t.AssignedToDisplayName ?? t.AssignedUsername ?? "")
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Distinct()
+            .OrderBy(n => n)
+            .ToList();
 
     protected override async Task OnInitializedAsync()
     {
@@ -219,11 +422,28 @@
         }
     }
 
-    private void OnFilterChanged(string newFilter)
+    /// <summary>
+    /// Shared post-mutation refresh: reloads full task list, clears dialog/action state,
+    /// and invokes StateHasChanged to guarantee UI re-render.
+    /// </summary>
+    private async Task RefreshTasksAfterMutationAsync()
     {
-        _statusFilter = newFilter;
+        _showReturnDialog = false;
+        _showCancelDialog = false;
+        _showReassignDialog = false;
+        _returnReason = string.Empty;
+        _cancelReason = string.Empty;
+        _reassignReason = string.Empty;
+        _reassignDescription = string.Empty;
+        _selectedNewAssistantUserId = null;
+        _eligibleAssistants = Array.Empty<EligibleAssistantDto>();
+        _dialogTaskId = Guid.Empty;
+
+        await LoadTasksAsync();
+        await InvokeAsync(StateHasChanged);
     }
 
+    // StoredProc: usp_ChapterPageTask_MarkCompleted
     private async Task ApproveTask(Guid taskId)
     {
         _actionInProgress = true;
@@ -231,7 +451,7 @@
         {
             await MangakaTaskClient.ApproveTaskAsync(_currentUserId, taskId);
             Snackbar.Add("Task approved successfully.", Severity.Success);
-            await LoadTasksAsync();
+            await RefreshTasksAfterMutationAsync();
         }
         catch (Exception ex)
         {
@@ -258,7 +478,7 @@
         {
             await MangakaTaskClient.ReturnTaskForReworkAsync(_currentUserId, _dialogTaskId, _returnReason.Trim());
             Snackbar.Add("Task returned for rework.", Severity.Success);
-            await LoadTasksAsync();
+            await RefreshTasksAfterMutationAsync();
         }
         catch (Exception ex)
         {
@@ -285,7 +505,7 @@
         {
             await MangakaTaskClient.CancelTaskAsync(_currentUserId, _dialogTaskId, _cancelReason.Trim());
             Snackbar.Add("Task cancelled.", Severity.Success);
-            await LoadTasksAsync();
+            await RefreshTasksAfterMutationAsync();
         }
         catch (Exception ex)
         {
@@ -295,5 +515,91 @@
         {
             _actionInProgress = false;
         }
+    }
+
+    // --- Reassign ---
+
+    private async Task OpenReassignDialog(ChapterPageTaskDto task)
+    {
+        _dialogTaskId = task.ChapterPageTaskId;
+        _reassignDialogTask = task;
+        _reassignReason = string.Empty;
+        _reassignDescription = string.Empty;
+        _selectedNewAssistantUserId = null;
+        _eligibleAssistants = Array.Empty<EligibleAssistantDto>();
+        _showReassignDialog = true;
+        _loadingAssistants = true;
+
+        try
+        {
+            _eligibleAssistants = await MangakaTaskClient.GetEligibleAssistantsAsync(_currentUserId, task.ChapterPageTaskId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load eligible assistants: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loadingAssistants = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task ConfirmReassign()
+    {
+        if (!_selectedNewAssistantUserId.HasValue || string.IsNullOrWhiteSpace(_reassignReason))
+            return;
+
+        _actionInProgress = true;
+        _showReassignDialog = false;
+        try
+        {
+            var request = new ReassignChapterPageTaskRequest(
+                _selectedNewAssistantUserId.Value,
+                _reassignReason.Trim(),
+                string.IsNullOrWhiteSpace(_reassignDescription) ? null : _reassignDescription.Trim());
+
+            await MangakaTaskClient.ReassignTaskAsync(_currentUserId, _dialogTaskId, request);
+            Snackbar.Add("Task reassigned successfully.", Severity.Success);
+            await RefreshTasksAfterMutationAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to reassign: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _actionInProgress = false;
+        }
+    }
+
+    private void OnFilterChanged(string newFilter)
+    {
+        _statusFilter = newFilter;
+    }
+
+    private void OnTypeFilterChanged(string newFilter)
+    {
+        _typeFilter = newFilter ?? string.Empty;
+    }
+
+    private async Task<IEnumerable<string>> SearchAssistants(string searchText, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+            return _availableAssistants;
+
+        return _availableAssistants
+            .Where(n => n.Contains(searchText, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Builds a workspace link for a task card, including returnUrl back to this page.
+    /// Route: /series/{slug}/workspace?chapterId={id}&amp;returnUrl=/mangaka/review-submissions
+    /// </summary>
+    private static string BuildWorkspaceLink(ChapterPageTaskDto task)
+    {
+        var baseUrl = $"/series/{task.SeriesSlug}/workspace?chapterId={task.ChapterId}";
+        return SafeReturnUrl.AppendReturnUrl(baseUrl, "/mangaka/review-submissions");
     }
 }
