@@ -58,7 +58,13 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Quer
             bool isUnderEditorialReview =
                 string.Equals(proposal.StatusCode, StatusUnderEditorialReview, StringComparison.Ordinal);
 
-            bool eligible = isUnderEditorialReview && !hasEditorialDecision;
+            bool seriesIsUnderEditorialReview =
+                string.Equals(proposal.Series?.StatusCode, StatusUnderEditorialReview, StringComparison.Ordinal);
+
+            // Actionable only when both the proposal row AND the current series are in
+            // UNDER_EDITORIAL_REVIEW. A stale proposal row on a PROPOSAL_DRAFT series must
+            // NOT show review actions.
+            bool eligible = isUnderEditorialReview && seriesIsUnderEditorialReview && !hasEditorialDecision;
 
             // Claim: eligible, not yet claimed by this actor. The page is already restricted to
             // the Tantou Editor role; the claim stored procedure performs the authoritative check.
@@ -72,11 +78,14 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Quer
                 SeriesId: proposal.SeriesId,
                 SeriesTitle: proposal.Series?.Title ?? string.Empty,
                 SeriesSlug: proposal.Series?.Slug ?? string.Empty,
+                SeriesCoverUrl: proposal.Series?.CoverFile?.CloudinarySecureUrl,
                 ProposalVersionNo: proposal.ProposalVersionNo,
                 ProposalTitle: proposal.ProposalTitle,
-                GenreSnapshot: proposal.GenreSnapshot,
+                Genres: MapGenres(proposal.Series?.Genres),
+                Tags: MapTags(proposal.Series?.Tags),
                 SynopsisSnapshot: proposal.SynopsisSnapshot,
-                StatusCode: proposal.StatusCode,
+                ProposalStatusCode: proposal.StatusCode,
+                SeriesStatusCode: proposal.Series?.StatusCode,
                 SubmittedByUserId: proposal.SubmittedByUserId,
                 SubmitterDisplayName: proposal.SubmittedByUser?.DisplayName ?? string.Empty,
                 SubmittedAtUtc: proposal.SubmittedAtUtc,
@@ -97,6 +106,24 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Quer
                 CanRequestRevision: canActOnDecision,
                 CanPassToBoard: canActOnDecision,
                 CanCancel: canActOnDecision);
+        }
+
+        private static IReadOnlyList<GenreDto> MapGenres(IEnumerable<Domain.Entities.Genre>? genres)
+        {
+            return genres?
+                .OrderBy(g => g.GenreName)
+                .Select(g => new GenreDto(g.GenreId, g.GenreName))
+                .ToList()
+                ?? new List<GenreDto>();
+        }
+
+        private static IReadOnlyList<TagDto> MapTags(IEnumerable<Domain.Entities.Tag>? tags)
+        {
+            return tags?
+                .OrderBy(t => t.TagName)
+                .Select(t => new TagDto(t.TagId, t.TagName))
+                .ToList()
+                ?? new List<TagDto>();
         }
     }
 }

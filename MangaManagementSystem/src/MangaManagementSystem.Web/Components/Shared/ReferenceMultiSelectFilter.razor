@@ -1,0 +1,169 @@
+@typeparam TItem
+@using System.Globalization
+@using MangaManagementSystem.Application.DTOs.Manga
+
+@* ── Reusable multi-select filter for reference data (genres/tags) ── *@
+@* Selection is keyed by actual ID, not page position. No checkboxes. *@
+
+<div style="position: relative;">
+    <MudButton Size="Size.Small" Variant="Variant.Outlined"
+               OnClick="ToggleOpen"
+               StartIcon="@Icons.Material.Filled.FilterList"
+               Style="text-transform: none; font-size: 0.78rem; white-space: nowrap;">
+        @Label @(_selectedIds.Count > 0 ? $"({_selectedIds.Count})" : "")
+    </MudButton>
+
+    @if (_open)
+    {
+        <div style="position: absolute; top: 100%; left: 0; margin-top: 4px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); z-index: 200; width: 280px;"
+             @onclick:stopPropagation>
+            <div style="padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;">
+                <MudTextField T="string" @bind-Value="_search"
+                              @bind-Value:after="() => _page = 1"
+                              Placeholder="@SearchPlaceholder"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Immediate="true" FullWidth="true"
+                              Style="font-size: 0.78rem;" />
+
+                @if (_filteredItems.Count == 0)
+                {
+                    <div style="color: #94a3b8; font-size: 0.8rem; text-align: center; padding: 16px;">@EmptyText</div>
+                }
+                else
+                {
+                    <div style="max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;">
+                        @foreach (var item in _pagedItems)
+                        {
+                            var id = GetItemId(item);
+                            var name = GetItemName(item);
+                            var desc = GetItemDescription(item);
+                            var sel = _selectedIds.Contains(id);
+                            <div @onclick="@(() => ToggleItem(id))"
+                                 style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; background: @(sel ? HighlightColor : "transparent");">
+                                <div style="flex: 1; min-width: 0;">
+                                    <div style="font-size: 0.8rem; font-weight: 500; color: #111827;">@name</div>
+                                    @if (!string.IsNullOrWhiteSpace(desc))
+                                    {
+                                        <div style="font-size: 0.66rem; color: #64748b; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@desc</div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    @if (_totalPages > 1)
+                    {
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 4px 0;">
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                       Disabled="@(_page <= 1)"
+                                       OnClick="@(() => _page--)">
+                                Prev
+                            </MudButton>
+                            <span style="font-size: 0.74rem; color: #64748b;">@_page / @_totalPages</span>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                       Disabled="@(_page >= _totalPages)"
+                                       OnClick="@(() => _page++)">
+                                Next
+                            </MudButton>
+                        </div>
+                    }
+                }
+
+                <div style="display: flex; gap: 8px; padding-top: 2px;">
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" FullWidth="true"
+                               OnClick="Close">Done</MudButton>
+                    @if (_selectedIds.Count > 0)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
+                                   OnClick="ClearAll">Clear all</MudButton>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "Filter";
+    [Parameter] public string SearchPlaceholder { get; set; } = "Search...";
+    [Parameter] public string EmptyText { get; set; } = "No items found.";
+    [Parameter] public string HighlightColor { get; set; } = "#eef2ff";
+    [Parameter] public IReadOnlyList<TItem> Items { get; set; } = Array.Empty<TItem>();
+    [Parameter] public IReadOnlyList<Guid> SelectedIds { get; set; } = Array.Empty<Guid>();
+    [Parameter] public Func<TItem, Guid> GetItemId { get; set; } = _ => Guid.Empty;
+    [Parameter] public Func<TItem, string> GetItemName { get; set; } = _ => string.Empty;
+    [Parameter] public Func<TItem, string?> GetItemDescription { get; set; } = _ => null;
+    [Parameter] public EventCallback<HashSet<Guid>> SelectedIdsChanged { get; set; }
+
+    private bool _open;
+    private string _search = "";
+    private int _page = 1;
+    private const int PageSize = 8;
+    private HashSet<Guid> _selectedIds = new();
+
+    protected override void OnParametersSet()
+    {
+        if (SelectedIds is not null)
+        {
+            _selectedIds = new HashSet<Guid>(SelectedIds);
+        }
+    }
+
+    private List<TItem> _filteredItems
+    {
+        get
+        {
+            var search = _search?.Trim() ?? "";
+            IEnumerable<TItem> result = Items;
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                result = result.Where(item =>
+                {
+                    var name = GetItemName(item);
+                    var desc = GetItemDescription(item);
+                    return name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                           (desc?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false);
+                });
+            }
+            return result.OrderBy(item => GetItemName(item), StringComparer.OrdinalIgnoreCase).ToList();
+        }
+    }
+
+    private int _totalPages => PageSize == 0 ? 0 : (int)Math.Ceiling((double)_filteredItems.Count / PageSize);
+
+    private List<TItem> _pagedItems =>
+        _filteredItems.Skip((_page - 1) * PageSize).Take(PageSize).ToList();
+
+    private void ToggleItem(Guid id)
+    {
+        if (!_selectedIds.Remove(id))
+            _selectedIds.Add(id);
+    }
+
+    private void ClearAll()
+    {
+        _selectedIds.Clear();
+    }
+
+    private void ToggleOpen()
+    {
+        if (_open)
+        {
+            Close();
+        }
+        else
+        {
+            _search = "";
+            _page = 1;
+            _open = true;
+        }
+    }
+
+    private async void Close()
+    {
+        _open = false;
+        await SelectedIdsChanged.InvokeAsync(_selectedIds);
+    }
+}

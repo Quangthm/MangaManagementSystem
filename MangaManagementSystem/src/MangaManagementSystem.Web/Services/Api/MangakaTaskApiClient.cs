@@ -86,6 +86,39 @@ namespace MangaManagementSystem.Web.Services.Api
             await EnsureSuccessAsync(response, cancellationToken);
         }
 
+        public async Task<IReadOnlyList<EligibleAssistantDto>> GetEligibleAssistantsAsync(Guid actorUserId, Guid taskId, CancellationToken cancellationToken = default)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"api/mangaka/tasks/{taskId}/eligible-assistants");
+            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            await EnsureSuccessAsync(response, cancellationToken);
+
+            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            return JsonSerializer.Deserialize<List<EligibleAssistantDto>>(content, _jsonOptions) ?? new List<EligibleAssistantDto>();
+        }
+
+        public async Task<ReassignChapterPageTaskResult> ReassignTaskAsync(Guid actorUserId, Guid taskId, ReassignChapterPageTaskRequest reassignRequest, CancellationToken cancellationToken = default)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"api/mangaka/tasks/{taskId}/reassign");
+            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+            request.Content = new StringContent(
+                JsonSerializer.Serialize(new
+                {
+                    newAssignedToUserId = reassignRequest.NewAssignedToUserId,
+                    reason = reassignRequest.Reason,
+                    updatedTaskDescription = reassignRequest.UpdatedTaskDescription
+                }, _jsonOptions),
+                Encoding.UTF8, "application/json");
+
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            await EnsureSuccessAsync(response, cancellationToken);
+
+            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            return JsonSerializer.Deserialize<ReassignChapterPageTaskResult>(content, _jsonOptions)
+                ?? throw new InvalidOperationException("Failed to parse reassignment result.");
+        }
+
         private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken ct)
         {
             if (!response.IsSuccessStatusCode)

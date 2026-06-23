@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace MangaManagementSystem.Application.DTOs.Manga
@@ -8,7 +9,8 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         string Title,
         string Slug,
         string Synopsis,
-        string Genre,
+        IReadOnlyList<GenreDto> Genres,
+        IReadOnlyList<TagDto> Tags,
         Guid? CoverFileId,
         string StatusCode,
         string ContentLanguageCode,

@@ -92,10 +92,6 @@
                             <MudText><strong>Priority:</strong> @_task.PriorityLevel</MudText>
                             <MudText><strong>Status:</strong> @_task.StatusCode</MudText>
                             <MudText><strong>Due:</strong> <TimestampDisplay Value="@_task.DueAtUtc" EmptyText="No deadline set" /></MudText>
-                            @if (_task.CompensationAmount.HasValue)
-                            {
-                                <MudText><strong>Compensation:</strong> @_task.CompensationAmount.Value.ToString("C2")</MudText>
-                            }
                         </MudStack>
                     </MudPaper>
 

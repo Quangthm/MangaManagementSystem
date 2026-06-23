@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -14,10 +14,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 {
     public class ChapterPageAnnotationRepository : GenericRepository<ChapterPageAnnotation>, IChapterPageAnnotationRepository
     {
-        private readonly ApplicationDbContext _context;
         public ChapterPageAnnotationRepository(ApplicationDbContext context) : base(context)
         {
-            _context = context;
         }
 
         public async Task<Guid> CreateChapterPageAnnotationAsync(

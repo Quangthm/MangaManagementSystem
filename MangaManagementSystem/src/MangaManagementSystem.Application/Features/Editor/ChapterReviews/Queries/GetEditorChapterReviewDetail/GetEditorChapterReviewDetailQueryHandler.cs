@@ -59,7 +59,7 @@ namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queri
             int currentVersionCount = pages.Count(p => p.CurrentVersionId.HasValue);
 
             string? workspaceUrl = !string.IsNullOrWhiteSpace(detail.SeriesSlug)
-                ? $"/series/{detail.SeriesSlug}/workspace?chapterId={detail.ChapterId}"
+                ? $"/series/{detail.SeriesSlug}/workspace?chapterId={detail.ChapterId}&returnUrl={Uri.EscapeDataString($"/editor/chapters/{detail.ChapterId}")}"
                 : null;
 
             return new EditorChapterReviewDetailDto(

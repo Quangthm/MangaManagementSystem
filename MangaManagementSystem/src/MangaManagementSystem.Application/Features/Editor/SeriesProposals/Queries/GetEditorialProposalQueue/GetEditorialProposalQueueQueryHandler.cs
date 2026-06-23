@@ -48,7 +48,8 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Quer
             p.ProposalVersionNo,
             p.ProposalTitle,
             p.SynopsisSnapshot,
-            p.GenreSnapshot,
+            MapGenres(p.Series?.Genres),
+            MapTags(p.Series?.Tags),
             p.StatusCode,
             p.SubmittedByUserId,
             p.SubmittedByUser?.DisplayName ?? string.Empty,
@@ -62,5 +63,23 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Quer
             p.ProposalFile?.OriginalFileName,
             p.MarkupFileId,
             p.MarkupFile?.CloudinarySecureUrl);
+
+        private static IReadOnlyList<GenreDto> MapGenres(IEnumerable<Domain.Entities.Genre>? genres)
+        {
+            return genres?
+                .OrderBy(g => g.GenreName)
+                .Select(g => new GenreDto(g.GenreId, g.GenreName))
+                .ToList()
+                ?? new List<GenreDto>();
+        }
+
+        private static IReadOnlyList<TagDto> MapTags(IEnumerable<Domain.Entities.Tag>? tags)
+        {
+            return tags?
+                .OrderBy(t => t.TagName)
+                .Select(t => new TagDto(t.TagId, t.TagName))
+                .ToList()
+                ?? new List<TagDto>();
+        }
     }
 }

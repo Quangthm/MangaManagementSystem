@@ -10,6 +10,15 @@ namespace MangaManagementSystem.Domain.Interfaces
     {
         Task<SeriesProposal?> GetByIdWithDetailsAsync(Guid seriesProposalId, CancellationToken ct = default);
         Task<SeriesProposal?> GetLatestBySeriesIdAsync(Guid seriesId, CancellationToken ct = default);
+
+        /// <summary>
+        /// Returns all proposals for the given series IDs, ordered by ProposalVersionNo desc then
+        /// SubmittedAtUtc desc. Callers group in memory to resolve the latest per series. This
+        /// avoids thread-unsafe parallel EF queries on the same DbContext.
+        /// Returns an empty list when seriesIds is null or empty.
+        /// </summary>
+        Task<IReadOnlyList<SeriesProposal>> GetLatestForSeriesBatchAsync(
+            IReadOnlyList<Guid> seriesIds, CancellationToken ct = default);
         Task<List<SeriesProposal>> GetEditorialQueueAsync(string? statusCode, Guid? seriesId, Guid? submittedByUserId, Guid? reviewedByUserId, CancellationToken ct = default);
 
         /// <summary>

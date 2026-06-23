@@ -53,7 +53,8 @@ namespace MangaManagementSystem.Web.Services.Api
             Guid actorUserId,
             string title,
             string synopsis,
-            string genre,
+            IReadOnlyList<Guid> genreIds,
+            IReadOnlyList<Guid> tagIds,
             string? contentLanguageCode = null,
             string? slug = null,
             string? publicationFrequencyCode = null,
@@ -66,7 +67,18 @@ namespace MangaManagementSystem.Web.Services.Api
             using var form = new MultipartFormDataContent();
             form.Add(new StringContent(title), "Title");
             form.Add(new StringContent(synopsis), "Synopsis");
-            form.Add(new StringContent(genre), "Genre");
+
+            foreach (var genreId in genreIds ?? Array.Empty<Guid>())
+            {
+                if (genreId != Guid.Empty)
+                    form.Add(new StringContent(genreId.ToString()), "GenreIds");
+            }
+
+            foreach (var tagId in tagIds ?? Array.Empty<Guid>())
+            {
+                if (tagId != Guid.Empty)
+                    form.Add(new StringContent(tagId.ToString()), "TagIds");
+            }
 
             if (!string.IsNullOrWhiteSpace(contentLanguageCode))
             {
@@ -180,7 +192,8 @@ namespace MangaManagementSystem.Web.Services.Api
             Guid seriesId,
             string title,
             string synopsis,
-            string genre,
+            IReadOnlyList<Guid> genreIds,
+            IReadOnlyList<Guid> tagIds,
             string contentLanguageCode,
             string? publicationFrequencyCode = null,
             string? slug = null,
@@ -192,7 +205,18 @@ namespace MangaManagementSystem.Web.Services.Api
             using var form = new MultipartFormDataContent();
             form.Add(new StringContent(title), "Title");
             form.Add(new StringContent(synopsis), "Synopsis");
-            form.Add(new StringContent(genre), "Genre");
+
+            foreach (var genreId in genreIds ?? Array.Empty<Guid>())
+            {
+                if (genreId != Guid.Empty)
+                    form.Add(new StringContent(genreId.ToString()), "GenreIds");
+            }
+
+            foreach (var tagId in tagIds ?? Array.Empty<Guid>())
+            {
+                if (tagId != Guid.Empty)
+                    form.Add(new StringContent(tagId.ToString()), "TagIds");
+            }
             form.Add(new StringContent(contentLanguageCode), "ContentLanguageCode");
 
             if (!string.IsNullOrWhiteSpace(publicationFrequencyCode))
@@ -312,6 +336,36 @@ namespace MangaManagementSystem.Web.Services.Api
             _logger.LogWarning(
                 "Load my series proposals failed: {StatusCode} {ReasonPhrase}",
                 (int)response.StatusCode, response.ReasonPhrase);
+
+            throw new InvalidOperationException(message);
+        }
+
+        public async Task<SeriesDto?> GetMySeriesCardByIdAsync(
+            Guid actorUserId,
+            Guid seriesId,
+            CancellationToken cancellationToken = default)
+        {
+            var route = $"api/mangaka/series/{seriesId}/card";
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Get, route);
+            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<SeriesDto>(
+                    cancellationToken: cancellationToken);
+            }
+
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                return null;
+
+            var message = await ExtractErrorMessageAsync(response);
+            _logger.LogWarning(
+                "Load series card by id failed for series {SeriesId}: {StatusCode} {ReasonPhrase}",
+                seriesId,
+                (int)response.StatusCode,
+                response.ReasonPhrase);
 
             throw new InvalidOperationException(message);
         }

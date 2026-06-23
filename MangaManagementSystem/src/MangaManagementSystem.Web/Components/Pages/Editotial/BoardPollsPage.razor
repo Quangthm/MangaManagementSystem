@@ -169,7 +169,7 @@
                                     </div>
 
                                     <textarea class="mf-textarea"
-                                              placeholder="Reason / comment. Required when rejecting."
+                                              placeholder="@VoteReasonPlaceholder"
                                               @bind="_voteReason">
                                     </textarea>
 
@@ -226,6 +226,9 @@
 </MangaFlowShell>
 
 @code {
+    private const string DefaultRejectReason =
+        "Rejected by board member during voting.";
+
     private IReadOnlyList<EditorialBoardPollDto> _polls = Array.Empty<EditorialBoardPollDto>();
     private EditorialBoardPollDto? _selectedPoll;
     private bool _isLoading = true;
@@ -234,6 +237,10 @@
     private string? _voteMessage;
     private string _selectedChoice = string.Empty;
     private string? _voteReason;
+
+    private string VoteReasonPlaceholder => _selectedChoice == "REJECT"
+        ? "Reason / comment. If empty, a default rejection reason will be saved."
+        : "Reason / comment. Optional for Approve or Abstain.";
 
     protected override async Task OnInitializedAsync()
     {
@@ -278,7 +285,9 @@
     private void SelectChoice(string choiceCode)
     {
         _selectedChoice = choiceCode;
-        _voteMessage = null;
+        _voteMessage = choiceCode == "REJECT" && string.IsNullOrWhiteSpace(_voteReason)
+            ? "Reject will be saved with a default reason if you leave the comment empty."
+            : null;
     }
 
     private string VoteOptionClass(string choiceCode)
@@ -303,26 +312,28 @@
             return;
         }
 
-        if (_selectedChoice == "REJECT" && string.IsNullOrWhiteSpace(_voteReason))
-        {
-            _voteMessage = "Reject vote requires reason.";
-            return;
-        }
-
         _isSavingVote = true;
         _voteMessage = null;
 
         var pollId = _selectedPoll.PollId;
+        var voteReason = NormalizeVoteReason();
 
         try
         {
             await EditorialBoardApiClient.CastVoteAsync(
                 pollId,
-                new CastVoteRequest(_selectedChoice, _voteReason));
+                new CastVoteRequest(_selectedChoice, voteReason));
 
             await LoadPollsAsync();
 
             _selectedPoll = _polls.FirstOrDefault(p => p.PollId == pollId);
+
+            if (_selectedPoll is not null)
+            {
+                _selectedChoice = _selectedPoll.CurrentUserChoiceCode ?? _selectedChoice;
+                _voteReason = _selectedPoll.CurrentUserVoteReason;
+            }
+
             _voteMessage = "Vote saved successfully. This result is stored in database.";
         }
         catch (Exception ex)
@@ -333,6 +344,20 @@
         {
             _isSavingVote = false;
         }
+    }
+
+    private string? NormalizeVoteReason()
+    {
+        if (_selectedChoice == "REJECT")
+        {
+            return string.IsNullOrWhiteSpace(_voteReason)
+                ? DefaultRejectReason
+                : _voteReason.Trim();
+        }
+
+        return string.IsNullOrWhiteSpace(_voteReason)
+            ? null
+            : _voteReason.Trim();
     }
 
     private static string DeadlineText(EditorialBoardPollDto poll)

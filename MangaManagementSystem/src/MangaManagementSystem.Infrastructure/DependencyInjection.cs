@@ -51,7 +51,12 @@ namespace MangaManagementSystem.Infrastructure
             services.AddScoped<IChapterPageAnnotationRepository, ChapterPageAnnotationRepository>();
             services.AddScoped<ISeriesProposalRepository, SeriesProposalRepository>();
             services.AddScoped<IEditorDashboardRepository, EditorDashboardRepository>();
+            services.AddScoped<IAssistantCompletedWorkRepository, AssistantCompletedWorkRepository>();
             services.AddScoped<IEditorChapterReviewRepository, EditorChapterReviewRepository>();
+            services.AddScoped<IEditorAnnotationRepository, EditorAnnotationRepository>();
+            services.AddScoped<IEditorSeriesRepository, EditorSeriesRepository>();
+            services.AddScoped<IReferenceDataRepository, ReferenceDataRepository>();
+            services.AddScoped<ISeriesContributorManagementRepository, SeriesContributorRepository>();
 
             // Unit of Work
             services.AddScoped<IUnitOfWork, UnitOfWork>();

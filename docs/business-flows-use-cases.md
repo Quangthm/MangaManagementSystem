@@ -34,6 +34,7 @@
 - Cloudinary stores actual files.
 - SQL Server stores file metadata in `manga.FileResource`.
 - Audit procedures resolve `actor_role_name` internally from `actor_user_id`; callers should not pass role-name text to audit.
+- For series cover uploads from the Web UI, the selected source image may be cropped in the browser before upload; the backend should receive only the cropped image file as the actual `SERIES_COVER`.
 - `username` is the login/system identifier.
 - `display_name` is the user-facing identity shown in UI.
 - If `display_name` is not provided, the system defaults it to `username`.
@@ -347,7 +348,7 @@ manga.usp_FileResource_Create
 | File purpose code | Allowed extensions | Allowed content types | Cloudinary resource type | Notes |
 |---|---|---|---|---|
 | `SERIES_PROPOSAL` | `.pdf`, `.doc`, `.docx` | `application/pdf`, `application/msword`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | `raw` | Formal series proposal documents only. Markdown, plain text, and image files are not accepted for proposal submission in MVP. |
-| `SERIES_COVER` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Series cover image. |
+| `SERIES_COVER` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Series cover image. In the Web draft UI, the selected source image is cropped client-side first, and the cropped `1000×1500` PNG is uploaded as the actual cover. |
 | `CHAPTER_PAGE_VERSION` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Official manga page image/version output. |
 | `EDITORIAL_ATTACHMENT` | `.pdf`, `.doc`, `.docx`, `.jpg`, `.jpeg`, `.png`, `.webp` | Proposal-document content types plus `image/jpeg`, `image/png`, `image/webp` | `raw` for documents; `image` for images | Editorial markup, review attachments, or supporting screenshots/documents. |
 | `REGISTRATION_PORTFOLIO` | `.pdf`, `.doc`, `.docx`, `.jpg`, `.jpeg`, `.png`, `.webp` | Proposal-document content types plus `image/jpeg`, `image/png`, `image/webp` | `raw` for documents; `image` for images | Optional portfolio submitted for account approval/profile review. |
@@ -467,12 +468,14 @@ User selects/uploads a file
 Mangaka opens /mangaka/series/drafts
 → Mangaka clicks Create Draft
 → UI shows create draft popup/modal
-→ Mangaka enters title, synopsis, genre, content language, optional source series, optional proposed publication frequency, and optional cover image
+→ Mangaka enters title, synopsis, one or more genres, optional tags, content language, optional source series, optional proposed publication frequency, and optional cover image
+→ If a cover image is selected, the UI opens a 2:3 portrait crop preview dialog
+→ Mangaka confirms the crop, and the UI produces a `1000×1500` PNG from the selected visible area
 → Backend validates the form and confirms the actor is an active Mangaka
 → Backend generates slug from title
 → Backend resolves slug uniqueness
 → If a cover image is provided, backend uploads the file to Cloudinary and calculates SHA-256 from the exact uploaded bytes
-→ Backend calls manga.usp_Series_Create with series data and optional cover metadata
+→ Backend calls manga.usp_Series_Create with series data, selected genre/tag IDs, and optional cover metadata
 → Database calls manga.usp_FileResource_Create if cover metadata exists
 → Database creates manga.Series with status_code = PROPOSAL_DRAFT
 → Database creates an active manga.SeriesContributor row for the creating Mangaka
@@ -496,7 +499,14 @@ audit.usp_AuditEvent_Append
 - Draft series are managed internally by `series_id`, not by `/series/{slug}`.
 - Backend generates and resolves slug uniqueness before calling the stored procedure.
 - `publication_frequency_code` may be provided by Mangaka during draft creation as the proposed/preferred frequency.
-- If a cover image is provided, C# uploads to Cloudinary first, then passes Cloudinary metadata to SQL.
+- Genres are selected from `manga.Genre` and linked through `manga.SeriesGenre`.
+- Tags are selected from `manga.Tag` and linked through `manga.SeriesTag`.
+- Genres and tags are current series metadata; they are not duplicated into proposal snapshot tables in MVP.
+- If a cover image is provided through the Web UI, the original selected file is used only in the browser for crop preview; the backend receives the cropped image file.
+- The MVP cover crop target is a 2:3 portrait image output as `1000×1500` PNG.
+- Smaller source images may be upscaled to `1000×1500`; the UI should warn that the final cover may look blurry.
+- No original/cropped dual storage and no crop metadata are stored for `SERIES_COVER` in MVP.
+- If a cover image is provided, C# uploads the resulting file to Cloudinary first, then passes Cloudinary metadata to SQL.
 - SQL creates the `FileResource` row inside the series creation workflow.
 - If SQL fails after Cloudinary upload, the backend should attempt to delete the uploaded Cloudinary asset to avoid orphaned files.
 - The creator must be added as an active `SeriesContributor` in the same database workflow/transaction as the `Series` creation.
@@ -522,12 +532,14 @@ audit.usp_AuditEvent_Append
 Mangaka opens /mangaka/series/drafts
 → Mangaka selects a draft series
 → UI opens edit draft popup/modal
-→ Mangaka updates title, synopsis, genre, content language, optional source series, optional proposed publication frequency, and optional cover image
+→ Mangaka updates title, synopsis, genres, tags, content language, optional source series, optional proposed publication frequency, and optional cover image
+→ If a replacement cover image is selected, the UI opens a 2:3 portrait crop preview dialog
+→ Mangaka confirms the crop, and the UI produces a `1000×1500` PNG from the selected visible area
 → Backend validates the form and confirms the actor is an active Mangaka contributor of the selected series
 → Backend confirms the series is still PROPOSAL_DRAFT
 → If title changed, backend regenerates slug from title and resolves slug uniqueness
 → If cover image changed, backend uploads the new cover to Cloudinary and calculates SHA-256 from the exact uploaded bytes
-→ Backend calls manga.usp_Series_UpdateProfile with updated series data and optional new cover metadata
+→ Backend calls manga.usp_Series_UpdateProfile with updated series data, selected genre/tag IDs, and optional new cover metadata
 → Database calls manga.usp_FileResource_Create if new cover metadata exists
 → Database updates manga.Series editable profile fields
 → Database updates updated_at_utc and updated_by_user_id together
@@ -546,11 +558,15 @@ audit.usp_AuditEvent_Append
 ### Important Notes
 
 - Normal Mangaka profile updates are allowed only while `Series.status_code = PROPOSAL_DRAFT`.
-- Once the series leaves `PROPOSAL_DRAFT`, title, slug, synopsis, genre, cover, content language, source series, and `publication_frequency_code` are locked from normal Mangaka profile editing.
+- Once the series leaves `PROPOSAL_DRAFT`, title, slug, synopsis, genres, tags, cover, content language, source series, and `publication_frequency_code` are locked from normal Mangaka profile editing.
 - Slug may auto-regenerate from title during `PROPOSAL_DRAFT` because draft workflows use `series_id`.
 - Slug locks after the series leaves `PROPOSAL_DRAFT`; no slug history or redirect table is required for MVP.
 - `publication_frequency_code` is treated as Mangaka's proposed/preferred frequency during draft; board serialization/frequency override is handled by a separate board procedure.
+- Genres and tags are updated as current series metadata through `SeriesGenre` and `SeriesTag` while the draft remains editable.
 - The procedure should rely on database constraints for simple `CHECK`, `UNIQUE`, `NOT NULL`, and FK enforcement, while still validating actor permission and workflow state.
+- After a successful update, the UI should refresh only the affected series card through a scoped read query instead of reloading the full dashboard list.
+- If the scoped card read returns `404`/`NULL`, the UI must not fabricate a card from local form state; it should remove or mark the card unavailable and warn the user.
+- If the scoped card read fails because of a network/server error, the UI may keep the existing card unchanged and warn that the visible card may be stale.
 
 ### System Should Try To
 
@@ -586,7 +602,7 @@ Mangaka opens /mangaka/series/drafts
 → Database verifies the submitter is an active Mangaka contributor of the series
 → Database does not require an active Tantou Editor contributor for first submission
 → Database creates manga.FileResource with file_purpose_code = SERIES_PROPOSAL
-→ Database creates manga.SeriesProposal with the next proposal_version_no and submission-time snapshots
+→ Database creates manga.SeriesProposal with the next proposal_version_no, proposal title/synopsis snapshots, and proposal file reference
 → Database sets manga.SeriesProposal.status_code = UNDER_EDITORIAL_REVIEW
 → Database sets manga.Series.status_code = UNDER_EDITORIAL_REVIEW
 → Database writes SERIES_PROPOSAL_SUBMITTED audit event
@@ -612,8 +628,9 @@ audit.usp_AuditEvent_Append
 - First submission requires an active Mangaka contributor but does not require an active Tantou Editor contributor already assigned to the series.
 - Submitted proposals appear in the editorial review queue for active Tantou Editors.
 - The UI may prioritize unclaimed proposals first, but the database should not block multiple Tantou Editors from becoming active contributors to the same series.
-- Submitted proposal snapshot fields should remain locked.
+- Submitted proposal snapshot fields should remain locked; `SeriesProposal` snapshots proposal title, synopsis, and proposal file, but does not snapshot genres, tags, or the current series cover file in MVP.
 - Revision later creates a new `SeriesProposal` version instead of overwriting the submitted proposal.
+- Proposal review screens may display current genres, tags, and cover from the locked `Series` metadata during review; these are not copied into `SeriesProposal`.
 - If Cloudinary upload succeeds but SQL fails, the backend should attempt to delete the uploaded Cloudinary asset.
 
 ### System Should Try To
@@ -624,6 +641,448 @@ audit.usp_AuditEvent_Append
 - Make the newly submitted proposal easy for active Tantou Editors to find.
 
 ---
+# Suggested Additions — Business Flows / Use Case Notes
+
+---
+
+## BF-MANGAKA-001 — View My Series Dashboard
+
+**Status:** Agreed
+**Primary actor:** Mangaka
+**Goal:** Show only series where the logged-in actor is an active Mangaka contributor.
+
+### Main Flow
+
+```text
+Mangaka opens /mangaka
+→ UI calls GET /api/mangaka/series/my-series through typed API client
+→ API resolves actor user id
+→ API sends GetMyMangakaSeriesQuery
+→ Application validates actor id
+→ Infrastructure queries series where actor is an active Mangaka contributor
+→ Query includes cover, genres, tags, status, slug, proposed frequency, and update time
+→ UI renders dashboard cards with filters/search/sort
+```
+
+### Important Notes
+
+* `/mangaka` must not show every series in the database.
+* A series is visible only when the actor is an active Mangaka contributor.
+* The Web layer must call the API through `IMangakaSeriesApiClient`.
+* The API controller dispatches through MediatR.
+* Read/list filtering may use EF read projections with `AsNoTracking`.
+* No stored procedure is required for this read-only dashboard query.
+
+### System Should Try To
+
+* Keep Mangaka dashboard scoped to the current actor.
+* Avoid direct Razor-to-Application calls for migrated workflows.
+* Keep dashboard filtering/search/sort responsive on the client when data is already loaded.
+
+---
+
+## BF-MANGAKA-002 — Navigate to Assistant Review / Review Submissions
+
+**Status:** Agreed
+**Primary actor:** Mangaka
+**Goal:** Open the enhanced task-review page from the Mangaka dashboard sidebar.
+
+### Main Flow
+
+```text
+Mangaka opens /mangaka
+→ Mangaka clicks sidebar item "Assistant Review"
+→ UI routes to /mangaka/review-submissions
+→ Page loads under MangakaLayout
+→ UI calls GET /api/mangaka/tasks
+→ Backend returns tasks created by the Mangaka for assistant work review
+→ UI displays task cards with series/chapter/page/version/task context
+```
+
+### Important Notes
+
+* The old embedded simple task table inside `MangakaDashboard.razor` is no longer the active destination.
+* `/mangaka/review-submissions` is the active Mangaka task-review page.
+* Current Series and Series Proposals remain dashboard tabs for now.
+* This is a route/navigation decision, not a database workflow.
+
+### System Should Try To
+
+* Keep task review on a dedicated page.
+* Avoid large MangakaDashboard refactors until explicitly approved.
+* Preserve `/mangaka` dashboard behavior for Current Series and Series Proposals.
+
+---
+
+## BF-TASK-004 — Mangaka Reviews Assistant Task Submissions
+
+**Status:** Agreed
+**Primary actor:** Mangaka
+**Goal:** Let a Mangaka review assistant-submitted page work and choose the correct review action: approve, return to the same Assistant for rework, cancel, or reassign to a different Assistant.
+
+### Main Flow
+
+```text
+Mangaka opens /mangaka/review-submissions
+→ UI loads task list for the Mangaka-created tasks
+→ UI shows task cards with series, chapter, page, page version, assistant, type, status, due date, priority, compensation, and region count
+→ Mangaka filters by series/chapter/title, task type, assistant, and status
+→ Mangaka opens original/submitted previews when available
+→ Mangaka chooses one available action:
+    - Approve
+    - Return for Rework
+    - Cancel
+    - Reassign
+→ UI calls the relevant typed API client method
+→ API calls the relevant Application task use case/service
+→ Application validates actor permission and task state
+→ Infrastructure calls the relevant stored procedure/repository workflow
+→ UI reloads task list, clears dialog state, and refreshes stat cards/actions
+```
+
+### Important Notes
+
+* Task cards should include `PageVersionNo` when available.
+* Review actions must refresh the visible UI without requiring browser refresh.
+* Filters should continue to apply after refresh.
+* Backend rules must remain the source of truth for allowed task transitions.
+* **Return for Rework** and **Reassign** are separate workflows:
+
+  * Return for Rework sends the same task back to the same Assistant.
+  * Reassign moves ownership to a different Assistant by cancelling the old task and creating a replacement task.
+
+### System Should Try To
+
+* Give Mangaka enough context to review assistant work without opening many pages.
+* Keep review actions safe and state-aware.
+* Avoid stale task cards after workflow mutations.
+* Preserve task history through audit events.
+
+---
+
+## BF-TASK-005 — Return Assistant Task for Rework to Same Assistant
+
+**Status:** Agreed
+**Primary actor:** Mangaka
+**Goal:** Return an `UNDER_REVIEW` task to the same assigned Assistant for rework.
+
+### Main Flow
+
+```text
+Mangaka opens /mangaka/review-submissions
+→ UI shows Return for Rework action on eligible UNDER_REVIEW task
+→ Mangaka opens Return for Rework dialog
+→ Mangaka enters updated task instructions/description
+→ UI calls Return for Rework API action
+→ API calls Application task return-for-rework use case/service
+→ Application validates actor, task state, and updated task description
+→ Infrastructure calls manga.usp_ChapterPageTask_ReturnForRework
+→ SQL locks the task workflow
+→ SQL verifies the task exists
+→ SQL verifies status_code = UNDER_REVIEW
+→ SQL verifies actor is an active Mangaka contributor of the task's series
+→ SQL updates the same ChapterPageTask row:
+    - status_code = ASSIGNED
+    - completed_page_version_id = NULL
+    - task_description = updated task description
+    - updated_at_utc = current UTC time
+→ SQL writes CHAPTER_PAGE_TASK_RETURNED_FOR_REWORK audit event
+→ UI reloads task list and clears dialog state
+```
+
+### Database Procedure
+
+```text
+manga.usp_ChapterPageTask_ReturnForRework
+```
+
+### Important Notes
+
+* Return for Rework applies only to `UNDER_REVIEW` tasks.
+* Return for Rework keeps the same assigned Assistant.
+* Return for Rework does not create a replacement task.
+* The same `chapter_page_task_id` remains active.
+* The task status becomes `ASSIGNED`.
+* `completed_page_version_id` is cleared because the submitted output was rejected for rework.
+* `task_description` is replaced with the updated rework instruction.
+* Actor must be an active Mangaka contributor of the task's series.
+* SQL derives the task's series through:
+  `ChapterPageTaskRegion → PageRegion → ChapterPageVersion → ChapterPage → Chapter → Series`.
+* Application/C# should validate the primary business rules before calling SQL when possible.
+* SQL remains the final transactional guard and audit owner.
+
+### System Should Try To
+
+* Let Mangaka request revisions from the same Assistant without creating a new task.
+* Preserve audit traceability of rejected submitted work.
+* Prevent returning tasks that are not currently under review.
+
+---
+
+## BF-TASK-006 — Reassign Assistant Task to Different Assistant
+
+**Status:** Agreed
+**Primary actor:** Mangaka
+**Goal:** Allow a Mangaka to move a task to a different eligible Assistant contributor when the original Assistant should no longer own the task.
+
+### Main Flow
+
+```text
+Mangaka opens /mangaka/review-submissions
+→ UI shows Reassign action for ASSIGNED and UNDER_REVIEW tasks
+→ Mangaka opens Reassign dialog
+→ UI loads eligible assistants for the task
+→ Mangaka selects a different Assistant
+→ Mangaka enters required reason
+→ UI calls POST /api/mangaka/tasks/{taskId}/reassign
+→ API calls Application task reassignment use case
+→ Application validates actor, task status, reason, same-user rule, and assistant eligibility
+→ Infrastructure calls manga.usp_ChapterPageTask_AssignToDifferentUser
+→ SQL cancels old task
+→ SQL creates replacement ASSIGNED task for the new Assistant
+→ SQL copies task-region links
+→ SQL writes CHAPTER_PAGE_TASK_ASSIGNED_TO_DIFFERENT_USER audit event
+→ UI reloads task list after success
+```
+
+### Database Procedure
+
+```text
+manga.usp_ChapterPageTask_AssignToDifferentUser
+```
+
+### Important Notes
+
+* Reassignment is different from Return for Rework.
+* Reassignment changes the assigned Assistant.
+* Reassignment requires the new Assistant to be different from the current assigned Assistant.
+* Reassignment is allowed for `ASSIGNED` and `UNDER_REVIEW`.
+* Reassignment is not allowed for `COMPLETED` or `CANCELLED`.
+* The new Assistant must be an active contributor of the same series.
+* Reason is required and should be limited to 500 characters.
+* The stored procedure cancels the old task and creates a new replacement task with status `ASSIGNED`.
+* Because the task id changes, the UI should reload the task list rather than only mutating the old card.
+* C# Application layer owns primary business validation before calling SQL.
+* SQL procedure provides locking, final guards, copy of task-region links, and audit.
+
+### System Should Try To
+
+* Avoid assigning work to non-contributors.
+* Avoid reassigning completed/cancelled tasks.
+* Preserve history by cancelling the old task and creating a replacement.
+* Keep audit traceability between old and replacement tasks.
+
+
+**Status:** Agreed
+**Primary actor:** Mangaka
+**Goal:** Allow a Mangaka to reassign an Assistant task to a different eligible Assistant contributor on the same series.
+
+### Main Flow
+
+```text
+Mangaka opens /mangaka/review-submissions
+→ UI shows Reassign action for ASSIGNED and UNDER_REVIEW tasks
+→ Mangaka opens Reassign dialog
+→ UI loads eligible assistants for the task
+→ Mangaka selects a different Assistant
+→ Mangaka enters required reason
+→ UI calls POST /api/mangaka/tasks/{taskId}/reassign
+→ API calls Application task reassignment use case
+→ Application validates actor, task status, reason, same-user rule, and assistant eligibility
+→ Infrastructure calls manga.usp_ChapterPageTask_AssignToDifferentUser
+→ SQL cancels old task, creates replacement ASSIGNED task, copies task-region links, and writes audit event
+→ UI reloads task list after success
+```
+
+### Database Procedure
+
+```text
+manga.usp_ChapterPageTask_AssignToDifferentUser
+```
+
+### Important Notes
+
+* Reassignment is allowed for `ASSIGNED` and `UNDER_REVIEW`.
+* Reassignment is not allowed for `COMPLETED` or `CANCELLED`.
+* The new assistant must be different from the current assigned assistant.
+* The new assistant must be an active contributor of the same series.
+* Reason is required and must be limited to 500 characters.
+* The stored procedure cancels the old task and creates a new replacement task with status `ASSIGNED`.
+* Because the task id changes, the UI should reload the task list rather than only mutating the old card.
+* SQL procedure provides locking, final guards, copy of task-region links, and audit.
+* C# Application layer still owns primary business validation before calling SQL.
+
+### System Should Try To
+
+* Avoid reassigning completed/cancelled tasks.
+* Avoid assigning work to non-contributors.
+* Preserve task history by cancelling the old task and creating a replacement.
+* Keep audit traceability between old and replacement tasks.
+
+---
+
+## BF-MANGAKA-CONTRIB-001 — View Series Contributors
+
+**Status:** Agreed
+**Primary actor:** Mangaka
+**Goal:** Let a Mangaka view contributor history for series where they are an active Mangaka contributor.
+
+### Main Flow
+
+```text
+Mangaka opens /mangaka/contributors
+→ UI loads the Mangaka's own series list from GET /api/mangaka/series/my-series
+→ Mangaka selects a series
+→ UI calls GET /api/mangaka/series/{seriesId}/contributors
+→ API sends GetSeriesContributorsQuery
+→ Application validates actor permission
+→ Infrastructure returns contributor rows for the selected series
+→ UI displays active and former contributors with role, status, start date, end date, and actions
+```
+
+### Important Notes
+
+* Actor may view contributors only for series where they are an active Mangaka contributor.
+* Active contributor means `EndDate == null`.
+* Former contributor means `EndDate != null`.
+* Contributor history must be preserved.
+* Mangaka and Tantou Editor contributors are read-only in this MVP screen.
+* Only Assistant contributors are manageable in this workflow.
+
+### System Should Try To
+
+* Keep contributor history visible.
+* Avoid deleting contributor rows.
+* Prevent Mangaka from viewing contributors for series they do not manage.
+
+---
+
+## BF-MANGAKA-CONTRIB-002 — Add Assistant Contributor to Series
+
+**Status:** Agreed
+**Primary actor:** Mangaka
+**Goal:** Add an active Assistant user as an active contributor to one of the Mangaka's own series.
+
+### Main Flow
+
+```text
+Mangaka opens /mangaka/contributors
+→ Mangaka selects a series
+→ Mangaka clicks Add Assistant
+→ UI opens Add Assistant dialog
+→ UI searches eligible assistants through GET /api/mangaka/series/{seriesId}/contributors/eligible-assistants
+→ Backend returns ACTIVE Assistant users who are not currently active contributors of the selected series
+→ Mangaka selects an Assistant
+→ UI calls POST /api/mangaka/series/{seriesId}/contributors/assistants
+→ API sends AddAssistantContributorCommand
+→ Application validates actor, target user role/status, and duplicate active contributor rule
+→ Infrastructure calls manga.usp_SeriesContributor_Add
+→ Database inserts active SeriesContributor row and writes audit
+→ UI refreshes contributor list and eligible-assistant search
+```
+
+### Database Procedure
+
+```text
+manga.usp_SeriesContributor_Add
+```
+
+### Important Notes
+
+* Target user must exist.
+* Target user must have role `Assistant`.
+* Target user must have `status_code = ACTIVE`.
+* Target user must not already be an active contributor of the selected series.
+* Historical ended contributor rows must not block re-adding.
+* The existing generic add procedure may be reused only after Assistant-specific C# validation.
+* C# Application validation must not rely only on SQL errors.
+
+### System Should Try To
+
+* Make adding assistants discoverable through search/autocomplete.
+* Avoid duplicate active contributor rows.
+* Keep historical contributor rows reusable for future re-adds.
+
+---
+
+## BF-MANGAKA-CONTRIB-003 — End Assistant Contribution
+
+**Status:** Agreed
+**Primary actor:** Mangaka
+**Goal:** End an active Assistant contributor's participation in a series while preserving history.
+
+### Main Flow
+
+```text
+Mangaka opens /mangaka/contributors
+→ Mangaka selects a series
+→ UI shows End action only for active Assistant contributor rows
+→ Mangaka opens End Assistant dialog
+→ Mangaka enters reason
+→ UI calls POST /api/mangaka/series/{seriesId}/contributors/assistants/{assistantUserId}/end
+→ API sends EndAssistantContributorCommand
+→ Application validates actor permission, target role/status, reason, and active task blocking rule
+→ Infrastructure calls manga.usp_SeriesContributor_EndAssistant
+→ SQL sets end_date to current UTC date and writes audit
+→ UI refreshes contributor list and eligible-assistant search
+```
+
+### Database Procedure
+
+```text
+manga.usp_SeriesContributor_EndAssistant
+```
+
+### Important Notes
+
+* This procedure may exist as a deployment script before being applied to the target database.
+* Remove/end action is Assistant-only in this MVP screen.
+* Do not end Mangaka contributors in this workflow.
+* Do not end Tantou Editor contributors in this workflow.
+* Do not delete SeriesContributor rows.
+* Set `end_date`; preserve history.
+* Reason is required and must be limited to 500 characters.
+* If the Assistant has `ASSIGNED` or `UNDER_REVIEW` tasks for the series, block ending and show:
+  `This assistant has active tasks. Reassign or cancel their tasks before removing them from the series.`
+* Active-task lookup must derive series through the task-region/page/chapter chain, not through a direct task series id.
+
+### System Should Try To
+
+* Protect active production work from orphaned assignments.
+* Preserve contributor history.
+* Keep role management narrow and safe for MVP.
+
+---
+
+## BF-NAV-001 — Safe Return URL Navigation
+
+**Status:** Agreed
+**Primary actor:** Any authenticated role
+**Goal:** Preserve safe back-navigation across role pages, series pages, and workspace links.
+
+### Main Flow
+
+```text
+User opens a page that links to /series/{slug} or workspace
+→ UI appends a local returnUrl using SafeReturnUrl.AppendReturnUrl()
+→ Target page resolves returnUrl through SafeReturnUrl.Resolve()
+→ If returnUrl is safe, Back button uses it
+→ If returnUrl is unsafe or missing, page falls back to a safe default such as /dashboard
+```
+
+### Important Notes
+
+* Safe return URLs should allow trusted local prefixes only.
+* Allowed local prefixes include `/mangaka`, `/assistant`, `/editor`, `/board-chief`, `/board`, `/admin`, `/series`, and `/dashboard`.
+* Reject external URLs, protocol-relative URLs, backslashes, `javascript:`, `data:`, `/api/`, and `/signout`.
+* SeriesPage fallback should be role-neutral, not hardcoded to `/mangaka`.
+* Workspace links from `/mangaka/review-submissions` should pass `returnUrl=/mangaka/review-submissions`.
+
+### System Should Try To
+
+* Prevent open redirects.
+* Keep cross-role navigation predictable.
+* Preserve user workflow context after opening series/workspace pages.
 
 # 5. Board Poll and Publication Frequency Flows
 
@@ -959,7 +1418,7 @@ audit.usp_AuditEvent_Append
 ## BF-PAGE-004 — Create Page Annotation Linked to Existing or Newly Created Page Regions
 
 **Status:** Agreed  
-**Primary actor:** Authorized Page Workspace User  
+**Primary actor:** Mangaka / Tantou Editor  
 **Goal:** Create a page annotation/comment and link it to one or more `PageRegion` records.
 
 ### Main Flow
@@ -980,7 +1439,10 @@ User opens the chapter/page workspace
 → Database validates page_region_ids_json
 → Database verifies all referenced PageRegion rows exist
 → Database verifies all referenced PageRegion rows belong to the same ChapterPageVersion
-→ Database verifies the actor is allowed to annotate the owning series/page workspace
+→ Database derives owning series/page context through linked PageRegion records
+→ Database verifies the actor account is ACTIVE
+→ Database verifies the actor is an active contributor for the owning series
+→ Database verifies the actor role is Mangaka or Tantou Editor
 → Database creates one manga.ChapterPageAnnotation row
 → Database creates one or more manga.ChapterPageAnnotationRegion rows
 → Database writes CHAPTER_PAGE_ANNOTATION_CREATED audit event
@@ -1030,6 +1492,9 @@ manga.ChapterPageVersion
 - The annotation creation procedure should still validate cross-table rules even if C# already checked the IDs.
 - The `issue_type_code` allowed values are enforced by the `ChapterPageAnnotation` table constraint.
 - `ChapterPageAnnotationRegion` primary key prevents duplicate annotation-region pairs.
+- Mangaka-created annotations are production-tracking feedback.
+- Tantou Editor-created annotations are editorial-review feedback.
+- The MVP does not add an annotation-origin column; permission is guarded by stored procedures using the annotation creator's current role and owning series context.
 
 ### System Should Try To
 
@@ -1045,7 +1510,7 @@ manga.ChapterPageVersion
 ## BF-PAGE-005 — Resolve Page Annotation
 
 **Status:** Agreed  
-**Primary actor:** Authorized Page Workspace User / reviewer with permission  
+**Primary actor:** Mangaka / Tantou Editor with permission  
 **Goal:** Mark an annotation as handled without deleting the original feedback record.
 
 ### Main Flow
@@ -1057,7 +1522,14 @@ User opens the chapter/page workspace
 → Authorized resolver confirms the issue has been handled
 → Backend calls the annotation resolve workflow procedure
 → Database verifies annotation exists and is not already resolved
-→ Database verifies resolver is active and has permission for the owning page workspace through linked PageRegion records
+→ Database derives owning series/page context through linked PageRegion records
+→ Database resolves the annotation creator's current role through annotated_by_user_id
+→ Database resolves the resolver's current role through actor_user_id
+→ Database verifies the resolver account is ACTIVE and an active contributor for the owning series
+→ If the annotation was created by a Mangaka:
+    Database allows resolution by an active Mangaka contributor or active Tantou Editor contributor on the same series
+→ If the annotation was created by a Tantou Editor:
+    Database allows resolution only by an active Tantou Editor contributor on the same series
 → Database sets resolved_at_utc = SYSUTCDATETIME()
 → Database sets resolved_by_user_id = resolver user ID
 → Database writes CHAPTER_PAGE_ANNOTATION_RESOLVED audit event
@@ -1081,6 +1553,10 @@ audit.usp_AuditEvent_Append
 - Resolved annotations remain useful for traceability, review history, and explaining why a later page version was created.
 - Many visual/content issues should normally be resolved only after a corrected page version or accepted output exists.
 - Some annotations may be resolved without a new page version if the reviewer decides the feedback is no longer applicable, duplicated, or intentionally accepted.
+- Mangaka users may resolve Mangaka-created annotations on the same series.
+- Mangaka users must not resolve Tantou Editor-created annotations.
+- Tantou Editors assigned/active on the same series may resolve both Mangaka-created and Tantou Editor-created annotations.
+- The MVP does not add a new annotation-origin column; stored procedures should enforce this using `annotated_by_user_id`, current user roles, active series contributor membership, and the owning series derived from linked regions.
 
 ### System Should Try To
 
@@ -1088,10 +1564,62 @@ audit.usp_AuditEvent_Append
 - Preserve resolved feedback as workflow history.
 - Avoid deleting annotation records just because the issue was fixed.
 - Keep resolution accountable by recording who resolved it and when.
-
-
+- Keep editorial feedback authority with Tantou Editors while still allowing Mangaka production tracking.
 
 ---
+
+## BF-PAGE-005A — Update Page Annotation Text
+
+**Status:** Agreed  
+**Primary actor:** Mangaka / Tantou Editor with permission  
+**Goal:** Correct or clarify unresolved annotation text without changing linked regions or deleting feedback history.
+
+### Main Flow
+
+```text
+User opens the chapter/page workspace
+→ User selects an unresolved annotation
+→ User edits annotation text and optionally enters an update reason
+→ Backend calls the annotation text update workflow procedure
+→ Database verifies annotation exists and is unresolved
+→ Database derives owning series/page context through linked PageRegion records
+→ Database resolves the annotation creator's current role through annotated_by_user_id
+→ Database resolves the actor's current role through actor_user_id
+→ Database verifies the actor account is ACTIVE and an active contributor for the owning series
+→ If the annotation was created by a Mangaka:
+    Database allows update by an active Mangaka contributor or active Tantou Editor contributor on the same series
+→ If the annotation was created by a Tantou Editor:
+    Database allows update only by an active Tantou Editor contributor on the same series
+→ Database updates annotation_text
+→ Database writes CHAPTER_PAGE_ANNOTATION_TEXT_UPDATED audit event with old text, new text, actor, and optional reason
+→ UI refreshes the annotation text
+```
+
+### Database Procedure(s)
+
+```text
+manga.usp_ChapterPageAnnotation_UpdateText
+audit.usp_AuditEvent_Append
+```
+
+### Important Notes
+
+- This MVP flow updates only `ChapterPageAnnotation.annotation_text`.
+- It must not change linked `PageRegion` records.
+- It must not delete or recreate the annotation row.
+- Resolved annotations should not be edited in MVP.
+- Mangaka users may update unresolved Mangaka-created annotations on the same series.
+- Mangaka users must not update Tantou Editor-created annotations.
+- Tantou Editors assigned/active on the same series may update unresolved annotations created by either Mangaka users or Tantou Editors.
+- The procedure is a database guard check; no new annotation-origin column is added for MVP.
+- Audit should include old text and new text because annotation text is part of workflow feedback history.
+
+### System Should Try To
+
+- Let Mangaka correct production-tracking notes before or during preparation.
+- Let Tantou Editors clarify Mangaka-created notes during chapter review.
+- Preserve audit traceability for text changes.
+- Avoid silently overwriting feedback history.
 
 ## BF-PAGE-006 — Create Chapter Page Task Linked to Page Regions
 

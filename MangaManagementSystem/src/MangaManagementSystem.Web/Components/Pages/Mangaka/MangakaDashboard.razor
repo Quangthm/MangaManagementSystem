@@ -7,6 +7,7 @@
 @inject ISnackbar Snackbar
 @inject IChapterPageTaskService TaskService
 @inject IMangakaSeriesApiClient MangakaSeriesApiClient
+@inject IReferenceDataApiClient ReferenceDataApiClient
 @inject IProfileApiClient ProfileApiClient
 @inject AuthenticationStateProvider AuthStateProvider
 @using MangaManagementSystem.Application.Common
@@ -79,7 +80,7 @@
                 @foreach (var nav in _navItems)
                 {
                     var isActive = _activeTab == nav.Id;
-                    <button @onclick="() => _activeTab = nav.Id"
+                    <button @onclick="@(() => HandleNavClick(nav.Id))"
                             style="display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: none; border-radius: 8px; cursor: pointer; width: 100%; text-align: left; font-size: 0.85rem; font-weight: @(isActive ? 600 : 500); background: @(isActive ? "#eef2ff" : "transparent"); color: @(isActive ? "#4f46e5" : "#64748b");">
                         <MudIcon Icon="@nav.Icon" Size="Size.Small" Style="font-size: 18px; flex-shrink: 0;" />
                         <span>@nav.Label</span>
@@ -145,10 +146,10 @@
                     </div>
 
                     @* Search *@
-                    <div style="width: 220px; flex-shrink: 0;">
+                    <div style="width: 200px; flex-shrink: 0;">
                         <MudTextField T="string" @bind-Value="_searchText"
                                        @bind-Value:after="ResetDashboardPage"
-                                       Placeholder="Search by title or genre"
+                                       Placeholder="Search by title"
                                        Adornment="Adornment.Start"
                                        AdornmentIcon="@Icons.Material.Filled.Search"
                                        Variant="Variant.Outlined" Margin="Margin.Dense"
@@ -170,7 +171,73 @@
                     </div>
                 </div>
 
-                @if (AllFilteredSeries.Count == 0)
+                @* ── Genre/Tag filter row ── *@
+                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 20px;">
+                    <ReferenceMultiSelectFilter TItem="GenreDto"
+                                                Label="Genre"
+                                                SearchPlaceholder="Search genres..."
+                                                EmptyText="No genres found."
+                                                HighlightColor="#eef2ff"
+                                                Items="_availableGenres"
+                                                SelectedIds="_filterGenreIds.ToList()"
+                                                GetItemId="g => g.GenreId"
+                                                GetItemName="g => g.GenreName"
+                                                GetItemDescription="g => g.Description"
+                                                SelectedIdsChanged="(HashSet<Guid> ids) => { _filterGenreIds = ids; ResetDashboardPage(); }" />
+                    <ReferenceMultiSelectFilter TItem="TagDto"
+                                                Label="Tag"
+                                                SearchPlaceholder="Search tags..."
+                                                EmptyText="No tags found."
+                                                HighlightColor="#f0fdf4"
+                                                Items="_availableTags"
+                                                SelectedIds="_filterTagIds.ToList()"
+                                                GetItemId="t => t.TagId"
+                                                GetItemName="t => t.TagName"
+                                                GetItemDescription="t => t.Description"
+                                                SelectedIdsChanged="(HashSet<Guid> ids) => { _filterTagIds = ids; ResetDashboardPage(); }" />
+                    @if (_filterGenreIds.Count > 0)
+                    {
+                        <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                            @foreach (var gid in _filterGenreIds)
+                            {
+                                var g = _availableGenres.FirstOrDefault(gg => gg.GenreId == gid);
+                                if (g != null)
+                                {
+                                    <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #eef2ff; color: #4f46e5; border-radius: 10px; font-size: 0.68rem; font-weight: 500; white-space: nowrap;">
+                                        @g.GenreName
+                                        <span @onclick="@(() => { _filterGenreIds.Remove(gid); ResetDashboardPage(); })" style="cursor: pointer; font-size: 14px; line-height: 1; color: #818cf8;">&times;</span>
+                                    </span>
+                                }
+                            }
+                        </div>
+                    }
+                    @if (_filterTagIds.Count > 0)
+                    {
+                        <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                            @foreach (var tid in _filterTagIds)
+                            {
+                                var t = _availableTags.FirstOrDefault(tt => tt.TagId == tid);
+                                if (t != null)
+                                {
+                                    <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #f0fdf4; color: #059669; border-radius: 10px; font-size: 0.68rem; font-weight: 500; white-space: nowrap;">
+                                        @t.TagName
+                                        <span @onclick="@(() => { _filterTagIds.Remove(tid); ResetDashboardPage(); })" style="cursor: pointer; font-size: 14px; line-height: 1; color: #6ee7b7;">&times;</span>
+                                    </span>
+                                }
+                            }
+                        </div>
+                    }
+                    @if (_filterGenreIds.Count > 0 || _filterTagIds.Count > 0)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
+                                   OnClick="@(() => { _filterGenreIds.Clear(); _filterTagIds.Clear(); ResetDashboardPage(); })"
+                                   Style="font-size: 0.72rem; text-transform: none;">
+                            Clear filters
+                        </MudButton>
+                    }
+                </div>
+
+                    @if (AllFilteredSeries.Count == 0)
                 {
                     @* Empty state *@
                     <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64px 24px; color: #94a3b8; gap: 16px;">
@@ -191,34 +258,17 @@
                 <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px;">
                     @foreach (var series in PagedSeriesData)
                     {
-                        @* ── Series Card ── *@
-                        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); position: relative; overflow: hidden; cursor: pointer; display: flex; flex-direction: column;"
+                        @* ── Series Card (left-side portrait cover layout) ── *@
+                        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); position: relative; overflow: hidden; cursor: pointer; display: flex; gap: 0; min-height: 210px;"
                              @onclick="() => OpenSeriesCard(series)">
 
-                            @* Cover thumbnail / placeholder *@
-                            @if (!string.IsNullOrWhiteSpace(series.CoverUrl))
-                            {
-                                <div style="height: 130px; overflow: hidden; flex-shrink: 0;">
-                                    <img src="@series.CoverUrl"
-                                         alt="Cover for @series.Title"
-                                         style="width: 100%; height: 100%; object-fit: cover; display: block;" />
-                                </div>
-                            }
-                            else
-                            {
-                                <div style="height: 130px; background: @(series.Color + "12"); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                                    <MudIcon Icon="@Icons.Material.Filled.MenuBook"
-                                             Style="@($"font-size: 48px; color: {series.Color}; opacity: 0.35;")" />
-                                </div>
-                            }
-
-                            @* Kebab menu — top-right over thumbnail *@
+                            @* Kebab menu — top-right over card *@
                             @if (!IsAnyDashboardModalOpen)
                             {
-                            <div style="position: absolute; top: 8px; right: 8px;" @onclick:stopPropagation>
+                            <div style="position: absolute; top: 8px; right: 8px; z-index: 10;" @onclick:stopPropagation>
                                 <div style="position: relative;">
                                     <MudIconButton Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small"
-                                                   Style="background: rgba(255,255,255,0.85); border-radius: 50%;"
+                                                   Style="background: rgba(255,255,255,0.85); border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"
                                                    @onclick="@(() => _openSeriesActionMenuId = _openSeriesActionMenuId == series.Id ? null : series.Id)" />
                                     @if (_openSeriesActionMenuId == series.Id)
                                     {
@@ -237,51 +287,106 @@
                             </div>
                             }
 
-                            @* Accent bar *@
-                            <div style="height: 3px; background: @series.Color; flex-shrink: 0;"></div>
-
-                            @* Card body *@
-                            <div style="padding: 16px; flex: 1; display: flex; flex-direction: column; gap: 10px;">
-                                <div style="color: #111827; font-weight: 700; font-size: 0.9rem; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@series.Title</div>
-
-                                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                                    <span style="background: #f1f5f9; color: #475569; font-size: 0.65rem; padding: 2px 8px; border-radius: 12px; font-weight: 500; height: 22px; display: flex; align-items: center;">@series.Genre</span>
-                                    <span style="background: @SeriesStatusHelper.BadgeColor(series.StatusCode); color: @SeriesStatusHelper.TextColor(series.StatusCode); font-size: 0.65rem; padding: 2px 8px; border-radius: 12px; font-weight: 600; height: 22px; display: flex; align-items: center;">@SeriesStatusHelper.DisplayName(series.StatusCode)</span>
-                                </div>
-
-                                <div style="display: flex; align-items: center; gap: 4px;">
-                                    <span style="width: 6px; height: 6px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
-                                    <span style="color: #94a3b8; font-size: 0.7rem;">Updated @series.LastUpdated</span>
-                                </div>
+                            @* Left: portrait cover *@
+                            <div style="flex-shrink: 0; width: 120px; align-self: stretch; display: flex; flex-direction: column; background: @(series.Color + "0a");">
+                                @if (!string.IsNullOrWhiteSpace(series.CoverUrl))
+                                {
+                                    <img src="@series.CoverUrl"
+                                         alt="Cover for @series.Title"
+                                         style="width: 120px; height: 100%; object-fit: cover; display: block;" />
+                                }
+                                else
+                                {
+                                    <div style="width: 120px; height: 100%; display: flex; align-items: center; justify-content: center;">
+                                        <MudIcon Icon="@Icons.Material.Filled.MenuBook"
+                                                 Style="@($"font-size: 40px; color: {series.Color}; opacity: 0.3;")" />
+                                    </div>
+                                }
                             </div>
 
-                            @* Card action row — visible primary actions (hidden while modal open) *@
-                            @if (!IsAnyDashboardModalOpen)
-                            {
-                                @if (series.StatusCode == "PROPOSAL_DRAFT")
+                            @* Right: content *@
+                            <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 14px 16px 14px 16px; gap: 8px;">
+
+                                @* Accent bar *@
+                                <div style="height: 3px; background: @series.Color; flex-shrink: 0; border-radius: 1px; width: 40px;"></div>
+
+                                <div style="color: #111827; font-weight: 700; font-size: 0.9rem; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@series.Title</div>
+
+                                @* Genre chips *@
+                                <div style="display: flex; gap: 5px; flex-wrap: wrap; align-items: center;">
+                                    @{
+                                        var cardGenres = series.Genres ?? Array.Empty<GenreDto>();
+                                        var visibleGenres = cardGenres.Take(3).ToList();
+                                        var genreOverflowCount = cardGenres.Count > 3 ? cardGenres.Count - 3 : 0;
+                                    }
+                                    @foreach (var g in visibleGenres)
+                                    {
+                                        <span style="background: #eef2ff; color: #4f46e5; font-size: 0.62rem; padding: 2px 6px; border-radius: 10px; font-weight: 500; white-space: nowrap; height: 20px; display: flex; align-items: center;">@g.GenreName</span>
+                                    }
+                                    @if (genreOverflowCount > 0)
+                                    {
+                                        <span style="background: #f1f5f9; color: #64748b; font-size: 0.62rem; padding: 2px 6px; border-radius: 10px; font-weight: 500; white-space: nowrap; height: 20px; display: flex; align-items: center;"
+                                              title="@string.Join(", ", cardGenres.Skip(3).Select(g => g.GenreName))">+@genreOverflowCount more</span>
+                                    }
+                                </div>
+
+                                @* Tag chips *@
+                                @{
+                                    var cardTags = series.Tags ?? Array.Empty<TagDto>();
+                                    var visibleTags = cardTags.Take(3).ToList();
+                                    var tagOverflowCount = cardTags.Count > 3 ? cardTags.Count - 3 : 0;
+                                }
+                                @if (cardTags.Count > 0)
                                 {
-                                    <div style="padding: 0 16px 14px; display: flex; gap: 8px;" @onclick:stopPropagation>
-                                        <MudButton Variant="Variant.Outlined" Size="Size.Small" FullWidth="true"
-                                                   OnClick="@(() => OpenDraftDetails(series))">
-                                            View Draft
-                                        </MudButton>
-                                        <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" FullWidth="true"
-                                                   StartIcon="@Icons.Material.Filled.Send"
-                                                   OnClick="@(() => OpenSubmitProposal(series.Id, series.Title))">
-                                            Submit
-                                        </MudButton>
+                                    <div style="display: flex; gap: 5px; flex-wrap: wrap; align-items: center;">
+                                        @foreach (var t in visibleTags)
+                                        {
+                                            <span style="background: #f0fdf4; color: #166534; font-size: 0.62rem; padding: 2px 6px; border-radius: 10px; font-weight: 500; white-space: nowrap; height: 20px; display: flex; align-items: center;">@t.TagName</span>
+                                        }
+                                        @if (tagOverflowCount > 0)
+                                        {
+                                            <span style="background: #f1f5f9; color: #64748b; font-size: 0.62rem; padding: 2px 6px; border-radius: 10px; font-weight: 500; white-space: nowrap; height: 20px; display: flex; align-items: center;"
+                                                  title="@string.Join(", ", cardTags.Skip(3).Select(t => t.TagName))">+@tagOverflowCount more</span>
+                                        }
                                     </div>
                                 }
-                                else if (series.StatusCode is "UNDER_EDITORIAL_REVIEW" or "UNDER_BOARD_REVIEW")
+
+                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: auto;">
+                                    <span style="background: @SeriesStatusHelper.BadgeColor(series.StatusCode); color: @SeriesStatusHelper.TextColor(series.StatusCode); font-size: 0.62rem; padding: 2px 8px; border-radius: 10px; font-weight: 600; height: 20px; display: flex; align-items: center;">@SeriesStatusHelper.DisplayName(series.StatusCode)</span>
+                                    <span style="display: flex; align-items: center; gap: 3px;">
+                                        <span style="width: 5px; height: 5px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
+                                        <span style="color: #94a3b8; font-size: 0.65rem;">@series.LastUpdated</span>
+                                    </span>
+                                </div>
+
+                                @* Card action row *@
+                                @if (!IsAnyDashboardModalOpen)
                                 {
-                                    <div style="padding: 0 16px 14px;" @onclick:stopPropagation>
-                                        <MudButton Variant="Variant.Outlined" Size="Size.Small" FullWidth="true"
-                                                   OnClick="@(() => OpenReviewStatus(series))">
-                                            View Status
-                                        </MudButton>
-                                    </div>
+                                    @if (series.StatusCode == "PROPOSAL_DRAFT")
+                                    {
+                                        <div style="display: flex; gap: 8px; margin-top: 2px;" @onclick:stopPropagation>
+                                            <MudButton Variant="Variant.Outlined" Size="Size.Small" Style="flex: 1; font-size: 0.72rem;"
+                                                       OnClick="@(() => OpenDraftDetails(series))">
+                                                View Draft
+                                            </MudButton>
+                                            <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" Style="flex: 1; font-size: 0.72rem;"
+                                                       StartIcon="@Icons.Material.Filled.Send"
+                                                       OnClick="@(() => OpenSubmitProposal(series.Id, series.Title))">
+                                                Submit
+                                            </MudButton>
+                                        </div>
+                                    }
+                                    else if (series.StatusCode is "UNDER_EDITORIAL_REVIEW" or "UNDER_BOARD_REVIEW")
+                                    {
+                                        <div style="margin-top: 2px;" @onclick:stopPropagation>
+                                            <MudButton Variant="Variant.Outlined" Size="Size.Small" FullWidth="true"
+                                                       OnClick="@(() => OpenReviewStatus(series))">
+                                                View Status
+                                            </MudButton>
+                                        </div>
+                                    }
                                 }
-                            }
+                            </div>
                         </div>
                     }
 
@@ -348,7 +453,7 @@
                     <div style="width: 240px; flex-shrink: 0;">
                         <MudTextField T="string" @bind-Value="_proposalSearchText"
                                        @bind-Value:after="ResetProposalPage"
-                                       Placeholder="Search by title or genre"
+                                       Placeholder="Search by title"
                                        Adornment="Adornment.Start"
                                        AdornmentIcon="@Icons.Material.Filled.Search"
                                        Variant="Variant.Outlined" Margin="Margin.Dense"
@@ -368,6 +473,72 @@
                             <MudSelectItem T="string" Value="@("status")">Status</MudSelectItem>
                         </MudSelect>
                     </div>
+                </div>
+
+                @* ── Proposal Genre/Tag filter row ── *@
+                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 20px;">
+                    <ReferenceMultiSelectFilter TItem="GenreDto"
+                                                Label="Genre"
+                                                SearchPlaceholder="Search genres..."
+                                                EmptyText="No genres found."
+                                                HighlightColor="#eef2ff"
+                                                Items="_availableGenres"
+                                                SelectedIds="_proposalFilterGenreIds.ToList()"
+                                                GetItemId="g => g.GenreId"
+                                                GetItemName="g => g.GenreName"
+                                                GetItemDescription="g => g.Description"
+                                                SelectedIdsChanged="(HashSet<Guid> ids) => { _proposalFilterGenreIds = ids; ResetProposalPage(); }" />
+                    <ReferenceMultiSelectFilter TItem="TagDto"
+                                                Label="Tag"
+                                                SearchPlaceholder="Search tags..."
+                                                EmptyText="No tags found."
+                                                HighlightColor="#f0fdf4"
+                                                Items="_availableTags"
+                                                SelectedIds="_proposalFilterTagIds.ToList()"
+                                                GetItemId="t => t.TagId"
+                                                GetItemName="t => t.TagName"
+                                                GetItemDescription="t => t.Description"
+                                                SelectedIdsChanged="(HashSet<Guid> ids) => { _proposalFilterTagIds = ids; ResetProposalPage(); }" />
+                    @if (_proposalFilterGenreIds.Count > 0)
+                    {
+                        <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                            @foreach (var gid in _proposalFilterGenreIds)
+                            {
+                                var g = _availableGenres.FirstOrDefault(gg => gg.GenreId == gid);
+                                if (g != null)
+                                {
+                                    <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #eef2ff; color: #4f46e5; border-radius: 10px; font-size: 0.68rem; font-weight: 500; white-space: nowrap;">
+                                        @g.GenreName
+                                        <span @onclick="@(() => { _proposalFilterGenreIds.Remove(gid); ResetProposalPage(); })" style="cursor: pointer; font-size: 14px; line-height: 1; color: #818cf8;">&times;</span>
+                                    </span>
+                                }
+                            }
+                        </div>
+                    }
+                    @if (_proposalFilterTagIds.Count > 0)
+                    {
+                        <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                            @foreach (var tid in _proposalFilterTagIds)
+                            {
+                                var t = _availableTags.FirstOrDefault(tt => tt.TagId == tid);
+                                if (t != null)
+                                {
+                                    <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #f0fdf4; color: #059669; border-radius: 10px; font-size: 0.68rem; font-weight: 500; white-space: nowrap;">
+                                        @t.TagName
+                                        <span @onclick="@(() => { _proposalFilterTagIds.Remove(tid); ResetProposalPage(); })" style="cursor: pointer; font-size: 14px; line-height: 1; color: #6ee7b7;">&times;</span>
+                                    </span>
+                                }
+                            }
+                        </div>
+                    }
+                    @if (_proposalFilterGenreIds.Count > 0 || _proposalFilterTagIds.Count > 0)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
+                                   OnClick="@(() => { _proposalFilterGenreIds.Clear(); _proposalFilterTagIds.Clear(); ResetProposalPage(); })"
+                                   Style="font-size: 0.72rem; text-transform: none;">
+                            Clear filters
+                        </MudButton>
+                    }
                 </div>
 
                 @if (AllFilteredProposals.Count == 0)
@@ -559,10 +730,10 @@
                     </div>
                 }
 
-                @* Genre snapshot *@
+                @* Genre display from series metadata *@
                 <div>
                     <div style="font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 4px;">Genre</div>
-                    <div style="font-size: 0.85rem; color: #111827;">@_selectedProposal.GenreSnapshot</div>
+                    <div style="font-size: 0.85rem; color: #111827;">@string.Join(", ", _selectedProposal.Genres.Select(g => g.GenreName))</div>
                 </div>
 
                 @* Synopsis snapshot (bounded scrollable box) *@
@@ -686,8 +857,9 @@
 </MudOverlay>
 
 @* ── New Series Draft Modal (creates manga.Series with status PROPOSAL_DRAFT) ── *@
-<MudOverlay Visible="@_newSeriesDialogOpen" OnClick="@(() => _newSeriesDialogOpen = false)">
-    <MudCard Style="width: 480px; max-width: 90vw; margin: 5% auto 0; border-radius: 14px;" @onclick:stopPropagation>
+<MudOverlay Visible="@_newSeriesDialogOpen" OnClick="@(() => _newSeriesDialogOpen = false)"
+            Style="display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 24px 0;">
+    <MudCard Style="width: 480px; max-width: 90vw; border-radius: 14px; max-height: calc(100vh - 48px); overflow-y: auto;" @onclick:stopPropagation>
         <MudCardContent Style="padding: 0;">
             @* Modal Header *@
             <div style="padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between;">
@@ -730,13 +902,157 @@
                                   Placeholder="Describe the story, world, and main characters..."
                                   Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true" Lines="3" />
 
-                    <MudSelect T="string" Label="Genre" @bind-Value="_newDraftGenre"
-                               Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true">
-                        @foreach (var g in _genres)
+                    <div class="mb-3">
+                        <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 6px;">Genre *</span>
+                        @if (_genrePickerOpen && !_genrePickerForEdit)
                         {
-                            <MudSelectItem Value="@g">@g</MudSelectItem>
+                            @* ── Inline Genre Picker ── *@
+                            <div style="display: flex; flex-direction: column; gap: 10px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; background: #fafafe;">
+                                <MudTextField T="string" @bind-Value="_genrePickerSearch"
+                                              @bind-Value:after="ResetGenrePickerPage"
+                                              Placeholder="Search by name or description..."
+                                              Adornment="Adornment.Start"
+                                              AdornmentIcon="@Icons.Material.Filled.Search"
+                                              Variant="Variant.Outlined" Margin="Margin.Dense"
+                                              Immediate="true" FullWidth="true" />
+                                @if (FilteredPickerGenres.Count == 0)
+                                {
+                                    <div style="color: #94a3b8; font-size: 0.8rem; text-align: center; padding: 16px;">No genres found.</div>
+                                }
+                                else
+                                {
+                                    <div style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;">
+                                        @foreach (var g in PagedPickerGenres)
+                                        {
+                                            var sel = _genrePickerSelection.Contains(g.GenreId);
+                                            <div @onclick="@(() => TogglePickerGenre(g.GenreId))"
+                                                 style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; background: @(sel ? "#eef2ff" : "transparent");">
+                                                <div>
+                                                    <div style="font-size: 0.8rem; font-weight: 500; color: #111827;">@g.GenreName</div>
+                                                    @if (!string.IsNullOrWhiteSpace(g.Description))
+                                                    {
+                                                        <div style="font-size: 0.66rem; color: #64748b; line-height: 1.3;">@g.Description</div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                    if (GenrePickerTotalPages > 1)
+                                    {
+                                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(_genrePickerPage <= 1)" OnClick="@(() => _genrePickerPage--)">Prev</MudButton>
+                                            <span style="font-size: 0.74rem; color: #64748b;">@_genrePickerPage / @GenrePickerTotalPages</span>
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(_genrePickerPage >= GenrePickerTotalPages)" OnClick="@(() => _genrePickerPage++)">Next</MudButton>
+                                        </div>
+                                    }
+                                }
+                                <div style="display: flex; gap: 8px;">
+                                    <MudButton Size="Size.Small" Variant="Variant.Outlined" FullWidth="true" OnClick="CloseGenrePicker">Cancel</MudButton>
+                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                                               Disabled="@(_genrePickerSelection.Count == 0)"
+                                               OnClick="ApplyGenrePicker">Apply</MudButton>
+                                </div>
+                                @if (_genrePickerSelection.Count == 0)
+                                {
+                                    <div style="font-size: 0.7rem; color: #dc2626; text-align: center;">At least one genre is required.</div>
+                                }
+                            </div>
                         }
-                    </MudSelect>
+                        else
+                        {
+                            <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px;">
+                                @foreach (var gid in _newDraftGenreIds)
+                                {
+                                    var genre = _availableGenres.FirstOrDefault(g => g.GenreId == gid);
+                                    if (genre != null)
+                                    {
+                                        <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #eef2ff; color: #4f46e5; border-radius: 12px; font-size: 0.72rem; font-weight: 500;">
+                                            @genre.GenreName
+                                            <span @onclick="@(() => RemoveNewDraftGenre(genre.GenreId))" style="cursor: pointer; font-size: 14px; line-height: 1; margin-left: 1px; color: #818cf8;">&times;</span>
+                                        </span>
+                                    }
+                                }
+                                @if (_newDraftGenreIds.Count == 0)
+                                {
+                                    <span style="color: #94a3b8; font-size: 0.75rem; font-style: italic;">No genres selected</span>
+                                }
+                            </div>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OpenGenrePicker(false))">Add / Manage Genres</MudButton>
+                        }
+                    </div>
+
+                    <div class="mb-3">
+                        <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 6px;">Tags (optional)</span>
+                        @if (_tagPickerOpen && !_tagPickerForEdit)
+                        {
+                            @* ── Inline Tag Picker ── *@
+                            <div style="display: flex; flex-direction: column; gap: 10px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; background: #fafafe;">
+                                <MudTextField T="string" @bind-Value="_tagPickerSearch"
+                                              @bind-Value:after="ResetTagPickerPage"
+                                              Placeholder="Search by name or description..."
+                                              Adornment="Adornment.Start"
+                                              AdornmentIcon="@Icons.Material.Filled.Search"
+                                              Variant="Variant.Outlined" Margin="Margin.Dense"
+                                              Immediate="true" FullWidth="true" />
+                                @if (FilteredPickerTags.Count == 0)
+                                {
+                                    <div style="color: #94a3b8; font-size: 0.8rem; text-align: center; padding: 16px;">No tags found.</div>
+                                }
+                                else
+                                {
+                                    <div style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;">
+                                        @foreach (var t in PagedPickerTags)
+                                        {
+                                            var sel = _tagPickerSelection.Contains(t.TagId);
+                                            <div @onclick="@(() => TogglePickerTag(t.TagId))"
+                                                 style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; background: @(sel ? "#f0fdf4" : "transparent");">
+                                                <div>
+                                                    <div style="font-size: 0.8rem; font-weight: 500; color: #111827;">@t.TagName</div>
+                                                    @if (!string.IsNullOrWhiteSpace(t.Description))
+                                                    {
+                                                        <div style="font-size: 0.66rem; color: #64748b; line-height: 1.3;">@t.Description</div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                    if (TagPickerTotalPages > 1)
+                                    {
+                                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(_tagPickerPage <= 1)" OnClick="@(() => _tagPickerPage--)">Prev</MudButton>
+                                            <span style="font-size: 0.74rem; color: #64748b;">@_tagPickerPage / @TagPickerTotalPages</span>
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(_tagPickerPage >= TagPickerTotalPages)" OnClick="@(() => _tagPickerPage++)">Next</MudButton>
+                                        </div>
+                                    }
+                                }
+                                <div style="display: flex; gap: 8px;">
+                                    <MudButton Size="Size.Small" Variant="Variant.Outlined" FullWidth="true" OnClick="CloseTagPicker">Cancel</MudButton>
+                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" OnClick="ApplyTagPicker">Apply</MudButton>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px;">
+                                @foreach (var tid in _newDraftTagIds)
+                                {
+                                    var tag = _availableTags.FirstOrDefault(t => t.TagId == tid);
+                                    if (tag != null)
+                                    {
+                                        <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #f0fdf4; color: #059669; border-radius: 12px; font-size: 0.72rem; font-weight: 500;">
+                                            @tag.TagName
+                                            <span @onclick="@(() => RemoveNewDraftTag(tag.TagId))" style="cursor: pointer; font-size: 14px; line-height: 1; margin-left: 1px; color: #6ee7b7;">&times;</span>
+                                        </span>
+                                    }
+                                }
+                                @if (_newDraftTagIds.Count == 0)
+                                {
+                                    <span style="color: #94a3b8; font-size: 0.75rem; font-style: italic;">No tags selected</span>
+                                }
+                            </div>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OpenTagPicker(false))">Add / Manage Tags</MudButton>
+                        }
+                    </div>
 
                     <MudSelect T="string" Label="Content Language" @bind-Value="_newDraftLanguage"
                                Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true">
@@ -757,32 +1073,45 @@
                     @* Optional Series Cover Upload (purpose SERIES_COVER) *@
                     <div>
                         <div style="font-size: 0.78rem; font-weight: 600; color: #374151; margin-bottom: 6px;">Series Cover (optional)</div>
-                        @if (_draftCoverFileName != null)
-                        {
-                            <div style="position: relative; display: flex; align-items: center; gap: 8px; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fafafe;">
-                                <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" Style="font-size: 20px; color: #4f46e5;" />
-                                <span style="flex: 1; font-size: 0.82rem; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@_draftCoverFileName</span>
-                                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
-                                               Style="color: #dc2626;"
-                                               OnClick="@(() => { _draftCoverBytes = null; _draftCoverFileName = null; _draftCoverContentType = null; })" />
-                            </div>
-                        }
-                        else
-                        {
-                            <MudFileUpload T="IBrowserFile" FilesChanged="@(async (IBrowserFile f) => { if (f == null) return; _draftCoverFileName = f.Name; _draftCoverContentType = f.ContentType; using var s = f.OpenReadStream(5*1024*1024); using var ms = new MemoryStream(); await s.CopyToAsync(ms); _draftCoverBytes = ms.ToArray(); })">
-                                <ActivatorContent>
-                                    <div style="border: 1.5px dashed #c7d2fe; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; background: #fafafe;">
-                                        <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" Style="font-size: 28px; color: #a5b4fc;" />
-                                        <div style="color: #64748b; font-size: 0.75rem; font-weight: 500;">Click to upload cover art</div>
-                                        <div style="color: #94a3b8; font-size: 0.65rem;">PNG, JPG, WEBP · Max 5MB</div>
+
+                        <div style="display: flex; align-items: center; gap: 18px; flex-wrap: wrap;">
+                            @if (_draftCoverPreviewUrl != null)
+                            {
+                                <div style="flex-shrink: 0; cursor: pointer;" @onclick="OpenCoverPreview">
+                                    <img src="@_draftCoverPreviewUrl" alt="Cover preview"
+                                         style="width: 120px; height: 180px; object-fit: cover; border-radius: 10px; border: 2px solid #6366f1;" />
+                                </div>
+                            }
+
+                            <div style="flex: 1; min-width: 200px;">
+                                @if (_draftCoverFileName != null)
+                                {
+                                    <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fafafe;">
+                                        <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" Style="color: #4f46e5;" />
+                                        <span style="flex: 1; font-size: 0.8rem; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@_draftCoverFileName</span>
+                                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                                                       Style="color: #dc2626;"
+                                                       OnClick="@ClearCreateCover" />
                                     </div>
-                                </ActivatorContent>
-                            </MudFileUpload>
-                        }
+                                }
+                                else
+                                {
+                                    <MudFileUpload T="IBrowserFile" FilesChanged="@OnCreateCoverChanged">
+                                        <ActivatorContent>
+                                            <div style="border: 1.5px dashed #c7d2fe; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; background: #fafafe;">
+                                                <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" Style="font-size: 24px; color: #a5b4fc;" />
+                                                <div style="color: #64748b; font-size: 0.75rem; font-weight: 500;">Click to upload cover art</div>
+                                                <div style="color: #94a3b8; font-size: 0.65rem;">PNG, JPG, WEBP · Max 5MB</div>
+                                            </div>
+                                        </ActivatorContent>
+                                    </MudFileUpload>
+                                }
+                            </div>
+                        </div>
                     </div>
 
                     <MudButton Variant="Variant.Filled" FullWidth="true"
-                               Disabled="@(_draftSaving || string.IsNullOrWhiteSpace(_newDraftTitle) || string.IsNullOrWhiteSpace(_newDraftGenre))"
+                               Disabled="@(_draftSaving || string.IsNullOrWhiteSpace(_newDraftTitle) || _newDraftGenreIds.Count == 0)"
                                OnClick="CreateSeriesDraft">
                         @(_draftSaving ? "Creating..." : "Create Draft")
                     </MudButton>
@@ -794,10 +1123,11 @@
 
 @* ── Edit Draft Modal (BF-SERIES-002 — Edit Series Draft Profile) ── *@
 @* Cover editing only allowed for PROPOSAL_DRAFT; status guard enforced by stored procedure. *@
-<MudOverlay Visible="@_draftDetailsOpen" OnClick="@(() => _draftDetailsOpen = false)">
-    <MudCard Style="width: 540px; max-width: 94vw; margin: 3% auto 0; border-radius: 14px; max-height: 92vh; overflow-y: auto;" @onclick:stopPropagation>
+<MudOverlay Visible="@_draftDetailsOpen" OnClick="@(() => _draftDetailsOpen = false)"
+            Style="display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 24px 0;">
+    <MudCard Style="width: 540px; max-width: 94vw; border-radius: 14px; max-height: calc(100vh - 48px); overflow-y: auto;" @onclick:stopPropagation>
         <MudCardContent Style="padding: 0;">
-            <div style="padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: #fff; z-index: 2;">
+            <div style="padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between;">
                 <div>
                     <div style="font-weight: 700; font-size: 1rem; color: #111827;">Edit Draft</div>
                     <div style="color: #94a3b8; font-size: 0.72rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px;"
@@ -809,51 +1139,54 @@
 
             <div style="padding: 24px; display: flex; flex-direction: column; gap: 16px;">
 
-                @* Cover section *@
+                @* Cover section — inline layout: preview beside upload zone *@
                 <div>
                     <div style="font-size: 0.78rem; font-weight: 600; color: #374151; margin-bottom: 8px;">Series Cover</div>
 
-                    @* Preview: new selection takes priority, then existing cover *@
-                    @if (_editCoverPreviewUrl != null)
-                    {
-                        <div style="display: flex; justify-content: center; margin-bottom: 10px;">
-                            <img src="@_editCoverPreviewUrl" alt="New cover preview"
-                                 style="width: 80px; height: 113px; object-fit: cover; border-radius: 8px; border: 2px solid #6366f1;" />
-                        </div>
-                    }
-                    else if (!string.IsNullOrWhiteSpace(_detailSeries?.CoverUrl))
-                    {
-                        <div style="display: flex; justify-content: center; margin-bottom: 10px;">
-                            <div style="position: relative; display: inline-block;">
+                    <div style="display: flex; align-items: center; gap: 18px; flex-wrap: wrap;">
+                        @* Preview: new selection takes priority, then existing cover *@
+                        @if (_editCoverPreviewUrl != null)
+                        {
+                            <div style="flex-shrink: 0; cursor: pointer;" @onclick="OpenCoverPreview">
+                                <img src="@_editCoverPreviewUrl" alt="New cover preview"
+                                     style="width: 120px; height: 180px; object-fit: cover; border-radius: 10px; border: 2px solid #6366f1;" />
+                            </div>
+                        }
+                        else if (!string.IsNullOrWhiteSpace(_detailSeries?.CoverUrl))
+                        {
+                            <div style="flex-shrink: 0; position: relative; display: inline-block; cursor: pointer;" @onclick="OpenCoverPreview">
                                 <img src="@_detailSeries.CoverUrl" alt="Current cover"
-                                     style="width: 80px; height: 113px; object-fit: cover; border-radius: 8px; border: 1px solid #e2e8f0;" />
+                                     style="width: 120px; height: 180px; object-fit: cover; border-radius: 10px; border: 1px solid #e2e8f0;" />
                                 <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); background: #f1f5f9; color: #64748b; font-size: 0.6rem; padding: 1px 6px; border-radius: 6px; white-space: nowrap;">Current</div>
                             </div>
-                        </div>
-                    }
+                        }
 
-                    @if (_editCoverFileName != null)
-                    {
-                        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fafafe;">
-                            <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" Style="color: #4f46e5;" />
-                            <span style="flex: 1; font-size: 0.8rem; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@_editCoverFileName</span>
-                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
-                                           Style="color: #dc2626;"
-                                           OnClick="@ClearEditCover" />
-                        </div>
-                    }
-                    else
-                    {
-                        <MudFileUpload T="IBrowserFile" FilesChanged="@OnEditCoverChanged">
-                            <ActivatorContent>
-                                <div style="border: 1.5px dashed #c7d2fe; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; background: #fafafe;">
-                                    <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" Style="font-size: 24px; color: #a5b4fc;" />
-                                    <div style="color: #64748b; font-size: 0.75rem; font-weight: 500;">Click to replace cover</div>
-                                    <div style="color: #94a3b8; font-size: 0.65rem;">PNG, JPG, WEBP · Max 5 MB</div>
+                        @* Upload zone *@
+                        <div style="flex: 1; min-width: 200px;">
+                            @if (_editCoverFileName != null)
+                            {
+                                <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fafafe;">
+                                    <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" Style="color: #4f46e5;" />
+                                    <span style="flex: 1; font-size: 0.8rem; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@_editCoverFileName</span>
+                                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                                                   Style="color: #dc2626;"
+                                                   OnClick="@ClearEditCover" />
                                 </div>
-                            </ActivatorContent>
-                        </MudFileUpload>
-                    }
+                            }
+                            else
+                            {
+                                <MudFileUpload T="IBrowserFile" FilesChanged="@OnEditCoverChanged">
+                                    <ActivatorContent>
+                                        <div style="border: 1.5px dashed #c7d2fe; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; background: #fafafe;">
+                                            <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" Style="font-size: 24px; color: #a5b4fc;" />
+                                            <div style="color: #64748b; font-size: 0.75rem; font-weight: 500;">Click to replace cover</div>
+                                            <div style="color: #94a3b8; font-size: 0.65rem;">PNG, JPG, WEBP · Max 5 MB</div>
+                                        </div>
+                                    </ActivatorContent>
+                                </MudFileUpload>
+                            }
+                        </div>
+                    </div>
                 </div>
 
                 @* Profile fields *@
@@ -873,15 +1206,159 @@
                 </div>
 
                 <MudTextField Label="Synopsis / Description" @bind-Value="_editSynopsis"
-                              Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true" Lines="3" />
+                              Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true" Lines="6" />
 
-                <MudSelect T="string" Label="Genre" @bind-Value="_editGenre"
-                           Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true">
-                    @foreach (var g in _genres)
+                <div class="mb-3">
+                    <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 6px;">Genre *</span>
+                    @if (_genrePickerOpen && _genrePickerForEdit)
                     {
-                        <MudSelectItem Value="@g">@g</MudSelectItem>
+                        @* ── Inline Genre Picker (Edit) ── *@
+                        <div style="display: flex; flex-direction: column; gap: 10px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; background: #fafafe;">
+                            <MudTextField T="string" @bind-Value="_genrePickerSearch"
+                                          @bind-Value:after="ResetGenrePickerPage"
+                                          Placeholder="Search by name or description..."
+                                          Adornment="Adornment.Start"
+                                          AdornmentIcon="@Icons.Material.Filled.Search"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense"
+                                          Immediate="true" FullWidth="true" />
+                            @if (FilteredPickerGenres.Count == 0)
+                            {
+                                <div style="color: #94a3b8; font-size: 0.8rem; text-align: center; padding: 16px;">No genres found.</div>
+                            }
+                            else
+                            {
+                                <div style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;">
+                                    @foreach (var g in PagedPickerGenres)
+                                    {
+                                        var sel = _genrePickerSelection.Contains(g.GenreId);
+                                        <div @onclick="@(() => TogglePickerGenre(g.GenreId))"
+                                             style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; background: @(sel ? "#eef2ff" : "transparent");">
+                                            <div>
+                                                <div style="font-size: 0.8rem; font-weight: 500; color: #111827;">@g.GenreName</div>
+                                                @if (!string.IsNullOrWhiteSpace(g.Description))
+                                                {
+                                                    <div style="font-size: 0.66rem; color: #64748b; line-height: 1.3;">@g.Description</div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                                if (GenrePickerTotalPages > 1)
+                                {
+                                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(_genrePickerPage <= 1)" OnClick="@(() => _genrePickerPage--)">Prev</MudButton>
+                                        <span style="font-size: 0.74rem; color: #64748b;">@_genrePickerPage / @GenrePickerTotalPages</span>
+                                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(_genrePickerPage >= GenrePickerTotalPages)" OnClick="@(() => _genrePickerPage++)">Next</MudButton>
+                                    </div>
+                                }
+                            }
+                            <div style="display: flex; gap: 8px;">
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" FullWidth="true" OnClick="CloseGenrePicker">Cancel</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                                           Disabled="@(_genrePickerSelection.Count == 0)"
+                                           OnClick="ApplyGenrePicker">Apply</MudButton>
+                            </div>
+                            @if (_genrePickerSelection.Count == 0)
+                            {
+                                <div style="font-size: 0.7rem; color: #dc2626; text-align: center;">At least one genre is required.</div>
+                            }
+                        </div>
                     }
-                </MudSelect>
+                    else
+                    {
+                        <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px;">
+                            @foreach (var gid in _editGenreIds)
+                            {
+                                var genre = _availableGenres.FirstOrDefault(g => g.GenreId == gid);
+                                if (genre != null)
+                                {
+                                    <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #eef2ff; color: #4f46e5; border-radius: 12px; font-size: 0.72rem; font-weight: 500;">
+                                        @genre.GenreName
+                                        <span @onclick="@(() => RemoveEditGenre(genre.GenreId))" style="cursor: pointer; font-size: 14px; line-height: 1; margin-left: 1px; color: #818cf8;">&times;</span>
+                                    </span>
+                                }
+                            }
+                            @if (_editGenreIds.Count == 0)
+                            {
+                                <span style="color: #94a3b8; font-size: 0.75rem; font-style: italic;">No genres selected</span>
+                            }
+                        </div>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OpenGenrePicker(true))">Add / Manage Genres</MudButton>
+                    }
+                </div>
+
+                <div class="mb-3">
+                    <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 6px;">Tags (optional)</span>
+                    @if (_tagPickerOpen && _tagPickerForEdit)
+                    {
+                        @* ── Inline Tag Picker (Edit) ── *@
+                        <div style="display: flex; flex-direction: column; gap: 10px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; background: #fafafe;">
+                            <MudTextField T="string" @bind-Value="_tagPickerSearch"
+                                          @bind-Value:after="ResetTagPickerPage"
+                                          Placeholder="Search by name or description..."
+                                          Adornment="Adornment.Start"
+                                          AdornmentIcon="@Icons.Material.Filled.Search"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense"
+                                          Immediate="true" FullWidth="true" />
+                            @if (FilteredPickerTags.Count == 0)
+                            {
+                                <div style="color: #94a3b8; font-size: 0.8rem; text-align: center; padding: 16px;">No tags found.</div>
+                            }
+                            else
+                            {
+                                <div style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;">
+                                    @foreach (var t in PagedPickerTags)
+                                    {
+                                        var sel = _tagPickerSelection.Contains(t.TagId);
+                                        <div @onclick="@(() => TogglePickerTag(t.TagId))"
+                                             style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; background: @(sel ? "#f0fdf4" : "transparent");">
+                                            <div>
+                                                <div style="font-size: 0.8rem; font-weight: 500; color: #111827;">@t.TagName</div>
+                                                @if (!string.IsNullOrWhiteSpace(t.Description))
+                                                {
+                                                    <div style="font-size: 0.66rem; color: #64748b; line-height: 1.3;">@t.Description</div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                                if (TagPickerTotalPages > 1)
+                                {
+                                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(_tagPickerPage <= 1)" OnClick="@(() => _tagPickerPage--)">Prev</MudButton>
+                                        <span style="font-size: 0.74rem; color: #64748b;">@_tagPickerPage / @TagPickerTotalPages</span>
+                                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(_tagPickerPage >= TagPickerTotalPages)" OnClick="@(() => _tagPickerPage++)">Next</MudButton>
+                                    </div>
+                                }
+                            }
+                            <div style="display: flex; gap: 8px;">
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" FullWidth="true" OnClick="CloseTagPicker">Cancel</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" OnClick="ApplyTagPicker">Apply</MudButton>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px;">
+                            @foreach (var tid in _editTagIds)
+                            {
+                                var tag = _availableTags.FirstOrDefault(t => t.TagId == tid);
+                                if (tag != null)
+                                {
+                                    <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #f0fdf4; color: #059669; border-radius: 12px; font-size: 0.72rem; font-weight: 500;">
+                                        @tag.TagName
+                                        <span @onclick="@(() => RemoveEditTag(tag.TagId))" style="cursor: pointer; font-size: 14px; line-height: 1; margin-left: 1px; color: #6ee7b7;">&times;</span>
+                                    </span>
+                                }
+                            }
+                            @if (_editTagIds.Count == 0)
+                            {
+                                <span style="color: #94a3b8; font-size: 0.75rem; font-style: italic;">No tags selected</span>
+                            }
+                        </div>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OpenTagPicker(true))">Add / Manage Tags</MudButton>
+                    }
+                </div>
 
                 <MudSelect T="string" Label="Content Language" @bind-Value="_editLanguage"
                            Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true">
@@ -907,7 +1384,7 @@
                         Cancel
                     </MudButton>
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
-                               Disabled="@(_draftSavingEdit || string.IsNullOrWhiteSpace(_editTitle) || string.IsNullOrWhiteSpace(_editGenre))"
+                               Disabled="@(_draftSavingEdit || string.IsNullOrWhiteSpace(_editTitle) || _editGenreIds.Count == 0)"
                                OnClick="SaveDraftEditAsync">
                         @(_draftSavingEdit ? "Saving..." : "Save Changes")
                     </MudButton>
@@ -1056,6 +1533,48 @@
     </MudCard>
 </MudOverlay>
 
+@* ── Cover Crop Dialog ── *@
+@if (_showCoverCropDialog && !string.IsNullOrWhiteSpace(_coverCropSourceDataUrl))
+{
+    <ImageCropDialog SourceDataUrl="@_coverCropSourceDataUrl"
+                     AspectRatio="@(2.0/3.0)"
+                     OutputWidth="1000"
+                     OutputHeight="1500"
+                     OutputContentType="image/png"
+                     CropDescription="2:3 portrait crop"
+                     OutputFileNamePrefix="series-cover"
+                     HelperText="Covers are displayed in a 2:3 portrait frame. Please crop your image to choose the visible cover area."
+                     OnConfirm="@OnCoverCropConfirmed"
+                     OnCancel="@OnCoverCropCancelled" />
+}
+
+@* ── Cover Preview Popup ── *@
+@if (_showCoverPreviewDialog)
+{
+    <MudOverlay Visible="true" OnClick="CloseCoverPreview" DarkBackground="true">
+        <div style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; padding: 24px;" @onclick:stopPropagation>
+            <MudCard Style="width: 520px; max-width: 94vw; max-height: 85vh; border-radius: 14px;" Class="d-flex flex-column">
+                <MudCardContent Style="padding: 0;">
+                    <div style="padding: 18px 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between;">
+                        <MudText Typo="Typo.h6" Style="font-weight: 800; color: #0f172a; margin: 0;">Series Cover Preview</MudText>
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                                       OnClick="CloseCoverPreview" />
+                    </div>
+                    <div style="padding: 24px; display: flex; justify-content: center;">
+                        <img src="@_coverPreviewUrl" alt="Series cover"
+                             style="max-width: 100%; max-height: 420px; object-fit: contain; border-radius: 10px;" />
+                    </div>
+                    <div style="padding: 14px 24px; border-top: 1px solid #f1f5f9; display: flex; justify-content: flex-end;">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CloseCoverPreview">
+                            Close
+                        </MudButton>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </div>
+    </MudOverlay>
+}
+
 @code {
     private string _activeTab = "current";
     private bool _newSeriesDialogOpen;
@@ -1064,12 +1583,14 @@
 
     private string _newDraftTitle = "";
     private string _newDraftSynopsis = "";
-    private string _newDraftGenre = "";
+    private HashSet<Guid> _newDraftGenreIds = new();
+    private HashSet<Guid> _newDraftTagIds = new();
     private string _newDraftLanguage = "ja";
     private string? _newDraftFrequency;
     private byte[]? _draftCoverBytes;
     private string? _draftCoverFileName;
     private string? _draftCoverContentType;
+    private string? _draftCoverPreviewUrl; // cropped data: URI for create modal preview
 
     // ── Edit Draft modal state (BF-SERIES-002) ────────────────────────────────
     private bool _draftDetailsOpen;
@@ -1078,7 +1599,8 @@
     // Editable form fields — populated when the modal opens
     private string _editTitle = "";
     private string _editSynopsis = "";
-    private string _editGenre = "";
+    private HashSet<Guid> _editGenreIds = new();
+    private HashSet<Guid> _editTagIds = new();
     private string _editLanguage = "ja";
     private string? _editFrequency;
     private bool _draftSavingEdit;
@@ -1089,13 +1611,23 @@
     private string? _editCoverContentType;
     private string? _editCoverPreviewUrl; // data: URI for immediate preview
 
+    // ── Cover crop dialog state ──────────────────────────────────────────────
+    private bool _showCoverCropDialog;
+    private string? _coverCropSourceDataUrl;
+    private string? _coverCropSourceFileName;
+    private bool _coverCropIsForCreate; // true = update create fields, false = update edit fields
+
+    // ── Cover preview popup state ────────────────────────────────────────────
+    private bool _showCoverPreviewDialog;
+    private string? _coverPreviewUrl;
+
     // ── Review Status modal state ────────────────────────────────────────────
     private bool _reviewStatusOpen;
     private SeriesCardData? _reviewSeries;
 
     // ── Dashboard modal state ──
     private bool IsAnyDashboardModalOpen =>
-        _cancelDraftDialogOpen || _newSeriesDialogOpen || _draftDetailsOpen || _reviewStatusOpen || _submitProposalDialogOpen;
+        _cancelDraftDialogOpen || _newSeriesDialogOpen || _draftDetailsOpen || _reviewStatusOpen || _submitProposalDialogOpen || _genrePickerOpen || _tagPickerOpen || _showCoverCropDialog || _showCoverPreviewDialog;
 
     // ── Dashboard pagination ──
     private int _dashboardPage = 1;
@@ -1168,6 +1700,8 @@
     private int _proposalPage = 1;
     private const int ProposalPageSize = 8;
     private List<MangakaSeriesProposalDto> _proposalData = [];
+    private HashSet<Guid> _proposalFilterGenreIds = new();
+    private HashSet<Guid> _proposalFilterTagIds = new();
 
     private static readonly (string Label, string[] Statuses)[] ProposalFilterGroups =
     [
@@ -1200,8 +1734,19 @@
                 var term = _proposalSearchText.Trim();
                 result = result.Where(p =>
                     p.SeriesTitle.Contains(term, StringComparison.OrdinalIgnoreCase) ||
-                    p.ProposalTitle.Contains(term, StringComparison.OrdinalIgnoreCase) ||
-                    p.GenreSnapshot.Contains(term, StringComparison.OrdinalIgnoreCase));
+                    p.ProposalTitle.Contains(term, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (_proposalFilterGenreIds.Count > 0)
+            {
+                result = result.Where(p =>
+                    _proposalFilterGenreIds.All(fgId => p.Genres.Any(g => g.GenreId == fgId)));
+            }
+
+            if (_proposalFilterTagIds.Count > 0)
+            {
+                result = result.Where(p =>
+                    _proposalFilterTagIds.All(ftId => p.Tags.Any(t => t.TagId == ftId)));
             }
 
             result = _proposalSortMode switch
@@ -1295,7 +1840,178 @@
         }
     }
 
-    // ── Cancel Draft state ────────────────────────────────────────────────────────
+    private async Task LoadReferenceDataAsync()
+    {
+        try
+        {
+            _availableGenres = await ReferenceDataApiClient.GetGenresAsync();
+            _availableTags = await ReferenceDataApiClient.GetTagsAsync();
+        }
+        catch
+        {
+            _availableGenres = Array.Empty<GenreDto>();
+            _availableTags = Array.Empty<TagDto>();
+        }
+    }
+
+    // ── Genre Picker state ───────────────────────────────────────────────────────────
+    private bool _genrePickerOpen;
+    private bool _genrePickerForEdit;
+    private string _genrePickerSearch = "";
+    private int _genrePickerPage = 1;
+    private const int GenrePickerPageSize = 8;
+    private HashSet<Guid> _genrePickerSelection = new();
+
+    private IReadOnlyList<GenreDto> FilteredPickerGenres
+    {
+        get
+        {
+            var search = _genrePickerSearch?.Trim() ?? "";
+            IEnumerable<GenreDto> result = _availableGenres;
+            if (!string.IsNullOrWhiteSpace(search))
+                result = result.Where(g =>
+                    g.GenreName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                    (g.Description?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
+            return result.OrderBy(g => g.GenreName).ToList();
+        }
+    }
+
+    private int GenrePickerTotalPages => GenrePickerPageSize == 0
+        ? 0
+        : (int)Math.Ceiling((double)FilteredPickerGenres.Count / GenrePickerPageSize);
+
+    private List<GenreDto> PagedPickerGenres =>
+        FilteredPickerGenres
+            .Skip((_genrePickerPage - 1) * GenrePickerPageSize)
+            .Take(GenrePickerPageSize)
+            .ToList();
+
+    private void ResetGenrePickerPage() => _genrePickerPage = 1;
+
+    private void OpenGenrePicker(bool forEdit)
+    {
+        _genrePickerForEdit = forEdit;
+        _genrePickerSearch = "";
+        _genrePickerPage = 1;
+        _genrePickerSelection = new HashSet<Guid>(forEdit ? _editGenreIds : _newDraftGenreIds);
+        _genrePickerOpen = true;
+    }
+
+    private void TogglePickerGenre(Guid id)
+    {
+        if (_genrePickerSelection.Count <= 1 && _genrePickerSelection.Contains(id))
+            return;
+        if (!_genrePickerSelection.Remove(id))
+            _genrePickerSelection.Add(id);
+    }
+
+    private void ApplyGenrePicker()
+    {
+        if (_genrePickerSelection.Count == 0) return;
+        var target = _genrePickerForEdit ? _editGenreIds : _newDraftGenreIds;
+        target.Clear();
+        foreach (var id in _genrePickerSelection) target.Add(id);
+        _genrePickerOpen = false;
+    }
+
+    private void CloseGenrePicker()
+    {
+        _genrePickerOpen = false;
+    }
+
+    private void RemoveNewDraftGenre(Guid genreId)
+    {
+        if (_newDraftGenreIds.Count <= 1)
+        {
+            Snackbar.Add("At least one genre is required.", Severity.Warning);
+            return;
+        }
+        _newDraftGenreIds.Remove(genreId);
+    }
+
+    private void RemoveEditGenre(Guid genreId)
+    {
+        if (_editGenreIds.Count <= 1)
+        {
+            Snackbar.Add("At least one genre is required.", Severity.Warning);
+            return;
+        }
+        _editGenreIds.Remove(genreId);
+    }
+
+    // ── Tag Picker state ─────────────────────────────────────────────────────────────
+    private bool _tagPickerOpen;
+    private bool _tagPickerForEdit;
+    private string _tagPickerSearch = "";
+    private int _tagPickerPage = 1;
+    private const int TagPickerPageSize = 10;
+    private HashSet<Guid> _tagPickerSelection = new();
+
+    private IReadOnlyList<TagDto> FilteredPickerTags
+    {
+        get
+        {
+            var search = _tagPickerSearch?.Trim() ?? "";
+            IEnumerable<TagDto> result = _availableTags;
+            if (!string.IsNullOrWhiteSpace(search))
+                result = result.Where(t =>
+                    t.TagName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                    (t.Description?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
+            return result.OrderBy(t => t.TagName).ToList();
+        }
+    }
+
+    private int TagPickerTotalPages => TagPickerPageSize == 0
+        ? 0
+        : (int)Math.Ceiling((double)FilteredPickerTags.Count / TagPickerPageSize);
+
+    private List<TagDto> PagedPickerTags =>
+        FilteredPickerTags
+            .Skip((_tagPickerPage - 1) * TagPickerPageSize)
+            .Take(TagPickerPageSize)
+            .ToList();
+
+    private void ResetTagPickerPage() => _tagPickerPage = 1;
+
+    private void OpenTagPicker(bool forEdit)
+    {
+        _tagPickerForEdit = forEdit;
+        _tagPickerSearch = "";
+        _tagPickerPage = 1;
+        _tagPickerSelection = new HashSet<Guid>(forEdit ? _editTagIds : _newDraftTagIds);
+        _tagPickerOpen = true;
+    }
+
+    private void TogglePickerTag(Guid id)
+    {
+        if (!_tagPickerSelection.Remove(id))
+            _tagPickerSelection.Add(id);
+    }
+
+    private void ApplyTagPicker()
+    {
+        var target = _tagPickerForEdit ? _editTagIds : _newDraftTagIds;
+        target.Clear();
+        foreach (var id in _tagPickerSelection) target.Add(id);
+        _tagPickerOpen = false;
+    }
+
+    private void CloseTagPicker()
+    {
+        _tagPickerOpen = false;
+    }
+
+    private void RemoveNewDraftTag(Guid tagId)
+    {
+        _newDraftTagIds.Remove(tagId);
+    }
+
+    private void RemoveEditTag(Guid tagId)
+    {
+        _editTagIds.Remove(tagId);
+    }
+
+    // ── Cancel Draft state ────────────────────────────
     private bool _cancelDraftDialogOpen;
     private Guid _cancelDraftSeriesId;
     private string? _cancelDraftSeriesTitle;
@@ -1398,7 +2114,7 @@
                 break;
             case "SERIALIZED":
                 if (!string.IsNullOrWhiteSpace(series.Slug))
-                    Nav.NavigateTo($"/series/{series.Slug}/workspace");
+                    Nav.NavigateTo($"/series/{series.Slug}?returnUrl={Uri.EscapeDataString("/mangaka")}");
                 else
                     Snackbar.Add("Series page is not available yet.", Severity.Info);
                 break;
@@ -1412,10 +2128,10 @@
     {
         _openSeriesActionMenuId = null;
         _detailSeries = series;
-        // Seed the edit form fields from the current card data
         _editTitle = series.Title;
         _editSynopsis = series.Synopsis ?? "";
-        _editGenre = series.Genre;
+        _editGenreIds = new HashSet<Guid>(series.Genres.Select(g => g.GenreId));
+        _editTagIds = new HashSet<Guid>(series.Tags.Select(t => t.TagId));
         _editLanguage = series.ContentLanguageCode ?? "ja";
         _editFrequency = series.PublicationFrequencyCode;
         _draftSavingEdit = false;
@@ -1429,6 +2145,24 @@
         _editCoverFileName = null;
         _editCoverContentType = null;
         _editCoverPreviewUrl = null;
+    }
+
+    private void OpenCoverPreview()
+    {
+        var url = _editCoverPreviewUrl
+                  ?? _draftCoverPreviewUrl
+                  ?? _detailSeries?.CoverUrl;
+
+        if (string.IsNullOrWhiteSpace(url)) return;
+
+        _coverPreviewUrl = url;
+        _showCoverPreviewDialog = true;
+    }
+
+    private void CloseCoverPreview()
+    {
+        _showCoverPreviewDialog = false;
+        _coverPreviewUrl = null;
     }
 
     /// <summary>
@@ -1477,22 +2211,118 @@
             using var stream = file.OpenReadStream(maxCoverBytes);
             using var ms = new MemoryStream();
             await stream.CopyToAsync(ms);
-            _editCoverBytes = ms.ToArray();
-            _editCoverFileName = file.Name;
-            _editCoverContentType = file.ContentType;
-            // Generate a data: URI so the user sees a preview before saving
-            _editCoverPreviewUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(_editCoverBytes)}";
+            var bytes = ms.ToArray();
+
+            _coverCropSourceDataUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(bytes)}";
+            _coverCropSourceFileName = file.Name;
+            _coverCropIsForCreate = false;
+            _showCoverCropDialog = true;
         }
         catch (Exception)
         {
             Snackbar.Add("Failed to read the selected cover image. Please try again.", Severity.Error);
-            ClearEditCover();
         }
+    }
+
+    private async Task OnCreateCoverChanged(IBrowserFile file)
+    {
+        if (file == null) return;
+
+        const long maxCoverBytes = 5 * 1024 * 1024;
+
+        var allowedCoverTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "image/png", "image/jpeg", "image/webp"
+        };
+
+        var allowedCoverExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".png", ".jpg", ".jpeg", ".webp"
+        };
+
+        var ext = Path.GetExtension(file.Name);
+        if (!allowedCoverExtensions.Contains(ext))
+        {
+            Snackbar.Add("Only PNG, JPG, and WEBP images are accepted as series covers.", Severity.Warning);
+            return;
+        }
+
+        if (!allowedCoverTypes.Contains(file.ContentType))
+        {
+            Snackbar.Add("The selected file type is not accepted. Please upload a PNG, JPG, or WEBP image.", Severity.Warning);
+            return;
+        }
+
+        if (file.Size > maxCoverBytes)
+        {
+            Snackbar.Add("The cover image exceeds the maximum size of 5 MB.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            using var stream = file.OpenReadStream(maxCoverBytes);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            var bytes = ms.ToArray();
+
+            _coverCropSourceDataUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(bytes)}";
+            _coverCropSourceFileName = file.Name;
+            _coverCropIsForCreate = true;
+            _showCoverCropDialog = true;
+        }
+        catch (Exception)
+        {
+            Snackbar.Add("Failed to read the selected cover image. Please try again.", Severity.Error);
+        }
+    }
+
+    private async Task OnCoverCropConfirmed((byte[] Bytes, string FileName, string ContentType) result)
+    {
+        _showCoverCropDialog = false;
+        _coverCropSourceDataUrl = null;
+        _coverCropSourceFileName = null;
+
+        if (_coverCropIsForCreate)
+        {
+            _draftCoverBytes = result.Bytes;
+            _draftCoverFileName = result.FileName;
+            _draftCoverContentType = result.ContentType;
+            _draftCoverPreviewUrl = $"data:{result.ContentType};base64,{Convert.ToBase64String(result.Bytes)}";
+        }
+        else
+        {
+            _editCoverBytes = result.Bytes;
+            _editCoverFileName = result.FileName;
+            _editCoverContentType = result.ContentType;
+            _editCoverPreviewUrl = $"data:{result.ContentType};base64,{Convert.ToBase64String(result.Bytes)}";
+        }
+    }
+
+    private async Task OnCoverCropCancelled()
+    {
+        _showCoverCropDialog = false;
+        _coverCropSourceDataUrl = null;
+        _coverCropSourceFileName = null;
+    }
+
+    private void ClearCreateCover()
+    {
+        _draftCoverBytes = null;
+        _draftCoverFileName = null;
+        _draftCoverContentType = null;
+        _draftCoverPreviewUrl = null;
     }
 
     private async Task SaveDraftEditAsync()
     {
-        if (string.IsNullOrWhiteSpace(_editTitle) || string.IsNullOrWhiteSpace(_editGenre)) return;
+        if (string.IsNullOrWhiteSpace(_editTitle) || _editGenreIds.Count == 0) return;
+
+        if (string.IsNullOrWhiteSpace(_editSynopsis))
+        {
+            Snackbar.Add("Synopsis / Description is required.", Severity.Warning);
+            return;
+        }
 
         if (_currentUserId is null || _currentUserId == Guid.Empty)
         {
@@ -1509,8 +2339,9 @@
                 actorUserId: _currentUserId.Value,
                 seriesId: _detailSeries.Id,
                 title: _editTitle.Trim(),
-                synopsis: string.IsNullOrWhiteSpace(_editSynopsis) ? _editTitle.Trim() : _editSynopsis.Trim(),
-                genre: _editGenre,
+                synopsis: _editSynopsis.Trim(),
+                genreIds: _editGenreIds.ToList(),
+                tagIds: _editTagIds.ToList(),
                 contentLanguageCode: _editLanguage,
                 publicationFrequencyCode: _editFrequency,
                 slug: null, // auto-derived from title in the handler
@@ -1519,36 +2350,57 @@
                 coverContentType: _editCoverContentType,
                 cancellationToken: default);
 
-            // Update the in-memory card to reflect the saved changes
+            // Update succeeded — now refresh this single card from the API.
             var idx = _seriesData.FindIndex(s => s.Id == _detailSeries.Id);
             if (idx >= 0)
             {
-                var updated = _seriesData[idx] with
+                try
                 {
-                    Title = result.Title,
-                    Genre = result.Genre,
-                    Synopsis = result.Synopsis,
-                    ContentLanguageCode = result.ContentLanguageCode,
-                    Slug = result.Slug,
-                    PublicationFrequencyCode = result.PublicationFrequencyCode,
-                    // Use the new cover URL if one was uploaded; otherwise keep the existing one
-                    CoverUrl = result.NewCoverUrl ?? _seriesData[idx].CoverUrl
-                };
-                _seriesData[idx] = updated;
-                // Also update the detail series reference so the modal reflects the change
-                _detailSeries = updated;
-                _editTitle = result.Title;
-                _editSynopsis = result.Synopsis;
-                _editGenre = result.Genre;
-                _editLanguage = result.ContentLanguageCode;
-                if (result.NewCoverUrl != null)
+                    var freshDto = await MangakaSeriesApiClient.GetMySeriesCardByIdAsync(
+                        _currentUserId.Value, _detailSeries.Id);
+
+                    if (freshDto is not null)
+                    {
+                        var fresh = new SeriesCardData(
+                            Id: freshDto.SeriesId,
+                            Title: freshDto.Title,
+                            GenreDisplay: string.Join(", ", freshDto.Genres.Select(g => g.GenreName)),
+                            Genres: freshDto.Genres,
+                            Tags: freshDto.Tags,
+                            StatusCode: freshDto.StatusCode,
+                            Slug: freshDto.Slug,
+                            Synopsis: freshDto.Synopsis,
+                            ContentLanguageCode: freshDto.ContentLanguageCode,
+                            CoverUrl: freshDto.CoverUrl,
+                            CreatedAtUtc: freshDto.CreatedAtUtc,
+                            UpdatedAtUtc: freshDto.UpdatedAtUtc,
+                            PublicationFrequencyCode: freshDto.PublicationFrequencyCode
+                        );
+                        _seriesData[idx] = fresh;
+                        _detailSeries = fresh;
+                        Snackbar.Add("Draft profile saved.", Severity.Success);
+                    }
+                    else
+                    {
+                        // Server returned 404 — this series is no longer available to this user.
+                        // Do NOT fabricate a fake card from command result + local selections.
+                        _seriesData.RemoveAt(idx);
+                        _detailSeries = null;
+                        Snackbar.Add(
+                            "The draft was saved, but this series is no longer available in your dashboard. Please refresh if needed.",
+                            Severity.Warning);
+                    }
+                }
+                catch (Exception)
                 {
-                    _editCoverPreviewUrl = null; // clear local preview; real URL is now in CoverUrl
-                    ClearEditCover();
+                    // Targeted card refresh failed (network/server error), but the update did succeed.
+                    // Keep the existing card unchanged — it may be stale but is safer than fabricating data.
+                    Snackbar.Add(
+                        "The draft was saved, but the card could not be refreshed. Please reload the page.",
+                        Severity.Warning);
                 }
             }
 
-            Snackbar.Add("Draft profile saved.", Severity.Success);
             _draftDetailsOpen = false;
         }
         catch (Exception ex)
@@ -1683,7 +2535,8 @@
         }
     }
 
-    private static readonly string[] _genres = ["Tiên hiệp", "Wuxia", "Xianxia", "Action", "Fantasy", "Romance", "Horror", "Slice of Life"];
+    private IReadOnlyList<GenreDto> _availableGenres = Array.Empty<GenreDto>();
+    private IReadOnlyList<TagDto> _availableTags = Array.Empty<TagDto>();
 
     private readonly (string Code, string Label)[] _languages =
     [
@@ -1697,7 +2550,24 @@
         new("current", "Current Series", Icons.Material.Filled.ViewModule),
         new("proposals", "Series Proposals", Icons.Material.Filled.Description),
         new("review", "Assistant Review", Icons.Material.Filled.AssignmentTurnedIn),
+        new("contributors", "Manage Contributors", Icons.Material.Filled.People),
     ];
+
+    private void HandleNavClick(string navId)
+    {
+        if (navId == "review")
+        {
+            Nav.NavigateTo("/mangaka/review-submissions");
+        }
+        else if (navId == "contributors")
+        {
+            Nav.NavigateTo("/mangaka/contributors");
+        }
+        else
+        {
+            _activeTab = navId;
+        }
+    }
 
     private string _currentDisplayName = "Mangaka";
     private string _currentRoleName = "Mangaka";
@@ -1709,6 +2579,8 @@
     private string _selectedFilter = "All";
     private string _searchText = "";
     private string _sortMode = "recent"; // "recent" | "newest" | "title"
+    private HashSet<Guid> _filterGenreIds = new();
+    private HashSet<Guid> _filterTagIds = new();
 
     private static readonly (string Label, string[] Statuses)[] FilterGroups =
     [
@@ -1737,13 +2609,26 @@
             if (group.Statuses is { Length: > 0 })
                 result = result.Where(s => group.Statuses.Contains(s.StatusCode));
 
-            // Search filter
+            // Title search only
             if (!string.IsNullOrWhiteSpace(_searchText))
             {
                 var term = _searchText.Trim();
                 result = result.Where(s =>
-                    s.Title.Contains(term, StringComparison.OrdinalIgnoreCase) ||
-                    s.Genre.Contains(term, StringComparison.OrdinalIgnoreCase));
+                    s.Title.Contains(term, StringComparison.OrdinalIgnoreCase));
+            }
+
+            // Genre filter — show series that contain ALL selected genres
+            if (_filterGenreIds.Count > 0)
+            {
+                result = result.Where(s =>
+                    _filterGenreIds.All(fgId => s.Genres.Any(g => g.GenreId == fgId)));
+            }
+
+            // Tag filter — show series that contain ALL selected tags
+            if (_filterTagIds.Count > 0)
+            {
+                result = result.Where(s =>
+                    _filterTagIds.All(ftId => s.Tags.Any(t => t.TagId == ftId)));
             }
 
             // Sort
@@ -1762,8 +2647,8 @@
     {
         get
         {
-            if (!string.IsNullOrWhiteSpace(_searchText))
-                return "No series match your search.";
+            if (!string.IsNullOrWhiteSpace(_searchText) || _filterGenreIds.Count > 0 || _filterTagIds.Count > 0)
+                return "No series match your filters.";
 
             return _selectedFilter switch
             {
@@ -1847,6 +2732,7 @@
         await LoadSeriesAsync();
         await LoadTasksAsync();
         await LoadProposalTrackingAsync();
+        await LoadReferenceDataAsync();
     }
 
     private async Task LoadSeriesAsync()
@@ -1863,7 +2749,9 @@
             _seriesData = dtos.Select(s => new SeriesCardData(
                 Id: s.SeriesId,
                 Title: s.Title,
-                Genre: s.Genre,
+                GenreDisplay: string.Join(", ", s.Genres.Select(g => g.GenreName)),
+                Genres: s.Genres,
+                Tags: s.Tags,
                 StatusCode: s.StatusCode,
                 Slug: s.Slug,
                 Synopsis: s.Synopsis,
@@ -1882,7 +2770,7 @@
 
     private async Task CreateSeriesDraft()
     {
-        if (string.IsNullOrWhiteSpace(_newDraftTitle) || string.IsNullOrWhiteSpace(_newDraftGenre)) return;
+        if (string.IsNullOrWhiteSpace(_newDraftTitle) || _newDraftGenreIds.Count == 0) return;
 
         if (_currentUserId is null || _currentUserId == Guid.Empty)
         {
@@ -1901,7 +2789,8 @@
                 actorUserId: _currentUserId.Value,
                 title: _newDraftTitle.Trim(),
                 synopsis: string.IsNullOrWhiteSpace(_newDraftSynopsis) ? _newDraftTitle.Trim() : _newDraftSynopsis.Trim(),
-                genre: _newDraftGenre,
+                genreIds: _newDraftGenreIds.ToList(),
+                tagIds: _newDraftTagIds.ToList(),
                 contentLanguageCode: _newDraftLanguage,
                 slug: null,
                 publicationFrequencyCode: _newDraftFrequency,
@@ -1913,7 +2802,9 @@
             _seriesData.Add(new SeriesCardData(
                 Id: created.SeriesId,
                 Title: created.Title,
-                Genre: _newDraftGenre,
+                GenreDisplay: string.Join(", ", _availableGenres.Where(g => _newDraftGenreIds.Contains(g.GenreId)).Select(g => g.GenreName)),
+                Genres: _availableGenres.Where(g => _newDraftGenreIds.Contains(g.GenreId)).ToList(),
+                Tags: _availableTags.Where(t => _newDraftTagIds.Contains(t.TagId)).ToList(),
                 StatusCode: created.StatusCode,
                 Slug: created.Slug,
                 Synopsis: string.IsNullOrWhiteSpace(_newDraftSynopsis) ? created.Title : _newDraftSynopsis.Trim(),
@@ -1932,12 +2823,14 @@
             _draftCreated = false;
             _newDraftTitle = "";
             _newDraftSynopsis = "";
-            _newDraftGenre = "";
+            _newDraftGenreIds.Clear();
+            _newDraftTagIds.Clear();
             _newDraftLanguage = "ja";
             _newDraftFrequency = null;
             _draftCoverBytes = null;
             _draftCoverFileName = null;
             _draftCoverContentType = null;
+            _draftCoverPreviewUrl = null;
             _newSeriesDialogOpen = false;
         }
         catch (Exception ex)
@@ -1956,7 +2849,9 @@
     private record SeriesCardData(
         Guid Id,
         string Title,
-        string Genre,
+        string GenreDisplay,
+        IReadOnlyList<GenreDto> Genres,
+        IReadOnlyList<TagDto> Tags,
         string StatusCode,
         string Slug,
         string? Synopsis,

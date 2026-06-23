@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.API.Contracts;
+using MangaManagementSystem.Application.Common.Security;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Features.Series.Queries.GetSeriesBySlug;
 using MangaManagementSystem.Application.Features.Series.Queries.GetSeriesWorkspaceEntry;
@@ -64,7 +65,7 @@ namespace MangaManagementSystem.API.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unexpected error loading series detail for slug {Slug}.", slug);
+                _logger.LogError(ex, "Unexpected error loading series detail for slug {Slug}.", LogSanitizer.Sanitize(slug));
                 return Problem(
                     detail: "We could not load this series right now. Please try again later.",
                     statusCode: StatusCodes.Status500InternalServerError);
@@ -108,7 +109,7 @@ namespace MangaManagementSystem.API.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex,
-                    "Unexpected error checking workspace access for slug {Slug}.", slug);
+                    "Unexpected error checking workspace access for slug {Slug}.", LogSanitizer.Sanitize(slug));
                 return Problem(
                     detail: "We could not verify workspace access right now. Please try again later.",
                     statusCode: StatusCodes.Status500InternalServerError);

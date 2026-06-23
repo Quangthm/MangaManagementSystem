@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace MangaManagementSystem.Application.Features
 {
-    internal class features
+    internal class Features
     {
     }
 }

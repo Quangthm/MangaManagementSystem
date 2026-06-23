@@ -60,6 +60,16 @@ namespace MangaManagementSystem.Web
                     client.BaseAddress = new Uri(settings.Value.BaseUrl);
                 })
                 .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
+            builder.Services.AddHttpClient<IMangakaSeriesApiClient, MangakaSeriesApiClient>((sp, client) =>
+            {
+                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                client.BaseAddress = new Uri(settings.Value.BaseUrl);
+            });
+            builder.Services.AddHttpClient<IMangakaSeriesContributorApiClient, MangakaSeriesContributorApiClient>((sp, client) =>
+            {
+                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                client.BaseAddress = new Uri(settings.Value.BaseUrl);
+            });
             builder.Services.AddHttpClient<IProfilePasswordApiClient, ProfilePasswordApiClient>((sp, client) =>
             {
                 var settings =
@@ -75,6 +85,11 @@ namespace MangaManagementSystem.Web
 
                 client.BaseAddress =
                     new Uri(settings.Value.BaseUrl);
+            });
+            builder.Services.AddHttpClient<IReferenceDataApiClient, ReferenceDataApiClient>((sp, client) =>
+            {
+                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                client.BaseAddress = new Uri(settings.Value.BaseUrl);
             });
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddAntiforgery();
@@ -157,6 +172,16 @@ namespace MangaManagementSystem.Web
                 client.BaseAddress = new Uri(settings.Value.BaseUrl);
             });
             builder.Services.AddHttpClient<Services.Api.IEditorChapterReviewApiClient, Services.Api.EditorChapterReviewApiClient>((sp, client) =>
+            {
+                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                client.BaseAddress = new Uri(settings.Value.BaseUrl);
+            });
+            builder.Services.AddHttpClient<Services.Api.IEditorAnnotationApiClient, Services.Api.EditorAnnotationApiClient>((sp, client) =>
+            {
+                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                client.BaseAddress = new Uri(settings.Value.BaseUrl);
+            });
+            builder.Services.AddHttpClient<Services.Api.IEditorSeriesApiClient, Services.Api.EditorSeriesApiClient>((sp, client) =>
             {
                 var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
                 client.BaseAddress = new Uri(settings.Value.BaseUrl);

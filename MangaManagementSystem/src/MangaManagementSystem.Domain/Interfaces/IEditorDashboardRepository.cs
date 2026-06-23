@@ -14,7 +14,7 @@ namespace MangaManagementSystem.Domain.Interfaces
     /// </summary>
     public interface IEditorDashboardRepository
     {
-        Task<EditorDashboardData> GetDashboardDataAsync(int proposalQueueTake, int recentSeriesTake, CancellationToken ct = default);
+        Task<EditorDashboardData> GetDashboardDataAsync(Guid actorUserId, int proposalQueueTake, int recentSeriesTake, CancellationToken ct = default);
     }
 
     /// <summary>

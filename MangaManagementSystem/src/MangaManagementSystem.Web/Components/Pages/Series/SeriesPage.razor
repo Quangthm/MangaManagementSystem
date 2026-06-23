@@ -5,6 +5,7 @@
 @using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Web.Components.Pages.Mangaka
 @using MangaManagementSystem.Web.Services.Api
+@using MangaManagementSystem.Web.Services
 @attribute [Authorize]
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
@@ -40,7 +41,7 @@
             <div style="color: #64748b; font-size: 0.9rem; margin-bottom: 24px;">
                 No series was found for the URL <code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">/series/@Slug</code>.
             </div>
-            <MudButton Variant="Variant.Outlined" OnClick="@(() => Nav.NavigateTo("/mangaka"))">
+            <MudButton Variant="Variant.Outlined" OnClick="@(() => Nav.NavigateTo(BackUrl))">
                 Back to Dashboard
             </MudButton>
         </div>
@@ -48,12 +49,12 @@
     else
     {
         <div style="max-width: 1160px; margin: 0 auto;">
-            @* Back navigation *@
+            @* Back navigation (supports safe returnUrl) *@
             <MudButton StartIcon="@Icons.Material.Filled.ArrowBack"
                        Variant="Variant.Text"
                        Style="color: #64748b; margin-bottom: 24px;"
-                       OnClick="@(() => Nav.NavigateTo("/mangaka"))">
-                Back to Dashboard
+                       OnClick="@(() => Nav.NavigateTo(BackUrl))">
+                @(SafeReturnUrl.IsSafe(returnUrl) ? "Back" : "Back to Dashboard")
             </MudButton>
 
             <div class="@(_series.Contributors.Count > 0 ? "series-page-grid" : null)" style="margin-bottom: 24px;">
@@ -102,13 +103,18 @@
                             </div>
 
                             @* Genres *@
-                            @if (!string.IsNullOrWhiteSpace(_series.Genre))
+                            @if (_series.Genres.Count > 0)
                             {
                                 <div style="margin-bottom: 14px;">
                                     <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; display: block; margin-bottom: 4px;">Genres</span>
-                                    <span style="background: #f1f5f9; color: #475569; font-size: 0.72rem; padding: 3px 10px; border-radius: 12px; font-weight: 500;">
-                                        @_series.Genre
-                                    </span>
+                                    <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                                        @foreach (var g in _series.Genres)
+                                        {
+                                            <span style="background: #f1f5f9; color: #475569; font-size: 0.72rem; padding: 3px 10px; border-radius: 12px; font-weight: 500;">
+                                                @g.GenreName
+                                            </span>
+                                        }
+                                    </div>
                                 </div>
                             }
 
@@ -133,7 +139,14 @@
                             @if (!string.IsNullOrWhiteSpace(_series.Synopsis))
                             {
                                 <div style="color: #374151; font-size: 0.9rem; line-height: 1.6; flex-grow: 1;">
-                                    @_series.Synopsis
+                                    <div style="@(_seriesSynopsisExpanded ? "" : "max-height:140px; overflow:hidden;")">@_series.Synopsis</div>
+                                    @if (_series.Synopsis.Length > 300)
+                                    {
+                                        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="ToggleSeriesSynopsis" Class="mt-1"
+                                                   Style="color: #6366f1;">
+                                            @(_seriesSynopsisExpanded ? "Show less" : "View more")
+                                        </MudButton>
+                                    }
                                 </div>
                             }
 
@@ -143,7 +156,7 @@
                                 {
                                     <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="false"
                                                StartIcon="@Icons.Material.Filled.OpenInNew"
-                                               OnClick="@(() => Nav.NavigateTo($"/series/{Slug}/workspace"))">
+                                               OnClick="@(() => Nav.NavigateTo(SafeReturnUrl.AppendReturnUrl($"/series/{Slug}/workspace", returnUrl)))">
                                         Open Workspace
                                     </MudButton>
                                 }
@@ -189,7 +202,7 @@
                         @foreach (var ch in _series.Chapters)
                         {
                             <div style="padding: 12px 24px; border-bottom: 1px solid #f8fafc; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: background 0.12s;"
-                                 @onclick="@(() => Nav.NavigateTo($"/series/{Slug}/workspace?chapterId={ch.ChapterId}"))"
+                                 @onclick="@(() => Nav.NavigateTo(SafeReturnUrl.AppendReturnUrl($"/series/{Slug}/workspace?chapterId={ch.ChapterId}", returnUrl)))"
                                  onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
                                 <div style="display: flex; align-items: center; gap: 12px;">
                                     <span style="font-weight: 700; font-size: 0.85rem; color: #111827; min-width: 60px;">Ch. @ch.ChapterNumberLabel</span>
@@ -361,12 +374,18 @@
         _contributorPanelOpen = !_contributorPanelOpen;
     }
 
+    private void ToggleSeriesSynopsis() => _seriesSynopsisExpanded = !_seriesSynopsisExpanded;
+
     [Parameter] public string Slug { get; set; } = string.Empty;
+    [SupplyParameterFromQuery] public string? returnUrl { get; set; }
 
     private SeriesDetailDto? _series;
     private SeriesWorkspaceEntryDto? _workspaceAccess;
     private bool _loading = true;
+    private bool _seriesSynopsisExpanded;
     private Guid? _currentUserId;
+
+    private string BackUrl => SafeReturnUrl.Resolve(returnUrl, "/dashboard");
 
     private static string LanguageLabel(string? code) => code switch
     {

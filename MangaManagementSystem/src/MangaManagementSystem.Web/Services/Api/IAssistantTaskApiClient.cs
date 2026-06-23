@@ -12,6 +12,9 @@ namespace MangaManagementSystem.Web.Services.Api
         // Annotations for assigned regions
         Task<IReadOnlyList<ChapterPageAnnotationDto>> GetTaskAnnotationsAsync(Guid actorUserId, Guid taskId, CancellationToken cancellationToken = default);
 
+        // Completed work summary
+        Task<AssistantCompletedWorkSummaryDto?> GetCompletedWorkAsync(Guid actorUserId, CancellationToken cancellationToken = default);
+
         // Submit operation
         Task<AssistantTaskSubmitResultDto?> SubmitTaskWorkAsync(
             Guid actorUserId,

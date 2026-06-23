@@ -1,0 +1,187 @@
+@page "/assistant/completed-work"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@using MangaManagementSystem.Application.DTOs.Manga
+@using MangaManagementSystem.Web.Services.Api
+@attribute [Authorize(Roles = "Assistant")]
+@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IAssistantTaskApiClient AssistantTaskClient
+
+<AssistantLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Completed Work</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Track approved assistant tasks and estimated work summary.</MudText>
+            <MudText Typo="Typo.caption" Class="mf-muted mt-1">
+                Estimated from approved completed tasks only. MangaFlow does not process real payments.
+            </MudText>
+        </div>
+
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error">Failed to load completed work: @_error</MudAlert>
+        }
+        else if (_summary == null)
+        {
+            <MudAlert Severity="Severity.Info">No completed work data available.</MudAlert>
+        }
+        else
+        {
+            @* Summary Cards *@
+            <MudGrid Class="mb-6">
+                <MudItem xs="6" md="3">
+                    <StatCard Label="Completed Tasks" Value="@_summary.CompletedTaskCount.ToString()" Description="Approved tasks" />
+                </MudItem>
+                <MudItem xs="6" md="3">
+                    <StatCard Label="Approved Regions" Value="@_summary.ApprovedRegionCount.ToString()" Description="Regions completed" />
+                </MudItem>
+                <MudItem xs="6" md="3">
+                    <StatCard Label="Estimated Total" Value="@_summary.TotalEstimatedAmount.ToString("N0")" Description="All completed work" />
+                </MudItem>
+                <MudItem xs="6" md="3">
+                    <StatCard Label="This Month" Value="@_summary.ThisMonthEstimatedAmount.ToString("N0")" Description="Current month" />
+                </MudItem>
+            </MudGrid>
+
+            @* Breakdown by task type *@
+            <MudPaper Class="pa-5 mf-card mb-6" Elevation="0">
+                <MudText Typo="Typo.h6" Class="font-weight-bold mb-4">Breakdown by Task Type</MudText>
+                @if (_summary.Breakdown.Count == 0)
+                {
+                    <MudText Class="mf-muted">No breakdown data available.</MudText>
+                }
+                else
+                {
+                    <MudTable Items="@_summary.Breakdown" Hover="true" Dense="true" Striped="true">
+                        <HeaderContent>
+                            <MudTh>Task Type</MudTh>
+                            <MudTh>Completed Tasks</MudTh>
+                            <MudTh>Regions</MudTh>
+                            <MudTh>Estimated Amount</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>
+                                <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">
+                                    @context.TaskType
+                                </MudChip>
+                            </MudTd>
+                            <MudTd>@context.CompletedTaskCount</MudTd>
+                            <MudTd>@context.RegionCount</MudTd>
+                            <MudTd>
+                                <MudText Typo="Typo.body2" Class="font-weight-bold">
+                                    @context.EstimatedAmount.ToString("N0")
+                                </MudText>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+            </MudPaper>
+
+            @* Recent Completed Tasks *@
+            <MudPaper Class="pa-5 mf-card" Elevation="0">
+                <MudText Typo="Typo.h6" Class="font-weight-bold mb-4">Recent Completed Tasks</MudText>
+                @if (_summary.RecentItems.Count == 0)
+                {
+                    <MudText Class="mf-muted">No recently completed tasks.</MudText>
+                }
+                else
+                {
+                    <MudTable Items="@_summary.RecentItems" Hover="true" Dense="true" Striped="true">
+                        <HeaderContent>
+                            <MudTh>Task</MudTh>
+                            <MudTh>Series</MudTh>
+                            <MudTh>Chapter / Page</MudTh>
+                            <MudTh>Completed</MudTh>
+                            <MudTh>Regions</MudTh>
+                            <MudTh>Estimated Amount</MudTh>
+                            <MudTh></MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>
+                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">
+                                    @context.TaskType
+                                </MudChip>
+                            </MudTd>
+                            <MudTd>
+                                <MudText Typo="Typo.body2">@context.SeriesTitle</MudText>
+                            </MudTd>
+                            <MudTd>
+                                <MudText Typo="Typo.body2">
+                                    @context.ChapterTitle
+                                    @if (context.PageNumber > 0)
+                                    {
+                                        <span> &bull; P.@context.PageNumber</span>
+                                    }
+                                </MudText>
+                            </MudTd>
+                            <MudTd>
+                                <MudText Typo="Typo.body2">
+                                    @(context.CompletedAt?.ToLocalTime().ToString("MMM dd, yyyy") ?? "-")
+                                </MudText>
+                            </MudTd>
+                            <MudTd>@context.RegionCount</MudTd>
+                            <MudTd>
+                                <MudText Typo="Typo.body2" Class="font-weight-bold">
+                                    @context.EstimatedAmount.ToString("N0")
+                                </MudText>
+                            </MudTd>
+                            <MudTd>
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                           Href="@($"/assistant/task/{context.TaskId}")">
+                                    View
+                                </MudButton>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+            </MudPaper>
+        }
+    </div>
+</AssistantLayout>
+
+@code {
+    private Guid _currentUserId;
+    private bool _loading = true;
+    private string? _error;
+    private AssistantCompletedWorkSummaryDto? _summary;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (Guid.TryParse(idClaim, out var userId))
+            {
+                _currentUserId = userId;
+            }
+        }
+
+        await LoadCompletedWorkAsync();
+    }
+
+    private async Task LoadCompletedWorkAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _summary = await AssistantTaskClient.GetCompletedWorkAsync(_currentUserId);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

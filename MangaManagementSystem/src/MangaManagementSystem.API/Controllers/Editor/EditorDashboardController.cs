@@ -39,7 +39,7 @@ namespace MangaManagementSystem.API.Controllers.Editor
         [HttpGet]
         public async Task<IActionResult> GetDashboardAsync(CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out _))
+            if (!TryResolveActorUserId(out var actorUserId))
             {
                 return BadRequest(new ApiErrorResponse(
                     "Could not identify the requesting user. Please sign in again."));
@@ -48,7 +48,7 @@ namespace MangaManagementSystem.API.Controllers.Editor
             try
             {
                 EditorDashboardDto result =
-                    await _mediator.Send(new GetEditorDashboardQuery(), cancellationToken);
+                    await _mediator.Send(new GetEditorDashboardQuery(actorUserId), cancellationToken);
                 return Ok(result);
             }
             catch (Exception ex)
