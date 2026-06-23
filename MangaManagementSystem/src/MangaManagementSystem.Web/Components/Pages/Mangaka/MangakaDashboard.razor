@@ -2550,6 +2550,7 @@
         new("current", "Current Series", Icons.Material.Filled.ViewModule),
         new("proposals", "Series Proposals", Icons.Material.Filled.Description),
         new("review", "Assistant Review", Icons.Material.Filled.AssignmentTurnedIn),
+        new("contributors", "Manage Contributors", Icons.Material.Filled.People),
     ];
 
     private void HandleNavClick(string navId)
@@ -2557,6 +2558,10 @@
         if (navId == "review")
         {
             Nav.NavigateTo("/mangaka/review-submissions");
+        }
+        else if (navId == "contributors")
+        {
+            Nav.NavigateTo("/mangaka/contributors");
         }
         else
         {

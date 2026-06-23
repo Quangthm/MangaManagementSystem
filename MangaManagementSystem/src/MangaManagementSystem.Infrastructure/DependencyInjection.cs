@@ -54,6 +54,7 @@ namespace MangaManagementSystem.Infrastructure
             services.AddScoped<IEditorAnnotationRepository, EditorAnnotationRepository>();
             services.AddScoped<IEditorSeriesRepository, EditorSeriesRepository>();
             services.AddScoped<IReferenceDataRepository, ReferenceDataRepository>();
+            services.AddScoped<ISeriesContributorManagementRepository, SeriesContributorRepository>();
 
             // Unit of Work
             services.AddScoped<IUnitOfWork, UnitOfWork>();

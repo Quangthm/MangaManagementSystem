@@ -1,0 +1,469 @@
+@page "/mangaka/contributors"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@using MangaManagementSystem.Application.DTOs.Manga
+@using MangaManagementSystem.Web.Components.Layouts
+@using MangaManagementSystem.Web.Services.Api
+@attribute [Authorize(Roles = "Mangaka")]
+@inject IMangakaSeriesApiClient MangakaSeriesApiClient
+@inject IMangakaSeriesContributorApiClient ContributorApiClient
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthStateProvider
+
+<MangakaLayout>
+    <div class="mf-page">
+        <MudButton Variant="Variant.Text"
+                   StartIcon="@Icons.Material.Filled.ArrowBack"
+                   Style="color: #64748b; margin-bottom: 16px;"
+                   OnClick="@(() => Nav.NavigateTo("/mangaka"))">
+            Back to Mangaka Dashboard
+        </MudButton>
+
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Manage Series Contributors</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">View contributor history, add active assistants, and end assistant contributions for your series.</MudText>
+        </div>
+
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error">@_error</MudAlert>
+        }
+        else
+        {
+            <MudGrid Class="mb-4">
+                <MudItem xs="12" md="3"><StatCard Label="My Series" Value="@_series.Count.ToString()" Description="Series you can manage" /></MudItem>
+                <MudItem xs="12" md="3"><StatCard Label="Active Contributors" Value="@_contributors.Count(c => c.IsActive).ToString()" Description="Current team members" /></MudItem>
+                <MudItem xs="12" md="3"><StatCard Label="Active Assistants" Value="@_contributors.Count(c => c.IsActive && c.RoleName == "Assistant").ToString()" Description="Manageable contributors" /></MudItem>
+                <MudItem xs="12" md="3"><StatCard Label="Former Contributors" Value="@_contributors.Count(c => !c.IsActive).ToString()" Description="Historical contributor rows" /></MudItem>
+            </MudGrid>
+
+            <MudPaper Class="pa-4 mb-4 mf-card" Elevation="0">
+                <MudGrid>
+                    <MudItem xs="12" md="3">
+                        <MudSelect T="Guid?" Label="Series" Value="@_selectedSeriesId" ValueChanged="OnSeriesChanged" Variant="Variant.Outlined">
+                            @foreach (var series in _series)
+                            {
+                                <MudSelectItem T="Guid?" Value="@series.SeriesId">@series.Title</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" md="3">
+                        <MudTextField @bind-Value="_searchText" Label="Search contributors"
+                                       Variant="Variant.Outlined" Immediate="true"
+                                       Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" />
+                    </MudItem>
+                    <MudItem xs="12" md="3">
+                        <MudSelect T="string" Label="Role" Value="@_roleFilter" ValueChanged="OnRoleFilterChanged" Variant="Variant.Outlined">
+                            <MudSelectItem T="string" Value="@("ALL")">All Roles</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Mangaka")">Mangaka</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Assistant")">Assistant</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Tantou Editor")">Tantou Editor</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" md="3">
+                        <MudSelect T="string" Label="Status" Value="@_statusFilter" ValueChanged="OnStatusFilterChanged" Variant="Variant.Outlined">
+                            <MudSelectItem T="string" Value="@("ACTIVE")">Active</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("FORMER")">Former</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("ALL")">All</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                </MudGrid>
+
+                <MudStack Row="true" Class="mt-3" Justify="Justify.FlexEnd">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.PersonAdd"
+                               Disabled="@(!_selectedSeriesId.HasValue || _dialogLoading)"
+                               OnClick="OpenAddAssistantDialogAsync">
+                        Add Assistant
+                    </MudButton>
+                </MudStack>
+            </MudPaper>
+
+            @if (!_selectedSeriesId.HasValue)
+            {
+                <MudPaper Class="pa-8 mf-card text-center" Elevation="0">
+                    <MudIcon Icon="@Icons.Material.Filled.People" Size="Size.Large" Color="Color.Primary" />
+                    <MudText Typo="Typo.h5" Class="mt-2">Select a series</MudText>
+                    <MudText Class="mf-muted">Choose one of your series to view and manage contributors.</MudText>
+                </MudPaper>
+            }
+            else if (!_filteredContributors.Any())
+            {
+                <MudPaper Class="pa-8 mf-card text-center" Elevation="0">
+                    <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" Color="Color.Info" />
+                    <MudText Typo="Typo.h5" Class="mt-2">No contributors found</MudText>
+                    <MudText Class="mf-muted">No contributor rows match the current filters.</MudText>
+                </MudPaper>
+            }
+            else
+            {
+                <MudTable Items="@_filteredContributors" Dense="true" Hover="true" Class="mf-card">
+                    <HeaderContent>
+                        <MudTh>Series</MudTh>
+                        <MudTh>Contributor</MudTh>
+                        <MudTh>Role</MudTh>
+                        <MudTh>Status</MudTh>
+                        <MudTh>Start Date</MudTh>
+                        <MudTh>End Date</MudTh>
+                        <MudTh>Actions</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Series">@context.SeriesTitle</MudTd>
+                        <MudTd DataLabel="Contributor">
+                            <MudText Typo="Typo.body2"><strong>@context.DisplayName</strong></MudText>
+                            @if (!string.IsNullOrWhiteSpace(context.Username))
+                            {
+                                <MudText Typo="Typo.caption" Class="mf-muted">@context.Username</MudText>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(context.Email))
+                            {
+                                <MudText Typo="Typo.caption" Class="mf-muted">@context.Email</MudText>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Role">
+                            <MudChip T="string" Size="Size.Small" Color="@(GetRoleColor(context.RoleName))">@context.RoleName</MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Status">
+                            <MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)">@(context.IsActive ? "Active" : "Former")</MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Start Date">@context.StartDate.ToString("yyyy-MM-dd")</MudTd>
+                        <MudTd DataLabel="End Date">@(context.EndDate?.ToString("yyyy-MM-dd") ?? "—")</MudTd>
+                        <MudTd DataLabel="Actions">
+                            @if (context.IsActive && context.RoleName == "Assistant")
+                            {
+                                <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                           Disabled="@_dialogLoading"
+                                           OnClick="@(() => OpenEndAssistantDialog(context))">
+                                    End
+                                </MudButton>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.caption" Class="mf-muted">Read-only</MudText>
+                            }
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        }
+    </div>
+</MangakaLayout>
+
+<MudDialog @bind-Visible="_showAddAssistantDialog" Options="_dialogOptions">
+    <DialogContent>
+        <MudText Typo="Typo.h6" Class="mb-3">Add Assistant Contributor</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3 mf-muted">Series: @_selectedSeriesTitle</MudText>
+
+        @if (_dialogLoading)
+        {
+            <MudProgressLinear Indeterminate="true" Class="mb-3" />
+        }
+
+        <MudAutocomplete T="EligibleAssistantContributorDto"
+                         Label="Assistant"
+                         Variant="Variant.Outlined"
+                         SearchFunc="SearchAssistantsAsync"
+                         ToStringFunc="@(x => x is null ? string.Empty : $"{x.DisplayName} ({x.Username ?? x.Email ?? "No username/email"})")"
+                         Value="@_selectedAssistantCandidate"
+                         ValueChanged="OnAssistantCandidateChanged"
+                         ResetValueOnEmptyText="false"
+                         Clearable="true"
+                         CoerceText="false"
+                         CoerceValue="false" />
+
+        <MudStack Row="true" Class="mt-4" Justify="Justify.FlexEnd" Spacing="2">
+            <MudButton Variant="Variant.Text" OnClick="CloseAddAssistantDialog">Cancel</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                       Disabled="@(_dialogLoading || _selectedAssistantCandidate is null)"
+                       OnClick="ConfirmAddAssistantAsync">
+                Add Assistant
+            </MudButton>
+        </MudStack>
+    </DialogContent>
+</MudDialog>
+
+<MudDialog @bind-Visible="_showEndAssistantDialog" Options="_dialogOptions">
+    <DialogContent>
+        <MudText Typo="Typo.h6" Class="mb-3">Remove Assistant Contributor</MudText>
+        <MudText Typo="Typo.body2" Class="mb-1">Assistant: @_assistantToEnd?.DisplayName</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3 mf-muted">Series: @_selectedSeriesTitle</MudText>
+
+        <MudTextField @bind-Value="_endReason"
+                      Label="Reason"
+                      Variant="Variant.Outlined"
+                      Lines="4"
+                      MaxLength="500"
+                      Counter="500" />
+
+        <MudStack Row="true" Class="mt-4" Justify="Justify.FlexEnd" Spacing="2">
+            <MudButton Variant="Variant.Text" OnClick="CloseEndAssistantDialog">Cancel</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Error"
+                       Disabled="@(_dialogLoading || string.IsNullOrWhiteSpace(_endReason))"
+                       OnClick="ConfirmEndAssistantAsync">
+                Remove Assistant
+            </MudButton>
+        </MudStack>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    private readonly DialogOptions _dialogOptions = new() { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+
+    private Guid _actorUserId;
+    private bool _loading = true;
+    private bool _dialogLoading;
+    private string? _error;
+
+    private List<SeriesDto> _series = [];
+    private List<SeriesContributorListItemDto> _contributors = [];
+    private Guid? _selectedSeriesId;
+    private string? _selectedSeriesTitle;
+
+    private string _searchText = string.Empty;
+    private string _roleFilter = "ALL";
+    private string _statusFilter = "ACTIVE";
+
+    private bool _showAddAssistantDialog;
+    private EligibleAssistantContributorDto? _selectedAssistantCandidate;
+
+    private bool _showEndAssistantDialog;
+    private SeriesContributorListItemDto? _assistantToEnd;
+    private string _endReason = string.Empty;
+
+    private IEnumerable<SeriesContributorListItemDto> _filteredContributors => _contributors
+        .Where(ApplySearch)
+        .Where(ApplyRoleFilter)
+        .Where(ApplyStatusFilter);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _actorUserId = await ResolveActorUserIdAsync();
+            await LoadSeriesAsync();
+
+            if (_series.Count > 0)
+            {
+                _selectedSeriesId = _series[0].SeriesId;
+                _selectedSeriesTitle = _series[0].Title;
+                await LoadContributorsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task<Guid> ResolveActorUserIdAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        var raw = user.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!Guid.TryParse(raw, out var actorUserId) || actorUserId == Guid.Empty)
+        {
+            throw new InvalidOperationException("Could not identify the current user. Please sign in again.");
+        }
+
+        return actorUserId;
+    }
+
+    private async Task LoadSeriesAsync()
+    {
+        _series = (await MangakaSeriesApiClient.GetMySeriesAsync(_actorUserId)).ToList();
+    }
+
+    private async Task LoadContributorsAsync()
+    {
+        if (!_selectedSeriesId.HasValue)
+        {
+            _contributors = [];
+            return;
+        }
+
+        _contributors = (await ContributorApiClient.GetContributorsAsync(_actorUserId, _selectedSeriesId.Value)).ToList();
+    }
+
+    private async Task OnSeriesChanged(Guid? seriesId)
+    {
+        _selectedSeriesId = seriesId;
+        _selectedSeriesTitle = _series.FirstOrDefault(x => x.SeriesId == seriesId)?.Title;
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            await LoadContributorsAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task OnRoleFilterChanged(string role)
+    {
+        _roleFilter = role;
+        return Task.CompletedTask;
+    }
+
+    private Task OnStatusFilterChanged(string status)
+    {
+        _statusFilter = status;
+        return Task.CompletedTask;
+    }
+
+    private bool ApplySearch(SeriesContributorListItemDto item)
+    {
+        if (string.IsNullOrWhiteSpace(_searchText))
+        {
+            return true;
+        }
+
+        var term = _searchText.Trim();
+        return item.SeriesTitle.Contains(term, StringComparison.OrdinalIgnoreCase)
+            || item.DisplayName.Contains(term, StringComparison.OrdinalIgnoreCase)
+            || (!string.IsNullOrWhiteSpace(item.Username) && item.Username.Contains(term, StringComparison.OrdinalIgnoreCase))
+            || (!string.IsNullOrWhiteSpace(item.Email) && item.Email.Contains(term, StringComparison.OrdinalIgnoreCase))
+            || item.RoleName.Contains(term, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool ApplyRoleFilter(SeriesContributorListItemDto item)
+        => _roleFilter == "ALL" || item.RoleName == _roleFilter;
+
+    private bool ApplyStatusFilter(SeriesContributorListItemDto item)
+        => _statusFilter switch
+        {
+            "ACTIVE" => item.IsActive,
+            "FORMER" => !item.IsActive,
+            _ => true
+        };
+
+    private Color GetRoleColor(string roleName)
+        => roleName switch
+        {
+            "Mangaka" => Color.Primary,
+            "Assistant" => Color.Info,
+            "Tantou Editor" => Color.Secondary,
+            _ => Color.Default
+        };
+
+    private async Task OpenAddAssistantDialogAsync()
+    {
+        _selectedAssistantCandidate = null;
+        _showAddAssistantDialog = true;
+        await Task.CompletedTask;
+    }
+
+    private void CloseAddAssistantDialog()
+    {
+        _showAddAssistantDialog = false;
+        _selectedAssistantCandidate = null;
+    }
+
+    private Task OnAssistantCandidateChanged(EligibleAssistantContributorDto? candidate)
+    {
+        _selectedAssistantCandidate = candidate;
+        return Task.CompletedTask;
+    }
+
+    private async Task<IEnumerable<EligibleAssistantContributorDto>> SearchAssistantsAsync(string value, CancellationToken cancellationToken)
+    {
+        if (!_selectedSeriesId.HasValue)
+        {
+            return Enumerable.Empty<EligibleAssistantContributorDto>();
+        }
+
+        return await ContributorApiClient.SearchEligibleAssistantsAsync(_actorUserId, _selectedSeriesId.Value, value, cancellationToken);
+    }
+
+    private async Task ConfirmAddAssistantAsync()
+    {
+        if (!_selectedSeriesId.HasValue || _selectedAssistantCandidate is null)
+        {
+            return;
+        }
+
+        _dialogLoading = true;
+        try
+        {
+            await ContributorApiClient.AddAssistantAsync(
+                _actorUserId,
+                _selectedSeriesId.Value,
+                new AddAssistantContributorRequest(_selectedAssistantCandidate.UserId));
+
+            Snackbar.Add("Assistant contributor added successfully.", Severity.Success);
+            CloseAddAssistantDialog();
+            await LoadContributorsAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _dialogLoading = false;
+        }
+    }
+
+    private void OpenEndAssistantDialog(SeriesContributorListItemDto contributor)
+    {
+        _assistantToEnd = contributor;
+        _endReason = string.Empty;
+        _showEndAssistantDialog = true;
+    }
+
+    private void CloseEndAssistantDialog()
+    {
+        _showEndAssistantDialog = false;
+        _assistantToEnd = null;
+        _endReason = string.Empty;
+    }
+
+    private async Task ConfirmEndAssistantAsync()
+    {
+        if (!_selectedSeriesId.HasValue || _assistantToEnd is null)
+        {
+            return;
+        }
+
+        _dialogLoading = true;
+        try
+        {
+            await ContributorApiClient.EndAssistantAsync(
+                _actorUserId,
+                _selectedSeriesId.Value,
+                _assistantToEnd.UserId,
+                new EndAssistantContributorRequest(_endReason.Trim()));
+
+            Snackbar.Add("Assistant contributor removed successfully.", Severity.Success);
+            CloseEndAssistantDialog();
+            await LoadContributorsAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _dialogLoading = false;
+        }
+    }
+}
