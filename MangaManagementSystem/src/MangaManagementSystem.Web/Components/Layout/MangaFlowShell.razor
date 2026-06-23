@@ -1,0 +1,275 @@
+@namespace MangaManagementSystem.Web.Components.Layouts
+
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.JSInterop
+
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+
+<div class="mf-app-shell mf-board-shell">
+    <aside class="mf-sidebar mf-board-editor-sidebar">
+        <AuthorizeView>
+            <Authorized Context="sideAuth">
+                @{
+                    var sideUser = sideAuth.User;
+                    var sideDisplayName = GetDisplayName(sideUser);
+                    var sideRoleName = GetRoleDisplayName(sideUser);
+                    var sideInitials = GetInitials(sideDisplayName);
+                }
+
+                <div class="mf-board-profile-area">
+                    <input id="mf-board-profile-toggle"
+                           class="mf-board-profile-toggle"
+                           type="checkbox" />
+
+                    <label class="mf-board-profile-card"
+                           for="mf-board-profile-toggle">
+                        <span class="mf-board-profile-avatar">@sideInitials</span>
+
+                        <span class="mf-board-profile-text">
+                            <span class="mf-board-profile-name" title="@sideDisplayName">
+                                @sideDisplayName
+                            </span>
+
+                            <span class="mf-board-profile-role">
+                                @sideRoleName
+                            </span>
+                        </span>
+
+                        <span class="mf-board-profile-more-btn"
+                              title="Account menu">
+                            ⋮
+                        </span>
+                    </label>
+
+                    <div class="mf-board-profile-dropdown">
+                        <a class="mf-board-profile-dropdown-item"
+                           href="/profile/settings">
+                            <span class="mf-board-menu-icon">⚙</span>
+
+                            <span>
+                                <span class="mf-board-menu-title">Profile Settings</span>
+                                <span class="mf-board-menu-subtitle">Profile, portfolio and security</span>
+                            </span>
+                        </a>
+
+                        <div class="mf-board-profile-dropdown-divider"></div>
+
+                        <button type="button"
+                                class="mf-board-profile-dropdown-item logout"
+                                @onclick="LogoutAsync">
+                            Logout
+                        </button>
+                    </div>
+                </div>
+            </Authorized>
+
+            <NotAuthorized>
+                <div class="mf-board-profile-area">
+                    <input id="mf-board-profile-toggle"
+                           class="mf-board-profile-toggle"
+                           type="checkbox" />
+
+                    <label class="mf-board-profile-card"
+                           for="mf-board-profile-toggle">
+                        <span class="mf-board-profile-avatar">?</span>
+
+                        <span class="mf-board-profile-text">
+                            <span class="mf-board-profile-name">Guest</span>
+                            <span class="mf-board-profile-role">Not signed in</span>
+                        </span>
+
+                        <span class="mf-board-profile-more-btn"
+                              title="Account menu">
+                            ⋮
+                        </span>
+                    </label>
+
+                    <div class="mf-board-profile-dropdown">
+                        <a class="mf-board-profile-dropdown-item"
+                           href="/login">
+                            Sign in
+                        </a>
+                    </div>
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
+
+        <nav class="mf-board-nav">
+            <a class="@MenuClass("dashboard")" href="/demo/mangaflow/editorial">
+                Editorial Dashboard
+            </a>
+
+            <a class="@MenuClass("proposals")" href="/demo/mangaflow/proposals">
+                Proposal Reviews
+            </a>
+
+            <a class="@MenuClass("polls")" href="/demo/mangaflow/polls">
+                Board Polls
+            </a>
+
+            <AuthorizeView Roles="Editorial Board Chief">
+                <Authorized>
+                    <a class="@MenuClass("decisions")" href="/demo/mangaflow/decisions">
+                        Decision Center
+                    </a>
+                </Authorized>
+            </AuthorizeView>
+
+            <div class="mf-board-nav-section">
+                Ranking &amp; Context
+            </div>
+
+            <a class="mf-board-nav-link" href="/demo/mangaflow/ranking">
+                Series Ranking
+            </a>
+        </nav>
+
+        <div class="mf-board-sidebar-footer">
+            <a class="mf-board-back-btn" href="/dashboard">
+                Back to Overview
+            </a>
+        </div>
+    </aside>
+
+    <main class="mf-main">
+        <header class="mf-topbar">
+            <div class="mf-breadcrumb">
+                <span>MangaFlow</span>
+                <span>/</span>
+                <span>Editorial Board</span>
+                <span>/</span>
+                <strong>@Title</strong>
+            </div>
+
+            <div class="mf-top-actions">
+                @if (Actions is not null)
+                {
+                    @Actions
+                }
+
+                <div class="mf-help">?</div>
+            </div>
+        </header>
+
+        <section class="mf-page-title-area">
+            <div>
+                <h1>@Title</h1>
+
+                @if (!string.IsNullOrWhiteSpace(Subtitle))
+                {
+                    <p>@Subtitle</p>
+                }
+            </div>
+
+            @if (ShowLiveBadge)
+            {
+                <span class="mf-live-pill">● Live</span>
+            }
+        </section>
+
+        <section class="mf-content">
+            @ChildContent
+        </section>
+    </main>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string Subtitle { get; set; } = string.Empty;
+    [Parameter] public string ActiveMenu { get; set; } = string.Empty;
+    [Parameter] public bool ShowLiveBadge { get; set; }
+    [Parameter] public RenderFragment? Actions { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string MenuClass(string key)
+    {
+        return ActiveMenu.Equals(key, StringComparison.OrdinalIgnoreCase)
+            ? "mf-board-nav-link active"
+            : "mf-board-nav-link";
+    }
+
+    private async Task LogoutAsync()
+    {
+        var keys = new[]
+        {
+            "authToken",
+            "token",
+            "jwt",
+            "accessToken",
+            "currentUser",
+            "user",
+            "role",
+            "roleName"
+        };
+
+        foreach (var key in keys)
+        {
+            await JSRuntime.InvokeVoidAsync("localStorage.removeItem", key);
+            await JSRuntime.InvokeVoidAsync("sessionStorage.removeItem", key);
+        }
+
+        NavigationManager.NavigateTo("/signout", forceLoad: true);
+    }
+
+    private static string GetDisplayName(ClaimsPrincipal user)
+    {
+        return user.FindFirst("display_name")?.Value
+            ?? user.FindFirst("DisplayName")?.Value
+            ?? user.FindFirst(ClaimTypes.Name)?.Value
+            ?? user.FindFirst("name")?.Value
+            ?? user.Identity?.Name
+            ?? "Board Member";
+    }
+
+    private static string GetRoleDisplayName(ClaimsPrincipal user)
+    {
+        var role = user.FindFirst(ClaimTypes.Role)?.Value
+            ?? user.FindFirst("role")?.Value
+            ?? user.FindFirst("role_name")?.Value
+            ?? user.FindFirst("Role")?.Value
+            ?? user.FindFirst("RoleName")?.Value
+            ?? "Viewer";
+
+        return role switch
+        {
+            "Editorial Board Chief" => "Board Chief",
+            "EditorialBoardChief" => "Board Chief",
+            "Board Chief" => "Board Chief",
+
+            "Editorial Board Member" => "Board Member",
+            "EditorialBoardMember" => "Board Member",
+            "Board Member" => "Board Member",
+
+            "Tantou Editor" => "Tantou Editor",
+            "Mangaka" => "Mangaka",
+            "Assistant" => "Assistant",
+            "Admin" => "Admin",
+
+            _ => role
+        };
+    }
+
+    private static string GetInitials(string displayName)
+    {
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            return "?";
+        }
+
+        var parts = displayName.Split(
+            ' ',
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (parts.Length == 1)
+        {
+            return parts[0].Length >= 2
+                ? parts[0][..2].ToUpperInvariant()
+                : parts[0].ToUpperInvariant();
+        }
+
+        return $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
+    }
+}

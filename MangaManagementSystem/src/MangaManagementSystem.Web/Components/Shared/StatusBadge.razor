@@ -1,8 +1,29 @@
+@using MangaManagementSystem.Web.Components.Shared
 @namespace MangaManagementSystem.Web.Components.Shared
+@using MudBlazor
+@using Microsoft.AspNetCore.Components
 
-<MudChip T="string" Color="@GetColor()" Size="@Size" Class="@Class" @attributes="@Attributes">
-    @Label
-</MudChip>
+@if (UseMudChip)
+{
+    <MudChip T="string"
+             Color="@MudColor"
+             Size="@Size"
+             Class="@Class"
+             @attributes="@MergedAttributes">
+        @DisplayLabel
+    </MudChip>
+}
+else
+{
+    <span class="@BadgeClass" @attributes="@MergedAttributes">
+        @if (Dot)
+        {
+            <span class="mf-status-dot"></span>
+        }
+
+        @DisplayLabel
+    </span>
+}
 
 @code {
     private static readonly Dictionary<string, Color> StatusColors = new(StringComparer.OrdinalIgnoreCase)
@@ -11,10 +32,12 @@
         { "PENDING_APPROVAL", Color.Warning },
         { "REJECTED", Color.Error },
         { "DISABLED", Color.Default },
+
         { "ASSIGNED", Color.Info },
         { "UNDER_REVIEW", Color.Warning },
         { "COMPLETED", Color.Success },
         { "CANCELLED", Color.Error },
+
         { "APPROVED", Color.Success },
         { "DRAFT", Color.Default },
         { "SUBMITTED", Color.Info },
@@ -26,31 +49,136 @@
         { "HIATUS", Color.Warning },
         { "PROPOSAL_DRAFT", Color.Info },
         { "OPEN", Color.Warning },
-        { "RESOLVED", Color.Success }
+        { "RESOLVED", Color.Success },
+
+        { "PUBLISHED", Color.Success },
+        { "CLOSED", Color.Error },
+        { "ARCHIVED", Color.Default },
+        { "UPCOMING", Color.Default },
+        { "VOTING_IN_PROGRESS", Color.Warning },
+        { "START_SERIALIZATION", Color.Info },
+        { "SERIALIZATION", Color.Info },
+        { "CONTINUATION", Color.Info }
     };
 
     [Parameter] public string? Status { get; set; }
     [Parameter] public string? Label { get; set; }
+
+    // Use this when old pages need MudBlazor chip style:
+    // <StatusBadge Status="ACTIVE" UseMudChip="true" />
+    [Parameter] public bool UseMudChip { get; set; }
+
+    // CSS badge option
+    [Parameter] public bool Dot { get; set; } = true;
+
+    // MudChip option
     [Parameter] public Size Size { get; set; } = Size.Small;
+
+    // Shared option
     [Parameter] public string? Class { get; set; }
+
+    // Backward compatibility with the old file
     [Parameter] public IDictionary<string, object>? Attributes { get; set; }
 
-    private Color GetColor()
-    {
-        if (string.IsNullOrWhiteSpace(Status))
-        {
-            return Color.Default;
-        }
+    // Normal Razor unmatched attributes
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
 
-        return StatusColors.TryGetValue(Status.Trim(), out var color) ? color : Color.Default;
+    private string DisplayLabel =>
+        !string.IsNullOrWhiteSpace(Label)
+            ? Label.Trim()
+            : !string.IsNullOrWhiteSpace(Status)
+                ? Status.Trim()
+                : "Unknown";
+
+    private Color MudColor
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(Status))
+            {
+                return Color.Default;
+            }
+
+            return StatusColors.TryGetValue(Status.Trim(), out var color)
+                ? color
+                : Color.Default;
+        }
     }
 
-    protected override void OnParametersSet()
+    private string BadgeClass
     {
-        // Ensure Label defaults to Status if not provided
-        if (string.IsNullOrWhiteSpace(Label) && !string.IsNullOrWhiteSpace(Status))
+        get
         {
-            Label = Status.Trim();
+            var cssClass = Normalize(Status) switch
+            {
+                "active" or "published" or "open" or "approved" or "completed" or "resolved" or "serialized"
+                    => "success",
+
+                "inreview" or "underreview" or "votinginprogress" or "pending" or "pendingapproval" or "submitted" or "onhold" or "hiatus"
+                    => "warning",
+
+                "rejected" or "closed" or "cancelled" or "canceled" or "revisionrequested"
+                    => "danger",
+
+                "draft" or "proposaldraft" or "archived" or "upcoming" or "disabled"
+                    => "neutral",
+
+                "assigned" or "startserialization" or "serialization" or "continuation"
+                    => "info",
+
+                _ => "info"
+            };
+
+            return string.IsNullOrWhiteSpace(Class)
+                ? $"mf-status {cssClass}"
+                : $"mf-status {cssClass} {Class}";
         }
+    }
+
+    private IReadOnlyDictionary<string, object>? MergedAttributes
+    {
+        get
+        {
+            if ((Attributes is null || Attributes.Count == 0) &&
+                (AdditionalAttributes is null || AdditionalAttributes.Count == 0))
+            {
+                return null;
+            }
+
+            var merged = new Dictionary<string, object>();
+
+            if (Attributes is not null)
+            {
+                foreach (var item in Attributes)
+                {
+                    merged[item.Key] = item.Value;
+                }
+            }
+
+            if (AdditionalAttributes is not null)
+            {
+                foreach (var item in AdditionalAttributes)
+                {
+                    merged[item.Key] = item.Value;
+                }
+            }
+
+            return merged;
+        }
+    }
+
+    private static string Normalize(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        return value
+            .Replace(" ", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("_", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("-", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .ToLowerInvariant();
     }
 }

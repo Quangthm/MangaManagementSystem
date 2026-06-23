@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using EFCore.NamingConventions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using MangaManagementSystem.Application.Features.EditorialBoard.Repositories;
 
 namespace MangaManagementSystem.Infrastructure
 {
@@ -67,7 +68,10 @@ namespace MangaManagementSystem.Infrastructure
             // Assistant task submission
             services.AddScoped<MangaManagementSystem.Application.Interfaces.IAssistantTaskSubmissionService, Services.AssistantTaskSubmissionService>();
 
+
+            services.AddScoped<IEditorialBoardRepository, EditorialBoardRepository>();
             return services;
         }
     }
 }
+
