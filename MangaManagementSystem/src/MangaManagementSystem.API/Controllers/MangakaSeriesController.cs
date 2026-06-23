@@ -210,6 +210,11 @@ namespace MangaManagementSystem.API.Controllers
                 return BadRequest(new ApiErrorResponse("At least one valid genre is required."));
             }
 
+            if (string.IsNullOrWhiteSpace(request.Synopsis))
+            {
+                return BadRequest(new ApiErrorResponse("Synopsis / Description is required."));
+            }
+
             byte[]? coverBytes       = null;
             string? coverFileName    = null;
             string? coverContentType = null;

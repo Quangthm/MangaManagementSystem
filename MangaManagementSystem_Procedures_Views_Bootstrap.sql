@@ -2375,6 +2375,183 @@ BEGIN
     END CATCH;
 END;
 GO
+CREATE OR ALTER PROCEDURE manga.usp_SeriesContributor_EndAssistant
+    @actor_user_id UNIQUEIDENTIFIER,
+    @series_id UNIQUEIDENTIFIER,
+    @assistant_user_id UNIQUEIDENTIFIER,
+    @reason NVARCHAR(500)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        --------------------------------------------------------------------
+        -- 1. Lock contributor changes for this series
+        --------------------------------------------------------------------
+        DECLARE @lock_resource NVARCHAR(200) =
+            N'manga_series_contributor_end_assistant_' + CONVERT(NVARCHAR(36), @series_id);
+
+        DECLARE @lock_result INT;
+
+        EXEC @lock_result = sys.sp_getapplock
+            @Resource = @lock_resource,
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 10000;
+
+        IF @lock_result < 0
+        BEGIN
+            ;THROW 58601, 'Could not acquire series contributor lock.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 2. Validate required reason
+        --------------------------------------------------------------------
+        IF @reason IS NULL OR LTRIM(RTRIM(@reason)) = N''
+        BEGIN
+            ;THROW 58602, 'A reason is required when ending an assistant contributor.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 3. Actor must be active Mangaka contributor of target series
+        --------------------------------------------------------------------
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM manga.vw_ActiveSeriesContributor ascx
+            WHERE ascx.series_id = @series_id
+              AND ascx.user_id = @actor_user_id
+              AND ascx.role_name = N'Mangaka'
+              AND ascx.user_status_code = N'ACTIVE'
+        )
+        BEGIN
+            ;THROW 58603, 'Only an active Mangaka contributor can end assistant contributors for this series.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 4. Target must be active Assistant contributor of target series
+        --------------------------------------------------------------------
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM manga.vw_ActiveSeriesContributor ascx
+            WHERE ascx.series_id = @series_id
+              AND ascx.user_id = @assistant_user_id
+              AND ascx.role_name = N'Assistant'
+              AND ascx.user_status_code = N'ACTIVE'
+        )
+        BEGIN
+            ;THROW 58604, 'Target user is not an active Assistant contributor of this series.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 5. Explicitly reject Mangaka / Tantou Editor contributor rows
+        --------------------------------------------------------------------
+        IF EXISTS
+        (
+            SELECT 1
+            FROM manga.vw_ActiveSeriesContributor ascx
+            WHERE ascx.series_id = @series_id
+              AND ascx.user_id = @assistant_user_id
+              AND ascx.role_name IN (N'Mangaka', N'Tantou Editor')
+              AND ascx.user_status_code = N'ACTIVE'
+        )
+        BEGIN
+            ;THROW 58605, 'Mangaka and Tantou Editor contributors cannot be ended by this workflow.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 6. Block ending when assistant has ASSIGNED or UNDER_REVIEW tasks
+        --    for this same series.
+        --    Relationship: Task -> Region -> PageVersion -> Page -> Chapter -> Series
+        --------------------------------------------------------------------
+        IF EXISTS
+        (
+            SELECT 1
+            FROM manga.ChapterPageTask t
+            INNER JOIN manga.ChapterPageTaskRegion tpr
+                ON tpr.chapter_page_task_id = t.chapter_page_task_id
+            INNER JOIN manga.PageRegion pr
+                ON pr.page_region_id = tpr.page_region_id
+            INNER JOIN manga.ChapterPageVersion cpv
+                ON cpv.chapter_page_version_id = pr.chapter_page_version_id
+            INNER JOIN manga.ChapterPage cp
+                ON cp.chapter_page_id = cpv.chapter_page_id
+            INNER JOIN manga.Chapter ch
+                ON ch.chapter_id = cp.chapter_id
+            WHERE t.assigned_to_user_id = @assistant_user_id
+              AND t.status_code IN (N'ASSIGNED', N'UNDER_REVIEW')
+              AND ch.series_id = @series_id
+        )
+        BEGIN
+            ;THROW 58606, 'This assistant has active tasks. Reassign or cancel their tasks before removing them from the series.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 7. End the active contributor row by setting end_date only.
+        --    Preserve history; never delete.
+        --------------------------------------------------------------------
+        UPDATE manga.SeriesContributor
+        SET end_date = CONVERT(DATE, SYSUTCDATETIME()),
+            notes = CASE
+                WHEN notes IS NULL OR notes = N'' THEN @reason
+                ELSE CONCAT(notes, N' | End reason: ', @reason)
+            END
+        WHERE series_id = @series_id
+          AND user_id = @assistant_user_id
+          AND end_date IS NULL;
+
+        IF @@ROWCOUNT = 0
+        BEGIN
+            ;THROW 58607, 'No active Assistant contributor row could be ended for this series.', 1;
+        END;
+
+        --------------------------------------------------------------------
+        -- 8. Audit
+        --------------------------------------------------------------------
+        DECLARE @audit_entity_id NVARCHAR(100) = CONVERT(NVARCHAR(36), @assistant_user_id);
+
+        DECLARE @detail_json NVARCHAR(MAX) =
+        (
+            SELECT
+                @series_id AS series_id,
+                @assistant_user_id AS assistant_user_id,
+                @reason AS reason,
+                CONVERT(DATE, SYSUTCDATETIME()) AS end_date
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @actor_user_id,
+            @action_code = N'SERIES_CONTRIBUTOR_ASSISTANT_ENDED',
+            @entity_type = N'SeriesContributor',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1 AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH;
+END;
+GO
 CREATE OR ALTER PROCEDURE manga.usp_Series_Create
     @actor_user_id UNIQUEIDENTIFIER,
 

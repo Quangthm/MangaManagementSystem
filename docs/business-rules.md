@@ -89,7 +89,7 @@
 | File purpose code | Allowed extensions | Allowed content types | Cloudinary resource type | Notes |
 |---|---|---|---|---|
 | `SERIES_PROPOSAL` | `.pdf`, `.doc`, `.docx` | `application/pdf`, `application/msword`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | `raw` | Formal series proposal documents only. Markdown, plain text, and image files are not accepted for proposal submission in MVP. |
-| `SERIES_COVER` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Series cover image. |
+| `SERIES_COVER` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Series cover image. The Web draft UI may upload a cropped `1000×1500` PNG result as the actual cover while still accepting standard image source types. |
 | `CHAPTER_PAGE_VERSION` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Official manga page image/version output. |
 | `EDITORIAL_ATTACHMENT` | `.pdf`, `.doc`, `.docx`, `.jpg`, `.jpeg`, `.png`, `.webp` | Proposal-document content types plus `image/jpeg`, `image/png`, `image/webp` | `raw` for documents; `image` for images | Editorial markup, review attachments, or supporting screenshots/documents. |
 | `REGISTRATION_PORTFOLIO` | `.pdf`, `.doc`, `.docx`, `.jpg`, `.jpeg`, `.png`, `.webp` | Proposal-document content types plus `image/jpeg`, `image/png`, `image/webp` | `raw` for documents; `image` for images | Optional portfolio submitted for account approval/profile review. |
@@ -140,6 +140,10 @@
 | BR-SERIES-006B | Genres represent broad story categories, while tags represent more specific tropes, themes, settings, character traits, source/context labels, or content descriptors. | Active draft |
 | BR-SERIES-006C | Genres and tags are current series metadata and are not stored as proposal-history snapshot tables in MVP. | Active draft |
 | BR-SERIES-007 | A series cover image is current series metadata, must be stored as a `FileResource`, and should have the file purpose `SERIES_COVER` when provided. | Active draft |
+| BR-SERIES-007A | When the Web UI supports series cover cropping, the cropped image file is the authoritative series cover file uploaded to the backend. | Active draft |
+| BR-SERIES-007B | The system should not store original/cropped dual files or crop metadata for `SERIES_COVER` in MVP. | Active draft |
+| BR-SERIES-007C | The MVP series cover crop target is a 2:3 portrait image, currently output as `1000×1500` `image/png` before upload. | Active draft |
+| BR-SERIES-007D | Source images smaller than the recommended cover output size may still be accepted, but the UI should warn that the final cover may look blurry after upscaling. | Active draft |
 | BR-SERIES-008 | A series may optionally reference another series as its source version. | Active draft |
 | BR-SERIES-009 | A series cannot reference itself as its own source series. | Active draft |
 | BR-SERIES-010 | Series ownership and contributor membership are managed through `SeriesContributor` instead of storing a lead Mangaka directly in `Series`. | Active draft |

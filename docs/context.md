@@ -29,6 +29,7 @@ The MVP should stay focused and avoid unnecessary tables unless a table represen
 |---|---|
 | Users and accounts | Use one MVP role per account. New users start as `PENDING_APPROVAL`. Admin activates, rejects, or disables accounts. Each user has a non-unique `display_name` for UI display; if not provided during registration or external login, it defaults to the username. Users may update their own display name without entering their account password. |
 | File management | Store actual media in Cloudinary; store metadata and references in `manga.FileResource`. Every file resource must store a backend-calculated `sha256_hash`; duplicate-file warnings based on this hash are optional MVP usability behavior and may be implemented only where time allows. |
+| Series cover crop | The Web UI may crop a selected cover image in the browser before upload. The current MVP cover output is a `1000×1500` PNG in a 2:3 portrait ratio; the cropped file is the actual `SERIES_COVER`, while the original source image and crop metadata are not stored. |
 | Series management | Manage series profile, unique slug, lifecycle status, primary language, normalized genres, normalized tags, current cover image, publication frequency, and optional source series reference. `series_id` is the internal backend identity; `slug` is the stable URL identity after serialization. No separate `series_code` is used in MVP. |
 | Series contributors | Manage team membership through `SeriesContributor`, not a direct lead Mangaka column on `Series`. |
 | Series proposals | Store formal submitted proposal versions in `SeriesProposal`; revisions create new proposal rows. |
@@ -169,6 +170,21 @@ The project uses **permission-based actor grouping** for shared features and rol
 - Cloudinary cleanup should use the resource type associated with the accepted file purpose and uploaded content type.
 - SQL stored procedures should receive validated file metadata and do not need to duplicate extension/MIME validation.
 
+
+### Series cover crop implementation note
+
+- For series cover uploads from the Web draft UI, the selected source image is cropped in the browser before upload.
+- The current MVP output is a `1000×1500` PNG using a 2:3 portrait ratio.
+- The backend still receives a normal image file and uses the existing `FileResource` / Cloudinary workflow.
+- The original selected image is not uploaded or stored separately.
+- No crop metadata is stored in MVP.
+- Source images smaller than `1000×1500` may be upscaled, but the UI should warn that the final cover may look blurry.
+
+### Crop implementation reuse note
+
+- Avatar/profile crop and series cover crop currently use separate Web implementations.
+- Current decision: keep them separate until both workflows are smoke-tested, because the avatar crop is stable and the series cover crop is newly added.
+- If a future refactor is approved, migrate avatar cropping toward the reusable `ImageCropDialog` pattern in phases rather than changing both crop workflows at once.
 
 ## 4.4 Users and Accounts
 

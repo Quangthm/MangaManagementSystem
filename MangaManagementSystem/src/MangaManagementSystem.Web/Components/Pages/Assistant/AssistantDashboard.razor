@@ -1,13 +1,16 @@
-@page "/assistant"
+﻿@page "/assistant"
+
+@inject NavigationManager Nav
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
 @using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Web.Services.Api
-@attribute [Authorize(Roles = "Assistant")]
 @inject IAssistantTaskApiClient AssistantTaskClient
-@inject NavigationManager Nav
+@attribute [Authorize(Roles = "Assistant")]
+@inject MangaManagementSystem.Application.Interfaces.IChapterPageTaskService TaskService
 @inject AuthenticationStateProvider AuthStateProvider
+@inject ISnackbar Snackbar
 
 <AssistantLayout>
     <div class="mf-page">
@@ -39,7 +42,11 @@
                         <MudText Typo="Typo.h6" Class="font-weight-bold mb-4">My Assigned Tasks</MudText>
                         @if (_tasks == null || !_tasks.Any())
                         {
-                            <MudPaper Class="pa-6 text-center mf-card"><MudText>No assigned tasks found.</MudText></MudPaper>
+                            <MudPaper Class="pa-6 text-center mf-card">
+                                <MudIcon Icon="@Icons.Material.Filled.Assignment" Size="Size.Large" Color="Color.Secondary" />
+                                <MudText Typo="Typo.h6" Class="mt-2">No assigned tasks.</MudText>
+                                <MudText Class="mf-muted">Tasks assigned to you will appear here.</MudText>
+                            </MudPaper>
                         }
                         else
                         {
@@ -75,8 +82,8 @@
                                 @foreach (var t in _dueSoon)
                                 {
                                     <MudListItem T="ChapterPageTaskDto" Value="@t">
-                                        <MudText>@t.TypeCode — @(t.SeriesTitle ?? "")</MudText>
-                                        <MudText Class="mf-muted">@FormatDate(t.DueAtUtc)</MudText>
+                                        <MudText>@t.TypeCode â€” Id: @t.ChapterPageTaskId</MudText>
+                                        <MudText class="mf-muted">@FormatDate(t.DueAtUtc)</MudText>
                                     </MudListItem>
                                 }
                             </MudList>
@@ -144,8 +151,10 @@
 
     private void OpenTask(Guid id) => Nav.NavigateTo($"/assistant/task/{id}");
 
-    private string FormatDate(DateTime? value) =>
-        value.HasValue ? value.Value.ToLocalTime().ToString("g") : "—";
+    private string FormatDate(DateTime? value)
+    {
+        return value.HasValue ? value.Value.ToLocalTime().ToString("g") : "â€”";
+    }
 
     private Color GetStatusColor(string status) => status switch
     {
@@ -156,3 +165,5 @@
         _ => Color.Default
     };
 }
+
+
