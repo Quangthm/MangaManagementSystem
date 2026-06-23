@@ -4,9 +4,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace MangaManagementSystem.Domain.Common
+namespace MangaManagementSystem.Infrastructure.Repositories
 {
-    internal class Common
+    internal class Repositories
     {
     }
 }

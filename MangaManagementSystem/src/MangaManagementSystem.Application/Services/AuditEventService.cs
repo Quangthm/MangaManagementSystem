@@ -57,7 +57,7 @@ namespace MangaManagementSystem.Application.Services
             e.ActorRoleName,
             e.ActionCode,
             e.EntityType,
-            e.EntityId,
+            e.EntityId ?? string.Empty,
             e.DetailJson
         );
     }

@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -14,10 +14,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 {
     public class ChapterPageTaskRepository : GenericRepository<ChapterPageTask>, IChapterPageTaskRepository
     {
-        private readonly ApplicationDbContext _context;
         public ChapterPageTaskRepository(ApplicationDbContext context) : base(context)
         {
-            _context = context;
         }
 
         public async Task<Guid> CreateChapterPageTaskAsync(
