@@ -257,7 +257,7 @@ else
             <!-- Canvas Container -->
             <div class="flex-grow-1 d-flex" style="overflow: hidden; background-color: #e5e5e5; min-height: 0;">
                 <!-- Editor Pane Left -->
-                <div style="flex: 1; position: relative; overflow: hidden; min-width: 0; border-top: @(_activePane == "Left" ? "4px solid var(--mud-palette-primary)" : "4px solid transparent"); transition: border-color 0.2s ease;" @onmousedown='() => SetActivePane("Left")'>
+                <div style="flex: 1; position: relative; overflow: hidden; min-width: 0; border-top: @(_activePane == "Left" ? "4px solid var(--mud-palette-primary)" : "4px solid transparent") ; transition: border-color 0.2s ease;" @onmousedown='() => SetActivePane("Left")'>
                     @if (UploadedPages.Any())
                     {
                         var currentPage = UploadedPages[ActivePageIndex];
@@ -308,7 +308,7 @@ else
                 
                 <!-- Split View Pane Right -->
                 <div style="display: @(_isSplitView ? "block" : "none"); width: 1px; background: var(--mud-palette-lines-default); flex-shrink: 0;"></div>
-                <div style="display: @(_isSplitView ? "flex" : "none"); flex: 1; position: relative; overflow: hidden; background: #efefef; min-width: 0; border-top: @(_activePane == "Right" ? "4px solid var(--mud-palette-primary)" : "4px solid transparent"); transition: border-color 0.2s ease;" @onmousedown='() => SetActivePane("Right")'>
+                <div style="display: @(_isSplitView ? "flex" : "none") ; flex: 1; position: relative; overflow: hidden; background: #efefef; min-width: 0; border-top: @(_activePane == "Right" ? "4px solid var(--mud-palette-primary)" : "4px solid transparent") ; transition: border-color 0.2s ease;" @onmousedown='() => SetActivePane("Right")'>
                         @if (_splitUploadedPages.Any())
                         {
                             var splitPage = _splitUploadedPages[_splitPageIndex];
@@ -356,7 +356,6 @@ else
                             <canvas id="ai-canvas-right" style="position: absolute; left: 0; top: 0; background: white; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); transform-origin: top left;"></canvas>
                         </div>
                     </div>
-                }
             </div>
 
             <!-- Bottom Pagination -->
