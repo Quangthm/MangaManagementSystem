@@ -20,4 +20,8 @@ public interface IEditorialBoardRepository
         CastSeriesBoardVoteRequestDto request,
         Guid voterUserId,
         CancellationToken cancellationToken);
+    Task<FinalizeBoardPollResultDto> FinalizeApprovalAsync(
+        Guid pollId,
+        Guid chiefUserId,
+        CancellationToken cancellationToken);
 }

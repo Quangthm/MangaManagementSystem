@@ -112,16 +112,19 @@
                                 <Authorized>
                                     <div class="mf-grid mf-grid-3 mf-action-grid">
                                         <button class="mf-decision-action approve"
-                                                @onclick="() => FinalApproval(poll)">
-                                            Final Approval
+                                                disabled="@IsFinalApprovalDisabled(poll)"
+                                                @onclick="() => FinalApprovalAsync(poll)">
+                                            @FinalApprovalButtonText(poll)
                                         </button>
 
                                         <button class="mf-decision-action return"
+                                                disabled="@_isFinalizing"
                                                 @onclick="() => ReturnForReview(poll)">
                                             Return for Review
                                         </button>
 
                                         <button class="mf-decision-action escalate"
+                                                disabled="@_isFinalizing"
                                                 @onclick="() => EscalateDecision(poll)">
                                             Escalate Decision
                                         </button>
@@ -144,6 +147,8 @@
 @code {
     private IReadOnlyList<EditorialBoardPollDto> _polls = Array.Empty<EditorialBoardPollDto>();
     private bool _isLoading = true;
+    private bool _isFinalizing;
+    private Guid? _finalizingPollId;
     private string? _errorMessage;
     private string? _decisionMessage;
 
@@ -178,32 +183,95 @@
         }
     }
 
+    private async Task FinalApprovalAsync(EditorialBoardPollDto poll)
+    {
+        if (_isFinalizing)
+        {
+            return;
+        }
+
+        if (poll.PollTypeCode != "START_SERIALIZATION")
+        {
+            _decisionMessage = "Only START_SERIALIZATION polls can be finalized as serialized.";
+            return;
+        }
+
+        if (poll.PollStatusCode != "OPEN")
+        {
+            _decisionMessage = "Only OPEN polls can be finalized.";
+            return;
+        }
+
+        _isFinalizing = true;
+        _finalizingPollId = poll.PollId;
+        _decisionMessage = null;
+
+        try
+        {
+            var result = await EditorialBoardApiClient.FinalizeApprovalAsync(poll.PollId);
+
+            _decisionMessage =
+                $"Final approval completed for {poll.Code}. Series status is now {result?.SeriesStatusCode ?? "SERIALIZED"}.";
+
+            await LoadDecisionCenterAsync();
+        }
+        catch (Exception ex)
+        {
+            _decisionMessage = ex.Message;
+        }
+        finally
+        {
+            _isFinalizing = false;
+            _finalizingPollId = null;
+        }
+    }
+
+    private void ReturnForReview(EditorialBoardPollDto poll)
+    {
+        SetDecisionMessage(
+            poll,
+            "Return for Review",
+            "Return-for-review API is not wired yet.");
+    }
+
+    private void EscalateDecision(EditorialBoardPollDto poll)
+    {
+        SetDecisionMessage(
+            poll,
+            "Escalate Decision",
+            "Escalation API is not wired yet.");
+    }
+
+    private void SetDecisionMessage(
+        EditorialBoardPollDto poll,
+        string action,
+        string note)
+    {
+        _decisionMessage = $"{action} selected for {poll.Code}. {note}";
+    }
+
+    private bool IsFinalApprovalDisabled(EditorialBoardPollDto poll)
+    {
+        return _isFinalizing
+            || poll.PollTypeCode != "START_SERIALIZATION"
+            || poll.PollStatusCode != "OPEN";
+    }
+
+    private string FinalApprovalButtonText(EditorialBoardPollDto poll)
+    {
+        if (_isFinalizing && _finalizingPollId == poll.PollId)
+        {
+            return "Finalizing...";
+        }
+
+        return "Final Approval";
+    }
+
     private static int Percent(int count, int total)
     {
         return total <= 0
             ? 0
             : (int)Math.Round(count * 100m / total);
-    }
-
-    private void FinalApproval(EditorialBoardPollDto poll)
-    {
-        SetDecisionMessage(poll, "Final Approval");
-    }
-
-    private void ReturnForReview(EditorialBoardPollDto poll)
-    {
-        SetDecisionMessage(poll, "Return for Review");
-    }
-
-    private void EscalateDecision(EditorialBoardPollDto poll)
-    {
-        SetDecisionMessage(poll, "Escalate Decision");
-    }
-
-    private void SetDecisionMessage(EditorialBoardPollDto poll, string action)
-    {
-        _decisionMessage =
-            $"{action} selected for {poll.Code}. The poll data shown here is loaded from database. Final decision API is not wired yet.";
     }
 
     private static string DisplayStatus(EditorialBoardPollDto poll)
