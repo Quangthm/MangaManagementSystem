@@ -8,65 +8,57 @@
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
 
-<div class="mf-app-shell">
-    <aside class="mf-sidebar">
-        <div class="mf-brand">
-            <div class="mf-brand-icon">◇</div>
-
-            <div>
-                <div class="mf-brand-title">MangaFlow</div>
-                <div class="mf-brand-subtitle">Editorial System</div>
-            </div>
-        </div>
-
-        <div class="mf-search">Quick search...</div>
-
-        <div class="mf-nav-group">
-            <div class="mf-nav-heading">
-                <span>◇</span>
-                <span>Editorial Board</span>
-                <span class="mf-nav-caret">⌄</span>
-            </div>
-
-            <a class='@MenuClass("dashboard")' href="/demo/mangaflow/editorial">
-                <span>Editorial Dashboard</span>
-            </a>
-
-            <a class='@MenuClass("proposals")' href="/demo/mangaflow/proposals">
-                <span>Proposal Reviews</span>
-                <span class="mf-side-count">4</span>
-            </a>
-
-            <a class='@MenuClass("polls")' href="/demo/mangaflow/polls">
-                <span>Board Polls</span>
-                <span class="mf-side-count">3</span>
-            </a>
-
-            <a class='@MenuClass("decisions")' href="/demo/mangaflow/decisions">
-                <span>Decision Center</span>
-            </a>
-        </div>
-
+<div class="mf-app-shell mf-board-shell">
+    <aside class="mf-sidebar mf-board-editor-sidebar">
         <AuthorizeView>
             <Authorized Context="sideAuth">
                 @{
                     var sideUser = sideAuth.User;
                     var sideDisplayName = GetDisplayName(sideUser);
                     var sideRoleName = GetRoleDisplayName(sideUser);
-                    var sideEmail = GetEmail(sideUser);
                     var sideInitials = GetInitials(sideDisplayName);
                 }
 
-                <div class="mf-user-card">
-                    <span class="mf-avatar">@sideInitials</span>
+                <div class="mf-board-profile-area">
+                    <input id="mf-board-profile-toggle"
+                           class="mf-board-profile-toggle"
+                           type="checkbox" />
 
-                    <div>
-                        <div class="mf-user-name">@sideDisplayName</div>
-                        <div class="mf-user-email">@sideEmail</div>
-                        <div class="mf-user-role">@sideRoleName</div>
+                    <label class="mf-board-profile-card"
+                           for="mf-board-profile-toggle">
+                        <span class="mf-board-profile-avatar">@sideInitials</span>
+
+                        <span class="mf-board-profile-text">
+                            <span class="mf-board-profile-name" title="@sideDisplayName">
+                                @sideDisplayName
+                            </span>
+
+                            <span class="mf-board-profile-role">
+                                @sideRoleName
+                            </span>
+                        </span>
+
+                        <span class="mf-board-profile-more-btn"
+                              title="Account menu">
+                            ⋮
+                        </span>
+                    </label>
+
+                    <div class="mf-board-profile-dropdown">
+                        <a class="mf-board-profile-dropdown-item"
+                           href="/profile/settings">
+                            <span class="mf-board-menu-icon">⚙</span>
+
+                            <span>
+                                <span class="mf-board-menu-title">Profile Settings</span>
+                                <span class="mf-board-menu-subtitle">Profile, portfolio and security</span>
+                            </span>
+                        </a>
+
+                        <div class="mf-board-profile-dropdown-divider"></div>
 
                         <button type="button"
-                                class="mf-sidebar-logout"
+                                class="mf-board-profile-dropdown-item logout"
                                 @onclick="LogoutAsync">
                             Logout
                         </button>
@@ -75,17 +67,71 @@
             </Authorized>
 
             <NotAuthorized>
-                <div class="mf-user-card">
-                    <span class="mf-avatar">?</span>
+                <div class="mf-board-profile-area">
+                    <input id="mf-board-profile-toggle"
+                           class="mf-board-profile-toggle"
+                           type="checkbox" />
 
-                    <div>
-                        <div class="mf-user-name">Guest</div>
-                        <div class="mf-user-email">Not signed in</div>
-                        <div class="mf-user-role">Viewer</div>
+                    <label class="mf-board-profile-card"
+                           for="mf-board-profile-toggle">
+                        <span class="mf-board-profile-avatar">?</span>
+
+                        <span class="mf-board-profile-text">
+                            <span class="mf-board-profile-name">Guest</span>
+                            <span class="mf-board-profile-role">Not signed in</span>
+                        </span>
+
+                        <span class="mf-board-profile-more-btn"
+                              title="Account menu">
+                            ⋮
+                        </span>
+                    </label>
+
+                    <div class="mf-board-profile-dropdown">
+                        <a class="mf-board-profile-dropdown-item"
+                           href="/login">
+                            Sign in
+                        </a>
                     </div>
                 </div>
             </NotAuthorized>
         </AuthorizeView>
+
+        <nav class="mf-board-nav">
+            <a class="@MenuClass("dashboard")" href="/demo/mangaflow/editorial">
+                Editorial Dashboard
+            </a>
+
+            <a class="@MenuClass("proposals")" href="/demo/mangaflow/proposals">
+                Proposal Reviews
+            </a>
+
+            <a class="@MenuClass("polls")" href="/demo/mangaflow/polls">
+                Board Polls
+            </a>
+
+            <AuthorizeView Roles="Editorial Board Chief">
+                <Authorized>
+                    <a class="@MenuClass("decisions")" href="/demo/mangaflow/decisions">
+                        Decision Center
+                    </a>
+                </Authorized>
+            </AuthorizeView>
+
+            <div class="mf-board-nav-section">
+                Ranking &amp; Context
+            </div>
+
+            <a class="mf-board-nav-link" href="/demo/mangaflow/ranking">
+                Series Ranking
+            </a>
+        </nav>
+
+        <div class="mf-board-sidebar-footer">
+            <a class="mf-board-back-btn" href="/dashboard">
+                Back to Overview
+            </a>
+        </div>
     </aside>
 
     <main class="mf-main">
@@ -105,54 +151,17 @@
                 }
 
                 <div class="mf-help">?</div>
-
-                <div class="mf-notification">
-                    <span>3</span>
-                </div>
-
-                <AuthorizeView>
-                    <Authorized Context="topAuth">
-                        @{
-                            var topUser = topAuth.User;
-                            var topDisplayName = GetDisplayName(topUser);
-                            var topRoleName = GetRoleDisplayName(topUser);
-                            var topInitials = GetInitials(topDisplayName);
-                        }
-
-                        <div class="mf-profile-pill">
-                            <span class="mf-avatar small">@topInitials</span>
-
-                            <div>
-                                <div class="mf-profile-name">@topDisplayName</div>
-                                <small>@topRoleName</small>
-                            </div>
-                        </div>
-
-                        <button type="button"
-                                class="mf-btn mf-btn-soft"
-                                @onclick="LogoutAsync">
-                            Logout
-                        </button>
-                    </Authorized>
-
-                    <NotAuthorized>
-                        <div class="mf-profile-pill">
-                            <span class="mf-avatar small">?</span>
-
-                            <div>
-                                <div class="mf-profile-name">Guest</div>
-                                <small>Not signed in</small>
-                            </div>
-                        </div>
-                    </NotAuthorized>
-                </AuthorizeView>
             </div>
         </header>
 
         <section class="mf-page-title-area">
             <div>
                 <h1>@Title</h1>
-                <p>@Subtitle</p>
+
+                @if (!string.IsNullOrWhiteSpace(Subtitle))
+                {
+                    <p>@Subtitle</p>
+                }
             </div>
 
             @if (ShowLiveBadge)
@@ -178,8 +187,8 @@
     private string MenuClass(string key)
     {
         return ActiveMenu.Equals(key, StringComparison.OrdinalIgnoreCase)
-            ? "mf-side-link active"
-            : "mf-side-link";
+            ? "mf-board-nav-link active"
+            : "mf-board-nav-link";
     }
 
     private async Task LogoutAsync()
@@ -213,14 +222,6 @@
             ?? user.FindFirst("name")?.Value
             ?? user.Identity?.Name
             ?? "Board Member";
-    }
-
-    private static string GetEmail(ClaimsPrincipal user)
-    {
-        return user.FindFirst(ClaimTypes.Email)?.Value
-            ?? user.FindFirst("email")?.Value
-            ?? user.FindFirst("Email")?.Value
-            ?? "member@mangaflow.io";
     }
 
     private static string GetRoleDisplayName(ClaimsPrincipal user)
