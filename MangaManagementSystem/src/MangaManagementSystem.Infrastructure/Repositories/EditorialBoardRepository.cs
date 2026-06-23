@@ -404,13 +404,22 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 s.slug,
                 sp.proposal_title,
                 u.display_name,
-                sp.genre_snapshot,
+                ISNULL(genres.genre_names, N'Unknown Genre') AS genre_display,
                 sp.status_code
             FROM manga.SeriesProposal sp
             INNER JOIN manga.Series s
                 ON s.series_id = sp.series_id
             INNER JOIN auth.Users u
                 ON u.user_id = sp.submitted_by_user_id
+            OUTER APPLY
+            (
+                SELECT
+                    STRING_AGG(CONVERT(NVARCHAR(MAX), g.genre_name), N' / ') AS genre_names
+                FROM manga.SeriesGenre sg
+                INNER JOIN manga.Genre g
+                    ON g.genre_id = sg.genre_id
+                WHERE sg.series_id = s.series_id
+            ) genres
             WHERE sp.status_code IN (
                 N'UNDER_EDITORIAL_REVIEW',
                 N'UNDER_BOARD_REVIEW',
