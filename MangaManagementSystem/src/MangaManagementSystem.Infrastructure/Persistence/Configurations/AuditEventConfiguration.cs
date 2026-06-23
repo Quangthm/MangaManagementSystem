@@ -15,7 +15,7 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
             builder.Property(a => a.ActionCode).IsRequired();
             builder.Property(a => a.EntityType).IsRequired();
             builder.Property(a => a.EntityId);
-            builder.HasCheckConstraint("CK_AuditEvent_DetailJson", "detail_json IS NULL OR ISJSON(detail_json) = 1");
+            builder.ToTable(t => t.HasCheckConstraint("CK_AuditEvent_DetailJson", "detail_json IS NULL OR ISJSON(detail_json) = 1"));
             builder.HasIndex(a => new { a.EntityType, a.EntityId, a.OccurredAtUtc }).HasDatabaseName("ix_audit_event_entity_time");
             builder.HasIndex(a => new { a.ActorUserId, a.OccurredAtUtc }).HasDatabaseName("ix_audit_event_actor_time");
             builder.HasOne(a => a.ActorUser).WithMany().HasForeignKey(a => a.ActorUserId);

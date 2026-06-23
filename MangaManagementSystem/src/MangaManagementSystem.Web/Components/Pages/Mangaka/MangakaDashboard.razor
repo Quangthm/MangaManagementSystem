@@ -1,4 +1,4 @@
-@page "/mangaka"
+﻿@page "/mangaka"
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Globalization
@@ -14,9 +14,9 @@
 @using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Web.Services.Api
 
-@* ── Full-page layout matching React SeriesListPage.tsx ── *@
+@* â”€â”€ Full-page layout matching React SeriesListPage.tsx â”€â”€ *@
 <div class="mf-dashboard-shell" style="display: flex; height: 100vh; overflow: hidden; background: #f8fafc;">
-    @* ── Left Sidebar (260px) ── *@
+    @* â”€â”€ Left Sidebar (260px) â”€â”€ *@
     <aside style="width: 260px; flex-shrink: 0; background: #fff; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column;">
         @* Profile Header *@
         <div style="padding: 16px; border-bottom: 1px solid #f1f5f9;">
@@ -80,7 +80,7 @@
                 @foreach (var nav in _navItems)
                 {
                     var isActive = _activeTab == nav.Id;
-                    <button @onclick="() => _activeTab = nav.Id"
+                    <button @onclick="@(() => HandleNavClick(nav.Id))"
                             style="display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: none; border-radius: 8px; cursor: pointer; width: 100%; text-align: left; font-size: 0.85rem; font-weight: @(isActive ? 600 : 500); background: @(isActive ? "#eef2ff" : "transparent"); color: @(isActive ? "#4f46e5" : "#64748b");">
                         <MudIcon Icon="@nav.Icon" Size="Size.Small" Style="font-size: 18px; flex-shrink: 0;" />
                         <span>@nav.Label</span>
@@ -91,7 +91,7 @@
 
     </aside>
 
-    @* ── Main Content Area ── *@
+    @* â”€â”€ Main Content Area â”€â”€ *@
     <main style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
         @* Top Header *@
         <div style="padding: 24px 32px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e2e8f0; background: #f8fafc; z-index: 10;">
@@ -128,7 +128,7 @@
         <div style="flex: 1; overflow: auto; padding: 32px;">
             @if (_activeTab == "current")
             {
-                @* ── Filter chips + search + sort ── *@
+                @* â”€â”€ Filter chips + search + sort â”€â”€ *@
                 <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 24px;">
                     @* Status filter chips *@
                     <div style="display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0;">
@@ -171,7 +171,7 @@
                     </div>
                 </div>
 
-                @* ── Genre/Tag filter row ── *@
+                @* â”€â”€ Genre/Tag filter row â”€â”€ *@
                 <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 20px;">
                     <ReferenceMultiSelectFilter TItem="GenreDto"
                                                 Label="Genre"
@@ -258,34 +258,17 @@
                 <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px;">
                     @foreach (var series in PagedSeriesData)
                     {
-                        @* ── Series Card ── *@
-                        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); position: relative; overflow: hidden; cursor: pointer; display: flex; flex-direction: column;"
+                        @* â”€â”€ Series Card (left-side portrait cover layout) â”€â”€ *@
+                        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); position: relative; overflow: hidden; cursor: pointer; display: flex; gap: 0; min-height: 210px;"
                              @onclick="() => OpenSeriesCard(series)">
 
-                            @* Cover thumbnail / placeholder *@
-                            @if (!string.IsNullOrWhiteSpace(series.CoverUrl))
-                            {
-                                <div style="height: 130px; overflow: hidden; flex-shrink: 0;">
-                                    <img src="@series.CoverUrl"
-                                         alt="Cover for @series.Title"
-                                         style="width: 100%; height: 100%; object-fit: cover; display: block;" />
-                                </div>
-                            }
-                            else
-                            {
-                                <div style="height: 130px; background: @(series.Color + "12"); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                                    <MudIcon Icon="@Icons.Material.Filled.MenuBook"
-                                             Style="@($"font-size: 48px; color: {series.Color}; opacity: 0.35;")" />
-                                </div>
-                            }
-
-                            @* Kebab menu — top-right over thumbnail *@
+                            @* Kebab menu â€” top-right over card *@
                             @if (!IsAnyDashboardModalOpen)
                             {
-                            <div style="position: absolute; top: 8px; right: 8px;" @onclick:stopPropagation>
+                            <div style="position: absolute; top: 8px; right: 8px; z-index: 10;" @onclick:stopPropagation>
                                 <div style="position: relative;">
                                     <MudIconButton Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small"
-                                                   Style="background: rgba(255,255,255,0.85); border-radius: 50%;"
+                                                   Style="background: rgba(255,255,255,0.85); border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"
                                                    @onclick="@(() => _openSeriesActionMenuId = _openSeriesActionMenuId == series.Id ? null : series.Id)" />
                                     @if (_openSeriesActionMenuId == series.Id)
                                     {
@@ -304,64 +287,106 @@
                             </div>
                             }
 
-                            @* Accent bar *@
-                            <div style="height: 3px; background: @series.Color; flex-shrink: 0;"></div>
+                            @* Left: portrait cover *@
+                            <div style="flex-shrink: 0; width: 120px; align-self: stretch; display: flex; flex-direction: column; background: @(series.Color + "0a");">
+                                @if (!string.IsNullOrWhiteSpace(series.CoverUrl))
+                                {
+                                    <img src="@series.CoverUrl"
+                                         alt="Cover for @series.Title"
+                                         style="width: 120px; height: 100%; object-fit: cover; display: block;" />
+                                }
+                                else
+                                {
+                                    <div style="width: 120px; height: 100%; display: flex; align-items: center; justify-content: center;">
+                                        <MudIcon Icon="@Icons.Material.Filled.MenuBook"
+                                                 Style="@($"font-size: 40px; color: {series.Color}; opacity: 0.3;")" />
+                                    </div>
+                                }
+                            </div>
 
-                            @* Card body *@
-                            <div style="padding: 16px; flex: 1; display: flex; flex-direction: column; gap: 10px;">
+                            @* Right: content *@
+                            <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 14px 16px 14px 16px; gap: 8px;">
+
+                                @* Accent bar *@
+                                <div style="height: 3px; background: @series.Color; flex-shrink: 0; border-radius: 1px; width: 40px;"></div>
+
                                 <div style="color: #111827; font-weight: 700; font-size: 0.9rem; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@series.Title</div>
 
-                                <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-width: 0;">
+                                @* Genre chips *@
+                                <div style="display: flex; gap: 5px; flex-wrap: wrap; align-items: center;">
                                     @{
                                         var cardGenres = series.Genres ?? Array.Empty<GenreDto>();
                                         var visibleGenres = cardGenres.Take(3).ToList();
-                                        var overflowCount = cardGenres.Count > 3 ? cardGenres.Count - 3 : 0;
+                                        var genreOverflowCount = cardGenres.Count > 3 ? cardGenres.Count - 3 : 0;
                                     }
                                     @foreach (var g in visibleGenres)
                                     {
-                                        <span style="background: #eef2ff; color: #4f46e5; font-size: 0.65rem; padding: 2px 6px; border-radius: 12px; font-weight: 500; white-space: nowrap; height: 22px; display: flex; align-items: center;">@g.GenreName</span>
+                                        <span style="background: #eef2ff; color: #4f46e5; font-size: 0.62rem; padding: 2px 6px; border-radius: 10px; font-weight: 500; white-space: nowrap; height: 20px; display: flex; align-items: center;">@g.GenreName</span>
                                     }
-                                    @if (overflowCount > 0)
+                                    @if (genreOverflowCount > 0)
                                     {
-                                        <span style="background: #f1f5f9; color: #64748b; font-size: 0.65rem; padding: 2px 6px; border-radius: 12px; font-weight: 500; white-space: nowrap; height: 22px; display: flex; align-items: center;"
-                                              title="@string.Join(", ", cardGenres.Skip(3).Select(g => g.GenreName))">+@overflowCount more</span>
+                                        <span style="background: #f1f5f9; color: #64748b; font-size: 0.62rem; padding: 2px 6px; border-radius: 10px; font-weight: 500; white-space: nowrap; height: 20px; display: flex; align-items: center;"
+                                              title="@string.Join(", ", cardGenres.Skip(3).Select(g => g.GenreName))">+@genreOverflowCount more</span>
                                     }
-                                    <span style="background: @SeriesStatusHelper.BadgeColor(series.StatusCode); color: @SeriesStatusHelper.TextColor(series.StatusCode); font-size: 0.65rem; padding: 2px 8px; border-radius: 12px; font-weight: 600; height: 22px; display: flex; align-items: center;">@SeriesStatusHelper.DisplayName(series.StatusCode)</span>
                                 </div>
 
-                                <div style="display: flex; align-items: center; gap: 4px;">
-                                    <span style="width: 6px; height: 6px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
-                                    <span style="color: #94a3b8; font-size: 0.7rem;">Updated @series.LastUpdated</span>
+                                @* Tag chips *@
+                                @{
+                                    var cardTags = series.Tags ?? Array.Empty<TagDto>();
+                                    var visibleTags = cardTags.Take(3).ToList();
+                                    var tagOverflowCount = cardTags.Count > 3 ? cardTags.Count - 3 : 0;
+                                }
+                                @if (cardTags.Count > 0)
+                                {
+                                    <div style="display: flex; gap: 5px; flex-wrap: wrap; align-items: center;">
+                                        @foreach (var t in visibleTags)
+                                        {
+                                            <span style="background: #f0fdf4; color: #166534; font-size: 0.62rem; padding: 2px 6px; border-radius: 10px; font-weight: 500; white-space: nowrap; height: 20px; display: flex; align-items: center;">@t.TagName</span>
+                                        }
+                                        @if (tagOverflowCount > 0)
+                                        {
+                                            <span style="background: #f1f5f9; color: #64748b; font-size: 0.62rem; padding: 2px 6px; border-radius: 10px; font-weight: 500; white-space: nowrap; height: 20px; display: flex; align-items: center;"
+                                                  title="@string.Join(", ", cardTags.Skip(3).Select(t => t.TagName))">+@tagOverflowCount more</span>
+                                        }
+                                    </div>
+                                }
+
+                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: auto;">
+                                    <span style="background: @SeriesStatusHelper.BadgeColor(series.StatusCode); color: @SeriesStatusHelper.TextColor(series.StatusCode); font-size: 0.62rem; padding: 2px 8px; border-radius: 10px; font-weight: 600; height: 20px; display: flex; align-items: center;">@SeriesStatusHelper.DisplayName(series.StatusCode)</span>
+                                    <span style="display: flex; align-items: center; gap: 3px;">
+                                        <span style="width: 5px; height: 5px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
+                                        <span style="color: #94a3b8; font-size: 0.65rem;">@series.LastUpdated</span>
+                                    </span>
                                 </div>
+
+                                @* Card action row *@
+                                @if (!IsAnyDashboardModalOpen)
+                                {
+                                    @if (series.StatusCode == "PROPOSAL_DRAFT")
+                                    {
+                                        <div style="display: flex; gap: 8px; margin-top: 2px;" @onclick:stopPropagation>
+                                            <MudButton Variant="Variant.Outlined" Size="Size.Small" Style="flex: 1; font-size: 0.72rem;"
+                                                       OnClick="@(() => OpenDraftDetails(series))">
+                                                View Draft
+                                            </MudButton>
+                                            <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" Style="flex: 1; font-size: 0.72rem;"
+                                                       StartIcon="@Icons.Material.Filled.Send"
+                                                       OnClick="@(() => OpenSubmitProposal(series.Id, series.Title))">
+                                                Submit
+                                            </MudButton>
+                                        </div>
+                                    }
+                                    else if (series.StatusCode is "UNDER_EDITORIAL_REVIEW" or "UNDER_BOARD_REVIEW")
+                                    {
+                                        <div style="margin-top: 2px;" @onclick:stopPropagation>
+                                            <MudButton Variant="Variant.Outlined" Size="Size.Small" FullWidth="true"
+                                                       OnClick="@(() => OpenReviewStatus(series))">
+                                                View Status
+                                            </MudButton>
+                                        </div>
+                                    }
+                                }
                             </div>
-
-                            @* Card action row — visible primary actions (hidden while modal open) *@
-                            @if (!IsAnyDashboardModalOpen)
-                            {
-                                @if (series.StatusCode == "PROPOSAL_DRAFT")
-                                {
-                                    <div style="padding: 0 16px 14px; display: flex; gap: 8px;" @onclick:stopPropagation>
-                                        <MudButton Variant="Variant.Outlined" Size="Size.Small" FullWidth="true"
-                                                   OnClick="@(() => OpenDraftDetails(series))">
-                                            View Draft
-                                        </MudButton>
-                                        <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" FullWidth="true"
-                                                   StartIcon="@Icons.Material.Filled.Send"
-                                                   OnClick="@(() => OpenSubmitProposal(series.Id, series.Title))">
-                                            Submit
-                                        </MudButton>
-                                    </div>
-                                }
-                                else if (series.StatusCode is "UNDER_EDITORIAL_REVIEW" or "UNDER_BOARD_REVIEW")
-                                {
-                                    <div style="padding: 0 16px 14px;" @onclick:stopPropagation>
-                                        <MudButton Variant="Variant.Outlined" Size="Size.Small" FullWidth="true"
-                                                   OnClick="@(() => OpenReviewStatus(series))">
-                                            View Status
-                                        </MudButton>
-                                    </div>
-                                }
-                            }
                         </div>
                     }
 
@@ -409,7 +434,7 @@
             }
             else if (_activeTab == "proposals")
             {
-                @* ── Proposal filter chips + search + sort ── *@
+                @* â”€â”€ Proposal filter chips + search + sort â”€â”€ *@
                 <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 24px;">
                     <div style="display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0;">
                         @foreach (var (label, statuses) in ProposalFilterGroups)
@@ -450,7 +475,7 @@
                     </div>
                 </div>
 
-                @* ── Proposal Genre/Tag filter row ── *@
+                @* â”€â”€ Proposal Genre/Tag filter row â”€â”€ *@
                 <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 20px;">
                     <ReferenceMultiSelectFilter TItem="GenreDto"
                                                 Label="Genre"
@@ -525,7 +550,7 @@
                 }
                 else
                 {
-                    @* ── Proposal table ── *@
+                    @* â”€â”€ Proposal table â”€â”€ *@
                     <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
                         <div style="display: grid; grid-template-columns: 2fr 2fr 100px 130px 130px 80px 60px; padding: 10px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 0.72rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">
                             <span>Series</span>
@@ -563,7 +588,7 @@
                         }
                     </div>
 
-                    @* ── Proposal pagination ── *@
+                    @* â”€â”€ Proposal pagination â”€â”€ *@
                     @if (ProposalTotalPages > 1)
                     {
                         <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 20px;">
@@ -622,7 +647,7 @@
                                     <MudTd><MudChip T="string" Color="@GetTaskChipColor(context.StatusCode)" Size="Size.Small">@context.StatusCode</MudChip></MudTd>
                                     <MudTd>@FormatDate(context.DueAtUtc)</MudTd>
                                     <MudTd>
-                                        @* Workspace shortcut disabled — task data currently has SeriesId but no slug.
+                                        @* Workspace shortcut disabled â€” task data currently has SeriesId but no slug.
                                            Pending slug-based routing support once task read-model includes series slug.
                                            See session note 2026-06-18-series-detail-page.md. *@
                                     </MudTd>
@@ -636,7 +661,7 @@
     </main>
 </div>
 
-@* ── Proposal Detail Modal (read-only) ── *@
+@* â”€â”€ Proposal Detail Modal (read-only) â”€â”€ *@
 <MudOverlay Visible="@_proposalDetailOpen" OnClick="@(() => _proposalDetailOpen = false)">
     <MudCard Style="width: 680px; max-width: 92vw; max-height: 85vh; margin: 5% auto 0; border-radius: 14px; overflow: hidden; display: flex; flex-direction: column;" @onclick:stopPropagation>
         @if (_selectedProposal is not null)
@@ -687,11 +712,11 @@
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                         <div>
                             <div style="font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 2px;">Reviewed By</div>
-                            <div style="font-size: 0.85rem; color: #111827; font-weight: 500;">@(_selectedProposal.ReviewedByDisplayName ?? "—")</div>
+                            <div style="font-size: 0.85rem; color: #111827; font-weight: 500;">@(_selectedProposal.ReviewedByDisplayName ?? "â€”")</div>
                         </div>
                         <div>
                             <div style="font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 2px;">Reviewed At</div>
-                            <div style="font-size: 0.85rem; color: #111827;">@(_selectedProposal.ReviewedAtUtc?.ToString("MMM d, yyyy HH:mm") ?? "—")</div>
+                            <div style="font-size: 0.85rem; color: #111827;">@(_selectedProposal.ReviewedAtUtc?.ToString("MMM d, yyyy HH:mm") ?? "â€”")</div>
                         </div>
                     </div>
                 }
@@ -746,7 +771,7 @@
                         </MudButton>
                     </div>
                     <div style="font-size: 0.72rem; color: #94a3b8; margin-top: 4px;">
-                        @_selectedProposal.ProposalFile.OriginalFileName · @FormatFileSize(_selectedProposal.ProposalFile.FileSizeBytes)
+                        @_selectedProposal.ProposalFile.OriginalFileName Â· @FormatFileSize(_selectedProposal.ProposalFile.FileSizeBytes)
                     </div>
                 </div>
 
@@ -768,7 +793,7 @@
                             </MudButton>
                         </div>
                         <div style="font-size: 0.72rem; color: #94a3b8; margin-top: 4px;">
-                            @_selectedProposal.MarkupFile.OriginalFileName · @FormatFileSize(_selectedProposal.MarkupFile.FileSizeBytes)
+                            @_selectedProposal.MarkupFile.OriginalFileName Â· @FormatFileSize(_selectedProposal.MarkupFile.FileSizeBytes)
                         </div>
                     }
                     else
@@ -781,7 +806,7 @@
     </MudCard>
 </MudOverlay>
 
-@* ── Cancel Draft Confirmation Modal ── *@
+@* â”€â”€ Cancel Draft Confirmation Modal â”€â”€ *@
 @* Only reachable for PROPOSAL_DRAFT series. Transitions series to CANCELLED. *@
 <MudOverlay Visible="@_cancelDraftDialogOpen" OnClick="@(() => { if (!_cancelDraftBusy) CloseCancelDraft(); })">
     <MudCard Style="width: 460px; max-width: 92vw; margin: 10% auto 0; border-radius: 14px;" @onclick:stopPropagation>
@@ -831,7 +856,7 @@
     </MudCard>
 </MudOverlay>
 
-@* ── New Series Draft Modal (creates manga.Series with status PROPOSAL_DRAFT) ── *@
+@* â”€â”€ New Series Draft Modal (creates manga.Series with status PROPOSAL_DRAFT) â”€â”€ *@
 <MudOverlay Visible="@_newSeriesDialogOpen" OnClick="@(() => _newSeriesDialogOpen = false)"
             Style="display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 24px 0;">
     <MudCard Style="width: 480px; max-width: 90vw; border-radius: 14px; max-height: calc(100vh - 48px); overflow-y: auto;" @onclick:stopPropagation>
@@ -870,7 +895,7 @@
                         {
                             <span>Slug preview will appear after entering a title.</span>
                         }
-                        <div style="font-size: 0.65rem; color: #94a3b8; margin-top: 2px;">Preview only — final slug is generated by the server.</div>
+                        <div style="font-size: 0.65rem; color: #94a3b8; margin-top: 2px;">Preview only â€” final slug is generated by the server.</div>
                     </div>
 
                     <MudTextField Label="Synopsis / Description" @bind-Value="_newDraftSynopsis"
@@ -881,7 +906,7 @@
                         <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 6px;">Genre *</span>
                         @if (_genrePickerOpen && !_genrePickerForEdit)
                         {
-                            @* ── Inline Genre Picker ── *@
+                            @* â”€â”€ Inline Genre Picker â”€â”€ *@
                             <div style="display: flex; flex-direction: column; gap: 10px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; background: #fafafe;">
                                 <MudTextField T="string" @bind-Value="_genrePickerSearch"
                                               @bind-Value:after="ResetGenrePickerPage"
@@ -960,7 +985,7 @@
                         <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 6px;">Tags (optional)</span>
                         @if (_tagPickerOpen && !_tagPickerForEdit)
                         {
-                            @* ── Inline Tag Picker ── *@
+                            @* â”€â”€ Inline Tag Picker â”€â”€ *@
                             <div style="display: flex; flex-direction: column; gap: 10px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; background: #fafafe;">
                                 <MudTextField T="string" @bind-Value="_tagPickerSearch"
                                               @bind-Value:after="ResetTagPickerPage"
@@ -1039,7 +1064,7 @@
 
                     <MudSelect T="string" Label="Publication Frequency (optional)" @bind-Value="_newDraftFrequency"
                                Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true">
-                        <MudSelectItem Value="@((string?)null)">— Not set —</MudSelectItem>
+                        <MudSelectItem Value="@((string?)null)">â€” Not set â€”</MudSelectItem>
                         <MudSelectItem Value="@("WEEKLY")">Weekly</MudSelectItem>
                         <MudSelectItem Value="@("MONTHLY")">Monthly</MudSelectItem>
                         <MudSelectItem Value="@("IRREGULAR")">Irregular</MudSelectItem>
@@ -1048,35 +1073,41 @@
                     @* Optional Series Cover Upload (purpose SERIES_COVER) *@
                     <div>
                         <div style="font-size: 0.78rem; font-weight: 600; color: #374151; margin-bottom: 6px;">Series Cover (optional)</div>
-                        @if (_draftCoverFileName != null)
-                        {
-                            <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
-                                @if (_draftCoverPreviewUrl != null)
-                                {
+
+                        <div style="display: flex; align-items: center; gap: 18px; flex-wrap: wrap;">
+                            @if (_draftCoverPreviewUrl != null)
+                            {
+                                <div style="flex-shrink: 0; cursor: pointer;" @onclick="OpenCoverPreview">
                                     <img src="@_draftCoverPreviewUrl" alt="Cover preview"
-                                         style="width: 80px; height: 120px; object-fit: cover; border-radius: 8px; border: 2px solid #6366f1;" />
-                                }
-                                <div style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fafafe;">
-                                    <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" Style="font-size: 18px; color: #4f46e5;" />
-                                    <span style="flex: 1; font-size: 0.78rem; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@_draftCoverFileName</span>
-                                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
-                                                   Style="color: #dc2626;"
-                                                   OnClick="@ClearCreateCover" />
+                                         style="width: 120px; height: 180px; object-fit: cover; border-radius: 10px; border: 2px solid #6366f1;" />
                                 </div>
-                            </div>
-                        }
-                        else
-                        {
-                            <MudFileUpload T="IBrowserFile" FilesChanged="@OnCreateCoverChanged">
-                                <ActivatorContent>
-                                    <div style="border: 1.5px dashed #c7d2fe; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; background: #fafafe;">
-                                        <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" Style="font-size: 28px; color: #a5b4fc;" />
-                                        <div style="color: #64748b; font-size: 0.75rem; font-weight: 500;">Click to upload cover art</div>
-                                        <div style="color: #94a3b8; font-size: 0.65rem;">PNG, JPG, WEBP · Max 5MB</div>
+                            }
+
+                            <div style="flex: 1; min-width: 200px;">
+                                @if (_draftCoverFileName != null)
+                                {
+                                    <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fafafe;">
+                                        <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" Style="color: #4f46e5;" />
+                                        <span style="flex: 1; font-size: 0.8rem; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@_draftCoverFileName</span>
+                                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                                                       Style="color: #dc2626;"
+                                                       OnClick="@ClearCreateCover" />
                                     </div>
-                                </ActivatorContent>
-                            </MudFileUpload>
-                        }
+                                }
+                                else
+                                {
+                                    <MudFileUpload T="IBrowserFile" FilesChanged="@OnCreateCoverChanged">
+                                        <ActivatorContent>
+                                            <div style="border: 1.5px dashed #c7d2fe; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; background: #fafafe;">
+                                                <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" Style="font-size: 24px; color: #a5b4fc;" />
+                                                <div style="color: #64748b; font-size: 0.75rem; font-weight: 500;">Click to upload cover art</div>
+                                                <div style="color: #94a3b8; font-size: 0.65rem;">PNG, JPG, WEBP Â· Max 5MB</div>
+                                            </div>
+                                        </ActivatorContent>
+                                    </MudFileUpload>
+                                }
+                            </div>
+                        </div>
                     </div>
 
                     <MudButton Variant="Variant.Filled" FullWidth="true"
@@ -1090,7 +1121,7 @@
     </MudCard>
 </MudOverlay>
 
-@* ── Edit Draft Modal (BF-SERIES-002 — Edit Series Draft Profile) ── *@
+@* â”€â”€ Edit Draft Modal (BF-SERIES-002 â€” Edit Series Draft Profile) â”€â”€ *@
 @* Cover editing only allowed for PROPOSAL_DRAFT; status guard enforced by stored procedure. *@
 <MudOverlay Visible="@_draftDetailsOpen" OnClick="@(() => _draftDetailsOpen = false)"
             Style="display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 24px 0;">
@@ -1108,51 +1139,54 @@
 
             <div style="padding: 24px; display: flex; flex-direction: column; gap: 16px;">
 
-                @* Cover section *@
+                @* Cover section â€” inline layout: preview beside upload zone *@
                 <div>
                     <div style="font-size: 0.78rem; font-weight: 600; color: #374151; margin-bottom: 8px;">Series Cover</div>
 
-                    @* Preview: new selection takes priority, then existing cover *@
-                    @if (_editCoverPreviewUrl != null)
-                    {
-                        <div style="display: flex; justify-content: center; margin-bottom: 10px;">
-                            <img src="@_editCoverPreviewUrl" alt="New cover preview"
-                                 style="width: 80px; height: 113px; object-fit: cover; border-radius: 8px; border: 2px solid #6366f1;" />
-                        </div>
-                    }
-                    else if (!string.IsNullOrWhiteSpace(_detailSeries?.CoverUrl))
-                    {
-                        <div style="display: flex; justify-content: center; margin-bottom: 10px;">
-                            <div style="position: relative; display: inline-block;">
+                    <div style="display: flex; align-items: center; gap: 18px; flex-wrap: wrap;">
+                        @* Preview: new selection takes priority, then existing cover *@
+                        @if (_editCoverPreviewUrl != null)
+                        {
+                            <div style="flex-shrink: 0; cursor: pointer;" @onclick="OpenCoverPreview">
+                                <img src="@_editCoverPreviewUrl" alt="New cover preview"
+                                     style="width: 120px; height: 180px; object-fit: cover; border-radius: 10px; border: 2px solid #6366f1;" />
+                            </div>
+                        }
+                        else if (!string.IsNullOrWhiteSpace(_detailSeries?.CoverUrl))
+                        {
+                            <div style="flex-shrink: 0; position: relative; display: inline-block; cursor: pointer;" @onclick="OpenCoverPreview">
                                 <img src="@_detailSeries.CoverUrl" alt="Current cover"
-                                     style="width: 80px; height: 113px; object-fit: cover; border-radius: 8px; border: 1px solid #e2e8f0;" />
+                                     style="width: 120px; height: 180px; object-fit: cover; border-radius: 10px; border: 1px solid #e2e8f0;" />
                                 <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); background: #f1f5f9; color: #64748b; font-size: 0.6rem; padding: 1px 6px; border-radius: 6px; white-space: nowrap;">Current</div>
                             </div>
-                        </div>
-                    }
+                        }
 
-                    @if (_editCoverFileName != null)
-                    {
-                        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fafafe;">
-                            <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" Style="color: #4f46e5;" />
-                            <span style="flex: 1; font-size: 0.8rem; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@_editCoverFileName</span>
-                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
-                                           Style="color: #dc2626;"
-                                           OnClick="@ClearEditCover" />
-                        </div>
-                    }
-                    else
-                    {
-                        <MudFileUpload T="IBrowserFile" FilesChanged="@OnEditCoverChanged">
-                            <ActivatorContent>
-                                <div style="border: 1.5px dashed #c7d2fe; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; background: #fafafe;">
-                                    <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" Style="font-size: 24px; color: #a5b4fc;" />
-                                    <div style="color: #64748b; font-size: 0.75rem; font-weight: 500;">Click to replace cover</div>
-                                    <div style="color: #94a3b8; font-size: 0.65rem;">PNG, JPG, WEBP · Max 5 MB</div>
+                        @* Upload zone *@
+                        <div style="flex: 1; min-width: 200px;">
+                            @if (_editCoverFileName != null)
+                            {
+                                <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fafafe;">
+                                    <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" Style="color: #4f46e5;" />
+                                    <span style="flex: 1; font-size: 0.8rem; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@_editCoverFileName</span>
+                                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                                                   Style="color: #dc2626;"
+                                                   OnClick="@ClearEditCover" />
                                 </div>
-                            </ActivatorContent>
-                        </MudFileUpload>
-                    }
+                            }
+                            else
+                            {
+                                <MudFileUpload T="IBrowserFile" FilesChanged="@OnEditCoverChanged">
+                                    <ActivatorContent>
+                                        <div style="border: 1.5px dashed #c7d2fe; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; background: #fafafe;">
+                                            <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" Style="font-size: 24px; color: #a5b4fc;" />
+                                            <div style="color: #64748b; font-size: 0.75rem; font-weight: 500;">Click to replace cover</div>
+                                            <div style="color: #94a3b8; font-size: 0.65rem;">PNG, JPG, WEBP Â· Max 5 MB</div>
+                                        </div>
+                                    </ActivatorContent>
+                                </MudFileUpload>
+                            }
+                        </div>
+                    </div>
                 </div>
 
                 @* Profile fields *@
@@ -1168,17 +1202,17 @@
                     {
                         <span>Slug preview will appear after entering a title.</span>
                     }
-                    <div style="font-size: 0.65rem; color: #94a3b8; margin-top: 2px;">Preview only — final slug is generated by the server.</div>
+                    <div style="font-size: 0.65rem; color: #94a3b8; margin-top: 2px;">Preview only â€” final slug is generated by the server.</div>
                 </div>
 
                 <MudTextField Label="Synopsis / Description" @bind-Value="_editSynopsis"
-                              Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true" Lines="3" />
+                              Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true" Lines="6" />
 
                 <div class="mb-3">
                     <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 6px;">Genre *</span>
                     @if (_genrePickerOpen && _genrePickerForEdit)
                     {
-                        @* ── Inline Genre Picker (Edit) ── *@
+                        @* â”€â”€ Inline Genre Picker (Edit) â”€â”€ *@
                         <div style="display: flex; flex-direction: column; gap: 10px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; background: #fafafe;">
                             <MudTextField T="string" @bind-Value="_genrePickerSearch"
                                           @bind-Value:after="ResetGenrePickerPage"
@@ -1257,7 +1291,7 @@
                     <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 6px;">Tags (optional)</span>
                     @if (_tagPickerOpen && _tagPickerForEdit)
                     {
-                        @* ── Inline Tag Picker (Edit) ── *@
+                        @* â”€â”€ Inline Tag Picker (Edit) â”€â”€ *@
                         <div style="display: flex; flex-direction: column; gap: 10px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; background: #fafafe;">
                             <MudTextField T="string" @bind-Value="_tagPickerSearch"
                                           @bind-Value:after="ResetTagPickerPage"
@@ -1336,7 +1370,7 @@
 
                 <MudSelect T="string" Label="Publication Frequency" @bind-Value="_editFrequency"
                            Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true">
-                    <MudSelectItem Value="@((string?)null)">— Not set —</MudSelectItem>
+                    <MudSelectItem Value="@((string?)null)">â€” Not set â€”</MudSelectItem>
                     <MudSelectItem Value="@("WEEKLY")">Weekly</MudSelectItem>
                     <MudSelectItem Value="@("MONTHLY")">Monthly</MudSelectItem>
                     <MudSelectItem Value="@("IRREGULAR")">Irregular</MudSelectItem>
@@ -1358,7 +1392,7 @@
 
                 <MudDivider />
 
-                @* Submit Proposal — secondary action inside edit modal *@
+                @* Submit Proposal â€” secondary action inside edit modal *@
                 <MudButton Variant="Variant.Outlined" Color="Color.Success" FullWidth="true"
                            StartIcon="@Icons.Material.Filled.Send"
                            Disabled="@_draftSavingEdit"
@@ -1370,7 +1404,7 @@
     </MudCard>
 </MudOverlay>
 
-@* ── Review Status Modal (read-only — UNDER_EDITORIAL_REVIEW / UNDER_BOARD_REVIEW / etc.) ── *@
+@* â”€â”€ Review Status Modal (read-only â€” UNDER_EDITORIAL_REVIEW / UNDER_BOARD_REVIEW / etc.) â”€â”€ *@
 <MudOverlay Visible="@_reviewStatusOpen" OnClick="@(() => _reviewStatusOpen = false)">
     <MudCard Style="width: 440px; max-width: 92vw; margin: 8% auto 0; border-radius: 14px;" @onclick:stopPropagation>
         <MudCardContent Style="padding: 0;">
@@ -1426,7 +1460,7 @@
     </MudCard>
 </MudOverlay>
 
-@* ── Submit Proposal Modal (BF-SERIES-003) ── *@
+@* â”€â”€ Submit Proposal Modal (BF-SERIES-003) â”€â”€ *@
 @* Only reachable for series with StatusCode == PROPOSAL_DRAFT. *@
 <MudOverlay Visible="@_submitProposalDialogOpen" OnClick="@CloseSubmitProposal">
     <MudCard Style="width: 480px; max-width: 90vw; margin: 5% auto 0; border-radius: 14px;" @onclick:stopPropagation>
@@ -1455,7 +1489,7 @@
                 <div>
                     <div style="font-size: 0.78rem; font-weight: 600; color: #374151; margin-bottom: 6px;">
                         Proposal Document <span style="color: #dc2626;">*</span>
-                        <span style="font-weight: 400; color: #94a3b8; margin-left: 4px;">PDF, DOC, DOCX · Max 10 MB</span>
+                        <span style="font-weight: 400; color: #94a3b8; margin-left: 4px;">PDF, DOC, DOCX Â· Max 10 MB</span>
                     </div>
                     @if (_proposalFileName != null)
                     {
@@ -1474,7 +1508,7 @@
                                 <div style="border: 1.5px dashed #bbf7d0; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; background: #f0fdf4;">
                                     <MudIcon Icon="@Icons.Material.Filled.UploadFile" Size="Size.Small" Style="font-size: 28px; color: #059669;" />
                                     <div style="color: #064e3b; font-size: 0.75rem; font-weight: 500;">Click to upload proposal document</div>
-                                    <div style="color: #6b7280; font-size: 0.65rem;">PDF, DOC, DOCX · Max 10 MB</div>
+                                    <div style="color: #6b7280; font-size: 0.65rem;">PDF, DOC, DOCX Â· Max 10 MB</div>
                                 </div>
                             </ActivatorContent>
                         </MudFileUpload>
@@ -1499,7 +1533,7 @@
     </MudCard>
 </MudOverlay>
 
-@* ── Cover Crop Dialog ── *@
+@* â”€â”€ Cover Crop Dialog â”€â”€ *@
 @if (_showCoverCropDialog && !string.IsNullOrWhiteSpace(_coverCropSourceDataUrl))
 {
     <ImageCropDialog SourceDataUrl="@_coverCropSourceDataUrl"
@@ -1512,6 +1546,33 @@
                      HelperText="Covers are displayed in a 2:3 portrait frame. Please crop your image to choose the visible cover area."
                      OnConfirm="@OnCoverCropConfirmed"
                      OnCancel="@OnCoverCropCancelled" />
+}
+
+@* â”€â”€ Cover Preview Popup â”€â”€ *@
+@if (_showCoverPreviewDialog)
+{
+    <MudOverlay Visible="true" OnClick="CloseCoverPreview" DarkBackground="true">
+        <div style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; padding: 24px;" @onclick:stopPropagation>
+            <MudCard Style="width: 520px; max-width: 94vw; max-height: 85vh; border-radius: 14px;" Class="d-flex flex-column">
+                <MudCardContent Style="padding: 0;">
+                    <div style="padding: 18px 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between;">
+                        <MudText Typo="Typo.h6" Style="font-weight: 800; color: #0f172a; margin: 0;">Series Cover Preview</MudText>
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                                       OnClick="CloseCoverPreview" />
+                    </div>
+                    <div style="padding: 24px; display: flex; justify-content: center;">
+                        <img src="@_coverPreviewUrl" alt="Series cover"
+                             style="max-width: 100%; max-height: 420px; object-fit: contain; border-radius: 10px;" />
+                    </div>
+                    <div style="padding: 14px 24px; border-top: 1px solid #f1f5f9; display: flex; justify-content: flex-end;">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CloseCoverPreview">
+                            Close
+                        </MudButton>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </div>
+    </MudOverlay>
 }
 
 @code {
@@ -1531,11 +1592,11 @@
     private string? _draftCoverContentType;
     private string? _draftCoverPreviewUrl; // cropped data: URI for create modal preview
 
-    // ── Edit Draft modal state (BF-SERIES-002) ────────────────────────────────
+    // â”€â”€ Edit Draft modal state (BF-SERIES-002) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private bool _draftDetailsOpen;
     private SeriesCardData? _detailSeries;
 
-    // Editable form fields — populated when the modal opens
+    // Editable form fields â€” populated when the modal opens
     private string _editTitle = "";
     private string _editSynopsis = "";
     private HashSet<Guid> _editGenreIds = new();
@@ -1550,21 +1611,25 @@
     private string? _editCoverContentType;
     private string? _editCoverPreviewUrl; // data: URI for immediate preview
 
-    // ── Cover crop dialog state ──────────────────────────────────────────────
+    // â”€â”€ Cover crop dialog state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private bool _showCoverCropDialog;
     private string? _coverCropSourceDataUrl;
     private string? _coverCropSourceFileName;
     private bool _coverCropIsForCreate; // true = update create fields, false = update edit fields
 
-    // ── Review Status modal state ────────────────────────────────────────────
+    // â”€â”€ Cover preview popup state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    private bool _showCoverPreviewDialog;
+    private string? _coverPreviewUrl;
+
+    // â”€â”€ Review Status modal state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private bool _reviewStatusOpen;
     private SeriesCardData? _reviewSeries;
 
-    // ── Dashboard modal state ──
+    // â”€â”€ Dashboard modal state â”€â”€
     private bool IsAnyDashboardModalOpen =>
-        _cancelDraftDialogOpen || _newSeriesDialogOpen || _draftDetailsOpen || _reviewStatusOpen || _submitProposalDialogOpen || _genrePickerOpen || _tagPickerOpen || _showCoverCropDialog;
+        _cancelDraftDialogOpen || _newSeriesDialogOpen || _draftDetailsOpen || _reviewStatusOpen || _submitProposalDialogOpen || _genrePickerOpen || _tagPickerOpen || _showCoverCropDialog || _showCoverPreviewDialog;
 
-    // ── Dashboard pagination ──
+    // â”€â”€ Dashboard pagination â”€â”€
     private int _dashboardPage = 1;
     private const int DashboardPageSize = 8;
 
@@ -1595,14 +1660,14 @@
         _ => Color.Default,
     };
 
-    private static string FormatDate(DateTime? dt) => dt?.ToString("MMM dd") ?? "—";
+    private static string FormatDate(DateTime? dt) => dt?.ToString("MMM dd") ?? "â€”";
 
     private static string LanguageLabel(string? code) => code switch
     {
         "ja" => "Japanese",
         "en" => "English",
         "vi" => "Vietnamese",
-        _ => code ?? "—"
+        _ => code ?? "â€”"
     };
 
     private async Task LoadTasksAsync()
@@ -1626,7 +1691,7 @@
         }
     }
 
-    // ── Proposal tracking state ───────────────────────────────────────────────
+    // â”€â”€ Proposal tracking state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private bool _proposalDetailOpen;
     private MangakaSeriesProposalDto? _selectedProposal;
     private string _proposalSelectedFilter = "All";
@@ -1789,7 +1854,7 @@
         }
     }
 
-    // ── Genre Picker state ───────────────────────────────────────────────────────────
+    // â”€â”€ Genre Picker state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private bool _genrePickerOpen;
     private bool _genrePickerForEdit;
     private string _genrePickerSearch = "";
@@ -1874,7 +1939,7 @@
         _editGenreIds.Remove(genreId);
     }
 
-    // ── Tag Picker state ─────────────────────────────────────────────────────────────
+    // â”€â”€ Tag Picker state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private bool _tagPickerOpen;
     private bool _tagPickerForEdit;
     private string _tagPickerSearch = "";
@@ -1946,7 +2011,7 @@
         _editTagIds.Remove(tagId);
     }
 
-    // ── Cancel Draft state ────────────────────────────
+    // â”€â”€ Cancel Draft state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private bool _cancelDraftDialogOpen;
     private Guid _cancelDraftSeriesId;
     private string? _cancelDraftSeriesTitle;
@@ -2006,7 +2071,7 @@
         }
     }
 
-    // ── Submit Proposal state (BF-SERIES-003) ────────────────────────────────────
+    // â”€â”€ Submit Proposal state (BF-SERIES-003) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private bool _submitProposalDialogOpen;
     private Guid _submitProposalSeriesId;
     private string? _submitProposalSeriesTitle;
@@ -2031,13 +2096,13 @@
 
     private const long MaxProposalFileSizeBytes = 10 * 1024 * 1024; // 10 MB
 
-    // ── Navigation dispatcher ─────────────────────────────────────────────────────
+    // â”€â”€ Navigation dispatcher â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     /// <summary>
     /// Routes card clicks to the correct behaviour based on status.
-    /// PROPOSAL_DRAFT → Draft Details modal (not workspace).
-    /// UNDER_EDITORIAL_REVIEW / UNDER_BOARD_REVIEW → Review Status modal.
-    /// SERIALIZED → navigate to /series/{slug}.
-    /// HIATUS / CANCELLED / COMPLETED → Review Status modal (read-only).
+    /// PROPOSAL_DRAFT â†’ Draft Details modal (not workspace).
+    /// UNDER_EDITORIAL_REVIEW / UNDER_BOARD_REVIEW â†’ Review Status modal.
+    /// SERIALIZED â†’ navigate to /series/{slug}.
+    /// HIATUS / CANCELLED / COMPLETED â†’ Review Status modal (read-only).
     /// </summary>
     private void OpenSeriesCard(SeriesCardData series)
     {
@@ -2049,7 +2114,11 @@
                 break;
             case "SERIALIZED":
                 if (!string.IsNullOrWhiteSpace(series.Slug))
+<<<<<<< HEAD
                     Nav.NavigateTo($"/series/{series.Slug}/workspace");
+=======
+                    Nav.NavigateTo($"/series/{series.Slug}?returnUrl={Uri.EscapeDataString("/mangaka")}");
+>>>>>>> origin/main
                 else
                     Snackbar.Add("Series page is not available yet.", Severity.Info);
                 break;
@@ -2082,11 +2151,29 @@
         _editCoverPreviewUrl = null;
     }
 
+    private void OpenCoverPreview()
+    {
+        var url = _editCoverPreviewUrl
+                  ?? _draftCoverPreviewUrl
+                  ?? _detailSeries?.CoverUrl;
+
+        if (string.IsNullOrWhiteSpace(url)) return;
+
+        _coverPreviewUrl = url;
+        _showCoverPreviewDialog = true;
+    }
+
+    private void CloseCoverPreview()
+    {
+        _showCoverPreviewDialog = false;
+        _coverPreviewUrl = null;
+    }
+
     /// <summary>
     /// Pre-read IBrowserFile bytes immediately for cover replacement.
     /// Validates image type (PNG/JPG/WEBP) and size (max 5 MB).
     /// Generates a data: URI preview so the user can verify the selection before saving.
-    /// Does NOT call IFileStorageService — that happens in UpdateSeriesDraftCommandHandler via API.
+    /// Does NOT call IFileStorageService â€” that happens in UpdateSeriesDraftCommandHandler via API.
     /// </summary>
     private async Task OnEditCoverChanged(IBrowserFile file)
     {
@@ -2235,6 +2322,12 @@
     {
         if (string.IsNullOrWhiteSpace(_editTitle) || _editGenreIds.Count == 0) return;
 
+        if (string.IsNullOrWhiteSpace(_editSynopsis))
+        {
+            Snackbar.Add("Synopsis / Description is required.", Severity.Warning);
+            return;
+        }
+
         if (_currentUserId is null || _currentUserId == Guid.Empty)
         {
             Snackbar.Add("Could not identify the signed-in user. Please sign in again.", Severity.Error);
@@ -2250,7 +2343,7 @@
                 actorUserId: _currentUserId.Value,
                 seriesId: _detailSeries.Id,
                 title: _editTitle.Trim(),
-                synopsis: string.IsNullOrWhiteSpace(_editSynopsis) ? _editTitle.Trim() : _editSynopsis.Trim(),
+                synopsis: _editSynopsis.Trim(),
                 genreIds: _editGenreIds.ToList(),
                 tagIds: _editTagIds.ToList(),
                 contentLanguageCode: _editLanguage,
@@ -2261,7 +2354,7 @@
                 coverContentType: _editCoverContentType,
                 cancellationToken: default);
 
-            // Update succeeded — now refresh this single card from the API.
+            // Update succeeded â€” now refresh this single card from the API.
             var idx = _seriesData.FindIndex(s => s.Id == _detailSeries.Id);
             if (idx >= 0)
             {
@@ -2293,7 +2386,7 @@
                     }
                     else
                     {
-                        // Server returned 404 — this series is no longer available to this user.
+                        // Server returned 404 â€” this series is no longer available to this user.
                         // Do NOT fabricate a fake card from command result + local selections.
                         _seriesData.RemoveAt(idx);
                         _detailSeries = null;
@@ -2305,7 +2398,7 @@
                 catch (Exception)
                 {
                     // Targeted card refresh failed (network/server error), but the update did succeed.
-                    // Keep the existing card unchanged — it may be stale but is safer than fabricating data.
+                    // Keep the existing card unchanged â€” it may be stale but is safer than fabricating data.
                     Snackbar.Add(
                         "The draft was saved, but the card could not be refreshed. Please reload the page.",
                         Severity.Warning);
@@ -2356,7 +2449,7 @@
     }
 
     /// <summary>
-    /// Pre-read IBrowserFile bytes immediately — do not hold IBrowserFile across re-renders.
+    /// Pre-read IBrowserFile bytes immediately â€” do not hold IBrowserFile across re-renders.
     /// Validates extension, content type, and size before storing in component state.
     /// </summary>
     private async Task OnProposalFileChanged(IBrowserFile file)
@@ -2431,7 +2524,7 @@
             }
 
             Snackbar.Add(
-                $"Proposal submitted (v{result.ProposalVersionNo}) — series is now Under Editorial Review.",
+                $"Proposal submitted (v{result.ProposalVersionNo}) â€” series is now Under Editorial Review.",
                 Severity.Success);
 
             _submitProposalDialogOpen = false;
@@ -2461,7 +2554,24 @@
         new("current", "Current Series", Icons.Material.Filled.ViewModule),
         new("proposals", "Series Proposals", Icons.Material.Filled.Description),
         new("review", "Assistant Review", Icons.Material.Filled.AssignmentTurnedIn),
+        new("contributors", "Manage Contributors", Icons.Material.Filled.People),
     ];
+
+    private void HandleNavClick(string navId)
+    {
+        if (navId == "review")
+        {
+            Nav.NavigateTo("/mangaka/review-submissions");
+        }
+        else if (navId == "contributors")
+        {
+            Nav.NavigateTo("/mangaka/contributors");
+        }
+        else
+        {
+            _activeTab = navId;
+        }
+    }
 
     private string _currentDisplayName = "Mangaka";
     private string _currentRoleName = "Mangaka";
@@ -2469,7 +2579,7 @@
     private string? _currentAvatarUrl;
     private List<SeriesCardData> _seriesData = [];
 
-    // ── Filter / search / sort state ──
+    // â”€â”€ Filter / search / sort state â”€â”€
     private string _selectedFilter = "All";
     private string _searchText = "";
     private string _sortMode = "recent"; // "recent" | "newest" | "title"
@@ -2511,14 +2621,14 @@
                     s.Title.Contains(term, StringComparison.OrdinalIgnoreCase));
             }
 
-            // Genre filter — show series that contain ALL selected genres
+            // Genre filter â€” show series that contain ALL selected genres
             if (_filterGenreIds.Count > 0)
             {
                 result = result.Where(s =>
                     _filterGenreIds.All(fgId => s.Genres.Any(g => g.GenreId == fgId)));
             }
 
-            // Tag filter — show series that contain ALL selected tags
+            // Tag filter â€” show series that contain ALL selected tags
             if (_filterTagIds.Count > 0)
             {
                 result = result.Where(s =>
@@ -2559,7 +2669,7 @@
 
     /// <summary>
     /// Produces a client-side slug preview using the same SlugGenerator logic the backend
-    /// uses. This is display-only — the server always generates the authoritative slug.
+    /// uses. This is display-only â€” the server always generates the authoritative slug.
     /// </summary>
     private static string BuildSlugPreview(string? title)
     {
@@ -2710,7 +2820,7 @@
             ));
 
             _draftCreated = true;
-            Snackbar.Add($"Draft created — status {SeriesStatusHelper.DisplayName(created.StatusCode)}.", Severity.Success);
+            Snackbar.Add($"Draft created â€” status {SeriesStatusHelper.DisplayName(created.StatusCode)}.", Severity.Success);
 
             await Task.Delay(1200);
 
@@ -2780,3 +2890,4 @@
         }
     }
 }
+

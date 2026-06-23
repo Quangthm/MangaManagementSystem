@@ -17,7 +17,7 @@ namespace MangaManagementSystem.Infrastructure.Services
 
         public async Task<MangaManagementSystem.Application.DTOs.Manga.FileUploadResultDto> UploadFormFileAsync(IFormFile file, string purpose, int? uploadedBy)
         {
-            if (file == null) return await Task.FromResult<MangaManagementSystem.Application.DTOs.Manga.FileUploadResultDto?>(null!);
+            if (file == null) throw new ArgumentNullException(nameof(file));
             using var ms = new MemoryStream();
             await file.CopyToAsync(ms);
             var bytes = ms.ToArray();

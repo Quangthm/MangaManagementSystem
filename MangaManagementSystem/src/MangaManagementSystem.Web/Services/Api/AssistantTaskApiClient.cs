@@ -100,6 +100,30 @@ namespace MangaManagementSystem.Web.Services.Api
             return result ?? new List<ChapterPageAnnotationDto>();
         }
 
+        // === Completed Work ===
+
+        public async Task<AssistantCompletedWorkSummaryDto?> GetCompletedWorkAsync(Guid actorUserId, CancellationToken cancellationToken = default)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "api/assistant/completed-work");
+            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                throw new HttpRequestException(
+                    $"API returned {(int)response.StatusCode} ({response.StatusCode}): {errorContent}",
+                    null,
+                    response.StatusCode);
+            }
+
+            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            var result = JsonSerializer.Deserialize<AssistantCompletedWorkSummaryDto>(responseContent, _jsonOptions);
+
+            return result;
+        }
+
         // === Submit Operation ===
 
         public async Task<AssistantTaskSubmitResultDto?> SubmitTaskWorkAsync(

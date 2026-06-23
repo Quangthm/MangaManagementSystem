@@ -27,5 +27,16 @@ namespace MangaManagementSystem.Application.Interfaces
 
         // Mangaka: tasks created by this user (for review submissions view)
         Task<IEnumerable<ChapterPageTaskDto>> GetTasksForReviewByCreatorAsync(Guid creatorUserId);
+
+        // Mangaka: reassign task to different assistant
+        Task<ReassignChapterPageTaskResult> ReassignTaskAsync(
+            Guid actorUserId,
+            Guid taskId,
+            ReassignChapterPageTaskRequest request);
+
+        // Mangaka: eligible assistants for task reassignment
+        Task<IReadOnlyList<EligibleAssistantDto>> GetEligibleAssistantsForTaskAsync(
+            Guid actorUserId,
+            Guid taskId);
     }
 }

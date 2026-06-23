@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace MangaManagementSystem.Domain.Common
 {
-    internal class common
+    internal class Common
     {
     }
 }

@@ -1,91 +1,182 @@
 @page "/demo/mangaflow/decisions"
+
+@using System.Globalization
 @using Microsoft.AspNetCore.Components.Authorization
+@using MangaManagementSystem.Web.Services.EditorialBoard
 
-<MangaFlowShell Title="Decision Center" Subtitle="Finalize publishing decisions based on board votes." ActiveMenu="decisions" Actions="@HeaderActions">
-    <h2 class="mf-section-title">Awaiting Decision (@DecisionItems.Count)</h2>
+@inject IEditorialBoardApiClient EditorialBoardApiClient
 
-    <div class="mf-decision-stack">
-        @foreach (var item in DecisionItems)
+<MangaFlowShell Title="Decision Center"
+                Subtitle="Finalize publishing decisions based on board votes."
+                ActiveMenu="decisions"
+                Actions="@HeaderActions">
+    <ChildContent>
+        @if (_isLoading)
         {
-            <article class="mf-decision-card">
-                <div class="mf-row">
-                    <div>
-                        <div class="mf-muted">@item.Code · Serialization</div>
-                        <h3>@item.Title</h3>
-                    </div>
-
-                    <StatusBadge Status="Voting in Progress" />
-                </div>
-
-                <div class="mf-grid mf-grid-4 vote-summary-grid">
-                    <div class="mf-vote-summary">
-                        <strong>@item.TotalVotes/@item.TotalMembers</strong>
-                        <span>Total Votes</span>
-                    </div>
-
-                    <div class="mf-vote-summary">
-                        <strong class="approve">@item.Approve</strong>
-                        <span>Approvals</span>
-                    </div>
-
-                    <div class="mf-vote-summary">
-                        <strong class="reject">@item.Reject</strong>
-                        <span>Rejections</span>
-                    </div>
-
-                    <div class="mf-vote-summary">
-                        <strong class="abstain">@item.Abstain</strong>
-                        <span>Abstentions</span>
-                    </div>
-                </div>
-
-                <div class="mf-progress segmented large">
-                    <div class="mf-segment approve" style="@($"width:{Percent(item.Approve, item.TotalMembers)}%")"></div>
-                    <div class="mf-segment reject" style="@($"width:{Percent(item.Reject, item.TotalMembers)}%")"></div>
-                    <div class="mf-segment abstain" style="@($"width:{Percent(item.Abstain, item.TotalMembers)}%")"></div>
-                </div>
-
-                <div class="mf-vote-percent-row">
-                    <span class="approve">@Percent(item.Approve, item.TotalMembers)% Approve (@item.Approve)</span>
-                    <span class="reject">@Percent(item.Reject, item.TotalMembers)% Reject (@item.Reject)</span>
-                    <span class="abstain">@Percent(item.Abstain, item.TotalMembers)% Abstain (@item.Abstain)</span>
-                </div>
-
-                <AuthorizeView Roles="Editorial Board Chief">
-                    <Authorized>
-                        <div class="mf-grid mf-grid-3 mf-action-grid">
-                            <button class="mf-decision-action approve" @onclick="() => FinalApproval(item)">
-                                Final Approval
-                            </button>
-
-                            <button class="mf-decision-action return" @onclick="() => ReturnForReview(item)">
-                                Return for Review
-                            </button>
-
-                            <button class="mf-decision-action escalate" @onclick="() => EscalateDecision(item)">
-                                Escalate Decision
-                            </button>
-                        </div>
-                    </Authorized>
-                </AuthorizeView>
-            </article>
+            <section class="mf-card">
+                <div class="mf-strong">Loading decision center...</div>
+                <div class="mf-muted">Fetching board poll results from database.</div>
+            </section>
         }
-    </div>
+        else if (!string.IsNullOrWhiteSpace(_errorMessage))
+        {
+            <section class="mf-card">
+                <div class="mf-strong">Cannot load decision center</div>
+                <div class="mf-muted">@_errorMessage</div>
 
-    @if (!string.IsNullOrWhiteSpace(DecisionMessage))
-    {
-        <div class="mf-toast">@DecisionMessage</div>
-    }
+                <button class="mf-btn mf-btn-primary mf-gap-small"
+                        @onclick="LoadDecisionCenterAsync">
+                    Retry
+                </button>
+            </section>
+        }
+        else
+        {
+            <h2 class="mf-section-title">Awaiting Decision (@_polls.Count)</h2>
+
+            @if (_polls.Count == 0)
+            {
+                <section class="mf-card">
+                    <div class="mf-strong">No board poll data</div>
+                    <div class="mf-muted">
+                        When a Board Chief opens a poll and board members vote, the real poll result will appear here.
+                    </div>
+                </section>
+            }
+            else
+            {
+                <div class="mf-decision-stack">
+                    @foreach (var poll in _polls)
+                    {
+                        <article class="mf-decision-card">
+                            <div class="mf-row">
+                                <div>
+                                    <div class="mf-muted">@poll.Code · @DisplayPollType(poll.PollTypeCode)</div>
+                                    <h3>@poll.PollName</h3>
+                                </div>
+
+                                <StatusBadge Status="@DisplayStatus(poll)" />
+                            </div>
+
+                            <div class="mf-grid mf-grid-4 vote-summary-grid">
+                                <div class="mf-vote-summary">
+                                    <strong>@poll.TotalVotes</strong>
+                                    <span>Total Votes</span>
+                                </div>
+
+                                <div class="mf-vote-summary">
+                                    <strong class="approve">@poll.ApproveVotes</strong>
+                                    <span>Approvals</span>
+                                </div>
+
+                                <div class="mf-vote-summary">
+                                    <strong class="reject">@poll.RejectVotes</strong>
+                                    <span>Rejections</span>
+                                </div>
+
+                                <div class="mf-vote-summary">
+                                    <strong class="abstain">@poll.AbstainVotes</strong>
+                                    <span>Abstentions</span>
+                                </div>
+                            </div>
+
+                            <div class="mf-progress segmented large">
+                                <div class="mf-segment approve"
+                                     style="@($"width:{Percent(poll.ApproveVotes, poll.TotalVotes)}%")">
+                                </div>
+
+                                <div class="mf-segment reject"
+                                     style="@($"width:{Percent(poll.RejectVotes, poll.TotalVotes)}%")">
+                                </div>
+
+                                <div class="mf-segment abstain"
+                                     style="@($"width:{Percent(poll.AbstainVotes, poll.TotalVotes)}%")">
+                                </div>
+                            </div>
+
+                            <div class="mf-vote-percent-row">
+                                <span class="approve">
+                                    @Percent(poll.ApproveVotes, poll.TotalVotes)% Approve (@poll.ApproveVotes)
+                                </span>
+
+                                <span class="reject">
+                                    @Percent(poll.RejectVotes, poll.TotalVotes)% Reject (@poll.RejectVotes)
+                                </span>
+
+                                <span class="abstain">
+                                    @Percent(poll.AbstainVotes, poll.TotalVotes)% Abstain (@poll.AbstainVotes)
+                                </span>
+                            </div>
+
+                            <AuthorizeView Roles="Editorial Board Chief">
+                                <Authorized>
+                                    <div class="mf-grid mf-grid-3 mf-action-grid">
+                                        <button class="mf-decision-action approve"
+                                                @onclick="() => FinalApproval(poll)">
+                                            Final Approval
+                                        </button>
+
+                                        <button class="mf-decision-action return"
+                                                @onclick="() => ReturnForReview(poll)">
+                                            Return for Review
+                                        </button>
+
+                                        <button class="mf-decision-action escalate"
+                                                @onclick="() => EscalateDecision(poll)">
+                                            Escalate Decision
+                                        </button>
+                                    </div>
+                                </Authorized>
+                            </AuthorizeView>
+                        </article>
+                    }
+                </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_decisionMessage))
+            {
+                <div class="mf-toast">@_decisionMessage</div>
+            }
+        }
+    </ChildContent>
 </MangaFlowShell>
 
 @code {
-    private string? DecisionMessage { get; set; }
+    private IReadOnlyList<EditorialBoardPollDto> _polls = Array.Empty<EditorialBoardPollDto>();
+    private bool _isLoading = true;
+    private string? _errorMessage;
+    private string? _decisionMessage;
 
     private RenderFragment HeaderActions => @<AuthorizeView Roles="Editorial Board Chief">
         <Authorized>
             <span class="mf-view-pill">Board Chief View</span>
         </Authorized>
     </AuthorizeView>;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDecisionCenterAsync();
+    }
+
+    private async Task LoadDecisionCenterAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        _decisionMessage = null;
+
+        try
+        {
+            _polls = await EditorialBoardApiClient.GetOpenPollsAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
 
     private static int Percent(int count, int total)
     {
@@ -94,62 +185,58 @@
             : (int)Math.Round(count * 100m / total);
     }
 
-    private void FinalApproval(DecisionItem item)
+    private void FinalApproval(EditorialBoardPollDto poll)
     {
-        SetDecision(item, "Final Approval");
+        SetDecisionMessage(poll, "Final Approval");
     }
 
-    private void ReturnForReview(DecisionItem item)
+    private void ReturnForReview(EditorialBoardPollDto poll)
     {
-        SetDecision(item, "Return for Review");
+        SetDecisionMessage(poll, "Return for Review");
     }
 
-    private void EscalateDecision(DecisionItem item)
+    private void EscalateDecision(EditorialBoardPollDto poll)
     {
-        SetDecision(item, "Escalate Decision");
+        SetDecisionMessage(poll, "Escalate Decision");
     }
 
-    private void SetDecision(DecisionItem item, string action)
+    private void SetDecisionMessage(EditorialBoardPollDto poll, string action)
     {
-        DecisionMessage = $"{action} selected for {item.Code}. Replace this demo handler with the real decision API later.";
+        _decisionMessage =
+            $"{action} selected for {poll.Code}. The poll data shown here is loaded from database. Final decision API is not wired yet.";
     }
 
-    private sealed class DecisionItem
+    private static string DisplayStatus(EditorialBoardPollDto poll)
     {
-        public string Code { get; init; } = string.Empty;
-        public string Title { get; init; } = string.Empty;
-        public int Approve { get; init; }
-        public int Reject { get; init; }
-        public int Abstain { get; init; }
-        public int TotalMembers { get; init; } = 9;
-        public int TotalVotes => Approve + Reject + Abstain;
-    }
-
-    private readonly IReadOnlyList<DecisionItem> DecisionItems = new List<DecisionItem>
-    {
-        new()
+        if (!string.IsNullOrWhiteSpace(poll.ComputedResultCode)
+            && poll.ComputedResultCode != "PENDING")
         {
-            Code = "MNG-003",
-            Title = "Serialization Approval — Mecha Storm Zero",
-            Approve = 5,
-            Reject = 1,
-            Abstain = 1
-        },
-        new()
-        {
-            Code = "MNG-002",
-            Title = "Serialization Vote — Shadow of the Lotus",
-            Approve = 3,
-            Reject = 2,
-            Abstain = 0
-        },
-        new()
-        {
-            Code = "MNG-015",
-            Title = "Continuation — Velocity Kings",
-            Approve = 4,
-            Reject = 0,
-            Abstain = 1
+            return poll.ComputedResultCode switch
+            {
+                "APPROVED" => "Approved",
+                "REJECTED" => "Rejected",
+                "NO_DECISION" => "No Decision",
+                "INVALIDATED" => "Cancelled",
+                _ => poll.ComputedResultCode
+            };
         }
-    };
+
+        return poll.PollStatusCode switch
+        {
+            "OPEN" => "Voting in Progress",
+            "CLOSED" => "Closed",
+            "CANCELLED" => "Cancelled",
+            _ => poll.PollStatusCode
+        };
+    }
+
+    private static string DisplayPollType(string pollTypeCode)
+    {
+        return pollTypeCode switch
+        {
+            "START_SERIALIZATION" => "Serialization",
+            "CANCEL_SERIALIZATION" => "Cancellation",
+            _ => pollTypeCode
+        };
+    }
 }

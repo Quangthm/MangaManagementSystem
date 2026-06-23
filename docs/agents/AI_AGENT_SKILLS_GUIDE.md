@@ -29,6 +29,8 @@ The system follows a **Distributed Monolith** style. The core business workflow 
   3. **Infrastructure** — EF Core, SQL Server stored-procedure wrappers, repository implementations, Cloudinary integration, SMTP/email, OTP cache, AI Hub adapters, and other external service adapters. Infrastructure may depend on Application and Domain.
   4. **API** — thin ASP.NET Core controllers/endpoints, request/response contracts, authentication/authorization boundaries, HTTP status-code mapping, and HTTP-specific concerns. API may depend on Application and Infrastructure for dependency injection only.
 - **Rule:** Business logic must not be placed directly in UI components, API controllers, or database-specific classes when it belongs in Domain/Application.
+- **Rule:** The C# backend, especially the Application layer, is the primary place for business rules, workflow coordination, normalization, request validation, and use-case decisions.
+- **Rule:** SQL Server stored procedures are used for transactional writes, locking/concurrency-sensitive final guards, multi-table insert/update consistency, and audit writes. They must not become the primary business-rule engine when the rule can be expressed safely in C# Application code.
 - **Rule:** SQL Server, EF Core, Cloudinary, SMTP, and AI Hub implementation details must stay in Infrastructure. They must not leak into Web UI components or API controllers.
 
 ### Clean Architecture Dependency Rules
@@ -357,10 +359,14 @@ AI Agents and GitHub Copilot must follow a **stored-procedure-first rule** for i
 
 #### Core Boundary Rule
 
+The project uses stored procedures for important write workflows, but this does **not** mean the database is the main business-rule layer. AI Agents must separate **C# business-rule ownership** from **SQL transactional final guards**.
+
 - **C# / ASP.NET Core responsibilities:**
-  - Handle UI/API requests.
+  - Own the main business rules and workflow coordination in the Application layer.
+  - Normalize request data into clear command/query DTOs before persistence.
   - Validate external input before calling the database.
-  - Call external services such as Cloudinary and the local AI Hub.
+  - Validate role/use-case rules, workflow eligibility, required fields, allowed status/action combinations, task assignment rules, file-purpose rules, and user-facing error messages before calling stored procedures.
+  - Decide which use-case should run and coordinate external services such as Cloudinary and the local AI Hub through Application-facing abstractions.
   - Upload/delete Cloudinary assets.
   - Perform compensation cleanup when an external operation succeeds but the database workflow fails.
   - Call SQL Server stored procedures through Infrastructure repository methods.
@@ -368,23 +374,32 @@ AI Agents and GitHub Copilot must follow a **stored-procedure-first rule** for i
 - **SQL Server stored procedure responsibilities:**
   - Own important database transactions.
   - Insert/update/link multiple related tables atomically.
-  - Validate workflow state transitions, actor permissions, cross-table rules, and concurrency-sensitive conditions.
+  - Re-check critical invariants as a **second/final guard**, especially where race conditions, concurrent edits, locks, cross-table consistency, or security-sensitive status transitions could invalidate earlier C# validation.
+  - Enforce final data-integrity guards that must be true at commit time, such as resource existence, ownership/contributor membership, workflow state still being eligible, regions belonging to the expected page version, and required output references for final statuses.
   - Use `TRY...CATCH`, `SET XACT_ABORT ON`, and transaction ownership patterns where appropriate.
   - Use `sp_getapplock`, `UPDLOCK`, or `HOLDLOCK` when a workflow is concurrency-sensitive.
   - Write audit events through `audit.usp_AuditEvent_Append`.
 
+- **Do not design stored procedures as the primary business-rule engine:**
+  - Do not move normal use-case decisions into SQL just because a workflow writes multiple tables.
+  - Do not rely on SQL errors as the main user-facing validation path when C# can validate earlier and return a clearer message.
+  - Do not parse large JSON payloads in SQL as a substitute for C# request validation and normalization. SQL may parse JSON for batch inserts, but Application must validate the command shape and business meaning first.
+  - Do not duplicate broad business orchestration in both C# and SQL. C# decides and coordinates; SQL commits and guards.
+
 #### When Stored Procedures Are Required
 
-Use SQL Server stored procedures or wrapper procedures for workflows that involve any of the following:
+Use SQL Server stored procedures or wrapper procedures for workflows that involve any of the following database-side concerns:
 
-- multiple table writes,
-- status transitions,
-- approval/rejection/cancellation decisions,
-- account/security actions,
+- multiple table writes that must commit or roll back together,
+- status transitions that require commit-time state checks,
+- approval/rejection/cancellation writes,
+- account/security writes,
 - `FileResource` creation plus business-record linking,
 - audit logging,
 - concurrency-sensitive updates,
-- business rules that must roll back together.
+- lock/guard conditions that must be enforced at the moment of persistence.
+
+Application/C# must still validate the business meaning of the request before calling these procedures. Stored procedures are required for transactional safety and final guards, not as a replacement for Application use-case validation.
 
 Examples include account creation, registration portfolio linking, admin account-status changes, proposal submission, page-version creation, task completion, board poll open/close/cancel, board result application, publication-frequency changes, and file soft deletion.
 
@@ -422,7 +437,7 @@ Never keep a SQL transaction open while uploading to Cloudinary.
 
 1. Blazor Server UI sends requests to the ASP.NET Core API through typed Web API clients. New or migrated business workflows must not call Application services directly from Web.
 2. ASP.NET Core API controllers handle HTTP binding and authorization boundaries, then call Application use cases. Application orchestrates validation/workflow rules and Infrastructure adapters handle Cloudinary, AI Hub, SMTP, EF Core, and stored-procedure calls.
-3. SQL Server stored procedures own important database transactions, multi-table writes, workflow state transitions, file metadata linking, and audit-event appends.
+3. SQL Server stored procedures own important database transactions, multi-table writes, file metadata linking, audit-event appends, and final concurrency-sensitive guards; Application owns the primary business-rule decisions before persistence.
 4. Cloudinary stores the actual files/images and provides secure delivery URLs.
 5. For AI-assisted detection, the backend sends the page image or image URL to the FastAPI AI Hub.
 6. The AI Hub returns JSON region suggestions.
@@ -445,7 +460,7 @@ Important responsibility boundaries:
 - **Admin** manages accounts, file deletion workflow, audit visibility, traceability, and system-level management, but does not own normal board poll open/close/cancel behavior.
 - **Mangaka** may provide or update desired publication frequency only while the series is in `PROPOSAL_DRAFT`.
 - **Cloudinary API secrets must stay on the backend or in local/deployment secrets, never in frontend code or committed Git files.**
-- **External services stay in C#; database workflows stay in stored procedures.** The backend may upload to Cloudinary or call the AI Hub, but important SQL changes must be handled through stored procedures or wrapper procedures.
+- **External services and business orchestration stay in C#; transactional database writes stay in stored procedures.** The backend may upload to Cloudinary or call the AI Hub, and the Application layer owns primary business validation/coordination. Important SQL changes must be handled through stored procedures or wrapper procedures that provide atomic writes, locks, final guards, and audit.
 
 ---
 
@@ -458,8 +473,8 @@ AI Agents must follow this exact sequential pipeline when interpreting user requ
 3. `decompose_epic_to_tasks` ➔ Splits requirements into Blazor UI and .NET Clean Architecture sub-tasks.
 4. `calculate_priority_matrix` ➔ Approves prioritization using Karl Wiegers matrix matching MVP constraints.
 5. `refine_functional_requirements` ➔ Converts logic to strict "The system shall..." statements using explicit C# types.
-6. `design_application_cqrs_use_case` ➔ Decides the Application command/query, MediatR handler, DTO/result, and validation boundaries.
-7. `design_database_workflow` ➔ Decides whether the feature requires a stored procedure/wrapper procedure and defines SQL transaction/audit boundaries.
+6. `design_application_cqrs_use_case` ➔ Decides the Application command/query, MediatR handler, DTO/result, business validation, and workflow orchestration boundaries.
+7. `design_database_workflow` ➔ Decides whether the feature requires a stored procedure/wrapper procedure and defines SQL transaction, lock/final-guard, and audit boundaries.
 8. `generate_acceptance_criteria` ➔ Writes BDD tests validating both C# business rules, stored-procedure effects, and Blazor UI states.
 9. `write_session_summary` ➔ Writes a clear task/session note under `docs/revision` or the matching use-case subfolder.
 10. `sync_to_github_projects` ➔ Automates GitHub tracking using `gh` CLI.
@@ -491,16 +506,20 @@ AI Agents must follow this exact sequential pipeline when interpreting user requ
     4. **Exceptions & Audit:** Custom middleware handling, stored-procedure audit calls through `audit.usp_AuditEvent_Append`, and compensation logic for external operations such as Cloudinary cleanup after SQL failure.
 
 ### 4. Skill Name: `design_database_workflow`
-* **System Prompt Constraint:** Decide the correct database-access pattern before generating implementation code.
+* **System Prompt Constraint:** Decide the correct database-access pattern before generating implementation code, while preserving C# Application as the primary business-rule layer.
 * **Execution Rules:**
-  - Use SQL Server stored procedures or wrapper procedures for business workflows that write multiple tables, change status, write audit events, require concurrency protection, or must roll back atomically.
+  - Use SQL Server stored procedures or wrapper procedures for workflows that write multiple tables, change status, write audit events, require concurrency protection, or must roll back atomically.
+  - Treat stored procedures as transactional write/audit/final-guard mechanisms, not as the main business-rule engine.
+  - Before designing a stored procedure, list which rules are enforced in C# Application first and which rules are repeated in SQL only as final commit-time guards.
+  - Application/C# should validate request shape, required fields, role/use-case eligibility, allowed action/status combinations, task assignment rules, file-purpose rules, generated titles/descriptions, and other user-facing business rules before the repository calls SQL.
+  - SQL should re-check resource locks, current workflow state, contributor membership, region/page-version consistency, unique/foreign-key consistency, and other invariants that can change between C# validation and commit.
   - Do not implement multi-table workflow writes as several separate EF Core `SaveChangesAsync` calls unless an explicit shared application transaction is already established and approved.
   - Prefer one wrapper procedure for one business action, such as `auth.usp_User_CreateWithOptionalPortfolio` for user creation plus optional portfolio `FileResource` creation/linking.
   - C# must call stored procedures directly from the Infrastructure layer using `Microsoft.Data.SqlClient` / ADO.NET when output parameters or complex stored-procedure contracts are required.
   - EF Core is acceptable for simple reads, search/list screens, dashboard queries, and uncomplicated single-table operations.
   - External systems such as Cloudinary must be called from C# before or after the SQL workflow; SQL Server procedures must not call external cloud APIs.
   - For Cloudinary-backed workflows, upload first, then call the SQL wrapper procedure, then attempt Cloudinary cleanup if the SQL procedure fails.
-  - Every generated workflow must explicitly state its transaction boundary, audit behavior, and rollback/compensation behavior.
+  - Every generated workflow must explicitly state: C# validation/coordination, SQL transaction boundary, SQL final guards/locks, audit behavior, and rollback/compensation behavior.
 
 
 
@@ -513,6 +532,7 @@ AI Agents must follow this exact sequential pipeline when interpreting user requ
   - Place new command/query code under a feature-based Application folder such as `Features/Mangaka/Series/Commands/CreateSeriesDraft`.
   - API controllers should call `IMediator.Send(...)` for new CQRS handlers.
   - Handlers may call Application-facing repository/storage/email abstractions, but must not depend on Web, API, EF `DbContext`, SQL client code, or Cloudinary SDK directly.
+  - Command handlers own primary business validation and workflow coordination before persistence. They must not pass unvalidated requests to stored procedures and rely on SQL as the first/main guard.
   - Important mutating command handlers must call Infrastructure stored-procedure wrappers instead of performing several independent EF `SaveChangesAsync` calls.
   - Query handlers may use read repository methods or EF-backed query abstractions for simple read models.
   - Do not call MediatR directly from Blazor Razor components. Web must still call API through typed API clients.
@@ -545,8 +565,12 @@ AI Agents must follow this exact sequential pipeline when interpreting user requ
     - Infrastructure: ...
     - Domain: ...
 
+    Business-rule boundary:
+    - Application/C#: primary business validation, normalization, orchestration, user-facing failure decisions
+    - SQL/SP: transactional writes, locks, commit-time final guards, audit
+
     Web-to-API flow:
-    Razor Page -> Typed API Client -> API Controller -> Application Service -> Infrastructure -> DB/SP
+    Razor Page -> Typed API Client -> API Controller -> Application Service/Handler -> Infrastructure -> DB/SP
     ```
 
 #### Example: Create Series Draft
@@ -565,7 +589,7 @@ API:
 Application:
 - Prefer CreateSeriesDraftCommand + CreateSeriesDraftCommandHandler through MediatR for new/migrated code.
 - If the existing ISeriesService.CreateSeriesDraftAsync path is kept temporarily, document it as transitional.
-- The handler/service validates draft input, slug rules, actor intent, and coordinates storage/SP workflow through interfaces.
+- The handler/service validates draft input, slug rules, actor intent, and coordinates storage/SP workflow through interfaces before SQL is called; SQL repeats only final commit-time guards and writes/audit.
 
 Infrastructure:
 - Uploads cover to Cloudinary if present.
@@ -599,7 +623,7 @@ MangakaDashboard.razor injects ISeriesService and IFileStorageService, uploads c
 * **System Prompt Constraint:** Write comprehensive Behavioral-Driven Development (BDD) testing scenarios.
 * **Execution Rules:**
   - Use the Cucumber framework: `Given - When - Then`.
-  - Must write 2 Happy Path scenarios and 2 Edge Case scenarios (e.g., unauthorized role rejection, invalid file uploads, stored-procedure rollback, Cloudinary cleanup after SQL failure, audit log write failures, or unauthorized workflow transitions).
+  - Must write 2 Happy Path scenarios and 2 Edge Case scenarios (e.g., unauthorized role rejection in C# before SQL, invalid file uploads, stored-procedure final-guard rollback, Cloudinary cleanup after SQL failure, audit log write failures, or unauthorized workflow transitions).
   - Explicitly state the MudBlazor UI feedback state (e.g., `<MudProgressCircular>`, `<MudDialog>`, or `ISnackbar` toast notification).
 
 ### 9. Skill Name: `write_session_summary`
@@ -814,13 +838,16 @@ Before accepting generated code, AI Agents and reviewers must check the followin
 - [ ] API controllers call `IMediator.Send(...)` for CQRS use cases or one existing Application service method for transitional workflows.
 - [ ] Blazor Web components do not call MediatR directly.
 - [ ] Use-case methods own business validation and workflow orchestration.
+- [ ] Application validates request shape, required fields, role/use-case eligibility, allowed action/status combinations, and user-facing business failures before calling Infrastructure/SP wrappers.
+- [ ] Application builds normalized payloads for stored procedures instead of sending raw UI state or unvalidated JSON directly to SQL.
 - [ ] Application depends on Domain and abstractions, not Infrastructure concrete classes.
 - [ ] Application DTOs do not expose database-only or security-sensitive fields.
 
 ### Infrastructure Project
 
 - [ ] EF Core and stored-procedure details stay inside Infrastructure.
-- [ ] Stored procedures are used for workflow transactions, status transitions, multi-table writes, file-resource linking, and audit writes.
+- [ ] Stored procedures are used for workflow transactions, status transitions, multi-table writes, file-resource linking, final guards/locks, and audit writes.
+- [ ] Infrastructure exposes workflow-oriented repository methods to Application and does not expose SQL parameter details to API/Web.
 - [ ] Cloudinary/SMTP/AI Hub details stay behind Application-facing interfaces.
 - [ ] Cloudinary uploads are compensated/cleaned up if SQL workflow fails after upload.
 
@@ -828,7 +855,8 @@ Before accepting generated code, AI Agents and reviewers must check the followin
 
 - [ ] No fake SQL columns are added just to satisfy EF.
 - [ ] EF mappings match the source-of-truth schema.
-- [ ] Stored-procedure output parameters and errors are handled safely.
+- [ ] Stored procedures do not replace Application business validation; they provide transaction ownership, atomic writes, locks, final guards, and audit.
+- [ ] Stored-procedure output parameters and errors are handled safely and mapped to user-safe Application/API errors.
 
 ### Documentation / Session Notes
 

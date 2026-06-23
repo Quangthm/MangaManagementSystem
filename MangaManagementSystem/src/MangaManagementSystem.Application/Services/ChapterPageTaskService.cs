@@ -30,7 +30,7 @@ namespace MangaManagementSystem.Application.Services
                 dto.TaskTitle,
                 dto.TaskDescription,
                 (byte)dto.PriorityLevel,
-                dto.DueAtUtc ?? DateTime.UtcNow,
+                dto.DueAtUtc ?? DateTime.UtcNow.AddDays(7),
                 dto.CompensationAmount,
                 dto.PageRegionIds);
 
@@ -185,7 +185,8 @@ namespace MangaManagementSystem.Application.Services
                     r.CreatedByUserId,
                     r.UpdatedByUserId)).ToList(),
                 AssignedToDisplayName: t.AssignedToUser?.DisplayName,
-                AssignedUsername: t.AssignedToUser?.Username
+                AssignedUsername: t.AssignedToUser?.Username,
+                CreatedAtUtc: t.CreatedAtUtc
             );
         }
 
@@ -210,6 +211,75 @@ namespace MangaManagementSystem.Application.Services
         {
             var entities = await _unitOfWork.ChapterPageTasks.GetTasksForReviewByCreatorAsync(creatorUserId);
             return entities.Select(MapToDtoWithFullContext).ToList();
+        }
+
+        // --- Reassignment ---
+
+        public async Task<ReassignChapterPageTaskResult> ReassignTaskAsync(
+            Guid actorUserId,
+            Guid taskId,
+            ReassignChapterPageTaskRequest request)
+        {
+            if (actorUserId == Guid.Empty)
+                throw new InvalidOperationException("Actor user ID is required.");
+            if (taskId == Guid.Empty)
+                throw new InvalidOperationException("Task ID is required.");
+            if (request.NewAssignedToUserId == Guid.Empty)
+                throw new InvalidOperationException("New assigned user ID is required.");
+            if (string.IsNullOrWhiteSpace(request.Reason))
+                throw new InvalidOperationException("A reason is required when reassigning a task.");
+            if (request.Reason.Trim().Length > 500)
+                throw new InvalidOperationException("Reason must not exceed 500 characters.");
+
+            // Load task to validate status and ownership
+            var task = await _unitOfWork.ChapterPageTasks.GetByIdWithRegionsAsync(taskId);
+            if (task == null)
+                throw new InvalidOperationException("Task not found.");
+
+            // Verify actor created this task
+            if (task.CreatedByUserId != actorUserId)
+                throw new InvalidOperationException("You are not authorized to reassign this task.");
+
+            // Status check — only ASSIGNED and UNDER_REVIEW are reassignable
+            if (task.StatusCode is "COMPLETED" or "CANCELLED")
+                throw new InvalidOperationException("Completed or cancelled tasks cannot be reassigned.");
+
+            if (task.StatusCode is not ("ASSIGNED" or "UNDER_REVIEW"))
+                throw new InvalidOperationException($"Task with status '{task.StatusCode}' cannot be reassigned.");
+
+            // Cannot reassign to the same user
+            if (task.AssignedToUserId == request.NewAssignedToUserId)
+                throw new InvalidOperationException("New assigned user must be different from the current assignee.");
+
+            // Use the current task description if no updated description is provided
+            var updatedDescription = string.IsNullOrWhiteSpace(request.UpdatedTaskDescription)
+                ? task.TaskDescription
+                : request.UpdatedTaskDescription.Trim();
+
+            // Call SP — final guards for contributor membership, locking, and audit happen in SQL
+            var newTaskId = await _unitOfWork.ChapterPageTasks.AssignToDifferentUserAsync(
+                actorUserId,
+                taskId,
+                request.NewAssignedToUserId,
+                request.Reason.Trim(),
+                updatedDescription);
+
+            return new ReassignChapterPageTaskResult(taskId, newTaskId);
+        }
+
+        public async Task<IReadOnlyList<EligibleAssistantDto>> GetEligibleAssistantsForTaskAsync(
+            Guid actorUserId,
+            Guid taskId)
+        {
+            if (actorUserId == Guid.Empty)
+                throw new InvalidOperationException("Actor user ID is required.");
+            if (taskId == Guid.Empty)
+                throw new InvalidOperationException("Task ID is required.");
+
+            var rawAssistants = await _unitOfWork.ChapterPageTasks.GetEligibleAssistantsForTaskAsync(taskId);
+            return rawAssistants
+                .Select(a => new EligibleAssistantDto(a.UserId, a.DisplayName, a.Username))
+                .ToList();
         }
 
         private static ChapterPageTaskDto MapToDtoWithFullContext(ChapterPageTask t)
@@ -252,13 +322,17 @@ namespace MangaManagementSystem.Application.Services
                 ChapterNumberLabel: chapter?.ChapterNumberLabel,
                 ChapterTitle: chapter?.ChapterTitle,
                 PageNo: page?.PageNo ?? null,
+                PageVersionNo: pageVersion?.VersionNo ?? null,
                 PageImageUrl: pageFile?.CloudinarySecureUrl,
                 CompensationAmount: t.CompensationAmount,
                 AssignedUsername: t.AssignedToUser?.Username,
                 CompletedOutputUrl: completedFile?.CloudinarySecureUrl,
                 CreatedByDisplayName: t.CreatedByUser?.DisplayName,
                 CreatedAtUtc: t.CreatedAtUtc,
-                UpdatedAtUtc: t.UpdatedAtUtc
+                UpdatedAtUtc: t.UpdatedAtUtc,
+                SeriesSlug: series?.Slug,
+                ChapterId: chapter?.ChapterId,
+                SourceChapterPageVersionId: firstRegion?.ChapterPageVersionId
             );
         }
 
@@ -303,11 +377,17 @@ namespace MangaManagementSystem.Application.Services
                 ChapterNumberLabel: chapter?.ChapterNumberLabel,
                 ChapterTitle: chapter?.ChapterTitle,
                 PageNo: page?.PageNo ?? null,
+                PageVersionNo: pageVersion?.VersionNo ?? null,
                 PageImageUrl: pageFile?.CloudinarySecureUrl,
                 CompensationAmount: t.CompensationAmount,
                 AssignedUsername: t.AssignedToUser?.Username,
-                CompletedOutputUrl: completedFile?.CloudinarySecureUrl
+                CompletedOutputUrl: completedFile?.CloudinarySecureUrl,
+                CreatedAtUtc: t.CreatedAtUtc,
+                SeriesSlug: series?.Slug,
+                ChapterId: chapter?.ChapterId,
+                SourceChapterPageVersionId: firstRegion?.ChapterPageVersionId
             );
         }
     }
 }
+
