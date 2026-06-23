@@ -1,4 +1,4 @@
-﻿@page "/mangaka"
+@page "/mangaka"
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Globalization
@@ -2114,11 +2114,7 @@
                 break;
             case "SERIALIZED":
                 if (!string.IsNullOrWhiteSpace(series.Slug))
-<<<<<<< HEAD
-                    Nav.NavigateTo($"/series/{series.Slug}/workspace");
-=======
-                    Nav.NavigateTo($"/series/{series.Slug}?returnUrl={Uri.EscapeDataString("/mangaka")}");
->>>>>>> origin/main
+                    Nav.NavigateTo($"/series/{series.Slug}/workspace?returnUrl={Uri.EscapeDataString("/mangaka")}");
                 else
                     Snackbar.Add("Series page is not available yet.", Severity.Info);
                 break;

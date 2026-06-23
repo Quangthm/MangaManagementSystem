@@ -1,10 +1,6 @@
-﻿<<<<<<< HEAD
-using System.Data;
+﻿using System.Data;
 using System.Data.Common;
 using MangaManagementSystem.Application.Features.EditorialBoard.Dtos;
-=======
-ï»¿using MangaManagementSystem.Application.Features.EditorialBoard.Dtos;
->>>>>>> origin/main
 using MangaManagementSystem.Application.Features.EditorialBoard.Repositories;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -825,20 +821,5 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             "PENDING" => "Voting in Progress",
             "INVALIDATED" => "Cancelled",
         };
-    }
-
-    public Task<IReadOnlyList<EditorialBoardPollDto>> GetOpenPollsAsync(Guid currentUserId, CancellationToken cancellationToken)
-    {
-        throw new NotImplementedException();
-    }
-
-    public Task<OpenSeriesBoardPollResultDto> OpenPollAsync(OpenSeriesBoardPollRequestDto request, Guid chiefUserId, CancellationToken cancellationToken)
-    {
-        throw new NotImplementedException();
-    }
-
-    public Task<CastSeriesBoardVoteResultDto> CastVoteAsync(CastSeriesBoardVoteRequestDto request, Guid voterUserId, CancellationToken cancellationToken)
-    {
-        throw new NotImplementedException();
     }
 }
