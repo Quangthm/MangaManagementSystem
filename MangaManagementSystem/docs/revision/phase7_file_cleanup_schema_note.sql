@@ -1,0 +1,53 @@
+﻿-- Phase 7 - File Resource Storage Cleanup Schema Note
+-- Purpose:
+--   This script is a REVIEW/SUGGESTION ONLY.
+--   Do NOT execute directly on production or shared database without leader review.
+--
+-- Context:
+--   Latest origin/main source did not contain:
+--     - manga.FileResource.storage_cleanup_status
+--     - admin file cleanup stored procedures
+--     - /admin/files page
+--
+-- Implemented source-code flow no longer uses storage_cleanup_status.
+-- Storage state is derived from:
+--   deleted_at_utc
+--   storage_cleaned_at_utc
+--   storage_cleanup_error
+--
+-- Derived states:
+--   Active:
+--     deleted_at_utc IS NULL
+--
+--   Pending cleanup:
+--     deleted_at_utc IS NOT NULL
+--     AND storage_cleaned_at_utc IS NULL
+--     AND storage_cleanup_error IS NULL
+--
+--   Cleaned:
+--     deleted_at_utc IS NOT NULL
+--     AND storage_cleaned_at_utc IS NOT NULL
+--
+--   Failed:
+--     deleted_at_utc IS NOT NULL
+--     AND storage_cleaned_at_utc IS NULL
+--     AND storage_cleanup_error IS NOT NULL
+--
+-- Suggested schema changes for leader review:
+
+-- 1. Add storage cleanup tracking columns if missing.
+-- ALTER TABLE manga.FileResource
+-- ADD storage_cleaned_at_utc DATETIME2 NULL,
+--     storage_cleanup_error NVARCHAR(1000) NULL;
+
+-- 2. Add cleanup candidate index if missing.
+-- CREATE INDEX ix_file_resource_storage_cleanup_candidates
+-- ON manga.FileResource (deleted_at_utc, storage_cleaned_at_utc)
+-- WHERE deleted_at_utc IS NOT NULL
+--   AND storage_cleaned_at_utc IS NULL;
+
+-- 3. If the real database still has storage_cleanup_status, review dependencies first.
+--    Only drop it after confirming no stored procedure, view, code, report, or job still depends on it.
+--
+-- ALTER TABLE manga.FileResource
+-- DROP COLUMN storage_cleanup_status;

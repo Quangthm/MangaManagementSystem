@@ -11,7 +11,7 @@ namespace MangaManagementSystem.Domain.Interfaces
         IChapterRepository Chapters { get; }
         IUserRepository Users { get; }
         IGenericRepository<ChapterPage> ChapterPages { get; }
-        IGenericRepository<FileResource> FileResources { get; }
+        IFileResourceRepository FileResources { get; }
         ISeriesProposalRepository SeriesProposals { get; }
         IGenericRepository<ChapterPageVersion> ChapterPageVersions { get; }
         IGenericRepository<PageRegion> PageRegions { get; }
@@ -26,6 +26,7 @@ namespace MangaManagementSystem.Domain.Interfaces
         IGenericRepository<Notification> Notifications { get; }
         IGenericRepository<AuditEvent> AuditEvents { get; }
         IGenericRepository<SeriesBoardVote> SeriesBoardVotes { get; }
+
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     }
 }

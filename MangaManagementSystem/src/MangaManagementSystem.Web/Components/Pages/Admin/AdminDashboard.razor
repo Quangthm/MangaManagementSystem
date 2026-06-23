@@ -90,13 +90,13 @@
     private int _rejectedCount;
     private bool _isLoading;
     private string? _loadError;
-    private bool _hasFileManagement = false;
+    private bool _hasFileManagement = true;
 
     protected override async Task OnInitializedAsync()
     {
         // Audit Logs UI removed per MVP scope
         // File management page is not implemented in this build
-        _hasFileManagement = false;
+        _hasFileManagement = true;
 
         await LoadStatsAsync();
     }

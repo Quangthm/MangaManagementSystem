@@ -177,19 +177,54 @@ namespace MangaManagementSystem.Infrastructure.Services
             );
         }
 
-        public async Task DeleteFileAsync(string publicId, string resourceType)
+        public async Task<FileDeleteResultDto> DeleteFileAsync(string publicId, string resourceType)
         {
+            var normalizedResourceType = NormalizeCloudinaryResourceTypeCode(resourceType);
+
             if (string.IsNullOrWhiteSpace(publicId))
             {
-                return;
+                return FileDeleteResultDto.NotFoundResult(
+                    publicId ?? string.Empty,
+                    normalizedResourceType,
+                    "empty_public_id");
             }
 
             var delParams = new DeletionParams(publicId)
             {
-                ResourceType = resourceType == "raw" ? ResourceType.Raw : ResourceType.Image
+                ResourceType = normalizedResourceType == "raw"
+                    ? ResourceType.Raw
+                    : ResourceType.Image
             };
 
-            await _cloudinary.DestroyAsync(delParams);
+            var deleteResult = await _cloudinary.DestroyAsync(delParams);
+            var resultCode = deleteResult?.Result ?? string.Empty;
+
+            if (string.Equals(resultCode, "ok", StringComparison.OrdinalIgnoreCase))
+            {
+                return FileDeleteResultDto.DeletedResult(
+                    publicId,
+                    normalizedResourceType,
+                    resultCode);
+            }
+
+            if (string.Equals(resultCode, "not found", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(resultCode, "not_found", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(resultCode, "notfound", StringComparison.OrdinalIgnoreCase))
+            {
+                return FileDeleteResultDto.NotFoundResult(
+                    publicId,
+                    normalizedResourceType,
+                    resultCode);
+            }
+
+            throw new InvalidOperationException(
+                $"Cloudinary delete failed for public id '{publicId}'. Result: '{resultCode}'.");
+        }
+        private static string NormalizeCloudinaryResourceTypeCode(string resourceType)
+        {
+            return string.Equals(resourceType, "raw", StringComparison.OrdinalIgnoreCase)
+                ? "raw"
+                : "image";
         }
 
         private async Task<UploadResult> UploadToCloudinaryAsync(

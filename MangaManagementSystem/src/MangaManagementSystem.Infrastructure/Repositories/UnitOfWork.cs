@@ -14,7 +14,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         public IChapterRepository Chapters { get; }
         public IUserRepository Users { get; }
         public IGenericRepository<ChapterPage> ChapterPages { get; }
-        public IGenericRepository<FileResource> FileResources { get; }
+        public IFileResourceRepository FileResources { get; }
         public ISeriesProposalRepository SeriesProposals { get; }
         public IGenericRepository<ChapterPageVersion> ChapterPageVersions { get; }
         public IGenericRepository<PageRegion> PageRegions { get; }
@@ -36,7 +36,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             IChapterRepository chapterRepository,
             IUserRepository userRepository,
             IGenericRepository<ChapterPage> chapterPages,
-            IGenericRepository<FileResource> fileResources,
+            IFileResourceRepository fileResources,
             ISeriesProposalRepository seriesProposals,
             IGenericRepository<ChapterPageVersion> chapterPageVersions,
             IGenericRepository<PageRegion> pageRegions,

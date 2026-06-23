@@ -1,0 +1,403 @@
+﻿@page "/admin/files"
+@using MangaManagementSystem.Application.DTOs.Manga
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin")]
+@inject IFileResourceService FileResourceService
+@inject ISnackbar Snackbar
+
+<PageTitle>File Management - MangaFlow</PageTitle>
+
+<AdminLayout>
+    <div class="mf-page">
+        <div class="mf-page-header">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">File Management</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">
+                Review file resources and clean up storage for soft-deleted files.
+            </MudText>
+        </div>
+
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            This page only reads database records when loading or filtering files.
+            Cloudinary is called only when Cleanup or Cleanup All is clicked.
+        </MudAlert>
+
+        <MudPaper Class="pa-5 mf-card" Elevation="0">
+            <MudGrid Class="mb-4">
+                <MudItem xs="12" md="4">
+                    <MudTextField T="string"
+                                  Label="Search"
+                                  Placeholder="File name, public id, URL, content type..."
+                                  @bind-Value="_keyword"
+                                  Immediate="true"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense" />
+                </MudItem>
+
+                <MudItem xs="12" md="3">
+                    <MudTextField T="string"
+                                  Label="Purpose Code"
+                                  Placeholder="Example: USER_AVATAR"
+                                  @bind-Value="_purposeCode"
+                                  Immediate="true"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense" />
+                </MudItem>
+
+                <MudItem xs="12" md="3">
+                    <MudSelect T="string"
+                               Label="Storage State"
+                               @bind-Value="_storageState"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense">
+                        <MudSelectItem T="string" Value="@("")">All</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("ACTIVE")">Active</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("PENDING_CLEANUP")">Pending cleanup</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("CLEANED")">Cleaned</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("FAILED")">Failed</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("DELETED")">Deleted</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="2">
+                    <MudNumericField T="int"
+                                     Label="Page Size"
+                                     @bind-Value="_pageSize"
+                                     Min="1"
+                                     Max="100"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense" />
+                </MudItem>
+            </MudGrid>
+
+            <MudStack Row="true" Spacing="2" Class="mb-4">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Disabled="_isLoading"
+                           OnClick="ReloadFilesAsync">
+                    Refresh
+                </MudButton>
+
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Warning"
+                           Disabled="@(_isLoading || _isCleaningAll)"
+                           OnClick="CleanupAllAsync">
+                    @if (_isCleaningAll)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        <span>Cleaning...</span>
+                    }
+                    else
+                    {
+                        <span>Cleanup All</span>
+                    }
+                </MudButton>
+            </MudStack>
+
+            @if (_isLoading)
+            {
+                <MudProgressLinear Indeterminate="true" Class="mb-4" />
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_loadError))
+            {
+                <MudAlert Severity="Severity.Error" Class="mb-4">@_loadError</MudAlert>
+            }
+
+            <MudText Typo="Typo.body2" Class="mf-muted mb-2">
+                Showing @_files.Count file(s). Total: @_totalCount. Page: @_page.
+            </MudText>
+
+            @if (!_files.Any() && !_isLoading)
+            {
+                <MudPaper Class="pa-6 text-center mf-card">
+                    <MudText>No file resources found.</MudText>
+                </MudPaper>
+            }
+            else
+            {
+                <MudTable Items="_files" Hover="true" Dense="true">
+                    <HeaderContent>
+                        <MudTh>File</MudTh>
+                        <MudTh>Purpose</MudTh>
+                        <MudTh>Content Type</MudTh>
+                        <MudTh>Size</MudTh>
+                        <MudTh>Uploaded</MudTh>
+                        <MudTh>Deleted</MudTh>
+                        <MudTh>Storage State</MudTh>
+                        <MudTh>Cleanup Error</MudTh>
+                        <MudTh></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.body2">@context.OriginalFileName</MudText>
+                                <MudText Typo="Typo.caption" Class="mf-muted">@context.CloudinaryPublicId</MudText>
+                            </MudStack>
+                        </MudTd>
+
+                        <MudTd>@context.FilePurposeCode</MudTd>
+                        <MudTd>@context.ContentType</MudTd>
+                        <MudTd>@FormatFileSize(context.FileSizeBytes)</MudTd>
+                        <MudTd>@context.UploadedAtUtc.ToLocalTime().ToString("g")</MudTd>
+                        <MudTd>@FormatNullableDate(context.DeletedAtUtc)</MudTd>
+
+                        <MudTd>
+                            <MudChip T="string"
+                                     Size="Size.Small"
+                                     Color="@GetStorageStateColor(context.StorageState)">
+                                @context.StorageState
+                            </MudChip>
+                        </MudTd>
+
+                        <MudTd>
+                            @if (string.IsNullOrWhiteSpace(context.StorageCleanupError))
+                            {
+                                <span>-</span>
+                            }
+                            else
+                            {
+                                <MudTooltip Text="@context.StorageCleanupError">
+                                    <MudText Typo="Typo.caption" Color="Color.Error">
+                                        @TrimForDisplay(context.StorageCleanupError, 60)
+                                    </MudText>
+                                </MudTooltip>
+                            }
+                        </MudTd>
+
+                        <MudTd>
+                            <MudButton Size="Size.Small"
+                                       Variant="Variant.Outlined"
+                                       Color="Color.Warning"
+                                       Disabled="@IsCleanupDisabled(context)"
+                                       OnClick="@(() => CleanupOneAsync(context.FileResourceId))">
+                                @if (_cleaningFileId == context.FileResourceId)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                    <span>Cleaning</span>
+                                }
+                                else
+                                {
+                                    <span>Cleanup</span>
+                                }
+                            </MudButton>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+
+                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mt-4">
+                    <MudButton Variant="Variant.Text"
+                               Disabled="@(_page <= 1 || _isLoading)"
+                               OnClick="PreviousPageAsync">
+                        Previous
+                    </MudButton>
+
+                    <MudText Typo="Typo.body2">Page @_page</MudText>
+
+                    <MudButton Variant="Variant.Text"
+                               Disabled="@(!HasNextPage || _isLoading)"
+                               OnClick="NextPageAsync">
+                        Next
+                    </MudButton>
+                </MudStack>
+            }
+        </MudPaper>
+    </div>
+</AdminLayout>
+
+@code {
+    private List<FileResourceDto> _files = new();
+
+    private string? _keyword;
+    private string? _purposeCode;
+    private string _storageState = string.Empty;
+
+    private int _page = 1;
+    private int _pageSize = 20;
+    private int _totalCount;
+
+    private bool _isLoading;
+    private bool _isCleaningAll;
+    private Guid? _cleaningFileId;
+
+    private string? _loadError;
+
+    private bool HasNextPage => _page * _pageSize < _totalCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadFilesAsync();
+    }
+
+    private async Task ReloadFilesAsync()
+    {
+        _page = 1;
+        await LoadFilesAsync();
+    }
+
+    private async Task PreviousPageAsync()
+    {
+        if (_page <= 1)
+        {
+            return;
+        }
+
+        _page--;
+        await LoadFilesAsync();
+    }
+
+    private async Task NextPageAsync()
+    {
+        if (!HasNextPage)
+        {
+            return;
+        }
+
+        _page++;
+        await LoadFilesAsync();
+    }
+
+    private async Task LoadFilesAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        try
+        {
+            var result = await FileResourceService.SearchAdminFilesAsync(
+                NormalizeFilter(_keyword),
+                NormalizeFilter(_purposeCode),
+                NormalizeFilter(_storageState),
+                _page,
+                _pageSize);
+
+            _files = result.Items.ToList();
+            _totalCount = result.TotalCount;
+            _page = result.Page;
+            _pageSize = result.PageSize;
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Failed to load file resources: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task CleanupOneAsync(Guid fileResourceId)
+    {
+        if (_cleaningFileId.HasValue)
+        {
+            return;
+        }
+
+        _cleaningFileId = fileResourceId;
+
+        try
+        {
+            var result = await FileResourceService.CleanupStorageAsync(fileResourceId);
+
+            Snackbar.Add(result.Message, result.Succeeded ? Severity.Success : Severity.Error);
+
+            await LoadFilesAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Cleanup failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _cleaningFileId = null;
+        }
+    }
+
+    private async Task CleanupAllAsync()
+    {
+        if (_isCleaningAll)
+        {
+            return;
+        }
+
+        _isCleaningAll = true;
+
+        try
+        {
+            var results = await FileResourceService.CleanupDeletedStorageBatchAsync(_pageSize);
+
+            var successCount = results.Count(r => r.Succeeded);
+            var failedCount = results.Count - successCount;
+
+            Snackbar.Add(
+                $"Cleanup completed. Success: {successCount}, Failed: {failedCount}.",
+                failedCount == 0 ? Severity.Success : Severity.Warning);
+
+            await LoadFilesAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Cleanup all failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isCleaningAll = false;
+        }
+    }
+
+    private bool IsCleanupDisabled(FileResourceDto file)
+    {
+        return _cleaningFileId.HasValue
+            || _isCleaningAll
+            || !file.DeletedAtUtc.HasValue
+            || file.StorageCleanedAtUtc.HasValue;
+    }
+
+    private static string? NormalizeFilter(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static string FormatNullableDate(DateTime? value)
+    {
+        return value.HasValue ? value.Value.ToLocalTime().ToString("g") : "-";
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024)
+        {
+            return $"{bytes} B";
+        }
+
+        if (bytes < 1024 * 1024)
+        {
+            return $"{bytes / 1024d:0.##} KB";
+        }
+
+        return $"{bytes / 1024d / 1024d:0.##} MB";
+    }
+
+    private static string TrimForDisplay(string value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "-";
+        }
+
+        return value.Length <= maxLength
+            ? value
+            : $"{value[..maxLength]}...";
+    }
+
+    private static Color GetStorageStateColor(string storageState)
+    {
+        return storageState switch
+        {
+            "Active" => Color.Info,
+            "Pending cleanup" => Color.Warning,
+            "Cleaned" => Color.Success,
+            "Failed" => Color.Error,
+            _ => Color.Default
+        };
+    }
+}
