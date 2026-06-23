@@ -246,7 +246,15 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         }
         catch
         {
-            await transaction.RollbackAsync(cancellationToken);
+            try
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
+            catch (InvalidOperationException)
+            {
+                // Transaction was already completed by SQL Server/provider.
+            }
+
             throw;
         }
     }
@@ -265,113 +273,106 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             await connection.OpenAsync(cancellationToken);
         }
 
-        await using var transaction =
-            await connection.BeginTransactionAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
 
-        try
-        {
-            await EnsurePollIsOpenAsync(
-                connection,
-                transaction,
-                request.PollId,
-                cancellationToken);
+        command.CommandText =
+            """
+            SET XACT_ABORT ON;
 
-            await using var command = connection.CreateCommand();
-            command.Transaction = transaction;
+            IF NOT EXISTS (
+                SELECT 1
+                FROM manga.SeriesBoardPoll
+                WHERE series_board_poll_id = @pollId
+                  AND poll_status_code = N'OPEN'
+                  AND (
+                      ends_at_utc IS NULL
+                      OR ends_at_utc > SYSUTCDATETIME()
+                  )
+            )
+            BEGIN
+                THROW 58601, 'Poll is not open or has expired.', 1;
+            END;
 
-            command.CommandText =
-                """
-                DECLARE @result TABLE
+            DECLARE @result TABLE
+            (
+                series_board_vote_id UNIQUEIDENTIFIER,
+                choice_code NVARCHAR(50),
+                vote_reason NVARCHAR(500),
+                voted_at_utc DATETIME2(0)
+            );
+
+            UPDATE manga.SeriesBoardVote
+            SET choice_code = @choiceCode,
+                vote_reason = @voteReason,
+                voted_at_utc = SYSUTCDATETIME()
+            OUTPUT
+                inserted.series_board_vote_id,
+                inserted.choice_code,
+                inserted.vote_reason,
+                inserted.voted_at_utc
+            INTO @result
+            WHERE series_board_poll_id = @pollId
+              AND user_id = @voterUserId;
+
+            IF @@ROWCOUNT = 0
+            BEGIN
+                INSERT INTO manga.SeriesBoardVote
                 (
-                    series_board_vote_id UNIQUEIDENTIFIER,
-                    choice_code NVARCHAR(50),
-                    vote_reason NVARCHAR(500),
-                    voted_at_utc DATETIME2(0)
-                );
-
-                IF EXISTS (
-                    SELECT 1
-                    FROM manga.SeriesBoardVote
-                    WHERE series_board_poll_id = @pollId
-                      AND user_id = @voterUserId
-                )
-                BEGIN
-                    UPDATE manga.SeriesBoardVote
-                    SET choice_code = @choiceCode,
-                        vote_reason = @voteReason,
-                        voted_at_utc = SYSUTCDATETIME()
-                    OUTPUT
-                        inserted.series_board_vote_id,
-                        inserted.choice_code,
-                        inserted.vote_reason,
-                        inserted.voted_at_utc
-                    INTO @result
-                    WHERE series_board_poll_id = @pollId
-                      AND user_id = @voterUserId;
-                END
-                ELSE
-                BEGIN
-                    INSERT INTO manga.SeriesBoardVote
-                    (
-                        series_board_poll_id,
-                        user_id,
-                        choice_code,
-                        vote_reason,
-                        voted_at_utc
-                    )
-                    OUTPUT
-                        inserted.series_board_vote_id,
-                        inserted.choice_code,
-                        inserted.vote_reason,
-                        inserted.voted_at_utc
-                    INTO @result
-                    VALUES
-                    (
-                        @pollId,
-                        @voterUserId,
-                        @choiceCode,
-                        @voteReason,
-                        SYSUTCDATETIME()
-                    );
-                END
-
-                SELECT
-                    series_board_vote_id,
+                    series_board_poll_id,
+                    user_id,
                     choice_code,
                     vote_reason,
                     voted_at_utc
-                FROM @result;
-                """;
+                )
+                OUTPUT
+                    inserted.series_board_vote_id,
+                    inserted.choice_code,
+                    inserted.vote_reason,
+                    inserted.voted_at_utc
+                INTO @result
+                VALUES
+                (
+                    @pollId,
+                    @voterUserId,
+                    @choiceCode,
+                    @voteReason,
+                    SYSUTCDATETIME()
+                );
+            END;
 
-            AddGuidParameter(command, "@pollId", request.PollId);
-            AddGuidParameter(command, "@voterUserId", voterUserId);
-            AddStringParameter(command, "@choiceCode", request.ChoiceCode, 50);
-            AddNullableStringParameter(command, "@voteReason", request.VoteReason, 500);
+            SELECT
+                series_board_vote_id,
+                choice_code,
+                vote_reason,
+                voted_at_utc
+            FROM @result;
+            """;
 
-            await using var reader =
-                await command.ExecuteReaderAsync(cancellationToken);
+        AddGuidParameter(command, "@pollId", request.PollId);
+        AddGuidParameter(command, "@voterUserId", voterUserId);
+        AddStringParameter(command, "@choiceCode", request.ChoiceCode, 50);
+        AddNullableStringParameter(command, "@voteReason", request.VoteReason, 500);
+
+        try
+        {
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
             if (!await reader.ReadAsync(cancellationToken))
             {
                 throw new InvalidOperationException("Could not save vote.");
             }
 
-            var result = new CastSeriesBoardVoteResultDto(
+            return new CastSeriesBoardVoteResultDto(
                 PollId: request.PollId,
                 VoteId: reader.GetGuid(0),
                 UserId: voterUserId,
                 ChoiceCode: reader.GetString(1),
                 VoteReason: reader.IsDBNull(2) ? null : reader.GetString(2),
                 VotedAtUtc: reader.GetDateTime(3));
-
-            await transaction.CommitAsync(cancellationToken);
-
-            return result;
         }
-        catch
+        catch (Microsoft.Data.SqlClient.SqlException ex) when (ex.Number == 58601)
         {
-            await transaction.RollbackAsync(cancellationToken);
-            throw;
+            throw new InvalidOperationException("Poll is not open or has expired.", ex);
         }
     }
 
@@ -626,41 +627,6 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         AddGuidParameter(command, "@chiefUserId", chiefUserId);
 
         await command.ExecuteNonQueryAsync(cancellationToken);
-    }
-
-    private static async Task EnsurePollIsOpenAsync(
-        DbConnection connection,
-        DbTransaction transaction,
-        Guid pollId,
-        CancellationToken cancellationToken)
-    {
-        await using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-
-        command.CommandText =
-            """
-            SELECT COUNT(1)
-            FROM manga.SeriesBoardPoll
-            WHERE series_board_poll_id = @pollId
-              AND poll_status_code = N'OPEN'
-              AND (
-                  ends_at_utc IS NULL
-                  OR ends_at_utc > SYSUTCDATETIME()
-              );
-            """;
-
-        AddGuidParameter(command, "@pollId", pollId);
-
-        var result = await command.ExecuteScalarAsync(cancellationToken);
-
-        var count = result is null || result == DBNull.Value
-            ? 0
-            : Convert.ToInt32(result);
-
-        if (count == 0)
-        {
-            throw new InvalidOperationException("Poll is not open or has expired.");
-        }
     }
 
     private static void ValidateOpenPollRequest(OpenSeriesBoardPollRequestDto request)
