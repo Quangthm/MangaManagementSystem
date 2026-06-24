@@ -14,5 +14,6 @@ namespace MangaManagementSystem.Application.Interfaces
         Task<ChapterPageAnnotationDto?> UpdateChapterPageAnnotationAsync(UpdateChapterPageAnnotationDto dto);
         Task<bool> DeleteChapterPageAnnotationAsync(Guid id);
         Task<bool> ResolveAnnotationAsync(Guid actorUserId, Guid annotationId, string? resolutionNote = null);
+        Task<IEnumerable<ChapterPageAnnotationDto>> GetChapterPageAnnotationsByChapterPageIdAsync(Guid chapterPageId);
     }
 }

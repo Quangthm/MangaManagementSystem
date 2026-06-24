@@ -30,76 +30,87 @@
         }
         else
         {
+            @* Status Banner *@
+            <MudAlert Severity="GetStatusSeverity()" Class="mb-6">
+                <MudStack Row="true" AlignItems="AlignItems.Center">
+                    <MudIcon Icon="@GetStatusIcon()" Size="Size.Small" />
+                    <MudText Typo="Typo.body2">@GetStatusMessage()</MudText>
+                </MudStack>
+            </MudAlert>
+
             <MudGrid>
                 <MudItem xs="12" md="8">
+                    @* Header Card *@
                     <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
-                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start">
                             <div>
-                                <MudText Typo="Typo.h6" Class="font-weight-bold">@_task.TypeCode</MudText>
+                                <MudText Typo="Typo.h4" Class="font-weight-bold">@_task.TypeCode Task</MudText>
+                                @if (!string.IsNullOrWhiteSpace(_task.SeriesTitle) || !string.IsNullOrWhiteSpace(_task.ChapterNumberLabel) || _task.PageNo.HasValue)
+                                {
+                                    <MudText Typo="Typo.body1" Class="mt-1">
+                                        @if (!string.IsNullOrWhiteSpace(_task.SeriesTitle))
+                                        {
+                                            <span>@_task.SeriesTitle</span>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(_task.ChapterNumberLabel))
+                                        {
+                                            <span class="mf-muted"> › @_task.ChapterNumberLabel</span>
+                                        }
+                                        @if (_task.PageNo.HasValue)
+                                        {
+                                            <span class="mf-muted"> › Page @_task.PageNo.Value</span>
+                                        }
+                                    </MudText>
+                                }
                                 @if (!string.IsNullOrWhiteSpace(_task.TaskTitle))
                                 {
-                                    <MudText Typo="Typo.body2">@_task.TaskTitle</MudText>
+                                    <MudText Typo="Typo.body2" Class="mf-muted mt-1">@_task.TaskTitle</MudText>
                                 }
-                            </div>
-                            <StatusBadge Status="@_task.StatusCode" />
-                        </MudStack>
-
-                        <MudPaper Class="pa-4 mb-3" Elevation="0" Style="background-color:#f5f5f5;">
-                            @if (!string.IsNullOrWhiteSpace(_task.SeriesTitle) || !string.IsNullOrWhiteSpace(_task.ChapterNumberLabel) || _task.PageNo.HasValue)
-                            {
-                                <MudStack Spacing="1">
-                                    @if (!string.IsNullOrWhiteSpace(_task.SeriesTitle))
-                                    {
-                                        <MudText Typo="Typo.body2"><strong>Series:</strong> @_task.SeriesTitle</MudText>
-                                    }
-                                    @if (!string.IsNullOrWhiteSpace(_task.ChapterNumberLabel))
-                                    {
-                                        <MudText Typo="Typo.body2"><strong>Chapter:</strong> @_task.ChapterNumberLabel</MudText>
-                                    }
-                                    @if (!string.IsNullOrWhiteSpace(_task.ChapterTitle))
-                                    {
-                                        <MudText Typo="Typo.body2"><strong>Chapter Title:</strong> @_task.ChapterTitle</MudText>
-                                    }
-                                    @if (_task.PageNo.HasValue)
-                                    {
-                                        <MudText Typo="Typo.body2"><strong>Page:</strong> @_task.PageNo.Value</MudText>
-                                    }
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-2">
+                                    <MudText Typo="Typo.caption" Class="mf-muted">
+                                        Assigned: <TimestampDisplay Value="@_task.CreatedAtUtc" EmptyText="-" ShowTime="false" />
+                                    </MudText>
+                                    <MudIcon Icon="@Icons.Material.Filled.FiberManualRecord" Size="Size.Small" Class="mf-muted" Style="font-size: 6px;" />
+                                    <MudText Typo="Typo.caption" Class="mf-muted">
+                                        Due: <TimestampDisplay Value="@_task.DueAtUtc" EmptyText="No deadline" ShowTime="false" />
+                                    </MudText>
+                                    <MudIcon Icon="@Icons.Material.Filled.FiberManualRecord" Size="Size.Small" Class="mf-muted" Style="font-size: 6px;" />
+                                    <MudText Typo="Typo.caption" Class="mf-muted">Priority @_task.PriorityLevel</MudText>
                                 </MudStack>
-                            }
-                            else
-                            {
-                                <MudText Typo="Typo.body2" Class="mf-muted">Series/Chapter information not available.</MudText>
-                            }
-                        </MudPaper>
-
-                        <MudStack Spacing="2">
-                            <MudText Typo="Typo.h6" Class="font-weight-bold">Task Description</MudText>
-                            @if (!string.IsNullOrWhiteSpace(_task.TaskDescription))
-                            {
-                                <MudText Class="mf-muted">@_task.TaskDescription</MudText>
-                            }
-                            else
-                            {
-                                <MudText Typo="Typo.body2" Class="mf-muted">No description available.</MudText>
-                            }
+                            </div>
+                            <StatusBadge Status="@_task.StatusCode" Size="Size.Medium" />
                         </MudStack>
                     </MudPaper>
 
+                    @* Description *@
+                    <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">Description</MudText>
+                        @if (!string.IsNullOrWhiteSpace(_task.TaskDescription))
+                        {
+                            <MudText Class="mf-muted" Style="white-space: pre-line;">@_task.TaskDescription</MudText>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Class="mf-muted">No description available.</MudText>
+                        }
+                    </MudPaper>
+
+                    @* Assigned Page Regions *@
                     @if (_task.PageRegions.Any())
                     {
                         <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
                             <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Assigned Page Regions</MudText>
-                            <MudTable Items="@_task.PageRegions" Hover="true" RowsPerPage="10" Elevation="0">
+                            <MudTable Items="@_task.PageRegions" Hover="true" RowsPerPage="10" Elevation="0" Dense="true">
                                 <HeaderContent>
                                     <MudTh>Type</MudTh>
                                     <MudTh>Label</MudTh>
                                     <MudTh>X</MudTh>
                                     <MudTh>Y</MudTh>
-                                    <MudTh>Width</MudTh>
-                                    <MudTh>Height</MudTh>
+                                    <MudTh>W</MudTh>
+                                    <MudTh>H</MudTh>
                                 </HeaderContent>
                                 <RowTemplate>
-                                    <MudTd>@context.TypeCode</MudTd>
+                                    <MudTd><MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">@context.TypeCode</MudChip></MudTd>
                                     <MudTd>@context.RegionLabel</MudTd>
                                     <MudTd>@context.X</MudTd>
                                     <MudTd>@context.Y</MudTd>
@@ -110,7 +121,7 @@
                         </MudPaper>
                     }
 
-                    @* Annotations for assigned regions *@
+                    @* Annotations *@
                     <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
                         <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Annotations</MudText>
                         @if (_annotations == null)
@@ -133,10 +144,10 @@
                                     <MudTh>Regions</MudTh>
                                 </HeaderContent>
                                 <RowTemplate>
-                                    <MudTd>@context.IssueTypeCode</MudTd>
+                                    <MudTd><MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">@context.IssueTypeCode</MudChip></MudTd>
                                     <MudTd Style="max-width:300px;overflow:hidden;text-overflow:ellipsis;">@context.AnnotationText</MudTd>
-                                    <MudTd>@(context.AnnotatedByDisplayName ?? "—")</MudTd>
-                                    <MudTd><TimestampDisplay Value="@context.CreatedAtUtc" EmptyText="—" /></MudTd>
+                                    <MudTd>@(context.AnnotatedByDisplayName ?? "\u2014")</MudTd>
+                                    <MudTd><TimestampDisplay Value="@context.CreatedAtUtc" EmptyText="\u2014" /></MudTd>
                                     <MudTd>
                                         @if (context.ResolvedAtUtc.HasValue)
                                         {
@@ -152,69 +163,150 @@
                             </MudTable>
                         }
                     </MudPaper>
-
-                    @if (!string.IsNullOrWhiteSpace(_task.PageImageUrl))
-                    {
-                        <MudPaper Class="pa-5 mf-card" Elevation="0">
-                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Source Page Image</MudText>
-                            <MudImage Src="@_task.PageImageUrl" Class="mf-page-image" MaxHeight="400" ObjectFit="ObjectFit.Contain" />
-                            <MudButton Variant="Variant.Text" Size="Size.Small" Href="@_task.PageImageUrl" Target="_blank" Class="mt-2">
-                                Download Source Image
-                            </MudButton>
-                        </MudPaper>
-                    }
-                    else
-                    {
-                        <MudPaper Class="pa-5 mf-card" Elevation="0">
-                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Page Image</MudText>
-                            <MudText Typo="Typo.body2" Class="mf-muted">Page image data not available.</MudText>
-                        </MudPaper>
-                    }
                 </MudItem>
 
                 <MudItem xs="12" md="4">
-                    <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
-                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Task Metadata</MudText>
-                        <MudStack Spacing="1">
-                            <MudText><strong>Type:</strong> @_task.TypeCode</MudText>
-                            <MudText><strong>Status:</strong> @_task.StatusCode</MudText>
-                            <MudText><strong>Priority:</strong> @_task.PriorityLevel</MudText>
-                            <MudText><strong>Due:</strong> <TimestampDisplay Value="@_task.DueAtUtc" EmptyText="No deadline set" /></MudText>
-                            @if (_task.CompensationAmount.HasValue)
-                            {
-                                <MudText><strong>Compensation:</strong> @_task.CompensationAmount.Value.ToString("C2")</MudText>
-                            }
-                            @if (!string.IsNullOrWhiteSpace(_task.AssignedToDisplayName))
-                            {
-                                <MudText><strong>Assigned To:</strong> @_task.AssignedToDisplayName</MudText>
-                            }
-                        </MudStack>
-                    </MudPaper>
-
-                    @if (_task.CompletedPageVersionId.HasValue && !string.IsNullOrWhiteSpace(_task.CompletedOutputUrl))
-                    {
+                    <div style="position: sticky; top: 24px;">
+                        @* Actions Card *@
                         <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
-                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Submitted Output</MudText>
-                            <MudImage Src="@_task.CompletedOutputUrl" MaxHeight="200" ObjectFit="ObjectFit.Contain" Class="rounded" />
-                            <MudText Typo="Typo.caption" Class="mf-muted mt-1">Version ID: @_task.CompletedPageVersionId</MudText>
+                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Actions</MudText>
+                            <MudStack Spacing="2">
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Href="@($"/assistant/studio/{_task.ChapterPageTaskId}")">
+                                    Open Studio Workspace
+                                </MudButton>
+                                @if (_task.StatusCode == "ASSIGNED")
+                                {
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" Href="@($"/assistant/task/{_task.ChapterPageTaskId}/submit")">
+                                        Submit Work
+                                    </MudButton>
+                                }
+                                else if (_task.StatusCode == "UNDER_REVIEW")
+                                {
+                                    <div class="text-center">
+                                        <MudChip T="string" Color="Color.Warning" Size="Size.Medium" Variant="Variant.Outlined">
+                                            Submitted for Review
+                                        </MudChip>
+                                    </div>
+                                }
+                                else if (_task.StatusCode == "COMPLETED")
+                                {
+                                    <div class="text-center">
+                                        <MudChip T="string" Color="Color.Success" Size="Size.Medium">
+                                            Approved ✓
+                                        </MudChip>
+                                    </div>
+                                }
+                                else if (_task.StatusCode == "CANCELLED")
+                                {
+                                    <div class="text-center">
+                                        <MudChip T="string" Color="Color.Error" Size="Size.Medium" Variant="Variant.Outlined">
+                                            Task Cancelled
+                                        </MudChip>
+                                    </div>
+                                }
+                                <MudButton Variant="Variant.Text" FullWidth="true" Href="/assistant/tasks">Back to Tasks</MudButton>
+                            </MudStack>
                         </MudPaper>
-                    }
 
-                    <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
-                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Actions</MudText>
-                        <MudStack Spacing="2">
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"/assistant/studio/{_task.ChapterPageTaskId}")">Open Studio Workspace</MudButton>
-                            @if (_task.StatusCode == "ASSIGNED")
+                        @* Metadata Card *@
+                        <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Metadata</MudText>
+                            <MudStack Spacing="1">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                    <MudText Typo="Typo.body2" Class="mf-muted">Type</MudText>
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">@_task.TypeCode</MudChip>
+                                </MudStack>
+                                <MudDivider Class="my-1" />
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                    <MudText Typo="Typo.body2" Class="mf-muted">Status</MudText>
+                                    <StatusBadge Status="@_task.StatusCode" />
+                                </MudStack>
+                                <MudDivider Class="my-1" />
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                    <MudText Typo="Typo.body2" Class="mf-muted">Assigned</MudText>
+                                    <TimestampDisplay Value="@_task.CreatedAtUtc" EmptyText="-" ShowTime="false" />
+                                </MudStack>
+                                <MudDivider Class="my-1" />
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                    <MudText Typo="Typo.body2" Class="mf-muted">Priority</MudText>
+                                    <MudText Typo="Typo.body2" Class="font-weight-bold">@_task.PriorityLevel</MudText>
+                                </MudStack>
+                                <MudDivider Class="my-1" />
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                    <MudText Typo="Typo.body2" Class="mf-muted">Due</MudText>
+                                    <TimestampDisplay Value="@_task.DueAtUtc" EmptyText="No deadline" ShowTime="false" />
+                                </MudStack>
+                                <MudDivider Class="my-1" />
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                    <MudText Typo="Typo.body2" Class="mf-muted">Regions</MudText>
+                                    <MudText Typo="Typo.body2" Class="font-weight-bold">@_task.PageRegions.Count</MudText>
+                                </MudStack>
+                            </MudStack>
+                        </MudPaper>
+
+                        @* Source Page Card *@
+                        <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Source Page</MudText>
+                            @if (!string.IsNullOrWhiteSpace(_task.PageImageUrl))
                             {
-                                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="@($"/assistant/task/{_task.ChapterPageTaskId}/submit")">Submit Work</MudButton>
+                                <MudImage Src="@_task.PageImageUrl" MaxHeight="150" ObjectFit="ObjectFit.Contain" Class="rounded w-100" />
+                                <div class="mt-2 text-center">
+                                    <MudButton Size="Size.Small" Variant="Variant.Text" Href="@_task.PageImageUrl" Target="_blank">Download Source</MudButton>
+                                </div>
                             }
                             else
                             {
-                                <MudButton Variant="Variant.Outlined" Disabled="true">Submit Work (Status: @_task.StatusCode)</MudButton>
+                                <MudText Typo="Typo.body2" Class="mf-muted pa-4 text-center">Source image not available.</MudText>
                             }
-                            <MudButton Variant="Variant.Text" Href="/assistant/tasks">Back to Tasks</MudButton>
-                        </MudStack>
-                    </MudPaper>
+                        </MudPaper>
+
+                        @* Submitted Output Card *@
+                        <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Submitted Output</MudText>
+                            @if (!string.IsNullOrWhiteSpace(_task.CompletedOutputUrl))
+                            {
+                                <div class="text-center pa-4">
+                                    <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Large" Class="mf-muted mb-2" />
+                                    <MudText Typo="Typo.body2" Class="mf-muted">Submitted output is available</MudText>
+                                    @if (_task.CompletedPageVersionId.HasValue)
+                                    {
+                                        <MudText Typo="Typo.caption" Class="mf-muted">Version: @_task.CompletedPageVersionId.Value.ToString("N")[..8]</MudText>
+                                    }
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" Class="mt-3"
+                                               OnClick="() => _showOutputPreview = true">
+                                        View Submitted Output
+                                    </MudButton>
+                                </div>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.body2" Class="mf-muted pa-4 text-center">No submitted output yet.</MudText>
+                            }
+                        </MudPaper>
+
+                        @* Submitted Output Preview Overlay *@
+                        <MudOverlay Visible="_showOutputPreview" AutoClose="false">
+                            <div style="display: flex; align-items: center; justify-content: center; height: 100%; padding: 24px;">
+                                <MudPaper Elevation="0" Class="mf-card"
+                                          Style="max-width: 800px; width: 100%; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-bottom: 1px solid var(--mf-slate-200);">
+                                        <MudText Typo="Typo.h6" Class="font-weight-bold">Submitted Output Preview</MudText>
+                                        <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseOutputPreview" Size="Size.Small" />
+                                    </div>
+                                    <div style="flex: 1; overflow: auto; padding: 24px; text-align: center;">
+                                        @if (!string.IsNullOrWhiteSpace(_task?.CompletedOutputUrl))
+                                        {
+                                            <img src="@_task.CompletedOutputUrl"
+                                                 style="max-width: 100%; max-height: 72vh; object-fit: contain; border-radius: 8px;" />
+                                        }
+                                    </div>
+                                    <div style="padding: 12px 24px; border-top: 1px solid var(--mf-slate-200); text-align: right;">
+                                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CloseOutputPreview">Close</MudButton>
+                                    </div>
+                                </MudPaper>
+                            </div>
+                        </MudOverlay>
+                    </div>
                 </MudItem>
             </MudGrid>
         }
@@ -226,9 +318,51 @@
 
     private Guid _currentUserId;
     private bool _loading = true;
+    private bool _showOutputPreview;
     private string? _error;
     private ChapterPageTaskDto? _task;
     private IReadOnlyList<ChapterPageAnnotationDto>? _annotations;
+
+    private Severity GetStatusSeverity()
+    {
+        return _task?.StatusCode switch
+        {
+            "ASSIGNED" => Severity.Info,
+            "UNDER_REVIEW" => Severity.Warning,
+            "COMPLETED" => Severity.Success,
+            "CANCELLED" => Severity.Error,
+            _ => Severity.Normal
+        };
+    }
+
+    private string GetStatusIcon()
+    {
+        return _task?.StatusCode switch
+        {
+            "ASSIGNED" => Icons.Material.Filled.Assignment,
+            "UNDER_REVIEW" => Icons.Material.Filled.RateReview,
+            "COMPLETED" => Icons.Material.Filled.CheckCircle,
+            "CANCELLED" => Icons.Material.Filled.Cancel,
+            _ => Icons.Material.Filled.Info
+        };
+    }
+
+    private string GetStatusMessage()
+    {
+        return _task?.StatusCode switch
+        {
+            "ASSIGNED" => "This task is assigned to you and ready to work on.",
+            "UNDER_REVIEW" => "Your work has been submitted. Waiting for Mangaka review.",
+            "COMPLETED" => "This task has been approved and completed.",
+            "CANCELLED" => "This task has been cancelled.",
+            _ => ""
+        };
+    }
+
+    private void CloseOutputPreview()
+    {
+        _showOutputPreview = false;
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -255,7 +389,6 @@
         {
             _task = await AssistantTaskClient.GetTaskDetailAsync(_currentUserId, TaskId);
 
-            // Load annotations for this task's regions (non-blocking)
             if (_task != null)
             {
                 _annotations = await AssistantTaskClient.GetTaskAnnotationsAsync(_currentUserId, TaskId);

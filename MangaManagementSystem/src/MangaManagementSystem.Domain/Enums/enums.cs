@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace MangaManagementSystem.Domain.Enums
 {
-    internal class enums
+    internal class Enums
     {
     }
 }

@@ -9,6 +9,7 @@
 @inject IUserService UserService
 @inject IFileResourceService FileResourceService
 @inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
 
 <AuthorizeView>
     <Authorized>
@@ -25,7 +26,7 @@
         }
         else
         {
-            <MudMenu OffsetY="true">
+            <MudMenu>
                 <ActivatorContent>
                     <button type="button"
                             class="mf-user-profile-card"
@@ -109,7 +110,54 @@
     private bool _loading = true;
     private bool _profileLoadInProgress;
     private bool _disposed;
+    private Guid _userId;
 
+	protected override async Task OnInitializedAsync()
+	{
+		try
+		{
+			var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+			var user = auth.User;
+			if (user?.Identity?.IsAuthenticated == true)
+			{
+				var idClaim = user.FindFirst(ClaimTypes.NameIdentifier);
+				if (Guid.TryParse(idClaim?.Value, out var uid))
+				{
+					_userId = uid;
+					var dto = await UserService.GetUserByIdAsync(uid);
+					if (dto != null)
+					{
+						_initial = string.IsNullOrWhiteSpace(dto.DisplayName) ? dto.Username?.Substring(0,1).ToUpper() : dto.DisplayName?.Substring(0,1).ToUpper();
+						if (dto.AvatarFileId.HasValue)
+						{
+							var file = await FileResourceService.GetFileResourceByIdAsync(dto.AvatarFileId.Value);
+							if (file != null && !string.IsNullOrWhiteSpace(file.CloudinarySecureUrl))
+							{
+								_avatarUrl = file.CloudinarySecureUrl;
+							}
+						}
+					}
+				}
+			}
+		}
+		catch (Exception)
+		{
+			// Non-fatal; show placeholder avatar
+			Snackbar.Add("Failed to load profile info.", Severity.Warning);
+		}
+		finally
+		{
+			_loading = false;
+		}
+	}
+
+	private void OpenProfile()
+	{
+		// Show a simple modal with profile info. For now this is a placeholder that
+		// shows read-only username/email/role/status and informs what update actions are available.
+		var content = "Profile editing, avatar upload, and password change are temporarily unavailable in the current build.";
+		Snackbar.Add(content, Severity.Info);
+	}
     private string? _avatarUrl;
     private string _initial = "U";
     private string _displayName = "User";

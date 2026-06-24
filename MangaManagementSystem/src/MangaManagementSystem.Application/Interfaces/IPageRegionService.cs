@@ -11,5 +11,6 @@ namespace MangaManagementSystem.Application.Interfaces
         Task<IEnumerable<PageRegionDto>> GetPageRegionsByChapterPageVersionIdAsync(Guid chapterPageVersionId);
         Task<PageRegionDto?> UpdatePageRegionAsync(UpdatePageRegionDto dto);
         Task<bool> DeletePageRegionAsync(Guid id);
+        Task<bool> BulkReplacePageRegionsAsync(Guid chapterPageVersionId, IEnumerable<CreatePageRegionDto> dtos);
     }
 }

@@ -1,3 +1,4 @@
+export function createMangaCanvasInstance() {
 let canvas, ctx, container;
 let dotNetRef;
 let originalImg = null;
@@ -48,12 +49,12 @@ let historyIndex = -1;
 
 let selectionDiv = null;
 
-export function syncAnnotations(anns) {
+function syncAnnotations(anns) {
     annotations = anns || [];
     redraw();
 }
 
-export function initCanvas(canvasId, containerId, dotnet) {
+function initCanvas(canvasId, containerId, dotnet) {
     canvas = document.getElementById(canvasId);
     container = document.getElementById(containerId);
     ctx = canvas.getContext('2d');
@@ -61,7 +62,7 @@ export function initCanvas(canvasId, containerId, dotnet) {
 
     // CSS HTML đã chuẩn, không cần ghi đè container
 
-    
+
     canvas.style.position = 'absolute';
     canvas.style.left = '0px';
     canvas.style.top = '0px';
@@ -89,7 +90,7 @@ function setupEvents() {
         const mouseY = e.clientY - rect.top;
 
         const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-        
+
         // Calculate new scale, min 0.1, max 10
         let newScale = scale * zoomFactor;
         newScale = Math.max(0.1, Math.min(newScale, 10));
@@ -98,7 +99,7 @@ function setupEvents() {
         panX = mouseX - (mouseX - panX) * (newScale / scale);
         panY = mouseY - (mouseY - panY) * (newScale / scale);
         scale = newScale;
-        
+
         applyTransform();
     }, { passive: false });
 
@@ -113,11 +114,11 @@ function setupEvents() {
         }
 
         const pos = getMousePos(e);
-        
+
         if (currentTool === 'draw') {
             isDrawing = true;
             drawStart = { x: e.clientX, y: e.clientY };
-            
+
             const rect = container.getBoundingClientRect();
             selectionDiv.style.left = (e.clientX - rect.left) + 'px';
             selectionDiv.style.top = (e.clientY - rect.top) + 'px';
@@ -127,7 +128,7 @@ function setupEvents() {
         } else if (currentTool === 'pin') {
             const pos = getMousePos(e);
             dotNetRef.invokeMethodAsync('OnPinAdded', Math.round(pos.x), Math.round(pos.y));
-            
+
             // Switch back to select tool automatically
             currentTool = 'select';
             dotNetRef.invokeMethodAsync('OnToolChangedFromJS', 'select');
@@ -136,7 +137,7 @@ function setupEvents() {
             lastBrushPos = getMousePos(e);
         } else if (currentTool === 'select') {
             const pos = getMousePos(e);
-            
+
             // Check if clicking on a selected region's handle FIRST
             let clickedHandle = null;
             let clickedRegion = null;
@@ -168,23 +169,13 @@ function setupEvents() {
             }
 
             // Check if clicking inside a region
-            const hit = regions.slice().reverse().find(r => 
-                pos.x >= r.x && pos.x <= r.x + r.width && 
+            const hit = regions.slice().reverse().find(r =>
+                pos.x >= r.x && pos.x <= r.x + r.width &&
                 pos.y >= r.y && pos.y <= r.y + r.height);
-            
+
             if (hit) {
-                if (e.shiftKey || e.ctrlKey) {
-                    hit.selected = !hit.selected;
-                    syncToBlazor();
-                    redraw();
-                } else {
-                    if (!hit.selected) {
-                        regions.forEach(r => r.selected = false);
-                        hit.selected = true;
-                        syncToBlazor();
-                        redraw();
-                    }
-                }
+                // User requested double-click to toggle selection (on/off).
+                // So single mousedown no longer changes selection, but still allows dragging.
                 isDraggingRegion = true;
                 targetRegion = hit;
                 dragOffsetX = pos.x - hit.x;
@@ -211,7 +202,7 @@ function setupEvents() {
         }
 
         const pos = getMousePos(e);
-        
+
         if (isBrushing) {
             bgCtx.beginPath();
             bgCtx.moveTo(lastBrushPos.x, lastBrushPos.y);
@@ -288,8 +279,8 @@ function setupEvents() {
                 if (found) break;
             }
             if (!found) {
-                const hit = regions.slice().reverse().find(r => 
-                    pos.x >= r.x && pos.x <= r.x + r.width && 
+                const hit = regions.slice().reverse().find(r =>
+                    pos.x >= r.x && pos.x <= r.x + r.width &&
                     pos.y >= r.y && pos.y <= r.y + r.height);
                 if (hit) hoverCursor = 'move';
             }
@@ -300,12 +291,12 @@ function setupEvents() {
             const rect = container.getBoundingClientRect();
             const currentX = e.clientX;
             const currentY = e.clientY;
-            
+
             const left = Math.min(drawStart.x, currentX) - rect.left;
             const top = Math.min(drawStart.y, currentY) - rect.top;
             const width = Math.abs(currentX - drawStart.x);
             const height = Math.abs(currentY - drawStart.y);
-            
+
             selectionDiv.style.left = left + 'px';
             selectionDiv.style.top = top + 'px';
             selectionDiv.style.width = width + 'px';
@@ -324,7 +315,7 @@ function setupEvents() {
             isPanning = false;
             container.style.cursor = currentTool === 'pan' ? 'grab' : 'crosshair';
         }
-        
+
         if (isDraggingRegion || isResizing) {
             isDraggingRegion = false;
             isResizing = false;
@@ -337,12 +328,12 @@ function setupEvents() {
         if (isDrawing) {
             isDrawing = false;
             selectionDiv.style.display = 'none';
-            
+
             const rect = container.getBoundingClientRect();
             const startCanvasX = (drawStart.x - rect.left - panX) / scale;
             const startCanvasY = (drawStart.y - rect.top - panY) / scale;
             const endCanvasPos = getMousePos(e);
-            
+
             const x = Math.min(startCanvasX, endCanvasPos.x);
             const y = Math.min(startCanvasY, endCanvasPos.y);
             const w = Math.abs(endCanvasPos.x - startCanvasX);
@@ -367,12 +358,14 @@ function setupEvents() {
     container.addEventListener('dblclick', (e) => {
         if (currentTool !== 'select') return;
         const pos = getMousePos(e);
-        const hit = regions.slice().reverse().find(r => 
-            pos.x >= r.x && pos.x <= r.x + r.width && 
+        const hit = regions.slice().reverse().find(r =>
+            pos.x >= r.x && pos.x <= r.x + r.width &&
             pos.y >= r.y && pos.y <= r.y + r.height);
-        
+
         if (hit) {
-            dotNetRef.invokeMethodAsync('OnRegionDoubleClicked', hit.id);
+            hit.selected = !hit.selected;
+            syncToBlazor();
+            redraw();
         }
     });
 
@@ -433,7 +426,7 @@ function applyTransform() {
 
 let currentDataUrl = null;
 
-export function loadImage(dataUrl) {
+function loadImage(dataUrl) {
     currentDataUrl = dataUrl;
     return new Promise((resolve) => {
         if (!dataUrl) {
@@ -448,6 +441,11 @@ export function loadImage(dataUrl) {
             return;
         }
         const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onerror = () => {
+            console.error('Failed to load image from URL:', dataUrl);
+            resolve();
+        };
         img.onload = () => {
             originalImg = img;
             backgroundCanvas.width = img.width;
@@ -467,9 +465,33 @@ export function loadImage(dataUrl) {
             panX = (container.clientWidth - img.width * scale) / 2;
             panY = (container.clientHeight - img.height * scale) / 2;
             applyTransform();
-            
+
             redraw();
             resolve();
+        };
+        img.onerror = () => {
+            // Fallback: if CORS fails, try without crossOrigin
+            const img2 = new Image();
+            img2.onload = () => {
+                originalImg = img2;
+                backgroundCanvas.width = img2.width;
+                backgroundCanvas.height = img2.height;
+                bgCtx.drawImage(img2, 0, 0);
+                canvas.style.display = 'block';
+                canvas.width = img2.width;
+                canvas.height = img2.height;
+                canvas.style.width = img2.width + 'px';
+                canvas.style.height = img2.height + 'px';
+                canvas.style.maxWidth = 'none';
+                canvas.style.maxHeight = 'none';
+                scale = Math.min(container.clientWidth / img2.width, container.clientHeight / img2.height);
+                panX = (container.clientWidth - img2.width * scale) / 2;
+                panY = (container.clientHeight - img2.height * scale) / 2;
+                applyTransform();
+                redraw();
+                resolve();
+            };
+            img2.src = dataUrl;
         };
         img.src = dataUrl;
     });
@@ -486,12 +508,12 @@ function dataURItoBlob(dataURI) {
     return new Blob([ab], {type: mimeString});
 }
 
-export function setTool(tool) {
+function setTool(tool) {
     currentTool = tool;
     container.style.cursor = tool === 'pan' ? 'grab' : 'crosshair';
 }
 
-export function zoom(factor) {
+function zoom(factor) {
     const newScale = scale * factor;
     const cx = container.clientWidth / 2;
     const cy = container.clientHeight / 2;
@@ -501,7 +523,7 @@ export function zoom(factor) {
     applyTransform();
 }
 
-export function resetZoom() {
+function resetZoom() {
     if(!originalImg) return;
     scale = Math.min(container.clientWidth / originalImg.width, container.clientHeight / originalImg.height);
     panX = (container.clientWidth - originalImg.width * scale) / 2;
@@ -509,12 +531,12 @@ export function resetZoom() {
     applyTransform();
 }
 
-export function setTypography(config) {
+function setTypography(config) {
     typo = { ...typo, ...config };
     redraw();
 }
 
-export function updateRegionData(id, data) {
+function updateRegionData(id, data) {
     const index = regions.findIndex(r => r.id === id);
     if (index !== -1) {
         regions[index] = { ...regions[index], ...data };
@@ -523,7 +545,7 @@ export function updateRegionData(id, data) {
     }
 }
 
-export function loadRegions(savedRegionsStr) {
+function loadRegions(savedRegionsStr) {
     if (!savedRegionsStr) {
         regions = [];
     } else if (typeof savedRegionsStr === 'string') {
@@ -544,23 +566,23 @@ export function loadRegions(savedRegionsStr) {
     redraw();
 }
 
-export function selectRegion(id) {
+function selectRegion(id) {
     regions.forEach(r => r.selected = (r.id === id));
     syncToBlazor();
     redraw();
 }
 
-export function deleteRegion(id) {
+function deleteRegion(id) {
     regions = regions.filter(r => r.id !== id);
     saveState();
     syncToBlazor();
     redraw();
 }
 
-export function deleteSelectedRegions() {
+function deleteSelectedRegions() {
     const hasSelected = regions.some(r => r.selected);
     if (!hasSelected) return;
-    
+
     if (window.confirm("Are you sure you want to delete the selected panel(s)?")) {
         regions = regions.filter(r => !r.selected);
         saveState();
@@ -569,7 +591,7 @@ export function deleteSelectedRegions() {
     }
 }
 
-export function approveSelectedRegions() {
+function approveSelectedRegions() {
     regions.forEach(r => {
         if (r.selected) r.isSuggested = false;
     });
@@ -578,7 +600,7 @@ export function approveSelectedRegions() {
     redraw();
 }
 
-export function setBrushSettings(color, size) {
+function setBrushSettings(color, size) {
     brushColor = color;
     brushSize = size;
 }
@@ -605,7 +627,7 @@ function getHandleRects(r) {
 
 function redraw() {
     if (!originalImg) return;
-    
+
     // 1. Draw base image
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(backgroundCanvas, 0, 0);
@@ -642,7 +664,7 @@ function redraw() {
         }
         ctx.strokeRect(r.x, r.y, r.width, r.height);
         ctx.setLineDash([]); // Reset line dash
-        
+
         // Draw Handle/ID for all regions
         ctx.fillStyle = r.selected ? '#3498db' : statusColor;
         ctx.fillRect(r.x, r.y - 20, 40, 20);
@@ -662,7 +684,7 @@ function redraw() {
             ctx.font = '16px Arial';
             ctx.fillText('📝', r.x + r.width - 20, r.y - 6);
         }
-        
+
         // Draw resize handles if selected
         if (r.selected) {
             const handles = getHandleRects(r);
@@ -679,10 +701,10 @@ function redraw() {
 
     // Draw annotations (Pins)
     annotations.forEach(ann => {
-        const ax = ann.x ?? ann.X;
-        const ay = ann.y ?? ann.Y;
+        const ax = ann.pinX ?? ann.PinX ?? ann.x ?? ann.X;
+        const ay = ann.pinY ?? ann.PinY ?? ann.y ?? ann.Y;
         const isResolved = ann.isResolved ?? ann.IsResolved ?? false;
-        
+
         if (ax != null && ay != null) {
             const radius = 12 / scale;
             // Draw pin circle
@@ -690,7 +712,7 @@ function redraw() {
             ctx.arc(ax, ay, radius, 0, 2 * Math.PI);
             ctx.fillStyle = isResolved ? 'rgba(46, 204, 113, 0.9)' : 'rgba(231, 76, 60, 0.9)';
             ctx.fill();
-            
+
             ctx.lineWidth = 2 / scale;
             ctx.strokeStyle = '#ffffff';
             ctx.stroke();
@@ -714,7 +736,7 @@ function drawWrappedText(context, region, x, y, maxWidth, maxHeight) {
     const text = region.translatedText;
     const size = region.fontSize > 0 ? region.fontSize : typo.fontSize;
     context.font = `${size}px ${typo.font}`;
-    
+
     if (region.type === 'SFX') {
         context.font = `italic bold ${size + 4}px ${typo.font}`;
     }
@@ -722,7 +744,7 @@ function drawWrappedText(context, region, x, y, maxWidth, maxHeight) {
     context.fillStyle = typo.color;
     context.textAlign = typo.align;
     context.textBaseline = 'top';
-    
+
     if(typo.stroke) {
         context.strokeStyle = typo.color === '#000000' ? '#ffffff' : '#000000';
         context.lineWidth = region.type === 'SFX' ? 5 : 3;
@@ -737,7 +759,7 @@ function drawWrappedText(context, region, x, y, maxWidth, maxHeight) {
         const testLine = line + words[n] + ' ';
         const metrics = context.measureText(testLine);
         const testWidth = metrics.width;
-        
+
         if (testWidth > maxWidth && n > 0) {
             lines.push(line);
             line = words[n] + ' ';
@@ -751,13 +773,13 @@ function drawWrappedText(context, region, x, y, maxWidth, maxHeight) {
     const lineHeight = size * 1.2;
     const totalTextHeight = lines.length * lineHeight;
     let currentY = y + (maxHeight - totalTextHeight) / 2;
-    
+
     // Draw each line
     lines.forEach(l => {
         let currentX = x;
         if(typo.align === 'center') currentX = x + maxWidth / 2;
         if(typo.align === 'right') currentX = x + maxWidth;
-        
+
         if(typo.stroke) {
             context.strokeText(l, currentX, currentY);
         }
@@ -770,7 +792,7 @@ function drawVerticalText(context, region, x, y, maxWidth, maxHeight) {
     const text = region.translatedText;
     const size = region.fontSize > 0 ? region.fontSize : typo.fontSize;
     context.font = `${size}px ${typo.font}`;
-    
+
     if (region.type === 'SFX') {
         context.font = `italic bold ${size + 4}px ${typo.font}`;
     }
@@ -787,17 +809,17 @@ function drawVerticalText(context, region, x, y, maxWidth, maxHeight) {
 
     // Tách văn bản thành các chữ (words) và lọc bỏ các khoảng trắng rỗng
     const words = text.split(/\s+/).filter(w => w.length > 0);
-    
+
     const lineHeight = size * 1.2;
     const totalTextHeight = words.length * lineHeight;
     // Căn giữa theo chiều dọc
     let currentY = y + (maxHeight - totalTextHeight) / 2;
-    
+
     words.forEach(word => {
         let currentX = x;
         if(typo.align === 'center') currentX = x + maxWidth / 2;
         if(typo.align === 'right') currentX = x + maxWidth;
-        
+
         if(typo.stroke) {
             context.strokeText(word, currentX, currentY);
         }
@@ -814,22 +836,32 @@ function saveState() {
     if (historyIndex < historyStack.length - 1) {
         historyStack = historyStack.slice(0, historyIndex + 1);
     }
+    let imgSrc = null;
+    try {
+        imgSrc = backgroundCanvas.toDataURL('image/png');
+    } catch (e) {
+        // Canvas is tainted (cross-origin image), skip saving image state
+        imgSrc = currentDataUrl;
+    }
     historyStack.push({
         regions: JSON.parse(JSON.stringify(regions)),
-        imgSrc: backgroundCanvas.toDataURL('image/png')
+        imgSrc: imgSrc
     });
     historyIndex++;
     if (typeof dotNetRef !== 'undefined' && dotNetRef) syncToBlazor();
 }
 
-export function undo() {
+function undo() {
     if (historyIndex > 0) {
         historyIndex--;
         const state = historyStack[historyIndex];
         regions = JSON.parse(JSON.stringify(state.regions));
-        
-        if (state.imgSrc && state.imgSrc !== backgroundCanvas.toDataURL('image/png')) {
+
+        let currentImgSrc = null;
+        try { currentImgSrc = backgroundCanvas.toDataURL('image/png'); } catch(e) { /* tainted */ }
+        if (state.imgSrc && state.imgSrc !== currentImgSrc) {
             const img = new Image();
+            img.crossOrigin = 'anonymous';
             img.onload = () => {
                 backgroundCanvas.width = img.width;
                 backgroundCanvas.height = img.height;
@@ -845,14 +877,17 @@ export function undo() {
     }
 }
 
-export function redo() {
+function redo() {
     if (historyIndex < historyStack.length - 1) {
         historyIndex++;
         const state = historyStack[historyIndex];
         regions = JSON.parse(JSON.stringify(state.regions));
-        
-        if (state.imgSrc && state.imgSrc !== backgroundCanvas.toDataURL('image/png')) {
+
+        let currentImgSrc2 = null;
+        try { currentImgSrc2 = backgroundCanvas.toDataURL('image/png'); } catch(e) { /* tainted */ }
+        if (state.imgSrc && state.imgSrc !== currentImgSrc2) {
             const img = new Image();
+            img.crossOrigin = 'anonymous';
             img.onload = () => {
                 backgroundCanvas.width = img.width;
                 backgroundCanvas.height = img.height;
@@ -892,16 +927,30 @@ function calculateIoU(box1, box2) {
     const iou = interArea / parseFloat(box1Area + box2Area - interArea);
     return iou;
 }
-export async function callSegmentAPI() {
+async function callSegmentAPI() {
     if (!currentDataUrl) return false;
     try {
-        const blob = dataURItoBlob(currentDataUrl);
-        const formData = new FormData();
-        formData.append('file', blob, 'image.jpg');
-        
-        const res = await fetch('http://localhost:8000/api/ai/segment', { method: 'POST', body: formData });
-        const json = await res.json();
-        
+        let blob;
+        try {
+            // Try to get data from canvas (works if not tainted)
+            const canvasDataUrl = backgroundCanvas.toDataURL('image/png');
+            blob = dataURItoBlob(canvasDataUrl);
+        } catch (e) {
+            // Canvas is tainted, fetch the image directly from the URL
+            const response = await fetch(currentDataUrl);
+            blob = await response.blob();
+        }
+        // Call Blazor C# backend instead of direct AI service call
+        if (!dotNetRef) return false;
+        const reader = new FileReader();
+        const base64Promise = new Promise((resolve) => {
+            reader.onloadend = () => resolve(reader.result);
+            reader.readAsDataURL(blob);
+        });
+        const base64Data = await base64Promise;
+        const resultStr = await dotNetRef.invokeMethodAsync('SegmentImageJS', base64Data);
+        const json = JSON.parse(resultStr);
+
         if (json.status === "success" && json.regions) {
             json.regions.forEach(aiReg => {
                 let isDuplicate = false;
@@ -911,7 +960,7 @@ export async function callSegmentAPI() {
                         break;
                     }
                 }
-                
+
                 if (!isDuplicate) {
                     regions.push({
                         id: nextId++,
@@ -936,35 +985,49 @@ export async function callSegmentAPI() {
     return false;
 }
 
-export async function callTranslateAPI() {
+async function callTranslateAPI() {
     let targets = regions.filter(r => r.selected);
     if (targets.length === 0) targets = regions; // Fallback to all if none selected
-    if (targets.length === 0) return false;
-    
+    if (targets.length === 0) return "no_regions";
+
     try {
+        // Get base64 image data - either from canvas or by fetching the URL
+        let imageBase64;
+        try {
+            imageBase64 = backgroundCanvas.toDataURL('image/png');
+        } catch (e) {
+            // Canvas is tainted, fetch the URL and convert to base64
+            const response = await fetch(currentDataUrl);
+            const blob = await response.blob();
+            imageBase64 = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.readAsDataURL(blob);
+            });
+        }
+
         const payload = {
-            image_base64: currentDataUrl,
+            image_base64: imageBase64,
             regions: targets.map(r => ({
                 id: r.id, x: r.x, y: r.y, width: r.width, height: r.height
             }))
         };
-        
-        const res = await fetch('http://localhost:8000/api/ai/translate-selected', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const json = await res.json();
-        
+
+        // Call Blazor C# backend instead of direct AI service call
+        if (!dotNetRef) return "error: dotNetRef is null";
+        const resultStr = await dotNetRef.invokeMethodAsync('TranslateRegionsJS', JSON.stringify(payload));
+        const json = JSON.parse(resultStr);
+
         if (json.status === "success" && json.regions) {
             if (json.clean_image_base64) {
                 return new Promise((resolve) => {
                     const img = new Image();
+                    img.crossOrigin = 'anonymous';
                     img.onload = () => {
                         backgroundCanvas.width = img.width;
                         backgroundCanvas.height = img.height;
                         bgCtx.drawImage(img, 0, 0);
-                        
+
                         json.regions.forEach((r) => {
                             let match = regions.find(x => x.id === r.id);
                             if (match) {
@@ -976,7 +1039,7 @@ export async function callTranslateAPI() {
                         saveState();
                         if (typeof dotNetRef !== 'undefined' && dotNetRef) syncToBlazor();
                         redraw();
-                        resolve(true);
+                        resolve("success");
                     };
                     img.src = json.clean_image_base64;
                 });
@@ -991,21 +1054,51 @@ export async function callTranslateAPI() {
                 saveState();
                 if (typeof dotNetRef !== 'undefined' && dotNetRef) syncToBlazor();
                 redraw();
-                return true;
+                return "success";
             }
         }
     } catch (e) {
         console.error("AI API Error:", e);
-        return false;
+        return "error: " + e.message;
     }
-    return false;
+    return "error";
 }
 
-export function exportImage() {
-    return backgroundCanvas.toDataURL('image/png');
+function exportImage() {
+    try {
+        return backgroundCanvas.toDataURL('image/png');
+    } catch (e) {
+        // Canvas is tainted, return the original URL
+        return currentDataUrl || '';
+    }
 }
 
-export function exportRegions() {
+function exportRegions() {
     return JSON.stringify(regions);
 }
 
+
+
+    return {
+        syncAnnotations,
+        initCanvas,
+        loadImage,
+        setTool,
+        zoom,
+        resetZoom,
+        setTypography,
+        updateRegionData,
+        loadRegions,
+        selectRegion,
+        deleteRegion,
+        deleteSelectedRegions,
+        approveSelectedRegions,
+        setBrushSettings,
+        undo,
+        redo,
+        exportImage,
+        exportRegions,
+        callSegmentAPI,
+        callTranslateAPI
+    };
+}

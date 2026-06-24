@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http;
 
@@ -18,9 +19,9 @@ namespace MangaManagementSystem.API.Contracts
         [Required]
         public string Synopsis { get; set; } = string.Empty;
 
-        [Required]
-        [MaxLength(100)]
-        public string Genre { get; set; } = string.Empty;
+        public List<Guid> GenreIds { get; set; } = new();
+
+        public List<Guid> TagIds { get; set; } = new();
 
         [MaxLength(10)]
         public string? ContentLanguageCode { get; set; }

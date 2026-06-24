@@ -11,5 +11,6 @@ namespace MangaManagementSystem.Application.Interfaces
         Task<IEnumerable<ChapterPageVersionDto>> GetChapterPageVersionsByChapterPageIdAsync(Guid chapterPageId);
         Task<ChapterPageVersionDto?> UpdateChapterPageVersionAsync(UpdateChapterPageVersionDto dto);
         Task<bool> DeleteChapterPageVersionAsync(Guid id);
+        Task<bool> SetCurrentVersionAsync(Guid chapterPageId, Guid chapterPageVersionId);
     }
 }

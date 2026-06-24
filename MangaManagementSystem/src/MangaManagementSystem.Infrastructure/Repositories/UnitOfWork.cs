@@ -75,7 +75,17 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         }
 
         public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
-            => await _context.SaveChangesAsync(cancellationToken);
+        {
+            try
+            {
+                return await _context.SaveChangesAsync(cancellationToken);
+            }
+            catch
+            {
+                _context.ChangeTracker.Clear();
+                throw;
+            }
+        }
 
         public void Dispose()
         {

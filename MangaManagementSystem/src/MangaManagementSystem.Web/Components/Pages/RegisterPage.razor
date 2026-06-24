@@ -226,6 +226,7 @@
     private bool _isOtpSent;
     private bool _isSendingOtp;
     private bool _isVerifyingOtp;
+    private bool _recaptchaRendered;
     private string? _registrationMessage;
     private Severity _registrationSeverity = Severity.Success;
     private const long MaxFileSizeBytes = 10 * 1024 * 1024; // 10 MB
@@ -237,7 +238,6 @@
     private byte[]? _selectedFileBytes;
     private string _fileValidationError = string.Empty;
     private int? _recaptchaWidgetId;
-    private bool _recaptchaRendered;
 
     protected override void OnInitialized()
     {
@@ -442,6 +442,7 @@
     {
         _isOtpSent = false;
         _otpCode = string.Empty;
+        _recaptchaWidgetId = null;
 
         if (_recaptchaWidgetId.HasValue)
         {

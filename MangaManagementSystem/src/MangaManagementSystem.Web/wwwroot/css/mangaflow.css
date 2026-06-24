@@ -1,56 +1,1001 @@
-﻿/* ═══════════════════════════════════════════════════════════════
-   MangaFlow Editorial Board UI
-   Clean Figma-style shell + dashboard + proposal/poll/decision UI
+/* ═══════════════════════════════════════════════════════════════
+   MangaFlow - Manga Management System Theme
+   Style: Mixed (Dark Sidebar + Light Content)
    ═══════════════════════════════════════════════════════════════ */
 
 :root {
-    --mf-primary: #4f7df3;
-    --mf-primary-dark: #3563dc;
+    --mf-primary: #6366f1;
+    --mf-primary-dark: #4f46e5;
+    --mf-secondary: #a855f7;
+    --mf-accent: #ef4444;
+    --mf-pink: #ec4899;
+    --mf-teal: #14b8a6;
+    --mf-amber: #f59e0b;
+    --mf-slate-50: #f8fafc;
+    --mf-slate-100: #f1f5f9;
+    --mf-slate-200: #e2e8f0;
+    --mf-slate-300: #cbd5e1;
+    --mf-slate-400: #94a3b8;
+    --mf-slate-500: #64748b;
+    --mf-slate-600: #475569;
+    --mf-slate-700: #334155;
+    --mf-slate-800: #1e293b;
+    --mf-slate-900: #0f172a;
+    --mf-slate-950: #020617;
+    --mf-radius: 16px;
+    --mf-radius-sm: 10px;
+    --mf-shadow-sm: 0 2px 8px rgba(15, 23, 42, .04);
+    --mf-shadow: 0 8px 32px rgba(15, 23, 42, .06);
+    --mf-shadow-lg: 0 20px 60px rgba(15, 23, 42, .08);
+    --mf-transition: .2s cubic-bezier(.4, 0, .2, 1);
+}
+
+/* ── Base ──────────────────────────────────────────────────── */
+html, body {
+    min-height: 100%;
+    background: var(--mf-slate-50);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+a {
+    text-decoration: none;
+}
+
+/* ── Gradient Utilities ────────────────────────────────────── */
+.mf-gradient-bg {
+    min-height: 100vh;
+    background: radial-gradient(ellipse at 30% 0%, rgba(99, 102, 241, .08), transparent 50%), radial-gradient(ellipse at 80% 100%, rgba(168, 85, 247, .06), transparent 50%), var(--mf-slate-50);
+}
+
+.mf-hero-bg {
+    background: radial-gradient(ellipse at 20% 50%, rgba(99, 102, 241, .05), transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(236, 72, 153, .04), transparent 50%), linear-gradient(180deg, #ffffff 0%, var(--mf-slate-50) 100%);
+}
+
+.mf-gradient-text {
+    background: linear-gradient(135deg, var(--mf-primary), var(--mf-accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+/* ── Cards ─────────────────────────────────────────────────── */
+.mf-card {
+    border: 1px solid var(--mf-slate-200);
+    border-radius: var(--mf-radius);
+    background: rgba(255, 255, 255, .95);
+    backdrop-filter: blur(12px);
+    box-shadow: var(--mf-shadow-sm);
+    transition: var(--mf-transition);
+}
+
+    .mf-card:hover {
+        border-color: rgba(99, 102, 241, .25);
+        box-shadow: var(--mf-shadow);
+    }
+
+/* ── Shell Layout ──────────────────────────────────────────── */
+.mf-shell {
+    min-height: 100vh;
+    display: flex;
+    background: var(--mf-slate-50);
+}
+
+/* ── Sidebar ───────────────────────────────────────────────── */
+.mf-sidebar {
+    width: 272px;
+    flex-shrink: 0;
+    min-height: 100vh;
+    color: white;
+    background: radial-gradient(ellipse at 50% 0%, rgba(99, 102, 241, .15), transparent 50%), linear-gradient(180deg, var(--mf-slate-900) 0%, var(--mf-slate-950) 100%);
+    border-right: 1px solid rgba(255, 255, 255, .06);
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+}
+
+.mf-sidebar-header {
+    padding: 24px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, .06);
+}
+
+.mf-logo-box {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, var(--mf-primary), var(--mf-accent));
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: .85rem;
+    color: white;
+    box-shadow: 0 8px 24px rgba(99, 102, 241, .3);
+}
+
+/* ── Navigation ────────────────────────────────────────────── */
+.mf-nav-section {
+    padding: 16px 12px;
+}
+
+.mf-nav-title {
+    color: var(--mf-slate-400);
+    font-size: .7rem;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    margin: 12px 12px 6px;
+}
+
+.mf-nav-link {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    color: var(--mf-slate-300);
+    padding: .7rem .9rem;
+    border-radius: var(--mf-radius-sm);
+    margin-bottom: .25rem;
+    font-size: .875rem;
+    font-weight: 500;
+    transition: var(--mf-transition);
+    cursor: pointer;
+}
+
+    .mf-nav-link:hover {
+        background: rgba(255, 255, 255, .08);
+        color: white;
+    }
+
+    .mf-nav-link.active {
+        background: linear-gradient(135deg, rgba(99, 102, 241, .9), rgba(168, 85, 247, .9));
+        color: white;
+        box-shadow: 0 4px 16px rgba(99, 102, 241, .3);
+    }
+
+    .mf-nav-link.disabled {
+        color: var(--mf-slate-500);
+        cursor: default;
+        opacity: .6;
+        font-size: .8rem;
+    }
+
+        .mf-nav-link.disabled:hover {
+            background: transparent;
+            color: var(--mf-slate-500);
+        }
+
+.mf-nav-icon {
+    opacity: .85;
+}
+
+/* ── Main Content ──────────────────────────────────────────── */
+.mf-main {
+    flex: 1;
+    min-width: 0;
+    overflow: auto;
+}
+
+.mf-page {
+    padding: 36px 40px;
+}
+
+.mf-page-header {
+    margin-bottom: 28px;
+    position: relative;
+}
+
+    .mf-page-header::after {
+        content: "";
+        display: block;
+        width: 64px;
+        height: 4px;
+        margin-top: 14px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, var(--mf-primary), var(--mf-accent));
+    }
+
+/* ── Section Header ────────────────────────────────────────── */
+.mf-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+/* ── Stats ─────────────────────────────────────────────────── */
+.mf-stat-number {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--mf-slate-900);
+}
+
+.mf-muted {
+    color: var(--mf-slate-500);
+}
+
+/* ── Badges ────────────────────────────────────────────────── */
+.mf-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .3rem .7rem;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: .72rem;
+}
+
+.mf-badge-green {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.mf-badge-yellow {
+    background: #fef9c3;
+    color: #854d0e;
+}
+
+.mf-badge-red {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.mf-badge-blue {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.mf-badge-purple {
+    background: #f3e8ff;
+    color: #7e22ce;
+}
+
+/* ── Canvas / Preview Area ─────────────────────────────────── */
+.mf-canvas {
+    min-height: 460px;
+    border: 2px dashed var(--mf-slate-300);
+    border-radius: var(--mf-radius);
+    background: repeating-linear-gradient(45deg, transparent, transparent 20px, rgba(99, 102, 241, .02) 20px, rgba(99, 102, 241, .02) 40px), var(--mf-slate-50);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--mf-slate-500);
+    transition: var(--mf-transition);
+}
+
+    .mf-canvas:hover {
+        border-color: var(--mf-primary);
+        background: repeating-linear-gradient(45deg, transparent, transparent 20px, rgba(99, 102, 241, .04) 20px, rgba(99, 102, 241, .04) 40px), var(--mf-slate-50);
+    }
+
+/* ── Role-specific Sidebar Themes ──────────────────────────── */
+
+/* Editor - Red/Purple accent */
+.mf-editor-sidebar {
+    background: radial-gradient(ellipse at 30% 0%, rgba(239, 68, 68, .18), transparent 40%), linear-gradient(180deg, var(--mf-slate-900) 0%, var(--mf-slate-950) 100%);
+}
+
+.mf-editor-logo {
+    background: linear-gradient(135deg, #ef4444, #a855f7);
+    box-shadow: 0 8px 24px rgba(239, 68, 68, .3);
+}
+
+/* Admin - Teal accent */
+.mf-admin-sidebar {
+    background: radial-gradient(ellipse at 50% 0%, rgba(20, 184, 166, .12), transparent 40%), linear-gradient(180deg, var(--mf-slate-900) 0%, var(--mf-slate-950) 100%);
+}
+
+.mf-admin-logo {
+    background: linear-gradient(135deg, #14b8a6, #6366f1);
+    box-shadow: 0 8px 24px rgba(20, 184, 166, .3);
+}
+
+/* Mangaka - Pink/Orange accent */
+.mf-mangaka-sidebar {
+    background: radial-gradient(ellipse at 40% 0%, rgba(236, 72, 153, .14), transparent 40%), linear-gradient(180deg, var(--mf-slate-900) 0%, var(--mf-slate-950) 100%);
+}
+
+.mf-mangaka-logo {
+    background: linear-gradient(135deg, #ec4899, #f59e0b);
+    box-shadow: 0 8px 24px rgba(236, 72, 153, .3);
+}
+
+/* Assistant - Blue accent */
+.mf-assistant-sidebar {
+    background: radial-gradient(ellipse at 50% 0%, rgba(59, 130, 246, .12), transparent 40%), linear-gradient(180deg, var(--mf-slate-900) 0%, var(--mf-slate-950) 100%);
+}
+
+.mf-assistant-logo {
+    background: linear-gradient(135deg, #3b82f6, #14b8a6);
+    box-shadow: 0 8px 24px rgba(59, 130, 246, .3);
+}
+
+/* Ranking/Board - Amber accent */
+.mf-ranking-sidebar {
+    background: radial-gradient(ellipse at 50% 0%, rgba(245, 158, 11, .12), transparent 40%), linear-gradient(180deg, var(--mf-slate-900) 0%, var(--mf-slate-950) 100%);
+}
+
+.mf-ranking-logo {
+    background: linear-gradient(135deg, #f59e0b, #ef4444);
+    box-shadow: 0 8px 24px rgba(245, 158, 11, .3);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Landing Page
+   ═══════════════════════════════════════════════════════════════ */
+
+.mf-landing-shell {
+  min-height: 100vh;
+  background: var(--mf-slate-50);
+}
+
+/* ── Hero ──────────────────────────────────────────────────── */
+.mf-landing-hero {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 20% 30%, rgba(99, 102, 241, .08), transparent 60%),
+    radial-gradient(ellipse at 80% 10%, rgba(168, 85, 247, .05), transparent 50%),
+    radial-gradient(ellipse at 50% 85%, rgba(99, 102, 241, .03), transparent 40%),
+    radial-gradient(ellipse at 0% 50%, rgba(236, 72, 153, .03), transparent 40%),
+    linear-gradient(180deg, #ffffff 0%, var(--mf-slate-50) 100%);
+}
+
+/* ── Dot Grid Overlay ──────────────────────────────────────── */
+.mf-hero-grid {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(99, 102, 241, .08) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* ── Floating Shapes ───────────────────────────────────────── */
+.mf-float-shape {
+  position: absolute;
+  border-radius: 24px;
+  opacity: .045;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.mf-float-shape-1 {
+  top: 5%;
+  left: -2%;
+  width: 300px;
+  height: 200px;
+  background: linear-gradient(135deg, var(--mf-primary), var(--mf-secondary));
+  transform: rotate(-10deg);
+  animation: floatA 10s ease-in-out infinite;
+}
+
+.mf-float-shape-2 {
+  top: 55%;
+  right: -1%;
+  width: 240px;
+  height: 160px;
+  background: linear-gradient(135deg, var(--mf-secondary), var(--mf-pink));
+  transform: rotate(6deg);
+  animation: floatB 12s ease-in-out infinite;
+}
+
+.mf-float-shape-3 {
+  bottom: 5%;
+  left: 10%;
+  width: 140px;
+  height: 180px;
+  background: linear-gradient(135deg, var(--mf-teal), var(--mf-primary));
+  transform: rotate(15deg);
+  border-radius: 16px;
+  animation: floatA 9s ease-in-out infinite reverse;
+}
+
+.mf-float-shape-4 {
+  top: 28%;
+  left: 42%;
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, var(--mf-amber), var(--mf-accent));
+  transform: rotate(25deg);
+  border-radius: 16px;
+  animation: floatB 8s ease-in-out infinite 1s;
+}
+
+.mf-float-shape-5 {
+  top: 72%;
+  left: 22%;
+  width: 60px;
+  height: 60px;
+  background: linear-gradient(135deg, var(--mf-pink), var(--mf-secondary));
+  transform: rotate(-20deg);
+  border-radius: 12px;
+  animation: floatA 7s ease-in-out infinite 2s;
+}
+
+@keyframes floatA {
+  0%, 100% { transform: rotate(-10deg) translateY(0); }
+  50% { transform: rotate(-10deg) translateY(-16px); }
+}
+
+@keyframes floatB {
+  0%, 100% { transform: rotate(6deg) translateY(0); }
+  50% { transform: rotate(6deg) translateY(-12px); }
+}
+
+/* ── Shimmer Text (flowing gradient) ───────────────────────── */
+.mf-shimmer-text {
+  background: linear-gradient(
+    135deg,
+    var(--mf-primary) 0%,
+    var(--mf-secondary) 25%,
+    var(--mf-pink) 50%,
+    var(--mf-secondary) 75%,
+    var(--mf-primary) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmerText 4s linear infinite;
+}
+
+@keyframes shimmerText {
+  0% { background-position: 0% center; }
+  100% { background-position: 200% center; }
+}
+
+/* ── Fade-up ───────────────────────────────────────────────── */
+.mf-fade-up {
+  opacity: 0;
+  transform: translateY(24px);
+  animation: fadeUp .7s ease-out forwards;
+}
+
+@keyframes fadeUp {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Glow Ring (behind dashboard) ──────────────────────────── */
+.mf-glow-ring {
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(99, 102, 241, .12), transparent 70%);
+  pointer-events: none;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: pulseGlow 3.5s ease-in-out infinite;
+  z-index: 0;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: .4; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.12); }
+}
+
+/* ── Dashboard Panel ────────────────────────────────────────── */
+.mf-dashboard {
+  position: relative;
+  background: linear-gradient(145deg, #1e293b, #0f172a);
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow:
+    0 20px 60px rgba(15, 23, 42, .25),
+    0 0 80px rgba(99, 102, 241, .06);
+  border: 1px solid rgba(255, 255, 255, .06);
+  transition: transform .35s ease, box-shadow .35s ease;
+}
+
+.mf-dashboard:hover {
+  transform: translateY(-4px);
+  box-shadow:
+    0 28px 80px rgba(15, 23, 42, .3),
+    0 0 100px rgba(99, 102, 241, .1);
+}
+
+.mf-dash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.mf-dash-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .65rem;
+  font-weight: 600;
+  letter-spacing: .05em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(20, 184, 166, .15);
+  color: var(--mf-teal);
+  border: 1px solid rgba(20, 184, 166, .15);
+}
+
+.mf-dash-live::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mf-teal);
+  animation: livePulse 1.5s ease-in-out infinite;
+}
+
+@keyframes livePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .3; }
+}
+
+.mf-dash-body {
+  color: rgba(255, 255, 255, .8);
+}
+
+.mf-dash-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: .75rem;
+  margin-bottom: 8px;
+}
+
+.mf-dash-label {
+  color: rgba(255, 255, 255, .45);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  font-weight: 600;
+}
+
+.mf-dash-value {
+  font-weight: 700;
+  color: white;
+}
+
+.mf-dash-track {
+  height: 6px;
+  background: rgba(255, 255, 255, .08);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.mf-dash-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--mf-primary), var(--mf-secondary));
+  animation: progressGrow 1.5s ease-out .3s forwards;
+  transform-origin: left;
+  transform: scaleX(0);
+  position: relative;
+  overflow: hidden;
+}
+
+.mf-dash-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .25), transparent);
+  animation: shimmerSweep 2.5s ease-in-out infinite 1.5s;
+}
+
+@keyframes shimmerSweep {
+  0% { transform: translateX(-100%); }
+  50%, 100% { transform: translateX(100%); }
+}
+
+@keyframes progressGrow {
+  to { transform: scaleX(1); }
+}
+
+.mf-dash-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.mf-dash-stat {
+  background: rgba(255, 255, 255, .04);
+  border-radius: 10px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, .04);
+  transition: background .25s ease, transform .25s ease;
+}
+
+.mf-dash-stat:hover {
+  background: rgba(255, 255, 255, .07);
+  transform: scale(1.03);
+}
+
+.mf-dash-stat-value {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: white;
+  line-height: 1.2;
+}
+
+.mf-dash-trend {
+  font-size: .6rem;
+  font-weight: 700;
+}
+
+.mf-dash-trend-up { color: var(--mf-teal); }
+.mf-dash-trend-down { color: var(--mf-accent); }
+
+.mf-dash-stat-label {
+  display: block;
+  font-size: .68rem;
+  color: rgba(255, 255, 255, .45);
+  margin-top: 2px;
+}
+
+.mf-dash-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, .06);
+  margin-bottom: 14px;
+}
+
+.mf-dash-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mf-dash-activity-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: .78rem;
+  color: rgba(255, 255, 255, .6);
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: background .2s ease;
+}
+
+.mf-dash-activity-item:hover {
+  background: rgba(255, 255, 255, .04);
+}
+
+.mf-dash-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Feature Grid ──────────────────────────────────────────── */
+.mf-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
+}
+
+.mf-feature-item {
+  display: flex;
+  gap: 16px;
+  padding: 4px 0;
+  transition: transform .3s ease;
+}
+
+.mf-feature-item:hover {
+  transform: translateX(4px);
+}
+
+.mf-feature-icon-wrap {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: rgba(99, 102, 241, .07);
+  margin-top: 2px;
+  transition: background .3s ease, box-shadow .3s ease, transform .3s ease;
+}
+
+.mf-feature-item:hover .mf-feature-icon-wrap {
+  background: rgba(99, 102, 241, .14);
+  box-shadow: 0 0 30px rgba(99, 102, 241, .15);
+  transform: scale(1.1);
+}
+
+/* ── Pipeline ──────────────────────────────────────────────── */
+.mf-pipeline-section {
+  background: var(--mf-slate-100);
+}
+
+.mf-pipeline {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 48px;
+  position: relative;
+  padding: 12px 0;
+}
+
+.mf-pipeline-node {
+  flex: 1;
+  max-width: 200px;
+  text-align: center;
+  position: relative;
+  z-index: 1;
+}
+
+.mf-node-circle {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--mf-primary), var(--mf-secondary));
+  color: white;
+  font-weight: 800;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(99, 102, 241, .3);
+  transition: transform .3s ease, box-shadow .3s ease;
+  position: relative;
+}
+
+.mf-node-circle::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid rgba(99, 102, 241, .15);
+  animation: ringPulse 2s ease-in-out infinite;
+}
+
+@keyframes ringPulse {
+  0%, 100% { transform: scale(1); opacity: .5; }
+  50% { transform: scale(1.12); opacity: 0; }
+}
+
+.mf-pipeline-node:hover .mf-node-circle {
+  transform: scale(1.1);
+  box-shadow: 0 6px 30px rgba(99, 102, 241, .5);
+}
+
+.mf-pipeline-line {
+  position: absolute;
+  top: 24px;
+  left: calc(12.5% + 24px);
+  right: calc(12.5% + 24px);
+  height: 3px;
+  z-index: 0;
+  opacity: .3;
+  background: linear-gradient(90deg, var(--mf-primary), var(--mf-secondary), var(--mf-pink));
+  background-size: 200% 100%;
+  animation: flowLine 3s linear infinite;
+}
+
+@keyframes flowLine {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 200% 0%; }
+}
+
+/* ── CTA ────────────────────────────────────────────────────── */
+.mf-cta {
+  background: linear-gradient(135deg, var(--mf-primary-dark), var(--mf-secondary));
+  border-radius: 20px;
+  padding: 60px 40px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.mf-cta::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(255, 255, 255, .08), transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(255, 255, 255, .04), transparent 40%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.mf-cta-particle {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.mf-cta-particle-1 {
+  width: 8px; height: 8px;
+  background: rgba(255, 255, 255, .15);
+  top: 20%; left: 10%;
+  animation: particleFloat 5s ease-in-out infinite;
+}
+
+.mf-cta-particle-2 {
+  width: 5px; height: 5px;
+  background: rgba(255, 255, 255, .1);
+  top: 60%; right: 15%;
+  animation: particleFloat 4s ease-in-out infinite 1s;
+}
+
+.mf-cta-particle-3 {
+  width: 6px; height: 6px;
+  background: rgba(255, 255, 255, .12);
+  bottom: 25%; left: 25%;
+  animation: particleFloat 6s ease-in-out infinite .5s;
+}
+
+.mf-cta-particle-4 {
+  width: 4px; height: 4px;
+  background: rgba(255, 255, 255, .08);
+  top: 30%; right: 30%;
+  animation: particleFloat 4.5s ease-in-out infinite 2s;
+}
+
+@keyframes particleFloat {
+  0%, 100% { transform: translateY(0) scale(1); opacity: .3; }
+  50% { transform: translateY(-20px) scale(1.5); opacity: 1; }
+}
+
+/* ── Footer ────────────────────────────────────────────────── */
+.mf-landing-footer {
+  border-top: 1px solid var(--mf-slate-200);
+  background: white;
+}
+
+.mf-footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 0;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.mf-footer-links {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.mf-footer-links .mud-button-root {
+  text-transform: none;
+  font-weight: 500;
+}
+
+/* ── Responsive ────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .mf-float-shape,
+  .mf-hero-grid,
+  .mf-glow-ring,
+  .mf-cta-particle { display: none; }
+  .mf-feature-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .mf-pipeline {
+    flex-direction: column;
+    align-items: center;
+    gap: 32px;
+  }
+  .mf-pipeline-node {
+    max-width: 280px;
+    width: 100%;
+  }
+  .mf-pipeline-line { display: none; }
+  .mf-landing-hero .mud-grid { text-align: center; }
+  .mf-landing-hero .mud-button-stack { justify-content: center; }
+}
+
+@media (max-width: 640px) {
+  .mf-feature-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .mf-footer-inner {
+    flex-direction: column;
+    text-align: center;
+  }
+}
+
+/* ── Reduced Motion ────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .mf-fade-up,
+  .mf-dash-fill,
+  .mf-float-shape,
+  .mf-cta-particle,
+  .mf-glow-ring,
+  .mf-dash-live::before,
+  .mf-dash-fill::after,
+  .mf-node-circle::after,
+  .mf-pipeline-line {
+    animation: none !important;
+    transition: none !important;
+  }
+  .mf-fade-up { opacity: 1; transform: none; }
+  .mf-dash-fill { transform: scaleX(1); }
+  .mf-shimmer-text { background: var(--mf-primary); -webkit-background-clip: text; background-clip: text; }
+  .mf-feature-item:hover,
+  .mf-feature-item:hover .mf-feature-icon-wrap,
+  .mf-dashboard:hover,
+  .mf-dash-stat:hover,
+  .mf-pipeline-node:hover .mf-node-circle { transform: none; box-shadow: none; }
+}
+
+/* ── Responsive ────────────────────────────────────────────── */
+.mf-mobile-topbar {
+    display: none;
+}
+
+@media (max-width: 900px) {
+    .mf-shell {
+        display: block;
+    }
+
+    .mf-sidebar {
+        width: 100%;
+        min-height: auto;
+        position: relative;
+        height: auto;
+    }
+
+    .mf-nav-section {
+        display: flex;
+        overflow-x: auto;
+        gap: .5rem;
+        padding: 10px 12px;
+    }
+
+    .mf-nav-title {
+        display: none;
+    }
+
+    .mf-nav-link {
+        white-space: nowrap;
+        padding: .5rem .7rem;
+    }
+
+    .mf-page {
+        padding: 20px 16px;
+    }
+}
+/* ═══════════════════════════════════════════════════════════════
+   MangaFlow Editorial Board + Voting Center Add-on
+   Paste this at the END of mangaflow.css
+
+   Notes:
+   - Keeps original sidebar from mangaflow.css
+   - Does NOT override .mf-sidebar, .mf-nav-link, .mf-logo-box
+   - Razor component code from mangaflow(1).css was removed
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
     --mf-primary-soft: #eef4ff;
-    --mf-sidebar-bg: #202943;
-    --mf-sidebar-bg-dark: #1b233b;
-    --mf-sidebar-border: rgba(255, 255, 255, .08);
     --mf-page-bg: #f5f7fb;
     --mf-card-bg: #ffffff;
     --mf-border: #e5eaf3;
     --mf-border-soft: #edf1f7;
     --mf-text: #0f172a;
-    --mf-muted: #64748b;
     --mf-muted-2: #94a3b8;
     --mf-green: #31c48d;
     --mf-red: #ff5c73;
     --mf-orange: #f59e0b;
     --mf-blue: #4f7df3;
     --mf-purple: #8b5cf6;
-    --mf-radius: 14px;
-    --mf-radius-sm: 10px;
-    --mf-shadow: 0 8px 24px rgba(15, 23, 42, .05);
 }
 
-html,
-body {
-    margin: 0;
-    min-height: 100%;
-    background: var(--mf-page-bg);
-    color: var(--mf-text);
-    font-family: "Inter", "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-
-a {
-    color: inherit;
-    text-decoration: none;
-}
-
-button,
-input,
-textarea,
-select {
-    font-family: inherit;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   Shell
-   ═══════════════════════════════════════════════════════════════ */
+/* ─────────────────────────────────────────────────────────────
+   Board App Shell
+   Sidebar is still controlled by original .mf-sidebar
+   ───────────────────────────────────────────────────────────── */
 
 .mf-app-shell {
     min-height: 100vh;
@@ -59,294 +1004,9 @@ select {
     color: var(--mf-text);
 }
 
-.mf-sidebar {
-    width: 264px;
-    flex: 0 0 264px;
-    min-height: 100vh;
-    height: 100vh;
-    position: sticky;
-    top: 0;
-    display: flex;
-    flex-direction: column;
-    background: var(--mf-sidebar-bg);
-    color: #ffffff;
-    border-right: 1px solid var(--mf-sidebar-border);
-    overflow-y: auto;
-}
-
-.mf-main {
-    flex: 1;
-    min-width: 0;
-    min-height: 100vh;
-    background: var(--mf-page-bg);
-}
-
-/*
-   Shared role-workspace shell.
-   These layouts use mf-shell / mf-nav-* rather than mf-app-shell /
-   mf-side-link, so the shared definitions must exist here.
-*/
-
-.mf-shell {
-    min-height: 100vh;
-    display: flex;
-    background: var(--mf-page-bg);
-    color: var(--mf-text);
-}
-
-.mf-shell > .mf-sidebar {
-    width: 264px;
-    flex: 0 0 264px;
-}
-
-.mf-shell > .mf-main {
-    flex: 1;
-    min-width: 0;
-    min-height: 100vh;
-}
-
-.mf-nav-section {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 16px 12px 20px;
-}
-
-.mf-nav-title {
-    padding: 0 10px;
-    margin-bottom: 4px;
-    color: #8f9bbb;
-    font-size: 0.7rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    line-height: 1.4;
-    text-transform: uppercase;
-}
-
-.mf-nav-link {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-    min-height: 42px;
-    padding: 10px 12px;
-    border-radius: 9px;
-    color: #d7e4ff;
-    line-height: 1.3;
-    transition:
-        background-color 0.16s ease,
-        color 0.16s ease,
-        box-shadow 0.16s ease;
-}
-
-.mf-nav-link:hover {
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.08);
-}
-
-.mf-nav-link.active {
-    color: #ffffff;
-    background: rgba(79, 125, 243, 0.2);
-    box-shadow: inset 3px 0 0 var(--mf-primary);
-}
-
-.mf-nav-link.disabled {
-    color: rgba(215, 228, 255, 0.45);
-    cursor: not-allowed;
-    pointer-events: none;
-}
-
-.mf-nav-icon {
-    flex: 0 0 auto;
-    color: currentColor;
-}
-
-@media (max-width: 760px) {
-    .mf-shell {
-        display: block;
-    }
-
-    .mf-shell > .mf-sidebar {
-        width: 100%;
-        height: auto;
-        min-height: auto;
-        position: relative;
-        top: auto;
-        flex-basis: auto;
-    }
-
-    .mf-shell > .mf-main {
-        min-height: auto;
-    }
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   Sidebar
-   ═══════════════════════════════════════════════════════════════ */
-
-.mf-brand {
-    min-height: 72px;
-    padding: 18px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    border-bottom: 1px solid var(--mf-sidebar-border);
-}
-
-.mf-brand-icon {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
-    display: grid;
-    place-items: center;
-    background: var(--mf-primary);
-    color: #ffffff;
-    font-weight: 900;
-}
-
-.mf-brand-title {
-    color: #ffffff;
-    font-size: 16px;
-    font-weight: 900;
-    line-height: 1.1;
-}
-
-.mf-brand-subtitle {
-    margin-top: 3px;
-    color: #9ca8c7;
-    font-size: 12px;
-}
-
-.mf-search {
-    margin: 14px 14px 18px;
-    padding: 10px 12px;
-    border-radius: 8px;
-    color: #8f9bbb;
-    background: rgba(255, 255, 255, .055);
-    border: 1px solid rgba(255, 255, 255, .08);
-    font-size: 13px;
-}
-
-.mf-nav-group {
-    padding: 0 14px;
-    flex: 1;
-}
-
-.mf-nav-heading {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: #b7c1dc;
-    font-size: 14px;
-    font-weight: 800;
-    margin-bottom: 8px;
-}
-
-.mf-nav-caret {
-    margin-left: auto;
-    opacity: .7;
-}
-
-.mf-side-link {
-    min-height: 36px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 8px 10px 8px 28px;
-    border-left: 1px solid rgba(255, 255, 255, .08);
-    color: #b7c1dc;
-    font-size: 14px;
-    font-weight: 600;
-    transition: .18s ease;
-}
-
-    .mf-side-link:hover {
-        color: #ffffff;
-        background: rgba(255, 255, 255, .045);
-    }
-
-    .mf-side-link.active {
-        color: #dbe8ff;
-        background: rgba(255, 255, 255, .035);
-    }
-
-.mf-side-count {
-    min-width: 20px;
-    height: 20px;
-    padding: 0 6px;
-    border-radius: 999px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: #3b4668;
-    color: #ffffff;
-    font-size: 11px;
-    font-weight: 900;
-}
-
-.mf-user-card {
-    margin-top: auto;
-    padding: 16px 14px;
-    min-height: 64px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: var(--mf-sidebar-bg-dark);
-    border-top: 1px solid var(--mf-sidebar-border);
-}
-
-.mf-avatar {
-    width: 34px;
-    height: 34px;
-    border-radius: 999px;
-    display: inline-grid;
-    place-items: center;
-    flex: 0 0 auto;
-    background: var(--mf-primary);
-    color: #ffffff;
-    font-size: 12px;
-    font-weight: 900;
-}
-
-    .mf-avatar.small {
-        width: 34px;
-        height: 34px;
-        font-size: 12px;
-    }
-
-.mf-user-name {
-    color: #ffffff;
-    font-size: 14px;
-    font-weight: 900;
-    line-height: 1.15;
-}
-
-.mf-user-email,
-.mf-user-role {
-    color: #9ca8c7;
-    font-size: 12px;
-    line-height: 1.25;
-}
-
-.mf-sidebar-logout {
-    margin-top: 6px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: #fca5a5;
-    font-size: 12px;
-    font-weight: 800;
-    cursor: pointer;
-}
-
-    .mf-sidebar-logout:hover {
-        color: #ffffff;
-    }
-
-/* ═══════════════════════════════════════════════════════════════
+/* ─────────────────────────────────────────────────────────────
    Topbar + Page Header
-   ═══════════════════════════════════════════════════════════════ */
+   ───────────────────────────────────────────────────────────── */
 
 .mf-topbar {
     height: 72px;
@@ -484,9 +1144,9 @@ select {
     padding: 24px 26px;
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ─────────────────────────────────────────────────────────────
    Layout Helpers
-   ═══════════════════════════════════════════════════════════════ */
+   ───────────────────────────────────────────────────────────── */
 
 .mf-grid {
     display: grid;
@@ -520,11 +1180,6 @@ select {
     gap: 12px;
 }
 
-.mf-muted {
-    color: var(--mf-muted);
-    font-size: 13px;
-}
-
 .mf-strong {
     color: var(--mf-text);
     font-weight: 900;
@@ -546,11 +1201,12 @@ select {
     font-weight: 900;
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   Cards / KPI
-   ═══════════════════════════════════════════════════════════════ */
+/* ─────────────────────────────────────────────────────────────
+   Board Cards / KPI
+   Scoped card override to .mf-content so global .mf-card stays safe
+   ───────────────────────────────────────────────────────────── */
 
-.mf-card,
+.mf-content .mf-card,
 .mf-kpi-card,
 .mf-filter-card,
 .mf-poll-card,
@@ -562,7 +1218,7 @@ select {
     box-shadow: none;
 }
 
-.mf-card {
+.mf-content .mf-card {
     padding: 18px;
 }
 
@@ -577,6 +1233,19 @@ select {
     display: flex;
     justify-content: space-between;
     gap: 12px;
+}
+
+.mf-kpi-main {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+}
+
+.mf-kpi-arrow {
+    color: var(--mf-muted-2);
+    font-size: 28px;
+    line-height: 1;
+    font-weight: 400;
 }
 
 .mf-kpi-label {
@@ -642,6 +1311,14 @@ select {
     border-color: #ddd6fe;
 }
 
+.tone-orange {
+    border-color: #fed7aa;
+}
+
+.tone-blue {
+    border-color: #bfdbfe;
+}
+
 .tone-green .mf-kpi-value {
     color: var(--mf-green);
 }
@@ -654,9 +1331,9 @@ select {
     color: var(--mf-orange);
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ─────────────────────────────────────────────────────────────
    Section / Lists
-   ═══════════════════════════════════════════════════════════════ */
+   ───────────────────────────────────────────────────────────── */
 
 .mf-section-head {
     display: flex;
@@ -693,9 +1370,9 @@ select {
         border-bottom: 0;
     }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ─────────────────────────────────────────────────────────────
    Buttons / Inputs
-   ═══════════════════════════════════════════════════════════════ */
+   ───────────────────────────────────────────────────────────── */
 
 .mf-btn {
     min-height: 34px;
@@ -795,9 +1472,9 @@ select {
     margin: 14px 0 6px;
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ─────────────────────────────────────────────────────────────
    Status / Table
-   ═══════════════════════════════════════════════════════════════ */
+   ───────────────────────────────────────────────────────────── */
 
 .mf-status {
     display: inline-flex;
@@ -881,9 +1558,10 @@ select {
         white-space: nowrap;
     }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ─────────────────────────────────────────────────────────────
    Modal / Proposal Detail
-   ═══════════════════════════════════════════════════════════════ */
+   General modal backdrop kept close to original board style
+   ───────────────────────────────────────────────────────────── */
 
 .mf-modal-backdrop {
     position: fixed;
@@ -1072,9 +1750,9 @@ select {
         border: 1px solid #bfdbfe;
     }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ─────────────────────────────────────────────────────────────
    Poll / Decision
-   ═══════════════════════════════════════════════════════════════ */
+   ───────────────────────────────────────────────────────────── */
 
 .mf-poll-card {
     padding: 18px;
@@ -1281,90 +1959,18 @@ select {
     box-shadow: 0 10px 30px rgba(15, 23, 42, .25);
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   Voting Modal
-   ═══════════════════════════════════════════════════════════════ */
-
-.mf-voting-modal {
-    width: min(1280px, 98vw);
-    max-height: 94vh;
-    overflow: auto;
-    background: #f3f6fb;
-    border-radius: 12px;
-    border: 1px solid var(--mf-border);
-    box-shadow: 0 20px 60px rgba(15, 23, 42, .25);
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   Responsive
-   ═══════════════════════════════════════════════════════════════ */
-
-@media (max-width: 1100px) {
-    .mf-grid-4,
-    .mf-grid-3,
-    .mf-grid-2,
-    .mf-proposal-layout {
-        grid-template-columns: 1fr;
-    }
-
-    .mf-proposal-side {
-        border-left: 0;
-    }
-
-    .mf-deadline-row {
-        grid-template-columns: 1fr;
-    }
-
-    .mf-topbar {
-        height: auto;
-        padding: 14px 18px;
-        align-items: flex-start;
-        flex-direction: column;
-        gap: 10px;
-    }
-
-    .mf-page-title-area {
-        padding: 18px;
-    }
-
-    .mf-content {
-        padding: 18px;
-    }
-}
-
-@media (max-width: 760px) {
-    .mf-app-shell {
-        display: block;
-    }
-
-    .mf-sidebar {
-        width: 100%;
-        height: auto;
-        min-height: auto;
-        position: relative;
-    }
-
-    .mf-side-link {
-        border-left: 0;
-        padding-left: 10px;
-    }
-
-    .mf-filter-card {
-        align-items: stretch;
-        flex-direction: column;
-    }
-
-    .mf-search-input {
-        max-width: none;
-    }
-}
-
-/* ═══════════════════════════════════════════════════════════════
+/* ─────────────────────────────────────────────────────────────
    Voting Center Modal - Figma Style
-   Paste at the END of mangaflow.css
-   ═══════════════════════════════════════════════════════════════ */
+   ───────────────────────────────────────────────────────────── */
 
-.mf-modal-backdrop {
+/*
+   This supports both:
+   1. Existing markup: <div class="mf-modal-backdrop"><div class="mf-voting-modal">
+   2. Safer markup:   <div class="mf-voting-center-backdrop"><div class="mf-voting-modal">
+*/
+
+.mf-modal-backdrop:has(.mf-voting-modal),
+.mf-voting-center-backdrop {
     position: fixed;
     inset: 0;
     z-index: 999;
@@ -1494,8 +2100,6 @@ select {
     .mf-voting-side .mf-card h3 {
         font-size: 17px;
     }
-
-/* Proposal title/meta */
 
 .mf-voting-modal .mf-modal-meta,
 .mf-voting-modal .mf-voting-meta {
@@ -1839,9 +2443,43 @@ select {
     line-height: 1.6;
 }
 
-/* Responsive voting modal */
+/* ─────────────────────────────────────────────────────────────
+   Responsive for Board UI
+   Does not replace base sidebar responsive behavior
+   ───────────────────────────────────────────────────────────── */
 
 @media (max-width: 1100px) {
+    .mf-grid-4,
+    .mf-grid-3,
+    .mf-grid-2,
+    .mf-proposal-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .mf-proposal-side {
+        border-left: 0;
+    }
+
+    .mf-deadline-row {
+        grid-template-columns: 1fr;
+    }
+
+    .mf-topbar {
+        height: auto;
+        padding: 14px 18px;
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .mf-page-title-area {
+        padding: 18px;
+    }
+
+    .mf-content {
+        padding: 18px;
+    }
+
     .mf-voting-body {
         grid-template-columns: 1fr;
     }
@@ -1852,7 +2490,17 @@ select {
 }
 
 @media (max-width: 760px) {
-    .mf-modal-backdrop {
+    .mf-filter-card {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .mf-search-input {
+        max-width: none;
+    }
+
+    .mf-modal-backdrop:has(.mf-voting-modal),
+    .mf-voting-center-backdrop {
         padding: 12px;
     }
 
@@ -1876,53 +2524,505 @@ select {
     }
 }
 
-<div class="mf-kpi-card tone-@Tone" >
-<div class="mf-kpi-main" >
-<div class="mf-kpi-icon" > @Icon</div >
+/* ═══════════════════════════════════════════════════════════════
+   Board Chief / Board Member Sidebar - Editor-like Adapter
+   Safe scope:
+   - Applies only to board shell: .mf-app-shell > .mf-sidebar
+   - Does NOT modify original file 1 sidebar classes globally
+   - Removes fake count badges
+   - Supports new editor-style profile dropdown markup
+   - Provides fallback styling for old board sidebar markup
+   ═══════════════════════════════════════════════════════════════ */
 
-<div >
-<div class="mf-kpi-label" > @Label</div >
-<div class="mf-kpi-value" > @Value</div >
-<div class="mf-kpi-description" > @Description</div >
-</div >
-</div >
+/* Board sidebar background, scoped only to Board shell */
+.mf-app-shell > .mf-sidebar,
+.mf-board-editor-sidebar {
+    background: radial-gradient(ellipse at 40% 0%, rgba(168, 85, 247, .18), transparent 44%), radial-gradient(ellipse at 0% 0%, rgba(236, 72, 153, .10), transparent 36%), linear-gradient(180deg, var(--mf-slate-900) 0%, var(--mf-slate-950) 100%);
+}
 
-<div class="mf-kpi-arrow" > ›</div >
-</div >
-
-@code {
-    [Parameter] public string Label {
-        get;
-        set;
+    /* Remove fake notification/count badges */
+    .mf-app-shell > .mf-sidebar .mf-side-count,
+    .mf-app-shell > .mf-sidebar .mf-nav-count,
+    .mf-app-shell > .mf-sidebar .mf-menu-count,
+    .mf-app-shell > .mf-sidebar .mf-badge-count,
+    .mf-board-editor-sidebar .mf-side-count,
+    .mf-board-editor-sidebar .mf-nav-count,
+    .mf-board-editor-sidebar .mf-menu-count,
+    .mf-board-editor-sidebar .mf-badge-count {
+        display: none !important;
     }
 
-    = string.Empty;
-
-    [Parameter] public string Value {
-        get;
-        set;
+    /* Hide old board brand/search heading so Board sidebar looks like Editor */
+    .mf-app-shell > .mf-sidebar .mf-brand,
+    .mf-app-shell > .mf-sidebar .mf-search,
+    .mf-app-shell > .mf-sidebar .mf-nav-heading,
+    .mf-board-editor-sidebar .mf-brand,
+    .mf-board-editor-sidebar .mf-search,
+    .mf-board-editor-sidebar .mf-nav-heading {
+        display: none !important;
     }
 
-    = string.Empty;
+/* ═══════════════════════════════════════════════════════════════
+   New Editor-style Profile Card
+   Use these classes in MangaFlowShell.razor if you want the 3-dot MudMenu.
+   ═══════════════════════════════════════════════════════════════ */
 
-    [Parameter] public string Description {
-        get;
-        set;
+.mf-board-profile-area {
+    padding: 14px 12px 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, .06);
+}
+
+.mf-board-profile-card {
+    width: 100%;
+    min-height: 78px;
+    padding: 12px;
+    border: 1px solid rgba(255, 255, 255, .12);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .065);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    text-align: left;
+    transition: var(--mf-transition);
+}
+
+    .mf-board-profile-card:hover {
+        background: rgba(255, 255, 255, .095);
+        border-color: rgba(255, 255, 255, .18);
     }
 
-    = string.Empty;
+.mf-board-profile-avatar {
+    width: 46px;
+    height: 46px;
+    flex: 0 0 46px;
+    border-radius: 14px;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(135deg, #a855f7, #ec4899);
+    color: #ffffff;
+    font-size: .95rem;
+    font-weight: 900;
+    box-shadow: 0 12px 30px rgba(168, 85, 247, .25);
+}
 
-    [Parameter] public string Icon {
-        get;
-        set;
+.mf-board-profile-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.mf-board-profile-name {
+    color: #ffffff;
+    font-size: .88rem;
+    font-weight: 900;
+    line-height: 1.15;
+    max-width: 128px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mf-board-profile-role {
+    margin-top: 4px;
+    color: #c7d2fe;
+    font-size: .72rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.mf-board-profile-more {
+    color: #cbd5e1 !important;
+    flex: 0 0 auto;
+}
+
+/* MudMenu dropdown content.
+   MudPopover is rendered outside sidebar, so keep these selectors global. */
+.mf-board-menu-profile-row {
+    min-width: 220px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.mf-board-menu-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    display: grid;
+    place-items: center;
+    background: #eef2ff;
+    color: #6366f1;
+}
+
+.mf-board-menu-title {
+    color: #111827;
+    font-size: .85rem;
+    font-weight: 900;
+    line-height: 1.2;
+}
+
+.mf-board-menu-subtitle {
+    margin-top: 3px;
+    color: #64748b;
+    font-size: .72rem;
+    line-height: 1.2;
+}
+
+.mf-board-menu-logout {
+    color: #dc2626;
+    font-size: .85rem;
+    font-weight: 900;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Board Navigation - Editor-like
+   Supports both:
+   - Old markup: .mf-nav-group + .mf-side-link
+   - New markup: .mf-board-nav + .mf-board-nav-link
+   ═══════════════════════════════════════════════════════════════ */
+
+.mf-app-shell > .mf-sidebar .mf-nav-group,
+.mf-board-editor-sidebar .mf-nav-group,
+.mf-board-nav {
+    flex: 1;
+    padding: 24px 12px;
+    overflow-y: auto;
+}
+
+.mf-board-nav-section {
+    margin: 28px 0 10px;
+    padding: 0 12px;
+    color: #93a4c7;
+    font-size: .72rem;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.mf-app-shell > .mf-sidebar .mf-side-link,
+.mf-board-editor-sidebar .mf-side-link,
+.mf-board-nav-link {
+    min-height: 40px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    border-left: 0;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    color: #dbeafe;
+    font-size: .86rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: var(--mf-transition);
+}
+
+    .mf-app-shell > .mf-sidebar .mf-side-link:hover,
+    .mf-board-editor-sidebar .mf-side-link:hover,
+    .mf-board-nav-link:hover {
+        color: #ffffff;
+        background: rgba(255, 255, 255, .08);
     }
 
-    = string.Empty;
-
-    [Parameter] public string Tone {
-        get;
-        set;
+    .mf-app-shell > .mf-sidebar .mf-side-link.active,
+    .mf-board-editor-sidebar .mf-side-link.active,
+    .mf-board-nav-link.active {
+        color: #ffffff;
+        background: linear-gradient(135deg, #6366f1, #a855f7);
+        box-shadow: 0 8px 22px rgba(99, 102, 241, .28);
     }
 
-    = "blue";
+/* ═══════════════════════════════════════════════════════════════
+   Fallback for OLD Board sidebar markup
+   If MangaFlowShell.razor still uses .mf-user-card at bottom,
+   move it to the top and make it visually closer to Editor profile card.
+   Note: CSS can show the 3-dot visual, but the real click dropdown
+   still requires the MudMenu markup in MangaFlowShell.razor.
+   ═══════════════════════════════════════════════════════════════ */
+
+.mf-app-shell > .mf-sidebar .mf-user-card,
+.mf-board-editor-sidebar .mf-user-card {
+    order: -10;
+    margin: 14px 12px 18px;
+    padding: 12px;
+    min-height: 78px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, .12);
+    background: rgba(255, 255, 255, .065);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: relative;
+}
+
+    .mf-app-shell > .mf-sidebar .mf-user-card:hover,
+    .mf-board-editor-sidebar .mf-user-card:hover {
+        background: rgba(255, 255, 255, .095);
+        border-color: rgba(255, 255, 255, .18);
+    }
+
+    /* Visual 3-dot only for old markup */
+    .mf-app-shell > .mf-sidebar .mf-user-card::after,
+    .mf-board-editor-sidebar .mf-user-card::after {
+        content: "⋮";
+        margin-left: auto;
+        color: #cbd5e1;
+        font-size: 1.25rem;
+        font-weight: 800;
+        line-height: 1;
+    }
+
+.mf-app-shell > .mf-sidebar .mf-avatar,
+.mf-board-editor-sidebar .mf-avatar {
+    width: 46px;
+    height: 46px;
+    flex: 0 0 46px;
+    border-radius: 14px;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(135deg, #a855f7, #ec4899);
+    color: #ffffff;
+    font-size: .86rem;
+    font-weight: 900;
+    box-shadow: 0 12px 30px rgba(168, 85, 247, .25);
+}
+
+    .mf-app-shell > .mf-sidebar .mf-avatar.small,
+    .mf-board-editor-sidebar .mf-avatar.small {
+        width: 46px;
+        height: 46px;
+        font-size: .86rem;
+    }
+
+.mf-app-shell > .mf-sidebar .mf-user-name,
+.mf-board-editor-sidebar .mf-user-name {
+    color: #ffffff;
+    font-size: .88rem;
+    font-weight: 900;
+    line-height: 1.15;
+    max-width: 128px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mf-app-shell > .mf-sidebar .mf-user-email,
+.mf-board-editor-sidebar .mf-user-email {
+    display: none;
+}
+
+.mf-app-shell > .mf-sidebar .mf-user-role,
+.mf-board-editor-sidebar .mf-user-role {
+    margin-top: 4px;
+    color: #c7d2fe;
+    font-size: .72rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+/* Hide old inline logout because final design uses dropdown logout */
+.mf-app-shell > .mf-sidebar .mf-sidebar-logout,
+.mf-board-editor-sidebar .mf-sidebar-logout {
+    display: none !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Footer button
+   ═══════════════════════════════════════════════════════════════ */
+
+.mf-board-sidebar-footer {
+    margin-top: auto;
+    padding: 12px;
+    border-top: 1px solid rgba(255, 255, 255, .06);
+}
+
+.mf-board-back-btn {
+    width: 100%;
+    min-height: 34px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, .22);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+    font-size: .76rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    text-decoration: none;
+    letter-spacing: .04em;
+    transition: var(--mf-transition);
+}
+
+    .mf-board-back-btn:hover {
+        color: #ffffff;
+        border-color: rgba(255, 255, 255, .38);
+        background: rgba(255, 255, 255, .06);
+    }
+
+/* ═══════════════════════════════════════════════════════════════
+   Mobile
+   ═══════════════════════════════════════════════════════════════ */
+
+@media (max-width: 900px) {
+    .mf-board-profile-area {
+        padding: 12px;
+    }
+
+    .mf-board-profile-card {
+        min-height: 64px;
+    }
+
+    .mf-app-shell > .mf-sidebar .mf-user-card,
+    .mf-board-editor-sidebar .mf-user-card {
+        min-height: 64px;
+        margin: 12px;
+    }
+
+    .mf-app-shell > .mf-sidebar .mf-nav-group,
+    .mf-board-editor-sidebar .mf-nav-group,
+    .mf-board-nav {
+        display: flex;
+        overflow-x: auto;
+        gap: .5rem;
+        padding: 10px 12px;
+    }
+
+    .mf-board-nav-section,
+    .mf-board-sidebar-footer {
+        display: none;
+    }
+
+    .mf-app-shell > .mf-sidebar .mf-side-link,
+    .mf-board-editor-sidebar .mf-side-link,
+    .mf-board-nav-link {
+        white-space: nowrap;
+        margin-bottom: 0;
+        padding: .5rem .7rem;
+    }
+}}
+
+/* ═══════════════════════════════════════════════════════════════
+   Board Profile Native Dropdown Fix
+   Uses <details>/<summary>, so it works without MudMenu/MudPopover.
+   ═══════════════════════════════════════════════════════════════ */
+
+.mf-board-profile-area {
+    position: relative;
+    z-index: 30;
+}
+
+.mf-board-profile-details {
+    position: relative;
+}
+
+    .mf-board-profile-details > summary {
+        list-style: none;
+    }
+
+        .mf-board-profile-details > summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .mf-board-profile-details > summary::marker {
+            content: "";
+        }
+
+.mf-board-profile-card {
+    user-select: none;
+    cursor: pointer;
+}
+
+.mf-board-profile-more-btn {
+    width: 30px;
+    height: 34px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #cbd5e1;
+    display: grid;
+    place-items: center;
+    font-size: 1.35rem;
+    line-height: 1;
+    font-weight: 900;
+    cursor: pointer;
+    transition: var(--mf-transition);
+}
+
+.mf-board-profile-card:hover .mf-board-profile-more-btn,
+.mf-board-profile-details[open] .mf-board-profile-more-btn {
+    background: rgba(255, 255, 255, .10);
+    color: #ffffff;
+}
+
+.mf-board-profile-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    z-index: 9999;
+    overflow: hidden;
+    border-radius: 10px;
+    background: #ffffff;
+    border: 1px solid #e5eaf3;
+    box-shadow: 0 18px 45px rgba(15, 23, 42, .28);
+}
+
+.mf-board-profile-dropdown-item {
+    width: 100%;
+    min-height: 58px;
+    padding: 12px 14px;
+    border: 0;
+    background: #ffffff;
+    color: #111827;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    transition: .18s ease;
+}
+
+    .mf-board-profile-dropdown-item:hover {
+        background: #f8fafc;
+    }
+
+    .mf-board-profile-dropdown-item.logout {
+        min-height: 48px;
+        color: #dc2626;
+        font-size: .85rem;
+        font-weight: 900;
+    }
+
+.mf-board-profile-dropdown-divider {
+    height: 1px;
+    background: #e5e7eb;
+}
+
+.mf-board-menu-icon {
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+    border-radius: 9px;
+    display: grid;
+    place-items: center;
+    background: #eef2ff;
+    color: #6366f1;
+}
+
+.mf-board-menu-title {
+    display: block;
+    color: #111827;
+    font-size: .85rem;
+    font-weight: 900;
+    line-height: 1.2;
+}
+
+.mf-board-menu-subtitle {
+    display: block;
+    margin-top: 3px;
+    color: #64748b;
+    font-size: .72rem;
+    line-height: 1.2;
 }

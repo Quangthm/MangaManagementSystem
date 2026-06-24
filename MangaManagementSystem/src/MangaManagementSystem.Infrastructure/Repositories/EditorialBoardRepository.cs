@@ -1,9 +1,9 @@
-﻿using System.Data;
-using System.Data.Common;
 using MangaManagementSystem.Application.Features.EditorialBoard.Dtos;
 using MangaManagementSystem.Application.Features.EditorialBoard.Repositories;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using System.Data;
+using System.Data.Common;
 
 namespace MangaManagementSystem.Infrastructure.Repositories;
 
@@ -69,18 +69,10 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             decisions);
     }
 
-
     public async Task<IReadOnlyList<EditorialBoardPollDto>> GetOpenPollsAsync(
         Guid currentUserId,
         CancellationToken cancellationToken)
     {
-        if (currentUserId == Guid.Empty)
-        {
-            throw new ArgumentException(
-                "Current user id is required.",
-                nameof(currentUserId));
-        }
-
         var connection = _dbContext.Database.GetDbConnection();
 
         if (connection.State != ConnectionState.Open)
@@ -93,90 +85,65 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         command.CommandText =
             """
             SELECT
-                v.series_board_poll_id,
-                v.series_id,
+                p.series_board_poll_id,
+                p.series_id,
                 s.slug,
-                v.series_title,
-                v.poll_type_code,
-                v.poll_status_code,
-                v.poll_reason,
-                s.publication_frequency_code,
-                v.started_at_utc,
-                v.ends_at_utc,
-                ISNULL(v.approve_count, 0) AS approve_count,
-                ISNULL(v.reject_count, 0) AS reject_count,
-                ISNULL(v.abstain_count, 0) AS abstain_count,
-                ISNULL(v.total_vote_count, 0) AS total_vote_count,
-                ISNULL(v.computed_result_code, N'PENDING')
-                    AS computed_result_code,
-                current_vote.choice_code,
-                current_vote.vote_reason
-            FROM manga.vw_SeriesBoardPollVoteSummary v
+                s.title,
+                p.poll_type_code,
+                p.poll_status_code,
+                p.poll_reason,
+                p.board_publication_frequency_code,
+                p.started_at_utc,
+                p.ends_at_utc,
+                ISNULL(vs.approve_count, 0) AS approve_count,
+                ISNULL(vs.reject_count, 0) AS reject_count,
+                ISNULL(vs.abstain_count, 0) AS abstain_count,
+                ISNULL(vs.total_vote_count, 0) AS total_vote_count,
+                ISNULL(vs.computed_result_code, N'PENDING') AS computed_result_code,
+                my_vote.choice_code AS current_user_choice_code,
+                my_vote.vote_reason AS current_user_vote_reason
+            FROM manga.SeriesBoardPoll p
             INNER JOIN manga.Series s
-                ON s.series_id = v.series_id
-            LEFT JOIN manga.SeriesBoardVote current_vote
-                ON current_vote.series_board_poll_id =
-                    v.series_board_poll_id
-               AND current_vote.user_id = @current_user_id
-            WHERE v.poll_status_code = N'OPEN'
-            ORDER BY v.started_at_utc DESC;
+                ON s.series_id = p.series_id
+            LEFT JOIN manga.vw_SeriesBoardPollVoteSummary vs
+                ON vs.series_board_poll_id = p.series_board_poll_id
+            LEFT JOIN manga.SeriesBoardVote my_vote
+                ON my_vote.series_board_poll_id = p.series_board_poll_id
+               AND my_vote.user_id = @currentUserId
+            WHERE p.poll_status_code = N'OPEN'
+            ORDER BY p.started_at_utc DESC;
             """;
 
-        AddParameter(
-            command,
-            "@current_user_id",
-            DbType.Guid,
-            currentUserId);
+        AddGuidParameter(command, "@currentUserId", currentUserId);
 
         var rows = new List<EditorialBoardPollDto>();
 
-        await using var reader =
-            await command.ExecuteReaderAsync(cancellationToken);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         while (await reader.ReadAsync(cancellationToken))
         {
-            var pollTypeCode =
-                GetStringOrDefault(reader, 4, "UNKNOWN");
+            var pollTypeCode = GetStringOrDefault(reader, 4, "UNKNOWN");
+            var seriesTitle = GetStringOrDefault(reader, 3, "Untitled Series");
 
-            var seriesTitle =
-                GetStringOrDefault(
-                    reader,
-                    3,
-                    "Untitled Series");
-
-            rows.Add(
-                new EditorialBoardPollDto(
-                    PollId: reader.GetGuid(0),
-                    SeriesId: reader.GetGuid(1),
-                    Code: GetStringOrDefault(reader, 2, "N/A"),
-                    SeriesTitle: seriesTitle,
-                    PollName:
-                        $"{MapPollType(pollTypeCode)} â€” {seriesTitle}",
-                    PollTypeCode: pollTypeCode,
-                    PollStatusCode:
-                        GetStringOrDefault(reader, 5, "OPEN"),
-                    PollReason:
-                        GetStringOrDefault(
-                            reader,
-                            6,
-                            "No reason provided"),
-                    PublicationFrequencyCode:
-                        GetNullableString(reader, 7),
-                    StartedAtUtc: reader.GetDateTime(8),
-                    EndsAtUtc: GetNullableDateTime(reader, 9),
-                    ApproveVotes: ToInt32(reader, 10),
-                    RejectVotes: ToInt32(reader, 11),
-                    AbstainVotes: ToInt32(reader, 12),
-                    TotalVotes: ToInt32(reader, 13),
-                    ComputedResultCode:
-                        GetStringOrDefault(
-                            reader,
-                            14,
-                            "PENDING"),
-                    CurrentUserChoiceCode:
-                        GetNullableString(reader, 15),
-                    CurrentUserVoteReason:
-                        GetNullableString(reader, 16)));
+            rows.Add(new EditorialBoardPollDto(
+                PollId: reader.GetGuid(0),
+                SeriesId: reader.GetGuid(1),
+                Code: GetStringOrDefault(reader, 2, "N/A"),
+                SeriesTitle: seriesTitle,
+                PollName: $"{MapPollType(pollTypeCode)} — {seriesTitle}",
+                PollTypeCode: pollTypeCode,
+                PollStatusCode: GetStringOrDefault(reader, 5, "OPEN"),
+                PollReason: GetStringOrDefault(reader, 6, string.Empty),
+                PublicationFrequencyCode: reader.IsDBNull(7) ? null : reader.GetString(7),
+                StartedAtUtc: reader.GetDateTime(8),
+                EndsAtUtc: reader.IsDBNull(9) ? null : reader.GetDateTime(9),
+                ApproveVotes: ToInt32(reader, 10),
+                RejectVotes: ToInt32(reader, 11),
+                AbstainVotes: ToInt32(reader, 12),
+                TotalVotes: ToInt32(reader, 13),
+                ComputedResultCode: GetStringOrDefault(reader, 14, "PENDING"),
+                CurrentUserChoiceCode: reader.IsDBNull(15) ? null : reader.GetString(15),
+                CurrentUserVoteReason: reader.IsDBNull(16) ? null : reader.GetString(16)));
         }
 
         return rows;
@@ -187,60 +154,7 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         Guid chiefUserId,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(request);
-
-        if (chiefUserId == Guid.Empty)
-        {
-            throw new ArgumentException(
-                "Chief user id is required.",
-                nameof(chiefUserId));
-        }
-
-        if (request.ProposalId == Guid.Empty)
-        {
-            throw new ArgumentException(
-                "Proposal id is required.",
-                nameof(request));
-        }
-
-        var pollTypeCode =
-            NormalizeRequiredCode(
-                request.PollTypeCode,
-                nameof(request.PollTypeCode),
-                50);
-
-        var pollReason =
-            NormalizeRequiredText(
-                request.PollReason,
-                nameof(request.PollReason));
-
-        var publicationFrequencyCode =
-            NormalizeOptionalCode(
-                request.PublicationFrequencyCode,
-                nameof(request.PublicationFrequencyCode),
-                20);
-
-        if (publicationFrequencyCode is not null
-            && publicationFrequencyCode is not
-                ("WEEKLY" or "MONTHLY" or "IRREGULAR"))
-        {
-            throw new ArgumentException(
-                "Publication frequency must be WEEKLY, MONTHLY, or IRREGULAR.",
-                nameof(request));
-        }
-
-        var nowUtc = DateTime.UtcNow;
-
-        var endsAtUtc =
-            request.EndsAtUtc?.ToUniversalTime();
-
-        if (endsAtUtc.HasValue
-            && endsAtUtc.Value <= nowUtc)
-        {
-            throw new ArgumentException(
-                "Poll end time must be in the future.",
-                nameof(request));
-        }
+        ValidateOpenPollRequest(request);
 
         var connection = _dbContext.Database.GetDbConnection();
 
@@ -250,233 +164,96 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         }
 
         await using var transaction =
-            await connection.BeginTransactionAsync(
-                cancellationToken);
+            await connection.BeginTransactionAsync(cancellationToken);
 
         try
         {
-            Guid seriesId;
-
-            await using (
-                var proposalCommand =
-                    connection.CreateCommand())
-            {
-                proposalCommand.Transaction = transaction;
-
-                proposalCommand.CommandText =
-                    """
-                    SELECT series_id
-                    FROM manga.SeriesProposal
-                    WHERE series_proposal_id = @proposal_id
-                      AND status_code = N'UNDER_BOARD_REVIEW';
-                    """;
-
-                AddParameter(
-                    proposalCommand,
-                    "@proposal_id",
-                    DbType.Guid,
-                    request.ProposalId);
-
-                var proposalResult =
-                    await proposalCommand.ExecuteScalarAsync(
-                        cancellationToken);
-
-                if (proposalResult is not Guid resolvedSeriesId)
-                {
-                    throw new InvalidOperationException(
-                        "The proposal was not found or is not under board review.");
-                }
-
-                seriesId = resolvedSeriesId;
-            }
-
-            await using (
-                var duplicateCommand =
-                    connection.CreateCommand())
-            {
-                duplicateCommand.Transaction = transaction;
-
-                duplicateCommand.CommandText =
-                    """
-                    SELECT COUNT(1)
-                    FROM manga.SeriesBoardPoll
-                    WHERE series_id = @series_id
-                      AND poll_type_code = @poll_type_code
-                      AND poll_status_code = N'OPEN';
-                    """;
-
-                AddParameter(
-                    duplicateCommand,
-                    "@series_id",
-                    DbType.Guid,
-                    seriesId);
-
-                AddParameter(
-                    duplicateCommand,
-                    "@poll_type_code",
-                    DbType.String,
-                    pollTypeCode);
-
-                var existingCount =
-                    Convert.ToInt32(
-                        await duplicateCommand.ExecuteScalarAsync(
-                            cancellationToken));
-
-                if (existingCount > 0)
-                {
-                    throw new InvalidOperationException(
-                        "An open poll of this type already exists for the series.");
-                }
-            }
-
-            if (publicationFrequencyCode is not null)
-            {
-                await using var updateSeriesCommand =
-                    connection.CreateCommand();
-
-                updateSeriesCommand.Transaction = transaction;
-
-                updateSeriesCommand.CommandText =
-                    """
-                    UPDATE manga.Series
-                    SET publication_frequency_code =
-                        @publication_frequency_code,
-                        updated_by_user_id =
-                            @chief_user_id,
-                        updated_at_utc =
-                            SYSUTCDATETIME()
-                    WHERE series_id = @series_id;
-                    """;
-
-                AddParameter(
-                    updateSeriesCommand,
-                    "@publication_frequency_code",
-                    DbType.String,
-                    publicationFrequencyCode);
-
-                AddParameter(
-                    updateSeriesCommand,
-                    "@chief_user_id",
-                    DbType.Guid,
-                    chiefUserId);
-
-                AddParameter(
-                    updateSeriesCommand,
-                    "@series_id",
-                    DbType.Guid,
-                    seriesId);
-
-                var updatedSeriesRows =
-                    await updateSeriesCommand.ExecuteNonQueryAsync(
-                        cancellationToken);
-
-                if (updatedSeriesRows != 1)
-                {
-                    throw new InvalidOperationException(
-                        "The series could not be updated before opening the poll.");
-                }
-            }
-
-            var pollId = Guid.NewGuid();
-
-            await using (
-                var insertPollCommand =
-                    connection.CreateCommand())
-            {
-                insertPollCommand.Transaction = transaction;
-
-                insertPollCommand.CommandText =
-                    """
-                    INSERT INTO manga.SeriesBoardPoll
-                    (
-                        series_board_poll_id,
-                        series_id,
-                        poll_type_code,
-                        poll_reason,
-                        poll_status_code,
-                        created_by_user_id,
-                        started_at_utc,
-                        ends_at_utc
-                    )
-                    VALUES
-                    (
-                        @poll_id,
-                        @series_id,
-                        @poll_type_code,
-                        @poll_reason,
-                        N'OPEN',
-                        @chief_user_id,
-                        @started_at_utc,
-                        @ends_at_utc
-                    );
-                    """;
-
-                AddParameter(
-                    insertPollCommand,
-                    "@poll_id",
-                    DbType.Guid,
-                    pollId);
-
-                AddParameter(
-                    insertPollCommand,
-                    "@series_id",
-                    DbType.Guid,
-                    seriesId);
-
-                AddParameter(
-                    insertPollCommand,
-                    "@poll_type_code",
-                    DbType.String,
-                    pollTypeCode);
-
-                AddParameter(
-                    insertPollCommand,
-                    "@poll_reason",
-                    DbType.String,
-                    pollReason);
-
-                AddParameter(
-                    insertPollCommand,
-                    "@chief_user_id",
-                    DbType.Guid,
-                    chiefUserId);
-
-                AddParameter(
-                    insertPollCommand,
-                    "@started_at_utc",
-                    DbType.DateTime2,
-                    nowUtc);
-
-                AddParameter(
-                    insertPollCommand,
-                    "@ends_at_utc",
-                    DbType.DateTime2,
-                    endsAtUtc);
-
-                var insertedRows =
-                    await insertPollCommand.ExecuteNonQueryAsync(
-                        cancellationToken);
-
-                if (insertedRows != 1)
-                {
-                    throw new InvalidOperationException(
-                        "The board poll was not created.");
-                }
-            }
-
-            await transaction.CommitAsync(
+            var proposalInfo = await GetProposalForPollAsync(
+                connection,
+                transaction,
+                request.ProposalId,
                 cancellationToken);
+
+            if (proposalInfo is null)
+            {
+                throw new InvalidOperationException(
+                    "Proposal not found or cannot be opened for board poll.");
+            }
+
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+
+            command.CommandText =
+                """
+                INSERT INTO manga.SeriesBoardPoll
+                (
+                    series_id,
+                    poll_type_code,
+                    poll_reason,
+                    poll_status_code,
+                    board_publication_frequency_code,
+                    created_by_user_id,
+                    started_at_utc,
+                    ends_at_utc
+                )
+                OUTPUT inserted.series_board_poll_id
+                VALUES
+                (
+                    @seriesId,
+                    @pollTypeCode,
+                    @pollReason,
+                    N'OPEN',
+                    @publicationFrequencyCode,
+                    @chiefUserId,
+                    SYSUTCDATETIME(),
+                    @endsAtUtc
+                );
+                """;
+
+            AddGuidParameter(command, "@seriesId", proposalInfo.SeriesId);
+            AddStringParameter(command, "@pollTypeCode", request.PollTypeCode, 50);
+            AddStringParameter(command, "@pollReason", request.PollReason, -1);
+            AddNullableStringParameter(
+                command,
+                "@publicationFrequencyCode",
+                request.PublicationFrequencyCode,
+                50);
+            AddGuidParameter(command, "@chiefUserId", chiefUserId);
+            AddNullableDateTimeParameter(command, "@endsAtUtc", request.EndsAtUtc);
+
+            var pollIdObj = await command.ExecuteScalarAsync(cancellationToken);
+
+            if (pollIdObj is not Guid pollId)
+            {
+                throw new InvalidOperationException("Could not create board poll.");
+            }
+
+            await UpdateProposalAndSeriesToBoardReviewAsync(
+                connection,
+                transaction,
+                request.ProposalId,
+                proposalInfo.SeriesId,
+                chiefUserId,
+                cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
 
             return new OpenSeriesBoardPollResultDto(
                 PollId: pollId,
-                SeriesId: seriesId,
+                SeriesId: proposalInfo.SeriesId,
                 ProposalId: request.ProposalId,
                 PollStatusCode: "OPEN");
         }
         catch
         {
-            await transaction.RollbackAsync(
-                cancellationToken);
+            try
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
+            catch (InvalidOperationException)
+            {
+                // Transaction was already completed by SQL Server/provider.
+            }
 
             throw;
         }
@@ -487,43 +264,7 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         Guid voterUserId,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(request);
-
-        if (voterUserId == Guid.Empty)
-        {
-            throw new ArgumentException(
-                "Voter user id is required.",
-                nameof(voterUserId));
-        }
-
-        if (request.PollId == Guid.Empty)
-        {
-            throw new ArgumentException(
-                "Poll id is required.",
-                nameof(request));
-        }
-
-        var choiceCode =
-            NormalizeRequiredCode(
-                request.ChoiceCode,
-                nameof(request.ChoiceCode),
-                50);
-
-        if (choiceCode is not
-            ("APPROVE" or "REJECT" or "ABSTAIN"))
-        {
-            throw new ArgumentException(
-                "Vote choice must be APPROVE, REJECT, or ABSTAIN.",
-                nameof(request));
-        }
-
-        var voteReason =
-            NormalizeOptionalText(
-                request.VoteReason,
-                500,
-                nameof(request.VoteReason));
-
-        var nowUtc = DateTime.UtcNow;
+        ValidateVoteRequest(request);
 
         var connection = _dbContext.Database.GetDbConnection();
 
@@ -532,375 +273,107 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             await connection.OpenAsync(cancellationToken);
         }
 
-        await using var transaction =
-            await connection.BeginTransactionAsync(
-                cancellationToken);
+        await using var command = connection.CreateCommand();
+
+        command.CommandText =
+            """
+            SET XACT_ABORT ON;
+
+            IF NOT EXISTS (
+                SELECT 1
+                FROM manga.SeriesBoardPoll
+                WHERE series_board_poll_id = @pollId
+                  AND poll_status_code = N'OPEN'
+                  AND (
+                      ends_at_utc IS NULL
+                      OR ends_at_utc > SYSUTCDATETIME()
+                  )
+            )
+            BEGIN
+                THROW 58601, 'Poll is not open or has expired.', 1;
+            END;
+
+            DECLARE @result TABLE
+            (
+                series_board_vote_id UNIQUEIDENTIFIER,
+                choice_code NVARCHAR(50),
+                vote_reason NVARCHAR(500),
+                voted_at_utc DATETIME2(0)
+            );
+
+            UPDATE manga.SeriesBoardVote
+            SET choice_code = @choiceCode,
+                vote_reason = @voteReason,
+                voted_at_utc = SYSUTCDATETIME()
+            OUTPUT
+                inserted.series_board_vote_id,
+                inserted.choice_code,
+                inserted.vote_reason,
+                inserted.voted_at_utc
+            INTO @result
+            WHERE series_board_poll_id = @pollId
+              AND user_id = @voterUserId;
+
+            IF @@ROWCOUNT = 0
+            BEGIN
+                INSERT INTO manga.SeriesBoardVote
+                (
+                    series_board_poll_id,
+                    user_id,
+                    choice_code,
+                    vote_reason,
+                    voted_at_utc
+                )
+                OUTPUT
+                    inserted.series_board_vote_id,
+                    inserted.choice_code,
+                    inserted.vote_reason,
+                    inserted.voted_at_utc
+                INTO @result
+                VALUES
+                (
+                    @pollId,
+                    @voterUserId,
+                    @choiceCode,
+                    @voteReason,
+                    SYSUTCDATETIME()
+                );
+            END;
+
+            SELECT
+                series_board_vote_id,
+                choice_code,
+                vote_reason,
+                voted_at_utc
+            FROM @result;
+            """;
+
+        AddGuidParameter(command, "@pollId", request.PollId);
+        AddGuidParameter(command, "@voterUserId", voterUserId);
+        AddStringParameter(command, "@choiceCode", request.ChoiceCode, 50);
+        AddNullableStringParameter(command, "@voteReason", request.VoteReason, 500);
 
         try
         {
-            string pollStatusCode;
-            DateTime? pollEndsAtUtc;
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
-            await using (
-                var pollCommand =
-                    connection.CreateCommand())
+            if (!await reader.ReadAsync(cancellationToken))
             {
-                pollCommand.Transaction = transaction;
-
-                pollCommand.CommandText =
-                    """
-                    SELECT
-                        poll_status_code,
-                        ends_at_utc
-                    FROM manga.SeriesBoardPoll
-                    WHERE series_board_poll_id = @poll_id;
-                    """;
-
-                AddParameter(
-                    pollCommand,
-                    "@poll_id",
-                    DbType.Guid,
-                    request.PollId);
-
-                await using var reader =
-                    await pollCommand.ExecuteReaderAsync(
-                        cancellationToken);
-
-                if (!await reader.ReadAsync(
-                    cancellationToken))
-                {
-                    throw new InvalidOperationException(
-                        "The board poll was not found.");
-                }
-
-                pollStatusCode =
-                    GetStringOrDefault(
-                        reader,
-                        0,
-                        "UNKNOWN");
-
-                pollEndsAtUtc =
-                    GetNullableDateTime(
-                        reader,
-                        1);
+                throw new InvalidOperationException("Could not save vote.");
             }
-
-            if (!string.Equals(
-                pollStatusCode,
-                "OPEN",
-                StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException(
-                    "Votes can only be cast while the poll is open.");
-            }
-
-            if (pollEndsAtUtc.HasValue
-                && pollEndsAtUtc.Value <= nowUtc)
-            {
-                throw new InvalidOperationException(
-                    "The board poll has already ended.");
-            }
-
-            Guid voteId;
-
-            await using (
-                var existingVoteCommand =
-                    connection.CreateCommand())
-            {
-                existingVoteCommand.Transaction = transaction;
-
-                existingVoteCommand.CommandText =
-                    """
-                    SELECT series_board_vote_id
-                    FROM manga.SeriesBoardVote
-                    WHERE series_board_poll_id = @poll_id
-                      AND user_id = @voter_user_id;
-                    """;
-
-                AddParameter(
-                    existingVoteCommand,
-                    "@poll_id",
-                    DbType.Guid,
-                    request.PollId);
-
-                AddParameter(
-                    existingVoteCommand,
-                    "@voter_user_id",
-                    DbType.Guid,
-                    voterUserId);
-
-                var existingVoteResult =
-                    await existingVoteCommand.ExecuteScalarAsync(
-                        cancellationToken);
-
-                if (existingVoteResult is Guid existingVoteId)
-                {
-                    voteId = existingVoteId;
-
-                    await using var updateVoteCommand =
-                        connection.CreateCommand();
-
-                    updateVoteCommand.Transaction = transaction;
-
-                    updateVoteCommand.CommandText =
-                        """
-                        UPDATE manga.SeriesBoardVote
-                        SET choice_code = @choice_code,
-                            vote_reason = @vote_reason,
-                            voted_at_utc = @voted_at_utc
-                        WHERE series_board_vote_id = @vote_id;
-                        """;
-
-                    AddParameter(
-                        updateVoteCommand,
-                        "@choice_code",
-                        DbType.String,
-                        choiceCode);
-
-                    AddParameter(
-                        updateVoteCommand,
-                        "@vote_reason",
-                        DbType.String,
-                        voteReason);
-
-                    AddParameter(
-                        updateVoteCommand,
-                        "@voted_at_utc",
-                        DbType.DateTime2,
-                        nowUtc);
-
-                    AddParameter(
-                        updateVoteCommand,
-                        "@vote_id",
-                        DbType.Guid,
-                        voteId);
-
-                    var updatedRows =
-                        await updateVoteCommand.ExecuteNonQueryAsync(
-                            cancellationToken);
-
-                    if (updatedRows != 1)
-                    {
-                        throw new InvalidOperationException(
-                            "The existing board vote was not updated.");
-                    }
-                }
-                else
-                {
-                    voteId = Guid.NewGuid();
-
-                    await using var insertVoteCommand =
-                        connection.CreateCommand();
-
-                    insertVoteCommand.Transaction = transaction;
-
-                    insertVoteCommand.CommandText =
-                        """
-                        INSERT INTO manga.SeriesBoardVote
-                        (
-                            series_board_vote_id,
-                            series_board_poll_id,
-                            user_id,
-                            choice_code,
-                            vote_reason,
-                            voted_at_utc
-                        )
-                        VALUES
-                        (
-                            @vote_id,
-                            @poll_id,
-                            @voter_user_id,
-                            @choice_code,
-                            @vote_reason,
-                            @voted_at_utc
-                        );
-                        """;
-
-                    AddParameter(
-                        insertVoteCommand,
-                        "@vote_id",
-                        DbType.Guid,
-                        voteId);
-
-                    AddParameter(
-                        insertVoteCommand,
-                        "@poll_id",
-                        DbType.Guid,
-                        request.PollId);
-
-                    AddParameter(
-                        insertVoteCommand,
-                        "@voter_user_id",
-                        DbType.Guid,
-                        voterUserId);
-
-                    AddParameter(
-                        insertVoteCommand,
-                        "@choice_code",
-                        DbType.String,
-                        choiceCode);
-
-                    AddParameter(
-                        insertVoteCommand,
-                        "@vote_reason",
-                        DbType.String,
-                        voteReason);
-
-                    AddParameter(
-                        insertVoteCommand,
-                        "@voted_at_utc",
-                        DbType.DateTime2,
-                        nowUtc);
-
-                    var insertedRows =
-                        await insertVoteCommand.ExecuteNonQueryAsync(
-                            cancellationToken);
-
-                    if (insertedRows != 1)
-                    {
-                        throw new InvalidOperationException(
-                            "The board vote was not created.");
-                    }
-                }
-            }
-
-            await transaction.CommitAsync(
-                cancellationToken);
 
             return new CastSeriesBoardVoteResultDto(
                 PollId: request.PollId,
-                VoteId: voteId,
+                VoteId: reader.GetGuid(0),
                 UserId: voterUserId,
-                ChoiceCode: choiceCode,
-                VoteReason: voteReason,
-                VotedAtUtc: nowUtc);
+                ChoiceCode: reader.GetString(1),
+                VoteReason: reader.IsDBNull(2) ? null : reader.GetString(2),
+                VotedAtUtc: reader.GetDateTime(3));
         }
-        catch
+        catch (Microsoft.Data.SqlClient.SqlException ex) when (ex.Number == 58601)
         {
-            await transaction.RollbackAsync(
-                cancellationToken);
-
-            throw;
+            throw new InvalidOperationException("Poll is not open or has expired.", ex);
         }
-    }
-
-    private static DbParameter AddParameter(
-        DbCommand command,
-        string name,
-        DbType dbType,
-        object? value)
-    {
-        var parameter = command.CreateParameter();
-
-        parameter.ParameterName = name;
-        parameter.DbType = dbType;
-        parameter.Value = value ?? DBNull.Value;
-
-        command.Parameters.Add(parameter);
-
-        return parameter;
-    }
-
-    private static string NormalizeRequiredCode(
-        string? value,
-        string parameterName,
-        int maxLength)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            throw new ArgumentException(
-                "A value is required.",
-                parameterName);
-        }
-
-        var normalized =
-            value.Trim().ToUpperInvariant();
-
-        if (normalized.Length > maxLength)
-        {
-            throw new ArgumentException(
-                $"The value cannot exceed {maxLength} characters.",
-                parameterName);
-        }
-
-        return normalized;
-    }
-
-    private static string? NormalizeOptionalCode(
-        string? value,
-        string parameterName,
-        int maxLength)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        var normalized =
-            value.Trim().ToUpperInvariant();
-
-        if (normalized.Length > maxLength)
-        {
-            throw new ArgumentException(
-                $"The value cannot exceed {maxLength} characters.",
-                parameterName);
-        }
-
-        return normalized;
-    }
-
-    private static string NormalizeRequiredText(
-        string? value,
-        string parameterName)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            throw new ArgumentException(
-                "A value is required.",
-                parameterName);
-        }
-
-        return value.Trim();
-    }
-
-    private static string? NormalizeOptionalText(
-        string? value,
-        int maxLength,
-        string parameterName)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        var normalized = value.Trim();
-
-        if (normalized.Length > maxLength)
-        {
-            throw new ArgumentException(
-                $"The value cannot exceed {maxLength} characters.",
-                parameterName);
-        }
-
-        return normalized;
-    }
-
-    private static string? GetNullableString(
-        DbDataReader reader,
-        int ordinal)
-    {
-        return reader.IsDBNull(ordinal)
-            ? null
-            : reader.GetString(ordinal);
-    }
-
-    private static DateTime? GetNullableDateTime(
-        DbDataReader reader,
-        int ordinal)
-    {
-        return reader.IsDBNull(ordinal)
-            ? null
-            : reader.GetDateTime(ordinal);
     }
 
     private static async Task<int> ExecuteScalarIntAsync(
@@ -932,13 +405,22 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 s.slug,
                 sp.proposal_title,
                 u.display_name,
-                sp.genre_snapshot,
+                ISNULL(genres.genre_names, N'Unknown Genre') AS genre_display,
                 sp.status_code
             FROM manga.SeriesProposal sp
             INNER JOIN manga.Series s
                 ON s.series_id = sp.series_id
             INNER JOIN auth.Users u
                 ON u.user_id = sp.submitted_by_user_id
+            OUTER APPLY
+            (
+                SELECT
+                    STRING_AGG(CONVERT(NVARCHAR(MAX), g.genre_name), N' / ') AS genre_names
+                FROM manga.SeriesGenre sg
+                INNER JOIN manga.Genre g
+                    ON g.genre_id = sg.genre_id
+                WHERE sg.series_id = s.series_id
+            ) genres
             WHERE sp.status_code IN (
                 N'UNDER_EDITORIAL_REVIEW',
                 N'UNDER_BOARD_REVIEW',
@@ -1068,6 +550,146 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         return rows;
     }
 
+    private sealed record ProposalForPoll(Guid ProposalId, Guid SeriesId);
+
+    private static async Task<ProposalForPoll?> GetProposalForPollAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        Guid proposalId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+
+        command.CommandText =
+            """
+            SELECT
+                sp.series_proposal_id,
+                sp.series_id
+            FROM manga.SeriesProposal sp
+            INNER JOIN manga.Series s
+                ON s.series_id = sp.series_id
+            WHERE sp.series_proposal_id = @proposalId
+              AND sp.status_code IN (
+                  N'UNDER_EDITORIAL_REVIEW',
+                  N'UNDER_BOARD_REVIEW'
+              )
+              AND s.status_code IN (
+                  N'UNDER_EDITORIAL_REVIEW',
+                  N'UNDER_BOARD_REVIEW'
+              );
+            """;
+
+        AddGuidParameter(command, "@proposalId", proposalId);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        return new ProposalForPoll(
+            ProposalId: reader.GetGuid(0),
+            SeriesId: reader.GetGuid(1));
+    }
+
+    private static async Task UpdateProposalAndSeriesToBoardReviewAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        Guid proposalId,
+        Guid seriesId,
+        Guid chiefUserId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+
+        command.CommandText =
+            """
+            UPDATE manga.SeriesProposal
+            SET status_code = N'UNDER_BOARD_REVIEW',
+                reviewed_by_user_id = COALESCE(reviewed_by_user_id, @chiefUserId),
+                reviewed_at_utc = COALESCE(reviewed_at_utc, SYSUTCDATETIME())
+            WHERE series_proposal_id = @proposalId
+              AND status_code = N'UNDER_EDITORIAL_REVIEW';
+
+            UPDATE manga.Series
+            SET status_code = N'UNDER_BOARD_REVIEW',
+                updated_at_utc = SYSUTCDATETIME(),
+                updated_by_user_id = @chiefUserId
+            WHERE series_id = @seriesId
+              AND status_code = N'UNDER_EDITORIAL_REVIEW';
+            """;
+
+        AddGuidParameter(command, "@proposalId", proposalId);
+        AddGuidParameter(command, "@seriesId", seriesId);
+        AddGuidParameter(command, "@chiefUserId", chiefUserId);
+
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static void ValidateOpenPollRequest(OpenSeriesBoardPollRequestDto request)
+    {
+        if (request.ProposalId == Guid.Empty)
+        {
+            throw new InvalidOperationException("ProposalId is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.PollReason))
+        {
+            throw new InvalidOperationException("Poll reason is required.");
+        }
+
+        if (request.PollTypeCode is not "START_SERIALIZATION" and not "CANCEL_SERIALIZATION")
+        {
+            throw new InvalidOperationException("Invalid poll type.");
+        }
+
+        if (request.PollTypeCode == "START_SERIALIZATION"
+            && string.IsNullOrWhiteSpace(request.PublicationFrequencyCode))
+        {
+            throw new InvalidOperationException(
+                "Publication frequency is required for START_SERIALIZATION poll.");
+        }
+
+        if (request.PollTypeCode == "CANCEL_SERIALIZATION"
+            && !string.IsNullOrWhiteSpace(request.PublicationFrequencyCode))
+        {
+            throw new InvalidOperationException(
+                "Publication frequency must be empty for CANCEL_SERIALIZATION poll.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.PublicationFrequencyCode)
+            && request.PublicationFrequencyCode is not "WEEKLY" and not "MONTHLY" and not "IRREGULAR")
+        {
+            throw new InvalidOperationException("Invalid publication frequency.");
+        }
+
+        if (request.EndsAtUtc is not null && request.EndsAtUtc <= DateTime.UtcNow)
+        {
+            throw new InvalidOperationException("Poll deadline must be in the future.");
+        }
+    }
+
+    private static void ValidateVoteRequest(CastSeriesBoardVoteRequestDto request)
+    {
+        if (request.PollId == Guid.Empty)
+        {
+            throw new InvalidOperationException("PollId is required.");
+        }
+
+        if (request.ChoiceCode is not "APPROVE" and not "REJECT" and not "ABSTAIN")
+        {
+            throw new InvalidOperationException("Invalid vote choice.");
+        }
+
+        if (request.ChoiceCode == "REJECT" && string.IsNullOrWhiteSpace(request.VoteReason))
+        {
+            throw new InvalidOperationException("Reject vote requires reason.");
+        }
+    }
+
     private static int ToInt32(DbDataReader reader, int ordinal)
     {
         return reader.IsDBNull(ordinal)
@@ -1083,6 +705,74 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         return reader.IsDBNull(ordinal)
             ? fallback
             : reader.GetString(ordinal);
+    }
+
+    private static void AddGuidParameter(
+        DbCommand command,
+        string name,
+        Guid value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.DbType = DbType.Guid;
+        parameter.Value = value;
+
+        command.Parameters.Add(parameter);
+    }
+
+    private static void AddStringParameter(
+        DbCommand command,
+        string name,
+        string value,
+        int size)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.DbType = DbType.String;
+        parameter.Value = value;
+
+        if (size > 0)
+        {
+            parameter.Size = size;
+        }
+
+        command.Parameters.Add(parameter);
+    }
+
+    private static void AddNullableStringParameter(
+        DbCommand command,
+        string name,
+        string? value,
+        int size)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.DbType = DbType.String;
+        parameter.Value = string.IsNullOrWhiteSpace(value)
+            ? DBNull.Value
+            : value;
+
+        if (size > 0)
+        {
+            parameter.Size = size;
+        }
+
+        command.Parameters.Add(parameter);
+    }
+
+    private static void AddNullableDateTimeParameter(
+        DbCommand command,
+        string name,
+        DateTime? value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.DbType = DbType.DateTime2;
+        parameter.Value = value is null
+            ? DBNull.Value
+            : value.Value;
+
+        command.Parameters.Add(parameter);
     }
 
     private static string MapProposalStatus(string statusCode)
@@ -1129,7 +819,8 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             "NO_DECISION" => "No Decision",
             "PENDING" => "Voting in Progress",
             "INVALIDATED" => "Cancelled",
-            _ => resultCode
         };
     }
+
+
 }

@@ -27,6 +27,7 @@ namespace MangaManagementSystem.Domain.Interfaces
 
         Task<ChapterPageTask?> GetByIdWithFullContextAsync(Guid taskId);
 
+        Task<IReadOnlyList<ChapterPageTask>> GetByChapterPageIdWithRegionsAsync(Guid chapterPageId);
         // Mangaka task lifecycle SPs
         Task CancelTaskAsync(Guid actorUserId, Guid taskId, string reason);
         Task MarkTaskCompletedAsync(Guid actorUserId, Guid taskId, string? completionNote);
@@ -34,5 +35,16 @@ namespace MangaManagementSystem.Domain.Interfaces
 
         // Mangaka: tasks created by this user (for review submissions view)
         Task<IReadOnlyList<ChapterPageTask>> GetTasksForReviewByCreatorAsync(Guid creatorUserId);
+
+        // Mangaka: reassign task to different assistant
+        Task<Guid> AssignToDifferentUserAsync(
+            Guid actorUserId,
+            Guid chapterPageTaskId,
+            Guid newAssignedToUserId,
+            string reason,
+            string updatedTaskDescription);
+
+        // Eligible assistants for task reassignment (active contributors of same series, Assistant role)
+        Task<IReadOnlyList<(Guid UserId, string DisplayName, string? Username)>> GetEligibleAssistantsForTaskAsync(Guid taskId);
     }
 }

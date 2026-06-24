@@ -1,4 +1,4 @@
-@page "/assistant/tasks"
+﻿@page "/assistant/tasks"
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
@@ -27,31 +27,85 @@
         else
         {
             <MudGrid Class="mb-6">
-                <MudItem xs="12" md="3"><StatCard Label="Assigned" Value="@_assignedCount.ToString()" Description="Awaiting your work" /></MudItem>
-                <MudItem xs="12" md="3"><StatCard Label="Under Review" Value="@_underReviewCount.ToString()" Description="Submitted for review" /></MudItem>
-                <MudItem xs="12" md="3"><StatCard Label="Completed" Value="@_completedCount.ToString()" Description="Approved tasks" /></MudItem>
-                <MudItem xs="12" md="3"><StatCard Label="Overdue" Value="@_overdueCount.ToString()" Description="Past due date" /></MudItem>
+                <MudItem xs="6" md="3"><StatCard Label="Assigned" Value="@_assignedCount.ToString()" Description="Awaiting your work" /></MudItem>
+                <MudItem xs="6" md="3"><StatCard Label="Under Review" Value="@_underReviewCount.ToString()" Description="Submitted for review" /></MudItem>
+                <MudItem xs="6" md="3"><StatCard Label="Completed" Value="@_completedCount.ToString()" Description="Approved tasks" /></MudItem>
+                <MudItem xs="6" md="3"><StatCard Label="Overdue" Value="@_overdueCount.ToString()" Description="Past due date" /></MudItem>
             </MudGrid>
 
-            @if (_tasks == null || !_tasks.Any())
+            @if (_overdueCount > 0)
+            {
+                <MudAlert Severity="Severity.Error" Class="mb-4" Dense="true">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                        <MudText Typo="Typo.body2" Class="font-weight-bold">
+                            @_overdueCount task(s) are overdue!
+                        </MudText>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => _filter = "overdue")">
+                            Show Overdue →
+                        </MudButton>
+                    </MudStack>
+                </MudAlert>
+            }
+
+            @* Filter tabs *@
+            <MudPaper Class="pa-3 mb-4 mf-card" Elevation="0">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                        <MudButton Size="Size.Small" Variant="@(_filter == "all" ? Variant.Filled : Variant.Text)" Color="Color.Primary" OnClick="@(() => _filter = "all")">All</MudButton>
+                        <MudButton Size="Size.Small" Variant="@(_filter == "assigned" ? Variant.Filled : Variant.Text)" Color="Color.Info" OnClick="@(() => _filter = "assigned")">Assigned</MudButton>
+                        <MudButton Size="Size.Small" Variant="@(_filter == "under_review" ? Variant.Filled : Variant.Text)" Color="Color.Secondary" OnClick="@(() => _filter = "under_review")">Under Review</MudButton>
+                        <MudButton Size="Size.Small" Variant="@(_filter == "overdue" ? Variant.Filled : Variant.Text)" Color="Color.Error" OnClick="@(() => _filter = "overdue")">Overdue</MudButton>
+                    </MudStack>
+                    <MudText Typo="Typo.caption" Class="mf-muted">
+                        @_filteredTasks.Count task(s)
+                        @if (_filter != "all")
+                        {
+                            <a href="javascript:void(0)" @onclick="ClearFilter" style="margin-left: 8px;">Clear filter</a>
+                        }
+                    </MudText>
+                </MudStack>
+            </MudPaper>
+
+            @if (!_filteredTasks.Any())
             {
                 <MudGrid>
                     <MudItem xs="12">
-                        <MudPaper Class="pa-6 text-center mf-card"><MudText>No assigned tasks found.</MudText></MudPaper>
+                        <MudPaper Class="pa-6 text-center mf-card">
+                            <MudText>No tasks match the current filter.</MudText>
+                        </MudPaper>
                     </MudItem>
                 </MudGrid>
             }
             else
             {
                 <MudGrid>
-                    @foreach (var t in _tasks)
+                    @foreach (var t in _filteredTasks)
                     {
+                        var isOverdue = IsOverdue(t);
+                        var isDueSoon = IsDueSoon(t);
+                        var cardStyle = isOverdue ? "border-left: 4px solid var(--mud-palette-error);" :
+                                        isDueSoon ? "border-left: 4px solid var(--mud-palette-warning);" : "";
+
                         <MudItem xs="12" md="6">
-                            <MudPaper Class="pa-5 mf-card" Elevation="0">
-                                <MudStack Row="true" Justify="Justify.SpaceBetween">
-                                    <MudText Typo="Typo.h6" Class="font-weight-bold">@t.TypeCode</MudText>
+                            <MudPaper Class="pa-5 mf-card" Elevation="0" Style="@cardStyle">
+                                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                        <MudText Typo="Typo.h6" Class="font-weight-bold"
+                                                  Style="@(isOverdue ? "color: var(--mud-palette-error);" : "")">
+                                            @t.TypeCode
+                                        </MudText>
+                                        @if (isOverdue)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Filled">OVERDUE</MudChip>
+                                        }
+                                        else if (isDueSoon)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">DUE SOON</MudChip>
+                                        }
+                                    </MudStack>
                                     <StatusBadge Status="@t.StatusCode" />
                                 </MudStack>
+
                                 <MudText Typo="Typo.body2" Class="mt-2">
                                     @if (!string.IsNullOrWhiteSpace(t.SeriesTitle))
                                     {
@@ -59,28 +113,32 @@
                                     }
                                     @if (!string.IsNullOrWhiteSpace(t.ChapterNumberLabel))
                                     {
-                                        <span class="mf-muted"> • @t.ChapterNumberLabel</span>
+                                        <span class="mf-muted"> &bull; @t.ChapterNumberLabel</span>
                                     }
                                     @if (t.PageNo.HasValue)
                                     {
-                                        <span class="mf-muted"> • Page @t.PageNo.Value</span>
+                                        <span class="mf-muted"> &bull; Page @t.PageNo.Value</span>
                                     }
                                 </MudText>
-                                <MudText Typo="Typo.body2" Class="mt-1">
-                                    Due: <TimestampDisplay Value="@t.DueAtUtc" EmptyText="No deadline set" />
-                                </MudText>
-                                @if (t.CompensationAmount.HasValue)
-                                {
-                                    <MudText Typo="Typo.caption" Class="mt-1">
-                                        <span class="mf-muted">Compensation: @t.CompensationAmount.Value.ToString("C2")</span>
+
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-1">
+                                    <MudText Typo="Typo.caption" Class="mf-muted">
+                                        Assigned: <TimestampDisplay Value="@t.CreatedAtUtc" EmptyText="-" ShowTime="false" />
                                     </MudText>
-                                }
+                                    <MudText Typo="Typo.caption" Class="mf-muted">&bull;</MudText>
+                                    <MudText Typo="Typo.body2"
+                                              Style="@(isOverdue ? "color: var(--mud-palette-error); font-weight: 600;" : "")">
+                                        Due: <TimestampDisplay Value="@t.DueAtUtc" EmptyText="No deadline set" />
+                                    </MudText>
+                                </MudStack>
+
                                 @if (t.PageRegions.Any())
                                 {
                                     <MudText Typo="Typo.caption" Class="mt-1 mf-muted">
                                         Regions: @t.PageRegions.Count
                                     </MudText>
                                 }
+
                                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"/assistant/task/{t.ChapterPageTaskId}")" Class="mt-3">Open Task</MudButton>
                             </MudPaper>
                         </MudItem>
@@ -88,7 +146,6 @@
                 </MudGrid>
             }
         }
-
     </div>
 </AssistantLayout>
 
@@ -97,11 +154,40 @@
     private bool _loading = true;
     private string? _error;
     private IReadOnlyList<ChapterPageTaskDto>? _tasks;
+    private string _filter = "all";
 
     private int _assignedCount;
     private int _underReviewCount;
     private int _completedCount;
     private int _overdueCount;
+
+    private List<ChapterPageTaskDto> _filteredTasks
+    {
+        get
+        {
+            if (_tasks == null) return [];
+            var now = DateTime.UtcNow;
+            IEnumerable<ChapterPageTaskDto> query = _tasks;
+
+            query = _filter switch
+            {
+                "assigned" => query.Where(t => t.StatusCode == "ASSIGNED"),
+                "under_review" => query.Where(t => t.StatusCode == "UNDER_REVIEW"),
+                "completed" => query.Where(t => t.StatusCode == "COMPLETED"),
+                "overdue" => query.Where(t => t.DueAtUtc.HasValue && t.DueAtUtc.Value < now &&
+                                                t.StatusCode != "COMPLETED" && t.StatusCode != "CANCELLED"),
+                _ => query
+            };
+
+            return [.. query.OrderBy(t =>
+            {
+                if (t.DueAtUtc.HasValue && t.DueAtUtc.Value < now &&
+                    t.StatusCode != "COMPLETED" && t.StatusCode != "CANCELLED") return 0;
+                if (t.DueAtUtc.HasValue && t.DueAtUtc.Value >= now && t.DueAtUtc.Value <= now.AddDays(3)) return 1;
+                return 2;
+            }).ThenBy(t => t.DueAtUtc ?? DateTime.MaxValue)];
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -144,4 +230,17 @@
             _loading = false;
         }
     }
+
+    private bool IsOverdue(ChapterPageTaskDto t) =>
+        t.DueAtUtc.HasValue && t.DueAtUtc.Value < DateTime.UtcNow &&
+        t.StatusCode != "COMPLETED" && t.StatusCode != "CANCELLED";
+
+    private bool IsDueSoon(ChapterPageTaskDto t)
+    {
+        if (IsOverdue(t)) return false;
+        var now = DateTime.UtcNow;
+        return t.DueAtUtc.HasValue && t.DueAtUtc.Value >= now && t.DueAtUtc.Value <= now.AddDays(3);
+    }
+
+    private void ClearFilter() => _filter = "all";
 }
