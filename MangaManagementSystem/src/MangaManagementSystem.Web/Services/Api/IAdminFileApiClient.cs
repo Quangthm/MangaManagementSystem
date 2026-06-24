@@ -1,4 +1,4 @@
-﻿using MangaManagementSystem.Application.DTOs.Admin;
+using MangaManagementSystem.Application.DTOs.Admin;
 
 namespace MangaManagementSystem.Web.Services.Api
 {
@@ -18,9 +18,22 @@ namespace MangaManagementSystem.Web.Services.Api
             Guid fileResourceId,
             CancellationToken cancellationToken = default);
 
+        Task<AdminFileDetailDto> DeleteAsync(
+            Guid fileResourceId,
+            string deleteReason,
+            CancellationToken cancellationToken = default);
+
         Task<AdminFileDetailDto> SoftDeleteAsync(
             Guid fileResourceId,
             string deleteReason,
+            CancellationToken cancellationToken = default);
+
+        Task<AdminFileCleanupResultDto> CleanupAsync(
+            Guid fileResourceId,
+            CancellationToken cancellationToken = default);
+
+        Task<AdminFileCleanupBatchResultDto> CleanupDeletedAsync(
+            int batchSize = 20,
             CancellationToken cancellationToken = default);
 
         Task<AdminFileContentResult> GetPreviewAsync(

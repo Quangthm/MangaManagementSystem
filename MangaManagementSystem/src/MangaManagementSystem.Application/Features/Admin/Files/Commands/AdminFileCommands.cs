@@ -1,4 +1,4 @@
-﻿using MangaManagementSystem.Application.DTOs.Admin;
+using MangaManagementSystem.Application.DTOs.Admin;
 using MediatR;
 
 namespace MangaManagementSystem.Application.Features.Admin.Files.Commands
@@ -8,4 +8,14 @@ namespace MangaManagementSystem.Application.Features.Admin.Files.Commands
         Guid FileResourceId,
         string? DeleteReason)
         : IRequest<AdminFileDetailDto>;
+
+    public sealed record CleanupAdminFileStorageCommand(
+        Guid ActorUserId,
+        Guid FileResourceId)
+        : IRequest<AdminFileCleanupResultDto>;
+
+    public sealed record CleanupDeletedAdminFilesStorageCommand(
+        Guid ActorUserId,
+        int BatchSize)
+        : IRequest<AdminFileCleanupBatchResultDto>;
 }

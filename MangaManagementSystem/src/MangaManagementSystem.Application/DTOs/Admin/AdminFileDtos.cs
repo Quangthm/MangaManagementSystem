@@ -1,4 +1,4 @@
-﻿namespace MangaManagementSystem.Application.DTOs.Admin
+namespace MangaManagementSystem.Application.DTOs.Admin
 {
     public sealed record AdminFileListItemDto(
         Guid FileResourceId,
@@ -53,4 +53,16 @@
         DateTime? DeletedAtUtc,
         bool IsDeleted,
         bool CanPreview);
+
+    public sealed record AdminFileCleanupResultDto(
+        Guid FileResourceId,
+        string OriginalFileName,
+        bool Succeeded,
+        string Message);
+
+    public sealed record AdminFileCleanupBatchResultDto(
+        IReadOnlyList<AdminFileCleanupResultDto> Items,
+        int RequestedCount,
+        int SucceededCount,
+        int FailedCount);
 }

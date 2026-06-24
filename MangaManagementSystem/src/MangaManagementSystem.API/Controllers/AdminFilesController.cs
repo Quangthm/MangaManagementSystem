@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using MangaManagementSystem.API.Contracts;
@@ -195,8 +195,9 @@ namespace MangaManagementSystem.API.Controllers
             }
         }
 
+        [HttpPost("{fileResourceId:guid}/delete")]
         [HttpPost("{fileResourceId:guid}/soft-delete")]
-        public async Task<IActionResult> SoftDeleteAsync(
+        public async Task<IActionResult> DeleteAsync(
             Guid fileResourceId,
             [FromBody] AdminFileSoftDeleteRequest request,
             CancellationToken cancellationToken)
@@ -244,8 +245,99 @@ namespace MangaManagementSystem.API.Controllers
             {
                 _logger.LogError(
                     ex,
-                    "Failed to soft-delete file resource {FileResourceId}.",
+                    "Failed to delete file resource {FileResourceId}.",
                     fileResourceId);
+
+                return AdminFileRequestFailed();
+            }
+        }
+
+        [HttpPost("{fileResourceId:guid}/cleanup")]
+        public async Task<IActionResult> CleanupAsync(
+            Guid fileResourceId,
+            CancellationToken cancellationToken)
+        {
+            var authorization =
+                await ResolveAdminActorAsync();
+
+            if (authorization.Error is not null)
+            {
+                return authorization.Error;
+            }
+
+            try
+            {
+                var result =
+                    await _sender.Send(
+                        new CleanupAdminFileStorageCommand(
+                            authorization.Actor!.UserId,
+                            fileResourceId),
+                        cancellationToken);
+
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(
+                    new ApiErrorResponse(
+                        AdminFileErrorCodes.InvalidRequest,
+                        ex.Message));
+            }
+            catch (SqlException ex)
+            {
+                return MapSqlException(ex);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to clean up storage for file resource {FileResourceId}.",
+                    fileResourceId);
+
+                return AdminFileRequestFailed();
+            }
+        }
+
+        [HttpPost("cleanup-deleted")]
+        public async Task<IActionResult> CleanupDeletedAsync(
+            [FromQuery] int batchSize = 20,
+            CancellationToken cancellationToken = default)
+        {
+            var authorization =
+                await ResolveAdminActorAsync();
+
+            if (authorization.Error is not null)
+            {
+                return authorization.Error;
+            }
+
+            try
+            {
+                var result =
+                    await _sender.Send(
+                        new CleanupDeletedAdminFilesStorageCommand(
+                            authorization.Actor!.UserId,
+                            batchSize),
+                        cancellationToken);
+
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(
+                    new ApiErrorResponse(
+                        AdminFileErrorCodes.InvalidRequest,
+                        ex.Message));
+            }
+            catch (SqlException ex)
+            {
+                return MapSqlException(ex);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to clean up deleted file resources.");
 
                 return AdminFileRequestFailed();
             }

@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using MangaManagementSystem.Application.DTOs.Admin;
@@ -139,7 +139,7 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<AdminFileDetailDto>
-            SoftDeleteAsync(
+            DeleteAsync(
                 Guid fileResourceId,
                 string deleteReason,
                 CancellationToken cancellationToken = default)
@@ -147,7 +147,7 @@ namespace MangaManagementSystem.Web.Services.Api
             using var request =
                 await CreateAuthorizedRequestAsync(
                     HttpMethod.Post,
-                    $"api/admin/files/{fileResourceId:D}/soft-delete");
+                    $"api/admin/files/{fileResourceId:D}/delete");
 
             request.Content =
                 JsonContent.Create(
@@ -163,12 +163,77 @@ namespace MangaManagementSystem.Web.Services.Api
 
             LogFailure(
                 response,
-                "Soft-delete Admin file");
+                "Delete Admin file");
 
             return await ApiResponseReader
                 .ReadRequiredAsync<AdminFileDetailDto>(
                     response,
-                    "The Admin File API returned an empty soft-delete response.",
+                    "The Admin File API returned an empty delete response.",
+                    cancellationToken);
+        }
+
+        public Task<AdminFileDetailDto>
+            SoftDeleteAsync(
+                Guid fileResourceId,
+                string deleteReason,
+                CancellationToken cancellationToken = default)
+        {
+            return DeleteAsync(
+                fileResourceId,
+                deleteReason,
+                cancellationToken);
+        }
+
+        public async Task<AdminFileCleanupResultDto>
+            CleanupAsync(
+                Guid fileResourceId,
+                CancellationToken cancellationToken = default)
+        {
+            using var request =
+                await CreateAuthorizedRequestAsync(
+                    HttpMethod.Post,
+                    $"api/admin/files/{fileResourceId:D}/cleanup");
+
+            using var response =
+                await _httpClient.SendAsync(
+                    request,
+                    cancellationToken);
+
+            LogFailure(
+                response,
+                "Clean up Admin file storage");
+
+            return await ApiResponseReader
+                .ReadRequiredAsync<AdminFileCleanupResultDto>(
+                    response,
+                    "The Admin File API returned an empty cleanup response.",
+                    cancellationToken);
+        }
+
+        public async Task<AdminFileCleanupBatchResultDto>
+            CleanupDeletedAsync(
+                int batchSize = 20,
+                CancellationToken cancellationToken = default)
+        {
+            using var request =
+                await CreateAuthorizedRequestAsync(
+                    HttpMethod.Post,
+                    "api/admin/files/cleanup-deleted?batchSize="
+                    + batchSize);
+
+            using var response =
+                await _httpClient.SendAsync(
+                    request,
+                    cancellationToken);
+
+            LogFailure(
+                response,
+                "Clean up deleted Admin file storage");
+
+            return await ApiResponseReader
+                .ReadRequiredAsync<AdminFileCleanupBatchResultDto>(
+                    response,
+                    "The Admin File API returned an empty cleanup batch response.",
                     cancellationToken);
         }
 
