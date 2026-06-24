@@ -130,7 +130,7 @@
                                 <MudButton Size="Size.Small"
                                            Variant="Variant.Text"
                                            Color="Color.Primary"
-                                           Disabled="@string.IsNullOrWhiteSpace(context.CloudinarySecureUrl)"
+                                           Disabled="@IsOpenDisabled(context)"
                                            OnClick="@(() => OpenFile(context.CloudinarySecureUrl))">
                                     Open
                                 </MudButton>
@@ -323,6 +323,12 @@
         }
     }
 
+    private bool IsOpenDisabled(FileResourceDto file)
+    {
+        return string.IsNullOrWhiteSpace(file.CloudinarySecureUrl)
+            || file.DeletedAtUtc.HasValue;
+    }
+
     private bool IsCleanupDisabled(FileResourceDto file)
     {
         return _cleaningFileId.HasValue
@@ -355,3 +361,4 @@
         return $"{bytes / 1024d / 1024d:0.##} MB";
     }
 }
+
