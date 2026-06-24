@@ -47,7 +47,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             var normalizedBatchSize = NormalizeBatchSize(batchSize);
 
             return await _dbSet
-                .Where(f => f.DeletedAtUtc != null && f.StorageCleanedAtUtc == null)
+                .Where(f => f.DeletedAtUtc != null)
                 .OrderBy(f => f.DeletedAtUtc)
                 .ThenBy(f => f.FileResourceId)
                 .Take(normalizedBatchSize)
@@ -87,22 +87,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 {
                     "ACTIVE" => query.Where(f => f.DeletedAtUtc == null),
 
-                    "PENDING" or "PENDING_CLEANUP" => query.Where(f =>
-                        f.DeletedAtUtc != null
-                        && f.StorageCleanedAtUtc == null
-                        && (f.StorageCleanupError == null || f.StorageCleanupError == string.Empty)),
-
-                    "CLEANED" => query.Where(f =>
-                        f.DeletedAtUtc != null
-                        && f.StorageCleanedAtUtc != null),
-
-                    "FAILED" => query.Where(f =>
-                        f.DeletedAtUtc != null
-                        && f.StorageCleanedAtUtc == null
-                        && f.StorageCleanupError != null
-                        && f.StorageCleanupError != string.Empty),
-
-                    "DELETED" => query.Where(f => f.DeletedAtUtc != null),
+                    "PENDING" or "PENDING_CLEANUP" or "DELETED" => query.Where(f =>
+                        f.DeletedAtUtc != null),
 
                     _ => query
                 };

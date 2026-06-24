@@ -288,8 +288,6 @@ Warnings are existing project warnings unrelated to this implementation.
 After checking root SQL scripts, the source SQL files were also aligned with the cleanup flow:
 
 - MangaManagementSystem_Schema.sql
-  - Added storage_cleaned_at_utc.
-  - Added storage_cleanup_error.
   - Added ix_file_resource_storage_cleanup_candidates.
 
 - MangaManagementSystem_Procedures_Views_Bootstrap.sql

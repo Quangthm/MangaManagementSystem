@@ -1,4 +1,4 @@
-﻿@page "/admin/files"
+@page "/admin/files"
 @using MangaManagementSystem.Application.DTOs.Manga
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "Admin")]
@@ -52,8 +52,6 @@
                         <MudSelectItem T="string" Value="@("")">All</MudSelectItem>
                         <MudSelectItem T="string" Value="@("ACTIVE")">Active</MudSelectItem>
                         <MudSelectItem T="string" Value="@("PENDING_CLEANUP")">Pending cleanup</MudSelectItem>
-                        <MudSelectItem T="string" Value="@("CLEANED")">Cleaned</MudSelectItem>
-                        <MudSelectItem T="string" Value="@("FAILED")">Failed</MudSelectItem>
                         <MudSelectItem T="string" Value="@("DELETED")">Deleted</MudSelectItem>
                     </MudSelect>
                 </MudItem>
@@ -124,7 +122,6 @@
                         <MudTh>Uploaded</MudTh>
                         <MudTh>Deleted</MudTh>
                         <MudTh>Storage State</MudTh>
-                        <MudTh>Cleanup Error</MudTh>
                         <MudTh></MudTh>
                     </HeaderContent>
                     <RowTemplate>
@@ -147,21 +144,6 @@
                                      Color="@GetStorageStateColor(context.StorageState)">
                                 @context.StorageState
                             </MudChip>
-                        </MudTd>
-
-                        <MudTd>
-                            @if (string.IsNullOrWhiteSpace(context.StorageCleanupError))
-                            {
-                                <span>-</span>
-                            }
-                            else
-                            {
-                                <MudTooltip Text="@context.StorageCleanupError">
-                                    <MudText Typo="Typo.caption" Color="Color.Error">
-                                        @TrimForDisplay(context.StorageCleanupError, 60)
-                                    </MudText>
-                                </MudTooltip>
-                            }
                         </MudTd>
 
                         <MudTd>
@@ -348,8 +330,7 @@
     {
         return _cleaningFileId.HasValue
             || _isCleaningAll
-            || !file.DeletedAtUtc.HasValue
-            || file.StorageCleanedAtUtc.HasValue;
+            || !file.DeletedAtUtc.HasValue;
     }
 
     private static string? NormalizeFilter(string? value)

@@ -22,8 +22,5 @@ namespace MangaManagementSystem.Domain.Entities
         public DateTime? DeletedAtUtc { get; set; }
         public Guid? DeletedByUserId { get; set; }
         public User? DeletedByUser { get; set; }
-
-        public DateTime? StorageCleanedAtUtc { get; set; }
-        public string? StorageCleanupError { get; set; }
     }
 }

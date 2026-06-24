@@ -1,4 +1,4 @@
-﻿using MangaManagementSystem.Domain.Entities;
+using MangaManagementSystem.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -49,15 +49,7 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
 
             builder.Property(f => f.UploadedAtUtc)
                 .HasDefaultValueSql("SYSUTCDATETIME()");
-
-            builder.Property(f => f.StorageCleanedAtUtc)
-                .HasColumnName("storage_cleaned_at_utc");
-
-            builder.Property(f => f.StorageCleanupError)
-                .HasColumnName("storage_cleanup_error")
-                .HasMaxLength(1000);
-
-            builder.HasIndex(f => f.FilePurposeCode)
+builder.HasIndex(f => f.FilePurposeCode)
                 .HasDatabaseName("ix_file_resource_purpose_code");
 
             builder.HasIndex(f => f.UploadedByUserId)
@@ -66,12 +58,7 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
             builder.HasIndex(f => new { f.FilePurposeCode, f.DeletedAtUtc })
                 .HasDatabaseName("ix_file_resource_active_by_purpose")
                 .HasFilter("deleted_at_utc IS NULL");
-
-            builder.HasIndex(f => new { f.DeletedAtUtc, f.StorageCleanedAtUtc })
-                .HasDatabaseName("ix_file_resource_storage_cleanup_candidates")
-                .HasFilter("deleted_at_utc IS NOT NULL AND storage_cleaned_at_utc IS NULL");
-
-            builder.HasOne(f => f.UploadedByUser)
+builder.HasOne(f => f.UploadedByUser)
                 .WithMany()
                 .HasForeignKey(f => f.UploadedByUserId);
 
@@ -81,4 +68,3 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
         }
     }
 }
-

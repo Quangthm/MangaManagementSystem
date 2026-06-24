@@ -1,4 +1,4 @@
-using MangaManagementSystem.Application.DTOs.Manga;
+﻿using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
@@ -13,7 +13,6 @@ namespace MangaManagementSystem.Application.Services
     {
         private const string CloudinaryRawResourceType = "raw";
         private const string CloudinaryImageResourceType = "image";
-        private const int MaxCleanupErrorLength = 1000;
 
         private readonly IUnitOfWork _unitOfWork;
         private readonly IFileStorageService _fileStorageService;
@@ -72,8 +71,6 @@ namespace MangaManagementSystem.Application.Services
 
             entity.DeletedAtUtc = DateTime.UtcNow;
             entity.DeletedByUserId = deletedByUserId;
-            entity.StorageCleanedAtUtc = null;
-            entity.StorageCleanupError = null;
 
             _unitOfWork.FileResources.Update(entity);
             await _unitOfWork.SaveChangesAsync();
@@ -135,17 +132,6 @@ namespace MangaManagementSystem.Application.Services
                     Message: "Only soft-deleted file resources can be cleaned up.");
             }
 
-            if (entity.StorageCleanedAtUtc.HasValue)
-            {
-                return new FileStorageCleanupResultDto(
-                    entity.FileResourceId,
-                    entity.OriginalFileName,
-                    MapToDto(entity).StorageState,
-                    Succeeded: true,
-                    StorageObjectNotFound: false,
-                    Message: "Storage object was already cleaned.");
-            }
-
             try
             {
                 var resourceType = DetermineCloudinaryResourceType(entity.ContentType);
@@ -153,15 +139,9 @@ namespace MangaManagementSystem.Application.Services
                     entity.CloudinaryPublicId,
                     resourceType);
 
-                entity.StorageCleanedAtUtc = DateTime.UtcNow;
-                entity.StorageCleanupError = null;
-
-                _unitOfWork.FileResources.Update(entity);
-                await _unitOfWork.SaveChangesAsync();
-
                 var storageObjectNotFound = deleteResult.NotFound;
                 var message = storageObjectNotFound
-                    ? "Storage object was already missing, so cleanup was marked as completed."
+                    ? "Storage object was already missing."
                     : "Storage object was deleted successfully.";
 
                 return new FileStorageCleanupResultDto(
@@ -174,17 +154,13 @@ namespace MangaManagementSystem.Application.Services
             }
             catch (Exception ex)
             {
-                entity.StorageCleanupError = TruncateCleanupError(ex.Message);
-                _unitOfWork.FileResources.Update(entity);
-                await _unitOfWork.SaveChangesAsync();
-
                 return new FileStorageCleanupResultDto(
                     entity.FileResourceId,
                     entity.OriginalFileName,
                     MapToDto(entity).StorageState,
                     Succeeded: false,
                     StorageObjectNotFound: false,
-                    Message: entity.StorageCleanupError);
+                    Message: $"Storage cleanup failed: {ex.Message}");
             }
         }
 
@@ -215,9 +191,7 @@ namespace MangaManagementSystem.Application.Services
             f.UploadedByUserId,
             f.UploadedAtUtc,
             f.DeletedAtUtc,
-            f.DeletedByUserId,
-            f.StorageCleanedAtUtc,
-            f.StorageCleanupError
+            f.DeletedByUserId
         );
 
         private static string DetermineCloudinaryResourceType(string contentType)
@@ -230,18 +204,6 @@ namespace MangaManagementSystem.Application.Services
             return contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
                 ? CloudinaryImageResourceType
                 : CloudinaryRawResourceType;
-        }
-
-        private static string TruncateCleanupError(string? message)
-        {
-            if (string.IsNullOrWhiteSpace(message))
-            {
-                return "Unknown storage cleanup error.";
-            }
-
-            return message.Length <= MaxCleanupErrorLength
-                ? message
-                : message[..MaxCleanupErrorLength];
         }
 
         private static int NormalizePage(int page)

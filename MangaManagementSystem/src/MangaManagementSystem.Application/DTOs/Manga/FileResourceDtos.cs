@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -16,35 +16,14 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         Guid? UploadedByUserId,
         DateTime UploadedAtUtc,
         DateTime? DeletedAtUtc,
-        Guid? DeletedByUserId,
-        DateTime? StorageCleanedAtUtc,
-        string? StorageCleanupError
+        Guid? DeletedByUserId
     )
     {
         public bool IsDeleted => DeletedAtUtc.HasValue;
 
-        public string StorageState
-        {
-            get
-            {
-                if (!DeletedAtUtc.HasValue)
-                {
-                    return "Active";
-                }
-
-                if (StorageCleanedAtUtc.HasValue)
-                {
-                    return "Cleaned";
-                }
-
-                if (!string.IsNullOrWhiteSpace(StorageCleanupError))
-                {
-                    return "Failed";
-                }
-
-                return "Pending cleanup";
-            }
-        }
+        public string StorageState => DeletedAtUtc.HasValue
+            ? "Pending cleanup"
+            : "Active";
     }
 
     public record CreateFileResourceDto(

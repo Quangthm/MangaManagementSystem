@@ -1,4 +1,4 @@
-CREATE DATABASE MangaManagementDB;
+﻿CREATE DATABASE MangaManagementDB;
 GO
 
 USE MangaManagementDB;
@@ -89,8 +89,6 @@ CREATE TABLE manga.FileResource (
 	uploaded_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_file_resource_uploaded_at_utc DEFAULT(SYSUTCDATETIME()),
 	deleted_at_utc DATETIME2(0) NULL,
 	deleted_by_user_id UNIQUEIDENTIFIER NULL,
-  storage_cleaned_at_utc DATETIME2(0) NULL,
-  storage_cleanup_error NVARCHAR(1000) NULL,
 	CONSTRAINT ck_file_resource_file_purpose_code CHECK (
 		file_purpose_code IN (
 			N'SERIES_PROPOSAL',
@@ -133,11 +131,6 @@ INCLUDE (
     uploaded_at_utc
 )
 WHERE deleted_at_utc IS NULL;
-
-CREATE INDEX ix_file_resource_storage_cleanup_candidates
-ON manga.FileResource (deleted_at_utc, storage_cleaned_at_utc)
-WHERE deleted_at_utc IS NOT NULL
-  AND storage_cleaned_at_utc IS NULL;
 GO
 ALTER TABLE auth.Users
 ADD CONSTRAINT fk_users_avatar_file
