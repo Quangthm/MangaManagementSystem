@@ -70,6 +70,7 @@ namespace MangaManagementSystem.Infrastructure
 
 
             services.AddScoped<IEditorialBoardRepository, EditorialBoardRepository>();
+            services.AddScoped<ILandingPageRepository, LandingPageRepository>();
             return services;
         }
     }
