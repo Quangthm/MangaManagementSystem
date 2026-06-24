@@ -12,6 +12,17 @@ namespace MangaManagementSystem.API
         {
             var builder = WebApplication.CreateBuilder(args);
 
+            builder.Services
+                .AddOptions<MangaManagementSystem.API.Options.InternalApiOptions>()
+                .Bind(
+                    builder.Configuration.GetSection(
+                        MangaManagementSystem.API.Options.InternalApiOptions.SectionName))
+                .Validate(
+                    options =>
+                        !string.IsNullOrWhiteSpace(options.Key),
+                    "InternalApi:Key is required.")
+                .ValidateOnStart();
+
             // Application use-case services and Infrastructure (EF Core,
             // stored procedure wrappers, Cloudinary, OTP cache) are reused
             // as-is. The API only owns the HTTP boundary; it does not contain
