@@ -41,3 +41,17 @@ The PR keeps the existing database schema as-is and does not modify:
 - Cleanup-state dropdown/column was removed from Admin File Management UI.
 - Build succeeded with existing warnings.
 
+
+## Latest UI Alignment
+
+The Admin File Management page was aligned with the previous file-management workflow:
+
+- Restored Details action.
+- Restored Preview action.
+- Restored Download action.
+- Restored Soft Delete action.
+- Kept Cleanup action for soft-deleted files.
+- Kept Cleanup All for soft-deleted file records.
+- Removed cleanup-state UI that depended on DB cleanup tracking.
+- The page still reads DB records only during loading/filtering.
+- Storage provider calls still happen only when Cleanup or Cleanup All is confirmed.
