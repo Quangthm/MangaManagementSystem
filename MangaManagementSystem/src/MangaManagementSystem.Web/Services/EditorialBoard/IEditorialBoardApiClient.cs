@@ -21,4 +21,8 @@ public interface IEditorialBoardApiClient
     Task<FinalizePollResult?> FinalizeApprovalAsync(
         Guid pollId,
         CancellationToken cancellationToken = default);
+
+    Task<FinalizePollResult?> CancelPollAsync(
+        Guid pollId,
+        CancellationToken cancellationToken = default);
 }

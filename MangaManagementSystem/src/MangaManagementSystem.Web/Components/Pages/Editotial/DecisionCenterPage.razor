@@ -1,6 +1,5 @@
 @page "/demo/mangaflow/decisions"
 
-@using System.Globalization
 @using Microsoft.AspNetCore.Components.Authorization
 @using MangaManagementSystem.Web.Services.EditorialBoard
 
@@ -110,23 +109,17 @@
 
                             <AuthorizeView Roles="Editorial Board Chief">
                                 <Authorized>
-                                    <div class="mf-grid mf-grid-3 mf-action-grid">
+                                    <div class="mf-grid mf-grid-2 mf-action-grid">
                                         <button class="mf-decision-action approve"
-                                                disabled="@IsFinalApprovalDisabled(poll)"
-                                                @onclick="() => FinalApprovalAsync(poll)">
-                                            @FinalApprovalButtonText(poll)
+                                                disabled="@IsActionDisabled(poll)"
+                                                @onclick="() => CloseVoteAsync(poll)">
+                                            @CloseVoteButtonText(poll)
                                         </button>
 
                                         <button class="mf-decision-action return"
-                                                disabled="@_isFinalizing"
-                                                @onclick="() => ReturnForReview(poll)">
-                                            Return for Review
-                                        </button>
-
-                                        <button class="mf-decision-action escalate"
-                                                disabled="@_isFinalizing"
-                                                @onclick="() => EscalateDecision(poll)">
-                                            Escalate Decision
+                                                disabled="@IsActionDisabled(poll)"
+                                                @onclick="() => CancelVoteAsync(poll)">
+                                            @CancelVoteButtonText(poll)
                                         </button>
                                     </div>
                                 </Authorized>
@@ -147,8 +140,8 @@
 @code {
     private IReadOnlyList<EditorialBoardPollDto> _polls = Array.Empty<EditorialBoardPollDto>();
     private bool _isLoading = true;
-    private bool _isFinalizing;
-    private Guid? _finalizingPollId;
+    private bool _isProcessing;
+    private Guid? _processingPollId;
     private string? _errorMessage;
     private string? _decisionMessage;
 
@@ -163,11 +156,20 @@
         await LoadDecisionCenterAsync();
     }
 
-    private async Task LoadDecisionCenterAsync()
+    private Task LoadDecisionCenterAsync()
+    {
+        return LoadDecisionCenterAsync(clearDecisionMessage: true);
+    }
+
+    private async Task LoadDecisionCenterAsync(bool clearDecisionMessage)
     {
         _isLoading = true;
         _errorMessage = null;
-        _decisionMessage = null;
+
+        if (clearDecisionMessage)
+        {
+            _decisionMessage = null;
+        }
 
         try
         {
@@ -183,27 +185,21 @@
         }
     }
 
-    private async Task FinalApprovalAsync(EditorialBoardPollDto poll)
+    private async Task CloseVoteAsync(EditorialBoardPollDto poll)
     {
-        if (_isFinalizing)
+        if (_isProcessing)
         {
-            return;
-        }
-
-        if (poll.PollTypeCode != "START_SERIALIZATION")
-        {
-            _decisionMessage = "Only START_SERIALIZATION polls can be finalized as serialized.";
             return;
         }
 
         if (poll.PollStatusCode != "OPEN")
         {
-            _decisionMessage = "Only OPEN polls can be finalized.";
+            _decisionMessage = "Only OPEN polls can be closed.";
             return;
         }
 
-        _isFinalizing = true;
-        _finalizingPollId = poll.PollId;
+        _isProcessing = true;
+        _processingPollId = poll.PollId;
         _decisionMessage = null;
 
         try
@@ -211,9 +207,9 @@
             var result = await EditorialBoardApiClient.FinalizeApprovalAsync(poll.PollId);
 
             _decisionMessage =
-                $"Final approval completed for {poll.Code}. Series status is now {result?.SeriesStatusCode ?? "SERIALIZED"}.";
+                $"Vote closed for {poll.Code}. Poll is {result?.PollStatusCode ?? "CLOSED"}, series status is {result?.SeriesStatusCode ?? "updated"}.";
 
-            await LoadDecisionCenterAsync();
+            await LoadDecisionCenterAsync(clearDecisionMessage: false);
         }
         catch (Exception ex)
         {
@@ -221,50 +217,72 @@
         }
         finally
         {
-            _isFinalizing = false;
-            _finalizingPollId = null;
+            _isProcessing = false;
+            _processingPollId = null;
         }
     }
 
-    private void ReturnForReview(EditorialBoardPollDto poll)
+    private async Task CancelVoteAsync(EditorialBoardPollDto poll)
     {
-        SetDecisionMessage(
-            poll,
-            "Return for Review",
-            "Return-for-review API is not wired yet.");
+        if (_isProcessing)
+        {
+            return;
+        }
+
+        if (poll.PollStatusCode != "OPEN")
+        {
+            _decisionMessage = "Only OPEN polls can be cancelled.";
+            return;
+        }
+
+        _isProcessing = true;
+        _processingPollId = poll.PollId;
+        _decisionMessage = null;
+
+        try
+        {
+            var result = await EditorialBoardApiClient.CancelPollAsync(poll.PollId);
+
+            _decisionMessage =
+                $"Vote cancelled for {poll.Code}. Poll is {result?.PollStatusCode ?? "CANCELLED"}. Series status was not changed.";
+
+            await LoadDecisionCenterAsync(clearDecisionMessage: false);
+        }
+        catch (Exception ex)
+        {
+            _decisionMessage = ex.Message;
+        }
+        finally
+        {
+            _isProcessing = false;
+            _processingPollId = null;
+        }
     }
 
-    private void EscalateDecision(EditorialBoardPollDto poll)
+    private bool IsActionDisabled(EditorialBoardPollDto poll)
     {
-        SetDecisionMessage(
-            poll,
-            "Escalate Decision",
-            "Escalation API is not wired yet.");
-    }
-
-    private void SetDecisionMessage(
-        EditorialBoardPollDto poll,
-        string action,
-        string note)
-    {
-        _decisionMessage = $"{action} selected for {poll.Code}. {note}";
-    }
-
-    private bool IsFinalApprovalDisabled(EditorialBoardPollDto poll)
-    {
-        return _isFinalizing
-            || poll.PollTypeCode != "START_SERIALIZATION"
+        return _isProcessing
             || poll.PollStatusCode != "OPEN";
     }
 
-    private string FinalApprovalButtonText(EditorialBoardPollDto poll)
+    private string CloseVoteButtonText(EditorialBoardPollDto poll)
     {
-        if (_isFinalizing && _finalizingPollId == poll.PollId)
+        if (_isProcessing && _processingPollId == poll.PollId)
         {
-            return "Finalizing...";
+            return "Closing...";
         }
 
-        return "Final Approval";
+        return "Close Vote";
+    }
+
+    private string CancelVoteButtonText(EditorialBoardPollDto poll)
+    {
+        if (_isProcessing && _processingPollId == poll.PollId)
+        {
+            return "Cancelling...";
+        }
+
+        return "Cancel Vote";
     }
 
     private static int Percent(int count, int total)
@@ -276,13 +294,14 @@
 
     private static string DisplayStatus(EditorialBoardPollDto poll)
     {
-        if (!string.IsNullOrWhiteSpace(poll.ComputedResultCode)
+        if (poll.PollStatusCode == "OPEN"
+            && !string.IsNullOrWhiteSpace(poll.ComputedResultCode)
             && poll.ComputedResultCode != "PENDING")
         {
             return poll.ComputedResultCode switch
             {
-                "APPROVED" => "Approved",
-                "REJECTED" => "Rejected",
+                "APPROVED" => "Approve Leading",
+                "REJECTED" => "Reject Leading",
                 "NO_DECISION" => "No Decision",
                 "INVALIDATED" => "Cancelled",
                 _ => poll.ComputedResultCode

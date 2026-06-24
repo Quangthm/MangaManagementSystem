@@ -401,10 +401,11 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 """
                 DECLARE @now DATETIME2(0) = SYSUTCDATETIME();
 
-                DECLARE @result TABLE
+                DECLARE @poll TABLE
                 (
                     poll_id UNIQUEIDENTIFIER,
                     series_id UNIQUEIDENTIFIER,
+                    poll_type_code NVARCHAR(50),
                     poll_status_code NVARCHAR(50),
                     publication_frequency_code NVARCHAR(50),
                     ended_at_utc DATETIME2(0)
@@ -421,55 +422,115 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 OUTPUT
                     inserted.series_board_poll_id,
                     inserted.series_id,
+                    inserted.poll_type_code,
                     inserted.poll_status_code,
                     inserted.board_publication_frequency_code,
                     inserted.ends_at_utc
-                INTO @result
+                INTO @poll
                 FROM manga.SeriesBoardPoll p
                 WHERE p.series_board_poll_id = @pollId
-                  AND p.poll_status_code = N'OPEN'
-                  AND p.poll_type_code = N'START_SERIALIZATION';
+                  AND p.poll_status_code = N'OPEN';
 
-                IF NOT EXISTS (SELECT 1 FROM @result)
+                IF NOT EXISTS (SELECT 1 FROM @poll)
                 BEGIN
-                    THROW 58611, 'Open START_SERIALIZATION poll was not found.', 1;
+                    THROW 58611, 'Open poll was not found.', 1;
                 END;
 
-                UPDATE s
-                SET status_code = N'SERIALIZED',
-                    publication_frequency_code = r.publication_frequency_code,
-                    updated_at_utc = r.ended_at_utc,
-                    updated_by_user_id = @chiefUserId
-                FROM manga.Series s
-                INNER JOIN @result r
-                    ON r.series_id = s.series_id
-                WHERE s.status_code = N'UNDER_BOARD_REVIEW';
+                DECLARE @seriesId UNIQUEIDENTIFIER;
+                DECLARE @pollTypeCode NVARCHAR(50);
+                DECLARE @publicationFrequencyCode NVARCHAR(50);
+                DECLARE @endedAtUtc DATETIME2(0);
 
-                IF @@ROWCOUNT = 0
+                SELECT TOP (1)
+                    @seriesId = series_id,
+                    @pollTypeCode = poll_type_code,
+                    @publicationFrequencyCode = publication_frequency_code,
+                    @endedAtUtc = ended_at_utc
+                FROM @poll;
+
+                DECLARE @approveVotes INT =
+                (
+                    SELECT COUNT(1)
+                    FROM manga.SeriesBoardVote
+                    WHERE series_board_poll_id = @pollId
+                      AND choice_code = N'APPROVE'
+                );
+
+                DECLARE @rejectVotes INT =
+                (
+                    SELECT COUNT(1)
+                    FROM manga.SeriesBoardVote
+                    WHERE series_board_poll_id = @pollId
+                      AND choice_code = N'REJECT'
+                );
+
+                DECLARE @computedResultCode NVARCHAR(50) =
+                    CASE
+                        WHEN @approveVotes > @rejectVotes THEN N'APPROVED'
+                        WHEN @rejectVotes > @approveVotes THEN N'REJECTED'
+                        ELSE N'NO_DECISION'
+                    END;
+
+                IF @pollTypeCode = N'START_SERIALIZATION'
+                   AND @computedResultCode = N'APPROVED'
                 BEGIN
-                    THROW 58612, 'Series is not in UNDER_BOARD_REVIEW status.', 1;
+                    UPDATE manga.Series
+                    SET status_code = N'SERIALIZED',
+                        publication_frequency_code = @publicationFrequencyCode,
+                        updated_at_utc = @endedAtUtc,
+                        updated_by_user_id = @chiefUserId
+                    WHERE series_id = @seriesId
+                      AND status_code = N'UNDER_BOARD_REVIEW';
+
+                    UPDATE manga.SeriesProposal
+                    SET status_code = N'APPROVED',
+                        reviewed_by_user_id = COALESCE(reviewed_by_user_id, @chiefUserId),
+                        reviewed_at_utc = COALESCE(reviewed_at_utc, @endedAtUtc)
+                    WHERE series_id = @seriesId
+                      AND status_code = N'UNDER_BOARD_REVIEW';
                 END;
 
-                UPDATE sp
-                SET status_code = N'APPROVED',
-                    reviewed_by_user_id = COALESCE(reviewed_by_user_id, @chiefUserId),
-                    reviewed_at_utc = COALESCE(
-                        reviewed_at_utc,
-                        (SELECT TOP (1) ended_at_utc FROM @result)
-                    )
-                FROM manga.SeriesProposal sp
-                INNER JOIN @result r
-                    ON r.series_id = sp.series_id
-                WHERE sp.status_code = N'UNDER_BOARD_REVIEW';
+                IF @pollTypeCode = N'START_SERIALIZATION'
+                   AND @computedResultCode = N'REJECTED'
+                BEGIN
+                    UPDATE manga.Series
+                    SET status_code = N'CANCELLED',
+                        updated_at_utc = @endedAtUtc,
+                        updated_by_user_id = @chiefUserId
+                    WHERE series_id = @seriesId
+                      AND status_code = N'UNDER_BOARD_REVIEW';
+
+                    UPDATE manga.SeriesProposal
+                    SET status_code = N'CANCELLED',
+                        reviewed_by_user_id = COALESCE(reviewed_by_user_id, @chiefUserId),
+                        reviewed_at_utc = COALESCE(reviewed_at_utc, @endedAtUtc)
+                    WHERE series_id = @seriesId
+                      AND status_code = N'UNDER_BOARD_REVIEW';
+                END;
+
+                IF @pollTypeCode = N'CANCEL_SERIALIZATION'
+                   AND @computedResultCode = N'APPROVED'
+                BEGIN
+                    UPDATE manga.Series
+                    SET status_code = N'CANCELLED',
+                        updated_at_utc = @endedAtUtc,
+                        updated_by_user_id = @chiefUserId
+                    WHERE series_id = @seriesId;
+                END;
+
+                DECLARE @seriesStatusCode NVARCHAR(50);
+
+                SELECT @seriesStatusCode = status_code
+                FROM manga.Series
+                WHERE series_id = @seriesId;
 
                 SELECT
-                    poll_id,
-                    series_id,
-                    poll_status_code,
-                    N'SERIALIZED' AS series_status_code,
-                    publication_frequency_code,
-                    ended_at_utc
-                FROM @result;
+                    @pollId AS poll_id,
+                    @seriesId AS series_id,
+                    N'CLOSED' AS poll_status_code,
+                    ISNULL(@seriesStatusCode, N'UNKNOWN') AS series_status_code,
+                    @publicationFrequencyCode AS publication_frequency_code,
+                    @endedAtUtc AS ended_at_utc;
                 """;
 
             AddGuidParameter(command, "@pollId", pollId);
@@ -481,7 +542,7 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             {
                 if (!await reader.ReadAsync(cancellationToken))
                 {
-                    throw new InvalidOperationException("Could not finalize board approval.");
+                    throw new InvalidOperationException("Could not close board poll.");
                 }
 
                 result = new FinalizeBoardPollResultDto(
@@ -497,7 +558,7 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
 
             return result;
         }
-        catch (SqlException ex) when (ex.Number is 58611 or 58612)
+        catch (SqlException ex) when (ex.Number == 58611)
         {
             await TryRollbackAsync(transaction, cancellationToken);
             throw new InvalidOperationException(ex.Message, ex);
@@ -506,6 +567,104 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         {
             await TryRollbackAsync(transaction, cancellationToken);
             throw;
+        }
+    }
+
+    public async Task<FinalizeBoardPollResultDto> CancelPollAsync(
+        Guid pollId,
+        Guid chiefUserId,
+        CancellationToken cancellationToken)
+    {
+        if (pollId == Guid.Empty)
+        {
+            throw new InvalidOperationException("PollId is required.");
+        }
+
+        if (chiefUserId == Guid.Empty)
+        {
+            throw new InvalidOperationException("ChiefUserId is required.");
+        }
+
+        var connection = _dbContext.Database.GetDbConnection();
+
+        if (connection.State != ConnectionState.Open)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        await using var command = connection.CreateCommand();
+
+        command.CommandText =
+            """
+            DECLARE @now DATETIME2(0) = SYSUTCDATETIME();
+
+            DECLARE @result TABLE
+            (
+                poll_id UNIQUEIDENTIFIER,
+                series_id UNIQUEIDENTIFIER,
+                poll_status_code NVARCHAR(50),
+                publication_frequency_code NVARCHAR(50),
+                ended_at_utc DATETIME2(0)
+            );
+
+            UPDATE p
+            SET poll_status_code = N'CANCELLED',
+                ends_at_utc =
+                    CASE
+                        WHEN @now <= p.started_at_utc
+                            THEN DATEADD(SECOND, 1, p.started_at_utc)
+                        ELSE @now
+                    END
+            OUTPUT
+                inserted.series_board_poll_id,
+                inserted.series_id,
+                inserted.poll_status_code,
+                inserted.board_publication_frequency_code,
+                inserted.ends_at_utc
+            INTO @result
+            FROM manga.SeriesBoardPoll p
+            WHERE p.series_board_poll_id = @pollId
+              AND p.poll_status_code = N'OPEN';
+
+            IF NOT EXISTS (SELECT 1 FROM @result)
+            BEGIN
+                THROW 58621, 'Open poll was not found or has already been closed/cancelled.', 1;
+            END;
+
+            SELECT
+                r.poll_id,
+                r.series_id,
+                r.poll_status_code,
+                s.status_code AS series_status_code,
+                r.publication_frequency_code,
+                r.ended_at_utc
+            FROM @result r
+            INNER JOIN manga.Series s
+                ON s.series_id = r.series_id;
+            """;
+
+        AddGuidParameter(command, "@pollId", pollId);
+
+        try
+        {
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+            if (!await reader.ReadAsync(cancellationToken))
+            {
+                throw new InvalidOperationException("Could not cancel board poll.");
+            }
+
+            return new FinalizeBoardPollResultDto(
+                PollId: reader.GetGuid(0),
+                SeriesId: reader.GetGuid(1),
+                PollStatusCode: reader.GetString(2),
+                SeriesStatusCode: reader.GetString(3),
+                PublicationFrequencyCode: reader.IsDBNull(4) ? null : reader.GetString(4),
+                EndedAtUtc: reader.GetDateTime(5));
+        }
+        catch (SqlException ex) when (ex.Number == 58621)
+        {
+            throw new InvalidOperationException(ex.Message, ex);
         }
     }
 

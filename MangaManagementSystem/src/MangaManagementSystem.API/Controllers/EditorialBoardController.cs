@@ -23,7 +23,10 @@ public sealed class EditorialBoardController : ControllerBase
     [HttpGet("dashboard")]
     public async Task<IActionResult> GetDashboard(CancellationToken cancellationToken)
     {
-        var result = await _mediator.Send(new GetEditorialDashboardQuery(), cancellationToken);
+        var result = await _mediator.Send(
+            new GetEditorialDashboardQuery(),
+            cancellationToken);
+
         return Ok(result);
     }
 
@@ -31,7 +34,11 @@ public sealed class EditorialBoardController : ControllerBase
     public async Task<IActionResult> GetOpenPolls(CancellationToken cancellationToken)
     {
         var currentUserId = GetCurrentUserId();
-        var result = await _mediator.Send(new GetOpenBoardPollsQuery(currentUserId), cancellationToken);
+
+        var result = await _mediator.Send(
+            new GetOpenBoardPollsQuery(currentUserId),
+            cancellationToken);
+
         return Ok(result);
     }
 
@@ -52,7 +59,9 @@ public sealed class EditorialBoardController : ControllerBase
             EndsAtUtc: request.EndsAtUtc);
 
         var result = await _mediator.Send(
-            new OpenSeriesBoardPollCommand(chiefUserId, commandRequest),
+            new OpenSeriesBoardPollCommand(
+                ChiefUserId: chiefUserId,
+                Request: commandRequest),
             cancellationToken);
 
         return Ok(result);
@@ -73,7 +82,43 @@ public sealed class EditorialBoardController : ControllerBase
             VoteReason: request.VoteReason);
 
         var result = await _mediator.Send(
-            new CastSeriesBoardVoteCommand(voterUserId, commandRequest),
+            new CastSeriesBoardVoteCommand(
+                VoterUserId: voterUserId,
+                Request: commandRequest),
+            cancellationToken);
+
+        return Ok(result);
+    }
+
+    [HttpPost("polls/{pollId:guid}/final-approval")]
+    [Authorize(Roles = "Editorial Board Chief")]
+    public async Task<IActionResult> FinalApproval(
+        Guid pollId,
+        CancellationToken cancellationToken)
+    {
+        var chiefUserId = GetCurrentUserId();
+
+        var result = await _mediator.Send(
+            new FinalizeBoardPollApprovalCommand(
+                PollId: pollId,
+                ChiefUserId: chiefUserId),
+            cancellationToken);
+
+        return Ok(result);
+    }
+
+    [HttpPost("polls/{pollId:guid}/cancel")]
+    [Authorize(Roles = "Editorial Board Chief")]
+    public async Task<IActionResult> CancelPoll(
+        Guid pollId,
+        CancellationToken cancellationToken)
+    {
+        var chiefUserId = GetCurrentUserId();
+
+        var result = await _mediator.Send(
+            new CancelBoardPollCommand(
+                PollId: pollId,
+                ChiefUserId: chiefUserId),
             cancellationToken);
 
         return Ok(result);
@@ -89,7 +134,8 @@ public sealed class EditorialBoardController : ControllerBase
 
         if (!Guid.TryParse(value, out var userId))
         {
-            throw new UnauthorizedAccessException("Cannot resolve current user id from token.");
+            throw new UnauthorizedAccessException(
+                "Cannot resolve current user id from token.");
         }
 
         return userId;

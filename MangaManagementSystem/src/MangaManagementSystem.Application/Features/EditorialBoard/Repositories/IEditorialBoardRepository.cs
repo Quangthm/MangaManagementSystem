@@ -25,4 +25,9 @@ public interface IEditorialBoardRepository
         Guid pollId,
         Guid chiefUserId,
         CancellationToken cancellationToken);
+
+    Task<FinalizeBoardPollResultDto> CancelPollAsync(
+        Guid pollId,
+        Guid chiefUserId,
+        CancellationToken cancellationToken);
 }
