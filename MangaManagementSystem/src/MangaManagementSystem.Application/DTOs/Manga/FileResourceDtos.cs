@@ -20,10 +20,6 @@ namespace MangaManagementSystem.Application.DTOs.Manga
     )
     {
         public bool IsDeleted => DeletedAtUtc.HasValue;
-
-        public string StorageState => DeletedAtUtc.HasValue
-            ? "Pending cleanup"
-            : "Active";
     }
 
     public record CreateFileResourceDto(
@@ -84,7 +80,6 @@ namespace MangaManagementSystem.Application.DTOs.Manga
     public record FileStorageCleanupResultDto(
         Guid FileResourceId,
         string OriginalFileName,
-        string StorageState,
         bool Succeeded,
         bool StorageObjectNotFound,
         string Message

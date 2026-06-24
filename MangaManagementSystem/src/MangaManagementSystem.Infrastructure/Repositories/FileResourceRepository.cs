@@ -17,14 +17,13 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         public async Task<IReadOnlyList<FileResource>> SearchAdminFilesAsync(
             string? keyword,
             string? purposeCode,
-            string? storageState,
             int page,
             int pageSize)
         {
             var normalizedPage = NormalizePage(page);
             var normalizedPageSize = NormalizePageSize(pageSize);
 
-            return await BuildAdminFileQuery(keyword, purposeCode, storageState)
+            return await BuildAdminFileQuery(keyword, purposeCode)
                 .OrderByDescending(f => f.UploadedAtUtc)
                 .ThenByDescending(f => f.FileResourceId)
                 .Skip((normalizedPage - 1) * normalizedPageSize)
@@ -34,10 +33,9 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
         public async Task<int> CountAdminFilesAsync(
             string? keyword,
-            string? purposeCode,
-            string? storageState)
+            string? purposeCode)
         {
-            return await BuildAdminFileQuery(keyword, purposeCode, storageState)
+            return await BuildAdminFileQuery(keyword, purposeCode)
                 .CountAsync();
         }
 
@@ -56,8 +54,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
         private IQueryable<FileResource> BuildAdminFileQuery(
             string? keyword,
-            string? purposeCode,
-            string? storageState)
+            string? purposeCode)
         {
             var query = _dbSet.AsNoTracking();
 
@@ -77,21 +74,6 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             {
                 var normalizedPurposeCode = purposeCode.Trim();
                 query = query.Where(f => f.FilePurposeCode == normalizedPurposeCode);
-            }
-
-            if (!string.IsNullOrWhiteSpace(storageState))
-            {
-                var normalizedStorageState = storageState.Trim().ToUpperInvariant();
-
-                query = normalizedStorageState switch
-                {
-                    "ACTIVE" => query.Where(f => f.DeletedAtUtc == null),
-
-                    "PENDING" or "PENDING_CLEANUP" or "DELETED" => query.Where(f =>
-                        f.DeletedAtUtc != null),
-
-                    _ => query
-                };
             }
 
             return query;

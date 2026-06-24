@@ -1,4 +1,4 @@
-using MangaManagementSystem.Application.DTOs.Manga;
+﻿using MangaManagementSystem.Application.DTOs.Manga;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -18,7 +18,6 @@ namespace MangaManagementSystem.Application.Interfaces
         Task<AdminFileResourceSearchResultDto> SearchAdminFilesAsync(
             string? keyword = null,
             string? purposeCode = null,
-            string? storageState = null,
             int page = 1,
             int pageSize = 20);
 

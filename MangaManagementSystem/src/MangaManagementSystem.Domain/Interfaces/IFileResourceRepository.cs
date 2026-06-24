@@ -9,14 +9,12 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<IReadOnlyList<FileResource>> SearchAdminFilesAsync(
             string? keyword,
             string? purposeCode,
-            string? storageState,
             int page,
             int pageSize);
 
         Task<int> CountAdminFilesAsync(
             string? keyword,
-            string? purposeCode,
-            string? storageState);
+            string? purposeCode);
 
         Task<IReadOnlyList<FileResource>> GetStorageCleanupCandidatesAsync(
             int batchSize);

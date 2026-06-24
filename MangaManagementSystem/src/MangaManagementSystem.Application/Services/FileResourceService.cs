@@ -81,7 +81,6 @@ namespace MangaManagementSystem.Application.Services
         public async Task<AdminFileResourceSearchResultDto> SearchAdminFilesAsync(
             string? keyword = null,
             string? purposeCode = null,
-            string? storageState = null,
             int page = 1,
             int pageSize = 20)
         {
@@ -91,14 +90,12 @@ namespace MangaManagementSystem.Application.Services
             var items = await _unitOfWork.FileResources.SearchAdminFilesAsync(
                 keyword,
                 purposeCode,
-                storageState,
                 normalizedPage,
                 normalizedPageSize);
 
             var totalCount = await _unitOfWork.FileResources.CountAdminFilesAsync(
                 keyword,
-                purposeCode,
-                storageState);
+                purposeCode);
 
             return new AdminFileResourceSearchResultDto(
                 items.Select(MapToDto).ToList(),
@@ -115,7 +112,6 @@ namespace MangaManagementSystem.Application.Services
                 return new FileStorageCleanupResultDto(
                     fileResourceId,
                     "-",
-                    "Not found",
                     Succeeded: false,
                     StorageObjectNotFound: false,
                     Message: "File resource was not found.");
@@ -126,7 +122,6 @@ namespace MangaManagementSystem.Application.Services
                 return new FileStorageCleanupResultDto(
                     entity.FileResourceId,
                     entity.OriginalFileName,
-                    MapToDto(entity).StorageState,
                     Succeeded: false,
                     StorageObjectNotFound: false,
                     Message: "Only soft-deleted file resources can be cleaned up.");
@@ -139,17 +134,17 @@ namespace MangaManagementSystem.Application.Services
                     entity.CloudinaryPublicId,
                     resourceType);
 
-                var storageObjectNotFound = deleteResult.NotFound;
-                var message = storageObjectNotFound
+                var message = deleteResult.NotFound
                     ? "Storage object was already missing."
-                    : "Storage object was deleted successfully.";
+                    : deleteResult.Deleted
+                        ? "Storage object was deleted successfully."
+                        : $"Storage cleanup returned result: {deleteResult.ResultCode}.";
 
                 return new FileStorageCleanupResultDto(
                     entity.FileResourceId,
                     entity.OriginalFileName,
-                    MapToDto(entity).StorageState,
-                    Succeeded: true,
-                    StorageObjectNotFound: storageObjectNotFound,
+                    Succeeded: deleteResult.Completed,
+                    StorageObjectNotFound: deleteResult.NotFound,
                     Message: message);
             }
             catch (Exception ex)
@@ -157,7 +152,6 @@ namespace MangaManagementSystem.Application.Services
                 return new FileStorageCleanupResultDto(
                     entity.FileResourceId,
                     entity.OriginalFileName,
-                    MapToDto(entity).StorageState,
                     Succeeded: false,
                     StorageObjectNotFound: false,
                     Message: $"Storage cleanup failed: {ex.Message}");

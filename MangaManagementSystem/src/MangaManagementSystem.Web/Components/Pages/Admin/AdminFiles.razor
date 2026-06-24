@@ -1,9 +1,10 @@
-@page "/admin/files"
+﻿@page "/admin/files"
 @using MangaManagementSystem.Application.DTOs.Manga
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "Admin")]
 @inject IFileResourceService FileResourceService
 @inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
 
 <PageTitle>File Management - MangaFlow</PageTitle>
 
@@ -23,7 +24,7 @@
 
         <MudPaper Class="pa-5 mf-card" Elevation="0">
             <MudGrid Class="mb-4">
-                <MudItem xs="12" md="4">
+                <MudItem xs="12" md="5">
                     <MudTextField T="string"
                                   Label="Search"
                                   Placeholder="File name, public id, URL, content type..."
@@ -33,7 +34,7 @@
                                   Margin="Margin.Dense" />
                 </MudItem>
 
-                <MudItem xs="12" md="3">
+                <MudItem xs="12" md="4">
                     <MudTextField T="string"
                                   Label="Purpose Code"
                                   Placeholder="Example: USER_AVATAR"
@@ -44,19 +45,6 @@
                 </MudItem>
 
                 <MudItem xs="12" md="3">
-                    <MudSelect T="string"
-                               Label="Storage State"
-                               @bind-Value="_storageState"
-                               Variant="Variant.Outlined"
-                               Margin="Margin.Dense">
-                        <MudSelectItem T="string" Value="@("")">All</MudSelectItem>
-                        <MudSelectItem T="string" Value="@("ACTIVE")">Active</MudSelectItem>
-                        <MudSelectItem T="string" Value="@("PENDING_CLEANUP")">Pending cleanup</MudSelectItem>
-                        <MudSelectItem T="string" Value="@("DELETED")">Deleted</MudSelectItem>
-                    </MudSelect>
-                </MudItem>
-
-                <MudItem xs="12" md="2">
                     <MudNumericField T="int"
                                      Label="Page Size"
                                      @bind-Value="_pageSize"
@@ -121,8 +109,7 @@
                         <MudTh>Size</MudTh>
                         <MudTh>Uploaded</MudTh>
                         <MudTh>Deleted</MudTh>
-                        <MudTh>Storage State</MudTh>
-                        <MudTh></MudTh>
+                        <MudTh>Actions</MudTh>
                     </HeaderContent>
                     <RowTemplate>
                         <MudTd>
@@ -139,29 +126,31 @@
                         <MudTd>@FormatNullableDate(context.DeletedAtUtc)</MudTd>
 
                         <MudTd>
-                            <MudChip T="string"
-                                     Size="Size.Small"
-                                     Color="@GetStorageStateColor(context.StorageState)">
-                                @context.StorageState
-                            </MudChip>
-                        </MudTd>
+                            <MudStack Row="true" Spacing="1">
+                                <MudButton Size="Size.Small"
+                                           Variant="Variant.Text"
+                                           Color="Color.Primary"
+                                           Disabled="@string.IsNullOrWhiteSpace(context.CloudinarySecureUrl)"
+                                           OnClick="@(() => OpenFile(context.CloudinarySecureUrl))">
+                                    Open
+                                </MudButton>
 
-                        <MudTd>
-                            <MudButton Size="Size.Small"
-                                       Variant="Variant.Outlined"
-                                       Color="Color.Warning"
-                                       Disabled="@IsCleanupDisabled(context)"
-                                       OnClick="@(() => CleanupOneAsync(context.FileResourceId))">
-                                @if (_cleaningFileId == context.FileResourceId)
-                                {
-                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                                    <span>Cleaning</span>
-                                }
-                                else
-                                {
-                                    <span>Cleanup</span>
-                                }
-                            </MudButton>
+                                <MudButton Size="Size.Small"
+                                           Variant="Variant.Outlined"
+                                           Color="Color.Warning"
+                                           Disabled="@IsCleanupDisabled(context)"
+                                           OnClick="@(() => CleanupOneAsync(context.FileResourceId))">
+                                    @if (_cleaningFileId == context.FileResourceId)
+                                    {
+                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                        <span>Cleaning</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Cleanup</span>
+                                    }
+                                </MudButton>
+                            </MudStack>
                         </MudTd>
                     </RowTemplate>
                 </MudTable>
@@ -191,7 +180,6 @@
 
     private string? _keyword;
     private string? _purposeCode;
-    private string _storageState = string.Empty;
 
     private int _page = 1;
     private int _pageSize = 20;
@@ -248,9 +236,8 @@
             var result = await FileResourceService.SearchAdminFilesAsync(
                 NormalizeFilter(_keyword),
                 NormalizeFilter(_purposeCode),
-                NormalizeFilter(_storageState),
-                _page,
-                _pageSize);
+                page: _page,
+                pageSize: _pageSize);
 
             _files = result.Items.ToList();
             _totalCount = result.TotalCount;
@@ -265,6 +252,16 @@
         {
             _isLoading = false;
         }
+    }
+
+    private void OpenFile(string? secureUrl)
+    {
+        if (string.IsNullOrWhiteSpace(secureUrl))
+        {
+            return;
+        }
+
+        NavigationManager.NavigateTo(secureUrl, forceLoad: true);
     }
 
     private async Task CleanupOneAsync(Guid fileResourceId)
@@ -356,29 +353,5 @@
         }
 
         return $"{bytes / 1024d / 1024d:0.##} MB";
-    }
-
-    private static string TrimForDisplay(string value, int maxLength)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return "-";
-        }
-
-        return value.Length <= maxLength
-            ? value
-            : $"{value[..maxLength]}...";
-    }
-
-    private static Color GetStorageStateColor(string storageState)
-    {
-        return storageState switch
-        {
-            "Active" => Color.Info,
-            "Pending cleanup" => Color.Warning,
-            "Cleaned" => Color.Success,
-            "Failed" => Color.Error,
-            _ => Color.Default
-        };
     }
 }
