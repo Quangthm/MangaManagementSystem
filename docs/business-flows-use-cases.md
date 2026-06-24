@@ -641,6 +641,448 @@ audit.usp_AuditEvent_Append
 - Make the newly submitted proposal easy for active Tantou Editors to find.
 
 ---
+# Suggested Additions — Business Flows / Use Case Notes
+
+---
+
+## BF-MANGAKA-001 — View My Series Dashboard
+
+**Status:** Agreed
+**Primary actor:** Mangaka
+**Goal:** Show only series where the logged-in actor is an active Mangaka contributor.
+
+### Main Flow
+
+```text
+Mangaka opens /mangaka
+→ UI calls GET /api/mangaka/series/my-series through typed API client
+→ API resolves actor user id
+→ API sends GetMyMangakaSeriesQuery
+→ Application validates actor id
+→ Infrastructure queries series where actor is an active Mangaka contributor
+→ Query includes cover, genres, tags, status, slug, proposed frequency, and update time
+→ UI renders dashboard cards with filters/search/sort
+```
+
+### Important Notes
+
+* `/mangaka` must not show every series in the database.
+* A series is visible only when the actor is an active Mangaka contributor.
+* The Web layer must call the API through `IMangakaSeriesApiClient`.
+* The API controller dispatches through MediatR.
+* Read/list filtering may use EF read projections with `AsNoTracking`.
+* No stored procedure is required for this read-only dashboard query.
+
+### System Should Try To
+
+* Keep Mangaka dashboard scoped to the current actor.
+* Avoid direct Razor-to-Application calls for migrated workflows.
+* Keep dashboard filtering/search/sort responsive on the client when data is already loaded.
+
+---
+
+## BF-MANGAKA-002 — Navigate to Assistant Review / Review Submissions
+
+**Status:** Agreed
+**Primary actor:** Mangaka
+**Goal:** Open the enhanced task-review page from the Mangaka dashboard sidebar.
+
+### Main Flow
+
+```text
+Mangaka opens /mangaka
+→ Mangaka clicks sidebar item "Assistant Review"
+→ UI routes to /mangaka/review-submissions
+→ Page loads under MangakaLayout
+→ UI calls GET /api/mangaka/tasks
+→ Backend returns tasks created by the Mangaka for assistant work review
+→ UI displays task cards with series/chapter/page/version/task context
+```
+
+### Important Notes
+
+* The old embedded simple task table inside `MangakaDashboard.razor` is no longer the active destination.
+* `/mangaka/review-submissions` is the active Mangaka task-review page.
+* Current Series and Series Proposals remain dashboard tabs for now.
+* This is a route/navigation decision, not a database workflow.
+
+### System Should Try To
+
+* Keep task review on a dedicated page.
+* Avoid large MangakaDashboard refactors until explicitly approved.
+* Preserve `/mangaka` dashboard behavior for Current Series and Series Proposals.
+
+---
+
+## BF-TASK-004 — Mangaka Reviews Assistant Task Submissions
+
+**Status:** Agreed
+**Primary actor:** Mangaka
+**Goal:** Let a Mangaka review assistant-submitted page work and choose the correct review action: approve, return to the same Assistant for rework, cancel, or reassign to a different Assistant.
+
+### Main Flow
+
+```text
+Mangaka opens /mangaka/review-submissions
+→ UI loads task list for the Mangaka-created tasks
+→ UI shows task cards with series, chapter, page, page version, assistant, type, status, due date, priority, compensation, and region count
+→ Mangaka filters by series/chapter/title, task type, assistant, and status
+→ Mangaka opens original/submitted previews when available
+→ Mangaka chooses one available action:
+    - Approve
+    - Return for Rework
+    - Cancel
+    - Reassign
+→ UI calls the relevant typed API client method
+→ API calls the relevant Application task use case/service
+→ Application validates actor permission and task state
+→ Infrastructure calls the relevant stored procedure/repository workflow
+→ UI reloads task list, clears dialog state, and refreshes stat cards/actions
+```
+
+### Important Notes
+
+* Task cards should include `PageVersionNo` when available.
+* Review actions must refresh the visible UI without requiring browser refresh.
+* Filters should continue to apply after refresh.
+* Backend rules must remain the source of truth for allowed task transitions.
+* **Return for Rework** and **Reassign** are separate workflows:
+
+  * Return for Rework sends the same task back to the same Assistant.
+  * Reassign moves ownership to a different Assistant by cancelling the old task and creating a replacement task.
+
+### System Should Try To
+
+* Give Mangaka enough context to review assistant work without opening many pages.
+* Keep review actions safe and state-aware.
+* Avoid stale task cards after workflow mutations.
+* Preserve task history through audit events.
+
+---
+
+## BF-TASK-005 — Return Assistant Task for Rework to Same Assistant
+
+**Status:** Agreed
+**Primary actor:** Mangaka
+**Goal:** Return an `UNDER_REVIEW` task to the same assigned Assistant for rework.
+
+### Main Flow
+
+```text
+Mangaka opens /mangaka/review-submissions
+→ UI shows Return for Rework action on eligible UNDER_REVIEW task
+→ Mangaka opens Return for Rework dialog
+→ Mangaka enters updated task instructions/description
+→ UI calls Return for Rework API action
+→ API calls Application task return-for-rework use case/service
+→ Application validates actor, task state, and updated task description
+→ Infrastructure calls manga.usp_ChapterPageTask_ReturnForRework
+→ SQL locks the task workflow
+→ SQL verifies the task exists
+→ SQL verifies status_code = UNDER_REVIEW
+→ SQL verifies actor is an active Mangaka contributor of the task's series
+→ SQL updates the same ChapterPageTask row:
+    - status_code = ASSIGNED
+    - completed_page_version_id = NULL
+    - task_description = updated task description
+    - updated_at_utc = current UTC time
+→ SQL writes CHAPTER_PAGE_TASK_RETURNED_FOR_REWORK audit event
+→ UI reloads task list and clears dialog state
+```
+
+### Database Procedure
+
+```text
+manga.usp_ChapterPageTask_ReturnForRework
+```
+
+### Important Notes
+
+* Return for Rework applies only to `UNDER_REVIEW` tasks.
+* Return for Rework keeps the same assigned Assistant.
+* Return for Rework does not create a replacement task.
+* The same `chapter_page_task_id` remains active.
+* The task status becomes `ASSIGNED`.
+* `completed_page_version_id` is cleared because the submitted output was rejected for rework.
+* `task_description` is replaced with the updated rework instruction.
+* Actor must be an active Mangaka contributor of the task's series.
+* SQL derives the task's series through:
+  `ChapterPageTaskRegion → PageRegion → ChapterPageVersion → ChapterPage → Chapter → Series`.
+* Application/C# should validate the primary business rules before calling SQL when possible.
+* SQL remains the final transactional guard and audit owner.
+
+### System Should Try To
+
+* Let Mangaka request revisions from the same Assistant without creating a new task.
+* Preserve audit traceability of rejected submitted work.
+* Prevent returning tasks that are not currently under review.
+
+---
+
+## BF-TASK-006 — Reassign Assistant Task to Different Assistant
+
+**Status:** Agreed
+**Primary actor:** Mangaka
+**Goal:** Allow a Mangaka to move a task to a different eligible Assistant contributor when the original Assistant should no longer own the task.
+
+### Main Flow
+
+```text
+Mangaka opens /mangaka/review-submissions
+→ UI shows Reassign action for ASSIGNED and UNDER_REVIEW tasks
+→ Mangaka opens Reassign dialog
+→ UI loads eligible assistants for the task
+→ Mangaka selects a different Assistant
+→ Mangaka enters required reason
+→ UI calls POST /api/mangaka/tasks/{taskId}/reassign
+→ API calls Application task reassignment use case
+→ Application validates actor, task status, reason, same-user rule, and assistant eligibility
+→ Infrastructure calls manga.usp_ChapterPageTask_AssignToDifferentUser
+→ SQL cancels old task
+→ SQL creates replacement ASSIGNED task for the new Assistant
+→ SQL copies task-region links
+→ SQL writes CHAPTER_PAGE_TASK_ASSIGNED_TO_DIFFERENT_USER audit event
+→ UI reloads task list after success
+```
+
+### Database Procedure
+
+```text
+manga.usp_ChapterPageTask_AssignToDifferentUser
+```
+
+### Important Notes
+
+* Reassignment is different from Return for Rework.
+* Reassignment changes the assigned Assistant.
+* Reassignment requires the new Assistant to be different from the current assigned Assistant.
+* Reassignment is allowed for `ASSIGNED` and `UNDER_REVIEW`.
+* Reassignment is not allowed for `COMPLETED` or `CANCELLED`.
+* The new Assistant must be an active contributor of the same series.
+* Reason is required and should be limited to 500 characters.
+* The stored procedure cancels the old task and creates a new replacement task with status `ASSIGNED`.
+* Because the task id changes, the UI should reload the task list rather than only mutating the old card.
+* C# Application layer owns primary business validation before calling SQL.
+* SQL procedure provides locking, final guards, copy of task-region links, and audit.
+
+### System Should Try To
+
+* Avoid assigning work to non-contributors.
+* Avoid reassigning completed/cancelled tasks.
+* Preserve history by cancelling the old task and creating a replacement.
+* Keep audit traceability between old and replacement tasks.
+
+
+**Status:** Agreed
+**Primary actor:** Mangaka
+**Goal:** Allow a Mangaka to reassign an Assistant task to a different eligible Assistant contributor on the same series.
+
+### Main Flow
+
+```text
+Mangaka opens /mangaka/review-submissions
+→ UI shows Reassign action for ASSIGNED and UNDER_REVIEW tasks
+→ Mangaka opens Reassign dialog
+→ UI loads eligible assistants for the task
+→ Mangaka selects a different Assistant
+→ Mangaka enters required reason
+→ UI calls POST /api/mangaka/tasks/{taskId}/reassign
+→ API calls Application task reassignment use case
+→ Application validates actor, task status, reason, same-user rule, and assistant eligibility
+→ Infrastructure calls manga.usp_ChapterPageTask_AssignToDifferentUser
+→ SQL cancels old task, creates replacement ASSIGNED task, copies task-region links, and writes audit event
+→ UI reloads task list after success
+```
+
+### Database Procedure
+
+```text
+manga.usp_ChapterPageTask_AssignToDifferentUser
+```
+
+### Important Notes
+
+* Reassignment is allowed for `ASSIGNED` and `UNDER_REVIEW`.
+* Reassignment is not allowed for `COMPLETED` or `CANCELLED`.
+* The new assistant must be different from the current assigned assistant.
+* The new assistant must be an active contributor of the same series.
+* Reason is required and must be limited to 500 characters.
+* The stored procedure cancels the old task and creates a new replacement task with status `ASSIGNED`.
+* Because the task id changes, the UI should reload the task list rather than only mutating the old card.
+* SQL procedure provides locking, final guards, copy of task-region links, and audit.
+* C# Application layer still owns primary business validation before calling SQL.
+
+### System Should Try To
+
+* Avoid reassigning completed/cancelled tasks.
+* Avoid assigning work to non-contributors.
+* Preserve task history by cancelling the old task and creating a replacement.
+* Keep audit traceability between old and replacement tasks.
+
+---
+
+## BF-MANGAKA-CONTRIB-001 — View Series Contributors
+
+**Status:** Agreed
+**Primary actor:** Mangaka
+**Goal:** Let a Mangaka view contributor history for series where they are an active Mangaka contributor.
+
+### Main Flow
+
+```text
+Mangaka opens /mangaka/contributors
+→ UI loads the Mangaka's own series list from GET /api/mangaka/series/my-series
+→ Mangaka selects a series
+→ UI calls GET /api/mangaka/series/{seriesId}/contributors
+→ API sends GetSeriesContributorsQuery
+→ Application validates actor permission
+→ Infrastructure returns contributor rows for the selected series
+→ UI displays active and former contributors with role, status, start date, end date, and actions
+```
+
+### Important Notes
+
+* Actor may view contributors only for series where they are an active Mangaka contributor.
+* Active contributor means `EndDate == null`.
+* Former contributor means `EndDate != null`.
+* Contributor history must be preserved.
+* Mangaka and Tantou Editor contributors are read-only in this MVP screen.
+* Only Assistant contributors are manageable in this workflow.
+
+### System Should Try To
+
+* Keep contributor history visible.
+* Avoid deleting contributor rows.
+* Prevent Mangaka from viewing contributors for series they do not manage.
+
+---
+
+## BF-MANGAKA-CONTRIB-002 — Add Assistant Contributor to Series
+
+**Status:** Agreed
+**Primary actor:** Mangaka
+**Goal:** Add an active Assistant user as an active contributor to one of the Mangaka's own series.
+
+### Main Flow
+
+```text
+Mangaka opens /mangaka/contributors
+→ Mangaka selects a series
+→ Mangaka clicks Add Assistant
+→ UI opens Add Assistant dialog
+→ UI searches eligible assistants through GET /api/mangaka/series/{seriesId}/contributors/eligible-assistants
+→ Backend returns ACTIVE Assistant users who are not currently active contributors of the selected series
+→ Mangaka selects an Assistant
+→ UI calls POST /api/mangaka/series/{seriesId}/contributors/assistants
+→ API sends AddAssistantContributorCommand
+→ Application validates actor, target user role/status, and duplicate active contributor rule
+→ Infrastructure calls manga.usp_SeriesContributor_Add
+→ Database inserts active SeriesContributor row and writes audit
+→ UI refreshes contributor list and eligible-assistant search
+```
+
+### Database Procedure
+
+```text
+manga.usp_SeriesContributor_Add
+```
+
+### Important Notes
+
+* Target user must exist.
+* Target user must have role `Assistant`.
+* Target user must have `status_code = ACTIVE`.
+* Target user must not already be an active contributor of the selected series.
+* Historical ended contributor rows must not block re-adding.
+* The existing generic add procedure may be reused only after Assistant-specific C# validation.
+* C# Application validation must not rely only on SQL errors.
+
+### System Should Try To
+
+* Make adding assistants discoverable through search/autocomplete.
+* Avoid duplicate active contributor rows.
+* Keep historical contributor rows reusable for future re-adds.
+
+---
+
+## BF-MANGAKA-CONTRIB-003 — End Assistant Contribution
+
+**Status:** Agreed
+**Primary actor:** Mangaka
+**Goal:** End an active Assistant contributor's participation in a series while preserving history.
+
+### Main Flow
+
+```text
+Mangaka opens /mangaka/contributors
+→ Mangaka selects a series
+→ UI shows End action only for active Assistant contributor rows
+→ Mangaka opens End Assistant dialog
+→ Mangaka enters reason
+→ UI calls POST /api/mangaka/series/{seriesId}/contributors/assistants/{assistantUserId}/end
+→ API sends EndAssistantContributorCommand
+→ Application validates actor permission, target role/status, reason, and active task blocking rule
+→ Infrastructure calls manga.usp_SeriesContributor_EndAssistant
+→ SQL sets end_date to current UTC date and writes audit
+→ UI refreshes contributor list and eligible-assistant search
+```
+
+### Database Procedure
+
+```text
+manga.usp_SeriesContributor_EndAssistant
+```
+
+### Important Notes
+
+* This procedure may exist as a deployment script before being applied to the target database.
+* Remove/end action is Assistant-only in this MVP screen.
+* Do not end Mangaka contributors in this workflow.
+* Do not end Tantou Editor contributors in this workflow.
+* Do not delete SeriesContributor rows.
+* Set `end_date`; preserve history.
+* Reason is required and must be limited to 500 characters.
+* If the Assistant has `ASSIGNED` or `UNDER_REVIEW` tasks for the series, block ending and show:
+  `This assistant has active tasks. Reassign or cancel their tasks before removing them from the series.`
+* Active-task lookup must derive series through the task-region/page/chapter chain, not through a direct task series id.
+
+### System Should Try To
+
+* Protect active production work from orphaned assignments.
+* Preserve contributor history.
+* Keep role management narrow and safe for MVP.
+
+---
+
+## BF-NAV-001 — Safe Return URL Navigation
+
+**Status:** Agreed
+**Primary actor:** Any authenticated role
+**Goal:** Preserve safe back-navigation across role pages, series pages, and workspace links.
+
+### Main Flow
+
+```text
+User opens a page that links to /series/{slug} or workspace
+→ UI appends a local returnUrl using SafeReturnUrl.AppendReturnUrl()
+→ Target page resolves returnUrl through SafeReturnUrl.Resolve()
+→ If returnUrl is safe, Back button uses it
+→ If returnUrl is unsafe or missing, page falls back to a safe default such as /dashboard
+```
+
+### Important Notes
+
+* Safe return URLs should allow trusted local prefixes only.
+* Allowed local prefixes include `/mangaka`, `/assistant`, `/editor`, `/board-chief`, `/board`, `/admin`, `/series`, and `/dashboard`.
+* Reject external URLs, protocol-relative URLs, backslashes, `javascript:`, `data:`, `/api/`, and `/signout`.
+* SeriesPage fallback should be role-neutral, not hardcoded to `/mangaka`.
+* Workspace links from `/mangaka/review-submissions` should pass `returnUrl=/mangaka/review-submissions`.
+
+### System Should Try To
+
+* Prevent open redirects.
+* Keep cross-role navigation predictable.
+* Preserve user workflow context after opening series/workspace pages.
 
 # 5. Board Poll and Publication Frequency Flows
 

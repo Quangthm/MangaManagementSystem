@@ -80,12 +80,13 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<bool> DeleteChapterPageTaskAsync(Guid id)
         {
-            var entity = await _unitOfWork.ChapterPageTasks.GetByIdAsync(id);
+            var entity = await _unitOfWork.ChapterPageTasks.GetByIdWithRegionsAsync(id);
             if (entity == null)
             {
                 return false;
             }
 
+            entity.PageRegions.Clear();
             _unitOfWork.ChapterPageTasks.Delete(entity);
             await _unitOfWork.SaveChangesAsync();
 
@@ -134,6 +135,12 @@ namespace MangaManagementSystem.Application.Services
             return MapToDtoWithAssistantContext(entity);
         }
 
+        public async Task<IEnumerable<ChapterPageTaskDto>> GetChapterPageTasksByChapterPageIdAsync(Guid chapterPageId)
+        {
+            var entities = await _unitOfWork.ChapterPageTasks.GetByChapterPageIdWithRegionsAsync(chapterPageId);
+            return entities.Select(MapToDto).ToList();
+        }
+
         private async Task AttachPageRegionsAsync(ChapterPageTask entity, IReadOnlyList<Guid> pageRegionIds)
         {
             if (pageRegionIds == null)
@@ -177,6 +184,8 @@ namespace MangaManagementSystem.Application.Services
                     r.OriginalText,
                     r.CreatedByUserId,
                     r.UpdatedByUserId)).ToList(),
+                AssignedToDisplayName: t.AssignedToUser?.DisplayName,
+                AssignedUsername: t.AssignedToUser?.Username,
                 CreatedAtUtc: t.CreatedAtUtc
             );
         }

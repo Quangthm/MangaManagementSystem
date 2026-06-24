@@ -78,6 +78,31 @@ namespace MangaManagementSystem.Application.Services
             return true;
         }
 
+        public async Task<bool> SetCurrentVersionAsync(Guid chapterPageId, Guid chapterPageVersionId)
+        {
+            var all = await _unitOfWork.ChapterPageVersions.GetAllAsync();
+            var allVersions = all.Where(v => v.ChapterPageId == chapterPageId).ToList();
+
+            // First pass: unset the current version to clear the unique constraint
+            foreach (var version in allVersions.Where(v => v.IsCurrentVersion && v.ChapterPageVersionId != chapterPageVersionId))
+            {
+                version.IsCurrentVersion = false;
+                _unitOfWork.ChapterPageVersions.Update(version);
+            }
+            await _unitOfWork.SaveChangesAsync();
+
+            // Second pass: set the new current version
+            var newCurrent = allVersions.FirstOrDefault(v => v.ChapterPageVersionId == chapterPageVersionId);
+            if (newCurrent != null)
+            {
+                newCurrent.IsCurrentVersion = true;
+                _unitOfWork.ChapterPageVersions.Update(newCurrent);
+                await _unitOfWork.SaveChangesAsync();
+            }
+
+            return true;
+        }
+
         private static ChapterPageVersionDto MapToDto(ChapterPageVersion v) => new(
             v.ChapterPageVersionId,
             v.ChapterPageId,

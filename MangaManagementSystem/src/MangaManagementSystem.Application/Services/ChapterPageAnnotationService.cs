@@ -82,12 +82,13 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<bool> DeleteChapterPageAnnotationAsync(Guid id)
         {
-            var entity = await _unitOfWork.ChapterPageAnnotations.GetByIdAsync(id);
+            var entity = await _unitOfWork.ChapterPageAnnotations.GetByIdWithRegionsAsync(id);
             if (entity == null)
             {
                 return false;
             }
 
+            entity.PageRegions.Clear();
             _unitOfWork.ChapterPageAnnotations.Delete(entity);
             await _unitOfWork.SaveChangesAsync();
             return true;
@@ -96,6 +97,12 @@ namespace MangaManagementSystem.Application.Services
         public async Task<bool> ResolveAnnotationAsync(Guid actorUserId, Guid annotationId, string? resolutionNote = null)
         {
             return await _unitOfWork.ChapterPageAnnotations.ResolveAnnotationAsync(actorUserId, annotationId, resolutionNote);
+        }
+
+        public async Task<IEnumerable<ChapterPageAnnotationDto>> GetChapterPageAnnotationsByChapterPageIdAsync(Guid chapterPageId)
+        {
+            var annotations = await _unitOfWork.ChapterPageAnnotations.GetByChapterPageIdWithRegionsAsync(chapterPageId);
+            return annotations.Select(MapToDto).ToList();
         }
 
         private async Task AttachPageRegionsAsync(ChapterPageAnnotation entity, IReadOnlyList<Guid> pageRegionIds)

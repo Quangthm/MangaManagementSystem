@@ -68,6 +68,9 @@ namespace MangaManagementSystem.Infrastructure
             // Assistant task submission
             services.AddScoped<MangaManagementSystem.Application.Interfaces.IAssistantTaskSubmissionService, Services.AssistantTaskSubmissionService>();
 
+            // AI Service
+            services.AddHttpClient<IAiService, AiService>();
+            services.AddScoped<IAiService, AiService>();
 
             services.AddScoped<IEditorialBoardRepository, EditorialBoardRepository>();
             services.AddScoped<ILandingPageRepository, LandingPageRepository>();

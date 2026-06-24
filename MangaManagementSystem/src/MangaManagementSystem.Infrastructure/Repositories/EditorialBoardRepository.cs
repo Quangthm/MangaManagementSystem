@@ -819,7 +819,8 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             "NO_DECISION" => "No Decision",
             "PENDING" => "Voting in Progress",
             "INVALIDATED" => "Cancelled",
-            _ => resultCode
         };
     }
+
+  
 }

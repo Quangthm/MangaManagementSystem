@@ -30,21 +30,19 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             cmd.CommandType = CommandType.StoredProcedure;
 
             cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@actor_user_id", System.Data.SqlDbType.UniqueIdentifier) { Value = actorUserId });
-            var regionsJson = JsonSerializer.Serialize(pageRegionIds);
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@page_region_ids_json", System.Data.SqlDbType.NVarChar, -1) { Value = regionsJson });
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@issue_type_code", System.Data.SqlDbType.NVarChar, 80) { Value = issueTypeCode });
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@annotation_text", System.Data.SqlDbType.NVarChar, -1) { Value = annotationText });
-
-            var outParam = new Microsoft.Data.SqlClient.SqlParameter("@new_chapter_page_annotation_id", System.Data.SqlDbType.UniqueIdentifier) { Direction = System.Data.ParameterDirection.Output };
-            cmd.Parameters.Add(outParam);
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@issue_type_code", System.Data.SqlDbType.NVarChar, 50) { Value = issueTypeCode });
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@annotation_text", System.Data.SqlDbType.NVarChar, 1000) { Value = annotationText });
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@page_region_ids_json", System.Data.SqlDbType.NVarChar, -1) { Value = System.Text.Json.JsonSerializer.Serialize(pageRegionIds) });
+            
+            var newIdParam = new Microsoft.Data.SqlClient.SqlParameter("@new_chapter_page_annotation_id", System.Data.SqlDbType.UniqueIdentifier) { Direction = ParameterDirection.Output };
+            cmd.Parameters.Add(newIdParam);
 
             if (conn.State != ConnectionState.Open)
                 await conn.OpenAsync();
 
             await cmd.ExecuteNonQueryAsync();
 
-            var newAnnotationId = outParam.Value == DBNull.Value ? Guid.Empty : (Guid)outParam.Value;
-            return newAnnotationId;
+            return (Guid)newIdParam.Value;
         }
 
         public async Task<ChapterPageAnnotation?> GetByIdWithRegionsAsync(Guid id)
@@ -96,6 +94,14 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
             await cmd.ExecuteNonQueryAsync();
             return true;
+        }
+
+        public async Task<IReadOnlyList<ChapterPageAnnotation>> GetByChapterPageIdWithRegionsAsync(Guid chapterPageId)
+        {
+            return await _context.ChapterPageAnnotations
+                .Include(a => a.PageRegions)
+                .Where(a => a.PageRegions.Any(r => r.ChapterPageVersion != null && r.ChapterPageVersion.ChapterPageId == chapterPageId))
+                .ToListAsync();
         }
     }
 }
