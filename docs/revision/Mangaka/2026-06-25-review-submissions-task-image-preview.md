@@ -7,46 +7,29 @@ feature/Mangaka
 2026-06-25
 
 ## Summary
-Fixed oversized task-card page images and redesigned the image preview as a true fullscreen lightbox. Moved all styling out of global `mangaflow.css` into component-scoped CSS.
+Fixed oversized task-card page images and redesigned the image preview as a true viewport-level lightbox. The earlier CSS-isolated `MudOverlay` attempt failed runtime smoke because the thumbnail was not reliably constrained and the preview stayed visually trapped in the task-card layout. Final implementation uses `MudDialog` via the app-level dialog provider.
 
 ### Revision
 The first implementation had three issues discovered during runtime smoke:
-1. Thumbnail wrapper lacked strict `max-width` / `min-width` enforcement — wide images could expand the task card
-2. Preview used a `MudPaper` card embedded inline rather than a fullscreen viewport-centered lightbox — it felt like a box over the same image
-3. `.task-page-thumb` CSS class was in global `wwwroot/css/mangaflow.css` — could affect shared/teammate views
+1. Thumbnail wrapper relied too heavily on isolated CSS — wide images could still expand the task card when CSS isolation didn't apply at runtime
+2. Preview used an inline overlay inside the component tree rather than an app-level dialog — it felt attached to the same card area
+3. Global/shared styling risk was avoided, but the display behavior still failed because the overlay approach was not viewport-scoped enough
 
 ## Scope
-- Thumbnail: 130×190px portrait bounding box with `max-width: 130px; min-width: 130px; max-height: 190px` — strictly enforced regardless of source image dimensions
-- Preview: Fullscreen `MudOverlay` with `DarkBackground="true"`, viewport-centered `<img>`, close button fixed at top-right
-- CSS: All styles moved to `ImagePreview.razor.css` (Blazor CSS isolation)
+- Thumbnail: 130×190px portrait bounding box with hard inline bounds and `object-fit: contain` — strictly enforced regardless of source image dimensions
+- Preview: Fullscreen `MudDialog` with dark fullscreen content, viewport-centered `<img>`, close button fixed at top-right
+- CSS: Component-scoped CSS remains minimal; critical layout styles are inline fallback to avoid CSS isolation/runtime issues
 - Dual-page manga spread display: intentionally scoped to thumbnail bounding only — splitting/cropping deferred to workspace page-processing task
 
 ## Files changed
 | File | Change |
 |------|--------|
-| `Components/Shared/ImagePreview.razor` | Rewritten: `<button>` thumbnail with strict bounds, fullscreen lightbox preview, simplified `[Parameter]` API |
-| `Components/Shared/ImagePreview.razor.css` | **New** — component-scoped CSS with `.mf-ip-thumb`, `.mf-ip-overlay`, `.mf-ip-lightbox`, `.mf-ip-full`, `.mf-ip-close`, `.mf-ip-title` |
-| `Components/Pages/Mangaka/ReviewSubmissions.razor` | Removed `ThumbnailCssClass="task-page-thumb"` — component owns its styling now |
-| `wwwroot/css/mangaflow.css` | Removed `.task-page-thumb` and `.task-page-thumb img` |
+| `Components/Shared/ImagePreview.razor` | Rewritten: fixed-size thumbnail button, `IDialogService` preview launch, simplified `[Parameter]` API |
+| `Components/Shared/ImagePreviewDialog.razor` | **New** — fullscreen lightbox dialog rendered through `MudDialogProvider` |
+| `Components/Shared/ImagePreview.razor.css` | Reduced to non-critical enhancement styles only |
+| `Components/Shared/ImagePreviewDialog.razor.css` | **New** — intentionally minimal; critical layout is inline fallback |
+| `Components/Pages/Mangaka/ReviewSubmissions.razor` | Continues to use `<ImagePreview ... />`; no full-width wrapper added |
 | `docs/revision/Mangaka/2026-06-25-review-submissions-task-image-preview.md` | This file (updated) |
-
-## Removed from global CSS
-```css
-.task-page-thumb { width:130px; height:190px; max-width:100%; ... }
-.task-page-thumb img { width:100%; height:100%; ... }
-```
-These were in `wwwroot/css/mangaflow.css` (lines 3030-3052). Now removed.
-
-## Component-scoped CSS classes (ImagePreview.razor.css)
-| Class | Purpose |
-|-------|---------|
-| `.mf-ip-thumb` | Thumbnail button — 130×190px, strict bounds, cursor:zoom-in |
-| `.mf-ip-thumb-img` | Image inside thumbnail — contained to parent bounds |
-| `.mf-ip-overlay` | Fullscreen overlay — `position:fixed; inset:0; z-index:2000` |
-| `.mf-ip-lightbox` | Centering wrapper — `100vw × 100vh` flex centering |
-| `.mf-ip-full` | Full preview image — `max-width: min(94vw, 1200px); max-height: 88vh` |
-| `.mf-ip-close` | Close button — fixed top-right, circular, semi-transparent |
-| `.mf-ip-title` | Title bar — fixed bottom-center |
 
 ## Thumbnail sizing
 - Enforced portrait bounds: `width: 130px`, `max-width: 130px`, `min-width: 130px`, `height: 190px`, `max-height: 190px`
@@ -54,11 +37,11 @@ These were in `wwwroot/css/mangaflow.css` (lines 3030-3052). Now removed.
 - Task card: remains compact at 100% zoom
 
 ## Lightbox/preview behavior
-- Dark fullscreen backdrop over viewport (`DarkBackground="true"`)
+- Dark fullscreen dialog content over viewport
 - Image centered in viewport, not relative to task card
 - Large image constrained: `max-width: min(94vw, 1200px); max-height: 88vh`
 - Close button: fixed × button at top-right of screen
-- Outside click closes (MudOverlay `AutoClose="true"`)
+- Backdrop/escape close supported by MudBlazor dialog options
 - `@onclick:stopPropagation` prevents interaction with underlying task card
 
 ## Component API (simplified)
@@ -70,14 +53,14 @@ These were in `wwwroot/css/mangaflow.css` (lines 3030-3052). Now removed.
 No CSS class parameters needed externally — component owns its styling.
 
 ## Build result
-All compilation succeeded. File-copy errors (MSB3027) are from the running app holding file locks — normal with hot-reload. No new compilation warnings or errors from these changes.
+`dotnet build MangaManagementSystem\MangaManagementSystem.slnx --no-incremental` succeeded with `0 errors` and `43 warnings` (same baseline warning count).
 
 ## Runtime smoke
-Pending — run and verify:
+Pending manual browser smoke at 100% zoom on `/mangaka/review-submissions`:
 - [ ] Thumbnail is exactly 130×190px regardless of source image size
 - [ ] Wide/double-page image stays contained inside thumbnail
 - [ ] Task card does not expand
-- [ ] Clicking thumbnail opens fullscreen dark overlay
+- [ ] Clicking thumbnail opens fullscreen dark dialog
 - [ ] Preview image is centered in viewport
 - [ ] Close button works
 - [ ] Outside click closes
@@ -96,4 +79,4 @@ Pending — run and verify:
 - **Global reuse**: ImagePreview component can be dropped into any page needing clickable image preview (series covers, proposals, workspace pages).
 
 ## Next step
-Runtime smoke test with a real double-page manga image to verify thumbnail bounds hold and lightbox works as fullscreen.
+Runtime smoke test with a real double-page manga image to verify thumbnail bounds hold and lightbox works as a true viewport-level dialog.

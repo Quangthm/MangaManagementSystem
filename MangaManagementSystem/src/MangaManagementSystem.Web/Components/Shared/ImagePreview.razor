@@ -1,30 +1,17 @@
 @using Microsoft.AspNetCore.Components
+@inject IDialogService DialogService
 
-@if (string.IsNullOrWhiteSpace(ImageUrl))
+@if (!string.IsNullOrWhiteSpace(ImageUrl))
 {
-    return;
-}
-
-<button type="button"
-        class="mf-ip-thumb"
-        @onclick="OpenPreview"
-        @onclick:stopPropagation="true">
-    <img src="@ImageUrl" alt="@AltText" class="mf-ip-thumb-img" />
-</button>
-
-@if (_showPreview)
-{
-    <MudOverlay Visible="true" DarkBackground="true" AutoClose="true" OnClick="ClosePreview"
-                Class="mf-ip-overlay">
-        <div class="mf-ip-lightbox" @onclick:stopPropagation="true">
-            <button type="button" class="mf-ip-close" @onclick="ClosePreview" title="Close">&times;</button>
-            <img src="@ImageUrl" alt="@AltText" class="mf-ip-full" />
-            @if (!string.IsNullOrWhiteSpace(Title))
-            {
-                <div class="mf-ip-title">@Title</div>
-            }
-        </div>
-    </MudOverlay>
+    <button type="button"
+            class="mf-ip-thumb"
+            style="width:130px;min-width:130px;max-width:130px;height:190px;min-height:190px;max-height:190px;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;padding:0;border:0;border-radius:8px;background:white;cursor:zoom-in;box-sizing:border-box;"
+            @onclick="OpenPreview"
+            @onclick:stopPropagation="true">
+        <img src="@ImageUrl"
+             alt="@AltText"
+             style="width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;display:block;" />
+    </button>
 }
 
 @code {
@@ -32,15 +19,30 @@
     [Parameter] public string AltText { get; set; } = string.Empty;
     [Parameter] public string? Title { get; set; }
 
-    private bool _showPreview;
-
-    private void OpenPreview()
+    private async Task OpenPreview()
     {
-        _showPreview = true;
-    }
+        if (string.IsNullOrWhiteSpace(ImageUrl))
+            return;
 
-    private void ClosePreview()
-    {
-        _showPreview = false;
+        var parameters = new DialogParameters
+        {
+            { "ImageUrl", ImageUrl },
+            { "AltText", AltText },
+            { "Title", Title }
+        };
+
+        var options = new DialogOptions
+        {
+            FullScreen = true,
+            CloseOnEscapeKey = true,
+            BackdropClick = true,
+            CloseButton = false,
+            NoHeader = true
+        };
+
+        await DialogService.ShowAsync<ImagePreviewDialog>(
+            Title ?? "Image Preview",
+            parameters,
+            options);
     }
 }
