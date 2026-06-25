@@ -1,4 +1,4 @@
-@page "/admin/files"
+﻿@page "/admin/files"
 @using MangaManagementSystem.Application.DTOs.Admin
 @using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Admin")]
@@ -34,6 +34,30 @@
         overflow-wrap: anywhere;
         font-family: monospace;
         font-size: 0.78rem;
+    }
+
+    .phase6-file-preview-card {
+        width: min(960px, 100%);
+        max-height: calc(100vh - 32px);
+        overflow-y: auto;
+    }
+
+    .phase6-file-preview-frame {
+        width: 100%;
+        height: min(70vh, 720px);
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        border-radius: 8px;
+        background: #ffffff;
+    }
+
+    .phase6-file-preview-image {
+        display: block;
+        max-width: 100%;
+        max-height: 70vh;
+        margin: 0 auto;
+        object-fit: contain;
+        border-radius: 8px;
+        background: #ffffff;
     }
 </style>
 
@@ -360,6 +384,79 @@
     </div>
 </AdminLayout>
 
+@if (_previewDialogOpen)
+{
+    <div class="phase6-file-dialog-backdrop"
+         role="presentation">
+        <MudPaper Class="phase6-file-preview-card pa-5 mf-card"
+                  Elevation="12">
+            <div class="d-flex justify-space-between align-center mb-4">
+                <div>
+                    <MudText Typo="Typo.h5">
+                        File Preview
+                    </MudText>
+
+                    <MudText Typo="Typo.body2"
+                             Class="mf-muted phase6-file-name">
+                        @_previewFileName
+                    </MudText>
+                </div>
+
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Default"
+                           OnClick="ClosePreviewDialog">
+                    Close
+                </MudButton>
+            </div>
+
+            @if (_previewIsPlaceholder)
+            {
+                <MudAlert Severity="Severity.Info"
+                          Class="mb-4">
+                    File unavailable
+                    @if (!string.IsNullOrWhiteSpace(_previewPlaceholderReason))
+                    {
+                        <span>
+                            (@_previewPlaceholderReason)
+                        </span>
+                    }
+                </MudAlert>
+            }
+
+            @if (string.IsNullOrWhiteSpace(_previewDataUrl))
+            {
+                <MudAlert Severity="Severity.Warning">
+                    File unavailable
+                </MudAlert>
+            }
+            else if (IsPreviewImage)
+            {
+                <img src="@_previewDataUrl"
+                     alt="@_previewFileName"
+                     class="phase6-file-preview-image" />
+            }
+            else if (IsPreviewPdf)
+            {
+                <iframe src="@_previewDataUrl"
+                        title="@_previewFileName"
+                        class="phase6-file-preview-frame">
+                </iframe>
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Warning">
+                    File unavailable
+                </MudAlert>
+            }
+
+            <MudText Typo="Typo.caption"
+                     Class="mf-muted mt-3">
+                @_previewContentType
+            </MudText>
+        </MudPaper>
+    </div>
+}
+
 @if (_selectedDetail is not null)
 {
     <div class="phase6-file-dialog-backdrop"
@@ -593,7 +690,12 @@
     private AdminFileDetailDto? _selectedDetail;
     private AdminFileListItemDto? _deleteTarget;
     private string _deleteReason = string.Empty;
-
+    private bool _previewDialogOpen;
+    private string? _previewDataUrl;
+    private string? _previewFileName;
+    private string? _previewContentType;
+    private bool _previewIsPlaceholder;
+    private string? _previewPlaceholderReason;
     private int DisplayTotalPages =>
         Math.Max(
             1,
@@ -602,6 +704,18 @@
     private bool CanMoveNext =>
         _page.TotalPages > 0
         && _pageNumber < _page.TotalPages;
+
+    private bool IsPreviewImage =>
+        !string.IsNullOrWhiteSpace(_previewContentType)
+        && _previewContentType.StartsWith(
+            "image/",
+            StringComparison.OrdinalIgnoreCase);
+
+    private bool IsPreviewPdf =>
+        string.Equals(
+            _previewContentType,
+            "application/pdf",
+            StringComparison.OrdinalIgnoreCase);
 
     protected override async Task OnInitializedAsync()
     {
@@ -766,20 +880,25 @@
                     .GetPreviewAsync(
                         fileResourceId);
 
-            using var stream =
-                new MemoryStream(
+            _previewFileName =
+                content.FileName;
+
+            _previewContentType =
+                NormalizeContentTypeForDataUrl(
+                    content.ContentType);
+
+            _previewDataUrl =
+                BuildDataUrl(
                     content.Content,
-                    writable: false);
+                    _previewContentType);
 
-            using var streamReference =
-                new DotNetStreamReference(
-                    stream);
+            _previewIsPlaceholder =
+                content.IsPlaceholder;
 
-            await JSRuntime.InvokeVoidAsync(
-                "adminFileContent.open",
-                streamReference,
-                content.ContentType,
-                content.FileName);
+            _previewPlaceholderReason =
+                content.PlaceholderReason;
+
+            _previewDialogOpen = true;
 
             if (content.IsPlaceholder)
             {
@@ -802,6 +921,38 @@
         }
     }
 
+    private void ClosePreviewDialog()
+    {
+        _previewDialogOpen = false;
+        _previewDataUrl = null;
+        _previewFileName = null;
+        _previewContentType = null;
+        _previewIsPlaceholder = false;
+        _previewPlaceholderReason = null;
+    }
+
+    private static string BuildDataUrl(
+        byte[] content,
+        string contentType)
+    {
+        return "data:"
+            + contentType
+            + ";base64,"
+            + Convert.ToBase64String(content);
+    }
+
+    private static string NormalizeContentTypeForDataUrl(
+        string? contentType)
+    {
+        if (string.IsNullOrWhiteSpace(contentType)
+            || contentType.Contains('\r')
+            || contentType.Contains('\n'))
+        {
+            return "application/octet-stream";
+        }
+
+        return contentType.Trim();
+    }
     private async Task DownloadAsync(
         Guid fileResourceId)
     {
