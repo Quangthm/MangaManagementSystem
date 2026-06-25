@@ -199,6 +199,23 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task ReturnTaskForReworkAsync(Guid actorUserId, Guid taskId, string reason)
         {
+            if (actorUserId == Guid.Empty)
+                throw new InvalidOperationException("Actor user ID is required.");
+            if (taskId == Guid.Empty)
+                throw new InvalidOperationException("Task ID is required.");
+            if (string.IsNullOrWhiteSpace(reason))
+                throw new InvalidOperationException("Updated task instructions are required when returning a task for rework.");
+
+            var task = await _unitOfWork.ChapterPageTasks.GetByIdWithRegionsAsync(taskId);
+            if (task == null)
+                throw new InvalidOperationException("Task not found.");
+
+            if (task.CreatedByUserId != actorUserId)
+                throw new InvalidOperationException("You are not authorized to return this task for rework.");
+
+            if (task.StatusCode != "UNDER_REVIEW")
+                throw new InvalidOperationException("Only tasks currently under review can be returned for rework.");
+
             await _unitOfWork.ChapterPageTasks.ReturnTaskForReworkAsync(actorUserId, taskId, reason);
         }
 
