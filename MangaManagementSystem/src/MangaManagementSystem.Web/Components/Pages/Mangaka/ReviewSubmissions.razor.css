@@ -1,0 +1,63 @@
+/* ReviewSubmissions task-card internal layout */
+
+.review-task-card-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 20px;
+    align-items: start;
+}
+
+.review-task-card-main {
+    min-width: 0;
+}
+
+.review-task-card-media-column {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.review-task-card-media-block {
+    display: flex;
+    flex-direction: column;
+}
+
+.review-task-card-image-slot {
+    width: 190px;
+    max-width: 190px;
+}
+
+.review-task-card-footer {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.review-task-card-actions {
+    flex-wrap: wrap;
+}
+
+.review-task-card-meta-row {
+    flex-wrap: wrap;
+}
+
+@media (max-width: 1100px) {
+    .review-task-card-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .review-task-card-media-column {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .review-task-card-image-slot {
+        width: auto;
+        max-width: 200px;
+    }
+}
