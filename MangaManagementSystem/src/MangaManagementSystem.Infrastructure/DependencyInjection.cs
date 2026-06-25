@@ -76,6 +76,9 @@ namespace MangaManagementSystem.Infrastructure
             services.AddScoped<IAiService, AiService>();
 
             services.AddScoped<IEditorialBoardRepository, EditorialBoardRepository>();
+
+            services.AddScoped<IImageMetadataProvider, CloudinaryImageMetadataProvider>();
+            services.AddScoped<IQuickSelectRepository, QuickSelectRepository>();
             return services;
         }
     }

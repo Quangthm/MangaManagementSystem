@@ -1,4 +1,4 @@
-# Manga Creation Workflow and Publishing Management System — Business Flows / Use Case Notes
+﻿# Manga Creation Workflow and Publishing Management System â€” Business Flows / Use Case Notes
 
 > **Purpose:** Record agreed business flows in a clear step-by-step format so the team can understand how UI, backend, Cloudinary, SQL Server procedures, and audit behavior should work together.
 >
@@ -43,25 +43,25 @@
 
 # 2. Account and Identity Flows
 
-## BF-AUTH-001 — Register Account Without Portfolio
+## BF-AUTH-001 â€” Register Account Without Portfolio
 
-**Status:** Agreed  
-**Primary actor:** New User  
+**Status:** Agreed
+**Primary actor:** New User
 **Goal:** Create a pending account without uploading a portfolio file.
 
 ### Main Flow
 
 ```text
 UI register form
-→ Backend API receives username/email/password/display_name/role_name
-→ Backend hashes password using BCrypt
-→ Backend calls auth.usp_User_Create
-→ Database resolves role_name into role_id
-→ Database creates auth.Users row with status_code = PENDING_APPROVAL
-→ Database defaults display_name to username if display_name is empty/null
-→ Database writes USER_REGISTERED audit event
-→ Backend returns registration success / pending approval response
-→ UI shows pending approval message
+â†’ Backend API receives username/email/password/display_name/role_name
+â†’ Backend hashes password using BCrypt
+â†’ Backend calls auth.usp_User_Create
+â†’ Database resolves role_name into role_id
+â†’ Database creates auth.Users row with status_code = PENDING_APPROVAL
+â†’ Database defaults display_name to username if display_name is empty/null
+â†’ Database writes USER_REGISTERED audit event
+â†’ Backend returns registration success / pending approval response
+â†’ UI shows pending approval message
 ```
 
 ### Database Procedure
@@ -88,29 +88,29 @@ auth.usp_User_Create
 
 ---
 
-## BF-AUTH-002 — Register Account With Optional Portfolio
+## BF-AUTH-002 â€” Register Account With Optional Portfolio
 
-**Status:** Agreed  
-**Primary actor:** New User  
+**Status:** Agreed
+**Primary actor:** New User
 **Goal:** Create a pending account and attach an optional portfolio file for admin review.
 
 ### Recommended Main Flow
 
 ```text
 UI register form
-→ User enters username/email/password/display_name/role_name
-→ User optionally selects portfolio file
-→ Backend API receives form data + optional portfolio file
-→ Backend uploads portfolio file to Cloudinary
-→ Cloudinary returns public_id, secure_url, content_type, file size, and other metadata
-→ Backend starts database workflow
-→ Database creates auth.Users row with portfolio_file_id = NULL
-→ Database creates manga.FileResource row with file_purpose_code = REGISTRATION_PORTFOLIO
-→ Database links manga.FileResource.file_resource_id to auth.Users.portfolio_file_id
-→ Database writes USER_REGISTERED audit event
-→ Database may write REGISTRATION_PORTFOLIO_ATTACHED audit event
-→ Backend returns registration success / pending approval response
-→ UI shows pending approval message
+â†’ User enters username/email/password/display_name/role_name
+â†’ User optionally selects portfolio file
+â†’ Backend API receives form data + optional portfolio file
+â†’ Backend uploads portfolio file to Cloudinary
+â†’ Cloudinary returns public_id, secure_url, content_type, file size, and other metadata
+â†’ Backend starts database workflow
+â†’ Database creates auth.Users row with portfolio_file_id = NULL
+â†’ Database creates manga.FileResource row with file_purpose_code = REGISTRATION_PORTFOLIO
+â†’ Database links manga.FileResource.file_resource_id to auth.Users.portfolio_file_id
+â†’ Database writes USER_REGISTERED audit event
+â†’ Database may write REGISTRATION_PORTFOLIO_ATTACHED audit event
+â†’ Backend returns registration success / pending approval response
+â†’ UI shows pending approval message
 ```
 
 ### Recommended Implementation Shape
@@ -146,25 +146,25 @@ COMMIT
 
 ---
 
-## BF-AUTH-003 — Google Signup Callback
+## BF-AUTH-003 â€” Google Signup Callback
 
-**Status:** Agreed  
-**Primary actor:** New User  
+**Status:** Agreed
+**Primary actor:** New User
 **Goal:** Create a pending account using Google identity information.
 
 ### Main Flow
 
 ```text
 User signs in with Google
-→ Google returns email and display name
-→ Backend checks whether user account already exists by email
-→ If account does not exist, backend calls auth.usp_User_Create
-→ Backend passes username derived from email or chosen account rule
-→ Backend passes display_name from Google display name if available
-→ If Google display name is unavailable, database defaults display_name to username
-→ Database creates user with status_code = PENDING_APPROVAL
-→ Database writes USER_REGISTERED audit event
-→ Backend returns pending approval response
+â†’ Google returns email and display name
+â†’ Backend checks whether user account already exists by email
+â†’ If account does not exist, backend calls auth.usp_User_Create
+â†’ Backend passes username derived from email or chosen account rule
+â†’ Backend passes display_name from Google display name if available
+â†’ If Google display name is unavailable, database defaults display_name to username
+â†’ Database creates user with status_code = PENDING_APPROVAL
+â†’ Database writes USER_REGISTERED audit event
+â†’ Backend returns pending approval response
 ```
 
 ### Important Notes
@@ -183,26 +183,26 @@ User signs in with Google
 
 ---
 
-## BF-AUTH-004 — Admin Changes User Status
+## BF-AUTH-004 â€” Admin Changes User Status
 
-**Status:** Agreed  
-**Primary actor:** Admin  
+**Status:** Agreed
+**Primary actor:** Admin
 **Goal:** Allow Admin to activate, reject, or disable a user account.
 
 ### Main Flow
 
 ```text
 Admin opens account management screen
-→ Admin selects target user
-→ Admin chooses new status: ACTIVE / REJECTED / DISABLED / PENDING_APPROVAL
-→ Admin optionally enters reason
-→ Backend calls auth.usp_Admin_ChangeUserStatus
-→ Database checks actor is active Admin
-→ Database locks the target user status-change workflow
-→ Database reads old status
-→ Database updates status_code
-→ Database writes USER_STATUS_CHANGED audit event
-→ UI refreshes account list/status
+â†’ Admin selects target user
+â†’ Admin chooses new status: ACTIVE / REJECTED / DISABLED / PENDING_APPROVAL
+â†’ Admin optionally enters reason
+â†’ Backend calls auth.usp_Admin_ChangeUserStatus
+â†’ Database checks actor is active Admin
+â†’ Database locks the target user status-change workflow
+â†’ Database reads old status
+â†’ Database updates status_code
+â†’ Database writes USER_STATUS_CHANGED audit event
+â†’ UI refreshes account list/status
 ```
 
 ### Important Notes
@@ -222,23 +222,23 @@ Admin opens account management screen
 
 ---
 
-## BF-AUTH-005 — User Updates Display Name
+## BF-AUTH-005 â€” User Updates Display Name
 
-**Status:** Agreed  
-**Primary actor:** General System User  
+**Status:** Agreed
+**Primary actor:** General System User
 **Goal:** Allow an authenticated user to update their visible display name without changing login identity.
 
 ### Main Flow
 
 ```text
 User opens profile settings
-→ User enters new display name
-→ Backend calls auth.usp_User_UpdateDisplayName
-→ Database checks actor_user_id equals target user_id
-→ Database locks display-name update for that user
-→ Database updates display_name only
-→ Database writes USER_DISPLAY_NAME_UPDATED audit event
-→ UI refreshes visible display name
+â†’ User enters new display name
+â†’ Backend calls auth.usp_User_UpdateDisplayName
+â†’ Database checks actor_user_id equals target user_id
+â†’ Database locks display-name update for that user
+â†’ Database updates display_name only
+â†’ Database writes USER_DISPLAY_NAME_UPDATED audit event
+â†’ UI refreshes visible display name
 ```
 
 ### Important Notes
@@ -257,23 +257,23 @@ User opens profile settings
 
 ---
 
-## BF-AUTH-006 — User Password Reset / Password Change
+## BF-AUTH-006 â€” User Password Reset / Password Change
 
-**Status:** Agreed  
-**Primary actor:** General System User / Admin / Token-based reset flow  
+**Status:** Agreed
+**Primary actor:** General System User / Admin / Token-based reset flow
 **Goal:** Update password hash without changing account approval/status state.
 
 ### Main Flow
 
 ```text
 User/Admin/token flow requests password reset/change
-→ Backend verifies required password reset condition
-→ Backend hashes new password using BCrypt
-→ Backend calls auth.usp_User_ResetPassword
-→ Database locks password reset workflow for target user
-→ Database updates password_hash only
-→ Database preserves existing status_code
-→ Database writes password-related audit event
+â†’ Backend verifies required password reset condition
+â†’ Backend hashes new password using BCrypt
+â†’ Backend calls auth.usp_User_ResetPassword
+â†’ Database locks password reset workflow for target user
+â†’ Database updates password_hash only
+â†’ Database preserves existing status_code
+â†’ Database writes password-related audit event
 ```
 
 ### Reset Modes
@@ -302,27 +302,27 @@ User/Admin/token flow requests password reset/change
 
 # 3. File Resource Flows
 
-## BF-FILE-001 — Create File Resource Metadata
+## BF-FILE-001 â€” Create File Resource Metadata
 
-**Status:** Agreed  
-**Primary actor:** Backend workflow / business workflow caller  
+**Status:** Agreed
+**Primary actor:** Backend workflow / business workflow caller
 **Goal:** Store Cloudinary file metadata in SQL Server and return a `file_resource_id` for the business record that owns the file.
 
 ### Main Flow
 
 ```text
 Backend validates file purpose, file type, size, permission, and workflow context
-→ Backend calculates SHA-256 from the exact uploaded file bytes
-→ Backend uploads file to Cloudinary
-→ Cloudinary returns public_id, secure_url, content_type, file size, and other metadata
-→ Backend calls the relevant business workflow procedure
-→ Business workflow procedure starts a SQL transaction
-→ Business workflow procedure calls manga.usp_FileResource_Create inside that transaction
-→ Database inserts manga.FileResource row
-→ Database returns file_resource_id
-→ Business workflow procedure creates/updates the owning business record with file_resource_id
-→ Business workflow procedure writes one business-level audit event
-→ Database transaction commits
+â†’ Backend calculates SHA-256 from the exact uploaded file bytes
+â†’ Backend uploads file to Cloudinary
+â†’ Cloudinary returns public_id, secure_url, content_type, file size, and other metadata
+â†’ Backend calls the relevant business workflow procedure
+â†’ Business workflow procedure starts a SQL transaction
+â†’ Business workflow procedure calls manga.usp_FileResource_Create inside that transaction
+â†’ Database inserts manga.FileResource row
+â†’ Database returns file_resource_id
+â†’ Business workflow procedure creates/updates the owning business record with file_resource_id
+â†’ Business workflow procedure writes one business-level audit event
+â†’ Database transaction commits
 ```
 
 ### Database Procedure
@@ -348,7 +348,7 @@ manga.usp_FileResource_Create
 | File purpose code | Allowed extensions | Allowed content types | Cloudinary resource type | Notes |
 |---|---|---|---|---|
 | `SERIES_PROPOSAL` | `.pdf`, `.doc`, `.docx` | `application/pdf`, `application/msword`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | `raw` | Formal series proposal documents only. Markdown, plain text, and image files are not accepted for proposal submission in MVP. |
-| `SERIES_COVER` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Series cover image. In the Web draft UI, the selected source image is cropped client-side first, and the cropped `1000×1500` PNG is uploaded as the actual cover. |
+| `SERIES_COVER` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Series cover image. In the Web draft UI, the selected source image is cropped client-side first, and the cropped `1000Ă—1500` PNG is uploaded as the actual cover. |
 | `CHAPTER_PAGE_VERSION` | `.jpg`, `.jpeg`, `.png`, `.webp` | `image/jpeg`, `image/png`, `image/webp` | `image` | Official manga page image/version output. |
 | `EDITORIAL_ATTACHMENT` | `.pdf`, `.doc`, `.docx`, `.jpg`, `.jpeg`, `.png`, `.webp` | Proposal-document content types plus `image/jpeg`, `image/png`, `image/webp` | `raw` for documents; `image` for images | Editorial markup, review attachments, or supporting screenshots/documents. |
 | `REGISTRATION_PORTFOLIO` | `.pdf`, `.doc`, `.docx`, `.jpg`, `.jpeg`, `.png`, `.webp` | Proposal-document content types plus `image/jpeg`, `image/png`, `image/webp` | `raw` for documents; `image` for images | Optional portfolio submitted for account approval/profile review. |
@@ -371,21 +371,21 @@ manga.usp_FileResource_Create
 
 ---
 
-## BF-FILE-002 — Soft Delete File Resource
+## BF-FILE-002 â€” Soft Delete File Resource
 
-**Status:** Agreed  
-**Primary actor:** Admin or authorized file-management actor  
+**Status:** Agreed
+**Primary actor:** Admin or authorized file-management actor
 **Goal:** Mark a file resource as deleted without physically removing its database row.
 
 ### Main Flow
 
 ```text
 Authorized user requests file deletion
-→ Backend calls manga.usp_FileResource_SoftDelete
-→ Database checks file exists and is not already deleted
-→ Database sets deleted_at_utc and deleted_by_user_id
-→ Database writes FILE_RESOURCE_SOFT_DELETED audit event
-→ UI shows safe placeholder where file is unavailable
+â†’ Backend calls manga.usp_FileResource_SoftDelete
+â†’ Database checks file exists and is not already deleted
+â†’ Database sets deleted_at_utc and deleted_by_user_id
+â†’ Database writes FILE_RESOURCE_SOFT_DELETED audit event
+â†’ UI shows safe placeholder where file is unavailable
 ```
 
 ### Important Notes
@@ -403,23 +403,23 @@ Authorized user requests file deletion
 
 ---
 
-## BF-FILE-003 — Optional Duplicate File Warning by SHA-256
+## BF-FILE-003 â€” Optional Duplicate File Warning by SHA-256
 
-**Status:** Agreed, optional MVP usability behavior  
-**Primary actor:** General System User / Backend workflow  
+**Status:** Agreed, optional MVP usability behavior
+**Primary actor:** General System User / Backend workflow
 **Goal:** Detect when a newly selected file appears identical to an existing active file and optionally warn the user before saving another copy.
 
 ### Main Flow
 
 ```text
 User selects/uploads a file
-→ Backend reads exact file bytes
-→ Backend calculates SHA-256 hash
-→ Backend searches active FileResource rows with the same sha256_hash
-→ If a possible duplicate exists:
+â†’ Backend reads exact file bytes
+â†’ Backend calculates SHA-256 hash
+â†’ Backend searches active FileResource rows with the same sha256_hash
+â†’ If a possible duplicate exists:
     Backend/UI may optionally show a warning
     User/backend may continue, cancel, or reuse depending on the workflow
-→ If no duplicate exists or user continues:
+â†’ If no duplicate exists or user continues:
     Backend uploads to Cloudinary if needed
     Backend creates new FileResource metadata
 ```
@@ -456,31 +456,31 @@ User selects/uploads a file
 # 4. Series and Proposal Flows
 
 
-## BF-SERIES-001 — Create Series Draft
+## BF-SERIES-001 â€” Create Series Draft
 
-**Status:** Agreed  
-**Primary actor:** Mangaka  
+**Status:** Agreed
+**Primary actor:** Mangaka
 **Goal:** Create a new draft series profile and immediately register the creating Mangaka as an active contributor.
 
 ### Main Flow
 
 ```text
 Mangaka opens /mangaka/series/drafts
-→ Mangaka clicks Create Draft
-→ UI shows create draft popup/modal
-→ Mangaka enters title, synopsis, one or more genres, optional tags, content language, optional source series, optional proposed publication frequency, and optional cover image
-→ If a cover image is selected, the UI opens a 2:3 portrait crop preview dialog
-→ Mangaka confirms the crop, and the UI produces a `1000×1500` PNG from the selected visible area
-→ Backend validates the form and confirms the actor is an active Mangaka
-→ Backend generates slug from title
-→ Backend resolves slug uniqueness
-→ If a cover image is provided, backend uploads the file to Cloudinary and calculates SHA-256 from the exact uploaded bytes
-→ Backend calls manga.usp_Series_Create with series data, selected genre/tag IDs, and optional cover metadata
-→ Database calls manga.usp_FileResource_Create if cover metadata exists
-→ Database creates manga.Series with status_code = PROPOSAL_DRAFT
-→ Database creates an active manga.SeriesContributor row for the creating Mangaka
-→ Database writes SERIES_CREATED and contributor-related audit event(s)
-→ UI refreshes the draft list and shows the created draft
+â†’ Mangaka clicks Create Draft
+â†’ UI shows create draft popup/modal
+â†’ Mangaka enters title, synopsis, one or more genres, optional tags, content language, optional source series, optional proposed publication frequency, and optional cover image
+â†’ If a cover image is selected, the UI opens a 2:3 portrait crop preview dialog
+â†’ Mangaka confirms the crop, and the UI produces a `1000Ă—1500` PNG from the selected visible area
+â†’ Backend validates the form and confirms the actor is an active Mangaka
+â†’ Backend generates slug from title
+â†’ Backend resolves slug uniqueness
+â†’ If a cover image is provided, backend uploads the file to Cloudinary and calculates SHA-256 from the exact uploaded bytes
+â†’ Backend calls manga.usp_Series_Create with series data, selected genre/tag IDs, and optional cover metadata
+â†’ Database calls manga.usp_FileResource_Create if cover metadata exists
+â†’ Database creates manga.Series with status_code = PROPOSAL_DRAFT
+â†’ Database creates an active manga.SeriesContributor row for the creating Mangaka
+â†’ Database writes SERIES_CREATED and contributor-related audit event(s)
+â†’ UI refreshes the draft list and shows the created draft
 ```
 
 ### Database Procedure(s)
@@ -503,8 +503,8 @@ audit.usp_AuditEvent_Append
 - Tags are selected from `manga.Tag` and linked through `manga.SeriesTag`.
 - Genres and tags are current series metadata; they are not duplicated into proposal snapshot tables in MVP.
 - If a cover image is provided through the Web UI, the original selected file is used only in the browser for crop preview; the backend receives the cropped image file.
-- The MVP cover crop target is a 2:3 portrait image output as `1000×1500` PNG.
-- Smaller source images may be upscaled to `1000×1500`; the UI should warn that the final cover may look blurry.
+- The MVP cover crop target is a 2:3 portrait image output as `1000Ă—1500` PNG.
+- Smaller source images may be upscaled to `1000Ă—1500`; the UI should warn that the final cover may look blurry.
 - No original/cropped dual storage and no crop metadata are stored for `SERIES_COVER` in MVP.
 - If a cover image is provided, C# uploads the resulting file to Cloudinary first, then passes Cloudinary metadata to SQL.
 - SQL creates the `FileResource` row inside the series creation workflow.
@@ -520,31 +520,31 @@ audit.usp_AuditEvent_Append
 
 ---
 
-## BF-SERIES-002 — Update Series Draft Profile
+## BF-SERIES-002 â€” Update Series Draft Profile
 
-**Status:** Agreed  
-**Primary actor:** Mangaka  
+**Status:** Agreed
+**Primary actor:** Mangaka
 **Goal:** Allow an active Mangaka contributor to update draft series profile information while the series is still in `PROPOSAL_DRAFT`.
 
 ### Main Flow
 
 ```text
 Mangaka opens /mangaka/series/drafts
-→ Mangaka selects a draft series
-→ UI opens edit draft popup/modal
-→ Mangaka updates title, synopsis, genres, tags, content language, optional source series, optional proposed publication frequency, and optional cover image
-→ If a replacement cover image is selected, the UI opens a 2:3 portrait crop preview dialog
-→ Mangaka confirms the crop, and the UI produces a `1000×1500` PNG from the selected visible area
-→ Backend validates the form and confirms the actor is an active Mangaka contributor of the selected series
-→ Backend confirms the series is still PROPOSAL_DRAFT
-→ If title changed, backend regenerates slug from title and resolves slug uniqueness
-→ If cover image changed, backend uploads the new cover to Cloudinary and calculates SHA-256 from the exact uploaded bytes
-→ Backend calls manga.usp_Series_UpdateProfile with updated series data, selected genre/tag IDs, and optional new cover metadata
-→ Database calls manga.usp_FileResource_Create if new cover metadata exists
-→ Database updates manga.Series editable profile fields
-→ Database updates updated_at_utc and updated_by_user_id together
-→ Database writes SERIES_PROFILE_UPDATED audit event
-→ UI refreshes the draft list/detail
+â†’ Mangaka selects a draft series
+â†’ UI opens edit draft popup/modal
+â†’ Mangaka updates title, synopsis, genres, tags, content language, optional source series, optional proposed publication frequency, and optional cover image
+â†’ If a replacement cover image is selected, the UI opens a 2:3 portrait crop preview dialog
+â†’ Mangaka confirms the crop, and the UI produces a `1000Ă—1500` PNG from the selected visible area
+â†’ Backend validates the form and confirms the actor is an active Mangaka contributor of the selected series
+â†’ Backend confirms the series is still PROPOSAL_DRAFT
+â†’ If title changed, backend regenerates slug from title and resolves slug uniqueness
+â†’ If cover image changed, backend uploads the new cover to Cloudinary and calculates SHA-256 from the exact uploaded bytes
+â†’ Backend calls manga.usp_Series_UpdateProfile with updated series data, selected genre/tag IDs, and optional new cover metadata
+â†’ Database calls manga.usp_FileResource_Create if new cover metadata exists
+â†’ Database updates manga.Series editable profile fields
+â†’ Database updates updated_at_utc and updated_by_user_id together
+â†’ Database writes SERIES_PROFILE_UPDATED audit event
+â†’ UI refreshes the draft list/detail
 ```
 
 ### Database Procedure(s)
@@ -579,36 +579,36 @@ audit.usp_AuditEvent_Append
 
 
 
-## BF-SERIES-003 — Submit Series Proposal for Editorial Review
+## BF-SERIES-003 â€” Submit Series Proposal for Editorial Review
 
-**Status:** Agreed  
-**Primary actor:** Mangaka  
+**Status:** Agreed
+**Primary actor:** Mangaka
 **Goal:** Formally submit a draft series proposal with a required proposal file so active Tantou Editors can review it from the editorial queue.
 
 ### Main Flow
 
 ```text
 Mangaka opens /mangaka/series/drafts
-→ Mangaka selects a series with status_code = PROPOSAL_DRAFT
-→ Mangaka clicks Submit Proposal
-→ UI opens proposal submission modal
-→ Mangaka selects the required proposal file
-→ Backend validates the actor/session and request shape
-→ Backend uploads the proposal file to Cloudinary
-→ Backend calculates SHA-256 from the exact uploaded file bytes
-→ Backend calls manga.usp_SeriesProposal_Submit with the series ID, actor user ID, and required proposal file metadata
-→ Database locks proposal submission for the series
-→ Database verifies the series exists and status_code = PROPOSAL_DRAFT
-→ Database verifies the submitter is an active Mangaka contributor of the series
-→ Database does not require an active Tantou Editor contributor for first submission
-→ Database creates manga.FileResource with file_purpose_code = SERIES_PROPOSAL
-→ Database creates manga.SeriesProposal with the next proposal_version_no, proposal title/synopsis snapshots, and proposal file reference
-→ Database sets manga.SeriesProposal.status_code = UNDER_EDITORIAL_REVIEW
-→ Database sets manga.Series.status_code = UNDER_EDITORIAL_REVIEW
-→ Database writes SERIES_PROPOSAL_SUBMITTED audit event
-→ Backend returns success
-→ UI locks normal draft editing and shows the series/proposal as under editorial review
-→ Proposal becomes visible in the Tantou Editor editorial review queue
+â†’ Mangaka selects a series with status_code = PROPOSAL_DRAFT
+â†’ Mangaka clicks Submit Proposal
+â†’ UI opens proposal submission modal
+â†’ Mangaka selects the required proposal file
+â†’ Backend validates the actor/session and request shape
+â†’ Backend uploads the proposal file to Cloudinary
+â†’ Backend calculates SHA-256 from the exact uploaded file bytes
+â†’ Backend calls manga.usp_SeriesProposal_Submit with the series ID, actor user ID, and required proposal file metadata
+â†’ Database locks proposal submission for the series
+â†’ Database verifies the series exists and status_code = PROPOSAL_DRAFT
+â†’ Database verifies the submitter is an active Mangaka contributor of the series
+â†’ Database does not require an active Tantou Editor contributor for first submission
+â†’ Database creates manga.FileResource with file_purpose_code = SERIES_PROPOSAL
+â†’ Database creates manga.SeriesProposal with the next proposal_version_no, proposal title/synopsis snapshots, and proposal file reference
+â†’ Database sets manga.SeriesProposal.status_code = UNDER_EDITORIAL_REVIEW
+â†’ Database sets manga.Series.status_code = UNDER_EDITORIAL_REVIEW
+â†’ Database writes SERIES_PROPOSAL_SUBMITTED audit event
+â†’ Backend returns success
+â†’ UI locks normal draft editing and shows the series/proposal as under editorial review
+â†’ Proposal becomes visible in the Tantou Editor editorial review queue
 ```
 
 ### Database Procedure(s)
@@ -641,11 +641,11 @@ audit.usp_AuditEvent_Append
 - Make the newly submitted proposal easy for active Tantou Editors to find.
 
 ---
-# Suggested Additions — Business Flows / Use Case Notes
+# Suggested Additions â€” Business Flows / Use Case Notes
 
 ---
 
-## BF-MANGAKA-001 — View My Series Dashboard
+## BF-MANGAKA-001 â€” View My Series Dashboard
 
 **Status:** Agreed
 **Primary actor:** Mangaka
@@ -655,13 +655,13 @@ audit.usp_AuditEvent_Append
 
 ```text
 Mangaka opens /mangaka
-→ UI calls GET /api/mangaka/series/my-series through typed API client
-→ API resolves actor user id
-→ API sends GetMyMangakaSeriesQuery
-→ Application validates actor id
-→ Infrastructure queries series where actor is an active Mangaka contributor
-→ Query includes cover, genres, tags, status, slug, proposed frequency, and update time
-→ UI renders dashboard cards with filters/search/sort
+â†’ UI calls GET /api/mangaka/series/my-series through typed API client
+â†’ API resolves actor user id
+â†’ API sends GetMyMangakaSeriesQuery
+â†’ Application validates actor id
+â†’ Infrastructure queries series where actor is an active Mangaka contributor
+â†’ Query includes cover, genres, tags, status, slug, proposed frequency, and update time
+â†’ UI renders dashboard cards with filters/search/sort
 ```
 
 ### Important Notes
@@ -681,7 +681,7 @@ Mangaka opens /mangaka
 
 ---
 
-## BF-MANGAKA-002 — Navigate to Assistant Review / Review Submissions
+## BF-MANGAKA-002 â€” Navigate to Assistant Review / Review Submissions
 
 **Status:** Agreed
 **Primary actor:** Mangaka
@@ -691,12 +691,12 @@ Mangaka opens /mangaka
 
 ```text
 Mangaka opens /mangaka
-→ Mangaka clicks sidebar item "Assistant Review"
-→ UI routes to /mangaka/review-submissions
-→ Page loads under MangakaLayout
-→ UI calls GET /api/mangaka/tasks
-→ Backend returns tasks created by the Mangaka for assistant work review
-→ UI displays task cards with series/chapter/page/version/task context
+â†’ Mangaka clicks sidebar item "Assistant Review"
+â†’ UI routes to /mangaka/review-submissions
+â†’ Page loads under MangakaLayout
+â†’ UI calls GET /api/mangaka/tasks
+â†’ Backend returns tasks created by the Mangaka for assistant work review
+â†’ UI displays task cards with series/chapter/page/version/task context
 ```
 
 ### Important Notes
@@ -714,7 +714,7 @@ Mangaka opens /mangaka
 
 ---
 
-## BF-TASK-004 — Mangaka Reviews Assistant Task Submissions
+## BF-TASK-004 â€” Mangaka Reviews Assistant Task Submissions
 
 **Status:** Agreed
 **Primary actor:** Mangaka
@@ -724,20 +724,20 @@ Mangaka opens /mangaka
 
 ```text
 Mangaka opens /mangaka/review-submissions
-→ UI loads task list for the Mangaka-created tasks
-→ UI shows task cards with series, chapter, page, page version, assistant, type, status, due date, priority, compensation, and region count
-→ Mangaka filters by series/chapter/title, task type, assistant, and status
-→ Mangaka opens original/submitted previews when available
-→ Mangaka chooses one available action:
+â†’ UI loads task list for the Mangaka-created tasks
+â†’ UI shows task cards with series, chapter, page, page version, assistant, type, status, due date, priority, compensation, and region count
+â†’ Mangaka filters by series/chapter/title, task type, assistant, and status
+â†’ Mangaka opens original/submitted previews when available
+â†’ Mangaka chooses one available action:
     - Approve
     - Return for Rework
     - Cancel
     - Reassign
-→ UI calls the relevant typed API client method
-→ API calls the relevant Application task use case/service
-→ Application validates actor permission and task state
-→ Infrastructure calls the relevant stored procedure/repository workflow
-→ UI reloads task list, clears dialog state, and refreshes stat cards/actions
+â†’ UI calls the relevant typed API client method
+â†’ API calls the relevant Application task use case/service
+â†’ Application validates actor permission and task state
+â†’ Infrastructure calls the relevant stored procedure/repository workflow
+â†’ UI reloads task list, clears dialog state, and refreshes stat cards/actions
 ```
 
 ### Important Notes
@@ -760,7 +760,7 @@ Mangaka opens /mangaka/review-submissions
 
 ---
 
-## BF-TASK-005 — Return Assistant Task for Rework to Same Assistant
+## BF-TASK-005 â€” Return Assistant Task for Rework to Same Assistant
 
 **Status:** Agreed
 **Primary actor:** Mangaka
@@ -770,24 +770,24 @@ Mangaka opens /mangaka/review-submissions
 
 ```text
 Mangaka opens /mangaka/review-submissions
-→ UI shows Return for Rework action on eligible UNDER_REVIEW task
-→ Mangaka opens Return for Rework dialog
-→ Mangaka enters updated task instructions/description
-→ UI calls Return for Rework API action
-→ API calls Application task return-for-rework use case/service
-→ Application validates actor, task state, and updated task description
-→ Infrastructure calls manga.usp_ChapterPageTask_ReturnForRework
-→ SQL locks the task workflow
-→ SQL verifies the task exists
-→ SQL verifies status_code = UNDER_REVIEW
-→ SQL verifies actor is an active Mangaka contributor of the task's series
-→ SQL updates the same ChapterPageTask row:
+â†’ UI shows Return for Rework action on eligible UNDER_REVIEW task
+â†’ Mangaka opens Return for Rework dialog
+â†’ Mangaka enters updated task instructions/description
+â†’ UI calls Return for Rework API action
+â†’ API calls Application task return-for-rework use case/service
+â†’ Application validates actor, task state, and updated task description
+â†’ Infrastructure calls manga.usp_ChapterPageTask_ReturnForRework
+â†’ SQL locks the task workflow
+â†’ SQL verifies the task exists
+â†’ SQL verifies status_code = UNDER_REVIEW
+â†’ SQL verifies actor is an active Mangaka contributor of the task's series
+â†’ SQL updates the same ChapterPageTask row:
     - status_code = ASSIGNED
     - completed_page_version_id = NULL
     - task_description = updated task description
     - updated_at_utc = current UTC time
-→ SQL writes CHAPTER_PAGE_TASK_RETURNED_FOR_REWORK audit event
-→ UI reloads task list and clears dialog state
+â†’ SQL writes CHAPTER_PAGE_TASK_RETURNED_FOR_REWORK audit event
+â†’ UI reloads task list and clears dialog state
 ```
 
 ### Database Procedure
@@ -807,7 +807,7 @@ manga.usp_ChapterPageTask_ReturnForRework
 * `task_description` is replaced with the updated rework instruction.
 * Actor must be an active Mangaka contributor of the task's series.
 * SQL derives the task's series through:
-  `ChapterPageTaskRegion → PageRegion → ChapterPageVersion → ChapterPage → Chapter → Series`.
+  `ChapterPageTaskRegion â†’ PageRegion â†’ ChapterPageVersion â†’ ChapterPage â†’ Chapter â†’ Series`.
 * Application/C# should validate the primary business rules before calling SQL when possible.
 * SQL remains the final transactional guard and audit owner.
 
@@ -819,7 +819,7 @@ manga.usp_ChapterPageTask_ReturnForRework
 
 ---
 
-## BF-TASK-006 — Reassign Assistant Task to Different Assistant
+## BF-TASK-006 â€” Reassign Assistant Task to Different Assistant
 
 **Status:** Agreed
 **Primary actor:** Mangaka
@@ -829,20 +829,20 @@ manga.usp_ChapterPageTask_ReturnForRework
 
 ```text
 Mangaka opens /mangaka/review-submissions
-→ UI shows Reassign action for ASSIGNED and UNDER_REVIEW tasks
-→ Mangaka opens Reassign dialog
-→ UI loads eligible assistants for the task
-→ Mangaka selects a different Assistant
-→ Mangaka enters required reason
-→ UI calls POST /api/mangaka/tasks/{taskId}/reassign
-→ API calls Application task reassignment use case
-→ Application validates actor, task status, reason, same-user rule, and assistant eligibility
-→ Infrastructure calls manga.usp_ChapterPageTask_AssignToDifferentUser
-→ SQL cancels old task
-→ SQL creates replacement ASSIGNED task for the new Assistant
-→ SQL copies task-region links
-→ SQL writes CHAPTER_PAGE_TASK_ASSIGNED_TO_DIFFERENT_USER audit event
-→ UI reloads task list after success
+â†’ UI shows Reassign action for ASSIGNED and UNDER_REVIEW tasks
+â†’ Mangaka opens Reassign dialog
+â†’ UI loads eligible assistants for the task
+â†’ Mangaka selects a different Assistant
+â†’ Mangaka enters required reason
+â†’ UI calls POST /api/mangaka/tasks/{taskId}/reassign
+â†’ API calls Application task reassignment use case
+â†’ Application validates actor, task status, reason, same-user rule, and assistant eligibility
+â†’ Infrastructure calls manga.usp_ChapterPageTask_AssignToDifferentUser
+â†’ SQL cancels old task
+â†’ SQL creates replacement ASSIGNED task for the new Assistant
+â†’ SQL copies task-region links
+â†’ SQL writes CHAPTER_PAGE_TASK_ASSIGNED_TO_DIFFERENT_USER audit event
+â†’ UI reloads task list after success
 ```
 
 ### Database Procedure
@@ -881,17 +881,17 @@ manga.usp_ChapterPageTask_AssignToDifferentUser
 
 ```text
 Mangaka opens /mangaka/review-submissions
-→ UI shows Reassign action for ASSIGNED and UNDER_REVIEW tasks
-→ Mangaka opens Reassign dialog
-→ UI loads eligible assistants for the task
-→ Mangaka selects a different Assistant
-→ Mangaka enters required reason
-→ UI calls POST /api/mangaka/tasks/{taskId}/reassign
-→ API calls Application task reassignment use case
-→ Application validates actor, task status, reason, same-user rule, and assistant eligibility
-→ Infrastructure calls manga.usp_ChapterPageTask_AssignToDifferentUser
-→ SQL cancels old task, creates replacement ASSIGNED task, copies task-region links, and writes audit event
-→ UI reloads task list after success
+â†’ UI shows Reassign action for ASSIGNED and UNDER_REVIEW tasks
+â†’ Mangaka opens Reassign dialog
+â†’ UI loads eligible assistants for the task
+â†’ Mangaka selects a different Assistant
+â†’ Mangaka enters required reason
+â†’ UI calls POST /api/mangaka/tasks/{taskId}/reassign
+â†’ API calls Application task reassignment use case
+â†’ Application validates actor, task status, reason, same-user rule, and assistant eligibility
+â†’ Infrastructure calls manga.usp_ChapterPageTask_AssignToDifferentUser
+â†’ SQL cancels old task, creates replacement ASSIGNED task, copies task-region links, and writes audit event
+â†’ UI reloads task list after success
 ```
 
 ### Database Procedure
@@ -921,7 +921,7 @@ manga.usp_ChapterPageTask_AssignToDifferentUser
 
 ---
 
-## BF-MANGAKA-CONTRIB-001 — View Series Contributors
+## BF-MANGAKA-CONTRIB-001 â€” View Series Contributors
 
 **Status:** Agreed
 **Primary actor:** Mangaka
@@ -931,13 +931,13 @@ manga.usp_ChapterPageTask_AssignToDifferentUser
 
 ```text
 Mangaka opens /mangaka/contributors
-→ UI loads the Mangaka's own series list from GET /api/mangaka/series/my-series
-→ Mangaka selects a series
-→ UI calls GET /api/mangaka/series/{seriesId}/contributors
-→ API sends GetSeriesContributorsQuery
-→ Application validates actor permission
-→ Infrastructure returns contributor rows for the selected series
-→ UI displays active and former contributors with role, status, start date, end date, and actions
+â†’ UI loads the Mangaka's own series list from GET /api/mangaka/series/my-series
+â†’ Mangaka selects a series
+â†’ UI calls GET /api/mangaka/series/{seriesId}/contributors
+â†’ API sends GetSeriesContributorsQuery
+â†’ Application validates actor permission
+â†’ Infrastructure returns contributor rows for the selected series
+â†’ UI displays active and former contributors with role, status, start date, end date, and actions
 ```
 
 ### Important Notes
@@ -957,7 +957,7 @@ Mangaka opens /mangaka/contributors
 
 ---
 
-## BF-MANGAKA-CONTRIB-002 — Add Assistant Contributor to Series
+## BF-MANGAKA-CONTRIB-002 â€” Add Assistant Contributor to Series
 
 **Status:** Agreed
 **Primary actor:** Mangaka
@@ -967,18 +967,18 @@ Mangaka opens /mangaka/contributors
 
 ```text
 Mangaka opens /mangaka/contributors
-→ Mangaka selects a series
-→ Mangaka clicks Add Assistant
-→ UI opens Add Assistant dialog
-→ UI searches eligible assistants through GET /api/mangaka/series/{seriesId}/contributors/eligible-assistants
-→ Backend returns ACTIVE Assistant users who are not currently active contributors of the selected series
-→ Mangaka selects an Assistant
-→ UI calls POST /api/mangaka/series/{seriesId}/contributors/assistants
-→ API sends AddAssistantContributorCommand
-→ Application validates actor, target user role/status, and duplicate active contributor rule
-→ Infrastructure calls manga.usp_SeriesContributor_Add
-→ Database inserts active SeriesContributor row and writes audit
-→ UI refreshes contributor list and eligible-assistant search
+â†’ Mangaka selects a series
+â†’ Mangaka clicks Add Assistant
+â†’ UI opens Add Assistant dialog
+â†’ UI searches eligible assistants through GET /api/mangaka/series/{seriesId}/contributors/eligible-assistants
+â†’ Backend returns ACTIVE Assistant users who are not currently active contributors of the selected series
+â†’ Mangaka selects an Assistant
+â†’ UI calls POST /api/mangaka/series/{seriesId}/contributors/assistants
+â†’ API sends AddAssistantContributorCommand
+â†’ Application validates actor, target user role/status, and duplicate active contributor rule
+â†’ Infrastructure calls manga.usp_SeriesContributor_Add
+â†’ Database inserts active SeriesContributor row and writes audit
+â†’ UI refreshes contributor list and eligible-assistant search
 ```
 
 ### Database Procedure
@@ -1005,7 +1005,7 @@ manga.usp_SeriesContributor_Add
 
 ---
 
-## BF-MANGAKA-CONTRIB-003 — End Assistant Contribution
+## BF-MANGAKA-CONTRIB-003 â€” End Assistant Contribution
 
 **Status:** Agreed
 **Primary actor:** Mangaka
@@ -1015,16 +1015,16 @@ manga.usp_SeriesContributor_Add
 
 ```text
 Mangaka opens /mangaka/contributors
-→ Mangaka selects a series
-→ UI shows End action only for active Assistant contributor rows
-→ Mangaka opens End Assistant dialog
-→ Mangaka enters reason
-→ UI calls POST /api/mangaka/series/{seriesId}/contributors/assistants/{assistantUserId}/end
-→ API sends EndAssistantContributorCommand
-→ Application validates actor permission, target role/status, reason, and active task blocking rule
-→ Infrastructure calls manga.usp_SeriesContributor_EndAssistant
-→ SQL sets end_date to current UTC date and writes audit
-→ UI refreshes contributor list and eligible-assistant search
+â†’ Mangaka selects a series
+â†’ UI shows End action only for active Assistant contributor rows
+â†’ Mangaka opens End Assistant dialog
+â†’ Mangaka enters reason
+â†’ UI calls POST /api/mangaka/series/{seriesId}/contributors/assistants/{assistantUserId}/end
+â†’ API sends EndAssistantContributorCommand
+â†’ Application validates actor permission, target role/status, reason, and active task blocking rule
+â†’ Infrastructure calls manga.usp_SeriesContributor_EndAssistant
+â†’ SQL sets end_date to current UTC date and writes audit
+â†’ UI refreshes contributor list and eligible-assistant search
 ```
 
 ### Database Procedure
@@ -1054,7 +1054,7 @@ manga.usp_SeriesContributor_EndAssistant
 
 ---
 
-## BF-NAV-001 — Safe Return URL Navigation
+## BF-NAV-001 â€” Safe Return URL Navigation
 
 **Status:** Agreed
 **Primary actor:** Any authenticated role
@@ -1064,10 +1064,10 @@ manga.usp_SeriesContributor_EndAssistant
 
 ```text
 User opens a page that links to /series/{slug} or workspace
-→ UI appends a local returnUrl using SafeReturnUrl.AppendReturnUrl()
-→ Target page resolves returnUrl through SafeReturnUrl.Resolve()
-→ If returnUrl is safe, Back button uses it
-→ If returnUrl is unsafe or missing, page falls back to a safe default such as /dashboard
+â†’ UI appends a local returnUrl using SafeReturnUrl.AppendReturnUrl()
+â†’ Target page resolves returnUrl through SafeReturnUrl.Resolve()
+â†’ If returnUrl is safe, Back button uses it
+â†’ If returnUrl is unsafe or missing, page falls back to a safe default such as /dashboard
 ```
 
 ### Important Notes
@@ -1086,26 +1086,26 @@ User opens a page that links to /series/{slug} or workspace
 
 # 5. Board Poll and Publication Frequency Flows
 
-## BF-BOARD-001 — Open START_SERIALIZATION Poll
+## BF-BOARD-001 â€” Open START_SERIALIZATION Poll
 
-**Status:** Agreed  
-**Primary actor:** Editorial Board Chief  
+**Status:** Agreed
+**Primary actor:** Editorial Board Chief
 **Goal:** Start board voting for serialization and specify the official publication frequency if approved.
 
 ### Main Flow
 
 ```text
 Editorial Board Chief opens board review queue
-→ Chief selects eligible series/proposal
-→ Chief enters poll reason
-→ Chief selects board_publication_frequency_code
-→ Backend calls board poll creation procedure
-→ Database checks series is UNDER_BOARD_REVIEW
-→ Database checks exactly one active proposal is UNDER_BOARD_REVIEW
-→ Database creates SeriesBoardPoll with poll_type_code = START_SERIALIZATION
-→ Database stores board_publication_frequency_code on the poll
-→ Database writes board poll creation audit event
-→ Board members and chief may vote while poll is open
+â†’ Chief selects eligible series/proposal
+â†’ Chief enters poll reason
+â†’ Chief selects board_publication_frequency_code
+â†’ Backend calls board poll creation procedure
+â†’ Database checks series is UNDER_BOARD_REVIEW
+â†’ Database checks exactly one active proposal is UNDER_BOARD_REVIEW
+â†’ Database creates SeriesBoardPoll with poll_type_code = START_SERIALIZATION
+â†’ Database stores board_publication_frequency_code on the poll
+â†’ Database writes board poll creation audit event
+â†’ Board members and chief may vote while poll is open
 ```
 
 ### Important Notes
@@ -1113,7 +1113,7 @@ Editorial Board Chief opens board review queue
 - `START_SERIALIZATION` poll must include board-selected publication frequency.
 - The poll stores the frequency being voted on.
 - If approved, this frequency becomes `Series.publication_frequency_code`.
-- Mangaka’s preferred frequency is not stored as a separate official column in MVP.
+- Mangakaâ€™s preferred frequency is not stored as a separate official column in MVP.
 - Mangaka may later request a change through notification, not through a formal request table.
 
 ### System Should Try To
@@ -1124,26 +1124,26 @@ Editorial Board Chief opens board review queue
 
 ---
 
-## BF-BOARD-002 — Apply START_SERIALIZATION Poll Result
+## BF-BOARD-002 â€” Apply START_SERIALIZATION Poll Result
 
-**Status:** Agreed  
-**Primary actor:** Editorial Board Chief or system workflow  
+**Status:** Agreed
+**Primary actor:** Editorial Board Chief or system workflow
 **Goal:** Apply the computed board vote result after poll closure.
 
 ### Main Flow
 
 ```text
 Poll is closed
-→ System computes approve/reject/abstain counts
-→ If approve > reject:
+â†’ System computes approve/reject/abstain counts
+â†’ If approve > reject:
     Series status becomes SERIALIZED
     Active proposal status becomes APPROVED
     Series.publication_frequency_code = SeriesBoardPoll.board_publication_frequency_code
-→ If reject > approve:
+â†’ If reject > approve:
     Proposal/series follow MVP rejection/cancellation policy
-→ If tied:
+â†’ If tied:
     Series/proposal remain UNDER_BOARD_REVIEW
-→ Database writes board result application audit event
+â†’ Database writes board result application audit event
 ```
 
 ### Important Notes
@@ -1162,20 +1162,20 @@ Poll is closed
 
 ---
 
-## BF-BOARD-003 — Mangaka Requests Publication Frequency Change After Board Decision
+## BF-BOARD-003 â€” Mangaka Requests Publication Frequency Change After Board Decision
 
-**Status:** Agreed  
-**Primary actor:** Mangaka  
+**Status:** Agreed
+**Primary actor:** Mangaka
 **Goal:** Let Mangaka communicate schedule concerns after the board has already decided the official frequency.
 
 ### Main Flow
 
 ```text
 Mangaka views serialized series publication frequency
-→ Mangaka writes request/reason for frequency change
-→ Backend creates in-app notification to Editorial Board Chief
-→ Editorial Board Chief reviews notification
-→ Chief may decide to directly change official frequency through separate controlled workflow
+â†’ Mangaka writes request/reason for frequency change
+â†’ Backend creates in-app notification to Editorial Board Chief
+â†’ Editorial Board Chief reviews notification
+â†’ Chief may decide to directly change official frequency through separate controlled workflow
 ```
 
 ### Important Notes
@@ -1195,37 +1195,37 @@ Mangaka views serialized series publication frequency
 
 # 6. Page Modification and Page Version Flows
 
-## BF-PAGE-001 — Temporary Page Modification Download
+## BF-PAGE-001 â€” Temporary Page Modification Download
 
-**Status:** Draft  
-**Primary actor:** Mangaka / Authorized Page Workspace User  
+**Status:** Draft
+**Primary actor:** Mangaka / Authorized Page Workspace User
 **Goal:** Let a user generate or edit a modified page output with system tools and download it for external editing without replacing the current page version.
 
 ### Example System Tools
 
 ```text
 Auto-translation
-→ AI/OCR text replacement preview
-→ future cleanup tool
-→ future effects/coloring helper
-→ future panel/text adjustment tool
+â†’ AI/OCR text replacement preview
+â†’ future cleanup tool
+â†’ future effects/coloring helper
+â†’ future panel/text adjustment tool
 ```
 
 ### Main Flow
 
 ```text
 User opens page workspace for an existing ChapterPageVersion
-→ User uses a system tool that modifies or generates a changed page output
-→ Backend verifies the user can access the page/version and use the selected tool
-→ Backend sends the current page image, Cloudinary URL, or required page data to the relevant tool/service
-→ Tool/service generates a modified output file or editable preview
-→ Backend may upload the modified output to a temporary Cloudinary folder such as manga-management/temp/page-modifications/
-→ Backend returns a temporary preview/download URL to the UI
-→ User downloads the modified output for external editing or discards it
-→ No manga.FileResource row is created for the temporary output by default
-→ No ChapterPageVersion row is created
-→ Current ChapterPageVersion remains unchanged
-→ Temporary Cloudinary asset is deleted later by cleanup workflow
+â†’ User uses a system tool that modifies or generates a changed page output
+â†’ Backend verifies the user can access the page/version and use the selected tool
+â†’ Backend sends the current page image, Cloudinary URL, or required page data to the relevant tool/service
+â†’ Tool/service generates a modified output file or editable preview
+â†’ Backend may upload the modified output to a temporary Cloudinary folder such as manga-management/temp/page-modifications/
+â†’ Backend returns a temporary preview/download URL to the UI
+â†’ User downloads the modified output for external editing or discards it
+â†’ No manga.FileResource row is created for the temporary output by default
+â†’ No ChapterPageVersion row is created
+â†’ Current ChapterPageVersion remains unchanged
+â†’ Temporary Cloudinary asset is deleted later by cleanup workflow
 ```
 
 ### Important Notes
@@ -1249,39 +1249,39 @@ User opens page workspace for an existing ChapterPageVersion
 
 ---
 
-## BF-PAGE-002 — Save Modified Page Output as New Page Version
+## BF-PAGE-002 â€” Save Modified Page Output as New Page Version
 
-**Status:** Draft  
-**Primary actor:** Mangaka / Authorized Page Workspace User  
+**Status:** Draft
+**Primary actor:** Mangaka / Authorized Page Workspace User
 **Goal:** Save an accepted modified page output as an official tracked `ChapterPageVersion`.
 
 ### Example Modified Outputs
 
 ```text
 Accepted auto-translated page output
-→ accepted AI/OCR edited page output
-→ accepted assistant output
-→ user-edited file re-uploaded after temporary download
-→ future accepted output from other page editing tools
+â†’ accepted AI/OCR edited page output
+â†’ accepted assistant output
+â†’ user-edited file re-uploaded after temporary download
+â†’ future accepted output from other page editing tools
 ```
 
 ### Main Flow
 
 ```text
 User reviews modified page output
-→ User clicks Save as New Page Version or uploads the externally edited output back into the system
-→ Backend validates the user can create a new page version for the logical page
-→ Backend uploads the final accepted page file to Cloudinary if it is not already stored as a permanent asset
-→ Cloudinary returns public_id, secure_url, content_type, file size, and other metadata
-→ Backend calls the page-version creation workflow procedure
-→ Database transaction begins
-→ Database calls manga.usp_FileResource_Create with file_purpose_code = CHAPTER_PAGE_VERSION
-→ Database creates manga.FileResource row
-→ Database creates manga.ChapterPageVersion row using the returned file_resource_id
-→ Database updates current-version state if workflow rules allow this new version to become current
-→ Database writes CHAPTER_PAGE_VERSION_CREATED audit event with the source/tool context in detail_json when available
-→ Database transaction commits
-→ UI shows the new page version in page-version history
+â†’ User clicks Save as New Page Version or uploads the externally edited output back into the system
+â†’ Backend validates the user can create a new page version for the logical page
+â†’ Backend uploads the final accepted page file to Cloudinary if it is not already stored as a permanent asset
+â†’ Cloudinary returns public_id, secure_url, content_type, file size, and other metadata
+â†’ Backend calls the page-version creation workflow procedure
+â†’ Database transaction begins
+â†’ Database calls manga.usp_FileResource_Create with file_purpose_code = CHAPTER_PAGE_VERSION
+â†’ Database creates manga.FileResource row
+â†’ Database creates manga.ChapterPageVersion row using the returned file_resource_id
+â†’ Database updates current-version state if workflow rules allow this new version to become current
+â†’ Database writes CHAPTER_PAGE_VERSION_CREATED audit event with the source/tool context in detail_json when available
+â†’ Database transaction commits
+â†’ UI shows the new page version in page-version history
 ```
 
 ### Database Procedure(s)
@@ -1314,28 +1314,28 @@ manga.usp_ChapterPageVersion_Create or equivalent page-version workflow procedur
 
 ---
 
-## BF-PAGE-003 — Create Page Regions for a Page Version
+## BF-PAGE-003 â€” Create Page Regions for a Page Version
 
-**Status:** Agreed  
-**Primary actor:** Authorized Page Workspace User  
+**Status:** Agreed
+**Primary actor:** Authorized Page Workspace User
 **Goal:** Save one or more manual or AI-suggested page regions for a specific `ChapterPageVersion`.
 
 ### Main Flow
 
 ```text
 User opens the chapter/page workspace
-→ User selects a page version
-→ User draws one or more manual regions or accepts AI-suggested regions
-→ UI prepares region JSON as either one object or an array of objects
-→ Backend validates the selected chapter_page_version_id and region request shape
-→ Backend calls manga.usp_PageRegion_Create
-→ Database verifies actor is an ACTIVE user and active SeriesContributor for the series that owns the selected page version
-→ Database normalizes single-object JSON into an array when needed
-→ Database parses region fields from JSON
-→ Database inserts manga.PageRegion rows linked to the selected chapter_page_version_id
-→ Database returns created page_region_id values as JSON
-→ Database writes PAGE_REGIONS_CREATED audit event
-→ UI can use the returned page_region_id values for annotation, task assignment, segmentation display, or later workspace actions
+â†’ User selects a page version
+â†’ User draws one or more manual regions or accepts AI-suggested regions
+â†’ UI prepares region JSON as either one object or an array of objects
+â†’ Backend validates the selected chapter_page_version_id and region request shape
+â†’ Backend calls manga.usp_PageRegion_Create
+â†’ Database verifies actor is an ACTIVE user and active SeriesContributor for the series that owns the selected page version
+â†’ Database normalizes single-object JSON into an array when needed
+â†’ Database parses region fields from JSON
+â†’ Database inserts manga.PageRegion rows linked to the selected chapter_page_version_id
+â†’ Database returns created page_region_id values as JSON
+â†’ Database writes PAGE_REGIONS_CREATED audit event
+â†’ UI can use the returned page_region_id values for annotation, task assignment, segmentation display, or later workspace actions
 ```
 
 ### Expected Region JSON
@@ -1380,7 +1380,7 @@ Batch region input is also allowed:
     "height": 90.00,
     "confidence_score": 0.8750,
     "source_type": "AI",
-    "original_text": "こんにちは"
+    "original_text": "ă“ă‚“ă«ă¡ă¯"
   }
 ]
 ```
@@ -1415,9 +1415,9 @@ audit.usp_AuditEvent_Append
 
 ---
 
-## BF-PAGE-004 — Create Page Annotation Linked to Existing or Newly Created Page Regions
+## BF-PAGE-004 â€” Create Page Annotation Linked to Existing or Newly Created Page Regions
 
-**Status:** Agreed  
+**Status:** Agreed
 **Primary actor:** Mangaka / Tantou Editor
 **Goal:** Create a page annotation/comment and link it to one or more `PageRegion` records.
 
@@ -1425,29 +1425,29 @@ audit.usp_AuditEvent_Append
 
 ```text
 User opens the chapter/page workspace
-→ User selects one or more existing saved PageRegion records and/or draws new unsaved regions
-→ User enters issue type and annotation text
-→ Backend separates existing_page_region_ids from new region objects
-→ Backend starts one SQL transaction
-→ If new unsaved regions exist:
+â†’ User selects one or more existing saved PageRegion records and/or draws new unsaved regions
+â†’ User enters issue type and annotation text
+â†’ Backend separates existing_page_region_ids from new region objects
+â†’ Backend starts one SQL transaction
+â†’ If new unsaved regions exist:
     Backend calls manga.usp_PageRegion_Create with chapter_page_version_id and regions_json
     Database creates PageRegion rows and returns created_page_region_ids_json
     Backend reads the returned created page_region_id values
-→ Backend merges existing_page_region_ids with newly created page_region_id values
-→ Backend removes duplicate IDs before sending the final region list
-→ Backend calls manga.usp_ChapterPageAnnotation_Create with actor_user_id, issue_type_code, annotation_text, and final page_region_ids_json
-→ Database validates page_region_ids_json
-→ Database verifies all referenced PageRegion rows exist
-→ Database verifies all referenced PageRegion rows belong to the same ChapterPageVersion
-→ Database derives owning series/page context through linked PageRegion records
-→ Database verifies the actor account is ACTIVE
-→ Database verifies the actor is an active contributor for the owning series
-→ Database verifies the actor role is Mangaka or Tantou Editor
-→ Database creates one manga.ChapterPageAnnotation row
-→ Database creates one or more manga.ChapterPageAnnotationRegion rows
-→ Database writes CHAPTER_PAGE_ANNOTATION_CREATED audit event
-→ Backend commits the SQL transaction
-→ UI shows the annotation marker/comment linked to all selected regions
+â†’ Backend merges existing_page_region_ids with newly created page_region_id values
+â†’ Backend removes duplicate IDs before sending the final region list
+â†’ Backend calls manga.usp_ChapterPageAnnotation_Create with actor_user_id, issue_type_code, annotation_text, and final page_region_ids_json
+â†’ Database validates page_region_ids_json
+â†’ Database verifies all referenced PageRegion rows exist
+â†’ Database verifies all referenced PageRegion rows belong to the same ChapterPageVersion
+â†’ Database derives owning series/page context through linked PageRegion records
+â†’ Database verifies the actor account is ACTIVE
+â†’ Database verifies the actor is an active contributor for the owning series
+â†’ Database verifies the actor role is Mangaka or Tantou Editor
+â†’ Database creates one manga.ChapterPageAnnotation row
+â†’ Database creates one or more manga.ChapterPageAnnotationRegion rows
+â†’ Database writes CHAPTER_PAGE_ANNOTATION_CREATED audit event
+â†’ Backend commits the SQL transaction
+â†’ UI shows the annotation marker/comment linked to all selected regions
 ```
 
 ### Existing Region ID JSON
@@ -1484,7 +1484,7 @@ manga.ChapterPageVersion
 - One annotation may reference multiple regions, such as several speech bubbles with the same typesetting issue.
 - Each annotation must link to at least one `PageRegion`.
 - All regions linked to the same annotation must belong to the same `ChapterPageVersion`.
-- The annotation does not need its own direct `chapter_page_version_id` because the page-version context is derived through `ChapterPageAnnotationRegion → PageRegion → ChapterPageVersion`.
+- The annotation does not need its own direct `chapter_page_version_id` because the page-version context is derived through `ChapterPageAnnotationRegion â†’ PageRegion â†’ ChapterPageVersion`.
 - The annotation does not store direct coordinates; coordinates remain in `PageRegion`.
 - Existing saved regions and newly created regions may be mixed in one annotation workflow.
 - C# should own the outer transaction for the mixed case so newly created PageRegion rows can be rolled back if annotation creation/linking fails.
@@ -1507,9 +1507,9 @@ manga.ChapterPageVersion
 
 ---
 
-## BF-PAGE-005 — Resolve Page Annotation
+## BF-PAGE-005 â€” Resolve Page Annotation
 
-**Status:** Agreed  
+**Status:** Agreed
 **Primary actor:** Mangaka / Tantou Editor with permission
 **Goal:** Mark an annotation as handled without deleting the original feedback record.
 
@@ -1517,23 +1517,23 @@ manga.ChapterPageVersion
 
 ```text
 User opens the chapter/page workspace
-→ User reviews an unresolved annotation
-→ Related work is corrected, usually through a newer ChapterPageVersion or accepted task output for the same logical page derived from linked regions
-→ Authorized resolver confirms the issue has been handled
-→ Backend calls the annotation resolve workflow procedure
-→ Database verifies annotation exists and is not already resolved
-→ Database derives owning series/page context through linked PageRegion records
-→ Database resolves the annotation creator's current role through annotated_by_user_id
-→ Database resolves the resolver's current role through actor_user_id
-→ Database verifies the resolver account is ACTIVE and an active contributor for the owning series
-→ If the annotation was created by a Mangaka:
+â†’ User reviews an unresolved annotation
+â†’ Related work is corrected, usually through a newer ChapterPageVersion or accepted task output for the same logical page derived from linked regions
+â†’ Authorized resolver confirms the issue has been handled
+â†’ Backend calls the annotation resolve workflow procedure
+â†’ Database verifies annotation exists and is not already resolved
+â†’ Database derives owning series/page context through linked PageRegion records
+â†’ Database resolves the annotation creator's current role through annotated_by_user_id
+â†’ Database resolves the resolver's current role through actor_user_id
+â†’ Database verifies the resolver account is ACTIVE and an active contributor for the owning series
+â†’ If the annotation was created by a Mangaka:
     Database allows resolution by an active Mangaka contributor or active Tantou Editor contributor on the same series
-→ If the annotation was created by a Tantou Editor:
+â†’ If the annotation was created by a Tantou Editor:
     Database allows resolution only by an active Tantou Editor contributor on the same series
-→ Database sets resolved_at_utc = SYSUTCDATETIME()
-→ Database sets resolved_by_user_id = resolver user ID
-→ Database writes CHAPTER_PAGE_ANNOTATION_RESOLVED audit event
-→ UI marks the annotation as resolved while preserving it for history
+â†’ Database sets resolved_at_utc = SYSUTCDATETIME()
+â†’ Database sets resolved_by_user_id = resolver user ID
+â†’ Database writes CHAPTER_PAGE_ANNOTATION_RESOLVED audit event
+â†’ UI marks the annotation as resolved while preserving it for history
 ```
 
 ### Database Procedure(s)
@@ -1568,7 +1568,7 @@ audit.usp_AuditEvent_Append
 
 ---
 
-## BF-PAGE-005A — Update Page Annotation Text
+## BF-PAGE-005A â€” Update Page Annotation Text
 
 **Status:** Agreed
 **Primary actor:** Mangaka / Tantou Editor with permission
@@ -1578,21 +1578,21 @@ audit.usp_AuditEvent_Append
 
 ```text
 User opens the chapter/page workspace
-→ User selects an unresolved annotation
-→ User edits annotation text and optionally enters an update reason
-→ Backend calls the annotation text update workflow procedure
-→ Database verifies annotation exists and is unresolved
-→ Database derives owning series/page context through linked PageRegion records
-→ Database resolves the annotation creator's current role through annotated_by_user_id
-→ Database resolves the actor's current role through actor_user_id
-→ Database verifies the actor account is ACTIVE and an active contributor for the owning series
-→ If the annotation was created by a Mangaka:
+â†’ User selects an unresolved annotation
+â†’ User edits annotation text and optionally enters an update reason
+â†’ Backend calls the annotation text update workflow procedure
+â†’ Database verifies annotation exists and is unresolved
+â†’ Database derives owning series/page context through linked PageRegion records
+â†’ Database resolves the annotation creator's current role through annotated_by_user_id
+â†’ Database resolves the actor's current role through actor_user_id
+â†’ Database verifies the actor account is ACTIVE and an active contributor for the owning series
+â†’ If the annotation was created by a Mangaka:
     Database allows update by an active Mangaka contributor or active Tantou Editor contributor on the same series
-→ If the annotation was created by a Tantou Editor:
+â†’ If the annotation was created by a Tantou Editor:
     Database allows update only by an active Tantou Editor contributor on the same series
-→ Database updates annotation_text
-→ Database writes CHAPTER_PAGE_ANNOTATION_TEXT_UPDATED audit event with old text, new text, actor, and optional reason
-→ UI refreshes the annotation text
+â†’ Database updates annotation_text
+â†’ Database writes CHAPTER_PAGE_ANNOTATION_TEXT_UPDATED audit event with old text, new text, actor, and optional reason
+â†’ UI refreshes the annotation text
 ```
 
 ### Database Procedure(s)
@@ -1621,31 +1621,31 @@ audit.usp_AuditEvent_Append
 - Preserve audit traceability for text changes.
 - Avoid silently overwriting feedback history.
 
-## BF-PAGE-006 — Create Chapter Page Task Linked to Page Regions
+## BF-PAGE-006 â€” Create Chapter Page Task Linked to Page Regions
 
-**Status:** Agreed  
-**Primary actor:** Mangaka / authorized task creator  
+**Status:** Agreed
+**Primary actor:** Mangaka / authorized task creator
 **Goal:** Create a page task for an Assistant or contributor and link the task to one or more `PageRegion` records.
 
 ### Main Flow
 
 ```text
 User opens the chapter/page workspace
-→ User selects one or more existing saved PageRegion records for the task target
-→ If the task applies to the whole page, UI/backend uses a full-page PageRegion for the selected ChapterPageVersion
-→ User enters assigned user, task type, title, description, priority, due date, and compensation amount
-→ Backend prepares page_region_ids_json as a JSON array of PageRegion IDs
-→ Backend calls manga.usp_ChapterPageTask_Create
-→ Database validates page_region_ids_json is a valid JSON array
-→ Database verifies all referenced PageRegion rows exist
-→ Database verifies all referenced PageRegion rows belong to the same ChapterPageVersion
-→ Database derives the owning series through PageRegion → ChapterPageVersion → ChapterPage → Chapter
-→ Database verifies the actor is an active contributor for the owning series
-→ Database verifies the assigned user is ACTIVE and an active contributor for the owning series
-→ Database creates one manga.ChapterPageTask row
-→ Database creates one or more manga.ChapterPageTaskRegion rows
-→ Database writes CHAPTER_PAGE_TASK_CREATED audit event
-→ UI shows the new task with its linked target regions
+â†’ User selects one or more existing saved PageRegion records for the task target
+â†’ If the task applies to the whole page, UI/backend uses a full-page PageRegion for the selected ChapterPageVersion
+â†’ User enters assigned user, task type, title, description, priority, due date, and compensation amount
+â†’ Backend prepares page_region_ids_json as a JSON array of PageRegion IDs
+â†’ Backend calls manga.usp_ChapterPageTask_Create
+â†’ Database validates page_region_ids_json is a valid JSON array
+â†’ Database verifies all referenced PageRegion rows exist
+â†’ Database verifies all referenced PageRegion rows belong to the same ChapterPageVersion
+â†’ Database derives the owning series through PageRegion â†’ ChapterPageVersion â†’ ChapterPage â†’ Chapter
+â†’ Database verifies the actor is an active contributor for the owning series
+â†’ Database verifies the assigned user is ACTIVE and an active contributor for the owning series
+â†’ Database creates one manga.ChapterPageTask row
+â†’ Database creates one or more manga.ChapterPageTaskRegion rows
+â†’ Database writes CHAPTER_PAGE_TASK_CREATED audit event
+â†’ UI shows the new task with its linked target regions
 ```
 
 ### Page Region ID JSON
@@ -1691,8 +1691,8 @@ manga.ChapterPageVersion
 - Each task must link to at least one `PageRegion`.
 - A whole-page task must still link to a `PageRegion`; the system should create or reuse a full-page region covering the selected `ChapterPageVersion`.
 - All regions linked to the same task must belong to the same `ChapterPageVersion`.
-- The task page context is derived through `ChapterPageTaskRegion → PageRegion → ChapterPageVersion → ChapterPage`.
-- The task owning series is derived through `PageRegion → ChapterPageVersion → ChapterPage → Chapter → Series`.
+- The task page context is derived through `ChapterPageTaskRegion â†’ PageRegion â†’ ChapterPageVersion â†’ ChapterPage`.
+- The task owning series is derived through `PageRegion â†’ ChapterPageVersion â†’ ChapterPage â†’ Chapter â†’ Series`.
 - The actor creating the task must be an active contributor for the owning series.
 - The assigned user must be an `ACTIVE` account and an active contributor for the owning series.
 - `compensation_amount` is required, must be non-negative, and should use `0.00` when no compensation is paid.
@@ -1708,24 +1708,97 @@ manga.ChapterPageVersion
 - Keep permission checks based on the owning series derived from the selected regions.
 - Keep the task assignment workflow traceable through audit.
 
+---
+
+## BF-TASK-007 â€” Quick Select Batch Task Assignment
+
+**Status:** Agreed
+**Primary actor:** Mangaka
+**Goal:** Create multiple assigned tasks at once by selecting pages with their current versions, an assistant, task type, and common task defaults. Each task links to one whole-page `PageRegion`.
+
+### Main Flow
+
+```text
+Mangaka opens the Quick Select dialog from the chapter workspace
+â†’ Mangaka selects a series and chapter
+â†’ UI loads available chapters for Quick Select
+â†’ UI loads pages/current versions for the selected chapter
+â†’ UI loads active Assistant contributors for the selected series
+â†’ Mangaka selects one or more pages
+â†’ Mangaka selects an Assistant
+â†’ Mangaka enters task type, title prefix, default description, priority, due date, and compensation
+â†’ Mangaka optionally overrides the description for individual pages
+â†’ Mangaka clicks Confirm
+â†’ Backend validates the full request
+â†’ Backend loads page/version/file metadata
+â†’ Backend resolves Cloudinary image dimensions for each selected page version
+â†’ Backend builds a validated assignment plan
+â†’ Backend opens a SQL transaction
+â†’ Backend acquires a session+series+chapter scoped SQL app lock
+â†’ Backend re-checks guards (actor, assistant, chapter, pages, versions, files)
+â†’ Backend finds or creates one FULL_PAGE PageRegion per selected page version
+â†’ Backend creates one ASSIGNED ChapterPageTask per selected page
+â†’ Backend links each task to its FULL_PAGE PageRegion through ChapterPageTaskRegion
+â†’ Backend writes one CHAPTER_PAGE_TASK_CREATED audit event per task
+â†’ Backend commits the transaction
+â†’ UI reloads the task list and shows created tasks
+```
+
+### Database Tables
+
+```text
+manga.ChapterPageTask
+manga.ChapterPageTaskRegion
+manga.PageRegion
+audit.AuditEvent
+```
+
+### Important Notes
+
+- Quick Select creates multiple new ASSIGNED tasks in one batch.
+- One task per selected page/current page version.
+- User selects pages, not regions.
+- Backend creates or reuses one FULL_PAGE PageRegion per selected page version.
+- FULL_PAGE dimensions come from Cloudinary via IImageMetadataProvider.
+- FileResource does not store image dimensions.
+- Each task links to its FULL_PAGE region.
+- Application validates the whole batch before persistence.
+- Infrastructure persists with EF batch insert and one SaveChangesAsync.
+- Transaction/app-lock prevents overlapping writes for the same actor+series+chapter.
+- Rollback prevents partial tasks, regions, or audit rows.
+- Audit writes one CHAPTER_PAGE_TASK_CREATED event per created task.
+- AuditEvent.entity_type = ChapterPageTask.
+- AuditEvent.entity_id = real created ChapterPageTask ID.
+- detail_json matches the existing single-task stored procedure audit JSON shape.
+- No stored procedure is called for this workflow.
+- Cloudinary image bounds are resolved before opening the SQL transaction.
+
+### System Should Try To
+
+- Let Mangaka assign multiple tasks quickly without creating each one individually.
+- Keep task creation consistent with single-task creation semantics.
+- Reuse existing FULL_PAGE regions instead of creating duplicates.
+- Prevent partial batch creation on failure.
+- Keep audit trail complete and traceable per task.
+
 
 # 7. Workflow Template for Future Additions
 
 Use this template when adding new flows.
 
 ```md
-## BF-AREA-XXX — Flow Name
+## BF-AREA-XXX â€” Flow Name
 
-**Status:** Draft / Agreed / Future  
-**Primary actor:** Actor Name  
+**Status:** Draft / Agreed / Future
+**Primary actor:** Actor Name
 **Goal:** Short goal sentence.
 
 ### Main Flow
 
 ```text
 Step 1
-→ Step 2
-→ Step 3
+â†’ Step 2
+â†’ Step 3
 ```
 
 ### Database Procedure(s)
