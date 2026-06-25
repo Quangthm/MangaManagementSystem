@@ -155,7 +155,7 @@ CREATE TABLE audit.AuditEvent (
 		OR ISJSON(detail_json) = 1
 		),
 	CONSTRAINT fk_audit_event_actor_user FOREIGN KEY (actor_user_id) REFERENCES auth.Users(user_id)
-	)
+	);
 	--WITH (LEDGER = ON (APPEND_ONLY = ON));
 
 CREATE INDEX ix_audit_event_entity_time ON audit.AuditEvent (
@@ -713,8 +713,8 @@ CREATE TABLE manga.PageRegion (
 	region_label NVARCHAR(100) NULL,
 	x DECIMAL(10, 2) NOT NULL,
 	y DECIMAL(10, 2) NOT NULL,
-	width DECIMAL(10, 2) NOT NULL,
-	height DECIMAL(10, 2) NOT NULL,
+	width DECIMAL(10, 2) NOT NULL CONSTRAINT df_page_region_width DEFAULT(0),
+	height DECIMAL(10, 2) NOT NULL CONSTRAINT df_page_region_height DEFAULT(0),
 	confidence_score DECIMAL(5, 4) NULL,
 	source_type NVARCHAR(20) NOT NULL CONSTRAINT df_page_region_source_type DEFAULT(N'MANUAL'),
 	original_text NVARCHAR(MAX) NULL,
@@ -749,16 +749,36 @@ CREATE TABLE manga.PageRegion (
 			N'CHARACTER',
 			N'SFX_TEXT',
 			N'BACKGROUND',
+			N'FULL_PAGE',
 			N'OTHER'
 			)
 		),
 	CONSTRAINT fk_page_region_version FOREIGN KEY (chapter_page_version_id) REFERENCES manga.ChapterPageVersion(chapter_page_version_id),
 	CONSTRAINT fk_page_region_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id),
 	CONSTRAINT fk_page_region_updated_by FOREIGN KEY (updated_by_user_id) REFERENCES auth.Users(user_id),
-	CONSTRAINT ck_page_region_dimensions CHECK (
-		width > 0
-		AND height > 0
-		),
+	CONSTRAINT ck_page_region_coordinates_nonnegative CHECK (
+    x >= 0
+    AND y >= 0
+),
+CONSTRAINT ck_page_region_dimensions CHECK (
+    (
+        width = 0
+        AND height = 0
+    )
+    OR (
+        width > 0
+        AND height > 0
+    )
+),
+CONSTRAINT ck_page_region_full_page_shape CHECK (
+    type_code <> N'FULL_PAGE'
+    OR (
+        x = 0
+        AND y = 0
+        AND width > 0
+        AND height > 0
+    )
+),
 	CONSTRAINT ck_page_region_source_type CHECK (
 		source_type IN (
 			N'AI',

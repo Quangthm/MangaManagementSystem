@@ -513,6 +513,92 @@ Return for Rework and Reassign must remain separate UI concepts:
 
 ---
 
+## 6.z Quick Select Task Assignment (Backend Only)
+
+### Purpose
+
+Allow a Mangaka to quickly create multiple assigned tasks at once by selecting pages, an assistant, and common task defaults. Each task links to one whole-page `PageRegion`.
+
+### API endpoints
+
+| Method | Route | Purpose |
+|---|---|---|
+| GET | `/api/mangaka/series/{seriesId}/chapters/quick-select` | Load chapters for Quick Select. |
+| GET | `/api/mangaka/chapters/{chapterId}/pages/quick-select` | Load pages/current versions for Quick Select. |
+| GET | `/api/mangaka/series/{seriesId}/assistants/quick-select` | Load active Assistant contributors for Quick Select. |
+| POST | `/api/mangaka/tasks/quick-select` | Create batch of assigned tasks. |
+
+### Backend behavior
+
+- Quick Select creates multiple new ASSIGNED tasks in one batch.
+- One task per selected page/current page version.
+- User selects pages, not regions.
+- Backend creates or reuses one `FULL_PAGE` `PageRegion` per selected page version.
+- `FULL_PAGE` dimensions come from Cloudinary via `IImageMetadataProvider`.
+- `FileResource` does not store image dimensions.
+- Each task links to its `FULL_PAGE` region.
+- Application validates the whole batch before persistence.
+- Infrastructure persists with EF batch insert and one `SaveChangesAsync`.
+- Transaction/app-lock prevents overlapping writes.
+- Rollback prevents partial tasks, regions, or audit rows.
+- Audit writes one `CHAPTER_PAGE_TASK_CREATED` event per created task.
+- No stored procedure is called for this workflow.
+
+### Request DTO
+
+```csharp
+QuickSelectTaskAssignmentRequest
+- SeriesId
+- ChapterId
+- AssignedToUserId
+- TypeCode
+- TaskTitlePrefix
+- DefaultTaskDescription
+- PriorityLevel (1-5)
+- DueAtUtc
+- CompensationAmount (>= 0)
+- Pages: QuickSelectPageTaskRequest[]
+    - ChapterPageId
+    - ChapterPageVersionId
+    - DescriptionOverride? (optional per-page override)
+```
+
+### Response DTO
+
+```csharp
+QuickSelectTaskAssignmentResult
+- CreatedTaskCount
+- CreatedTasks: QuickSelectCreatedTaskDto[]
+    - ChapterPageTaskId
+    - ChapterPageId
+    - ChapterPageVersionId
+    - PageNo
+```
+
+### UI scope
+
+Quick Select dialog is implemented on `/mangaka/review-submissions`. A "Quick Select" button opens a dialog with progressive sections:
+1. Select Series (from existing Mangaka series)
+2. Select Chapter (loads chapters for selected series)
+3. Select multiple Pages (multi-select checkboxes with Select All/Clear)
+4. Select Assistant (loads ACTIVE Assistant contributors for selected series)
+5. Task Details (type, title prefix, priority, due date, compensation)
+6. Default description + optional per-page overrides
+7. Submit — creates batch of ASSIGNED tasks
+
+Backend endpoints used:
+- `GET /api/mangaka/series/my-series` (existing, for series selector)
+- `GET /api/mangaka/series/{seriesId}/chapters/quick-select`
+- `GET /api/mangaka/chapters/{chapterId}/pages/quick-select`
+- `GET /api/mangaka/series/{seriesId}/assistants/quick-select`
+- `POST /api/mangaka/tasks/quick-select`
+
+Typed API client methods added to `IMangakaTaskApiClient` / `MangakaTaskApiClient`.
+
+On success: dialog closes, snackbar shows `"Created N task(s)."`, task list and stat cards refresh via existing `RefreshTasksAfterMutationAsync()`.
+
+---
+
 ## 6.y Manage Series Contributors Page
 
 ### Route

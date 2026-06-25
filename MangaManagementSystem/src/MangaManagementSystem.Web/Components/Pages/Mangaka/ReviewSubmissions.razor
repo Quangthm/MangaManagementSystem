@@ -6,6 +6,7 @@
 @using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Mangaka")]
 @inject IMangakaTaskApiClient MangakaTaskClient
+@inject IMangakaSeriesApiClient MangakaSeriesClient
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthStateProvider
@@ -24,6 +25,14 @@
             <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Review Assistant Submissions</MudText>
             <MudText Typo="Typo.body1" Class="mf-muted">Review and approve completed tasks from your assistants</MudText>
         </div>
+
+        @if (!_loading)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.FlashOn"
+                       OnClick="OpenQuickSelect" Class="mb-4">
+                Quick Select
+            </MudButton>
+        }
 
         @if (_loading)
         {
@@ -315,6 +324,179 @@
             </DialogActions>
         </MudDialog>
 
+        @* Quick Select Dialog *@
+        <MudDialog @bind-Visible="_showQuickSelect" Options="new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true }">
+            <TitleContent>Quick Select Task Assignment</TitleContent>
+            <DialogContent>
+                @if (_quickSelectLoadingSeries)
+                {
+                    <MudProgressLinear Indeterminate="true" />
+                }
+                else
+                {
+                    <MudSelect T="Guid?" Label="Series" Value="_quickSelectSelectedSeriesId"
+                               ValueChanged="OnQuickSelectSeriesChanged"
+                               Variant="Variant.Outlined" Required="true" Class="mb-3"
+                               AnchorOrigin="Origin.BottomCenter">
+                        @foreach (var s in _quickSelectSeries)
+                        {
+                            <MudSelectItem T="Guid?" Value="@s.SeriesId">@s.Title</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+
+                @if (_quickSelectSelectedSeriesId.HasValue)
+                {
+                    if (_quickSelectLoadingChapters)
+                    {
+                        <MudProgressLinear Indeterminate="true" Class="mb-3" />
+                    }
+                    else if (!_quickSelectChapters.Any())
+                    {
+                        <MudAlert Severity="Severity.Warning" Class="mb-3">No chapters found for this series.</MudAlert>
+                    }
+                    else
+                    {
+                        <MudSelect T="Guid?" Label="Chapter" Value="_quickSelectSelectedChapterId"
+                                   ValueChanged="OnQuickSelectChapterChanged"
+                                   Variant="Variant.Outlined" Required="true" Class="mb-3"
+                                   AnchorOrigin="Origin.BottomCenter">
+                            @foreach (var ch in _quickSelectChapters)
+                            {
+                                <MudSelectItem T="Guid?" Value="@ch.ChapterId">
+                                    Ch. @ch.ChapterNumber @(ch.Title ?? "") @(ch.PageCount.HasValue ? $"({ch.PageCount} pages)" : "")
+                                </MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                }
+
+                @if (_quickSelectSelectedChapterId.HasValue)
+                {
+                    if (_quickSelectLoadingPages)
+                    {
+                        <MudProgressLinear Indeterminate="true" Class="mb-3" />
+                    }
+                    else if (!_quickSelectPages.Any())
+                    {
+                        <MudAlert Severity="Severity.Warning" Class="mb-3">No pages found for this chapter.</MudAlert>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.subtitle2" Class="mb-2">Select Pages</MudText>
+                        <MudPaper Class="pa-2 mb-3" Elevation="0" Style="max-height:200px;overflow-y:auto;">
+                            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="SelectAllPages" Class="mb-1">Select All</MudButton>
+                            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="ClearAllPages" Class="mb-1 ml-2">Clear</MudButton>
+                            @foreach (var pg in _quickSelectPages)
+                            {
+                                <div class="d-flex align-center py-1">
+                                    <MudCheckBox T="bool"
+                                                 Checked="@_quickSelectPageSelections[pg.ChapterPageId]"
+                                                 CheckedChanged="@((bool v) => { _quickSelectPageSelections[pg.ChapterPageId] = v; })" />
+                                    <MudText Typo="Typo.body2" Class="ml-2">Page @pg.PageNo &mdash; v@(pg.VersionNo)</MudText>
+                                </div>
+                            }
+                        </MudPaper>
+                    }
+                }
+
+                @if (_quickSelectSelectedChapterId.HasValue && _quickSelectSelectedPages.Any())
+                {
+                    if (_quickSelectLoadingAssistants)
+                    {
+                        <MudProgressLinear Indeterminate="true" Class="mb-3" />
+                    }
+                    else if (!_quickSelectAssistants.Any())
+                    {
+                        <MudAlert Severity="Severity.Warning" Class="mb-3">No active Assistant contributors found for this series.</MudAlert>
+                    }
+                    else
+                    {
+                        <MudSelect T="Guid?" Label="Assistant" @bind-Value="_quickSelectSelectedAssistantId"
+                                   Variant="Variant.Outlined" Required="true" Class="mb-3"
+                                   AnchorOrigin="Origin.BottomCenter">
+                            @foreach (var a in _quickSelectAssistants)
+                            {
+                                <MudSelectItem T="Guid?" Value="@a.UserId">
+                                    @a.DisplayName @(a.Username != null ? $"(@{a.Username})" : "")
+                                </MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                }
+
+                @if (_quickSelectSelectedAssistantId.HasValue && _quickSelectSelectedPages.Any())
+                {
+                    <MudText Typo="Typo.subtitle2" Class="mt-2 mb-2">Task Details</MudText>
+                    <MudGrid>
+                        <MudItem xs="12" md="6">
+                            <MudSelect T="string" Label="Task Type" @bind-Value="_quickSelectTypeCode"
+                                       Variant="Variant.Outlined" Required="true" Class="mb-3">
+                                <MudSelectItem Value="@("BACKGROUND")">Background</MudSelectItem>
+                                <MudSelectItem Value="@("SHADING")">Shading</MudSelectItem>
+                                <MudSelectItem Value="@("EFFECTS")">Effects</MudSelectItem>
+                                <MudSelectItem Value="@("CLEANUP")">Cleanup</MudSelectItem>
+                                <MudSelectItem Value="@("DIALOGUE")">Dialogue</MudSelectItem>
+                                <MudSelectItem Value="@("TYPESETTING")">Typesetting</MudSelectItem>
+                                <MudSelectItem Value="@("REVIEW")">Review</MudSelectItem>
+                                <MudSelectItem Value="@("OTHER")">Other</MudSelectItem>
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="_quickSelectTitlePrefix" Label="Task Title Prefix"
+                                          Variant="Variant.Outlined" Required="true" Class="mb-3"
+                                          HelperText="e.g. 'Cleanup' → tasks named 'Cleanup - Page 1'" />
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudNumericField @bind-Value="_quickSelectPriority" Label="Priority (1-5)"
+                                             Variant="Variant.Outlined" Min="1" Max="5" Required="true" Class="mb-3" />
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudDatePicker @bind-Date="_quickSelectDueDate" Label="Due Date"
+                                           Class="mb-3" />
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudNumericField @bind-Value="_quickSelectCompensation" Label="Compensation"
+                                             Variant="Variant.Outlined" Min="0" Class="mb-3"
+                                             Format="F2" />
+                        </MudItem>
+                    </MudGrid>
+
+                    <MudTextField @bind-Value="_quickSelectDefaultDescription" Label="Default Task Description"
+                                  Variant="Variant.Outlined" Lines="4" Required="true" Class="mb-3"
+                                  HelperText="Applied to all selected pages unless overridden." />
+
+                    @if (_quickSelectSelectedPages.Any())
+                    {
+                        <MudText Typo="Typo.subtitle2" Class="mb-2">
+                            Per-Page Description Overrides <MudText Typo="Typo.caption" Class="mf-muted">(optional)</MudText>
+                        </MudText>
+                        <MudPaper Class="pa-2 mb-3" Elevation="0" Style="max-height:240px;overflow-y:auto;">
+                            @foreach (var pg in _quickSelectSelectedPages)
+                            {
+                                <MudExpansionPanels Class="mb-1" Style="box-shadow:none;">
+                                    <MudExpansionPanel Text="@($"Page {pg.PageNo} — v{pg.VersionNo}")">
+                                        <MudTextField @bind-Value="_quickSelectPageOverrides[pg.ChapterPageId]"
+                                                      Label="@($"Override for Page {pg.PageNo}")"
+                                                      Variant="Variant.Outlined" Lines="3"
+                                                      HelperText="Leave empty to use default description." />
+                                    </MudExpansionPanel>
+                                </MudExpansionPanels>
+                            }
+                        </MudPaper>
+                    }
+                }
+            </DialogContent>
+            <DialogActions>
+                <MudButton OnClick="CloseQuickSelect" Disabled="@_quickSelectSubmitting">Cancel</MudButton>
+                <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                           Disabled="@(!CanQuickSelectSubmit() || _quickSelectSubmitting)"
+                           OnClick="ConfirmQuickSelect">
+                    @(_quickSelectSubmitting ? "Creating..." : "Create Tasks")
+                </MudButton>
+            </DialogActions>
+        </MudDialog>
+
     </div>
 </MangakaLayout>
 
@@ -395,6 +577,243 @@
             .Distinct()
             .OrderBy(n => n)
             .ToList();
+
+    // Quick Select state
+    private bool _showQuickSelect;
+    private bool _quickSelectSubmitting;
+    private bool _quickSelectLoadingSeries;
+    private bool _quickSelectLoadingChapters;
+    private bool _quickSelectLoadingPages;
+    private bool _quickSelectLoadingAssistants;
+    private Guid? _quickSelectSelectedSeriesId;
+    private Guid? _quickSelectSelectedChapterId;
+    private Guid? _quickSelectSelectedAssistantId;
+    private string _quickSelectTypeCode = string.Empty;
+    private string _quickSelectTitlePrefix = string.Empty;
+    private int _quickSelectPriority = 3;
+    private DateTime? _quickSelectDueDate = DateTime.Today.AddDays(7);
+    private decimal _quickSelectCompensation;
+    private string _quickSelectDefaultDescription = string.Empty;
+    private IReadOnlyList<SeriesDto> _quickSelectSeries = Array.Empty<SeriesDto>();
+    private IReadOnlyList<QuickSelectChapterDto> _quickSelectChapters = Array.Empty<QuickSelectChapterDto>();
+    private IReadOnlyList<QuickSelectPageDto> _quickSelectPages = Array.Empty<QuickSelectPageDto>();
+    private IReadOnlyList<QuickSelectAssistantDto> _quickSelectAssistants = Array.Empty<QuickSelectAssistantDto>();
+    private Dictionary<Guid, bool> _quickSelectPageSelections = new();
+    private Dictionary<Guid, string> _quickSelectPageOverrides = new();
+
+    private IReadOnlyList<QuickSelectPageDto> _quickSelectSelectedPages =>
+        _quickSelectPages.Where(p => _quickSelectPageSelections.TryGetValue(p.ChapterPageId, out var sel) && sel).ToList();
+
+    private bool CanQuickSelectSubmit()
+    {
+        return _quickSelectSelectedSeriesId.HasValue
+            && _quickSelectSelectedChapterId.HasValue
+            && _quickSelectSelectedAssistantId.HasValue
+            && _quickSelectSelectedPages.Any()
+            && !string.IsNullOrWhiteSpace(_quickSelectTypeCode)
+            && !string.IsNullOrWhiteSpace(_quickSelectTitlePrefix)
+            && _quickSelectDueDate.HasValue
+            && _quickSelectPriority is >= 1 and <= 5
+            && _quickSelectCompensation >= 0
+            && !string.IsNullOrWhiteSpace(_quickSelectDefaultDescription);
+    }
+
+    private void OpenQuickSelect()
+    {
+        _showQuickSelect = true;
+        _quickSelectSelectedSeriesId = null;
+        _quickSelectSelectedChapterId = null;
+        _quickSelectSelectedAssistantId = null;
+        _quickSelectTypeCode = string.Empty;
+        _quickSelectTitlePrefix = string.Empty;
+        _quickSelectPriority = 3;
+        _quickSelectDueDate = DateTime.Today.AddDays(7);
+        _quickSelectCompensation = 0;
+        _quickSelectDefaultDescription = string.Empty;
+        _quickSelectSeries = Array.Empty<SeriesDto>();
+        _quickSelectChapters = Array.Empty<QuickSelectChapterDto>();
+        _quickSelectPages = Array.Empty<QuickSelectPageDto>();
+        _quickSelectAssistants = Array.Empty<QuickSelectAssistantDto>();
+        _quickSelectPageSelections = new();
+        _quickSelectPageOverrides = new();
+        _quickSelectSubmitting = false;
+
+        _ = LoadQuickSelectSeriesAsync();
+    }
+
+    private void CloseQuickSelect()
+    {
+        _showQuickSelect = false;
+    }
+
+    private async Task LoadQuickSelectSeriesAsync()
+    {
+        _quickSelectLoadingSeries = true;
+        try
+        {
+            _quickSelectSeries = await MangakaSeriesClient.GetMySeriesAsync(_currentUserId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load series: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _quickSelectLoadingSeries = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task OnQuickSelectSeriesChanged(Guid? seriesId)
+    {
+        _quickSelectSelectedChapterId = null;
+        _quickSelectChapters = Array.Empty<QuickSelectChapterDto>();
+        _quickSelectPages = Array.Empty<QuickSelectPageDto>();
+        _quickSelectPageSelections = new();
+        _quickSelectPageOverrides = new();
+        _quickSelectSelectedAssistantId = null;
+        _quickSelectAssistants = Array.Empty<QuickSelectAssistantDto>();
+
+        if (!seriesId.HasValue)
+        {
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        var loadChapters = LoadQuickSelectChaptersAsync(seriesId.Value);
+        var loadAssistants = LoadQuickSelectAssistantsInternalAsync(seriesId.Value);
+        await Task.WhenAll(loadChapters, loadAssistants);
+    }
+
+    private async Task LoadQuickSelectChaptersAsync(Guid seriesId)
+    {
+        _quickSelectLoadingChapters = true;
+        try
+        {
+            _quickSelectChapters = await MangakaTaskClient.GetQuickSelectChaptersAsync(_currentUserId, seriesId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load chapters: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _quickSelectLoadingChapters = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task OnQuickSelectChapterChanged(Guid? chapterId)
+    {
+        _quickSelectPages = Array.Empty<QuickSelectPageDto>();
+        _quickSelectPageSelections = new();
+        _quickSelectPageOverrides = new();
+
+        if (!chapterId.HasValue)
+        {
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        _quickSelectLoadingPages = true;
+        try
+        {
+            _quickSelectPages = await MangakaTaskClient.GetQuickSelectPagesAsync(chapterId.Value);
+            _quickSelectPageSelections = _quickSelectPages.ToDictionary(p => p.ChapterPageId, _ => false);
+            _quickSelectPageOverrides = _quickSelectPages.ToDictionary(p => p.ChapterPageId, _ => string.Empty);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load pages: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _quickSelectLoadingPages = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task LoadQuickSelectAssistantsInternalAsync(Guid seriesId)
+    {
+        _quickSelectLoadingAssistants = true;
+        try
+        {
+            _quickSelectAssistants = await MangakaTaskClient.GetQuickSelectAssistantsAsync(_currentUserId, seriesId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load assistants: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _quickSelectLoadingAssistants = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void SelectAllPages()
+    {
+        foreach (var key in _quickSelectPageSelections.Keys.ToList())
+            _quickSelectPageSelections[key] = true;
+    }
+
+    private void ClearAllPages()
+    {
+        foreach (var key in _quickSelectPageSelections.Keys.ToList())
+            _quickSelectPageSelections[key] = false;
+    }
+
+    private async Task ConfirmQuickSelect()
+    {
+        if (!CanQuickSelectSubmit()) return;
+
+        var selectedPages = _quickSelectSelectedPages;
+        if (!selectedPages.Any())
+        {
+            Snackbar.Add("No pages selected.", Severity.Warning);
+            return;
+        }
+
+        _quickSelectSubmitting = true;
+        try
+        {
+            var pageRequests = selectedPages.Select(p =>
+            {
+                var overrideText = _quickSelectPageOverrides.TryGetValue(p.ChapterPageId, out var o) ? o?.Trim() : null;
+                return new QuickSelectPageTaskRequest(
+                    p.ChapterPageId,
+                    p.CurrentChapterPageVersionId,
+                    string.IsNullOrWhiteSpace(overrideText) ? null : overrideText);
+            }).ToList();
+
+            var request = new QuickSelectTaskAssignmentRequest(
+                _quickSelectSelectedSeriesId!.Value,
+                _quickSelectSelectedChapterId!.Value,
+                _quickSelectSelectedAssistantId!.Value,
+                _quickSelectTypeCode.Trim(),
+                _quickSelectTitlePrefix.Trim(),
+                _quickSelectDefaultDescription.Trim(),
+                (byte)_quickSelectPriority,
+                _quickSelectDueDate!.Value,
+                _quickSelectCompensation,
+                pageRequests);
+
+            var result = await MangakaTaskClient.QuickSelectAssignAsync(_currentUserId, request);
+
+            _showQuickSelect = false;
+            Snackbar.Add($"Created {result.CreatedTaskCount} task(s).", Severity.Success);
+            await RefreshTasksAfterMutationAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"{ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _quickSelectSubmitting = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {

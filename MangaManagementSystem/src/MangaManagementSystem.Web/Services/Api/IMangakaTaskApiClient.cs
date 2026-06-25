@@ -11,5 +11,11 @@ namespace MangaManagementSystem.Web.Services.Api
         Task CancelTaskAsync(Guid actorUserId, Guid taskId, string reason, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<EligibleAssistantDto>> GetEligibleAssistantsAsync(Guid actorUserId, Guid taskId, CancellationToken cancellationToken = default);
         Task<ReassignChapterPageTaskResult> ReassignTaskAsync(Guid actorUserId, Guid taskId, ReassignChapterPageTaskRequest request, CancellationToken cancellationToken = default);
+
+        // Quick Select
+        Task<IReadOnlyList<QuickSelectChapterDto>> GetQuickSelectChaptersAsync(Guid actorUserId, Guid seriesId, CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<QuickSelectPageDto>> GetQuickSelectPagesAsync(Guid chapterId, CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<QuickSelectAssistantDto>> GetQuickSelectAssistantsAsync(Guid actorUserId, Guid seriesId, CancellationToken cancellationToken = default);
+        Task<QuickSelectTaskAssignmentResult> QuickSelectAssignAsync(Guid actorUserId, QuickSelectTaskAssignmentRequest request, CancellationToken cancellationToken = default);
     }
 }

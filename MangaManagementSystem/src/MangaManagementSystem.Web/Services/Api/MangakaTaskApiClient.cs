@@ -130,5 +130,58 @@ namespace MangaManagementSystem.Web.Services.Api
                     response.StatusCode);
             }
         }
+
+        // --- Quick Select ---
+
+        public async Task<IReadOnlyList<QuickSelectChapterDto>> GetQuickSelectChaptersAsync(Guid actorUserId, Guid seriesId, CancellationToken cancellationToken = default)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"api/mangaka/series/{seriesId}/chapters/quick-select");
+            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            await EnsureSuccessAsync(response, cancellationToken);
+
+            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            return JsonSerializer.Deserialize<List<QuickSelectChapterDto>>(content, _jsonOptions) ?? new List<QuickSelectChapterDto>();
+        }
+
+        public async Task<IReadOnlyList<QuickSelectPageDto>> GetQuickSelectPagesAsync(Guid chapterId, CancellationToken cancellationToken = default)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"api/mangaka/chapters/{chapterId}/pages/quick-select");
+
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            await EnsureSuccessAsync(response, cancellationToken);
+
+            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            return JsonSerializer.Deserialize<List<QuickSelectPageDto>>(content, _jsonOptions) ?? new List<QuickSelectPageDto>();
+        }
+
+        public async Task<IReadOnlyList<QuickSelectAssistantDto>> GetQuickSelectAssistantsAsync(Guid actorUserId, Guid seriesId, CancellationToken cancellationToken = default)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"api/mangaka/series/{seriesId}/assistants/quick-select");
+            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            await EnsureSuccessAsync(response, cancellationToken);
+
+            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            return JsonSerializer.Deserialize<List<QuickSelectAssistantDto>>(content, _jsonOptions) ?? new List<QuickSelectAssistantDto>();
+        }
+
+        public async Task<QuickSelectTaskAssignmentResult> QuickSelectAssignAsync(Guid actorUserId, QuickSelectTaskAssignmentRequest quickSelectRequest, CancellationToken cancellationToken = default)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "api/mangaka/tasks/quick-select");
+            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+            request.Content = new StringContent(
+                JsonSerializer.Serialize(quickSelectRequest, _jsonOptions),
+                Encoding.UTF8, "application/json");
+
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            await EnsureSuccessAsync(response, cancellationToken);
+
+            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            return JsonSerializer.Deserialize<QuickSelectTaskAssignmentResult>(content, _jsonOptions)
+                ?? throw new InvalidOperationException("Failed to parse quick select assignment result.");
+        }
     }
 }
