@@ -1708,6 +1708,79 @@ manga.ChapterPageVersion
 - Keep permission checks based on the owning series derived from the selected regions.
 - Keep the task assignment workflow traceable through audit.
 
+---
+
+## BF-TASK-007 — Quick Select Batch Task Assignment
+
+**Status:** Agreed  
+**Primary actor:** Mangaka  
+**Goal:** Create multiple assigned tasks at once by selecting pages with their current versions, an assistant, task type, and common task defaults. Each task links to one whole-page `PageRegion`.
+
+### Main Flow
+
+```text
+Mangaka opens the Quick Select dialog from the chapter workspace
+→ Mangaka selects a series and chapter
+→ UI loads available chapters for Quick Select
+→ UI loads pages/current versions for the selected chapter
+→ UI loads active Assistant contributors for the selected series
+→ Mangaka selects one or more pages
+→ Mangaka selects an Assistant
+→ Mangaka enters task type, title prefix, default description, priority, due date, and compensation
+→ Mangaka optionally overrides the description for individual pages
+→ Mangaka clicks Confirm
+→ Backend validates the full request
+→ Backend loads page/version/file metadata
+→ Backend resolves Cloudinary image dimensions for each selected page version
+→ Backend builds a validated assignment plan
+→ Backend opens a SQL transaction
+→ Backend acquires a session+series+chapter scoped SQL app lock
+→ Backend re-checks guards (actor, assistant, chapter, pages, versions, files)
+→ Backend finds or creates one FULL_PAGE PageRegion per selected page version
+→ Backend creates one ASSIGNED ChapterPageTask per selected page
+→ Backend links each task to its FULL_PAGE PageRegion through ChapterPageTaskRegion
+→ Backend writes one CHAPTER_PAGE_TASK_CREATED audit event per task
+→ Backend commits the transaction
+→ UI reloads the task list and shows created tasks
+```
+
+### Database Tables
+
+```text
+manga.ChapterPageTask
+manga.ChapterPageTaskRegion
+manga.PageRegion
+audit.AuditEvent
+```
+
+### Important Notes
+
+- Quick Select creates multiple new ASSIGNED tasks in one batch.
+- One task per selected page/current page version.
+- User selects pages, not regions.
+- Backend creates or reuses one FULL_PAGE PageRegion per selected page version.
+- FULL_PAGE dimensions come from Cloudinary via IImageMetadataProvider.
+- FileResource does not store image dimensions.
+- Each task links to its FULL_PAGE region.
+- Application validates the whole batch before persistence.
+- Infrastructure persists with EF batch insert and one SaveChangesAsync.
+- Transaction/app-lock prevents overlapping writes for the same actor+series+chapter.
+- Rollback prevents partial tasks, regions, or audit rows.
+- Audit writes one CHAPTER_PAGE_TASK_CREATED event per created task.
+- AuditEvent.entity_type = ChapterPageTask.
+- AuditEvent.entity_id = real created ChapterPageTask ID.
+- detail_json matches the existing single-task stored procedure audit JSON shape.
+- No stored procedure is called for this workflow.
+- Cloudinary image bounds are resolved before opening the SQL transaction.
+
+### System Should Try To
+
+- Let Mangaka assign multiple tasks quickly without creating each one individually.
+- Keep task creation consistent with single-task creation semantics.
+- Reuse existing FULL_PAGE regions instead of creating duplicates.
+- Prevent partial batch creation on failure.
+- Keep audit trail complete and traceable per task.
+
 
 # 7. Workflow Template for Future Additions
 

@@ -34,6 +34,7 @@ namespace MangaManagementSystem.Application
             services.AddScoped<INotificationService, NotificationService>();
             services.AddScoped<IAuditEventService, AuditEventService>();
             services.AddScoped<ISeriesBoardVoteService, SeriesBoardVoteService>();
+            services.AddScoped<IQuickSelectService, QuickSelectService>();
             return services;
         }
     }

@@ -513,6 +513,74 @@ Return for Rework and Reassign must remain separate UI concepts:
 
 ---
 
+## 6.z Quick Select Task Assignment (Backend Only)
+
+### Purpose
+
+Allow a Mangaka to quickly create multiple assigned tasks at once by selecting pages, an assistant, and common task defaults. Each task links to one whole-page `PageRegion`.
+
+### API endpoints
+
+| Method | Route | Purpose |
+|---|---|---|
+| GET | `/api/mangaka/series/{seriesId}/chapters/quick-select` | Load chapters for Quick Select. |
+| GET | `/api/mangaka/chapters/{chapterId}/pages/quick-select` | Load pages/current versions for Quick Select. |
+| GET | `/api/mangaka/series/{seriesId}/assistants/quick-select` | Load active Assistant contributors for Quick Select. |
+| POST | `/api/mangaka/tasks/quick-select` | Create batch of assigned tasks. |
+
+### Backend behavior
+
+- Quick Select creates multiple new ASSIGNED tasks in one batch.
+- One task per selected page/current page version.
+- User selects pages, not regions.
+- Backend creates or reuses one `FULL_PAGE` `PageRegion` per selected page version.
+- `FULL_PAGE` dimensions come from Cloudinary via `IImageMetadataProvider`.
+- `FileResource` does not store image dimensions.
+- Each task links to its `FULL_PAGE` region.
+- Application validates the whole batch before persistence.
+- Infrastructure persists with EF batch insert and one `SaveChangesAsync`.
+- Transaction/app-lock prevents overlapping writes.
+- Rollback prevents partial tasks, regions, or audit rows.
+- Audit writes one `CHAPTER_PAGE_TASK_CREATED` event per created task.
+- No stored procedure is called for this workflow.
+
+### Request DTO
+
+```csharp
+QuickSelectTaskAssignmentRequest
+- SeriesId
+- ChapterId
+- AssignedToUserId
+- TypeCode
+- TaskTitlePrefix
+- DefaultTaskDescription
+- PriorityLevel (1-5)
+- DueAtUtc
+- CompensationAmount (>= 0)
+- Pages: QuickSelectPageTaskRequest[]
+    - ChapterPageId
+    - ChapterPageVersionId
+    - DescriptionOverride? (optional per-page override)
+```
+
+### Response DTO
+
+```csharp
+QuickSelectTaskAssignmentResult
+- CreatedTaskCount
+- CreatedTasks: QuickSelectCreatedTaskDto[]
+    - ChapterPageTaskId
+    - ChapterPageId
+    - ChapterPageVersionId
+    - PageNo
+```
+
+### UI scope
+
+Quick Select dialog UI is not yet implemented. This session implements backend only.
+
+---
+
 ## 6.y Manage Series Contributors Page
 
 ### Route
