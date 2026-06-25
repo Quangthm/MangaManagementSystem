@@ -93,14 +93,22 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     _context.Roles.Where(r => r.RoleName == "Assistant"),
                     x => x.u.RoleId,
                     r => r.RoleId,
-                    (x, r) => new QuickSelectAssistantDto(
+                    (x, r) => new
+                    {
                         x.u.UserId,
                         x.u.DisplayName,
                         x.u.Username,
                         x.u.Email
-                    )
+                    }
                 )
                 .OrderBy(x => x.DisplayName)
+                .ThenBy(x => x.Username)
+                .Select(x => new QuickSelectAssistantDto(
+                    x.UserId,
+                    x.DisplayName,
+                    x.Username,
+                    x.Email
+                ))
                 .ToListAsync(cancellationToken);
 
             return assistants;
