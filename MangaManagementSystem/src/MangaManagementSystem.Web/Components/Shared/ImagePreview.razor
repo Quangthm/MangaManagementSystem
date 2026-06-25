@@ -1,0 +1,46 @@
+@using Microsoft.AspNetCore.Components
+
+@if (string.IsNullOrWhiteSpace(ImageUrl))
+{
+    return;
+}
+
+<button type="button"
+        class="mf-ip-thumb"
+        @onclick="OpenPreview"
+        @onclick:stopPropagation="true">
+    <img src="@ImageUrl" alt="@AltText" class="mf-ip-thumb-img" />
+</button>
+
+@if (_showPreview)
+{
+    <MudOverlay Visible="true" DarkBackground="true" AutoClose="true" OnClick="ClosePreview"
+                Class="mf-ip-overlay">
+        <div class="mf-ip-lightbox" @onclick:stopPropagation="true">
+            <button type="button" class="mf-ip-close" @onclick="ClosePreview" title="Close">&times;</button>
+            <img src="@ImageUrl" alt="@AltText" class="mf-ip-full" />
+            @if (!string.IsNullOrWhiteSpace(Title))
+            {
+                <div class="mf-ip-title">@Title</div>
+            }
+        </div>
+    </MudOverlay>
+}
+
+@code {
+    [Parameter] public string? ImageUrl { get; set; }
+    [Parameter] public string AltText { get; set; } = string.Empty;
+    [Parameter] public string? Title { get; set; }
+
+    private bool _showPreview;
+
+    private void OpenPreview()
+    {
+        _showPreview = true;
+    }
+
+    private void ClosePreview()
+    {
+        _showPreview = false;
+    }
+}

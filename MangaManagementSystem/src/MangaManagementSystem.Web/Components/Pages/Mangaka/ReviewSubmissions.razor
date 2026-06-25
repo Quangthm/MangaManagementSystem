@@ -172,7 +172,11 @@
                                 @if (task.StatusCode == "UNDER_REVIEW" && !string.IsNullOrWhiteSpace(task.CompletedOutputUrl))
                                 {
                                     <MudText Typo="Typo.body2" Class="mt-2"><strong>Submitted Output:</strong></MudText>
-                                    <MudImage Src="@task.CompletedOutputUrl" Alt="Submitted output" MaxHeight="200" Class="mt-1 rounded" ObjectFit="ObjectFit.Contain" />
+                                    <div style="margin-top: 4px;">
+                                        <ImagePreview ImageUrl="@task.CompletedOutputUrl"
+                                                      AltText="Submitted output"
+                                                      Title="Submitted Output Preview" />
+                                    </div>
                                     @if (!string.IsNullOrWhiteSpace(task.SeriesSlug) && task.ChapterId.HasValue)
                                     {
                                         <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary"
@@ -186,7 +190,11 @@
                                 @if (!string.IsNullOrWhiteSpace(task.PageImageUrl))
                                 {
                                     <MudText Typo="Typo.body2" Class="mt-2"><strong>Original Page:</strong></MudText>
-                                    <MudImage Src="@task.PageImageUrl" Alt="Original page" MaxHeight="150" Class="mt-1 rounded" ObjectFit="ObjectFit.Contain" />
+                                    <div style="margin-top: 4px;">
+                                        <ImagePreview ImageUrl="@task.PageImageUrl"
+                                                      AltText="Original page"
+                                                      Title="Original Page Preview" />
+                                    </div>
                                     @if (!string.IsNullOrWhiteSpace(task.SeriesSlug) && task.ChapterId.HasValue)
                                     {
                                         <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary"

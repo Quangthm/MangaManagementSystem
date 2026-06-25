@@ -1,2 +1,0 @@
-SELECT name, definition FROM sys.check_constraints WHERE parent_object_id = OBJECT_ID(N'manga.PageRegion') ORDER BY name;
-SELECT COLUMN_NAME, IS_NULLABLE, DATA_TYPE, NUMERIC_PRECISION, NUMERIC_SCALE, COLUMN_DEFAULT FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'manga' AND TABLE_NAME = 'PageRegion' AND COLUMN_NAME IN ('x', 'y', 'width', 'height');
