@@ -1,0 +1,518 @@
+@page "/mangaka/chapters"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@using MangaManagementSystem.Application.DTOs.Manga
+@using MangaManagementSystem.Web.Services.Api
+@attribute [Authorize(Roles = "Mangaka")]
+@inject IMangakaChapterApiClient ChapterClient
+@inject IMangakaSeriesApiClient SeriesClient
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthStateProvider
+
+<MangakaLayout>
+    <div class="mf-page" style="padding: 24px;">
+        <MudButton Variant="Variant.Text"
+                   StartIcon="@Icons.Material.Filled.ArrowBack"
+                   Style="color: #64748b; margin-bottom: 16px;"
+                   OnClick="@(() => Nav.NavigateTo("/mangaka"))">
+            Back to Mangaka Dashboard
+        </MudButton>
+
+        <div class="mf-page-header" style="margin-bottom: 24px;">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Chapter Submission Management</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Create, edit, and submit chapter drafts for editorial review</MudText>
+        </div>
+
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error">@_error</MudAlert>
+        }
+        else
+        {
+            @* Filters *@
+            <MudPaper Class="pa-4 mb-4 mf-card" Elevation="0">
+                <MudGrid>
+                    <MudItem xs="12" md="4">
+                        <MudSelect T="Guid?" Label="Series" Value="@_selectedSeriesId"
+                                   Variant="Variant.Outlined" Clearable="true"
+                                   ValueChanged="OnSeriesFilterChanged">
+                            <MudSelectItem T="Guid?" Value="@(null)">All Series</MudSelectItem>
+                            @foreach (var series in _seriesList)
+                            {
+                                <MudSelectItem T="Guid?" Value="@series.SeriesId">@series.Title</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" md="4">
+                        <MudSelect T="string" Label="Status" Value="@_statusFilter"
+                                   Variant="Variant.Outlined" Clearable="true"
+                                   ValueChanged="OnStatusFilterChanged">
+                            <MudSelectItem T="string" Value="@("ALL")">All Statuses</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("DRAFT")">Draft</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("UNDER_REVIEW")">Under Review</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("REVISION_REQUESTED")">Revision Requested</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("APPROVED")">Approved</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("SCHEDULED")">Scheduled</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("RELEASED")">Released</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("ON_HOLD")">On Hold</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("CANCELLED")">Cancelled</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" md="4" Style="display: flex; align-items: flex-end;">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Add"
+                                   OnClick="OpenCreateDialog">
+                            Create Chapter Draft
+                        </MudButton>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+
+            @* Chapter List *@
+            @if (!_filteredChapters.Any())
+            {
+                <MudPaper Class="pa-8 mf-card text-center" Elevation="0">
+                    <MudIcon Icon="@Icons.Material.Filled.LibraryBooks" Size="Size.Large" Color="Color.Default" />
+                    <MudText Typo="Typo.h5" Class="mt-2">No Chapters Found</MudText>
+                    <MudText Class="mf-muted">Create your first chapter draft to get started.</MudText>
+                </MudPaper>
+            }
+            else
+            {
+                <MudGrid>
+                    @foreach (var chapter in _filteredChapters)
+                    {
+                        <MudItem xs="12" md="6">
+                            <MudPaper Class="pa-5 mf-card" Elevation="0">
+                                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
+                                    <MudText Typo="Typo.h6" Class="font-weight-bold">
+                                        @chapter.ChapterNumberLabel
+                                        @if (!string.IsNullOrWhiteSpace(chapter.ChapterTitle))
+                                        {
+                                            <span style="color: #64748b; font-weight: 400;">— @chapter.ChapterTitle</span>
+                                        }
+                                    </MudText>
+                                    <MudChip T="string" Color="@GetStatusColor(chapter.StatusCode)" Size="Size.Small">@GetStatusLabel(chapter.StatusCode)</MudChip>
+                                </MudStack>
+
+                                <MudText Typo="Typo.body2" Class="mf-muted mb-1">
+                                    <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Small" Class="mr-1" />
+                                    @chapter.SeriesTitle
+                                </MudText>
+
+                                @if (chapter.PlannedReleaseDate.HasValue)
+                                {
+                                    <MudText Typo="Typo.body2" Class="mf-muted mb-1">
+                                        <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" Class="mr-1" />
+                                        Planned Release: @chapter.PlannedReleaseDate.Value.ToString("MMM dd, yyyy")
+                                    </MudText>
+                                }
+
+                                @if (chapter.LatestReview != null)
+                                {
+                                    <MudAlert Severity="@GetReviewSeverity(chapter.LatestReview.DecisionCode)"
+                                              Class="mt-3 mb-2" Dense="true" Variant="Variant.Outlined">
+                                        <MudText Typo="Typo.caption" Class="font-weight-bold">
+                                            Latest Review: @chapter.LatestReview.DecisionCode
+                                        </MudText>
+                                        <MudText Typo="Typo.caption">
+                                            By @chapter.LatestReview.ReviewerDisplayName on @chapter.LatestReview.ReviewedAtUtc.ToString("MMM dd, yyyy")
+                                        </MudText>
+                                        @if (!string.IsNullOrWhiteSpace(chapter.LatestReview.Comments))
+                                        {
+                                            <MudText Typo="Typo.body2" Class="mt-1">
+                                                @chapter.LatestReview.Comments
+                                            </MudText>
+                                        }
+                                    </MudAlert>
+                                }
+
+                                @if (chapter.StatusCode == "UNDER_REVIEW")
+                                {
+                                    <MudAlert Severity="Severity.Info" Class="mt-2" Dense="true" Variant="Variant.Filled">
+                                        Awaiting Tantou Editor review
+                                    </MudAlert>
+                                }
+
+                                <MudStack Row="true" Class="mt-3" Style="flex-wrap: wrap;" Spacing="2">
+                                    @if (chapter.StatusCode == "DRAFT" || chapter.StatusCode == "REVISION_REQUESTED")
+                                    {
+                                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                                                   OnClick="@(() => OpenEditDialog(chapter))">
+                                            Edit
+                                        </MudButton>
+                                        <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                                   Disabled="@_actionInProgress"
+                                                   OnClick="@(() => SubmitForReview(chapter.ChapterId))">
+                                            Submit for Review
+                                        </MudButton>
+                                    }
+                                    else if (chapter.StatusCode == "APPROVED")
+                                    {
+                                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                                   OnClick="@(() => OpenScheduleDialog(chapter))">
+                                            Schedule Release
+                                        </MudButton>
+                                    }
+                                </MudStack>
+                            </MudPaper>
+                        </MudItem>
+                    }
+                </MudGrid>
+            }
+        }
+
+        @* Create Dialog *@
+        <MudDialog @bind-Visible="_showCreateDialog" Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
+            <TitleContent>Create Chapter Draft</TitleContent>
+            <DialogContent>
+                <MudSelect T="Guid" Label="Series" @bind-Value="_createSeriesId" Variant="Variant.Outlined" Required="true" Class="mb-3">
+                    @foreach (var series in _seriesList)
+                    {
+                        <MudSelectItem T="Guid" Value="@series.SeriesId">@series.Title</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudTextField @bind-Value="_createChapterNumberLabel" Label="Chapter Number Label"
+                              Variant="Variant.Outlined" Required="true" MaxLength="20"
+                              HelperText="Required. Must be unique within the series (e.g., '1', '2.5', 'Prologue')." />
+                <MudTextField @bind-Value="_createChapterTitle" Label="Chapter Title (optional)"
+                              Variant="Variant.Outlined" MaxLength="200" Class="mt-3" />
+            </DialogContent>
+            <DialogActions>
+                <MudButton OnClick="@(() => _showCreateDialog = false)">Cancel</MudButton>
+                <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                           Disabled="@(_createSeriesId == Guid.Empty || string.IsNullOrWhiteSpace(_createChapterNumberLabel) || _actionInProgress)"
+                           OnClick="CreateChapterDraft">
+                    Create
+                </MudButton>
+            </DialogActions>
+        </MudDialog>
+
+        @* Edit Dialog *@
+        <MudDialog @bind-Visible="_showEditDialog" Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
+            <TitleContent>Edit Chapter Draft</TitleContent>
+            <DialogContent>
+                @if (_editChapter != null)
+                {
+                    <MudText Typo="Typo.body2" Class="mb-2 mf-muted">
+                        Series: @_editChapter.SeriesTitle
+                    </MudText>
+                    <MudTextField @bind-Value="_editChapterNumberLabel" Label="Chapter Number Label"
+                                  Variant="Variant.Outlined" Required="true" MaxLength="20"
+                                  HelperText="Must be unique within the series." />
+                    <MudTextField @bind-Value="_editChapterTitle" Label="Chapter Title (optional)"
+                                  Variant="Variant.Outlined" MaxLength="200" Class="mt-3" />
+                }
+            </DialogContent>
+            <DialogActions>
+                <MudButton OnClick="@(() => _showEditDialog = false)">Cancel</MudButton>
+                <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                           Disabled="@(string.IsNullOrWhiteSpace(_editChapterNumberLabel) || _actionInProgress)"
+                           OnClick="UpdateChapterDraft">
+                    Save Changes
+                </MudButton>
+            </DialogActions>
+        </MudDialog>
+
+        @* Schedule Dialog *@
+        <MudDialog @bind-Visible="_showScheduleDialog" Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
+            <TitleContent>Schedule Release Date</TitleContent>
+            <DialogContent>
+                @if (_scheduleChapter != null)
+                {
+                    <MudText Typo="Typo.body2" Class="mb-2">
+                        <strong>@_scheduleChapter.ChapterNumberLabel</strong>
+                        @if (!string.IsNullOrWhiteSpace(_scheduleChapter.ChapterTitle))
+                        {
+                            <span>— @_scheduleChapter.ChapterTitle</span>
+                        }
+                    </MudText>
+                    <MudText Typo="Typo.caption" Class="mf-muted mb-3">
+                        Select a planned release date for this approved chapter.
+                    </MudText>
+                    <MudDatePicker @bind-Date="_scheduleDate" Label="Planned Release Date"
+                                   Variant="Variant.Outlined" Required="true"
+                                   MinDate="DateTime.Today"
+                                   HelperText="Must be today or later. Consider the series publication frequency." />
+                }
+            </DialogContent>
+            <DialogActions>
+                <MudButton OnClick="@(() => _showScheduleDialog = false)">Cancel</MudButton>
+                <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                           Disabled="@(!_scheduleDate.HasValue || _actionInProgress)"
+                           OnClick="ScheduleChapter">
+                    Schedule
+                </MudButton>
+            </DialogActions>
+        </MudDialog>
+    </div>
+</MangakaLayout>
+
+@code {
+    private Guid _currentUserId;
+    private bool _loading = true;
+    private string? _error;
+    private bool _actionInProgress;
+
+    private IReadOnlyList<MangakaChapterListItemDto> _chapters = Array.Empty<MangakaChapterListItemDto>();
+    private IReadOnlyList<SeriesDto> _seriesList = Array.Empty<SeriesDto>();
+
+    private Guid? _selectedSeriesId;
+    private string _statusFilter = "ALL";
+
+    // Create dialog state
+    private bool _showCreateDialog;
+    private Guid _createSeriesId;
+    private string _createChapterNumberLabel = string.Empty;
+    private string? _createChapterTitle;
+
+    // Edit dialog state
+    private bool _showEditDialog;
+    private MangakaChapterListItemDto? _editChapter;
+    private string _editChapterNumberLabel = string.Empty;
+    private string? _editChapterTitle;
+
+    // Schedule dialog state
+    private bool _showScheduleDialog;
+    private MangakaChapterListItemDto? _scheduleChapter;
+    private DateTime? _scheduleDate;
+
+    private IEnumerable<MangakaChapterListItemDto> _filteredChapters => ApplyFilters(_chapters);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var userIdClaim = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrWhiteSpace(userIdClaim) || !Guid.TryParse(userIdClaim, out _currentUserId))
+            {
+                _error = "Could not identify the current user. Please sign in again.";
+                return;
+            }
+
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load data: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            _seriesList = await SeriesClient.GetMySeriesAsync(_currentUserId);
+            _chapters = await ChapterClient.GetMyChaptersAsync(_currentUserId);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load data: {ex.Message}";
+        }
+    }
+
+    private IEnumerable<MangakaChapterListItemDto> ApplyFilters(IEnumerable<MangakaChapterListItemDto> source)
+    {
+        var query = source.AsEnumerable();
+
+        if (_selectedSeriesId.HasValue)
+        {
+            query = query.Where(c => c.SeriesId == _selectedSeriesId.Value);
+        }
+
+        if (_statusFilter != "ALL")
+        {
+            query = query.Where(c => c.StatusCode == _statusFilter);
+        }
+
+        return query;
+    }
+
+    private void OnSeriesFilterChanged(Guid? value)
+    {
+        _selectedSeriesId = value;
+    }
+
+    private void OnStatusFilterChanged(string value)
+    {
+        _statusFilter = value ?? "ALL";
+    }
+
+    private void OpenCreateDialog()
+    {
+        _createSeriesId = _seriesList.FirstOrDefault()?.SeriesId ?? Guid.Empty;
+        _createChapterNumberLabel = string.Empty;
+        _createChapterTitle = null;
+        _showCreateDialog = true;
+    }
+
+    private async Task CreateChapterDraft()
+    {
+        if (_createSeriesId == Guid.Empty || string.IsNullOrWhiteSpace(_createChapterNumberLabel))
+            return;
+
+        _actionInProgress = true;
+        try
+        {
+            var request = new CreateChapterDraftRequest(
+                _createSeriesId,
+                _createChapterNumberLabel.Trim(),
+                string.IsNullOrWhiteSpace(_createChapterTitle) ? null : _createChapterTitle.Trim());
+
+            await ChapterClient.CreateChapterDraftAsync(_currentUserId, request);
+            _showCreateDialog = false;
+            Snackbar.Add("Chapter draft created successfully.", Severity.Success);
+            await RefreshAfterMutation();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _actionInProgress = false;
+        }
+    }
+
+    private void OpenEditDialog(MangakaChapterListItemDto chapter)
+    {
+        _editChapter = chapter;
+        _editChapterNumberLabel = chapter.ChapterNumberLabel;
+        _editChapterTitle = chapter.ChapterTitle;
+        _showEditDialog = true;
+    }
+
+    private async Task UpdateChapterDraft()
+    {
+        if (_editChapter == null || string.IsNullOrWhiteSpace(_editChapterNumberLabel))
+            return;
+
+        _actionInProgress = true;
+        try
+        {
+            var request = new UpdateChapterDraftRequest(
+                _editChapterNumberLabel.Trim(),
+                string.IsNullOrWhiteSpace(_editChapterTitle) ? null : _editChapterTitle.Trim());
+
+            await ChapterClient.UpdateChapterDraftAsync(_currentUserId, _editChapter.ChapterId, request);
+            _showEditDialog = false;
+            Snackbar.Add("Chapter draft updated successfully.", Severity.Success);
+            await RefreshAfterMutation();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _actionInProgress = false;
+        }
+    }
+
+    private async Task SubmitForReview(Guid chapterId)
+    {
+        _actionInProgress = true;
+        try
+        {
+            await ChapterClient.SubmitChapterForReviewAsync(_currentUserId, chapterId);
+            Snackbar.Add("Chapter submitted for review.", Severity.Success);
+            await RefreshAfterMutation();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _actionInProgress = false;
+        }
+    }
+
+    private void OpenScheduleDialog(MangakaChapterListItemDto chapter)
+    {
+        _scheduleChapter = chapter;
+        _scheduleDate = DateTime.Today.AddDays(7);
+        _showScheduleDialog = true;
+    }
+
+    private async Task ScheduleChapter()
+    {
+        if (_scheduleChapter == null || !_scheduleDate.HasValue)
+            return;
+
+        _actionInProgress = true;
+        try
+        {
+            var request = new ScheduleApprovedChapterRequest(_scheduleDate.Value);
+            await ChapterClient.ScheduleApprovedChapterAsync(_currentUserId, _scheduleChapter.ChapterId, request);
+            _showScheduleDialog = false;
+            Snackbar.Add("Chapter scheduled successfully.", Severity.Success);
+            await RefreshAfterMutation();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _actionInProgress = false;
+        }
+    }
+
+    private async Task RefreshAfterMutation()
+    {
+        try
+        {
+            _chapters = await ChapterClient.GetMyChaptersAsync(_currentUserId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to refresh: {ex.Message}", Severity.Warning);
+        }
+    }
+
+    private static Severity GetReviewSeverity(string decisionCode) => decisionCode switch
+    {
+        "APPROVED" => Severity.Success,
+        "REVISION_REQUESTED" => Severity.Warning,
+        "CANCELLED" => Severity.Error,
+        _ => Severity.Info
+    };
+
+    private static Color GetStatusColor(string? status) => status switch
+    {
+        "DRAFT" => Color.Default,
+        "UNDER_REVIEW" => Color.Info,
+        "REVISION_REQUESTED" => Color.Warning,
+        "APPROVED" => Color.Success,
+        "SCHEDULED" => Color.Primary,
+        "RELEASED" => Color.Success,
+        "ON_HOLD" => Color.Dark,
+        "CANCELLED" => Color.Error,
+        _ => Color.Default
+    };
+
+    private static string GetStatusLabel(string? status) => status switch
+    {
+        "DRAFT" => "Draft",
+        "UNDER_REVIEW" => "Under Review",
+        "REVISION_REQUESTED" => "Revision Requested",
+        "APPROVED" => "Approved",
+        "SCHEDULED" => "Scheduled",
+        "RELEASED" => "Released",
+        "ON_HOLD" => "On Hold",
+        "CANCELLED" => "Cancelled",
+        _ => status ?? "Unknown"
+    };
+}

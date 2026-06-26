@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -8,8 +10,8 @@ using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Infrastructure.Persistence;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 
 namespace MangaManagementSystem.Infrastructure.Repositories
@@ -183,6 +185,17 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     _context.ChapterPageTasks.AddRange(tasks);
                     _context.AuditEvents.AddRange(auditEvents);
 
+                    foreach (var item in plan.Items)
+                    {
+                        var debugRegion = regionLookup[item.ChapterPageVersionId];
+                        _logger.LogInformation(
+                            "QuickSelect staging: TaskId={TaskId}, PageNo={PageNo}, PageRegionId={PageRegionId}, TypeCode={TypeCode}, X={X}, Y={Y}, Width={Width}, Height={Height}, SourceType={SourceType}, ConfidenceScore={ConfidenceScore}",
+                            item.ChapterPageTaskId, item.PageNo, debugRegion.PageRegionId,
+                            debugRegion.TypeCode, debugRegion.X, debugRegion.Y,
+                            debugRegion.Width, debugRegion.Height, debugRegion.SourceType,
+                            debugRegion.ConfidenceScore);
+                    }
+
                     await _context.SaveChangesAsync(cancellationToken);
                     await transaction.CommitAsync(cancellationToken);
 
@@ -191,9 +204,18 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                         CreatedTasks: createdDtos
                     );
                 }
-                catch
+                catch (Exception ex)
                 {
-                    await transaction.RollbackAsync(cancellationToken);
+                    _logger.LogError(ex,
+                        "QuickSelect Persist failed for ActorUserId={ActorUserId}, SeriesId={SeriesId}, ChapterId={ChapterId}, PageCount={PageCount}, TypeCode={TypeCode}, AssignedTo={AssignedTo}",
+                        plan.ActorUserId, plan.SeriesId, plan.ChapterId, plan.Items.Count, plan.TypeCode, plan.AssignedToUserId);
+
+                    try { await transaction.RollbackAsync(cancellationToken); }
+                    catch (Exception rollbackEx)
+                    {
+                        _logger.LogError(rollbackEx, "Rollback also failed during QuickSelect persist error handling.");
+                    }
+
                     throw;
                 }
             });
@@ -202,24 +224,59 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         private async Task AcquireAppLockAsync(
             QuickSelectAssignmentPlan plan, CancellationToken ct)
         {
-            var lockResource = $"manga_quick_select_task_assignment_{plan.ActorUserId}_{plan.SeriesId}_{plan.ChapterId}";
+            var connection = _context.Database.GetDbConnection();
 
-            var lockResultParam = new SqlParameter("@result", System.Data.SqlDbType.Int)
+            if (connection.State != ConnectionState.Open)
             {
-                Direction = System.Data.ParameterDirection.Output
-            };
+                await connection.OpenAsync(ct);
+            }
 
-            await _context.Database.ExecuteSqlRawAsync(
-                "EXEC sp_getapplock @Resource, @LockMode, @LockOwner, @LockTimeout, @Result OUTPUT",
-                new SqlParameter("@Resource", lockResource),
-                new SqlParameter("@LockMode", "Exclusive"),
-                new SqlParameter("@LockOwner", "Transaction"),
-                new SqlParameter("@LockTimeout", 5000),
-                lockResultParam);
+            await using var command = connection.CreateCommand();
 
-            var lockResult = (int)lockResultParam.Value;
-            if (lockResult < 0)
+            var currentTransaction = _context.Database.CurrentTransaction;
+            if (currentTransaction is not null)
             {
+                command.Transaction = currentTransaction.GetDbTransaction();
+            }
+
+            command.CommandText = """
+                DECLARE @lockResult int;
+
+                EXEC @lockResult = sys.sp_getapplock
+                    @Resource = @resource,
+                    @LockMode = @lockMode,
+                    @LockOwner = @lockOwner,
+                    @LockTimeout = @lockTimeout;
+
+                SELECT @lockResult;
+                """;
+
+            var resource = command.CreateParameter();
+            resource.ParameterName = "@resource";
+            resource.Value = $"manga_quick_select_task_assignment_{plan.ActorUserId}_{plan.SeriesId}_{plan.ChapterId}";
+            command.Parameters.Add(resource);
+
+            var lockMode = command.CreateParameter();
+            lockMode.ParameterName = "@lockMode";
+            lockMode.Value = "Exclusive";
+            command.Parameters.Add(lockMode);
+
+            var lockOwner = command.CreateParameter();
+            lockOwner.ParameterName = "@lockOwner";
+            lockOwner.Value = "Transaction";
+            command.Parameters.Add(lockOwner);
+
+            var lockTimeout = command.CreateParameter();
+            lockTimeout.ParameterName = "@lockTimeout";
+            lockTimeout.Value = 5000;
+            command.Parameters.Add(lockTimeout);
+
+            var resultObj = await command.ExecuteScalarAsync(ct);
+            var result = Convert.ToInt32(resultObj, CultureInfo.InvariantCulture);
+
+            if (result < 0)
+            {
+                _logger.LogWarning("sp_getapplock returned {LockResult} for resource {Resource}", result, resource.Value);
                 throw new InvalidOperationException(
                     "Another Quick Select assignment is already in progress for this chapter. Please wait and try again.");
             }

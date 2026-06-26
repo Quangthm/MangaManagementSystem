@@ -167,8 +167,8 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Quick Select task assignment failed for series {SeriesId}, chapter {ChapterId}.",
-                    request.SeriesId, request.ChapterId);
+                _logger.LogError(ex, "Quick Select task assignment failed for ActorUserId={ActorUserId}, SeriesId={SeriesId}, ChapterId={ChapterId}, PageCount={PageCount}.",
+                    actorUserId, request.SeriesId, request.ChapterId, request.Pages?.Count ?? 0);
                 return Problem(
                     detail: "Quick Select assignment failed. No tasks were created.",
                     statusCode: StatusCodes.Status500InternalServerError);

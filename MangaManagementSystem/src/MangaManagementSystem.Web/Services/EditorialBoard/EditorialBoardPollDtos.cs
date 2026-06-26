@@ -43,3 +43,11 @@ public sealed record CastVoteResult(
     string ChoiceCode,
     string? VoteReason,
     DateTime VotedAtUtc);
+
+public sealed record FinalizePollResult(
+    Guid PollId,
+    Guid SeriesId,
+    string PollStatusCode,
+    string SeriesStatusCode,
+    string? PublicationFrequencyCode,
+    DateTime EndedAtUtc);

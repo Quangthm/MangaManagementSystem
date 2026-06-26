@@ -101,7 +101,7 @@ namespace MangaManagementSystem.Application.Services
                 var bounds = await _imageMetadataProvider.GetImageBoundsAsync(
                     fileResource.CloudinaryPublicId, cancellationToken);
 
-                if (bounds == null)
+                if (bounds == null || bounds.Width <= 0 || bounds.Height <= 0)
                     throw new InvalidOperationException(
                         "Selected page image dimensions could not be loaded. No tasks were created.");
 

@@ -16,5 +16,6 @@ public class Chapter : BaseEntity
         public DateTime CreatedAtUtc { get; set; }
         public Guid? CreatedByUserId { get; set; }
         public User? CreatedByUser { get; set; }
+        public DateTime? UpdatedAtUtc { get; set; }
     }
 }
