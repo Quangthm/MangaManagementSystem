@@ -30,7 +30,7 @@ namespace MangaManagementSystem.Application.Services
                 dto.TaskTitle,
                 dto.TaskDescription,
                 (byte)dto.PriorityLevel,
-                dto.DueAtUtc ?? DateTime.UtcNow,
+                dto.DueAtUtc ?? DateTime.UtcNow.AddDays(7),
                 dto.CompensationAmount,
                 dto.PageRegionIds);
 
@@ -80,12 +80,13 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<bool> DeleteChapterPageTaskAsync(Guid id)
         {
-            var entity = await _unitOfWork.ChapterPageTasks.GetByIdAsync(id);
+            var entity = await _unitOfWork.ChapterPageTasks.GetByIdWithRegionsAsync(id);
             if (entity == null)
             {
                 return false;
             }
 
+            entity.PageRegions.Clear();
             _unitOfWork.ChapterPageTasks.Delete(entity);
             await _unitOfWork.SaveChangesAsync();
 
@@ -134,6 +135,12 @@ namespace MangaManagementSystem.Application.Services
             return MapToDtoWithAssistantContext(entity);
         }
 
+        public async Task<IEnumerable<ChapterPageTaskDto>> GetChapterPageTasksByChapterPageIdAsync(Guid chapterPageId)
+        {
+            var entities = await _unitOfWork.ChapterPageTasks.GetByChapterPageIdWithRegionsAsync(chapterPageId);
+            return entities.Select(MapToDto).ToList();
+        }
+
         private async Task AttachPageRegionsAsync(ChapterPageTask entity, IReadOnlyList<Guid> pageRegionIds)
         {
             if (pageRegionIds == null)
@@ -176,7 +183,10 @@ namespace MangaManagementSystem.Application.Services
                     r.SourceType,
                     r.OriginalText,
                     r.CreatedByUserId,
-                    r.UpdatedByUserId)).ToList()
+                    r.UpdatedByUserId)).ToList(),
+                AssignedToDisplayName: t.AssignedToUser?.DisplayName,
+                AssignedUsername: t.AssignedToUser?.Username,
+                CreatedAtUtc: t.CreatedAtUtc
             );
         }
 
@@ -189,6 +199,23 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task ReturnTaskForReworkAsync(Guid actorUserId, Guid taskId, string reason)
         {
+            if (actorUserId == Guid.Empty)
+                throw new InvalidOperationException("Actor user ID is required.");
+            if (taskId == Guid.Empty)
+                throw new InvalidOperationException("Task ID is required.");
+            if (string.IsNullOrWhiteSpace(reason))
+                throw new InvalidOperationException("Updated task instructions are required when returning a task for rework.");
+
+            var task = await _unitOfWork.ChapterPageTasks.GetByIdWithRegionsAsync(taskId);
+            if (task == null)
+                throw new InvalidOperationException("Task not found.");
+
+            if (task.CreatedByUserId != actorUserId)
+                throw new InvalidOperationException("You are not authorized to return this task for rework.");
+
+            if (task.StatusCode != "UNDER_REVIEW")
+                throw new InvalidOperationException("Only tasks currently under review can be returned for rework.");
+
             await _unitOfWork.ChapterPageTasks.ReturnTaskForReworkAsync(actorUserId, taskId, reason);
         }
 
@@ -372,6 +399,7 @@ namespace MangaManagementSystem.Application.Services
                 CompensationAmount: t.CompensationAmount,
                 AssignedUsername: t.AssignedToUser?.Username,
                 CompletedOutputUrl: completedFile?.CloudinarySecureUrl,
+                CreatedAtUtc: t.CreatedAtUtc,
                 SeriesSlug: series?.Slug,
                 ChapterId: chapter?.ChapterId,
                 SourceChapterPageVersionId: firstRegion?.ChapterPageVersionId

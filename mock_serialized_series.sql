@@ -45,7 +45,7 @@ BEGIN
     SELECT TOP (1)
         @MangakaUserId = u.user_id
     FROM auth.Users u
-    WHERE u.username = N'TestMangaka';
+    WHERE u.username = N'TestMangaka1';
 END;
 
 IF @AssistantUserId IS NULL
@@ -53,7 +53,7 @@ BEGIN
     SELECT TOP (1)
         @AssistantUserId = u.user_id
     FROM auth.Users u
-    WHERE u.username = N'TestAssistant';
+    WHERE u.username = N'TestAssistant1';
 END;
 
 IF @EditorUserId IS NULL
@@ -61,7 +61,7 @@ BEGIN
     SELECT TOP (1)
         @EditorUserId = u.user_id
     FROM auth.Users u
-    WHERE u.username = N'TestEditor';
+    WHERE u.username = N'TestEditor1';
 END;
 
 IF @MangakaUserId IS NULL

@@ -168,14 +168,16 @@
         <MudAutocomplete T="EligibleAssistantContributorDto"
                          Label="Assistant"
                          Variant="Variant.Outlined"
-                         SearchFunc="SearchAssistantsAsync"
-                         ToStringFunc="@(x => x is null ? string.Empty : $"{x.DisplayName} ({x.Username ?? x.Email ?? "No username/email"})")"
+                         SearchFunc="@SearchAssistantsAsync"
+                         ToStringFunc="@FormatAssistant"
                          Value="@_selectedAssistantCandidate"
                          ValueChanged="OnAssistantCandidateChanged"
                          ResetValueOnEmptyText="false"
                          Clearable="true"
                          CoerceText="false"
-                         CoerceValue="false" />
+                         CoerceValue="false"
+                         MinCharacters="1"
+                         DropdownSettings="@(new DropdownSettings { Fixed = true })" />
 
         <MudStack Row="true" Class="mt-4" Justify="Justify.FlexEnd" Spacing="2">
             <MudButton Variant="Variant.Text" OnClick="CloseAddAssistantDialog">Cancel</MudButton>
@@ -363,6 +365,22 @@
             _ => Color.Default
         };
 
+    private static string FormatAssistant(EligibleAssistantContributorDto? assistant)
+    {
+        if (assistant is null)
+            return string.Empty;
+
+        if (!string.IsNullOrWhiteSpace(assistant.DisplayName))
+            return !string.IsNullOrWhiteSpace(assistant.Username)
+                ? $"{assistant.DisplayName} ({assistant.Username})"
+                : assistant.DisplayName;
+
+        if (!string.IsNullOrWhiteSpace(assistant.Username))
+            return assistant.Username;
+
+        return assistant.Email ?? assistant.UserId.ToString();
+    }
+
     private async Task OpenAddAssistantDialogAsync()
     {
         _selectedAssistantCandidate = null;
@@ -382,14 +400,27 @@
         return Task.CompletedTask;
     }
 
-    private async Task<IEnumerable<EligibleAssistantContributorDto>> SearchAssistantsAsync(string value, CancellationToken cancellationToken)
+    private async Task<IEnumerable<EligibleAssistantContributorDto>> SearchAssistantsAsync(string? value, CancellationToken cancellationToken)
     {
         if (!_selectedSeriesId.HasValue)
         {
             return Enumerable.Empty<EligibleAssistantContributorDto>();
         }
 
-        return await ContributorApiClient.SearchEligibleAssistantsAsync(_actorUserId, _selectedSeriesId.Value, value, cancellationToken);
+        try
+        {
+            return await ContributorApiClient.SearchEligibleAssistantsAsync(
+                _actorUserId, _selectedSeriesId.Value, value, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return Enumerable.Empty<EligibleAssistantContributorDto>();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not search assistants: {ex.Message}", Severity.Error);
+            return Enumerable.Empty<EligibleAssistantContributorDto>();
+        }
     }
 
     private async Task ConfirmAddAssistantAsync()

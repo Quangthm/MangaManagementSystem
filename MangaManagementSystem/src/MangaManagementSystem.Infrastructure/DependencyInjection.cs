@@ -51,6 +51,7 @@ namespace MangaManagementSystem.Infrastructure
             services.AddScoped<IChapterPageAnnotationRepository, ChapterPageAnnotationRepository>();
             services.AddScoped<ISeriesProposalRepository, SeriesProposalRepository>();
             services.AddScoped<IEditorDashboardRepository, EditorDashboardRepository>();
+            services.AddScoped<IAssistantCompletedWorkRepository, AssistantCompletedWorkRepository>();
             services.AddScoped<IEditorChapterReviewRepository, EditorChapterReviewRepository>();
             services.AddScoped<IEditorAnnotationRepository, EditorAnnotationRepository>();
             services.AddScoped<IEditorSeriesRepository, EditorSeriesRepository>();
@@ -67,8 +68,14 @@ namespace MangaManagementSystem.Infrastructure
             // Assistant task submission
             services.AddScoped<MangaManagementSystem.Application.Interfaces.IAssistantTaskSubmissionService, Services.AssistantTaskSubmissionService>();
 
+            // AI Service
+            services.AddHttpClient<IAiService, AiService>();
+            services.AddScoped<IAiService, AiService>();
 
             services.AddScoped<IEditorialBoardRepository, EditorialBoardRepository>();
+
+            services.AddScoped<IImageMetadataProvider, CloudinaryImageMetadataProvider>();
+            services.AddScoped<IQuickSelectRepository, QuickSelectRepository>();
             return services;
         }
     }

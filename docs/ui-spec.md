@@ -259,6 +259,490 @@ A unified series page that can later become the public reader-facing series URL.
 | Admin | No normal manga production actions. |
 
 ---
+# Suggested Additions — UI Specification
+
+---
+
+## 2.x Implemented Mangaka Routes
+
+| Route                                            | Purpose                                                                              | Access                                         | Notes                                                                                                   |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `/mangaka`                                       | Mangaka dashboard landing page with Current Series and Series Proposals tab content. | Mangaka                                        | Uses custom dashboard shell and internal tab state. Do not refactor without Plan Mode first.            |
+| `/mangaka/review-submissions`                    | Dedicated Assistant Review / task review management page.                            | Mangaka                                        | Uses `<MangakaLayout>`. Sidebar "Assistant Review" routes here.                                         |
+| `/mangaka/contributors`                          | Dedicated Manage Series Contributors page.                                           | Mangaka                                        | Uses `<MangakaLayout>`. Sidebar "Manage Contributors" routes here.                                      |
+| `/series/{slug}`                                 | Stable series page when allowed by navigation policy.                                | Authorized users now; public later if enabled. | Back navigation uses safe returnUrl.                                                                    |
+| `/series/{slug}/workspace?chapterId={chapterId}` | Actual current chapter workspace route used by implementation.                       | Authorized workspace users.                    | Workspace links may include returnUrl. Page/version query support is deferred unless implemented later. |
+
+### Routing notes
+
+* `/mangaka/review-submissions` and `/mangaka/contributors` are dedicated pages, not embedded dashboard tabs.
+* Current Series and Series Proposals remain inside `/mangaka` for now.
+* Do not migrate `/mangaka/series` or `/mangaka/proposals` without a separate plan.
+* Use safe local return URLs for cross-page navigation.
+* The actual current workspace route is `/series/{slug}/workspace?chapterId={chapterId}`. If older spec text mentions `/workspace/chapters/{chapterId}`, mark it as planned/legacy unless the route is implemented.
+
+---
+
+## 3.x Mangaka Dashboard — Current Implemented Behavior
+
+### Purpose
+
+The Mangaka dashboard shows only series where the logged-in user is an active Mangaka contributor.
+
+### Data scope
+
+The dashboard must load series through:
+
+```text
+GET /api/mangaka/series/my-series
+```
+
+The backend filters by:
+
+```text
+SeriesContributor.UserId == actorUserId
+AND SeriesContributor.EndDate == null
+AND User.StatusCode == ACTIVE
+AND User.Role == Mangaka
+```
+
+### Dashboard features
+
+| Element                          | Behavior                                                    |
+| -------------------------------- | ----------------------------------------------------------- |
+| Current Series tab               | Shows Mangaka-owned/contributed series cards only.          |
+| Series Proposals tab             | Existing dashboard proposal view; route migration deferred. |
+| Assistant Review sidebar item    | Navigates to `/mangaka/review-submissions`.                 |
+| Manage Contributors sidebar item | Navigates to `/mangaka/contributors`.                       |
+| Search/filter/sort               | Client-side controls for already loaded series cards.       |
+
+### Current Series card layout
+
+Series cards use a left-side portrait cover layout:
+
+```text
+┌────────────┬──────────────────────────────┐
+│  Cover     │ Title                        │
+│  120×180   │ Genre chips +N more          │
+│  portrait  │ Tag chips +N more            │
+│            │ Status / updated time        │
+│            │ View Draft / Submit / etc.   │
+└────────────┴──────────────────────────────┘
+```
+
+Rules:
+
+* Cover column is 2:3 portrait.
+* Missing cover shows a placeholder.
+* Genre chips and tag chips use `+N more` behavior.
+* Card click behavior remains status-aware:
+
+  * `PROPOSAL_DRAFT`: show draft details/edit flow.
+  * `SERIALIZED` and allowed statuses: navigate to `/series/{slug}`.
+  * review/locked statuses: show review/status modal or disabled state.
+
+---
+
+## 4.x Create / Edit Series Draft Modal — Implemented UI Details
+
+### Create Draft modal
+
+Add/confirm these fields:
+
+| Field                 | Behavior                                                                 |
+| --------------------- | ------------------------------------------------------------------------ |
+| Title                 | Required.                                                                |
+| Synopsis              | Required.                                                                |
+| Genres                | Required multi-select from normalized `manga.Genre`.                     |
+| Tags                  | Optional multi-select from normalized `manga.Tag`.                       |
+| Content language      | Required.                                                                |
+| Publication frequency | Optional proposed frequency: `WEEKLY`, `MONTHLY`, `IRREGULAR`, or unset. |
+| Cover image           | Optional `SERIES_COVER`; shown as portrait preview when selected.        |
+
+### Edit Draft modal
+
+Rules:
+
+* Available only while series status is `PROPOSAL_DRAFT`.
+* Synopsis textarea should use a larger height, currently 6 lines.
+* Existing saved publication frequency must pre-populate the dropdown.
+* Cover preview appears inline beside upload zone.
+* Cover preview is 120×180 portrait.
+* Clicking the cover preview opens a larger preview popup.
+* Empty synopsis must not be replaced with title fallback.
+* Empty synopsis should be rejected before save and by backend validation.
+
+### Cover preview popup
+
+| Element        | Behavior                                                                         |
+| -------------- | -------------------------------------------------------------------------------- |
+| Overlay/card   | Centered preview modal.                                                          |
+| Image          | Large contained preview, max height around 420px.                                |
+| Close controls | Header close button, footer Close button, and outside click where implemented.   |
+| Scope          | Works for create selected cover, edit current cover, and edit replacement cover. |
+
+---
+
+## 6.x Review Assistant Submissions Page
+
+### Route
+
+```text
+/mangaka/review-submissions
+```
+
+### Layout
+
+Uses:
+
+```text
+<MangakaLayout>
+```
+
+### Purpose
+
+Allows a Mangaka to review assistant task submissions and manage assistant task status.
+
+### Main UI elements
+
+| Element                  | Behavior                                                                                                 |
+| ------------------------ | -------------------------------------------------------------------------------------------------------- |
+| Back button              | Returns to `/mangaka`.                                                                                   |
+| Page title               | `Review Assistant Submissions` or equivalent task-review title.                                          |
+| Stat cards               | Shows counts by task state.                                                                              |
+| Search/filter bar        | Series/chapter/title search, task type filter, assistant filter, status filter.                          |
+| Task cards               | Show task and production context.                                                                        |
+| Original Page preview    | Shows source page/version preview when available.                                                        |
+| Submitted Output preview | Shows completed/submitted version when available.                                                        |
+| Workspace links          | Open `/series/{slug}/workspace?chapterId={chapterId}` with safe `returnUrl=/mangaka/review-submissions`. |
+| Action buttons           | Approve, Return for Rework, Cancel, Reassign where allowed.                                              |
+
+### Task card fields
+
+Each task card should show available values for:
+
+```text
+Series title
+Chapter number/title
+Page number
+Page version number
+Assigned assistant
+Task type
+Task title
+Task status
+Due date
+Priority
+Compensation
+Region count
+Original page preview
+Submitted output preview when available
+```
+
+### Action visibility rules
+
+| Action            | Visible for                | Result                                                                                                       |
+| ----------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Approve           | `UNDER_REVIEW`             | Accepts submitted work according to task workflow.                                                           |
+| Return for Rework | `UNDER_REVIEW`             | Returns the same task to the same Assistant with status `ASSIGNED`; clears submitted completed page version. |
+| Cancel            | Workflow-allowed states    | Cancels the task according to backend rules.                                                                 |
+| Reassign          | `ASSIGNED`, `UNDER_REVIEW` | Cancels old task and creates replacement `ASSIGNED` task for a different Assistant.                          |
+
+### Return for Rework dialog
+
+| Field                      | Behavior                                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------------------------ |
+| Dialog title               | Return for Rework.                                                                               |
+| Current assistant          | Display only.                                                                                    |
+| Updated task instructions  | Required. Textarea with helper text "Explain what the Assistant should revise before resubmitting." |
+| Submit button              | Return for Rework.                                                                               |
+
+Behavior:
+
+```text
+Return for Rework keeps the same assigned Assistant.
+It does not create a new task.
+It updates the same ChapterPageTask row.
+It changes the task from UNDER_REVIEW back to ASSIGNED.
+It clears completed_page_version_id.
+It replaces task_description with the updated instruction.
+It reloads the task list after success.
+```
+
+### Reassign dialog
+
+| Field                    | Behavior                                                                 |
+| ------------------------ | ------------------------------------------------------------------------ |
+| Current assignee         | Display only.                                                            |
+| New assistant            | Search/select eligible active Assistant contributor for the same series. |
+| Reason                   | Required, max 500 characters.                                            |
+| Updated task description | Optional if supported.                                                   |
+
+Behavior:
+
+```text
+Reassign changes ownership to a different Assistant.
+It cancels the old task.
+It creates a new replacement task with status ASSIGNED.
+It copies task-region links.
+It reloads the task list after success because the task id changes.
+```
+
+### Post-action refresh
+
+After Approve, Return for Rework, Cancel, or Reassign:
+
+```text
+Reload task list
+Clear dialog/action state
+Re-render page
+Keep current filters applied
+Refresh stat cards and action buttons
+```
+
+### Important distinction
+
+Return for Rework and Reassign must remain separate UI concepts:
+
+| Return for Rework                                | Reassign                                               |
+| ------------------------------------------------ | ------------------------------------------------------ |
+| Same Assistant                                   | Different Assistant                                    |
+| Same task row                                    | New replacement task row                               |
+| Only from `UNDER_REVIEW`                         | From `ASSIGNED` or `UNDER_REVIEW`                      |
+| Clears submitted completed page version          | Cancels old task and creates replacement               |
+| Uses `manga.usp_ChapterPageTask_ReturnForRework` | Uses `manga.usp_ChapterPageTask_AssignToDifferentUser` |
+
+---
+
+## 6.z Quick Select Task Assignment (Backend Only)
+
+### Purpose
+
+Allow a Mangaka to quickly create multiple assigned tasks at once by selecting pages, an assistant, and common task defaults. Each task links to one whole-page `PageRegion`.
+
+### API endpoints
+
+| Method | Route | Purpose |
+|---|---|---|
+| GET | `/api/mangaka/series/{seriesId}/chapters/quick-select` | Load chapters for Quick Select. |
+| GET | `/api/mangaka/chapters/{chapterId}/pages/quick-select` | Load pages/current versions for Quick Select. |
+| GET | `/api/mangaka/series/{seriesId}/assistants/quick-select` | Load active Assistant contributors for Quick Select. |
+| POST | `/api/mangaka/tasks/quick-select` | Create batch of assigned tasks. |
+
+### Backend behavior
+
+- Quick Select creates multiple new ASSIGNED tasks in one batch.
+- One task per selected page/current page version.
+- User selects pages, not regions.
+- Backend creates or reuses one `FULL_PAGE` `PageRegion` per selected page version.
+- `FULL_PAGE` dimensions come from Cloudinary via `IImageMetadataProvider`.
+- `FileResource` does not store image dimensions.
+- Each task links to its `FULL_PAGE` region.
+- Application validates the whole batch before persistence.
+- Infrastructure persists with EF batch insert and one `SaveChangesAsync`.
+- Transaction/app-lock prevents overlapping writes.
+- Rollback prevents partial tasks, regions, or audit rows.
+- Audit writes one `CHAPTER_PAGE_TASK_CREATED` event per created task.
+- No stored procedure is called for this workflow.
+
+### Request DTO
+
+```csharp
+QuickSelectTaskAssignmentRequest
+- SeriesId
+- ChapterId
+- AssignedToUserId
+- TypeCode
+- TaskTitlePrefix
+- DefaultTaskDescription
+- PriorityLevel (1-5)
+- DueAtUtc
+- CompensationAmount (>= 0)
+- Pages: QuickSelectPageTaskRequest[]
+    - ChapterPageId
+    - ChapterPageVersionId
+    - DescriptionOverride? (optional per-page override)
+```
+
+### Response DTO
+
+```csharp
+QuickSelectTaskAssignmentResult
+- CreatedTaskCount
+- CreatedTasks: QuickSelectCreatedTaskDto[]
+    - ChapterPageTaskId
+    - ChapterPageId
+    - ChapterPageVersionId
+    - PageNo
+```
+
+### UI scope
+
+Quick Select dialog is implemented on `/mangaka/review-submissions`. A "Quick Select" button opens a dialog with progressive sections:
+1. Select Series (from existing Mangaka series)
+2. Select Chapter (loads chapters for selected series)
+3. Select multiple Pages (multi-select checkboxes with Select All/Clear)
+4. Select Assistant (loads ACTIVE Assistant contributors for selected series)
+5. Task Details (type, title prefix, priority, due date, compensation)
+6. Default description + optional per-page overrides
+7. Submit — creates batch of ASSIGNED tasks
+
+Backend endpoints used:
+- `GET /api/mangaka/series/my-series` (existing, for series selector)
+- `GET /api/mangaka/series/{seriesId}/chapters/quick-select`
+- `GET /api/mangaka/chapters/{chapterId}/pages/quick-select`
+- `GET /api/mangaka/series/{seriesId}/assistants/quick-select`
+- `POST /api/mangaka/tasks/quick-select`
+
+Typed API client methods added to `IMangakaTaskApiClient` / `MangakaTaskApiClient`.
+
+On success: dialog closes, snackbar shows `"Created N task(s)."`, task list and stat cards refresh via existing `RefreshTasksAfterMutationAsync()`.
+
+---
+
+## 6.y Manage Series Contributors Page
+
+### Route
+
+```text
+/mangaka/contributors
+```
+
+### Layout
+
+Uses:
+
+```text
+<MangakaLayout>
+```
+
+### Purpose
+
+Allows a Mangaka to view contributor history and manage Assistant contributors for their own series.
+
+### Main UI elements
+
+| Element              | Behavior                                                                                     |
+| -------------------- | -------------------------------------------------------------------------------------------- |
+| Back button          | Returns to `/mangaka`.                                                                       |
+| Title                | `Manage Series Contributors`.                                                                |
+| Description          | Explains viewing contributor history, adding assistants, and ending assistant contributions. |
+| Stat cards           | My Series, Active Contributors, Active Assistants, Former Contributors.                      |
+| Series selector      | Uses the existing Mangaka `my-series` data.                                                  |
+| Search box           | Filters contributor table by contributor/series text.                                        |
+| Role filter          | All, Mangaka, Assistant, Tantou Editor.                                                      |
+| Status filter        | Active, Former, All.                                                                         |
+| Contributor table    | Shows series, contributor, role, status, start date, end date, actions.                      |
+| Add Assistant button | Opens Add Assistant dialog for selected series.                                              |
+
+### Contributor table behavior
+
+| Contributor type | UI behavior       |
+| ---------------- | ----------------- |
+| Active Assistant | Shows End action. |
+| Former Assistant | Read-only.        |
+| Mangaka          | Read-only.        |
+| Tantou Editor    | Read-only.        |
+
+### Add Assistant dialog
+
+| Element                 | Behavior                                                                                                      |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Selected series display | Shows the selected series title.                                                                              |
+| Assistant autocomplete  | Searches eligible ACTIVE Assistant users.                                                                     |
+| Search behavior         | Searches DisplayName, Username, and Email.                                                                    |
+| Eligibility             | Excludes only current active contributors of selected series. Historical ended rows do not block eligibility. |
+| Dropdown behavior       | Autocomplete inside dialog should use fixed dropdown positioning to avoid clipping.                           |
+| Add button              | Disabled until an assistant is selected.                                                                      |
+| Success                 | Adds assistant, closes dialog, refreshes contributor list and eligible search.                                |
+
+### End Assistant dialog
+
+| Element            | Behavior                                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------------------ |
+| Target display     | Shows assistant and series.                                                                      |
+| Reason             | Required, max 500 characters.                                                                    |
+| Success            | Sets contributor end date; does not delete row; refreshes list.                                  |
+| Blocking condition | If assistant has `ASSIGNED` or `UNDER_REVIEW` tasks on the series, show a safe blocking message. |
+
+### Important implementation note
+
+The End Assistant flow requires `manga.usp_SeriesContributor_EndAssistant` to be applied to the target database before runtime remove/end smoke testing.
+
+---
+
+## 7.x Safe Return URL Behavior
+
+### Purpose
+
+Preserve safe back-navigation when users open series pages or workspaces from different role areas.
+
+### Allowed local prefixes
+
+```text
+/mangaka
+/assistant
+/editor
+/board-chief
+/board
+/admin
+/series
+/dashboard
+```
+
+### Rejected values
+
+```text
+external URLs
+protocol-relative URLs starting with //
+URLs containing backslash
+javascript:
+data:
+/api/
+/signout
+```
+
+### UI usage
+
+| Source                             | Behavior                                                       |
+| ---------------------------------- | -------------------------------------------------------------- |
+| Mangaka dashboard series card      | Serialized/allowed series links may pass `returnUrl=/mangaka`. |
+| Review Submissions workspace links | Pass `returnUrl=/mangaka/review-submissions`.                  |
+| SeriesPage                         | Resolves safe returnUrl; fallback should be `/dashboard`.      |
+| Workspace links                    | Preserve source page context when returning.                   |
+
+---
+
+## 8.x Series Detail Contributor Sidebar
+
+### Purpose
+
+Show contributors on `/series/{slug}` without using a slide-out drawer.
+
+### Layout
+
+Use a page-level two-column grid when contributors exist:
+
+```text
+Left: series detail card + chapter list
+Right: contributor sidebar card
+```
+
+### Behavior
+
+| Element                       | Behavior                                             |
+| ----------------------------- | ---------------------------------------------------- |
+| Contributor sidebar card      | Appears on the right side of the series detail area. |
+| View all contributors trigger | Toggles contributor list open/closed.                |
+| Chevron                       | ExpandMore when closed, ExpandLess when open.        |
+| Contributor rows              | Scrollable when list is tall.                        |
+| Empty contributor list        | Hide sidebar card if no contributors exist.          |
+| Mobile layout                 | Sidebar stacks below main series content.            |
+
+### Notes
+
+* Do not use `MudDrawer` for this contributor panel.
+* Do not show overlay or popup for the contributor list.
+* Contributor management is handled separately through `/mangaka/contributors`.
 
 ---
 

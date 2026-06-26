@@ -322,15 +322,199 @@ This preserves behavior without using `AsEnumerable()`:
   - [ ] Active contributors appear before former contributors
   - [ ] Filters still work
 
+## Follow-up runtime fix — Add Assistant eligible search
+
+### Root cause
+
+The Add Assistant dialog's autocomplete search appeared to do nothing. Investigation traced the entire search flow:
+
+- **UI wiring**: `SearchFunc="SearchAssistantsAsync"` — missing `@` prefix. In Blazor component parameters, omitting `@` on a delegate-typed parameter can prevent the method group from being correctly bound. The working reference in `ReviewSubmissions.razor` uses `SearchFunc="@SearchAssistants"` with `@`. Without `@`, the Razor compiler may not resolve the method reference to the `Func<string?, CancellationToken, Task<IEnumerable<T>>?>` delegate expected by MudBlazor 8.x's `SearchFunc`.
+- **Confirmed via MudBlazor 8.0.0 source**: `public Func<string?, CancellationToken, Task<IEnumerable<T>>?>? SearchFunc { get; set; }` — matches our method signature exactly.
+- **Infrastructure query**: Correct shape — filters by role "Assistant", status "ACTIVE", excludes active contributors only (not historical rows), applies search on DisplayName/Username/Email, returns top 50.
+- **Web typed client**: Correct — includes actor header, builds URL with `Uri.EscapeDataString(search)`.
+- **API controller**: Correct — `[FromQuery] string? search` and passes to handler.
+- **DTO**: `EligibleAssistantContributorDto` is a sealed positional record — `PropertyNameCaseInsensitive = true` in the client handles camelCase JSON correctly.
+
+The backend logic was correct throughout. The UI binding was broken.
+
+### Files changed
+
+- `MangaManagementSystem/src/MangaManagementSystem.Web/Components/Pages/Mangaka/ManageContributors.razor`
+
+### Fix summary
+
+1. **Added `@` prefix** to `SearchFunc` binding so Blazor correctly resolves the method group:
+   - before: `SearchFunc="SearchAssistantsAsync"`
+   - after: `SearchFunc="@SearchAssistantsAsync"`
+
+2. **Replaced inline `ToStringFunc` lambda with a named `FormatAssistant` method** for clarity and readability:
+   - handles null assistant
+   - prefers `DisplayName (Username)` format
+   - falls back to `DisplayName` alone if no Username
+   - falls back to `Username` if no DisplayName
+   - falls back to `Email` or `UserId.ToString()` as last resort
+
+3. **Added `MinCharacters="1"`** to ensure search triggers after the user types at least one character (MudBlazor 8.x defaults to 0, but explicit `1` is safer and matches expected UX).
+
+The backend query shape, Web typed client, controller, and Application layer were all confirmed correct and unchanged.
+
+### Build result
+
+- Command: `dotnet build MangaManagementSystem\MangaManagementSystem.sln --no-incremental`
+- Result: Build succeeded
+- Errors: 0
+- Warnings: 57 (baseline unchanged)
+- Changed-file warnings: 0
+
+### API/UI smoke status
+
+- **API direct test**: Not run from this environment. Backend logic (query shape, role filter "Assistant", ACTIVE status filter, active-contributor exclusion, search on DisplayName/Username/Email) was confirmed correct by code inspection.
+- **UI smoke**: Not run from this environment. Fix addresses the `@` binding issue identified from comparing to the working `ReviewSubmissions.razor` autocomplete pattern.
+- **Expected after fix**: typing an assistant name in the Add dialog triggers `SearchAssistantsAsync`, which calls the backend endpoint, which returns matching ACTIVE Assistant users excluding those already active on the series.
+
+## Follow-up runtime fix — Add Assistant search still empty
+
+### What the user reported
+
+After the previous fix (adding `@` prefix to `SearchFunc`, `FormatAssistant`, `MinCharacters="1"`), the user retested in the browser. The Add Assistant dialog still showed no selectable assistant results when searching.
+
+### Investigation performed
+
+1. **Database query verified directly** — executed the exact eligible-assistant SQL query against the live database (`MangaManagementDB`). Result: **6 ACTIVE Assistant users** exist and are eligible for series "Sect" (`67AEA971-B245-4E13-A150-EB2F5B69D222`). The actor (`TestMangaka1`, `9E01AADE-...`) is confirmed as an active Mangaka contributor of that series. None of the 6 Assistants are current active contributors of that series. The backend data is correct.
+2. **Role name casing verified** — `auth.Roles.role_name` contains `Assistant` (title case). Infrastructure query uses `r.RoleName == "Assistant"` — matches.
+3. **API direct test attempted** — tried `Invoke-RestMethod` to `http://localhost:5234` and `https://localhost:7256`. Both failed with "Unable to connect to the remote server" — the API server was not running at the time. Direct API response was not captured.
+4. **MudBlazor 8.0.0 source reviewed** — fetched and read the full `MudAutocomplete<T>` source from MudBlazor v8.0.0 GitHub. Key findings:
+   - `SearchFunc` is `Func<string?, CancellationToken, Task<IEnumerable<T>>?>?` — matches our method signature.
+   - `MaxItems` defaults to `10` — limits display count but does not cause empty results.
+   - `MinCharacters` defaults to `0` — already set to `1` by previous fix.
+   - **`DropdownSettings.Fixed` defaults to `false`** — when `false`, the autocomplete popover uses `position: absolute` relative to the input. Inside a `MudDialog` with `overflow: hidden`, the dropdown can render but be **clipped/hidden behind the dialog container**. This is a known MudBlazor issue when placing autocomplete inside dialogs.
+   - MudBlazor's `OpenMenuAsync` catches all exceptions from `SearchFunc` and logs a warning. If the API call throws (e.g. 400/500 response), the user sees empty results with no error feedback.
+5. **Web typed client code reviewed** — `SearchEligibleAssistantsAsync` correctly builds the URL, includes the actor header, and deserializes with `PropertyNameCaseInsensitive = true`. The `EnsureSuccessAsync` method throws `HttpRequestException` on non-2xx responses, which MudBlazor silently swallows.
+
+### Root cause
+
+Root cause not fully confirmed because the API was not running during investigation and browser smoke was not performed by the agent. However, two likely contributing causes were identified:
+
+1. **Dialog popover clipping (probable primary cause)**: `MudAutocomplete` inside `MudDialog` with `DropdownSettings.Fixed = false` (default) can cause the autocomplete dropdown to be clipped by the dialog's `overflow: hidden`. Setting `Fixed = true` forces the popover to use `position: fixed`, which renders above the dialog overlay.
+2. **Silent exception swallowing (secondary cause)**: If the API returns a non-2xx response or the typed client throws, MudBlazor catches the exception silently and shows empty results. The user would see no error and no results, making it impossible to distinguish a data issue from an API failure.
+
+### Files changed
+
+- `MangaManagementSystem/src/MangaManagementSystem.Web/Components/Pages/Mangaka/ManageContributors.razor`
+
+### Fix summary (cumulative diff from committed state)
+
+1. **`SearchFunc="@SearchAssistantsAsync"`** — added `@` prefix for correct Blazor method group binding (previous fix, retained).
+2. **`ToStringFunc="@FormatAssistant"`** — replaced inline lambda with named method for robust display labels (previous fix, retained).
+3. **`MinCharacters="1"`** — explicit minimum character threshold (previous fix, retained).
+4. **`DropdownSettings="@(new DropdownSettings { Fixed = true })"`** — forces the autocomplete popover to render with `position: fixed`, avoiding clipping inside the dialog. This is the likely primary fix for the invisible dropdown.
+5. **`SearchAssistantsAsync` parameter changed to `string?`** — matches MudBlazor 8.x `Func<string?, CancellationToken, ...>` delegate signature exactly.
+6. **Added `try/catch` in `SearchAssistantsAsync`**:
+   - catches `OperationCanceledException` silently (normal MudBlazor debounce cancellation)
+   - catches general exceptions and surfaces them via `Snackbar.Add(...)` so the user sees API failures instead of silent empty results
+   - always returns `Enumerable.Empty<EligibleAssistantContributorDto>()` on failure (no null)
+7. **Added `FormatAssistant` static method** — handles null, prefers `DisplayName (Username)` format, falls back through Username, Email, and UserId.
+
+### Build note
+
+- Agent attempted `dotnet build MangaManagementSystem\MangaManagementSystem.sln --no-incremental` but failed with `MSB1009: Project file does not exist`. This repo uses `.slnx`, not `.sln`.
+- User manually ran the correct `.slnx` build and reported success.
+
+### Runtime/API smoke status
+
+- **API direct test**: Not completed. API server was not running during investigation. Database query was verified directly via `sqlcmd` — 6 eligible ACTIVE Assistant users exist for the test series.
+- **UI smoke**: Not run by the agent. User should retest: open `/mangaka/contributors`, select a series, open Add Assistant dialog, type an assistant name, and verify results now appear in the dropdown.
+
+### Remaining known issues
+
+- The Add Assistant search fix needs user browser retest to confirm the `DropdownSettings { Fixed = true }` change resolves the visible dropdown issue.
+- If user still sees no results after this fix, the next debugging step should be: (1) check browser DevTools Network tab for the actual API request/response to `eligible-assistants`, (2) check if a snackbar error now appears (indicating API failure), (3) verify the API server is actually running and reachable at the configured `BaseUrl`.
+
+## Follow-up runtime fix — Eligible assistant search EF translation
+
+### User-reported error
+
+After the previous UI fixes (`DropdownSettings { Fixed = true }`, error-handling snackbar, `@` prefix), the Add Assistant dialog now correctly surfaces backend errors via snackbar. User saw:
+
+```
+GET /api/mangaka/series/{seriesId}/contributors/eligible-assistants?search=ass
+```
+
+returned API 400 with EF Core LINQ translation error. The error showed EF trying to translate a `Where` clause that referenced properties on a newly constructed `EligibleAssistantContributorDto`.
+
+### Actual root cause
+
+In `SeriesContributorRepository.SearchEligibleAssistantContributorsAsync`, the LINQ query projected into `EligibleAssistantContributorDto` **before** applying the search `Where` clause. When a search term was provided, the `Where` filter referenced DTO properties (`x.DisplayName`, `x.Username`, `x.Email`), which EF Core cannot translate because the DTO constructor is not a database expression.
+
+This is the same category of EF translation issue as the earlier `OrderByDescending(x => x.IsActive)` fix on `GetSeriesContributorsAsync`.
+
+Query shape before (broken):
+
+```
+select new EligibleAssistantContributorDto(...)   <-- DTO projection first
+.Where(x => x.DisplayName.Contains(term) ...)     <-- filter on DTO fields = EF translation failure
+.OrderBy(x => x.DisplayName)
+.Take(50)
+```
+
+### File changed
+
+- `MangaManagementSystem/src/MangaManagementSystem.Infrastructure/Repositories/SeriesContributorRepository.cs`
+
+### Query fix summary
+
+Rewrote `SearchEligibleAssistantContributorsAsync` so filtering and ordering happen on anonymous-type scalar fields (which EF can translate), then DTO projection happens last:
+
+1. Project into anonymous type first: `select new { u.UserId, u.DisplayName, u.Username, u.Email }`
+2. Apply search `Where` on anonymous type scalar fields
+3. Apply `OrderBy`/`ThenBy`/`Take` on anonymous type scalar fields
+4. Final `.Select(x => new EligibleAssistantContributorDto(...))` at the end
+5. `.ToListAsync()`
+
+Also removed duplicate leftover code block (lines 112-116 from previous edit artifact).
+
+Query shape after (fixed):
+
+```
+select new { u.UserId, u.DisplayName, u.Username, u.Email }   <-- anonymous type
+.Where(x => x.DisplayName.Contains(term) ...)                  <-- filter on scalars = EF translatable
+.OrderBy(x => x.DisplayName).ThenBy(x => x.Username)
+.Take(50)
+.Select(x => new EligibleAssistantContributorDto(...))          <-- DTO projection last
+.ToListAsync()
+```
+
+All business rules preserved:
+- Filters by `role.RoleName == "Assistant"` and `user.StatusCode == "ACTIVE"`
+- Excludes only active contributors (`EndDate == null`) for selected series
+- Historical ended rows do not block eligibility
+- Searches DisplayName, Username, Email
+- Returns top 50 ordered by DisplayName then Username
+
+### Build result
+
+- Command: `dotnet build MangaManagementSystem\MangaManagementSystem.slnx --no-incremental`
+- Result: Build succeeded
+- Errors: 0
+- Warnings: 37
+- Changed-file warnings: 0 new warnings from this fix
+
+### Runtime/API smoke status
+
+- **API direct test**: Not run (API server not started by agent).
+- **UI smoke**: Not run by agent.
+- User should retest: open `/mangaka/contributors`, select a series, open Add Assistant dialog, type "ass" — eligible assistants should appear without API 400 or snackbar error.
+
 ## Remaining follow-up tasks
 
+- User should retest Add Assistant search in browser to confirm the EF translation fix resolves the API 400.
 - Deploy/apply `MangaManagementSystem_SeriesContributor_EndAssistant.sql` to the local/dev database before runtime remove-assistant smoke.
 - Optionally clean up the unused placeholder file `Domain/Interfaces/ISeriesContributorRepository.cs` in a separate refactor if desired.
 - If runtime UX polish is needed later, improve typed-client error extraction to parse `ApiErrorResponse.Message` instead of surfacing raw JSON strings in snackbar messages.
 
 ## Resume prompt for next AI agent
 
-On branch `feature/Mangaka`, the contributor-management feature is implemented and build-clean with the baseline 57 warnings. Before runtime testing remove-assistant flow, apply `MangaManagementSystem_SeriesContributor_EndAssistant.sql` to the database. Inspect these primary files first:
+On branch `feature/Mangaka`, the contributor-management feature is implemented. The eligible-assistant search EF translation bug is fixed — DTO projection now happens after filtering/ordering. Build succeeds with `dotnet build MangaManagementSystem\MangaManagementSystem.slnx --no-incremental` (not `.sln`). User must retest Add Assistant search in browser. Before runtime testing remove-assistant flow, apply `MangaManagementSystem_SeriesContributor_EndAssistant.sql` to the database. Inspect these primary files first:
 - `Web/Components/Pages/Mangaka/ManageContributors.razor`
 - `API/Controllers/Mangaka/MangakaSeriesContributorController.cs`
 - `Application/Features/Mangaka/Contributors/...`

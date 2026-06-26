@@ -1,4 +1,4 @@
-﻿USE MangaManagementDB;
+USE MangaManagementDB;
 GO
 CREATE OR ALTER PROCEDURE audit.usp_AuditEvent_Append
     @actor_user_id      UNIQUEIDENTIFIER = NULL,
@@ -2275,6 +2275,29 @@ BEGIN
     END CATCH;
 END;
 GO
+-- ============================================================
+-- manga.usp_Series_UpdateProfile
+-- BF-SERIES-002 � Edit Series Draft Profile
+--
+-- Allows an active Mangaka contributor to update a PROPOSAL_DRAFT
+-- series profile: title, slug, synopsis, genre, content language,
+-- publication frequency, and optionally the cover image.
+--
+-- Cover update is all-or-nothing: pass all six cover metadata params
+-- or none. When a new cover is supplied, the old FileResource is
+-- soft-deleted inside the transaction and a new one is created.
+--
+-- Status guard: only PROPOSAL_DRAFT series can be updated here.
+-- Once a proposal has been submitted (UNDER_EDITORIAL_REVIEW or later),
+-- this procedure rejects the update.
+--
+-- Custom error numbers (57401�57410):
+--   57401  Could not acquire series profile update lock.
+--   57402  Series does not exist.
+--   57403  Only a PROPOSAL_DRAFT series can have its profile updated here.
+--   57404  Only an active Mangaka contributor can update this series profile.
+--   57405  Cover file metadata is incomplete � pass all six cover fields or none.
+-- ============================================================
 CREATE OR ALTER PROCEDURE manga.usp_Series_UpdateProfile
     @actor_user_id                  UNIQUEIDENTIFIER,
     @series_id                      UNIQUEIDENTIFIER,
@@ -2962,7 +2985,7 @@ BEGIN
             BEGIN TRAN;
         END;
 
-       IF ISJSON(@page_region_ids_json, ARRAY) <> 1
+       IF ISJSON(@page_region_ids_json) <> 1 OR LTRIM(@page_region_ids_json) NOT LIKE '[[]%'
 BEGIN
     ;THROW 57901, 'page_region_ids_json must be a valid JSON array of page region IDs.', 1;
 END;
@@ -3557,7 +3580,7 @@ BEGIN
         --------------------------------------------------------------------
 -- 1. Validate JSON array and parse region IDs.
 --------------------------------------------------------------------
-IF ISJSON(@page_region_ids_json, ARRAY) <> 1
+IF ISJSON(@page_region_ids_json) <> 1 OR LTRIM(@page_region_ids_json) NOT LIKE '[[]%'
 BEGIN
     ;THROW 57901, 'page_region_ids_json must be a valid JSON array of page region IDs.', 1;
 END;
@@ -5281,3 +5304,4 @@ END;
     END CATCH;
 END;
 GO
+

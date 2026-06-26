@@ -30,9 +30,9 @@
 | Rule ID | Business Rule | Review Status |
 |---|---|---|
 | BR-REG-001 | Each `PageRegion` belongs to exactly one `ChapterPageVersion`. | Active draft |
-| BR-REG-002 | A page region must have one valid region type: `PANEL`, `SPEECH_BUBBLE`, `CHARACTER`, `SFX_TEXT`, `BACKGROUND`, or `OTHER`. | Active draft |
-| BR-REG-003 | Page regions are stored as rectangular bounding boxes using `x`, `y`, `width`, and `height`. | Active draft |
-| BR-REG-004 | Region width and height must be positive. | Active draft |
+| BR-REG-002 | A page region must have one valid region type: `PANEL`, `SPEECH_BUBBLE`, `CHARACTER`, `SFX_TEXT`, `BACKGROUND`, `FULL_PAGE`, or `OTHER`. | Active draft |
+| BR-REG-003 | Page regions are stored as pixel-based geometry using x, y, width, and height, relative to the original page image dimensions. | Active draft |
+| BR-REG-004 | `width = 0` and `height = 0` represents a DOT/point region. `width > 0` and `height > 0` represents an area/rectangle region. Both must be non-negative. Mixed states such as `width > 0, height = 0` or `width = 0, height > 0` are not allowed. | Active draft |
 | BR-REG-005 | A region source must be either `AI` or `MANUAL`. | Active draft |
 | BR-REG-006 | A page region may be created manually or suggested by AI. | Active draft |
 | BR-REG-007 | If an AI-generated region is adjusted by a user, it becomes a manual region. | Active draft |
@@ -57,6 +57,10 @@
 | BR-REG-026 | A saved `PageRegion` may be adjusted by authorized users when region editing is permitted. | Active draft |
 | BR-REG-027 | When a saved `PageRegion` is adjusted, the system should record the last update time and the user who made the update. | Active draft |
 | BR-REG-028 | AI-assisted segmentation tools are available to all Authorized Page Workspace Users who can access the relevant workspace; saving, editing, assigning, or using detected regions must still follow role-specific permissions. | Active draft |
+| BR-REG-029 | A `FULL_PAGE` region represents the entire page image area. It uses `type_code = FULL_PAGE`, `x = 0`, `y = 0`, `width > 0`, `height > 0`, `source_type = MANUAL`, and `confidence_score = NULL`. | Active draft |
+| BR-REG-030 | Whole-page regions are used by Quick Select and other workflows that assign tasks or annotations to an entire page without requiring manual region selection. | Active draft |
+| BR-REG-031 | The system should find and reuse an existing whole-page `PageRegion` for a given `ChapterPageVersion` before creating a new one. | Active draft |
+| BR-REG-032 | `FileResource` does not store image width/height. Page image dimensions must be resolved from Cloudinary metadata when needed (e.g. for creating whole-page regions). Cloudinary metadata lookups must not hold an open database transaction. | Active draft |
 
 ---
 

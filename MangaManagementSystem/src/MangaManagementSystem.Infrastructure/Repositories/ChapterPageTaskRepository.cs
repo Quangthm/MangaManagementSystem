@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -14,10 +14,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 {
     public class ChapterPageTaskRepository : GenericRepository<ChapterPageTask>, IChapterPageTaskRepository
     {
-        private readonly ApplicationDbContext _context;
         public ChapterPageTaskRepository(ApplicationDbContext context) : base(context)
         {
-            _context = context;
         }
 
         public async Task<Guid> CreateChapterPageTaskAsync(
@@ -43,21 +41,22 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@task_description", System.Data.SqlDbType.NVarChar, -1) { Value = taskDescription });
             cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@priority_level", System.Data.SqlDbType.TinyInt) { Value = priorityLevel });
             cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@due_at_utc", System.Data.SqlDbType.DateTime2) { Value = dueAtUtc });
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@compensation_amount", System.Data.SqlDbType.Decimal, 5) { Value = compensationAmount ?? 0m });
+            
+            var compParam = new Microsoft.Data.SqlClient.SqlParameter("@compensation_amount", System.Data.SqlDbType.Decimal) { Precision = 12, Scale = 2 };
+            if (compensationAmount.HasValue) compParam.Value = compensationAmount.Value; else compParam.Value = 0m;
+            cmd.Parameters.Add(compParam);
 
-            var regionsJson = JsonSerializer.Serialize(pageRegionIds);
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@page_region_ids_json", System.Data.SqlDbType.NVarChar, -1) { Value = regionsJson });
-
-            var outParam = new Microsoft.Data.SqlClient.SqlParameter("@new_chapter_page_task_id", System.Data.SqlDbType.UniqueIdentifier) { Direction = System.Data.ParameterDirection.Output };
-            cmd.Parameters.Add(outParam);
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@page_region_ids_json", System.Data.SqlDbType.NVarChar, -1) { Value = System.Text.Json.JsonSerializer.Serialize(pageRegionIds) });
+            
+            var newIdParam = new Microsoft.Data.SqlClient.SqlParameter("@new_chapter_page_task_id", System.Data.SqlDbType.UniqueIdentifier) { Direction = ParameterDirection.Output };
+            cmd.Parameters.Add(newIdParam);
 
             if (conn.State != ConnectionState.Open)
                 await conn.OpenAsync();
 
             await cmd.ExecuteNonQueryAsync();
 
-            var newTaskId = outParam.Value == System.DBNull.Value ? Guid.Empty : (Guid)outParam.Value;
-            return newTaskId;
+            return (Guid)newIdParam.Value;
         }
 
         public async Task<ChapterPageTask?> GetByIdWithRegionsAsync(Guid id)
@@ -124,6 +123,16 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     .ThenInclude(r => r.ChapterPageVersion)
                         .ThenInclude(v => v.PageFile)
                 .FirstOrDefaultAsync(t => t.ChapterPageTaskId == taskId);
+        }
+
+        public async Task<IReadOnlyList<ChapterPageTask>> GetByChapterPageIdWithRegionsAsync(Guid chapterPageId)
+        {
+            return await _context.ChapterPageTasks
+                .Include(t => t.AssignedToUser)
+                .Include(t => t.PageRegions)
+                .Where(t => t.PageRegions.Any(r => r.ChapterPageVersion != null && r.ChapterPageVersion.ChapterPageId == chapterPageId))
+                .OrderByDescending(t => t.CreatedAtUtc)
+                .ToListAsync();
         }
 
         // --- Mangaka task lifecycle SPs ---

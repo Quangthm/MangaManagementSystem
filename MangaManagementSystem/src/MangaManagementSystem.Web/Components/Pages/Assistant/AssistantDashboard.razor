@@ -7,7 +7,7 @@
 @using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Assistant")]
-@inject MangaManagementSystem.Application.Interfaces.IChapterPageTaskService TaskService
+@inject IAssistantTaskApiClient AssistantTaskClient
 @inject AuthenticationStateProvider AuthStateProvider
 @inject ISnackbar Snackbar
 
@@ -29,16 +29,28 @@
         else
         {
             <MudGrid Class="mb-4">
-                <MudItem xs="12" md="3"><StatCard Label="Assigned" Value="@_assignedCount.ToString()" Description="Tasks assigned to you" /></MudItem>
-                <MudItem xs="12" md="3"><StatCard Label="Due Soon" Value="@_dueSoonCount.ToString()" Description="Within 3 days" /></MudItem>
-                <MudItem xs="12" md="3"><StatCard Label="Under Review" Value="@_underReviewCount.ToString()" Description="Awaiting feedback" /></MudItem>
-                <MudItem xs="12" md="3"><StatCard Label="Completed" Value="@_completedCount.ToString()" Description="Finished tasks" /></MudItem>
+                <MudItem xs="6" md="3"><StatCard Label="Assigned" Value="@_assignedCount.ToString()" Description="Tasks assigned to you" /></MudItem>
+                <MudItem xs="6" md="3"><StatCard Label="Due Soon" Value="@_dueSoonCount.ToString()" Description="Within 3 days" /></MudItem>
+                <MudItem xs="6" md="3"><StatCard Label="Under Review" Value="@_underReviewCount.ToString()" Description="Awaiting feedback" /></MudItem>
+                <MudItem xs="6" md="3"><StatCard Label="Completed" Value="@_completedCount.ToString()" Description="Finished tasks" /></MudItem>
             </MudGrid>
+
+            @if (_overdueCount > 0)
+            {
+                <MudAlert Severity="Severity.Error" Class="mb-4" Dense="true">
+                    <MudText Typo="Typo.body2" Class="font-weight-bold">
+                        @_overdueCount overdue task(s)! Please check the task list.
+                    </MudText>
+                </MudAlert>
+            }
 
             <MudGrid>
                 <MudItem xs="12" md="8">
                     <MudPaper Class="pa-5 mf-card" Elevation="0">
-                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-4">My Assigned Tasks</MudText>
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold">My Assigned Tasks</MudText>
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Href="/assistant/tasks">View All &rarr;</MudButton>
+                        </MudStack>
                         @if (_tasks == null || !_tasks.Any())
                         {
                             <MudPaper Class="pa-6 text-center mf-card">
@@ -49,7 +61,7 @@
                         }
                         else
                         {
-                            <MudTable Items="_tasks" Hover="true">
+                            <MudTable Items="_orderedTasks" Hover="true" Dense="true">
                                 <HeaderContent>
                                     <MudTh>Type</MudTh>
                                     <MudTh>Series / Chapter</MudTh>
@@ -58,9 +70,27 @@
                                     <MudTh></MudTh>
                                 </HeaderContent>
                                 <RowTemplate>
-                                    <MudTd>@context.TypeCode</MudTd>
-                                    <MudTd>@(context.SeriesTitle ?? "—") @(context.ChapterNumberLabel != null ? $"• {context.ChapterNumberLabel}" : "")</MudTd>
-                                    <MudTd>@FormatDate(context.DueAtUtc)</MudTd>
+                                    <MudTd>
+                                        <span style="@GetOverdueStyle(context)">@context.TypeCode</span>
+                                    </MudTd>
+                                    <MudTd>
+                                        <span style="@GetOverdueStyle(context)">
+                                            @(context.SeriesTitle ?? "—") @(context.ChapterNumberLabel != null ? $"• {context.ChapterNumberLabel}" : "")
+                                        </span>
+                                    </MudTd>
+                                    <MudTd>
+                                        <span style="@GetOverdueStyle(context) + 'font-weight:' + (IsDueSoon(context) ? '600' : 'normal') + ';'">
+                                            @FormatDate(context.DueAtUtc)
+                                            @if (IsOverdue(context))
+                                            {
+                                                <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Filled" Class="ml-1">OVERDUE</MudChip>
+                                            }
+                                            else if (IsDueSoon(context))
+                                            {
+                                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined" Class="ml-1">SOON</MudChip>
+                                            }
+                                        </span>
+                                    </MudTd>
                                     <MudTd><MudChip T="string" Color="@GetStatusColor(context.StatusCode)" Size="Size.Small">@context.StatusCode</MudChip></MudTd>
                                     <MudTd><MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(()=>OpenTask(context.ChapterPageTaskId))">View</MudButton></MudTd>
                                 </RowTemplate>
@@ -70,29 +100,81 @@
                 </MudItem>
                 <MudItem xs="12" md="4">
                     <MudPaper Class="pa-5 mf-card" Elevation="0">
-                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Due Soon</MudText>
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold">Due Soon</MudText>
+                            @if (_dueSoonCount > 0)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning">@_dueSoonCount</MudChip>
+                            }
+                        </MudStack>
                         @if (_dueSoon == null || !_dueSoon.Any())
                         {
                             <MudText Class="mf-muted">No tasks due soon.</MudText>
                         }
                         else
                         {
-                            <MudList T="ChapterPageTaskDto">
-                                @foreach (var t in _dueSoon)
+                            <MudList T="ChapterPageTaskDto" Clickable="true">
+                                @foreach (var t in _dueSoon.Take(5))
                                 {
-                                    <MudListItem T="ChapterPageTaskDto" Value="@t">
-                                        <MudText>@t.TypeCode â€” Id: @t.ChapterPageTaskId</MudText>
-                                        <MudText class="mf-muted">@FormatDate(t.DueAtUtc)</MudText>
+                                    <MudListItem T="ChapterPageTaskDto" Value="@t" OnClick="@(() => OpenTask(t.ChapterPageTaskId))">
+                                        <div class="d-flex align-center justify-space-between w-100">
+                                            <div>
+                                                <MudText Typo="Typo.body2" Class="font-weight-bold">@t.TypeCode</MudText>
+                                                <MudText Class="mf-muted" Style="font-size:0.75rem;">
+                                                    @(t.SeriesTitle ?? "—") @(t.ChapterNumberLabel != null ? $"• {t.ChapterNumberLabel}" : "")
+                                                </MudText>
+                                            </div>
+                                            <MudText Style="font-size:0.75rem; color: var(--mud-palette-warning); font-weight:600; white-space:nowrap;">
+                                                @FormatDate(t.DueAtUtc)
+                                            </MudText>
+                                        </div>
                                     </MudListItem>
                                 }
                             </MudList>
+                            @if (_dueSoon.Count() > 5)
+                            {
+                                <MudText Typo="Typo.caption" Class="mf-muted mt-2">+ @(_dueSoon.Count() - 5) more</MudText>
+                            }
                         }
 
                         <MudDivider Class="my-4" />
                         <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/assistant/tasks">View All Tasks</MudButton>
                     </MudPaper>
+
+                    @if (_overdueCount > 0)
+                    {
+                        <MudPaper Class="pa-5 mf-card mt-4" Elevation="0" Style="border-left: 4px solid var(--mud-palette-error);">
+                            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
+                                <MudText Typo="Typo.h6" Class="font-weight-bold" Style="color: var(--mud-palette-error);">Overdue</MudText>
+                                <MudChip T="string" Size="Size.Small" Color="Color.Error">@_overdueCount</MudChip>
+                            </MudStack>
+                            <MudList T="ChapterPageTaskDto" Clickable="true">
+                                @foreach (var t in _overdueTasks.Take(3))
+                                {
+                                    <MudListItem T="ChapterPageTaskDto" Value="@t" OnClick="@(() => OpenTask(t.ChapterPageTaskId))">
+                                        <div class="d-flex align-center justify-space-between w-100">
+                                            <div>
+                                                <MudText Typo="Typo.body2" Class="font-weight-bold" Style="color: var(--mud-palette-error);">@t.TypeCode</MudText>
+                                                <MudText Class="mf-muted" Style="font-size:0.75rem;">
+                                                    @(t.SeriesTitle ?? "—") @(t.ChapterNumberLabel != null ? $"• {t.ChapterNumberLabel}" : "")
+                                                </MudText>
+                                            </div>
+                                            <MudText Style="font-size:0.75rem; color: var(--mud-palette-error); font-weight:700; white-space:nowrap;">
+                                                @FormatDate(t.DueAtUtc)
+                                            </MudText>
+                                        </div>
+                                    </MudListItem>
+                                }
+                            </MudList>
+                            @if (_overdueTasks.Count > 3)
+                            {
+                                <MudText Typo="Typo.caption" Class="mf-muted mt-2">+ @(_overdueTasks.Count - 3) more</MudText>
+                            }
+                        </MudPaper>
+                    }
                 </MudItem>
             </MudGrid>
+
         }
     </div>
 </AssistantLayout>
@@ -103,10 +185,30 @@
     private string? _loadError;
     private IReadOnlyList<ChapterPageTaskDto>? _tasks;
     private IEnumerable<ChapterPageTaskDto>? _dueSoon;
+    private List<ChapterPageTaskDto> _overdueTasks = [];
     private int _assignedCount;
     private int _dueSoonCount;
     private int _underReviewCount;
     private int _completedCount;
+    private int _overdueCount;
+    private string _sortOrder = "due_asc";
+
+    private IReadOnlyList<ChapterPageTaskDto> _orderedTasks
+    {
+        get
+        {
+            if (_tasks == null) return [];
+            var sorted = _sortOrder == "due_asc"
+                ? _tasks.OrderBy(t => t.DueAtUtc ?? DateTime.MaxValue)
+                : _tasks.OrderBy(t => t.StatusCode == "ASSIGNED" ? 0 : 1)
+                        .ThenBy(t => t.DueAtUtc ?? DateTime.MaxValue);
+            if (_overdueCount > 0)
+            {
+                sorted = sorted.OrderBy(t => IsOverdue(t) ? 0 : 1);
+            }
+            return sorted.ToList();
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -132,10 +234,13 @@
         {
             _assignedCount = _tasks.Count(t => t.StatusCode == "ASSIGNED");
             var now = DateTime.UtcNow;
-            _dueSoon = _tasks.Where(t => t.DueAtUtc.HasValue && t.DueAtUtc.Value >= now && t.DueAtUtc.Value <= now.AddDays(3) && t.StatusCode != "COMPLETED" && t.StatusCode != "CANCELLED").ToList();
+            _assignedCount = _tasks.Count(t => t.StatusCode == "ASSIGNED");
+            _dueSoon = _tasks.Where(t => !IsOverdue(t) && t.DueAtUtc.HasValue && t.DueAtUtc.Value >= now && t.DueAtUtc.Value <= now.AddDays(3) && t.StatusCode != "COMPLETED" && t.StatusCode != "CANCELLED").ToList();
             _dueSoonCount = _dueSoon.Count();
             _underReviewCount = _tasks.Count(t => t.StatusCode == "UNDER_REVIEW");
             _completedCount = _tasks.Count(t => t.StatusCode == "COMPLETED");
+            _overdueTasks = _tasks.Where(t => IsOverdue(t)).ToList();
+            _overdueCount = _overdueTasks.Count;
         }
         catch (Exception ex)
         {
@@ -147,11 +252,37 @@
         }
     }
 
+    private bool IsOverdue(ChapterPageTaskDto t) =>
+        t.DueAtUtc.HasValue && t.DueAtUtc.Value < DateTime.UtcNow &&
+        t.StatusCode != "COMPLETED" && t.StatusCode != "CANCELLED";
+
+    private bool IsDueSoon(ChapterPageTaskDto t)
+    {
+        if (IsOverdue(t)) return false;
+        var now = DateTime.UtcNow;
+        return t.DueAtUtc.HasValue && t.DueAtUtc.Value >= now && t.DueAtUtc.Value <= now.AddDays(3);
+    }
+
+    private string GetOverdueStyle(ChapterPageTaskDto t)
+    {
+        if (IsOverdue(t))
+            return "color: var(--mud-palette-error); font-weight: 600;";
+        if (IsDueSoon(t))
+            return "color: var(--mud-palette-warning); font-weight: 600;";
+        return "";
+    }
+
     private void OpenTask(Guid id) => Nav.NavigateTo($"/assistant/task/{id}");
 
     private string FormatDate(DateTime? value)
     {
-        return value.HasValue ? value.Value.ToLocalTime().ToString("g") : "â€”";
+        if (!value.HasValue) return "—";
+        var local = value.Value.ToLocalTime();
+        var now = DateTime.Now;
+        if (local.Date == now.Date) return $"Today {local:t}";
+        if (local.Date == now.Date.AddDays(1)) return $"Tomorrow {local:t}";
+        if (local.Date == now.Date.AddDays(-1)) return $"Yesterday {local:t}";
+        return local.ToString("MMM dd");
     }
 
     private Color GetStatusColor(string status) => status switch
@@ -163,4 +294,3 @@
         _ => Color.Default
     };
 }
-

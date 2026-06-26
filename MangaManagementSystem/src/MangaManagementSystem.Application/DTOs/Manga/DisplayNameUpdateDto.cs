@@ -2,6 +2,6 @@
 {
     public class DisplayNameUpdateDto
     {
-        public string DisplayName { get; set; }
+        public string DisplayName { get; set; } = string.Empty;
     }
 }

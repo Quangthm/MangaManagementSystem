@@ -27,6 +27,7 @@ namespace MangaManagementSystem.Domain.Interfaces
 
         Task<ChapterPageTask?> GetByIdWithFullContextAsync(Guid taskId);
 
+        Task<IReadOnlyList<ChapterPageTask>> GetByChapterPageIdWithRegionsAsync(Guid chapterPageId);
         // Mangaka task lifecycle SPs
         Task CancelTaskAsync(Guid actorUserId, Guid taskId, string reason);
         Task MarkTaskCompletedAsync(Guid actorUserId, Guid taskId, string? completionNote);
