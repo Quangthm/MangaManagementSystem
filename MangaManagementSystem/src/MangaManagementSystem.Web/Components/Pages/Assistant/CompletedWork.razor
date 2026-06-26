@@ -10,138 +10,135 @@
 @inject IAssistantTaskApiClient AssistantTaskClient
 
 <AssistantLayout>
-    <div class="mf-page">
-        <div class="mf-page-header">
-            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Completed Work</MudText>
-            <MudText Typo="Typo.body1" Class="mf-muted">Track approved assistant tasks and estimated work summary.</MudText>
-            <MudText Typo="Typo.caption" Class="mf-muted mt-1">
-                Estimated from approved completed tasks only. MangaFlow does not process real payments.
-            </MudText>
+    <div style="display: flex; flex-direction: column; height: 100%; background: #f8fafc;">
+        @* ── Header ── *@
+        <div style="padding: 24px 32px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e2e8f0; background: #f8fafc; flex-shrink: 0;">
+            <div>
+                <div style="font-weight: 800; font-size: 1.6rem; color: #111827; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 4px;">
+                    Completed Work
+                </div>
+                <div style="color: #64748b; font-size: 0.85rem;">Track approved assistant tasks and estimated work summary.</div>
+                <div style="color: #94a3b8; font-size: 0.75rem; margin-top: 2px;">Estimated from approved completed tasks only. MangaFlow does not process real payments.</div>
+            </div>
         </div>
 
-        @if (_loading)
-        {
-            <MudProgressLinear Indeterminate="true" />
-        }
-        else if (!string.IsNullOrWhiteSpace(_error))
-        {
-            <MudAlert Severity="Severity.Error">Failed to load completed work: @_error</MudAlert>
-        }
-        else if (_summary == null)
-        {
-            <MudAlert Severity="Severity.Info">No completed work data available.</MudAlert>
-        }
-        else
-        {
-            @* Summary Cards *@
-            <MudGrid Class="mb-6">
-                <MudItem xs="6" md="3">
+        @* ── Scrollable Content ── *@
+        <div style="flex: 1; overflow: auto; padding: 32px;">
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" />
+            }
+            else if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px 16px; color: #dc2626; font-size: 0.85rem;">Failed to load completed work: @_error</div>
+            }
+            else if (_summary == null)
+            {
+                <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px 16px; color: #1e40af; font-size: 0.85rem;">No completed work data available.</div>
+            }
+            else
+            {
+                @* ── Stat Cards ── *@
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
                     <StatCard Label="Completed Tasks" Value="@_summary.CompletedTaskCount.ToString()" Description="Approved tasks" />
-                </MudItem>
-                <MudItem xs="6" md="3">
                     <StatCard Label="Approved Regions" Value="@_summary.ApprovedRegionCount.ToString()" Description="Regions completed" />
-                </MudItem>
-                <MudItem xs="6" md="3">
                     <StatCard Label="Estimated Total" Value="@_summary.TotalEstimatedAmount.ToString("N0")" Description="All completed work" />
-                </MudItem>
-                <MudItem xs="6" md="3">
                     <StatCard Label="This Month" Value="@_summary.ThisMonthEstimatedAmount.ToString("N0")" Description="Current month" />
-                </MudItem>
-            </MudGrid>
+                </div>
 
-            @* Breakdown by task type *@
-            <MudPaper Class="pa-5 mf-card mb-6" Elevation="0">
-                <MudText Typo="Typo.h6" Class="font-weight-bold mb-4">Breakdown by Task Type</MudText>
-                @if (_summary.Breakdown.Count == 0)
-                {
-                    <MudText Class="mf-muted">No breakdown data available.</MudText>
-                }
-                else
-                {
-                    <MudTable Items="@_summary.Breakdown" Hover="true" Dense="true" Striped="true">
-                        <HeaderContent>
-                            <MudTh>Task Type</MudTh>
-                            <MudTh>Completed Tasks</MudTh>
-                            <MudTh>Regions</MudTh>
-                            <MudTh>Estimated Amount</MudTh>
-                        </HeaderContent>
-                        <RowTemplate>
-                            <MudTd>
-                                <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">
-                                    @context.TaskType
-                                </MudChip>
-                            </MudTd>
-                            <MudTd>@context.CompletedTaskCount</MudTd>
-                            <MudTd>@context.RegionCount</MudTd>
-                            <MudTd>
-                                <MudText Typo="Typo.body2" Class="font-weight-bold">
-                                    @context.EstimatedAmount.ToString("N0")
-                                </MudText>
-                            </MudTd>
-                        </RowTemplate>
-                    </MudTable>
-                }
-            </MudPaper>
-
-            @* Recent Completed Tasks *@
-            <MudPaper Class="pa-5 mf-card" Elevation="0">
-                <MudText Typo="Typo.h6" Class="font-weight-bold mb-4">Recent Completed Tasks</MudText>
-                @if (_summary.RecentItems.Count == 0)
-                {
-                    <MudText Class="mf-muted">No recently completed tasks.</MudText>
-                }
-                else
-                {
-                    <MudTable Items="@_summary.RecentItems" Hover="true" Dense="true" Striped="true">
-                        <HeaderContent>
-                            <MudTh>Task</MudTh>
-                            <MudTh>Series</MudTh>
-                            <MudTh>Chapter / Page</MudTh>
-                            <MudTh>Completed</MudTh>
-                            <MudTh>Regions</MudTh>
-                            <MudTh>Estimated Amount</MudTh>
-                            <MudTh></MudTh>
-                        </HeaderContent>
-                        <RowTemplate>
-                            <MudTd>
-                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">
-                                    @context.TaskType
-                                </MudChip>
-                            </MudTd>
-                            <MudTd>
-                                <MudText Typo="Typo.body2">@context.SeriesTitle</MudText>
-                            </MudTd>
-                            <MudTd>
-                                <MudText Typo="Typo.body2">
-                                    @context.ChapterTitle
-                                    @if (context.PageNumber > 0)
+                @* ── Breakdown by Task Type ── *@
+                <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); margin-bottom: 24px; overflow: hidden;">
+                    <div style="padding: 20px 24px; border-bottom: 1px solid #f1f5f9;">
+                        <div style="font-weight: 700; font-size: 1rem; color: #111827;">Breakdown by Task Type</div>
+                    </div>
+                    @if (_summary.Breakdown.Count == 0)
+                    {
+                        <div style="padding: 24px; color: #94a3b8; font-size: 0.85rem;">No breakdown data available.</div>
+                    }
+                    else
+                    {
+                        <div style="overflow-x: auto;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                                <thead>
+                                    <tr style="border-bottom: 1px solid #f1f5f9; background: #f8fafc;">
+                                        <th style="padding: 12px 16px; text-align: left; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">Task Type</th>
+                                        <th style="padding: 12px 16px; text-align: right; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">Completed Tasks</th>
+                                        <th style="padding: 12px 16px; text-align: right; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">Regions</th>
+                                        <th style="padding: 12px 16px; text-align: right; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">Estimated Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in _summary.Breakdown)
                                     {
-                                        <span> &bull; P.@context.PageNumber</span>
+                                        <tr style="border-bottom: 1px solid #f1f5f9;">
+                                            <td style="padding: 12px 16px;">
+                                                <span style="background: #eef2ff; color: #4f46e5; font-size: 0.72rem; padding: 2px 8px; border-radius: 8px; font-weight: 500;">@item.TaskType</span>
+                                            </td>
+                                            <td style="padding: 12px 16px; text-align: right; color: #374151;">@item.CompletedTaskCount</td>
+                                            <td style="padding: 12px 16px; text-align: right; color: #374151;">@item.RegionCount</td>
+                                            <td style="padding: 12px 16px; text-align: right; font-weight: 700; color: #111827;">@item.EstimatedAmount.ToString("N0")</td>
+                                        </tr>
                                     }
-                                </MudText>
-                            </MudTd>
-                            <MudTd>
-                                <MudText Typo="Typo.body2">
-                                    @(context.CompletedAt?.ToLocalTime().ToString("MMM dd, yyyy") ?? "-")
-                                </MudText>
-                            </MudTd>
-                            <MudTd>@context.RegionCount</MudTd>
-                            <MudTd>
-                                <MudText Typo="Typo.body2" Class="font-weight-bold">
-                                    @context.EstimatedAmount.ToString("N0")
-                                </MudText>
-                            </MudTd>
-                            <MudTd>
-                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
-                                           Href="@($"/assistant/task/{context.TaskId}")">
-                                    View
-                                </MudButton>
-                            </MudTd>
-                        </RowTemplate>
-                    </MudTable>
-                }
-            </MudPaper>
-        }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+
+                @* ── Recent Completed Tasks ── *@
+                <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); overflow: hidden;">
+                    <div style="padding: 20px 24px; border-bottom: 1px solid #f1f5f9;">
+                        <div style="font-weight: 700; font-size: 1rem; color: #111827;">Recent Completed Tasks</div>
+                    </div>
+                    @if (_summary.RecentItems.Count == 0)
+                    {
+                        <div style="padding: 24px; color: #94a3b8; font-size: 0.85rem;">No recently completed tasks.</div>
+                    }
+                    else
+                    {
+                        <div style="overflow-x: auto;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                                <thead>
+                                    <tr style="border-bottom: 1px solid #f1f5f9; background: #f8fafc;">
+                                        <th style="padding: 12px 16px; text-align: left; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">Task</th>
+                                        <th style="padding: 12px 16px; text-align: left; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">Series</th>
+                                        <th style="padding: 12px 16px; text-align: left; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">Chapter / Page</th>
+                                        <th style="padding: 12px 16px; text-align: left; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">Completed</th>
+                                        <th style="padding: 12px 16px; text-align: right; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">Regions</th>
+                                        <th style="padding: 12px 16px; text-align: right; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">Estimated Amount</th>
+                                        <th style="padding: 12px 16px; text-align: right; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in _summary.RecentItems)
+                                    {
+                                        <tr style="border-bottom: 1px solid #f1f5f9;">
+                                            <td style="padding: 12px 16px;">
+                                                <span style="background: #f0fdf4; color: #166534; font-size: 0.72rem; padding: 2px 8px; border-radius: 8px; font-weight: 500;">@item.TaskType</span>
+                                            </td>
+                                            <td style="padding: 12px 16px; color: #374151;">@item.SeriesTitle</td>
+                                            <td style="padding: 12px 16px; color: #64748b;">
+                                                @item.ChapterTitle
+                                                @if (item.PageNumber > 0)
+                                                {
+                                                    <span> &bull; P.@item.PageNumber</span>
+                                                }
+                                            </td>
+                                            <td style="padding: 12px 16px; color: #64748b;">@(item.CompletedAt?.ToLocalTime().ToString("MMM dd, yyyy") ?? "-")</td>
+                                            <td style="padding: 12px 16px; text-align: right; color: #374151;">@item.RegionCount</td>
+                                            <td style="padding: 12px 16px; text-align: right; font-weight: 700; color: #111827;">@item.EstimatedAmount.ToString("N0")</td>
+                                            <td style="padding: 12px 16px; text-align: right;">
+                                                <a href="@($"/assistant/task/{item.TaskId}")" style="color: #4f46e5; font-size: 0.78rem; text-decoration: none; font-weight: 500;">View</a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
     </div>
 </AssistantLayout>
 

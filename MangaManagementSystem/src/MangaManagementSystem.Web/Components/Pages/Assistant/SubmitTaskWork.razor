@@ -12,106 +12,113 @@
 @inject AuthenticationStateProvider AuthStateProvider
 
 <AssistantLayout>
-    <div class="mf-page">
-        <div class="mf-page-header">
-            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Submit Work</MudText>
-            <MudText Typo="Typo.body1" Class="mf-muted">Upload completed work for Mangaka review</MudText>
+    <div style="display: flex; flex-direction: column; height: 100%; background: #f8fafc;">
+        @* ── Header ── *@
+        <div style="padding: 24px 32px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e2e8f0; background: #f8fafc; flex-shrink: 0;">
+            <div>
+                <div style="font-weight: 800; font-size: 1.6rem; color: #111827; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 4px;">
+                    Submit Work
+                </div>
+                <div style="color: #64748b; font-size: 0.85rem;">Upload completed work for Mangaka review</div>
+            </div>
         </div>
 
-        @if (_loading)
-        {
-            <MudProgressLinear Indeterminate="true" />
-        }
-        else if (!string.IsNullOrWhiteSpace(_error))
-        {
-            <MudAlert Severity="Severity.Error">@_error</MudAlert>
-        }
-        else if (_task is null)
-        {
-            <MudAlert Severity="Severity.Warning">Task not found or not assigned to you.</MudAlert>
-        }
-        else
-        {
-            <MudGrid>
-                <MudItem xs="12" md="8">
-                    <MudPaper Class="pa-5 mf-card" Elevation="0">
-                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
-                            <div>
-                                <MudText Typo="Typo.h6" Class="font-weight-bold">Submit Your Work</MudText>
-                                <MudText Class="mf-muted">@_task.TypeCode @(!string.IsNullOrWhiteSpace(_task.TaskTitle) ? $"— {_task.TaskTitle}" : "")</MudText>
+        @* ── Scrollable Content ── *@
+        <div style="flex: 1; overflow: auto; padding: 32px;">
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" />
+            }
+            else if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px 16px; color: #dc2626; font-size: 0.85rem;">@_error</div>
+            }
+            else if (_task is null)
+            {
+                <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 12px 16px; color: #92400e; font-size: 0.85rem;">Task not found or not assigned to you.</div>
+            }
+            else
+            {
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
+                    <div>
+                        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); padding: 24px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                                <div>
+                                    <div style="font-weight: 700; font-size: 1rem; color: #111827;">Submit Your Work</div>
+                                    <div style="color: #94a3b8; font-size: 0.85rem;">@_task.TypeCode @(!string.IsNullOrWhiteSpace(_task.TaskTitle) ? $"— {_task.TaskTitle}" : "")</div>
+                                </div>
+                                <StatusBadge Status="@_task.StatusCode" />
                             </div>
-                            <StatusBadge Status="@_task.StatusCode" />
-                        </MudStack>
 
-                        @if (!CanSubmit)
-                        {
-                            <MudAlert Severity="Severity.Warning" Class="mb-4">
-                                Only tasks in ASSIGNED status can be submitted for review. Current status: @_task.StatusCode
-                            </MudAlert>
-                        }
-                        else
-                        {
-                            <MudAlert Severity="Severity.Info" Class="mb-4">
-                                Upload your completed page image. Allowed: PNG, JPEG, WebP (max 10 MB).
-                            </MudAlert>
-                        }
-
-                        <div class="mb-4">
-                            <InputFile OnChange="HandleFileSelected" disabled="@(!CanSubmit)" />
-                            <MudText Typo="Typo.caption" Class="mf-muted mt-2 d-block">
-                                @if (_selectedFile != null)
-                                {
-                                    <span>Selected: @_selectedFile.Name (@_fileSizeDisplay)</span>
-                                }
-                                else
-                                {
-                                    <span>Click to select a file</span>
-                                }
-                            </MudText>
-                            @if (!string.IsNullOrWhiteSpace(_fileValidationError))
+                            @if (!CanSubmit)
                             {
-                                <MudAlert Severity="Severity.Error" Class="mt-2">@_fileValidationError</MudAlert>
+                                <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 12px 16px; color: #92400e; font-size: 0.85rem; margin-bottom: 16px;">
+                                    Only tasks in ASSIGNED status can be submitted for review. Current status: @_task.StatusCode
+                                </div>
+                            }
+                            else
+                            {
+                                <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px 16px; color: #1e40af; font-size: 0.85rem; margin-bottom: 16px;">
+                                    Upload your completed page image. Allowed: PNG, JPEG, WebP (max 10 MB).
+                                </div>
+                            }
+
+                            <div style="margin-bottom: 16px;">
+                                <InputFile OnChange="HandleFileSelected" disabled="@(!CanSubmit)" />
+                                <div style="color: #94a3b8; font-size: 0.78rem; margin-top: 8px;">
+                                    @if (_selectedFile != null)
+                                    {
+                                        <span>Selected: @_selectedFile.Name (@_fileSizeDisplay)</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Click to select a file</span>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(_fileValidationError))
+                                {
+                                    <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px 16px; color: #dc2626; font-size: 0.85rem; margin-top: 8px;">@_fileValidationError</div>
+                                }
+                            </div>
+
+                            @* Source page reference *@
+                            @if (!string.IsNullOrWhiteSpace(_task.PageImageUrl))
+                            {
+                                <div style="font-weight: 600; font-size: 0.85rem; color: #374151; margin-bottom: 8px;">Source Page Reference:</div>
+                                <MudImage Src="@_task.PageImageUrl" MaxHeight="250" ObjectFit="ObjectFit.Contain" Class="rounded" />
+                                <div style="margin-top: 4px;">
+                                    <a href="@_task.PageImageUrl" target="_blank" style="color: #4f46e5; font-size: 0.85rem; text-decoration: none; font-weight: 500;">Download Source</a>
+                                </div>
                             }
                         </div>
+                    </div>
 
-                        @* Source page reference *@
-                        @if (!string.IsNullOrWhiteSpace(_task.PageImageUrl))
-                        {
-                            <MudText Typo="Typo.body2" Class="mb-2"><strong>Source Page Reference:</strong></MudText>
-                            <MudImage Src="@_task.PageImageUrl" MaxHeight="250" ObjectFit="ObjectFit.Contain" Class="rounded" />
-                            <MudButton Variant="Variant.Text" Size="Size.Small" Href="@_task.PageImageUrl" Target="_blank" Class="mt-1">Download Source</MudButton>
-                        }
-                    </MudPaper>
-                </MudItem>
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); padding: 20px 24px;">
+                            <div style="font-weight: 700; font-size: 0.9rem; color: #111827; margin-bottom: 12px;">Task Summary</div>
+                            <div style="display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem;">
+                                <div><span style="color: #64748b;">Type:</span> <span style="color: #111827; font-weight: 500;">@_task.TypeCode</span></div>
+                                <div><span style="color: #64748b;">Priority:</span> <span style="color: #111827; font-weight: 500;">@_task.PriorityLevel</span></div>
+                                <div><span style="color: #64748b;">Status:</span> <span style="color: #111827; font-weight: 500;">@_task.StatusCode</span></div>
+                                <div><span style="color: #64748b;">Due:</span> <span style="color: #111827; font-weight: 500;"><TimestampDisplay Value="@_task.DueAtUtc" EmptyText="No deadline set" /></span></div>
+                            </div>
+                        </div>
 
-                <MudItem xs="12" md="4">
-                    <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
-                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Task Summary</MudText>
-                        <MudStack Spacing="1">
-                            <MudText><strong>Type:</strong> @_task.TypeCode</MudText>
-                            <MudText><strong>Priority:</strong> @_task.PriorityLevel</MudText>
-                            <MudText><strong>Status:</strong> @_task.StatusCode</MudText>
-                            <MudText><strong>Due:</strong> <TimestampDisplay Value="@_task.DueAtUtc" EmptyText="No deadline set" /></MudText>
-                        </MudStack>
-                    </MudPaper>
+                        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); padding: 20px 24px;">
+                            <div class="mb-3">
+                                <label style="display: block; font-size: 0.85rem; color: #374151; font-weight: 500; margin-bottom: 4px;">Submission Notes (optional)</label>
+                                <textarea @bind="Notes" style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.85rem; color: #111827; resize: vertical; min-height: 80px; outline: none;" placeholder="Add notes..."></textarea>
+                            </div>
 
-                    <MudPaper Class="pa-5 mf-card" Elevation="0">
-                        <MudTextField Lines="4" Label="Submission Notes (optional)" @bind-Value="Notes" Variant="Variant.Outlined" Class="mb-3" />
-
-                        <MudButton Variant="Variant.Filled"
-                                   Color="Color.Primary"
-                                   FullWidth="true"
-                                   Disabled="@(!CanSubmit || _selectedFile == null || _submitting)"
-                                   OnClick="SubmitAsync">
-                            @(_submitting ? "Submitting..." : "Submit Final Work")
-                        </MudButton>
-                        <MudButton Variant="Variant.Outlined" FullWidth="true" Class="mt-2" Href="@($"/assistant/task/{TaskId}")">
-                            Back to Task Detail
-                        </MudButton>
-                    </MudPaper>
-                </MudItem>
-            </MudGrid>
-        }
+                            <button @onclick="SubmitAsync" disabled="@(!CanSubmit || _selectedFile == null || _submitting)" style="background: #4f46e5; color: #fff; padding: 10px; border-radius: 8px; border: none; cursor: pointer; font-size: 0.85rem; font-weight: 500; width: 100%; @(!CanSubmit || _selectedFile == null || _submitting ? "opacity: 0.5;" : "")">
+                                @(_submitting ? "Submitting..." : "Submit Final Work")
+                            </button>
+                            <a href="@($"/assistant/task/{TaskId}")" style="border: 1px solid #e2e8f0; color: #374151; padding: 10px; border-radius: 8px; text-decoration: none; font-size: 0.85rem; font-weight: 500; display: block; text-align: center; margin-top: 8px;">Back to Task Detail</a>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
     </div>
 </AssistantLayout>
 

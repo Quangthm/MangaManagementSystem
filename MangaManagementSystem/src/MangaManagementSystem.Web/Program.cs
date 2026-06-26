@@ -60,11 +60,6 @@ namespace MangaManagementSystem.Web
                     client.BaseAddress = new Uri(settings.Value.BaseUrl);
                 })
                 .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
-            builder.Services.AddHttpClient<IMangakaSeriesApiClient, MangakaSeriesApiClient>((sp, client) =>
-            {
-                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
-                client.BaseAddress = new Uri(settings.Value.BaseUrl);
-            });
             builder.Services.AddHttpClient<IMangakaSeriesContributorApiClient, MangakaSeriesContributorApiClient>((sp, client) =>
             {
                 var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();

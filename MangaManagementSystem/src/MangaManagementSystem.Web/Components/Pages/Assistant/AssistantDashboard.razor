@@ -12,170 +12,182 @@
 @inject ISnackbar Snackbar
 
 <AssistantLayout>
-    <div class="mf-page">
-        <div class="mf-page-header">
-            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Assistant Workspace</MudText>
-            <MudText Typo="Typo.body1" Class="mf-muted">View assigned page tasks and track task progress.</MudText>
+    <div style="display: flex; flex-direction: column; height: 100%; background: #f8fafc;">
+        @* ── Header ── *@
+        <div style="padding: 24px 32px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e2e8f0; background: #f8fafc; flex-shrink: 0;">
+            <div>
+                <div style="font-weight: 800; font-size: 1.6rem; color: #111827; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 4px;">
+                    Assistant Workspace
+                </div>
+                <div style="color: #64748b; font-size: 0.85rem;">View assigned page tasks and track task progress.</div>
+            </div>
         </div>
 
-        @if (_loading)
-        {
-            <MudProgressLinear Indeterminate="true" />
-        }
-        else if (_loadError != null)
-        {
-            <MudAlert Severity="Severity.Error">Failed to load tasks: @_loadError</MudAlert>
-        }
-        else
-        {
-            <MudGrid Class="mb-4">
-                <MudItem xs="6" md="3"><StatCard Label="Assigned" Value="@_assignedCount.ToString()" Description="Tasks assigned to you" /></MudItem>
-                <MudItem xs="6" md="3"><StatCard Label="Due Soon" Value="@_dueSoonCount.ToString()" Description="Within 3 days" /></MudItem>
-                <MudItem xs="6" md="3"><StatCard Label="Under Review" Value="@_underReviewCount.ToString()" Description="Awaiting feedback" /></MudItem>
-                <MudItem xs="6" md="3"><StatCard Label="Completed" Value="@_completedCount.ToString()" Description="Finished tasks" /></MudItem>
-            </MudGrid>
-
-            @if (_overdueCount > 0)
+        @* ── Scrollable Content ── *@
+        <div style="flex: 1; overflow: auto; padding: 32px;">
+            @if (_loading)
             {
-                <MudAlert Severity="Severity.Error" Class="mb-4" Dense="true">
-                    <MudText Typo="Typo.body2" Class="font-weight-bold">
-                        @_overdueCount overdue task(s)! Please check the task list.
-                    </MudText>
-                </MudAlert>
+                <MudProgressLinear Indeterminate="true" />
             }
+            else if (_loadError != null)
+            {
+                <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px 16px; color: #dc2626; font-size: 0.85rem;">Failed to load tasks: @_loadError</div>
+            }
+            else
+            {
+                @* ── Stat Cards ── *@
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
+                    <StatCard Label="Assigned" Value="@_assignedCount.ToString()" Description="Tasks assigned to you" />
+                    <StatCard Label="Due Soon" Value="@_dueSoonCount.ToString()" Description="Within 3 days" />
+                    <StatCard Label="Under Review" Value="@_underReviewCount.ToString()" Description="Awaiting feedback" />
+                    <StatCard Label="Completed" Value="@_completedCount.ToString()" Description="Finished tasks" />
+                </div>
 
-            <MudGrid>
-                <MudItem xs="12" md="8">
-                    <MudPaper Class="pa-5 mf-card" Elevation="0">
-                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
-                            <MudText Typo="Typo.h6" Class="font-weight-bold">My Assigned Tasks</MudText>
-                            <MudButton Size="Size.Small" Variant="Variant.Text" Href="/assistant/tasks">View All &rarr;</MudButton>
-                        </MudStack>
+                @if (_overdueCount > 0)
+                {
+                    <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; gap: 8px; margin-bottom: 24px;">
+                        <span style="color: #dc2626; font-weight: 600; font-size: 0.85rem;">@_overdueCount overdue task(s)! Please check the task list.</span>
+                    </div>
+                }
+
+                @* ── Main Content Grid ── *@
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
+                    @* ── Tasks Table Card ── *@
+                    <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); overflow: hidden;">
+                        <div style="padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between;">
+                            <div style="font-weight: 700; font-size: 1rem; color: #111827;">My Assigned Tasks</div>
+                            <a href="/assistant/tasks" style="color: #4f46e5; font-size: 0.85rem; text-decoration: none; font-weight: 500;">View All &rarr;</a>
+                        </div>
                         @if (_tasks == null || !_tasks.Any())
                         {
-                            <MudPaper Class="pa-6 text-center mf-card">
-                                <MudIcon Icon="@Icons.Material.Filled.Assignment" Size="Size.Large" Color="Color.Secondary" />
-                                <MudText Typo="Typo.h6" Class="mt-2">No assigned tasks.</MudText>
-                                <MudText Class="mf-muted">Tasks assigned to you will appear here.</MudText>
-                            </MudPaper>
+                            <div style="padding: 48px 24px; text-align: center;">
+                                <div style="font-size: 40px; color: #cbd5e1; margin-bottom: 12px;">
+                                    <MudIcon Icon="@Icons.Material.Filled.Assignment" Style="font-size: 40px;" />
+                                </div>
+                                <div style="font-weight: 600; font-size: 0.95rem; color: #64748b; margin-bottom: 4px;">No assigned tasks.</div>
+                                <div style="color: #94a3b8; font-size: 0.85rem;">Tasks assigned to you will appear here.</div>
+                            </div>
                         }
                         else
                         {
-                            <MudTable Items="_orderedTasks" Hover="true" Dense="true">
-                                <HeaderContent>
-                                    <MudTh>Type</MudTh>
-                                    <MudTh>Series / Chapter</MudTh>
-                                    <MudTh>Due</MudTh>
-                                    <MudTh>Status</MudTh>
-                                    <MudTh></MudTh>
-                                </HeaderContent>
-                                <RowTemplate>
-                                    <MudTd>
-                                        <span style="@GetOverdueStyle(context)">@context.TypeCode</span>
-                                    </MudTd>
-                                    <MudTd>
-                                        <span style="@GetOverdueStyle(context)">
-                                            @(context.SeriesTitle ?? "—") @(context.ChapterNumberLabel != null ? $"• {context.ChapterNumberLabel}" : "")
-                                        </span>
-                                    </MudTd>
-                                    <MudTd>
-                                        <span style="@GetOverdueStyle(context) + 'font-weight:' + (IsDueSoon(context) ? '600' : 'normal') + ';'">
-                                            @FormatDate(context.DueAtUtc)
-                                            @if (IsOverdue(context))
-                                            {
-                                                <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Filled" Class="ml-1">OVERDUE</MudChip>
-                                            }
-                                            else if (IsDueSoon(context))
-                                            {
-                                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined" Class="ml-1">SOON</MudChip>
-                                            }
-                                        </span>
-                                    </MudTd>
-                                    <MudTd><MudChip T="string" Color="@GetStatusColor(context.StatusCode)" Size="Size.Small">@context.StatusCode</MudChip></MudTd>
-                                    <MudTd><MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(()=>OpenTask(context.ChapterPageTaskId))">View</MudButton></MudTd>
-                                </RowTemplate>
-                            </MudTable>
-                        }
-                    </MudPaper>
-                </MudItem>
-                <MudItem xs="12" md="4">
-                    <MudPaper Class="pa-5 mf-card" Elevation="0">
-                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
-                            <MudText Typo="Typo.h6" Class="font-weight-bold">Due Soon</MudText>
-                            @if (_dueSoonCount > 0)
-                            {
-                                <MudChip T="string" Size="Size.Small" Color="Color.Warning">@_dueSoonCount</MudChip>
-                            }
-                        </MudStack>
-                        @if (_dueSoon == null || !_dueSoon.Any())
-                        {
-                            <MudText Class="mf-muted">No tasks due soon.</MudText>
-                        }
-                        else
-                        {
-                            <MudList T="ChapterPageTaskDto" Clickable="true">
-                                @foreach (var t in _dueSoon.Take(5))
-                                {
-                                    <MudListItem T="ChapterPageTaskDto" Value="@t" OnClick="@(() => OpenTask(t.ChapterPageTaskId))">
-                                        <div class="d-flex align-center justify-space-between w-100">
-                                            <div>
-                                                <MudText Typo="Typo.body2" Class="font-weight-bold">@t.TypeCode</MudText>
-                                                <MudText Class="mf-muted" Style="font-size:0.75rem;">
+                            <div style="overflow-x: auto;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                                    <thead>
+                                        <tr style="border-bottom: 1px solid #f1f5f9;">
+                                            <th style="padding: 12px 16px; text-align: left; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">Type</th>
+                                            <th style="padding: 12px 16px; text-align: left; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">Series / Chapter</th>
+                                            <th style="padding: 12px 16px; text-align: left; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">Due</th>
+                                            <th style="padding: 12px 16px; text-align: left; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">Status</th>
+                                            <th style="padding: 12px 16px; text-align: right; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var t in _orderedTasks)
+                                        {
+                                            var isOverdue = IsOverdue(t);
+                                            var isDueSoon = IsDueSoon(t);
+                                            var rowColor = isOverdue ? "#fef2f2" : (isDueSoon ? "#fffbeb" : "transparent");
+                                            <tr style="border-bottom: 1px solid #f1f5f9; background: @rowColor; cursor: pointer;" @onclick="@(() => OpenTask(t.ChapterPageTaskId))">
+                                                <td style="padding: 12px 16px; font-weight: 600; color: @(isOverdue ? "#dc2626" : "#111827");">@t.TypeCode</td>
+                                                <td style="padding: 12px 16px; color: @(isOverdue ? "#dc2626" : "#374151");">
                                                     @(t.SeriesTitle ?? "—") @(t.ChapterNumberLabel != null ? $"• {t.ChapterNumberLabel}" : "")
-                                                </MudText>
-                                            </div>
-                                            <MudText Style="font-size:0.75rem; color: var(--mud-palette-warning); font-weight:600; white-space:nowrap;">
-                                                @FormatDate(t.DueAtUtc)
-                                            </MudText>
-                                        </div>
-                                    </MudListItem>
-                                }
-                            </MudList>
-                            @if (_dueSoon.Count() > 5)
-                            {
-                                <MudText Typo="Typo.caption" Class="mf-muted mt-2">+ @(_dueSoon.Count() - 5) more</MudText>
-                            }
+                                                </td>
+                                                <td style="padding: 12px 16px;">
+                                                    <span style="color: @(isOverdue ? "#dc2626" : (isDueSoon ? "#d97706" : "#64748b")); font-weight: @(isOverdue || isDueSoon ? "600" : "normal");">
+                                                        @FormatDate(t.DueAtUtc)
+                                                    </span>
+                                                    @if (isOverdue)
+                                                    {
+                                                        <span style="background: #dc2626; color: #fff; font-size: 0.62rem; padding: 1px 6px; border-radius: 8px; font-weight: 600; margin-left: 6px;">OVERDUE</span>
+                                                    }
+                                                    else if (isDueSoon)
+                                                    {
+                                                        <span style="background: #fef3c7; color: #92400e; font-size: 0.62rem; padding: 1px 6px; border-radius: 8px; font-weight: 600; margin-left: 6px;">SOON</span>
+                                                    }
+                                                </td>
+                                                <td style="padding: 12px 16px;">
+                                                    <span style="display: inline-block; background: @GetStatusBg(t.StatusCode); color: @GetStatusText(t.StatusCode); font-size: 0.68rem; padding: 2px 8px; border-radius: 10px; font-weight: 600;">@t.StatusCode</span>
+                                                </td>
+                                                <td style="padding: 12px 16px; text-align: right;">
+                                                    <a href="@($"/workspace/tasks/{t.ChapterPageTaskId}?returnUrl=/assistant")" style="background: #4f46e5; color: #fff; padding: 4px 14px; border-radius: 6px; text-decoration: none; font-size: 0.78rem; font-weight: 500;">Open Workspace</a>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
                         }
+                    </div>
 
-                        <MudDivider Class="my-4" />
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/assistant/tasks">View All Tasks</MudButton>
-                    </MudPaper>
-
-                    @if (_overdueCount > 0)
-                    {
-                        <MudPaper Class="pa-5 mf-card mt-4" Elevation="0" Style="border-left: 4px solid var(--mud-palette-error);">
-                            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
-                                <MudText Typo="Typo.h6" Class="font-weight-bold" Style="color: var(--mud-palette-error);">Overdue</MudText>
-                                <MudChip T="string" Size="Size.Small" Color="Color.Error">@_overdueCount</MudChip>
-                            </MudStack>
-                            <MudList T="ChapterPageTaskDto" Clickable="true">
-                                @foreach (var t in _overdueTasks.Take(3))
+                    @* ── Right Sidebar ── *@
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        @* Due Soon Card *@
+                        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); padding: 20px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                <div style="font-weight: 700; font-size: 0.9rem; color: #111827;">Due Soon</div>
+                                @if (_dueSoonCount > 0)
                                 {
-                                    <MudListItem T="ChapterPageTaskDto" Value="@t" OnClick="@(() => OpenTask(t.ChapterPageTaskId))">
-                                        <div class="d-flex align-center justify-space-between w-100">
-                                            <div>
-                                                <MudText Typo="Typo.body2" Class="font-weight-bold" Style="color: var(--mud-palette-error);">@t.TypeCode</MudText>
-                                                <MudText Class="mf-muted" Style="font-size:0.75rem;">
-                                                    @(t.SeriesTitle ?? "—") @(t.ChapterNumberLabel != null ? $"• {t.ChapterNumberLabel}" : "")
-                                                </MudText>
-                                            </div>
-                                            <MudText Style="font-size:0.75rem; color: var(--mud-palette-error); font-weight:700; white-space:nowrap;">
-                                                @FormatDate(t.DueAtUtc)
-                                            </MudText>
-                                        </div>
-                                    </MudListItem>
+                                    <span style="background: #fef3c7; color: #92400e; font-size: 0.68rem; padding: 1px 8px; border-radius: 8px; font-weight: 600;">@_dueSoonCount</span>
                                 }
-                            </MudList>
-                            @if (_overdueTasks.Count > 3)
+                            </div>
+                            @if (_dueSoon == null || !_dueSoon.Any())
                             {
-                                <MudText Typo="Typo.caption" Class="mf-muted mt-2">+ @(_overdueTasks.Count - 3) more</MudText>
+                                <div style="color: #94a3b8; font-size: 0.85rem;">No tasks due soon.</div>
                             }
-                        </MudPaper>
-                    }
-                </MudItem>
-            </MudGrid>
+                            else
+                            {
+                                <div style="display: flex; flex-direction: column;">
+                                    @foreach (var t in _dueSoon.Take(5))
+                                    {
+                                        <div @onclick="@(() => OpenTask(t.ChapterPageTaskId))" style="padding: 8px 0; border-bottom: 1px solid #f1f5f9; cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
+                                            <div>
+                                                <div style="font-weight: 600; font-size: 0.85rem; color: #111827;">@t.TypeCode</div>
+                                                <div style="color: #94a3b8; font-size: 0.75rem;">@(t.SeriesTitle ?? "—") @(t.ChapterNumberLabel != null ? $"• {t.ChapterNumberLabel}" : "")</div>
+                                            </div>
+                                            <div style="font-size: 0.75rem; color: #d97706; font-weight: 600; white-space: nowrap;">@FormatDate(t.DueAtUtc)</div>
+                                        </div>
+                                    }
+                                </div>
+                                @if (_dueSoon.Count() > 5)
+                                {
+                                    <div style="color: #94a3b8; font-size: 0.75rem; margin-top: 8px;">+ @(_dueSoon.Count() - 5) more</div>
+                                }
+                            }
+                            <div style="border-top: 1px solid #f1f5f9; margin-top: 12px; padding-top: 12px;">
+                                <a href="/assistant/tasks" style="background: #4f46e5; color: #fff; display: block; text-align: center; padding: 8px; border-radius: 8px; text-decoration: none; font-size: 0.85rem; font-weight: 500;">View All Tasks</a>
+                            </div>
+                        </div>
 
-        }
+                        @if (_overdueCount > 0)
+                        {
+                            @* Overdue Card *@
+                            <div style="background: #fff; border: 1px solid #fecaca; border-left: 4px solid #dc2626; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); padding: 20px;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                    <div style="font-weight: 700; font-size: 0.9rem; color: #dc2626;">Overdue</div>
+                                    <span style="background: #dc2626; color: #fff; font-size: 0.68rem; padding: 1px 8px; border-radius: 8px; font-weight: 600;">@_overdueCount</span>
+                                </div>
+                                <div style="display: flex; flex-direction: column;">
+                                    @foreach (var t in _overdueTasks.Take(3))
+                                    {
+                                        <div @onclick="@(() => OpenTask(t.ChapterPageTaskId))" style="padding: 8px 0; border-bottom: 1px solid #fef2f2; cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
+                                            <div>
+                                                <div style="font-weight: 600; font-size: 0.85rem; color: #dc2626;">@t.TypeCode</div>
+                                                <div style="color: #94a3b8; font-size: 0.75rem;">@(t.SeriesTitle ?? "—") @(t.ChapterNumberLabel != null ? $"• {t.ChapterNumberLabel}" : "")</div>
+                                            </div>
+                                            <div style="font-size: 0.75rem; color: #dc2626; font-weight: 700; white-space: nowrap;">@FormatDate(t.DueAtUtc)</div>
+                                        </div>
+                                    }
+                                </div>
+                                @if (_overdueTasks.Count > 3)
+                                {
+                                    <div style="color: #94a3b8; font-size: 0.75rem; margin-top: 8px;">+ @(_overdueTasks.Count - 3) more</div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
     </div>
 </AssistantLayout>
 
@@ -232,7 +244,7 @@
         _loadError = null;
         try
         {
-            _assignedCount = _tasks.Count(t => t.StatusCode == "ASSIGNED");
+            _tasks = await AssistantTaskClient.GetAssignedTasksAsync(_currentUserId);
             var now = DateTime.UtcNow;
             _assignedCount = _tasks.Count(t => t.StatusCode == "ASSIGNED");
             _dueSoon = _tasks.Where(t => !IsOverdue(t) && t.DueAtUtc.HasValue && t.DueAtUtc.Value >= now && t.DueAtUtc.Value <= now.AddDays(3) && t.StatusCode != "COMPLETED" && t.StatusCode != "CANCELLED").ToList();
@@ -285,12 +297,21 @@
         return local.ToString("MMM dd");
     }
 
-    private Color GetStatusColor(string status) => status switch
+    private string GetStatusBg(string status) => status switch
     {
-        "ASSIGNED" => Color.Info,
-        "UNDER_REVIEW" => Color.Secondary,
-        "COMPLETED" => Color.Success,
-        "CANCELLED" => Color.Default,
-        _ => Color.Default
+        "ASSIGNED" => "#eef2ff",
+        "UNDER_REVIEW" => "#fef3c7",
+        "COMPLETED" => "#f0fdf4",
+        "CANCELLED" => "#f1f5f9",
+        _ => "#f1f5f9"
+    };
+
+    private string GetStatusText(string status) => status switch
+    {
+        "ASSIGNED" => "#4f46e5",
+        "UNDER_REVIEW" => "#92400e",
+        "COMPLETED" => "#166534",
+        "CANCELLED" => "#64748b",
+        _ => "#64748b"
     };
 }

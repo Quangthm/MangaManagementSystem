@@ -1,0 +1,39 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Run SpotBugs Demo 1",
+            "type": "shell",
+            "command": "mvn",
+            "args": [
+                "clean",
+                "compile",
+                "spotbugs:spotbugs"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/tools/spotbugs-demo"
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "Run SpotBugs Two Demos",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}/tools/run-spotbugs-two-demos.ps1"
+            ],
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        }
+    ]
+}

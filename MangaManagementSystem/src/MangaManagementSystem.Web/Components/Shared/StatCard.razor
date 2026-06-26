@@ -1,14 +1,14 @@
 @namespace MangaManagementSystem.Web.Components.Shared
-<MudPaper Class="pa-5 mf-card" Elevation="0">
-    <MudStack Spacing="1">
-        <MudText Typo="Typo.caption" Color="Color.Secondary">@Label</MudText>
-        <MudText Typo="Typo.h4" Class="font-weight-bold">@Value</MudText>
+<div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); padding: 20px;">
+    <div style="display: flex; flex-direction: column; gap: 4px;">
+        <div style="color: #64748b; font-size: 0.78rem; font-weight: 500;">@Label</div>
+        <div style="font-weight: 800; font-size: 1.8rem; color: #111827; letter-spacing: -0.03em; line-height: 1.1;">@Value</div>
         @if (!string.IsNullOrWhiteSpace(Description))
         {
-            <MudText Typo="Typo.body2" Class="mf-muted">@Description</MudText>
+            <div style="color: #94a3b8; font-size: 0.78rem;">@Description</div>
         }
-    </MudStack>
-</MudPaper>
+    </div>
+</div>
 
 @code {
     [Parameter] public string Label { get; set; } = "";

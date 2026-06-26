@@ -31,7 +31,11 @@
 }
 
 /* ── Base ──────────────────────────────────────────────────── */
-html, body {
+html {
+    scroll-behavior: smooth;
+}
+
+body {
     min-height: 100%;
     background: var(--mf-slate-50);
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
