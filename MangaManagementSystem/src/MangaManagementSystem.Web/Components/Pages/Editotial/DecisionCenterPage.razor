@@ -31,18 +31,22 @@
         }
         else
         {
-            <section class="mf-card mf-gap-small">
+            <section class="mf-card mf-tab-card">
                 <div class="mf-filter-row">
                     <button type="button"
                             class="@TabClass(CurrentTab)"
                             @onclick="() => SetActiveTab(CurrentTab)">
-                        Current Polls (@_openPolls.Count)
+                        <span class="mf-tab-icon">●</span>
+                        <span>Current Polls</span>
+                        <strong>@_openPolls.Count</strong>
                     </button>
 
                     <button type="button"
                             class="@TabClass(HistoryTab)"
                             @onclick="() => SetActiveTab(HistoryTab)">
-                        Poll History (@_pollHistory.Count)
+                        <span class="mf-tab-icon">✓</span>
+                        <span>Poll History</span>
+                        <strong>@_pollHistory.Count</strong>
                     </button>
                 </div>
             </section>
