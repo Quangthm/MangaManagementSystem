@@ -1,0 +1,96 @@
+@page "/workspace/tasks/{TaskId:guid}"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@using MangaManagementSystem.Application.DTOs.Manga
+@using MangaManagementSystem.Application.Interfaces
+@attribute [Authorize(Roles = "Mangaka,Tantou Editor,Assistant")]
+@inject NavigationManager Nav
+@inject IChapterPageTaskService TaskService
+@inject IChapterPageVersionService VersionService
+@inject AuthenticationStateProvider AuthStateProvider
+
+@if (!string.IsNullOrWhiteSpace(_redirectUrl))
+{
+    <div style="padding: 32px; text-align: center; color: #64748b; font-size: 0.9rem;">
+        Redirecting to workspace...
+    </div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div style="max-width: 480px; margin: 64px auto; text-align: center; padding: 32px;">
+        <div style="font-size: 48px; color: #cbd5e1; margin-bottom: 16px;">
+            <svg style="width: 48px; height: 48px; margin: 0 auto; display: block;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+        </div>
+        <div style="font-weight: 700; font-size: 1.1rem; color: #111827; margin-bottom: 8px;">Unable to open workspace</div>
+        <div style="color: #64748b; font-size: 0.9rem; margin-bottom: 24px;">@_error</div>
+        @if (!string.IsNullOrWhiteSpace(_returnUrl))
+        {
+            <a href="@_returnUrl" style="color: #4f46e5; font-weight: 500; text-decoration: none;">&larr; Go back</a>
+        }
+        else
+        {
+            <a href="/assistant/tasks" style="color: #4f46e5; font-weight: 500; text-decoration: none;">&larr; Back to Tasks</a>
+        }
+    </div>
+}
+else
+{
+    <div style="padding: 32px; text-align: center; color: #94a3b8; font-size: 0.85rem;">
+        Loading task...
+    </div>
+}
+
+@code {
+    [Parameter] public Guid TaskId { get; set; }
+    [SupplyParameterFromQuery] public string? returnUrl { get; set; }
+
+    private string? _redirectUrl;
+    private string? _error;
+    private string? _returnUrl;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _returnUrl = returnUrl;
+
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            if (user.Identity?.IsAuthenticated != true)
+            {
+                _error = "You must be logged in to access the workspace.";
+                return;
+            }
+
+            var task = await TaskService.GetChapterPageTaskByIdAsync(TaskId);
+            if (task is null)
+            {
+                _error = "Task not found.";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(task.SeriesSlug))
+            {
+                _error = "Task is missing series information.";
+                return;
+            }
+
+            string queryParams = $"?taskId={TaskId}";
+
+            if (!string.IsNullOrWhiteSpace(_returnUrl))
+            {
+                queryParams += $"&returnUrl={Uri.EscapeDataString(_returnUrl)}";
+            }
+
+            _redirectUrl = $"/series/{task.SeriesSlug}/workspace{queryParams}";
+            Nav.NavigateTo(_redirectUrl);
+        }
+        catch (Exception ex)
+        {
+            _error = $"An error occurred: {ex.Message}";
+        }
+    }
+}

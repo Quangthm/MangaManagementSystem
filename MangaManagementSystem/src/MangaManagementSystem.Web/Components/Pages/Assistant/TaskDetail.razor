@@ -10,306 +10,327 @@
 @inject AuthenticationStateProvider AuthStateProvider
 
 <AssistantLayout>
-    <div class="mf-page">
-        <div class="mf-page-header">
-            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Task Detail</MudText>
-            <MudText Typo="Typo.body1" Class="mf-muted">Review assignment details and reference material</MudText>
+    <div style="display: flex; flex-direction: column; height: 100%; background: #f8fafc;">
+        @* ── Header ── *@
+        <div style="padding: 24px 32px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e2e8f0; background: #f8fafc; flex-shrink: 0;">
+            <div>
+                <div style="font-weight: 800; font-size: 1.6rem; color: #111827; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 4px;">
+                    Task Detail
+                </div>
+                <div style="color: #64748b; font-size: 0.85rem;">Review assignment details and reference material</div>
+            </div>
         </div>
 
-        @if (_loading)
-        {
-            <MudProgressLinear Indeterminate="true" />
-        }
-        else if (!string.IsNullOrWhiteSpace(_error))
-        {
-            <MudAlert Severity="Severity.Error">Failed to load task: @_error</MudAlert>
-        }
-        else if (_task is null)
-        {
-            <MudAlert Severity="Severity.Warning">Task not found or not assigned to you.</MudAlert>
-        }
-        else
-        {
-            @* Status Banner *@
-            <MudAlert Severity="GetStatusSeverity()" Class="mb-6">
-                <MudStack Row="true" AlignItems="AlignItems.Center">
-                    <MudIcon Icon="@GetStatusIcon()" Size="Size.Small" />
-                    <MudText Typo="Typo.body2">@GetStatusMessage()</MudText>
-                </MudStack>
-            </MudAlert>
+        @* ── Scrollable Content ── *@
+        <div style="flex: 1; overflow: auto; padding: 32px;">
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" />
+            }
+            else if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px 16px; color: #dc2626; font-size: 0.85rem;">Failed to load task: @_error</div>
+            }
+            else if (_task is null)
+            {
+                <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 12px 16px; color: #92400e; font-size: 0.85rem;">Task not found or not assigned to you.</div>
+            }
+            else
+            {
+                @* Status Banner *@
+                <div style="padding: 12px 16px; border-radius: 8px; margin-bottom: 24px; display: flex; align-items: center; gap: 8px; font-size: 0.85rem; background: @GetStatusBg(); border: 1px solid @GetStatusBorder(); color: @GetStatusTextColor();">
+                    <span>@GetStatusMessage()</span>
+                </div>
 
-            <MudGrid>
-                <MudItem xs="12" md="8">
-                    @* Header Card *@
-                    <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
-                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start">
-                            <div>
-                                <MudText Typo="Typo.h4" Class="font-weight-bold">@_task.TypeCode Task</MudText>
-                                @if (!string.IsNullOrWhiteSpace(_task.SeriesTitle) || !string.IsNullOrWhiteSpace(_task.ChapterNumberLabel) || _task.PageNo.HasValue)
-                                {
-                                    <MudText Typo="Typo.body1" Class="mt-1">
-                                        @if (!string.IsNullOrWhiteSpace(_task.SeriesTitle))
-                                        {
-                                            <span>@_task.SeriesTitle</span>
-                                        }
-                                        @if (!string.IsNullOrWhiteSpace(_task.ChapterNumberLabel))
-                                        {
-                                            <span class="mf-muted"> › @_task.ChapterNumberLabel</span>
-                                        }
-                                        @if (_task.PageNo.HasValue)
-                                        {
-                                            <span class="mf-muted"> › Page @_task.PageNo.Value</span>
-                                        }
-                                    </MudText>
-                                }
-                                @if (!string.IsNullOrWhiteSpace(_task.TaskTitle))
-                                {
-                                    <MudText Typo="Typo.body2" Class="mf-muted mt-1">@_task.TaskTitle</MudText>
-                                }
-                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-2">
-                                    <MudText Typo="Typo.caption" Class="mf-muted">
-                                        Assigned: <TimestampDisplay Value="@_task.CreatedAtUtc" EmptyText="-" ShowTime="false" />
-                                    </MudText>
-                                    <MudIcon Icon="@Icons.Material.Filled.FiberManualRecord" Size="Size.Small" Class="mf-muted" Style="font-size: 6px;" />
-                                    <MudText Typo="Typo.caption" Class="mf-muted">
-                                        Due: <TimestampDisplay Value="@_task.DueAtUtc" EmptyText="No deadline" ShowTime="false" />
-                                    </MudText>
-                                    <MudIcon Icon="@Icons.Material.Filled.FiberManualRecord" Size="Size.Small" Class="mf-muted" Style="font-size: 6px;" />
-                                    <MudText Typo="Typo.caption" Class="mf-muted">Priority @_task.PriorityLevel</MudText>
-                                </MudStack>
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        @* Header Card *@
+                        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); padding: 24px;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <div style="font-weight: 800; font-size: 1.3rem; color: #111827; letter-spacing: -0.02em;">@_task.TypeCode Task</div>
+                                    @if (!string.IsNullOrWhiteSpace(_task.SeriesTitle) || !string.IsNullOrWhiteSpace(_task.ChapterNumberLabel) || _task.PageNo.HasValue)
+                                    {
+                                        <div style="font-size: 0.9rem; color: #64748b; margin-top: 4px;">
+                                            @if (!string.IsNullOrWhiteSpace(_task.SeriesTitle))
+                                            {
+                                                <span>@_task.SeriesTitle</span>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(_task.ChapterNumberLabel))
+                                            {
+                                                <span style="color: #94a3b8;"> › @_task.ChapterNumberLabel</span>
+                                            }
+                                            @if (_task.PageNo.HasValue)
+                                            {
+                                                <span style="color: #94a3b8;"> › Page @_task.PageNo.Value</span>
+                                            }
+                                        </div>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(_task.TaskTitle))
+                                    {
+                                        <div style="color: #94a3b8; font-size: 0.85rem; margin-top: 4px;">@_task.TaskTitle</div>
+                                    }
+                                    <div style="display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 0.78rem;">
+                                        <span style="color: #94a3b8;">
+                                            Assigned: <TimestampDisplay Value="@_task.CreatedAtUtc" EmptyText="-" ShowTime="false" />
+                                        </span>
+                                        <span style="color: #cbd5e1;">&bull;</span>
+                                        <span style="color: #94a3b8;">
+                                            Due: <TimestampDisplay Value="@_task.DueAtUtc" EmptyText="No deadline" ShowTime="false" />
+                                        </span>
+                                        <span style="color: #cbd5e1;">&bull;</span>
+                                        <span style="color: #94a3b8;">Priority @_task.PriorityLevel</span>
+                                    </div>
+                                </div>
+                                <StatusBadge Status="@_task.StatusCode" Size="Size.Medium" />
                             </div>
-                            <StatusBadge Status="@_task.StatusCode" Size="Size.Medium" />
-                        </MudStack>
-                    </MudPaper>
+                        </div>
 
                     @* Description *@
-                    <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
-                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">Description</MudText>
-                        @if (!string.IsNullOrWhiteSpace(_task.TaskDescription))
-                        {
-                            <MudText Class="mf-muted" Style="white-space: pre-line;">@_task.TaskDescription</MudText>
-                        }
-                        else
-                        {
-                            <MudText Typo="Typo.body2" Class="mf-muted">No description available.</MudText>
-                        }
-                    </MudPaper>
-
-                    @* Assigned Page Regions *@
-                    @if (_task.PageRegions.Any())
-                    {
-                        <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
-                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Assigned Page Regions</MudText>
-                            <MudTable Items="@_task.PageRegions" Hover="true" RowsPerPage="10" Elevation="0" Dense="true">
-                                <HeaderContent>
-                                    <MudTh>Type</MudTh>
-                                    <MudTh>Label</MudTh>
-                                    <MudTh>X</MudTh>
-                                    <MudTh>Y</MudTh>
-                                    <MudTh>W</MudTh>
-                                    <MudTh>H</MudTh>
-                                </HeaderContent>
-                                <RowTemplate>
-                                    <MudTd><MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">@context.TypeCode</MudChip></MudTd>
-                                    <MudTd>@context.RegionLabel</MudTd>
-                                    <MudTd>@context.X</MudTd>
-                                    <MudTd>@context.Y</MudTd>
-                                    <MudTd>@context.Width</MudTd>
-                                    <MudTd>@context.Height</MudTd>
-                                </RowTemplate>
-                            </MudTable>
-                        </MudPaper>
-                    }
-
-                    @* Annotations *@
-                    <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
-                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Annotations</MudText>
-                        @if (_annotations == null)
-                        {
-                            <MudText Typo="Typo.body2" Class="mf-muted">Loading annotations...</MudText>
-                        }
-                        else if (!_annotations.Any())
-                        {
-                            <MudText Typo="Typo.body2" Class="mf-muted">No annotations for the assigned regions.</MudText>
-                        }
-                        else
-                        {
-                            <MudTable Items="@_annotations" Hover="true" RowsPerPage="10" Elevation="0" Dense="true">
-                                <HeaderContent>
-                                    <MudTh>Issue Type</MudTh>
-                                    <MudTh>Annotation</MudTh>
-                                    <MudTh>By</MudTh>
-                                    <MudTh>Created</MudTh>
-                                    <MudTh>Status</MudTh>
-                                    <MudTh>Regions</MudTh>
-                                </HeaderContent>
-                                <RowTemplate>
-                                    <MudTd><MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">@context.IssueTypeCode</MudChip></MudTd>
-                                    <MudTd Style="max-width:300px;overflow:hidden;text-overflow:ellipsis;">@context.AnnotationText</MudTd>
-                                    <MudTd>@(context.AnnotatedByDisplayName ?? "\u2014")</MudTd>
-                                    <MudTd><TimestampDisplay Value="@context.CreatedAtUtc" EmptyText="\u2014" /></MudTd>
-                                    <MudTd>
-                                        @if (context.ResolvedAtUtc.HasValue)
-                                        {
-                                            <MudChip T="string" Color="Color.Success" Size="Size.Small">Resolved</MudChip>
-                                        }
-                                        else
-                                        {
-                                            <MudChip T="string" Color="Color.Warning" Size="Size.Small">Open</MudChip>
-                                        }
-                                    </MudTd>
-                                    <MudTd>@context.PageRegions.Count</MudTd>
-                                </RowTemplate>
-                            </MudTable>
-                        }
-                    </MudPaper>
-                </MudItem>
-
-                <MudItem xs="12" md="4">
-                    <div style="position: sticky; top: 24px;">
-                        @* Actions Card *@
-                        <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
-                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Actions</MudText>
-                            <MudStack Spacing="2">
-                                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Href="@($"/assistant/studio/{_task.ChapterPageTaskId}")">
-                                    Open Studio Workspace
-                                </MudButton>
-                                @if (_task.StatusCode == "ASSIGNED")
-                                {
-                                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" Href="@($"/assistant/task/{_task.ChapterPageTaskId}/submit")">
-                                        Submit Work
-                                    </MudButton>
-                                }
-                                else if (_task.StatusCode == "UNDER_REVIEW")
-                                {
-                                    <div class="text-center">
-                                        <MudChip T="string" Color="Color.Warning" Size="Size.Medium" Variant="Variant.Outlined">
-                                            Submitted for Review
-                                        </MudChip>
-                                    </div>
-                                }
-                                else if (_task.StatusCode == "COMPLETED")
-                                {
-                                    <div class="text-center">
-                                        <MudChip T="string" Color="Color.Success" Size="Size.Medium">
-                                            Approved ✓
-                                        </MudChip>
-                                    </div>
-                                }
-                                else if (_task.StatusCode == "CANCELLED")
-                                {
-                                    <div class="text-center">
-                                        <MudChip T="string" Color="Color.Error" Size="Size.Medium" Variant="Variant.Outlined">
-                                            Task Cancelled
-                                        </MudChip>
-                                    </div>
-                                }
-                                <MudButton Variant="Variant.Text" FullWidth="true" Href="/assistant/tasks">Back to Tasks</MudButton>
-                            </MudStack>
-                        </MudPaper>
-
-                        @* Metadata Card *@
-                        <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
-                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Metadata</MudText>
-                            <MudStack Spacing="1">
-                                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-                                    <MudText Typo="Typo.body2" Class="mf-muted">Type</MudText>
-                                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">@_task.TypeCode</MudChip>
-                                </MudStack>
-                                <MudDivider Class="my-1" />
-                                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-                                    <MudText Typo="Typo.body2" Class="mf-muted">Status</MudText>
-                                    <StatusBadge Status="@_task.StatusCode" />
-                                </MudStack>
-                                <MudDivider Class="my-1" />
-                                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-                                    <MudText Typo="Typo.body2" Class="mf-muted">Assigned</MudText>
-                                    <TimestampDisplay Value="@_task.CreatedAtUtc" EmptyText="-" ShowTime="false" />
-                                </MudStack>
-                                <MudDivider Class="my-1" />
-                                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-                                    <MudText Typo="Typo.body2" Class="mf-muted">Priority</MudText>
-                                    <MudText Typo="Typo.body2" Class="font-weight-bold">@_task.PriorityLevel</MudText>
-                                </MudStack>
-                                <MudDivider Class="my-1" />
-                                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-                                    <MudText Typo="Typo.body2" Class="mf-muted">Due</MudText>
-                                    <TimestampDisplay Value="@_task.DueAtUtc" EmptyText="No deadline" ShowTime="false" />
-                                </MudStack>
-                                <MudDivider Class="my-1" />
-                                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-                                    <MudText Typo="Typo.body2" Class="mf-muted">Regions</MudText>
-                                    <MudText Typo="Typo.body2" Class="font-weight-bold">@_task.PageRegions.Count</MudText>
-                                </MudStack>
-                            </MudStack>
-                        </MudPaper>
-
-                        @* Source Page Card *@
-                        <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
-                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Source Page</MudText>
-                            @if (!string.IsNullOrWhiteSpace(_task.PageImageUrl))
+                        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); padding: 20px 24px;">
+                            <div style="font-weight: 700; font-size: 1rem; color: #111827; margin-bottom: 8px;">Description</div>
+                            @if (!string.IsNullOrWhiteSpace(_task.TaskDescription))
                             {
-                                <MudImage Src="@_task.PageImageUrl" MaxHeight="150" ObjectFit="ObjectFit.Contain" Class="rounded w-100" />
-                                <div class="mt-2 text-center">
-                                    <MudButton Size="Size.Small" Variant="Variant.Text" Href="@_task.PageImageUrl" Target="_blank">Download Source</MudButton>
-                                </div>
+                                <div style="color: #64748b; font-size: 0.85rem; white-space: pre-line;">@_task.TaskDescription</div>
                             }
                             else
                             {
-                                <MudText Typo="Typo.body2" Class="mf-muted pa-4 text-center">Source image not available.</MudText>
+                                <div style="color: #94a3b8; font-size: 0.85rem;">No description available.</div>
                             }
-                        </MudPaper>
+                        </div>
 
-                        @* Submitted Output Card *@
-                        <MudPaper Class="pa-5 mf-card mb-4" Elevation="0">
-                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Submitted Output</MudText>
-                            @if (!string.IsNullOrWhiteSpace(_task.CompletedOutputUrl))
-                            {
-                                <div class="text-center pa-4">
-                                    <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Large" Class="mf-muted mb-2" />
-                                    <MudText Typo="Typo.body2" Class="mf-muted">Submitted output is available</MudText>
-                                    @if (_task.CompletedPageVersionId.HasValue)
-                                    {
-                                        <MudText Typo="Typo.caption" Class="mf-muted">Version: @_task.CompletedPageVersionId.Value.ToString("N")[..8]</MudText>
-                                    }
-                                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" Class="mt-3"
-                                               OnClick="() => _showOutputPreview = true">
-                                        View Submitted Output
-                                    </MudButton>
+                        @* Assigned Page Regions *@
+                        @if (_task.PageRegions.Any())
+                        {
+                            <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); overflow: hidden;">
+                                <div style="padding: 16px 24px; border-bottom: 1px solid #f1f5f9;">
+                                    <div style="font-weight: 700; font-size: 1rem; color: #111827;">Assigned Page Regions</div>
                                 </div>
-                            }
-                            else
-                            {
-                                <MudText Typo="Typo.body2" Class="mf-muted pa-4 text-center">No submitted output yet.</MudText>
-                            }
-                        </MudPaper>
-
-                        @* Submitted Output Preview Overlay *@
-                        <MudOverlay Visible="_showOutputPreview" AutoClose="false">
-                            <div style="display: flex; align-items: center; justify-content: center; height: 100%; padding: 24px;">
-                                <MudPaper Elevation="0" Class="mf-card"
-                                          Style="max-width: 800px; width: 100%; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-bottom: 1px solid var(--mf-slate-200);">
-                                        <MudText Typo="Typo.h6" Class="font-weight-bold">Submitted Output Preview</MudText>
-                                        <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseOutputPreview" Size="Size.Small" />
-                                    </div>
-                                    <div style="flex: 1; overflow: auto; padding: 24px; text-align: center;">
-                                        @if (!string.IsNullOrWhiteSpace(_task?.CompletedOutputUrl))
-                                        {
-                                            <img src="@_task.CompletedOutputUrl"
-                                                 style="max-width: 100%; max-height: 72vh; object-fit: contain; border-radius: 8px;" />
-                                        }
-                                    </div>
-                                    <div style="padding: 12px 24px; border-top: 1px solid var(--mf-slate-200); text-align: right;">
-                                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CloseOutputPreview">Close</MudButton>
-                                    </div>
-                                </MudPaper>
+                                <div style="overflow-x: auto;">
+                                    <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                                        <thead>
+                                            <tr style="border-bottom: 1px solid #f1f5f9; background: #f8fafc;">
+                                                <th style="padding: 10px 16px; text-align: left; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">Type</th>
+                                                <th style="padding: 10px 16px; text-align: left; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">Label</th>
+                                                <th style="padding: 10px 16px; text-align: right; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">X</th>
+                                                <th style="padding: 10px 16px; text-align: right; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">Y</th>
+                                                <th style="padding: 10px 16px; text-align: right; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">W</th>
+                                                <th style="padding: 10px 16px; text-align: right; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">H</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var region in _task.PageRegions)
+                                            {
+                                                <tr style="border-bottom: 1px solid #f1f5f9;">
+                                                    <td style="padding: 10px 16px;">
+                                                        <span style="background: #eef2ff; color: #4f46e5; font-size: 0.72rem; padding: 2px 8px; border-radius: 6px; font-weight: 500;">@region.TypeCode</span>
+                                                    </td>
+                                                    <td style="padding: 10px 16px; color: #374151;">@region.RegionLabel</td>
+                                                    <td style="padding: 10px 16px; text-align: right; color: #64748b;">@region.X</td>
+                                                    <td style="padding: 10px 16px; text-align: right; color: #64748b;">@region.Y</td>
+                                                    <td style="padding: 10px 16px; text-align: right; color: #64748b;">@region.Width</td>
+                                                    <td style="padding: 10px 16px; text-align: right; color: #64748b;">@region.Height</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
-                        </MudOverlay>
+                        }
+
+                        @* Annotations *@
+                        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); overflow: hidden;">
+                            <div style="padding: 16px 24px; border-bottom: 1px solid #f1f5f9;">
+                                <div style="font-weight: 700; font-size: 1rem; color: #111827;">Annotations</div>
+                            </div>
+                            @if (_annotations == null)
+                            {
+                                <div style="padding: 24px; color: #94a3b8; font-size: 0.85rem;">Loading annotations...</div>
+                            }
+                            else if (!_annotations.Any())
+                            {
+                                <div style="padding: 24px; color: #94a3b8; font-size: 0.85rem;">No annotations for the assigned regions.</div>
+                            }
+                            else
+                            {
+                                <div style="overflow-x: auto;">
+                                    <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                                        <thead>
+                                            <tr style="border-bottom: 1px solid #f1f5f9; background: #f8fafc;">
+                                                <th style="padding: 10px 16px; text-align: left; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">Issue Type</th>
+                                                <th style="padding: 10px 16px; text-align: left; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">Annotation</th>
+                                                <th style="padding: 10px 16px; text-align: left; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">By</th>
+                                                <th style="padding: 10px 16px; text-align: left; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">Created</th>
+                                                <th style="padding: 10px 16px; text-align: left; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">Status</th>
+                                                <th style="padding: 10px 16px; text-align: right; color: #94a3b8; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;">Regions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var ann in _annotations)
+                                            {
+                                                <tr style="border-bottom: 1px solid #f1f5f9;">
+                                                    <td style="padding: 10px 16px;">
+                                                        <span style="background: #fef3c7; color: #92400e; font-size: 0.72rem; padding: 2px 8px; border-radius: 6px; font-weight: 500;">@ann.IssueTypeCode</span>
+                                                    </td>
+                                                    <td style="padding: 10px 16px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; color: #374151;">@ann.AnnotationText</td>
+                                                    <td style="padding: 10px 16px; color: #64748b;">@(ann.AnnotatedByDisplayName ?? "—")</td>
+                                                    <td style="padding: 10px 16px; color: #64748b;"><TimestampDisplay Value="@ann.CreatedAtUtc" EmptyText="—" /></td>
+                                                    <td style="padding: 10px 16px;">
+                                                        @if (ann.ResolvedAtUtc.HasValue)
+                                                        {
+                                                            <span style="background: #f0fdf4; color: #166534; font-size: 0.68rem; padding: 2px 8px; border-radius: 6px; font-weight: 500;">Resolved</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span style="background: #fef3c7; color: #92400e; font-size: 0.68rem; padding: 2px 8px; border-radius: 6px; font-weight: 500;">Open</span>
+                                                        }
+                                                    </td>
+                                                    <td style="padding: 10px 16px; text-align: right; color: #64748b;">@ann.PageRegions.Count</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                        </div>
                     </div>
-                </MudItem>
-            </MudGrid>
-        }
+
+                    @* ── Right Sidebar ── *@
+                    <div>
+                        <div style="position: sticky; top: 24px; display: flex; flex-direction: column; gap: 16px;">
+                            @* Actions Card *@
+                            <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); padding: 20px 24px;">
+                                <div style="font-weight: 700; font-size: 0.9rem; color: #111827; margin-bottom: 12px;">Actions</div>
+                                <div style="display: flex; flex-direction: column; gap: 8px;">
+                                    <a href="@($"/workspace/tasks/{_task.ChapterPageTaskId}?returnUrl=/assistant/task/{_task.ChapterPageTaskId}")" style="background: #4f46e5; color: #fff; padding: 10px; border-radius: 8px; text-decoration: none; font-size: 0.85rem; font-weight: 500; text-align: center;">Open Studio Workspace</a>
+                                    @if (_task.StatusCode == "ASSIGNED")
+                                    {
+                                        <a href="@($"/assistant/task/{_task.ChapterPageTaskId}/submit")" style="border: 1px solid #e2e8f0; color: #374151; padding: 10px; border-radius: 8px; text-decoration: none; font-size: 0.85rem; font-weight: 500; text-align: center;">Submit Work</a>
+                                    }
+                                    else if (_task.StatusCode == "UNDER_REVIEW")
+                                    {
+                                        <div style="text-align: center;">
+                                            <span style="background: #fef3c7; color: #92400e; font-size: 0.78rem; padding: 6px 12px; border-radius: 8px; font-weight: 500; display: inline-block;">Submitted for Review</span>
+                                        </div>
+                                    }
+                                    else if (_task.StatusCode == "COMPLETED")
+                                    {
+                                        <div style="text-align: center;">
+                                            <span style="background: #f0fdf4; color: #166534; font-size: 0.78rem; padding: 6px 12px; border-radius: 8px; font-weight: 500; display: inline-block;">Approved ✓</span>
+                                        </div>
+                                    }
+                                    else if (_task.StatusCode == "CANCELLED")
+                                    {
+                                        <div style="text-align: center;">
+                                            <span style="background: #fef2f2; color: #dc2626; font-size: 0.78rem; padding: 6px 12px; border-radius: 8px; font-weight: 500; display: inline-block;">Task Cancelled</span>
+                                        </div>
+                                    }
+                                    <a href="/assistant/tasks" style="color: #4f46e5; font-size: 0.85rem; text-decoration: none; font-weight: 500; text-align: center; padding: 6px;">Back to Tasks</a>
+                                </div>
+                            </div>
+
+                            @* Metadata Card *@
+                            <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); padding: 20px 24px;">
+                                <div style="font-weight: 700; font-size: 0.9rem; color: #111827; margin-bottom: 12px;">Metadata</div>
+                                <div style="display: flex; flex-direction: column;">
+                                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 0;">
+                                        <span style="color: #94a3b8; font-size: 0.85rem;">Type</span>
+                                        <span style="background: #eef2ff; color: #4f46e5; font-size: 0.72rem; padding: 2px 8px; border-radius: 6px; font-weight: 500;">@_task.TypeCode</span>
+                                    </div>
+                                    <div style="height: 1px; background: #f1f5f9; margin: 2px 0;"></div>
+                                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 0;">
+                                        <span style="color: #94a3b8; font-size: 0.85rem;">Status</span>
+                                        <StatusBadge Status="@_task.StatusCode" />
+                                    </div>
+                                    <div style="height: 1px; background: #f1f5f9; margin: 2px 0;"></div>
+                                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 0;">
+                                        <span style="color: #94a3b8; font-size: 0.85rem;">Assigned</span>
+                                        <span style="color: #64748b; font-size: 0.85rem;"><TimestampDisplay Value="@_task.CreatedAtUtc" EmptyText="-" ShowTime="false" /></span>
+                                    </div>
+                                    <div style="height: 1px; background: #f1f5f9; margin: 2px 0;"></div>
+                                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 0;">
+                                        <span style="color: #94a3b8; font-size: 0.85rem;">Priority</span>
+                                        <span style="color: #111827; font-weight: 700; font-size: 0.85rem;">@_task.PriorityLevel</span>
+                                    </div>
+                                    <div style="height: 1px; background: #f1f5f9; margin: 2px 0;"></div>
+                                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 0;">
+                                        <span style="color: #94a3b8; font-size: 0.85rem;">Due</span>
+                                        <span style="color: #64748b; font-size: 0.85rem;"><TimestampDisplay Value="@_task.DueAtUtc" EmptyText="No deadline" ShowTime="false" /></span>
+                                    </div>
+                                    <div style="height: 1px; background: #f1f5f9; margin: 2px 0;"></div>
+                                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 0;">
+                                        <span style="color: #94a3b8; font-size: 0.85rem;">Regions</span>
+                                        <span style="color: #111827; font-weight: 700; font-size: 0.85rem;">@_task.PageRegions.Count</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            @* Source Page Card *@
+                            <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); padding: 20px 24px;">
+                                <div style="font-weight: 700; font-size: 0.9rem; color: #111827; margin-bottom: 12px;">Source Page</div>
+                                @if (!string.IsNullOrWhiteSpace(_task.PageImageUrl))
+                                {
+                                    <MudImage Src="@_task.PageImageUrl" MaxHeight="150" ObjectFit="ObjectFit.Contain" Class="rounded w-100" />
+                                    <div style="text-align: center; margin-top: 8px;">
+                                        <a href="@_task.PageImageUrl" target="_blank" style="color: #4f46e5; font-size: 0.85rem; text-decoration: none; font-weight: 500;">Download Source</a>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div style="color: #94a3b8; font-size: 0.85rem; text-align: center; padding: 16px;">Source image not available.</div>
+                                }
+                            </div>
+
+                            @* Submitted Output Card *@
+                            <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); padding: 20px 24px;">
+                                <div style="font-weight: 700; font-size: 0.9rem; color: #111827; margin-bottom: 12px;">Submitted Output</div>
+                                @if (!string.IsNullOrWhiteSpace(_task.CompletedOutputUrl))
+                                {
+                                    <div style="text-align: center; padding: 16px;">
+                                        <div style="color: #94a3b8;">
+                                            <MudIcon Icon="@Icons.Material.Filled.Image" Style="font-size: 32px;" Class="mb-2" />
+                                        </div>
+                                        <div style="color: #94a3b8; font-size: 0.85rem;">Submitted output is available</div>
+                                        @if (_task.CompletedPageVersionId.HasValue)
+                                        {
+                                            <div style="color: #94a3b8; font-size: 0.72rem;">Version: @_task.CompletedPageVersionId.Value.ToString("N")[..8]</div>
+                                        }
+                                        <button @onclick="() => _showOutputPreview = true" style="border: 1px solid #e2e8f0; color: #374151; padding: 8px 16px; border-radius: 8px; background: none; cursor: pointer; font-size: 0.85rem; font-weight: 500; margin-top: 12px; width: 100%;">View Submitted Output</button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div style="color: #94a3b8; font-size: 0.85rem; text-align: center; padding: 16px;">No submitted output yet.</div>
+                                }
+                            </div>
+
+                            @* Submitted Output Preview Overlay *@
+                            <MudOverlay Visible="_showOutputPreview" AutoClose="false">
+                                <div style="display: flex; align-items: center; justify-content: center; height: 100%; padding: 24px;">
+                                    <div style="max-width: 800px; width: 100%; max-height: 85vh; background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); overflow: hidden; display: flex; flex-direction: column;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-bottom: 1px solid #e2e8f0;">
+                                            <div style="font-weight: 700; font-size: 1rem; color: #111827;">Submitted Output Preview</div>
+                                            <button @onclick="CloseOutputPreview" style="background: none; border: none; cursor: pointer; color: #94a3b8;">
+                                                <svg style="width: 20px; height: 20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                            </button>
+                                        </div>
+                                        <div style="flex: 1; overflow: auto; padding: 24px; text-align: center;">
+                                            @if (!string.IsNullOrWhiteSpace(_task?.CompletedOutputUrl))
+                                            {
+                                                <img src="@_task.CompletedOutputUrl" style="max-width: 100%; max-height: 72vh; object-fit: contain; border-radius: 8px;" />
+                                            }
+                                        </div>
+                                        <div style="padding: 12px 24px; border-top: 1px solid #e2e8f0; text-align: right;">
+                                            <button @onclick="CloseOutputPreview" style="background: #4f46e5; color: #fff; padding: 8px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: 0.85rem; font-weight: 500;">Close</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </MudOverlay>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
     </div>
 </AssistantLayout>
 
@@ -323,27 +344,39 @@
     private ChapterPageTaskDto? _task;
     private IReadOnlyList<ChapterPageAnnotationDto>? _annotations;
 
-    private Severity GetStatusSeverity()
+    private string GetStatusBg()
     {
         return _task?.StatusCode switch
         {
-            "ASSIGNED" => Severity.Info,
-            "UNDER_REVIEW" => Severity.Warning,
-            "COMPLETED" => Severity.Success,
-            "CANCELLED" => Severity.Error,
-            _ => Severity.Normal
+            "ASSIGNED" => "#eff6ff",
+            "UNDER_REVIEW" => "#fffbeb",
+            "COMPLETED" => "#f0fdf4",
+            "CANCELLED" => "#fef2f2",
+            _ => "#f8fafc"
         };
     }
 
-    private string GetStatusIcon()
+    private string GetStatusBorder()
     {
         return _task?.StatusCode switch
         {
-            "ASSIGNED" => Icons.Material.Filled.Assignment,
-            "UNDER_REVIEW" => Icons.Material.Filled.RateReview,
-            "COMPLETED" => Icons.Material.Filled.CheckCircle,
-            "CANCELLED" => Icons.Material.Filled.Cancel,
-            _ => Icons.Material.Filled.Info
+            "ASSIGNED" => "#bfdbfe",
+            "UNDER_REVIEW" => "#fde68a",
+            "COMPLETED" => "#bbf7d0",
+            "CANCELLED" => "#fecaca",
+            _ => "#e2e8f0"
+        };
+    }
+
+    private string GetStatusTextColor()
+    {
+        return _task?.StatusCode switch
+        {
+            "ASSIGNED" => "#1e40af",
+            "UNDER_REVIEW" => "#92400e",
+            "COMPLETED" => "#166534",
+            "CANCELLED" => "#dc2626",
+            _ => "#64748b"
         };
     }
 
