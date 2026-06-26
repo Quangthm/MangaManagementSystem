@@ -45,3 +45,11 @@ public sealed record CastSeriesBoardVoteResultDto(
     string ChoiceCode,
     string? VoteReason,
     DateTime VotedAtUtc);
+
+public sealed record FinalizeBoardPollResultDto(
+    Guid PollId,
+    Guid SeriesId,
+    string PollStatusCode,
+    string SeriesStatusCode,
+    string? PublicationFrequencyCode,
+    DateTime EndedAtUtc);
