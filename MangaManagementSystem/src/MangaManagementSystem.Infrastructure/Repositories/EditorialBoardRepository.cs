@@ -150,6 +150,94 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         return rows;
     }
 
+    public async Task<IReadOnlyList<EditorialBoardPollDto>> GetPollHistoryAsync(
+        Guid currentUserId,
+        CancellationToken cancellationToken)
+    {
+        var connection = _dbContext.Database.GetDbConnection();
+
+        if (connection.State != ConnectionState.Open)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        await using var command = connection.CreateCommand();
+
+        command.CommandText =
+            """
+            SELECT
+                p.series_board_poll_id,
+                p.series_id,
+                s.slug,
+                s.title,
+                p.poll_type_code,
+                p.poll_status_code,
+                p.poll_reason,
+                p.board_publication_frequency_code,
+                p.started_at_utc,
+                p.ends_at_utc,
+                ISNULL(vs.approve_count, 0) AS approve_count,
+                ISNULL(vs.reject_count, 0) AS reject_count,
+                ISNULL(vs.abstain_count, 0) AS abstain_count,
+                ISNULL(vs.total_vote_count, 0) AS total_vote_count,
+                CASE
+                    WHEN p.poll_status_code = N'CANCELLED'
+                         AND ISNULL(vs.approve_count, 0) = ISNULL(vs.reject_count, 0)
+                         AND ISNULL(vs.total_vote_count, 0) > 0
+                        THEN N'TIE_CANCELLED'
+                    WHEN p.poll_status_code = N'CANCELLED'
+                        THEN N'CANCELLED'
+                    ELSE ISNULL(vs.computed_result_code, N'PENDING')
+                END AS computed_result_code,
+                my_vote.choice_code AS current_user_choice_code,
+                my_vote.vote_reason AS current_user_vote_reason
+            FROM manga.SeriesBoardPoll p
+            INNER JOIN manga.Series s
+                ON s.series_id = p.series_id
+            LEFT JOIN manga.vw_SeriesBoardPollVoteSummary vs
+                ON vs.series_board_poll_id = p.series_board_poll_id
+            LEFT JOIN manga.SeriesBoardVote my_vote
+                ON my_vote.series_board_poll_id = p.series_board_poll_id
+               AND my_vote.user_id = @currentUserId
+            WHERE p.poll_status_code IN (N'CLOSED', N'CANCELLED')
+            ORDER BY ISNULL(p.ends_at_utc, p.started_at_utc) DESC;
+            """;
+
+        AddGuidParameter(command, "@currentUserId", currentUserId);
+
+        var rows = new List<EditorialBoardPollDto>();
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var pollTypeCode = GetStringOrDefault(reader, 4, "UNKNOWN");
+            var seriesTitle = GetStringOrDefault(reader, 3, "Untitled Series");
+
+            rows.Add(new EditorialBoardPollDto(
+                PollId: reader.GetGuid(0),
+                SeriesId: reader.GetGuid(1),
+                Code: GetStringOrDefault(reader, 2, "N/A"),
+                SeriesTitle: seriesTitle,
+                PollName: $"{MapPollType(pollTypeCode)} — {seriesTitle}",
+                PollTypeCode: pollTypeCode,
+                PollStatusCode: GetStringOrDefault(reader, 5, "CLOSED"),
+                PollReason: GetStringOrDefault(reader, 6, string.Empty),
+                PublicationFrequencyCode: reader.IsDBNull(7) ? null : reader.GetString(7),
+                StartedAtUtc: reader.GetDateTime(8),
+                EndsAtUtc: reader.IsDBNull(9) ? null : reader.GetDateTime(9),
+                ApproveVotes: ToInt32(reader, 10),
+                RejectVotes: ToInt32(reader, 11),
+                AbstainVotes: ToInt32(reader, 12),
+                TotalVotes: ToInt32(reader, 13),
+                ComputedResultCode: GetStringOrDefault(reader, 14, "PENDING"),
+                CurrentUserChoiceCode: reader.IsDBNull(15) ? null : reader.GetString(15),
+                CurrentUserVoteReason: reader.IsDBNull(16) ? null : reader.GetString(16)));
+        }
+
+        return rows;
+    }
+
     public async Task<OpenSeriesBoardPollResultDto> OpenPollAsync(
         OpenSeriesBoardPollRequestDto request,
         Guid chiefUserId,

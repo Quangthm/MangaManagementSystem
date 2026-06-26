@@ -29,6 +29,16 @@ public sealed class EditorialBoardApiClient : IEditorialBoardApiClient
         return result ?? Array.Empty<EditorialBoardPollDto>();
     }
 
+    public async Task<IReadOnlyList<EditorialBoardPollDto>> GetPollHistoryAsync(
+    CancellationToken cancellationToken = default)
+    {
+        var result = await _httpClient.GetFromJsonAsync<IReadOnlyList<EditorialBoardPollDto>>(
+            "api/editorial-board/polls/history",
+            cancellationToken);
+
+        return result ?? Array.Empty<EditorialBoardPollDto>();
+    }
+
     public async Task<OpenPollResult?> OpenPollAsync(
         Guid proposalId,
         OpenPollRequest request,

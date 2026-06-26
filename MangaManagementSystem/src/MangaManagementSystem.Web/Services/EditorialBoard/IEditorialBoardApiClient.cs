@@ -25,4 +25,7 @@ public interface IEditorialBoardApiClient
     Task<FinalizePollResult?> CancelPollAsync(
         Guid pollId,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<EditorialBoardPollDto>> GetPollHistoryAsync(
+    CancellationToken cancellationToken = default);
 }

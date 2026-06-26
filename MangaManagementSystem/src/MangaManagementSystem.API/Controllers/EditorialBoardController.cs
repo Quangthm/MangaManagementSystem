@@ -42,6 +42,18 @@ public sealed class EditorialBoardController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("polls/history")]
+    public async Task<IActionResult> GetPollHistory(CancellationToken cancellationToken)
+    {
+        var currentUserId = GetCurrentUserId();
+
+        var result = await _mediator.Send(
+            new GetBoardPollHistoryQuery(currentUserId),
+            cancellationToken);
+
+        return Ok(result);
+    }
+
     [HttpPost("proposals/{proposalId:guid}/polls")]
     [Authorize(Roles = "Editorial Board Chief")]
     public async Task<IActionResult> OpenPoll(

@@ -30,4 +30,8 @@ public interface IEditorialBoardRepository
         Guid pollId,
         Guid chiefUserId,
         CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<EditorialBoardPollDto>> GetPollHistoryAsync(
+    Guid currentUserId,
+    CancellationToken cancellationToken);
 }
