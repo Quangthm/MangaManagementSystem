@@ -406,27 +406,24 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                     poll_id UNIQUEIDENTIFIER,
                     series_id UNIQUEIDENTIFIER,
                     poll_type_code NVARCHAR(50),
-                    poll_status_code NVARCHAR(50),
                     publication_frequency_code NVARCHAR(50),
-                    ended_at_utc DATETIME2(0)
+                    started_at_utc DATETIME2(0)
                 );
 
-                UPDATE p
-                SET poll_status_code = N'CLOSED',
-                    ends_at_utc =
-                        CASE
-                            WHEN @now <= p.started_at_utc
-                                THEN DATEADD(SECOND, 1, p.started_at_utc)
-                            ELSE @now
-                        END
-                OUTPUT
-                    inserted.series_board_poll_id,
-                    inserted.series_id,
-                    inserted.poll_type_code,
-                    inserted.poll_status_code,
-                    inserted.board_publication_frequency_code,
-                    inserted.ends_at_utc
-                INTO @poll
+                INSERT INTO @poll
+                (
+                    poll_id,
+                    series_id,
+                    poll_type_code,
+                    publication_frequency_code,
+                    started_at_utc
+                )
+                SELECT
+                    p.series_board_poll_id,
+                    p.series_id,
+                    p.poll_type_code,
+                    p.board_publication_frequency_code,
+                    p.started_at_utc
                 FROM manga.SeriesBoardPoll p
                 WHERE p.series_board_poll_id = @pollId
                   AND p.poll_status_code = N'OPEN';
@@ -439,14 +436,22 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 DECLARE @seriesId UNIQUEIDENTIFIER;
                 DECLARE @pollTypeCode NVARCHAR(50);
                 DECLARE @publicationFrequencyCode NVARCHAR(50);
+                DECLARE @startedAtUtc DATETIME2(0);
                 DECLARE @endedAtUtc DATETIME2(0);
 
                 SELECT TOP (1)
                     @seriesId = series_id,
                     @pollTypeCode = poll_type_code,
                     @publicationFrequencyCode = publication_frequency_code,
-                    @endedAtUtc = ended_at_utc
+                    @startedAtUtc = started_at_utc
                 FROM @poll;
+
+                SET @endedAtUtc =
+                    CASE
+                        WHEN @now <= @startedAtUtc
+                            THEN DATEADD(SECOND, 1, @startedAtUtc)
+                        ELSE @now
+                    END;
 
                 DECLARE @approveVotes INT =
                 (
@@ -470,6 +475,24 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                         WHEN @rejectVotes > @approveVotes THEN N'REJECTED'
                         ELSE N'NO_DECISION'
                     END;
+
+                DECLARE @finalPollStatusCode NVARCHAR(50) =
+                    CASE
+                        WHEN @computedResultCode = N'NO_DECISION'
+                            THEN N'CANCELLED'
+                        ELSE N'CLOSED'
+                    END;
+
+                UPDATE manga.SeriesBoardPoll
+                SET poll_status_code = @finalPollStatusCode,
+                    ends_at_utc = @endedAtUtc
+                WHERE series_board_poll_id = @pollId
+                  AND poll_status_code = N'OPEN';
+
+                IF @@ROWCOUNT = 0
+                BEGIN
+                    THROW 58612, 'Poll could not be closed because it is no longer open.', 1;
+                END;
 
                 IF @pollTypeCode = N'START_SERIALIZATION'
                    AND @computedResultCode = N'APPROVED'
@@ -527,7 +550,7 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 SELECT
                     @pollId AS poll_id,
                     @seriesId AS series_id,
-                    N'CLOSED' AS poll_status_code,
+                    @finalPollStatusCode AS poll_status_code,
                     ISNULL(@seriesStatusCode, N'UNKNOWN') AS series_status_code,
                     @publicationFrequencyCode AS publication_frequency_code,
                     @endedAtUtc AS ended_at_utc;
@@ -558,7 +581,7 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
 
             return result;
         }
-        catch (SqlException ex) when (ex.Number == 58611)
+        catch (SqlException ex) when (ex.Number is 58611 or 58612)
         {
             await TryRollbackAsync(transaction, cancellationToken);
             throw new InvalidOperationException(ex.Message, ex);

@@ -206,8 +206,16 @@
         {
             var result = await EditorialBoardApiClient.FinalizeApprovalAsync(poll.PollId);
 
-            _decisionMessage =
-                $"Vote closed for {poll.Code}. Poll is {result?.PollStatusCode ?? "CLOSED"}, series status is {result?.SeriesStatusCode ?? "updated"}.";
+            if (result?.PollStatusCode == "CANCELLED")
+            {
+                _decisionMessage =
+                    $"Vote tied for {poll.Code}. Poll was automatically cancelled so the Board Chief can create a new vote.";
+            }
+            else
+            {
+                _decisionMessage =
+                    $"Vote closed for {poll.Code}. Poll is {result?.PollStatusCode ?? "CLOSED"}, series status is {result?.SeriesStatusCode ?? "updated"}.";
+            }
 
             await LoadDecisionCenterAsync(clearDecisionMessage: false);
         }
@@ -302,7 +310,7 @@
             {
                 "APPROVED" => "Approve Leading",
                 "REJECTED" => "Reject Leading",
-                "NO_DECISION" => "No Decision",
+                "NO_DECISION" => "Tie Vote",
                 "INVALIDATED" => "Cancelled",
                 _ => poll.ComputedResultCode
             };
