@@ -1,6 +1,5 @@
 @page "/demo/mangaflow/decisions"
 
-@using System.Globalization
 @using Microsoft.AspNetCore.Components.Authorization
 @using MangaManagementSystem.Web.Services.EditorialBoard
 
@@ -32,27 +31,52 @@
         }
         else
         {
-            <h2 class="mf-section-title">Awaiting Decision (@_polls.Count)</h2>
+            <section class="mf-card mf-gap-small">
+                <div class="mf-filter-row">
+                    <button type="button"
+                            class="@TabClass(CurrentTab)"
+                            @onclick="() => SetActiveTab(CurrentTab)">
+                        Current Polls (@_openPolls.Count)
+                    </button>
 
-            @if (_polls.Count == 0)
+                    <button type="button"
+                            class="@TabClass(HistoryTab)"
+                            @onclick="() => SetActiveTab(HistoryTab)">
+                        Poll History (@_pollHistory.Count)
+                    </button>
+                </div>
+            </section>
+
+            <h2 class="mf-section-title">@SectionTitle (@VisiblePolls.Count)</h2>
+
+            @if (VisiblePolls.Count == 0)
             {
                 <section class="mf-card">
-                    <div class="mf-strong">No board poll data</div>
-                    <div class="mf-muted">
-                        When a Board Chief opens a poll and board members vote, the real poll result will appear here.
-                    </div>
+                    <div class="mf-strong">@EmptyTitle</div>
+                    <div class="mf-muted">@EmptyMessage</div>
                 </section>
             }
             else
             {
                 <div class="mf-decision-stack">
-                    @foreach (var poll in _polls)
+                    @foreach (var poll in VisiblePolls)
                     {
                         <article class="mf-decision-card">
                             <div class="mf-row">
                                 <div>
-                                    <div class="mf-muted">@poll.Code · @DisplayPollType(poll.PollTypeCode)</div>
+                                    <div class="mf-muted">
+                                        @poll.Code · @DisplayPollType(poll.PollTypeCode)
+                                    </div>
+
                                     <h3>@poll.PollName</h3>
+
+                                    @if (_activeTab == HistoryTab)
+                                    {
+                                        <div class="mf-muted">
+                                            Started: @FormatDate(poll.StartedAtUtc)
+                                            · Ended: @FormatDate(poll.EndsAtUtc)
+                                        </div>
+                                    }
                                 </div>
 
                                 <StatusBadge Status="@DisplayStatus(poll)" />
@@ -108,26 +132,45 @@
                                 </span>
                             </div>
 
-                            <AuthorizeView Roles="Editorial Board Chief">
-                                <Authorized>
-                                    <div class="mf-grid mf-grid-3 mf-action-grid">
-                                        <button class="mf-decision-action approve"
-                                                @onclick="() => FinalApproval(poll)">
-                                            Final Approval
-                                        </button>
+                            @if (_activeTab == CurrentTab)
+                            {
+                                <AuthorizeView Roles="Editorial Board Chief">
+                                    <Authorized>
+                                        <div class="mf-grid mf-grid-2 mf-action-grid">
+                                            <button class="mf-decision-action approve"
+                                                    disabled="@IsActionDisabled(poll)"
+                                                    @onclick="() => CloseVoteAsync(poll)">
+                                                @CloseVoteButtonText(poll)
+                                            </button>
 
-                                        <button class="mf-decision-action return"
-                                                @onclick="() => ReturnForReview(poll)">
-                                            Return for Review
-                                        </button>
-
-                                        <button class="mf-decision-action escalate"
-                                                @onclick="() => EscalateDecision(poll)">
-                                            Escalate Decision
-                                        </button>
+                                            <button class="mf-decision-action return"
+                                                    disabled="@IsActionDisabled(poll)"
+                                                    @onclick="() => CancelVoteAsync(poll)">
+                                                @CancelVoteButtonText(poll)
+                                            </button>
+                                        </div>
+                                    </Authorized>
+                                </AuthorizeView>
+                            }
+                            else
+                            {
+                                <div class="mf-history-result-panel">
+                                    <div>
+                                        <div class="mf-muted">Final Result</div>
+                                        <div class="mf-strong">@DisplayPollResult(poll)</div>
                                     </div>
-                                </Authorized>
-                            </AuthorizeView>
+
+                                    <div>
+                                        <div class="mf-muted">Poll Status</div>
+                                        <div class="mf-strong">@DisplayPollStatus(poll.PollStatusCode)</div>
+                                    </div>
+
+                                    <div>
+                                        <div class="mf-muted">Your Vote</div>
+                                        <div class="mf-strong">@DisplayUserVote(poll)</div>
+                                    </div>
+                                </div>
+                            }
                         </article>
                     }
                 </div>
@@ -142,10 +185,39 @@
 </MangaFlowShell>
 
 @code {
-    private IReadOnlyList<EditorialBoardPollDto> _polls = Array.Empty<EditorialBoardPollDto>();
+    private const string CurrentTab = "CURRENT";
+    private const string HistoryTab = "HISTORY";
+
+    private IReadOnlyList<EditorialBoardPollDto> _openPolls = Array.Empty<EditorialBoardPollDto>();
+    private IReadOnlyList<EditorialBoardPollDto> _pollHistory = Array.Empty<EditorialBoardPollDto>();
+
+    private string _activeTab = CurrentTab;
+
     private bool _isLoading = true;
+    private bool _isProcessing;
+    private Guid? _processingPollId;
     private string? _errorMessage;
     private string? _decisionMessage;
+
+    private IReadOnlyList<EditorialBoardPollDto> VisiblePolls =>
+        _activeTab == CurrentTab
+            ? _openPolls
+            : _pollHistory;
+
+    private string SectionTitle =>
+        _activeTab == CurrentTab
+            ? "Current Polls"
+            : "Poll History";
+
+    private string EmptyTitle =>
+        _activeTab == CurrentTab
+            ? "No current board polls"
+            : "No poll history";
+
+    private string EmptyMessage =>
+        _activeTab == CurrentTab
+            ? "When a Board Chief opens a poll, active voting items will appear here."
+            : "Closed and cancelled polls will appear here after voting ends.";
 
     private RenderFragment HeaderActions => @<AuthorizeView Roles="Editorial Board Chief">
         <Authorized>
@@ -158,15 +230,25 @@
         await LoadDecisionCenterAsync();
     }
 
-    private async Task LoadDecisionCenterAsync()
+    private Task LoadDecisionCenterAsync()
+    {
+        return LoadDecisionCenterAsync(clearDecisionMessage: true);
+    }
+
+    private async Task LoadDecisionCenterAsync(bool clearDecisionMessage)
     {
         _isLoading = true;
         _errorMessage = null;
-        _decisionMessage = null;
+
+        if (clearDecisionMessage)
+        {
+            _decisionMessage = null;
+        }
 
         try
         {
-            _polls = await EditorialBoardApiClient.GetOpenPollsAsync();
+            _openPolls = await EditorialBoardApiClient.GetOpenPollsAsync();
+            _pollHistory = await EditorialBoardApiClient.GetPollHistoryAsync();
         }
         catch (Exception ex)
         {
@@ -178,6 +260,126 @@
         }
     }
 
+    private void SetActiveTab(string tab)
+    {
+        _activeTab = tab;
+    }
+
+    private string TabClass(string tab)
+    {
+        return _activeTab == tab
+            ? "mf-filter active"
+            : "mf-filter";
+    }
+
+    private async Task CloseVoteAsync(EditorialBoardPollDto poll)
+    {
+        if (_isProcessing)
+        {
+            return;
+        }
+
+        if (poll.PollStatusCode != "OPEN")
+        {
+            _decisionMessage = "Only OPEN polls can be closed.";
+            return;
+        }
+
+        _isProcessing = true;
+        _processingPollId = poll.PollId;
+        _decisionMessage = null;
+
+        try
+        {
+            var result = await EditorialBoardApiClient.FinalizeApprovalAsync(poll.PollId);
+
+            if (result?.PollStatusCode == "CANCELLED")
+            {
+                _decisionMessage =
+                    $"Vote tied for {poll.Code}. Poll was automatically cancelled and moved to Poll History.";
+            }
+            else
+            {
+                _decisionMessage =
+                    $"Vote closed for {poll.Code}. Result moved to Poll History.";
+            }
+
+            await LoadDecisionCenterAsync(clearDecisionMessage: false);
+        }
+        catch (Exception ex)
+        {
+            _decisionMessage = ex.Message;
+        }
+        finally
+        {
+            _isProcessing = false;
+            _processingPollId = null;
+        }
+    }
+
+    private async Task CancelVoteAsync(EditorialBoardPollDto poll)
+    {
+        if (_isProcessing)
+        {
+            return;
+        }
+
+        if (poll.PollStatusCode != "OPEN")
+        {
+            _decisionMessage = "Only OPEN polls can be cancelled.";
+            return;
+        }
+
+        _isProcessing = true;
+        _processingPollId = poll.PollId;
+        _decisionMessage = null;
+
+        try
+        {
+            await EditorialBoardApiClient.CancelPollAsync(poll.PollId);
+
+            _decisionMessage =
+                $"Vote cancelled for {poll.Code}. It was moved to Poll History.";
+
+            await LoadDecisionCenterAsync(clearDecisionMessage: false);
+        }
+        catch (Exception ex)
+        {
+            _decisionMessage = ex.Message;
+        }
+        finally
+        {
+            _isProcessing = false;
+            _processingPollId = null;
+        }
+    }
+
+    private bool IsActionDisabled(EditorialBoardPollDto poll)
+    {
+        return _isProcessing
+            || poll.PollStatusCode != "OPEN";
+    }
+
+    private string CloseVoteButtonText(EditorialBoardPollDto poll)
+    {
+        if (_isProcessing && _processingPollId == poll.PollId)
+        {
+            return "Closing...";
+        }
+
+        return "Close Vote";
+    }
+
+    private string CancelVoteButtonText(EditorialBoardPollDto poll)
+    {
+        if (_isProcessing && _processingPollId == poll.PollId)
+        {
+            return "Cancelling...";
+        }
+
+        return "Cancel Vote";
+    }
+
     private static int Percent(int count, int total)
     {
         return total <= 0
@@ -185,38 +387,39 @@
             : (int)Math.Round(count * 100m / total);
     }
 
-    private void FinalApproval(EditorialBoardPollDto poll)
-    {
-        SetDecisionMessage(poll, "Final Approval");
-    }
-
-    private void ReturnForReview(EditorialBoardPollDto poll)
-    {
-        SetDecisionMessage(poll, "Return for Review");
-    }
-
-    private void EscalateDecision(EditorialBoardPollDto poll)
-    {
-        SetDecisionMessage(poll, "Escalate Decision");
-    }
-
-    private void SetDecisionMessage(EditorialBoardPollDto poll, string action)
-    {
-        _decisionMessage =
-            $"{action} selected for {poll.Code}. The poll data shown here is loaded from database. Final decision API is not wired yet.";
-    }
-
     private static string DisplayStatus(EditorialBoardPollDto poll)
     {
-        if (!string.IsNullOrWhiteSpace(poll.ComputedResultCode)
-            && poll.ComputedResultCode != "PENDING")
+        if (poll.PollStatusCode == "CANCELLED"
+            && poll.ComputedResultCode == "TIE_CANCELLED")
+        {
+            return "Tie Cancelled";
+        }
+
+        if (poll.PollStatusCode == "CANCELLED")
+        {
+            return "Cancelled";
+        }
+
+        if (poll.PollStatusCode == "CLOSED")
         {
             return poll.ComputedResultCode switch
             {
                 "APPROVED" => "Approved",
                 "REJECTED" => "Rejected",
                 "NO_DECISION" => "No Decision",
-                "INVALIDATED" => "Cancelled",
+                _ => "Closed"
+            };
+        }
+
+        if (poll.PollStatusCode == "OPEN"
+            && !string.IsNullOrWhiteSpace(poll.ComputedResultCode)
+            && poll.ComputedResultCode != "PENDING")
+        {
+            return poll.ComputedResultCode switch
+            {
+                "APPROVED" => "Approve Leading",
+                "REJECTED" => "Reject Leading",
+                "NO_DECISION" => "Tie Vote",
                 _ => poll.ComputedResultCode
             };
         }
@@ -230,6 +433,52 @@
         };
     }
 
+    private static string DisplayPollResult(EditorialBoardPollDto poll)
+    {
+        if (poll.ComputedResultCode == "TIE_CANCELLED")
+        {
+            return "Tie Vote — Poll Cancelled";
+        }
+
+        if (poll.PollStatusCode == "CANCELLED")
+        {
+            return "Cancelled";
+        }
+
+        return poll.ComputedResultCode switch
+        {
+            "APPROVED" => "Approved",
+            "REJECTED" => "Rejected",
+            "NO_DECISION" => "No Decision",
+            "PENDING" => "Pending",
+            _ => poll.ComputedResultCode
+        };
+    }
+
+    private static string DisplayPollStatus(string pollStatusCode)
+    {
+        return pollStatusCode switch
+        {
+            "OPEN" => "Open",
+            "CLOSED" => "Closed",
+            "CANCELLED" => "Cancelled",
+            _ => pollStatusCode
+        };
+    }
+
+    private static string DisplayUserVote(EditorialBoardPollDto poll)
+    {
+        return poll.CurrentUserChoiceCode switch
+        {
+            "APPROVE" => "Approved",
+            "REJECT" => "Rejected",
+            "ABSTAIN" => "Abstained",
+            null => "Not voted",
+            "" => "Not voted",
+            _ => poll.CurrentUserChoiceCode
+        };
+    }
+
     private static string DisplayPollType(string pollTypeCode)
     {
         return pollTypeCode switch
@@ -238,5 +487,17 @@
             "CANCEL_SERIALIZATION" => "Cancellation",
             _ => pollTypeCode
         };
+    }
+
+    private static string FormatDate(DateTime dateTime)
+    {
+        return dateTime.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
+    }
+
+    private static string FormatDate(DateTime? dateTime)
+    {
+        return dateTime is null
+            ? "N/A"
+            : dateTime.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
     }
 }
