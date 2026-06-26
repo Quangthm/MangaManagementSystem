@@ -244,7 +244,7 @@
         _loadError = null;
         try
         {
-            _assignedCount = _tasks.Count(t => t.StatusCode == "ASSIGNED");
+            _tasks = await AssistantTaskClient.GetAssignedTasksAsync(_currentUserId);
             var now = DateTime.UtcNow;
             _assignedCount = _tasks.Count(t => t.StatusCode == "ASSIGNED");
             _dueSoon = _tasks.Where(t => !IsOverdue(t) && t.DueAtUtc.HasValue && t.DueAtUtc.Value >= now && t.DueAtUtc.Value <= now.AddDays(3) && t.StatusCode != "COMPLETED" && t.StatusCode != "CANCELLED").ToList();
