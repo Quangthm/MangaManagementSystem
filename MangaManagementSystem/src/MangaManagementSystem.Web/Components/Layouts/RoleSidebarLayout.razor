@@ -1,0 +1,64 @@
+@namespace MangaManagementSystem.Web.Components.Layouts
+@inject NavigationManager Nav
+
+<div class="mf-shell">
+    <aside class="mf-sidebar @SidebarCssClass">
+        <div class="mf-sidebar-profile-area">
+            <UserAvatarMenu />
+        </div>
+
+        <nav class="mf-nav-section">
+            <div class="mf-nav-title">@NavTitle</div>
+
+            @foreach (var item in NavItems)
+            {
+                <NavLink href="@item.Href"
+                         class="mf-nav-link"
+                         Match="@(item.MatchAll ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+                    <MudIcon Icon="@item.Icon"
+                             Size="Size.Small"
+                             Class="mf-nav-icon" />
+                    @item.Label
+                </NavLink>
+            }
+
+            @if (ExtraNavContent is not null)
+            {
+                @ExtraNavContent
+            }
+        </nav>
+
+        <MudSpacer />
+
+        <div class="pa-4">
+            <MudButton FullWidth="true"
+                       Variant="Variant.Outlined"
+                       Color="Color.Default"
+                       OnClick="@(() => Nav.NavigateTo(OverviewHref))">
+                Back to Overview
+            </MudButton>
+        </div>
+    </aside>
+
+    <main class="mf-main">
+        @ChildContent
+    </main>
+</div>
+
+@code {
+    [Parameter] public string SidebarCssClass { get; set; } = string.Empty;
+    [Parameter] public string NavTitle { get; set; } = string.Empty;
+    [Parameter] public string OverviewHref { get; set; } = "/dashboard";
+    [Parameter] public IReadOnlyList<RoleSidebarNavItem> NavItems { get; set; } = Array.Empty<RoleSidebarNavItem>();
+    [Parameter] public RenderFragment? ExtraNavContent { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    public record RoleSidebarNavItem(string Href, string Label, string Icon = "", bool MatchAll = false);
+}
+
+<style>
+    .mf-sidebar-profile-area {
+        padding: 18px 11px 14px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    }
+</style>

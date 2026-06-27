@@ -5,7 +5,6 @@
 @attribute [Authorize(Roles = "Mangaka")]
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
-@inject IChapterPageTaskService TaskService
 @inject IMangakaSeriesApiClient MangakaSeriesApiClient
 @inject IReferenceDataApiClient ReferenceDataApiClient
 @inject IProfileApiClient ProfileApiClient
@@ -14,87 +13,10 @@
 @using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Web.Services.Api
 
-@* ── Full-page layout matching React SeriesListPage.tsx ── *@
-<div class="mf-dashboard-shell" style="display: flex; height: 100vh; overflow: hidden; background: #f8fafc;">
-    @* ── Left Sidebar (260px) ── *@
-    <aside style="width: 260px; flex-shrink: 0; background: #fff; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column;">
-        @* Profile Header *@
-        <div style="padding: 16px; border-bottom: 1px solid #f1f5f9;">
-            <MudMenu FullWidth="true" Style="cursor: pointer;">
-                <ActivatorContent>
-                    <div style="display: flex; align-items: center; gap: 12px; padding: 4px; border-radius: 8px; width: 100%; min-width: 0;">
-                        @if (!string.IsNullOrWhiteSpace(_currentAvatarUrl))
-                        {
-                            <img src="@_currentAvatarUrl"
-                                 alt="User avatar"
-                                 style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" />
-                        }
-                        else
-                        {
-                            <MudAvatar Color="Color.Primary" Size="Size.Small">
-                                @_currentAvatarInitial
-                            </MudAvatar>
-                        }
+<MangakaLayout>
 
-                        <div style="flex: 1; min-width: 0;">
-                            <div title="@_currentDisplayName"
-     style="font-weight: 600;
-            font-size: 0.85rem;
-            color: #111827;
-            line-height: 1.2;
-            width: 145px;
-            max-width: 145px;
-            min-width: 0;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            cursor: help;">
-    @_currentDisplayName
-</div>
-
-                            <div style="color: #64748b; font-size: 0.7rem;">
-                                @_currentRoleName
-                            </div>
-                        </div>
-                        <MudIcon Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Style="font-size: 18px; color: #94a3b8;" />
-                    </div>
-                </ActivatorContent>
-                <ChildContent>
-                    <MudMenuItem OnClick="@(() => Nav.NavigateTo("/profile/settings"))">
-                        <MudIcon Icon="@Icons.Material.Filled.Settings" Size="Size.Small" Style="margin-right: 8px;" />
-                        Account Settings
-                    </MudMenuItem>
-                    <MudDivider />
-                    <MudMenuItem Style="color: #dc2626;" OnClick="@(() => Nav.NavigateTo("/signout", true))">
-                        <MudIcon Icon="@Icons.Material.Filled.Logout" Size="Size.Small" Style="margin-right: 8px; color: #dc2626;" />
-                        Logout
-                    </MudMenuItem>
-                </ChildContent>
-            </MudMenu>
-        </div>
-
-        @* Navigation Tabs *@
-        <div style="flex: 1; overflow: auto; padding: 16px 12px;">
-            <div style="color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.65rem; padding: 0 12px; margin-bottom: 8px;">Main Menu</div>
-            <div style="display: flex; flex-direction: column; gap: 4px;">
-                @foreach (var nav in _navItems)
-                {
-                    var isActive = _activeTab == nav.Id;
-                    <button @onclick="@(() => HandleNavClick(nav.Id))"
-                            style="display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: none; border-radius: 8px; cursor: pointer; width: 100%; text-align: left; font-size: 0.85rem; font-weight: @(isActive ? 600 : 500); background: @(isActive ? "#eef2ff" : "transparent"); color: @(isActive ? "#4f46e5" : "#64748b");">
-                        <MudIcon Icon="@nav.Icon" Size="Size.Small" Style="font-size: 18px; flex-shrink: 0;" />
-                        <span>@nav.Label</span>
-                    </button>
-                }
-            </div>
-        </div>
-
-    </aside>
-
-    @* ── Main Content Area ── *@
-    <main style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
-        @* Top Header *@
-        <div style="padding: 24px 32px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e2e8f0; background: #f8fafc; z-index: 10;">
+    @* ── Top Header ── *@
+    <div style="padding: 24px 32px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e2e8f0; background: #f8fafc; z-index: 10;">
             <div>
                 <div style="font-weight: 800; font-size: 1.6rem; color: #111827; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 4px;">
                     @_navItems.First(n => n.Id == _activeTab).Label
@@ -107,10 +29,6 @@
                     else if (_activeTab == "proposals")
                     {
                         <span>Track submitted proposal versions and review progress</span>
-                    }
-                    else
-                    {
-                        <span>Review tasks assigned to you</span>
                     }
                 </div>
             </div>
@@ -658,8 +576,7 @@
                 </div>
             }
         </div>
-    </main>
-</div>
+</MangakaLayout>
 
 @* ── Proposal Detail Modal (read-only) ── *@
 <MudOverlay Visible="@_proposalDetailOpen" OnClick="@(() => _proposalDetailOpen = false)">
@@ -1670,26 +1587,7 @@
         _ => code ?? "—"
     };
 
-    private async Task LoadTasksAsync()
-    {
-        try
-        {
-            if (_currentUserId == null) return;
-            var tasks = (await TaskService.GetChapterPageTasksByCreatorUserIdAsync(_currentUserId.Value)).ToList();
-            _tasks = tasks;
-            _taskStats = new TaskStats(
-                tasks.Count,
-                tasks.Count(t => t.StatusCode == "ASSIGNED"),
-                tasks.Count(t => t.StatusCode == "UNDER_REVIEW"),
-                tasks.Count(t => t.StatusCode == "COMPLETED")
-            );
-        }
-        catch
-        {
-            _tasks = [];
-            _taskStats = new(0, 0, 0, 0);
-        }
-    }
+    
 
     // ── Proposal tracking state ───────────────────────────────────────────────
     private bool _proposalDetailOpen;
@@ -2549,24 +2447,11 @@
     [
         new("current", "Current Series", Icons.Material.Filled.ViewModule),
         new("proposals", "Series Proposals", Icons.Material.Filled.Description),
-        new("review", "Assistant Review", Icons.Material.Filled.AssignmentTurnedIn),
-        new("contributors", "Manage Contributors", Icons.Material.Filled.People),
     ];
 
     private void HandleNavClick(string navId)
     {
-        if (navId == "review")
-        {
-            Nav.NavigateTo("/mangaka/review-submissions");
-        }
-        else if (navId == "contributors")
-        {
-            Nav.NavigateTo("/mangaka/contributors");
-        }
-        else
-        {
-            _activeTab = navId;
-        }
+        _activeTab = navId;
     }
 
     private string _currentDisplayName = "Mangaka";
@@ -2730,7 +2615,6 @@
         catch { }
 
         await LoadSeriesAsync();
-        await LoadTasksAsync();
         await LoadProposalTrackingAsync();
         await LoadReferenceDataAsync();
     }

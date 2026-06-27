@@ -1,11 +1,20 @@
 @namespace MangaManagementSystem.Web.Components.Layouts
 
-<div class="mf-shell">
-    <main class="mf-main">
-        @ChildContent
-    </main>
-</div>
+<RoleSidebarLayout SidebarCssClass="mf-mangaka-sidebar"
+                   NavTitle="Mangaka Menu"
+                   OverviewHref="/dashboard"
+                   NavItems="_navItems">
+    @ChildContent
+</RoleSidebarLayout>
 
 @code {
     [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private static readonly IReadOnlyList<RoleSidebarLayout.RoleSidebarNavItem> _navItems =
+    [
+        new("/mangaka", "Dashboard", Icons.Material.Filled.ViewModule, true),
+        new("/mangaka/chapters", "Chapter Submissions", Icons.Material.Filled.LibraryBooks),
+        new("/mangaka/review-submissions", "Assistant Review", Icons.Material.Filled.AssignmentTurnedIn),
+        new("/mangaka/contributors", "Manage Contributors", Icons.Material.Filled.People),
+    ];
 }
