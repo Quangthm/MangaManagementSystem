@@ -17,4 +17,15 @@ public interface IEditorialBoardApiClient
         Guid pollId,
         CastVoteRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<FinalizePollResult?> FinalizeApprovalAsync(
+        Guid pollId,
+        CancellationToken cancellationToken = default);
+
+    Task<FinalizePollResult?> CancelPollAsync(
+        Guid pollId,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<EditorialBoardPollDto>> GetPollHistoryAsync(
+    CancellationToken cancellationToken = default);
 }

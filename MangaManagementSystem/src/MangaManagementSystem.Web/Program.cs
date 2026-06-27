@@ -1,4 +1,4 @@
-﻿using MangaManagementSystem.Application;
+using MangaManagementSystem.Application;
 using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Infrastructure;
@@ -80,6 +80,11 @@ namespace MangaManagementSystem.Web
                         new Uri(settings.Value.BaseUrl);
                 })
                 .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
+            builder.Services.AddHttpClient<IMangakaSeriesContributorApiClient, MangakaSeriesContributorApiClient>((sp, client) =>
+            {
+                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                client.BaseAddress = new Uri(settings.Value.BaseUrl);
+            });
             builder.Services.AddHttpClient<IProfilePasswordApiClient, ProfilePasswordApiClient>((sp, client) =>
             {
                 var settings =
@@ -231,6 +236,11 @@ builder.Services.AddHttpClient<IAdminFileApiClient, AdminFileApiClient>((sp, cli
                 client.BaseAddress = new Uri(settings.Value.BaseUrl);
             });
             builder.Services.AddHttpClient<Services.Api.IEditorSeriesApiClient, Services.Api.EditorSeriesApiClient>((sp, client) =>
+            {
+                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                client.BaseAddress = new Uri(settings.Value.BaseUrl);
+            });
+            builder.Services.AddHttpClient<Services.Api.IMangakaChapterApiClient, Services.Api.MangakaChapterApiClient>((sp, client) =>
             {
                 var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
                 client.BaseAddress = new Uri(settings.Value.BaseUrl);

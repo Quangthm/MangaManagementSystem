@@ -29,6 +29,16 @@ public sealed class EditorialBoardApiClient : IEditorialBoardApiClient
         return result ?? Array.Empty<EditorialBoardPollDto>();
     }
 
+    public async Task<IReadOnlyList<EditorialBoardPollDto>> GetPollHistoryAsync(
+    CancellationToken cancellationToken = default)
+    {
+        var result = await _httpClient.GetFromJsonAsync<IReadOnlyList<EditorialBoardPollDto>>(
+            "api/editorial-board/polls/history",
+            cancellationToken);
+
+        return result ?? Array.Empty<EditorialBoardPollDto>();
+    }
+
     public async Task<OpenPollResult?> OpenPollAsync(
         Guid proposalId,
         OpenPollRequest request,
@@ -66,6 +76,44 @@ public sealed class EditorialBoardApiClient : IEditorialBoardApiClient
         }
 
         return await response.Content.ReadFromJsonAsync<CastVoteResult>(
+            cancellationToken: cancellationToken);
+    }
+
+    public async Task<FinalizePollResult?> FinalizeApprovalAsync(
+        Guid pollId,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await _httpClient.PostAsJsonAsync(
+            $"api/editorial-board/polls/{pollId}/final-approval",
+            new { },
+            cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var message = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new InvalidOperationException(message);
+        }
+
+        return await response.Content.ReadFromJsonAsync<FinalizePollResult>(
+            cancellationToken: cancellationToken);
+    }
+
+    public async Task<FinalizePollResult?> CancelPollAsync(
+        Guid pollId,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await _httpClient.PostAsJsonAsync(
+            $"api/editorial-board/polls/{pollId}/cancel",
+            new { },
+            cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var message = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new InvalidOperationException(message);
+        }
+
+        return await response.Content.ReadFromJsonAsync<FinalizePollResult>(
             cancellationToken: cancellationToken);
     }
 }

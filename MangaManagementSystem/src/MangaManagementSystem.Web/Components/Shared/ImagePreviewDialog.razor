@@ -1,0 +1,35 @@
+@using Microsoft.AspNetCore.Components
+
+<MudDialog>
+    <DialogContent>
+        <div style="width:100vw;height:100vh;min-width:100vw;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:48px;box-sizing:border-box;background:rgba(0,0,0,.88);position:relative;">
+            <button type="button"
+                    style="position:fixed;top:20px;right:28px;z-index:2200;border:0;border-radius:999px;width:44px;height:44px;font-size:32px;line-height:1;cursor:pointer;background:rgba(0,0,0,.45);color:#fff;display:flex;align-items:center;justify-content:center;padding:0;"
+                    @onclick="Close"
+                    title="Close preview">
+                &times;
+            </button>
+
+            <img src="@ImageUrl"
+                 alt="@AltText"
+                 style="max-width:min(94vw,1200px);max-height:88vh;width:auto;height:auto;object-fit:contain;background:white;box-shadow:0 20px 60px rgba(0,0,0,.45);" />
+
+            @if (!string.IsNullOrWhiteSpace(Title))
+            {
+                <div style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);color:white;background:rgba(0,0,0,.55);padding:8px 24px;font-size:0.9rem;border-radius:8px;max-width:90vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                    @Title
+                </div>
+            }
+        </div>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public string ImageUrl { get; set; } = string.Empty;
+    [Parameter] public string AltText { get; set; } = string.Empty;
+    [Parameter] public string? Title { get; set; }
+
+    private void Close() => MudDialog.Close();
+}

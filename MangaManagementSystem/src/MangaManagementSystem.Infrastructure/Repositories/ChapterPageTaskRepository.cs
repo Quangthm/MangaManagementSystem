@@ -63,6 +63,14 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         {
             return await _context.ChapterPageTasks
                 .Include(t => t.PageRegions)
+                    .ThenInclude(r => r.ChapterPageVersion)
+                        .ThenInclude(v => v.ChapterPage)
+                            .ThenInclude(p => p.Chapter)
+                                .ThenInclude(c => c.Series)
+                .Include(t => t.AssignedToUser)
+                .Include(t => t.CreatedByUser)
+                .Include(t => t.CompletedPageVersion)
+                    .ThenInclude(v => v.PageFile)
                 .FirstOrDefaultAsync(t => t.ChapterPageTaskId == id);
         }
 

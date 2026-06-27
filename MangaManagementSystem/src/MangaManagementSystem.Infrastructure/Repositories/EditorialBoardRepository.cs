@@ -1,6 +1,7 @@
 using MangaManagementSystem.Application.Features.EditorialBoard.Dtos;
 using MangaManagementSystem.Application.Features.EditorialBoard.Repositories;
 using MangaManagementSystem.Infrastructure.Persistence;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using System.Data;
 using System.Data.Common;
@@ -149,6 +150,94 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         return rows;
     }
 
+    public async Task<IReadOnlyList<EditorialBoardPollDto>> GetPollHistoryAsync(
+        Guid currentUserId,
+        CancellationToken cancellationToken)
+    {
+        var connection = _dbContext.Database.GetDbConnection();
+
+        if (connection.State != ConnectionState.Open)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        await using var command = connection.CreateCommand();
+
+        command.CommandText =
+            """
+            SELECT
+                p.series_board_poll_id,
+                p.series_id,
+                s.slug,
+                s.title,
+                p.poll_type_code,
+                p.poll_status_code,
+                p.poll_reason,
+                p.board_publication_frequency_code,
+                p.started_at_utc,
+                p.ends_at_utc,
+                ISNULL(vs.approve_count, 0) AS approve_count,
+                ISNULL(vs.reject_count, 0) AS reject_count,
+                ISNULL(vs.abstain_count, 0) AS abstain_count,
+                ISNULL(vs.total_vote_count, 0) AS total_vote_count,
+                CASE
+                    WHEN p.poll_status_code = N'CANCELLED'
+                         AND ISNULL(vs.approve_count, 0) = ISNULL(vs.reject_count, 0)
+                         AND ISNULL(vs.total_vote_count, 0) > 0
+                        THEN N'TIE_CANCELLED'
+                    WHEN p.poll_status_code = N'CANCELLED'
+                        THEN N'CANCELLED'
+                    ELSE ISNULL(vs.computed_result_code, N'PENDING')
+                END AS computed_result_code,
+                my_vote.choice_code AS current_user_choice_code,
+                my_vote.vote_reason AS current_user_vote_reason
+            FROM manga.SeriesBoardPoll p
+            INNER JOIN manga.Series s
+                ON s.series_id = p.series_id
+            LEFT JOIN manga.vw_SeriesBoardPollVoteSummary vs
+                ON vs.series_board_poll_id = p.series_board_poll_id
+            LEFT JOIN manga.SeriesBoardVote my_vote
+                ON my_vote.series_board_poll_id = p.series_board_poll_id
+               AND my_vote.user_id = @currentUserId
+            WHERE p.poll_status_code IN (N'CLOSED', N'CANCELLED')
+            ORDER BY ISNULL(p.ends_at_utc, p.started_at_utc) DESC;
+            """;
+
+        AddGuidParameter(command, "@currentUserId", currentUserId);
+
+        var rows = new List<EditorialBoardPollDto>();
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var pollTypeCode = GetStringOrDefault(reader, 4, "UNKNOWN");
+            var seriesTitle = GetStringOrDefault(reader, 3, "Untitled Series");
+
+            rows.Add(new EditorialBoardPollDto(
+                PollId: reader.GetGuid(0),
+                SeriesId: reader.GetGuid(1),
+                Code: GetStringOrDefault(reader, 2, "N/A"),
+                SeriesTitle: seriesTitle,
+                PollName: $"{MapPollType(pollTypeCode)} — {seriesTitle}",
+                PollTypeCode: pollTypeCode,
+                PollStatusCode: GetStringOrDefault(reader, 5, "CLOSED"),
+                PollReason: GetStringOrDefault(reader, 6, string.Empty),
+                PublicationFrequencyCode: reader.IsDBNull(7) ? null : reader.GetString(7),
+                StartedAtUtc: reader.GetDateTime(8),
+                EndsAtUtc: reader.IsDBNull(9) ? null : reader.GetDateTime(9),
+                ApproveVotes: ToInt32(reader, 10),
+                RejectVotes: ToInt32(reader, 11),
+                AbstainVotes: ToInt32(reader, 12),
+                TotalVotes: ToInt32(reader, 13),
+                ComputedResultCode: GetStringOrDefault(reader, 14, "PENDING"),
+                CurrentUserChoiceCode: reader.IsDBNull(15) ? null : reader.GetString(15),
+                CurrentUserVoteReason: reader.IsDBNull(16) ? null : reader.GetString(16)));
+        }
+
+        return rows;
+    }
+
     public async Task<OpenSeriesBoardPollResultDto> OpenPollAsync(
         OpenSeriesBoardPollRequestDto request,
         Guid chiefUserId,
@@ -163,8 +252,7 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             await connection.OpenAsync(cancellationToken);
         }
 
-        await using var transaction =
-            await connection.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
         try
         {
@@ -246,15 +334,7 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         }
         catch
         {
-            try
-            {
-                await transaction.RollbackAsync(cancellationToken);
-            }
-            catch (InvalidOperationException)
-            {
-                // Transaction was already completed by SQL Server/provider.
-            }
-
+            await TryRollbackAsync(transaction, cancellationToken);
             throw;
         }
     }
@@ -370,9 +450,332 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 VoteReason: reader.IsDBNull(2) ? null : reader.GetString(2),
                 VotedAtUtc: reader.GetDateTime(3));
         }
-        catch (Microsoft.Data.SqlClient.SqlException ex) when (ex.Number == 58601)
+        catch (SqlException ex) when (ex.Number == 58601)
         {
             throw new InvalidOperationException("Poll is not open or has expired.", ex);
+        }
+    }
+
+    public async Task<FinalizeBoardPollResultDto> FinalizeApprovalAsync(
+        Guid pollId,
+        Guid chiefUserId,
+        CancellationToken cancellationToken)
+    {
+        if (pollId == Guid.Empty)
+        {
+            throw new InvalidOperationException("PollId is required.");
+        }
+
+        if (chiefUserId == Guid.Empty)
+        {
+            throw new InvalidOperationException("ChiefUserId is required.");
+        }
+
+        var connection = _dbContext.Database.GetDbConnection();
+
+        if (connection.State != ConnectionState.Open)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+
+            command.CommandText =
+                """
+                DECLARE @now DATETIME2(0) = SYSUTCDATETIME();
+
+                DECLARE @poll TABLE
+                (
+                    poll_id UNIQUEIDENTIFIER,
+                    series_id UNIQUEIDENTIFIER,
+                    poll_type_code NVARCHAR(50),
+                    publication_frequency_code NVARCHAR(50),
+                    started_at_utc DATETIME2(0)
+                );
+
+                INSERT INTO @poll
+                (
+                    poll_id,
+                    series_id,
+                    poll_type_code,
+                    publication_frequency_code,
+                    started_at_utc
+                )
+                SELECT
+                    p.series_board_poll_id,
+                    p.series_id,
+                    p.poll_type_code,
+                    p.board_publication_frequency_code,
+                    p.started_at_utc
+                FROM manga.SeriesBoardPoll p
+                WHERE p.series_board_poll_id = @pollId
+                  AND p.poll_status_code = N'OPEN';
+
+                IF NOT EXISTS (SELECT 1 FROM @poll)
+                BEGIN
+                    THROW 58611, 'Open poll was not found.', 1;
+                END;
+
+                DECLARE @seriesId UNIQUEIDENTIFIER;
+                DECLARE @pollTypeCode NVARCHAR(50);
+                DECLARE @publicationFrequencyCode NVARCHAR(50);
+                DECLARE @startedAtUtc DATETIME2(0);
+                DECLARE @endedAtUtc DATETIME2(0);
+
+                SELECT TOP (1)
+                    @seriesId = series_id,
+                    @pollTypeCode = poll_type_code,
+                    @publicationFrequencyCode = publication_frequency_code,
+                    @startedAtUtc = started_at_utc
+                FROM @poll;
+
+                SET @endedAtUtc =
+                    CASE
+                        WHEN @now <= @startedAtUtc
+                            THEN DATEADD(SECOND, 1, @startedAtUtc)
+                        ELSE @now
+                    END;
+
+                DECLARE @approveVotes INT =
+                (
+                    SELECT COUNT(1)
+                    FROM manga.SeriesBoardVote
+                    WHERE series_board_poll_id = @pollId
+                      AND choice_code = N'APPROVE'
+                );
+
+                DECLARE @rejectVotes INT =
+                (
+                    SELECT COUNT(1)
+                    FROM manga.SeriesBoardVote
+                    WHERE series_board_poll_id = @pollId
+                      AND choice_code = N'REJECT'
+                );
+
+                DECLARE @computedResultCode NVARCHAR(50) =
+                    CASE
+                        WHEN @approveVotes > @rejectVotes THEN N'APPROVED'
+                        WHEN @rejectVotes > @approveVotes THEN N'REJECTED'
+                        ELSE N'NO_DECISION'
+                    END;
+
+                DECLARE @finalPollStatusCode NVARCHAR(50) =
+                    CASE
+                        WHEN @computedResultCode = N'NO_DECISION'
+                            THEN N'CANCELLED'
+                        ELSE N'CLOSED'
+                    END;
+
+                UPDATE manga.SeriesBoardPoll
+                SET poll_status_code = @finalPollStatusCode,
+                    ends_at_utc = @endedAtUtc
+                WHERE series_board_poll_id = @pollId
+                  AND poll_status_code = N'OPEN';
+
+                IF @@ROWCOUNT = 0
+                BEGIN
+                    THROW 58612, 'Poll could not be closed because it is no longer open.', 1;
+                END;
+
+                IF @pollTypeCode = N'START_SERIALIZATION'
+                   AND @computedResultCode = N'APPROVED'
+                BEGIN
+                    UPDATE manga.Series
+                    SET status_code = N'SERIALIZED',
+                        publication_frequency_code = @publicationFrequencyCode,
+                        updated_at_utc = @endedAtUtc,
+                        updated_by_user_id = @chiefUserId
+                    WHERE series_id = @seriesId
+                      AND status_code = N'UNDER_BOARD_REVIEW';
+
+                    UPDATE manga.SeriesProposal
+                    SET status_code = N'APPROVED',
+                        reviewed_by_user_id = COALESCE(reviewed_by_user_id, @chiefUserId),
+                        reviewed_at_utc = COALESCE(reviewed_at_utc, @endedAtUtc)
+                    WHERE series_id = @seriesId
+                      AND status_code = N'UNDER_BOARD_REVIEW';
+                END;
+
+                IF @pollTypeCode = N'START_SERIALIZATION'
+                   AND @computedResultCode = N'REJECTED'
+                BEGIN
+                    UPDATE manga.Series
+                    SET status_code = N'CANCELLED',
+                        updated_at_utc = @endedAtUtc,
+                        updated_by_user_id = @chiefUserId
+                    WHERE series_id = @seriesId
+                      AND status_code = N'UNDER_BOARD_REVIEW';
+
+                    UPDATE manga.SeriesProposal
+                    SET status_code = N'CANCELLED',
+                        reviewed_by_user_id = COALESCE(reviewed_by_user_id, @chiefUserId),
+                        reviewed_at_utc = COALESCE(reviewed_at_utc, @endedAtUtc)
+                    WHERE series_id = @seriesId
+                      AND status_code = N'UNDER_BOARD_REVIEW';
+                END;
+
+                IF @pollTypeCode = N'CANCEL_SERIALIZATION'
+                   AND @computedResultCode = N'APPROVED'
+                BEGIN
+                    UPDATE manga.Series
+                    SET status_code = N'CANCELLED',
+                        updated_at_utc = @endedAtUtc,
+                        updated_by_user_id = @chiefUserId
+                    WHERE series_id = @seriesId;
+                END;
+
+                DECLARE @seriesStatusCode NVARCHAR(50);
+
+                SELECT @seriesStatusCode = status_code
+                FROM manga.Series
+                WHERE series_id = @seriesId;
+
+                SELECT
+                    @pollId AS poll_id,
+                    @seriesId AS series_id,
+                    @finalPollStatusCode AS poll_status_code,
+                    ISNULL(@seriesStatusCode, N'UNKNOWN') AS series_status_code,
+                    @publicationFrequencyCode AS publication_frequency_code,
+                    @endedAtUtc AS ended_at_utc;
+                """;
+
+            AddGuidParameter(command, "@pollId", pollId);
+            AddGuidParameter(command, "@chiefUserId", chiefUserId);
+
+            FinalizeBoardPollResultDto result;
+
+            await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+            {
+                if (!await reader.ReadAsync(cancellationToken))
+                {
+                    throw new InvalidOperationException("Could not close board poll.");
+                }
+
+                result = new FinalizeBoardPollResultDto(
+                    PollId: reader.GetGuid(0),
+                    SeriesId: reader.GetGuid(1),
+                    PollStatusCode: reader.GetString(2),
+                    SeriesStatusCode: reader.GetString(3),
+                    PublicationFrequencyCode: reader.IsDBNull(4) ? null : reader.GetString(4),
+                    EndedAtUtc: reader.GetDateTime(5));
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+
+            return result;
+        }
+        catch (SqlException ex) when (ex.Number is 58611 or 58612)
+        {
+            await TryRollbackAsync(transaction, cancellationToken);
+            throw new InvalidOperationException(ex.Message, ex);
+        }
+        catch
+        {
+            await TryRollbackAsync(transaction, cancellationToken);
+            throw;
+        }
+    }
+
+    public async Task<FinalizeBoardPollResultDto> CancelPollAsync(
+        Guid pollId,
+        Guid chiefUserId,
+        CancellationToken cancellationToken)
+    {
+        if (pollId == Guid.Empty)
+        {
+            throw new InvalidOperationException("PollId is required.");
+        }
+
+        if (chiefUserId == Guid.Empty)
+        {
+            throw new InvalidOperationException("ChiefUserId is required.");
+        }
+
+        var connection = _dbContext.Database.GetDbConnection();
+
+        if (connection.State != ConnectionState.Open)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        await using var command = connection.CreateCommand();
+
+        command.CommandText =
+            """
+            DECLARE @now DATETIME2(0) = SYSUTCDATETIME();
+
+            DECLARE @result TABLE
+            (
+                poll_id UNIQUEIDENTIFIER,
+                series_id UNIQUEIDENTIFIER,
+                poll_status_code NVARCHAR(50),
+                publication_frequency_code NVARCHAR(50),
+                ended_at_utc DATETIME2(0)
+            );
+
+            UPDATE p
+            SET poll_status_code = N'CANCELLED',
+                ends_at_utc =
+                    CASE
+                        WHEN @now <= p.started_at_utc
+                            THEN DATEADD(SECOND, 1, p.started_at_utc)
+                        ELSE @now
+                    END
+            OUTPUT
+                inserted.series_board_poll_id,
+                inserted.series_id,
+                inserted.poll_status_code,
+                inserted.board_publication_frequency_code,
+                inserted.ends_at_utc
+            INTO @result
+            FROM manga.SeriesBoardPoll p
+            WHERE p.series_board_poll_id = @pollId
+              AND p.poll_status_code = N'OPEN';
+
+            IF NOT EXISTS (SELECT 1 FROM @result)
+            BEGIN
+                THROW 58621, 'Open poll was not found or has already been closed/cancelled.', 1;
+            END;
+
+            SELECT
+                r.poll_id,
+                r.series_id,
+                r.poll_status_code,
+                s.status_code AS series_status_code,
+                r.publication_frequency_code,
+                r.ended_at_utc
+            FROM @result r
+            INNER JOIN manga.Series s
+                ON s.series_id = r.series_id;
+            """;
+
+        AddGuidParameter(command, "@pollId", pollId);
+
+        try
+        {
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+            if (!await reader.ReadAsync(cancellationToken))
+            {
+                throw new InvalidOperationException("Could not cancel board poll.");
+            }
+
+            return new FinalizeBoardPollResultDto(
+                PollId: reader.GetGuid(0),
+                SeriesId: reader.GetGuid(1),
+                PollStatusCode: reader.GetString(2),
+                SeriesStatusCode: reader.GetString(3),
+                PublicationFrequencyCode: reader.IsDBNull(4) ? null : reader.GetString(4),
+                EndedAtUtc: reader.GetDateTime(5));
+        }
+        catch (SqlException ex) when (ex.Number == 58621)
+        {
+            throw new InvalidOperationException(ex.Message, ex);
         }
     }
 
@@ -690,6 +1093,20 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         }
     }
 
+    private static async Task TryRollbackAsync(
+        DbTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await transaction.RollbackAsync(cancellationToken);
+        }
+        catch (InvalidOperationException)
+        {
+            // Transaction was already completed by SQL Server/provider.
+        }
+    }
+
     private static int ToInt32(DbDataReader reader, int ordinal)
     {
         return reader.IsDBNull(ordinal)
@@ -716,7 +1133,6 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         parameter.ParameterName = name;
         parameter.DbType = DbType.Guid;
         parameter.Value = value;
-
         command.Parameters.Add(parameter);
     }
 

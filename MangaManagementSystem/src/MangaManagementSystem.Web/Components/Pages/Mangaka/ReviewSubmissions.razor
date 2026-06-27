@@ -54,7 +54,8 @@
             <MudPaper Class="pa-4 mb-4 mf-card" Elevation="0">
                 <MudGrid>
                     <MudItem xs="12" md="3">
-                        <MudTextField @bind-Value="_searchText" Label="Search by series or chapter"
+                        <MudTextField T="string" Value="@_searchText" ValueChanged="OnSearchTextChanged"
+                                       Label="Search by series or chapter"
                                        Variant="Variant.Outlined" Immediate="true"
                                        Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" />
                     </MudItem>
@@ -73,6 +74,7 @@
                     </MudItem>
                     <MudItem xs="12" md="3">
                         <MudAutocomplete T="string" Label="Assistant" Value="@_assistantFilter"
+                                          ValueChanged="OnAssistantFilterChanged"
                                           Variant="Variant.Outlined" Clearable="true"
                                           SearchFunc="@SearchAssistants" ResetValueOnEmptyText="false"
                                           CoerceText="true" CoerceValue="false" />
@@ -100,147 +102,188 @@
             }
             else
             {
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                    <MudText Typo="Typo.caption" Class="mf-muted">
+                        Showing @_pagedStartIndex–@_pagedEndIndex of @_filteredTaskList.Count tasks
+                    </MudText>
+                </div>
+
                 <MudGrid>
-                    @foreach (var task in _filteredTasks)
+                    @foreach (var task in _pagedTasks)
                     {
                         <MudItem xs="12" md="6">
-                            <MudPaper Class="pa-5 mf-card" Elevation="0">
+                            <MudPaper Class="pa-5 mf-card review-task-card" Elevation="0">
                                 <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
                                     <MudChip T="string" Color="Color.Primary" Size="Size.Small">@task.TypeCode</MudChip>
                                     <StatusBadge Status="@task.StatusCode" />
                                 </MudStack>
 
-                                @if (!string.IsNullOrWhiteSpace(task.TaskTitle))
-                                {
-                                    <MudText Typo="Typo.body2" Class="mt-1"><strong>@task.TaskTitle</strong></MudText>
-                                }
-
-                                @if (!string.IsNullOrWhiteSpace(task.SeriesTitle))
-                                {
-                                    <MudText Typo="Typo.body2" Class="mt-1 mf-muted">
-                                        <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Small" Class="mr-1" />
-                                        @task.SeriesTitle
-                                    </MudText>
-                                }
-                                @if (!string.IsNullOrWhiteSpace(task.ChapterNumberLabel) || task.PageNo.HasValue || task.PageVersionNo.HasValue)
-                                {
-                                    <MudText Typo="Typo.body2" Class="mt-1 mf-muted">
-                                        <MudIcon Icon="@Icons.Material.Filled.Article" Size="Size.Small" Class="mr-1" />
-                                        @if (!string.IsNullOrWhiteSpace(task.ChapterNumberLabel))
+                                <div class="review-task-card-layout"
+                                     style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:start;">
+                                    <div class="review-task-card-main" style="min-width:0;">
+                                        @if (!string.IsNullOrWhiteSpace(task.TaskTitle))
                                         {
-                                            <span>@task.ChapterNumberLabel</span>
+                                            <MudText Typo="Typo.body2" Class="mt-1"><strong>@task.TaskTitle</strong></MudText>
                                         }
-                                        @if (task.PageNo.HasValue)
+
+                                        @if (!string.IsNullOrWhiteSpace(task.SeriesTitle))
                                         {
-                                            <span> • Pg. @task.PageNo.Value</span>
+                                            <MudText Typo="Typo.body2" Class="mt-1 mf-muted">
+                                                <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Small" Class="mr-1" />
+                                                @task.SeriesTitle
+                                            </MudText>
                                         }
-                                        @if (task.PageVersionNo.HasValue)
+                                        @if (!string.IsNullOrWhiteSpace(task.ChapterNumberLabel) || task.PageNo.HasValue || task.PageVersionNo.HasValue)
                                         {
-                                            <span> • v@(task.PageVersionNo.Value)</span>
+                                            <MudText Typo="Typo.body2" Class="mt-1 mf-muted">
+                                                <MudIcon Icon="@Icons.Material.Filled.Article" Size="Size.Small" Class="mr-1" />
+                                                @if (!string.IsNullOrWhiteSpace(task.ChapterNumberLabel))
+                                                {
+                                                    <span>@task.ChapterNumberLabel</span>
+                                                }
+                                                @if (task.PageNo.HasValue)
+                                                {
+                                                    <span> • Pg. @task.PageNo.Value</span>
+                                                }
+                                                @if (task.PageVersionNo.HasValue)
+                                                {
+                                                    <span> • v@(task.PageVersionNo.Value)</span>
+                                                }
+                                            </MudText>
                                         }
-                                    </MudText>
-                                }
 
-                                <MudText Typo="Typo.body2" Class="mt-1 mf-muted">
-                                    <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Class="mr-1" />
-                                    @(task.AssignedToDisplayName ?? task.AssignedUsername ?? "Unknown")
-                                </MudText>
+                                        <MudText Typo="Typo.body2" Class="mt-1 mf-muted">
+                                            <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Class="mr-1" />
+                                            @(task.AssignedToDisplayName ?? task.AssignedUsername ?? "Unknown")
+                                        </MudText>
 
-                                <MudStack Row="true" Class="mt-1" Spacing="3">
-                                    <MudText Typo="Typo.body2" Class="mf-muted">
-                                        Priority: @task.PriorityLevel
-                                    </MudText>
-                                    <MudText Typo="Typo.body2" Class="mf-muted">
-                                        Due: <TimestampDisplay Value="@task.DueAtUtc" EmptyText="No deadline" />
-                                    </MudText>
-                                </MudStack>
+                                        <MudStack Row="true" Class="mt-1" Style="flex-wrap:wrap;" Spacing="3">
+                                            <MudText Typo="Typo.body2" Class="mf-muted">
+                                                Priority: @task.PriorityLevel
+                                            </MudText>
+                                            <MudText Typo="Typo.body2" Class="mf-muted">
+                                                Due: <TimestampDisplay Value="@task.DueAtUtc" EmptyText="No deadline" />
+                                            </MudText>
+                                        </MudStack>
 
-                                @if (task.PageRegions.Any())
-                                {
-                                    <MudText Typo="Typo.caption" Class="mt-1 mf-muted">
-                                        Regions: @task.PageRegions.Count
-                                    </MudText>
-                                }
+                                        @if (task.PageRegions.Any())
+                                        {
+                                            <MudText Typo="Typo.caption" Class="mt-1 mf-muted">
+                                                Regions: @task.PageRegions.Count
+                                            </MudText>
+                                        }
 
-                                @if (task.CompensationAmount.HasValue)
-                                {
-                                    <MudText Typo="Typo.caption" Class="mt-1 mf-muted">
-                                        Compensation: @task.CompensationAmount.Value.ToString("C2")
-                                    </MudText>
-                                }
+                                        @if (task.CompensationAmount.HasValue)
+                                        {
+                                            <MudText Typo="Typo.caption" Class="mt-1 mf-muted">
+                                                Compensation: @task.CompensationAmount.Value.ToString("C2")
+                                            </MudText>
+                                        }
+                                    </div>
 
-                                @if (task.StatusCode == "UNDER_REVIEW" && !string.IsNullOrWhiteSpace(task.CompletedOutputUrl))
-                                {
-                                    <MudText Typo="Typo.body2" Class="mt-2"><strong>Submitted Output:</strong></MudText>
-                                    <MudImage Src="@task.CompletedOutputUrl" Alt="Submitted output" MaxHeight="200" Class="mt-1 rounded" ObjectFit="ObjectFit.Contain" />
-                                    @if (!string.IsNullOrWhiteSpace(task.SeriesSlug) && task.ChapterId.HasValue)
+                                    <div class="review-task-card-media-column"
+                                         style="display:flex;flex-direction:column;gap:12px;flex-shrink:0;">
+                                        @if (task.StatusCode == "UNDER_REVIEW" && !string.IsNullOrWhiteSpace(task.CompletedOutputUrl))
+                                        {
+                                            <div>
+                                                <MudText Typo="Typo.subtitle2" Class="mb-1"><strong>Submitted Output:</strong></MudText>
+                                                <div style="width:190px;max-width:190px;">
+                                                    <ImagePreview ImageUrl="@task.CompletedOutputUrl"
+                                                                  AltText="Submitted output"
+                                                                  Title="Submitted Output Preview"
+                                                                  ThumbnailWidth="190"
+                                                                  ThumbnailHeight="285"
+                                                                  ThumbnailObjectFit="cover" />
+                                                </div>
+                                            </div>
+                                        }
+
+                                        @if (!string.IsNullOrWhiteSpace(task.PageImageUrl))
+                                        {
+                                            <div>
+                                                <MudText Typo="Typo.subtitle2" Class="mb-1"><strong>Original Page:</strong></MudText>
+                                                <div style="width:190px;max-width:190px;">
+                                                    <ImagePreview ImageUrl="@task.PageImageUrl"
+                                                                  AltText="Original page"
+                                                                  Title="Original Page Preview"
+                                                                  ThumbnailWidth="190"
+                                                                  ThumbnailHeight="285"
+                                                                  ThumbnailObjectFit="cover" />
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="review-task-card-footer"
+                                     style="border-top:1px solid rgba(100,116,139,.16);padding-top:12px;margin-top:16px;display:flex;flex-direction:column;gap:8px;">
+                                    @if (!string.IsNullOrWhiteSpace(task.SeriesSlug) && task.ChapterId.HasValue &&
+                                         (task.StatusCode == "UNDER_REVIEW" && !string.IsNullOrWhiteSpace(task.CompletedOutputUrl) || !string.IsNullOrWhiteSpace(task.PageImageUrl)))
                                     {
                                         <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary"
-                                                   StartIcon="@Icons.Material.Filled.OpenInNew" Class="mt-1"
+                                                   StartIcon="@Icons.Material.Filled.OpenInNew"
                                                    OnClick="@(() => Nav.NavigateTo(BuildWorkspaceLink(task)))">
                                             View in Workspace
                                         </MudButton>
                                     }
-                                }
 
-                                @if (!string.IsNullOrWhiteSpace(task.PageImageUrl))
-                                {
-                                    <MudText Typo="Typo.body2" Class="mt-2"><strong>Original Page:</strong></MudText>
-                                    <MudImage Src="@task.PageImageUrl" Alt="Original page" MaxHeight="150" Class="mt-1 rounded" ObjectFit="ObjectFit.Contain" />
-                                    @if (!string.IsNullOrWhiteSpace(task.SeriesSlug) && task.ChapterId.HasValue)
+                                    @if (task.StatusCode == "UNDER_REVIEW")
                                     {
-                                        <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary"
-                                                   StartIcon="@Icons.Material.Filled.OpenInNew" Class="mt-1"
-                                                   OnClick="@(() => Nav.NavigateTo(BuildWorkspaceLink(task)))">
-                                            View in Workspace
-                                        </MudButton>
+                                        <MudStack Row="true" Style="flex-wrap:wrap;" Spacing="2">
+                                            <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                                       Disabled="@_actionInProgress"
+                                                       OnClick="@(() => ApproveTask(task.ChapterPageTaskId))">
+                                                Approve
+                                            </MudButton>
+                                            <MudButton Variant="Variant.Outlined" Color="Color.Warning" Size="Size.Small"
+                                                       Disabled="@_actionInProgress"
+                                                       OnClick="@(() => OpenReturnDialog(task))">
+                                                Return for Rework
+                                            </MudButton>
+                                            <MudButton Variant="Variant.Outlined" Color="Color.Info" Size="Size.Small"
+                                                       Disabled="@_actionInProgress"
+                                                       OnClick="@(() => OpenReassignDialog(task))">
+                                                Reassign
+                                            </MudButton>
+                                            <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                                       Disabled="@_actionInProgress"
+                                                       OnClick="@(() => OpenCancelDialog(task))">
+                                                Cancel Task
+                                            </MudButton>
+                                        </MudStack>
                                     }
-                                }
-
-                                @if (task.StatusCode == "UNDER_REVIEW")
-                                {
-                                    <MudStack Row="true" Class="mt-3" Spacing="2">
-                                        <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
-                                                   Disabled="@_actionInProgress"
-                                                   OnClick="@(() => ApproveTask(task.ChapterPageTaskId))">
-                                            Approve
-                                        </MudButton>
-                                        <MudButton Variant="Variant.Outlined" Color="Color.Warning" Size="Size.Small"
-                                                   Disabled="@_actionInProgress"
-                                                   OnClick="@(() => OpenReturnDialog(task))">
-                                            Return for Rework
-                                        </MudButton>
-                                        <MudButton Variant="Variant.Outlined" Color="Color.Info" Size="Size.Small"
-                                                   Disabled="@_actionInProgress"
-                                                   OnClick="@(() => OpenReassignDialog(task))">
-                                            Reassign
-                                        </MudButton>
-                                        <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
-                                                   Disabled="@_actionInProgress"
-                                                   OnClick="@(() => OpenCancelDialog(task))">
-                                            Cancel Task
-                                        </MudButton>
-                                    </MudStack>
-                                }
-                                else if (task.StatusCode == "ASSIGNED")
-                                {
-                                    <MudStack Row="true" Class="mt-3" Spacing="2">
-                                        <MudButton Variant="Variant.Outlined" Color="Color.Info" Size="Size.Small"
-                                                   Disabled="@_actionInProgress"
-                                                   OnClick="@(() => OpenReassignDialog(task))">
-                                            Reassign
-                                        </MudButton>
-                                        <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
-                                                   Disabled="@_actionInProgress"
-                                                   OnClick="@(() => OpenCancelDialog(task))">
-                                            Cancel Task
-                                        </MudButton>
-                                    </MudStack>
-                                }
+                                    else if (task.StatusCode == "ASSIGNED")
+                                    {
+                                        <MudStack Row="true" Style="flex-wrap:wrap;" Spacing="2">
+                                            <MudButton Variant="Variant.Outlined" Color="Color.Info" Size="Size.Small"
+                                                       Disabled="@_actionInProgress"
+                                                       OnClick="@(() => OpenReassignDialog(task))">
+                                                Reassign
+                                            </MudButton>
+                                            <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                                       Disabled="@_actionInProgress"
+                                                       OnClick="@(() => OpenCancelDialog(task))">
+                                                Cancel Task
+                                            </MudButton>
+                                        </MudStack>
+                                    }
+                                </div>
                             </MudPaper>
                         </MudItem>
                     }
                 </MudGrid>
+
+                @if (_totalPages > 1)
+                {
+                    <div style="display:flex;justify-content:center;margin-top:24px;">
+                        <MudPagination Count="@_totalPages"
+                                       Selected="@_currentPage"
+                                       SelectedChanged="OnPageChanged"
+                                       Color="Color.Primary"
+                                       BoundaryCount="1"
+                                       MiddleCount="3" />
+                    </div>
+                }
             }
         }
 
@@ -334,15 +377,12 @@
                 }
                 else
                 {
-                    <MudSelect T="Guid?" Label="Series" Value="_quickSelectSelectedSeriesId"
-                               ValueChanged="OnQuickSelectSeriesChanged"
-                               Variant="Variant.Outlined" Required="true" Class="mb-3"
-                               AnchorOrigin="Origin.BottomCenter">
-                        @foreach (var s in _quickSelectSeries)
-                        {
-                            <MudSelectItem T="Guid?" Value="@s.SeriesId">@s.Title</MudSelectItem>
-                        }
-                    </MudSelect>
+                    <MudAutocomplete T="SeriesDto" Label="Series" Value="_quickSelectSelectedSeriesDto"
+                                     ValueChanged="OnQuickSelectSeriesSelected"
+                                     SearchFunc="SearchQuickSelectSeries" ToStringFunc="@(s => s?.Title ?? "")"
+                                     Variant="Variant.Outlined" Required="true" Class="mb-3"
+                                     ResetValueOnEmptyText="false" AdornmentIcon="@Icons.Material.Filled.Search"
+                                     Adornment="Adornment.End" />
                 }
 
                 @if (_quickSelectSelectedSeriesId.HasValue)
@@ -357,17 +397,12 @@
                     }
                     else
                     {
-                        <MudSelect T="Guid?" Label="Chapter" Value="_quickSelectSelectedChapterId"
-                                   ValueChanged="OnQuickSelectChapterChanged"
-                                   Variant="Variant.Outlined" Required="true" Class="mb-3"
-                                   AnchorOrigin="Origin.BottomCenter">
-                            @foreach (var ch in _quickSelectChapters)
-                            {
-                                <MudSelectItem T="Guid?" Value="@ch.ChapterId">
-                                    Ch. @ch.ChapterNumber @(ch.Title ?? "") @(ch.PageCount.HasValue ? $"({ch.PageCount} pages)" : "")
-                                </MudSelectItem>
-                            }
-                        </MudSelect>
+                        <MudAutocomplete T="QuickSelectChapterDto" Label="Chapter" Value="_quickSelectSelectedChapterDto"
+                                         ValueChanged="OnQuickSelectChapterSelected"
+                                         SearchFunc="SearchQuickSelectChapters" ToStringFunc="@ChToString"
+                                         Variant="Variant.Outlined" Required="true" Class="mb-3"
+                                         ResetValueOnEmptyText="false" AdornmentIcon="@Icons.Material.Filled.Search"
+                                         Adornment="Adornment.End" />
                     }
                 }
 
@@ -383,17 +418,25 @@
                     }
                     else
                     {
-                        <MudText Typo="Typo.subtitle2" Class="mb-2">Select Pages</MudText>
+                        <MudText Typo="Typo.subtitle2" Class="mb-2">
+                            Select Pages
+                            <MudText Typo="Typo.caption" Class="ml-2 mf-muted">Selected: @QuickSelectSelectedPageCount</MudText>
+                        </MudText>
                         <MudPaper Class="pa-2 mb-3" Elevation="0" Style="max-height:200px;overflow-y:auto;">
-                            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="SelectAllPages" Class="mb-1">Select All</MudButton>
-                            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="ClearAllPages" Class="mb-1 ml-2">Clear</MudButton>
+                            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="SelectAllQuickSelectPages" Class="mb-1">Select All</MudButton>
+                            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="ClearQuickSelectPages" Class="mb-1 ml-2">Clear</MudButton>
                             @foreach (var pg in _quickSelectPages)
                             {
                                 <div class="d-flex align-center py-1">
                                     <MudCheckBox T="bool"
-                                                 Checked="@_quickSelectPageSelections[pg.ChapterPageId]"
-                                                 CheckedChanged="@((bool v) => { _quickSelectPageSelections[pg.ChapterPageId] = v; })" />
+                                                 Value="@IsQuickSelectPageSelected(pg.ChapterPageId)"
+                                                 ValueChanged="@((bool selected) => SetQuickSelectPageSelected(pg.ChapterPageId, selected))"
+                                                 Color="Color.Primary" />
                                     <MudText Typo="Typo.body2" Class="ml-2">Page @pg.PageNo &mdash; v@(pg.VersionNo)</MudText>
+                                    @if (IsQuickSelectPageSelected(pg.ChapterPageId))
+                                    {
+                                        <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="ml-2">Selected</MudChip>
+                                    }
                                 </div>
                             }
                         </MudPaper>
@@ -412,16 +455,12 @@
                     }
                     else
                     {
-                        <MudSelect T="Guid?" Label="Assistant" @bind-Value="_quickSelectSelectedAssistantId"
-                                   Variant="Variant.Outlined" Required="true" Class="mb-3"
-                                   AnchorOrigin="Origin.BottomCenter">
-                            @foreach (var a in _quickSelectAssistants)
-                            {
-                                <MudSelectItem T="Guid?" Value="@a.UserId">
-                                    @a.DisplayName @(a.Username != null ? $"(@{a.Username})" : "")
-                                </MudSelectItem>
-                            }
-                        </MudSelect>
+                        <MudAutocomplete T="QuickSelectAssistantDto" Label="Assistant" Value="_quickSelectSelectedAssistantDto"
+                                         ValueChanged="OnQuickSelectAssistantSelected"
+                                         SearchFunc="SearchQuickSelectAssistantsLocal" ToStringFunc="@AsstToString"
+                                         Variant="Variant.Outlined" Required="true" Class="mb-3"
+                                         ResetValueOnEmptyText="false" AdornmentIcon="@Icons.Material.Filled.Search"
+                                         Adornment="Adornment.End" />
                     }
                 }
 
@@ -531,6 +570,36 @@
     private IEnumerable<ChapterPageTaskDto> _filteredTasks =>
         ApplyFilters(_tasks);
 
+    // Pagination state
+    private int _currentPage = 1;
+    private int _pageSize = 6;
+
+    private IReadOnlyList<ChapterPageTaskDto> _filteredTaskList => _filteredTasks.ToList();
+
+    private int _totalPages => Math.Max(1, (int)Math.Ceiling(_filteredTaskList.Count / (double)_pageSize));
+
+    private IEnumerable<ChapterPageTaskDto> _pagedTasks =>
+        _filteredTaskList
+            .Skip((_currentPage - 1) * _pageSize)
+            .Take(_pageSize);
+
+    private int _pagedStartIndex => _filteredTaskList.Count == 0 ? 0 : (_currentPage - 1) * _pageSize + 1;
+
+    private int _pagedEndIndex => Math.Min(_currentPage * _pageSize, _filteredTaskList.Count);
+
+    private void OnPageChanged(int page)
+    {
+        _currentPage = page;
+    }
+
+    private void ClampPage()
+    {
+        if (_currentPage > _totalPages)
+            _currentPage = _totalPages;
+        if (_currentPage < 1)
+            _currentPage = 1;
+    }
+
     private IEnumerable<ChapterPageTaskDto> ApplyFilters(IEnumerable<ChapterPageTaskDto> source)
     {
         var query = source.AsEnumerable();
@@ -598,6 +667,9 @@
     private IReadOnlyList<QuickSelectChapterDto> _quickSelectChapters = Array.Empty<QuickSelectChapterDto>();
     private IReadOnlyList<QuickSelectPageDto> _quickSelectPages = Array.Empty<QuickSelectPageDto>();
     private IReadOnlyList<QuickSelectAssistantDto> _quickSelectAssistants = Array.Empty<QuickSelectAssistantDto>();
+    private SeriesDto? _quickSelectSelectedSeriesDto;
+    private QuickSelectChapterDto? _quickSelectSelectedChapterDto;
+    private QuickSelectAssistantDto? _quickSelectSelectedAssistantDto;
     private Dictionary<Guid, bool> _quickSelectPageSelections = new();
     private Dictionary<Guid, string> _quickSelectPageOverrides = new();
 
@@ -634,6 +706,9 @@
         _quickSelectChapters = Array.Empty<QuickSelectChapterDto>();
         _quickSelectPages = Array.Empty<QuickSelectPageDto>();
         _quickSelectAssistants = Array.Empty<QuickSelectAssistantDto>();
+        _quickSelectSelectedSeriesDto = null;
+        _quickSelectSelectedChapterDto = null;
+        _quickSelectSelectedAssistantDto = null;
         _quickSelectPageSelections = new();
         _quickSelectPageOverrides = new();
         _quickSelectSubmitting = false;
@@ -664,26 +739,115 @@
         }
     }
 
-    private async Task OnQuickSelectSeriesChanged(Guid? seriesId)
+    // --- Quick Select Autocomplete handlers ---
+
+    private async Task OnQuickSelectSeriesSelected(SeriesDto? series)
     {
+        _quickSelectSelectedSeriesDto = series;
+        _quickSelectSelectedSeriesId = series?.SeriesId;
+
+        _quickSelectSelectedChapterDto = null;
         _quickSelectSelectedChapterId = null;
         _quickSelectChapters = Array.Empty<QuickSelectChapterDto>();
         _quickSelectPages = Array.Empty<QuickSelectPageDto>();
         _quickSelectPageSelections = new();
         _quickSelectPageOverrides = new();
+        _quickSelectSelectedAssistantDto = null;
         _quickSelectSelectedAssistantId = null;
         _quickSelectAssistants = Array.Empty<QuickSelectAssistantDto>();
 
-        if (!seriesId.HasValue)
+        if (series is null || series.SeriesId == Guid.Empty)
         {
             await InvokeAsync(StateHasChanged);
             return;
         }
 
-        var loadChapters = LoadQuickSelectChaptersAsync(seriesId.Value);
-        var loadAssistants = LoadQuickSelectAssistantsInternalAsync(seriesId.Value);
+        var loadChapters = LoadQuickSelectChaptersAsync(series.SeriesId);
+        var loadAssistants = LoadQuickSelectAssistantsInternalAsync(series.SeriesId);
         await Task.WhenAll(loadChapters, loadAssistants);
     }
+
+    private async Task OnQuickSelectChapterSelected(QuickSelectChapterDto? chapter)
+    {
+        _quickSelectSelectedChapterDto = chapter;
+        _quickSelectSelectedChapterId = chapter?.ChapterId;
+        _quickSelectPages = Array.Empty<QuickSelectPageDto>();
+        _quickSelectPageSelections = new();
+        _quickSelectPageOverrides = new();
+
+        if (chapter == null || chapter.ChapterId == Guid.Empty)
+        {
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        _quickSelectLoadingPages = true;
+        try
+        {
+            _quickSelectPages = await MangakaTaskClient.GetQuickSelectPagesAsync(chapter.ChapterId);
+            _quickSelectPageSelections = _quickSelectPages.ToDictionary(p => p.ChapterPageId, _ => false);
+            _quickSelectPageOverrides = _quickSelectPages.ToDictionary(p => p.ChapterPageId, _ => string.Empty);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load pages: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _quickSelectLoadingPages = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void OnQuickSelectAssistantSelected(QuickSelectAssistantDto? assistant)
+    {
+        _quickSelectSelectedAssistantDto = assistant;
+        _quickSelectSelectedAssistantId = assistant?.UserId;
+    }
+
+    // --- Quick Select Autocomplete search functions ---
+
+    private Task<IEnumerable<SeriesDto>> SearchQuickSelectSeries(string searchText, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+            return Task.FromResult<IEnumerable<SeriesDto>>(_quickSelectSeries);
+        return Task.FromResult<IEnumerable<SeriesDto>>(
+            _quickSelectSeries
+                .Where(s => s.Title.Contains(searchText, StringComparison.OrdinalIgnoreCase))
+                .ToList());
+    }
+
+    private Task<IEnumerable<QuickSelectChapterDto>> SearchQuickSelectChapters(string searchText, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+            return Task.FromResult<IEnumerable<QuickSelectChapterDto>>(_quickSelectChapters);
+        return Task.FromResult<IEnumerable<QuickSelectChapterDto>>(
+            _quickSelectChapters
+                .Where(ch => ch.ChapterNumber.ToString().Contains(searchText, StringComparison.OrdinalIgnoreCase)
+                          || (ch.Title ?? "").Contains(searchText, StringComparison.OrdinalIgnoreCase))
+                .ToList());
+    }
+
+    private Task<IEnumerable<QuickSelectAssistantDto>> SearchQuickSelectAssistantsLocal(string searchText, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+            return Task.FromResult<IEnumerable<QuickSelectAssistantDto>>(_quickSelectAssistants);
+        return Task.FromResult<IEnumerable<QuickSelectAssistantDto>>(
+            _quickSelectAssistants
+                .Where(a => a.DisplayName.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+                         || (a.Username ?? "").Contains(searchText, StringComparison.OrdinalIgnoreCase))
+                .ToList());
+    }
+
+    // --- Quick Select ToString helpers ---
+
+    private static string ChToString(QuickSelectChapterDto? ch)
+        => ch == null ? "" : $"Ch. {ch.ChapterNumber}{(ch.Title != null ? $" {ch.Title}" : "")}{(ch.PageCount.HasValue ? $" ({ch.PageCount} pages)" : "")}";
+
+    private static string AsstToString(QuickSelectAssistantDto? a)
+        => a == null ? "" : $"{a.DisplayName}{(a.Username != null ? $" (@{a.Username})" : "")}";
+
+    // --- Quick Select data loading ---
 
     private async Task LoadQuickSelectChaptersAsync(Guid seriesId)
     {
@@ -699,36 +863,6 @@
         finally
         {
             _quickSelectLoadingChapters = false;
-            await InvokeAsync(StateHasChanged);
-        }
-    }
-
-    private async Task OnQuickSelectChapterChanged(Guid? chapterId)
-    {
-        _quickSelectPages = Array.Empty<QuickSelectPageDto>();
-        _quickSelectPageSelections = new();
-        _quickSelectPageOverrides = new();
-
-        if (!chapterId.HasValue)
-        {
-            await InvokeAsync(StateHasChanged);
-            return;
-        }
-
-        _quickSelectLoadingPages = true;
-        try
-        {
-            _quickSelectPages = await MangakaTaskClient.GetQuickSelectPagesAsync(chapterId.Value);
-            _quickSelectPageSelections = _quickSelectPages.ToDictionary(p => p.ChapterPageId, _ => false);
-            _quickSelectPageOverrides = _quickSelectPages.ToDictionary(p => p.ChapterPageId, _ => string.Empty);
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Failed to load pages: {ex.Message}", Severity.Error);
-        }
-        finally
-        {
-            _quickSelectLoadingPages = false;
             await InvokeAsync(StateHasChanged);
         }
     }
@@ -751,16 +885,47 @@
         }
     }
 
-    private void SelectAllPages()
+    private bool IsQuickSelectPageSelected(Guid chapterPageId)
     {
-        foreach (var key in _quickSelectPageSelections.Keys.ToList())
-            _quickSelectPageSelections[key] = true;
+        return _quickSelectPageSelections.TryGetValue(chapterPageId, out var selected) && selected;
     }
 
-    private void ClearAllPages()
+    private void SetQuickSelectPageSelected(Guid chapterPageId, bool selected)
     {
-        foreach (var key in _quickSelectPageSelections.Keys.ToList())
-            _quickSelectPageSelections[key] = false;
+        _quickSelectPageSelections[chapterPageId] = selected;
+
+        if (!selected)
+        {
+            _quickSelectPageOverrides.Remove(chapterPageId);
+        }
+        else if (!_quickSelectPageOverrides.ContainsKey(chapterPageId))
+        {
+            _quickSelectPageOverrides[chapterPageId] = string.Empty;
+        }
+    }
+
+    private int QuickSelectSelectedPageCount =>
+        _quickSelectPageSelections.Count(kvp => kvp.Value);
+
+    private void SelectAllQuickSelectPages()
+    {
+        foreach (var page in _quickSelectPages)
+        {
+            _quickSelectPageSelections[page.ChapterPageId] = true;
+            if (!_quickSelectPageOverrides.ContainsKey(page.ChapterPageId))
+            {
+                _quickSelectPageOverrides[page.ChapterPageId] = string.Empty;
+            }
+        }
+    }
+
+    private void ClearQuickSelectPages()
+    {
+        foreach (var page in _quickSelectPages)
+        {
+            _quickSelectPageSelections[page.ChapterPageId] = false;
+        }
+        _quickSelectPageOverrides.Clear();
     }
 
     private async Task ConfirmQuickSelect()
@@ -868,6 +1033,7 @@
         _dialogTaskId = Guid.Empty;
 
         await LoadTasksAsync();
+        ClampPage();
         await InvokeAsync(StateHasChanged);
     }
 
@@ -1005,11 +1171,25 @@
     private void OnFilterChanged(string newFilter)
     {
         _statusFilter = newFilter;
+        _currentPage = 1;
     }
 
     private void OnTypeFilterChanged(string newFilter)
     {
         _typeFilter = newFilter ?? string.Empty;
+        _currentPage = 1;
+    }
+
+    private void OnSearchTextChanged(string? newValue)
+    {
+        _searchText = newValue ?? string.Empty;
+        _currentPage = 1;
+    }
+
+    private void OnAssistantFilterChanged(string? newValue)
+    {
+        _assistantFilter = newValue ?? string.Empty;
+        _currentPage = 1;
     }
 
     private async Task<IEnumerable<string>> SearchAssistants(string searchText, CancellationToken cancellationToken)

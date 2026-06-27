@@ -1,0 +1,10 @@
+/* Thumbnail button — bounds enforced inline; class kept for hover/focus ring */
+
+.mf-ip-thumb:hover {
+    opacity: 0.85;
+}
+
+.mf-ip-thumb:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+}

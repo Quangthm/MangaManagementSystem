@@ -36,16 +36,13 @@ namespace MangaManagementSystem.Infrastructure
             services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
             services.AddScoped<IEmailService, EmailService>();
 
-            // OTP cache adapter (shared by Web and API hosts).
-            services.AddMemoryCache();
-            services.AddSingleton<IOtpCacheService, OtpCacheService>();
-
             // Generic repository
             services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
 
             // Specific repositories
             services.AddScoped<ISeriesRepository, SeriesRepository>();
             services.AddScoped<IChapterRepository, ChapterRepository>();
+            services.AddScoped<IMangakaChapterRepository, MangakaChapterRepository>();
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IChapterPageTaskRepository, ChapterPageTaskRepository>();
             services.AddScoped<IChapterPageAnnotationRepository, ChapterPageAnnotationRepository>();
@@ -57,6 +54,8 @@ namespace MangaManagementSystem.Infrastructure
             services.AddScoped<IEditorSeriesRepository, EditorSeriesRepository>();
             services.AddScoped<IReferenceDataRepository, ReferenceDataRepository>();
             services.AddScoped<ISeriesContributorManagementRepository, SeriesContributorRepository>();
+            services.AddScoped<IQuickSelectRepository, QuickSelectRepository>();
+            services.AddScoped<ILandingPageRepository, LandingPageRepository>();
 
             // Unit of Work
             services.AddScoped<IFileResourceRepository, FileResourceRepository>();
@@ -73,12 +72,10 @@ namespace MangaManagementSystem.Infrastructure
 
             // AI Service
             services.AddHttpClient<IAiService, AiService>();
-            services.AddScoped<IAiService, AiService>();
+            services.AddScoped<IImageMetadataProvider, CloudinaryImageMetadataProvider>();
 
             services.AddScoped<IEditorialBoardRepository, EditorialBoardRepository>();
-
-            services.AddScoped<IImageMetadataProvider, CloudinaryImageMetadataProvider>();
-            services.AddScoped<IQuickSelectRepository, QuickSelectRepository>();
+ 
             return services;
         }
     }
