@@ -1,4 +1,4 @@
-﻿@page "/admin/files"
+@page "/admin/files"
 @using MangaManagementSystem.Application.DTOs.Admin
 @using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Admin")]
@@ -435,13 +435,6 @@
                      alt="@_previewFileName"
                      class="phase6-file-preview-image" />
             }
-            else if (IsPreviewPdf)
-            {
-                <iframe src="@_previewDataUrl"
-                        title="@_previewFileName"
-                        class="phase6-file-preview-frame">
-                </iframe>
-            }
             else
             {
                 <MudAlert Severity="Severity.Warning">
@@ -710,12 +703,14 @@
         && _previewContentType.StartsWith(
             "image/",
             StringComparison.OrdinalIgnoreCase);
-
-    private bool IsPreviewPdf =>
-        string.Equals(
-            _previewContentType,
+    private static bool IsPdfContentType(
+        string? contentType)
+    {
+        return string.Equals(
+            contentType,
             "application/pdf",
             StringComparison.OrdinalIgnoreCase);
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -880,17 +875,31 @@
                     .GetPreviewAsync(
                         fileResourceId);
 
+            var normalizedContentType =
+                NormalizeContentTypeForDataUrl(
+                    content.ContentType);
+
+            if (!content.IsPlaceholder
+                && IsPdfContentType(
+                    normalizedContentType))
+            {
+                await OpenContentInNewTabAsync(
+                    content,
+                    normalizedContentType);
+
+                return;
+            }
+
             _previewFileName =
                 content.FileName;
 
             _previewContentType =
-                NormalizeContentTypeForDataUrl(
-                    content.ContentType);
+                normalizedContentType;
 
             _previewDataUrl =
                 BuildDataUrl(
                     content.Content,
-                    _previewContentType);
+                    normalizedContentType);
 
             _previewIsPlaceholder =
                 content.IsPlaceholder;
@@ -919,6 +928,26 @@
         {
             _isLoading = false;
         }
+    }
+
+    private async Task OpenContentInNewTabAsync(
+        AdminFileContentResult content,
+        string contentType)
+    {
+        using var stream =
+            new MemoryStream(
+                content.Content,
+                writable: false);
+
+        using var streamReference =
+            new DotNetStreamReference(
+                stream);
+
+        await JSRuntime.InvokeVoidAsync(
+            "adminFileContent.open",
+            streamReference,
+            contentType,
+            content.FileName);
     }
 
     private void ClosePreviewDialog()
@@ -1140,10 +1169,8 @@
         return file.ContentType.StartsWith(
                 "image/",
                 StringComparison.OrdinalIgnoreCase)
-            || string.Equals(
-                file.ContentType,
-                "application/pdf",
-                StringComparison.OrdinalIgnoreCase);
+            || IsPdfContentType(
+                file.ContentType);
     }
 
     private static string? NormalizeFilter(
