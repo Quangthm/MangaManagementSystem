@@ -15,9 +15,12 @@
                 <NavLink href="@item.Href"
                          class="mf-nav-link"
                          Match="@(item.MatchAll ? NavLinkMatch.All : NavLinkMatch.Prefix)">
-                    <MudIcon Icon="@item.Icon"
-                             Size="Size.Small"
-                             Class="mf-nav-icon" />
+                    @if (!string.IsNullOrWhiteSpace(item.Icon))
+                    {
+                        <MudIcon Icon="@item.Icon"
+                                 Size="Size.Small"
+                                 Class="mf-nav-icon" />
+                    }
                     @item.Label
                 </NavLink>
             }
