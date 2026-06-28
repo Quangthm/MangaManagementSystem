@@ -3194,3 +3194,37 @@ a {
     background: rgba(255, 255, 255, 0.22);
     color: #ffffff;
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Workspace right Task Panel — make the MudTabs area fill the panel height so
+   the inner ACTIVE TASKS list gets a real, growing scroll region instead of
+   overflowing / being clipped at the bottom (especially on shorter laptop
+   screens where the NEW TASK form eats most of the panel height).
+   ────────────────────────────────────────────────────────────────────────── */
+.workspace-tabs.mud-tabs {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.workspace-tabs .mud-tabs-panels {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.workspace-tabs .mud-tab-panel {
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* The ACTIVE TASKS scroll container needs a sane minimum so a few cards stay
+   visible even when the NEW TASK form is fully expanded. */
+.workspace-tabs .mf-active-tasks {
+    flex: 1 1 auto;
+    min-height: 140px;
+    overflow-y: auto;
+}

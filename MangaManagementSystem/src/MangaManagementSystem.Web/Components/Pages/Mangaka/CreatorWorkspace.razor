@@ -146,7 +146,12 @@ else
                     }
 
                     <MudTooltip Text="Auto Segment Panels"><MudIconButton Icon="@Icons.Material.Filled.DashboardCustomize" Color="Color.Secondary" OnClick="RunSegmentAI" Disabled="@(IsProcessing || IsChapterLocked)" Size="Size.Small" /></MudTooltip>
-                    <MudTooltip Text="Translate Selected"><MudIconButton Icon="@Icons.Material.Filled.Translate" Color="Color.Info" OnClick="RunTranslateAI" Disabled="@(IsProcessing || IsChapterLocked)" Size="Size.Small" /></MudTooltip>
+                    <MudTooltip Text="Translate Selected (choose language)">
+                        <MudMenu Icon="@Icons.Material.Filled.Translate" IconColor="Color.Info" Size="Size.Small" Dense="true" Disabled="@(IsProcessing || IsChapterLocked)">
+                            <MudMenuItem Icon="@Icons.Material.Filled.Translate" OnClick='@(() => RunTranslateAI("vi"))'>Tiếng Việt (VI)</MudMenuItem>
+                            <MudMenuItem Icon="@Icons.Material.Filled.Translate" OnClick='@(() => RunTranslateAI("en"))'>English (EN)</MudMenuItem>
+                        </MudMenu>
+                    </MudTooltip>
                     <MudTooltip Text="Delete Selected"><MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" OnClick="DeleteSelectedRegions" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
                     
                     <MudDivider Vertical="true" FlexItem="true" Class="mx-2" />
@@ -168,9 +173,31 @@ else
                         if (currentPage.Versions.Count > 0)
                         {
                               <div style="position: absolute; top: 16px; left: 16px; z-index: 10;">
+                                  @if (_versionsCollapsedLeft)
+                                  {
+                                      var viewVerL = currentPage.Versions[Math.Clamp(currentPage.ActiveVersionIndex, 0, currentPage.Versions.Count - 1)];
+                                      <MudTooltip Text="Show Versions">
+                                          <MudPaper Class="rounded-lg d-flex align-center" Elevation="2" Style="background: rgba(255,255,255,0.95); backdrop-filter: blur(8px); border: 1px solid var(--mud-palette-lines-default); cursor: pointer; padding: 2px 8px; gap: 6px;" @onclick="@(() => _versionsCollapsedLeft = false)">
+                                              <MudIcon Icon="@Icons.Material.Filled.Layers" Size="Size.Small" Color="Color.Primary" />
+                                              <MudText Typo="Typo.caption" Class="font-weight-bold">v@(viewVerL.VersionNo)</MudText>
+                                              @if (currentPage.Versions.Count > 1)
+                                              {
+                                                  <MudText Typo="Typo.caption" Class="mf-muted">/@(currentPage.Versions.Count)</MudText>
+                                              }
+                                              <MudIcon Icon="@Icons.Material.Filled.UnfoldMore" Size="Size.Small" Class="mf-muted" />
+                                          </MudPaper>
+                                      </MudTooltip>
+                                  }
+                                  else
+                                  {
                                   <MudPaper Class="pa-2 rounded-lg" Elevation="2" Style="background: rgba(255,255,255,0.95); backdrop-filter: blur(8px); width: 210px; border: 1px solid var(--mud-palette-lines-default);">
                                       <div class="d-flex align-center justify-space-between mb-2">
-                                          <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Versions</MudText>
+                                          <div class="d-flex align-center">
+                                              <MudTooltip Text="Collapse">
+                                                  <MudIconButton Icon="@Icons.Material.Filled.UnfoldLess" Size="Size.Small" OnClick="@(() => _versionsCollapsedLeft = true)" />
+                                              </MudTooltip>
+                                              <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Versions</MudText>
+                                          </div>
                                           <div class="d-flex gap-1">
                                               <MudTooltip Text="Create Canvas as New Version">
                                                   <MudIconButton Icon="@Icons.Material.Filled.AddPhotoAlternate" Color="Color.Secondary" Size="Size.Small" OnClick='() => SaveAsNewVersion("Left")' Disabled="@IsChapterLocked" />
@@ -220,6 +247,7 @@ else
                                           }
                                       </div>
                                   </MudPaper>
+                                  }
                               </div>
                         }
                     }
@@ -237,9 +265,31 @@ else
                             if (splitPage.Versions.Count > 0)
                             {
                                 <div style="position: absolute; top: 16px; right: 16px; z-index: 10;">
+                                  @if (_versionsCollapsedRight)
+                                  {
+                                      var viewVerR = splitPage.Versions[Math.Clamp(splitPage.ActiveVersionIndex, 0, splitPage.Versions.Count - 1)];
+                                      <MudTooltip Text="Show Versions">
+                                          <MudPaper Class="rounded-lg d-flex align-center" Elevation="2" Style="background: rgba(255,255,255,0.95); backdrop-filter: blur(8px); border: 1px solid var(--mud-palette-lines-default); cursor: pointer; padding: 2px 8px; gap: 6px;" @onclick="@(() => _versionsCollapsedRight = false)">
+                                              <MudIcon Icon="@Icons.Material.Filled.Layers" Size="Size.Small" Color="Color.Primary" />
+                                              <MudText Typo="Typo.caption" Class="font-weight-bold">v@(viewVerR.VersionNo)</MudText>
+                                              @if (splitPage.Versions.Count > 1)
+                                              {
+                                                  <MudText Typo="Typo.caption" Class="mf-muted">/@(splitPage.Versions.Count)</MudText>
+                                              }
+                                              <MudIcon Icon="@Icons.Material.Filled.UnfoldMore" Size="Size.Small" Class="mf-muted" />
+                                          </MudPaper>
+                                      </MudTooltip>
+                                  }
+                                  else
+                                  {
                                   <MudPaper Class="pa-2 rounded-lg" Elevation="2" Style="background: rgba(255,255,255,0.95); backdrop-filter: blur(8px); width: 210px; border: 1px solid var(--mud-palette-lines-default);">
                                       <div class="d-flex align-center justify-space-between mb-2">
-                                          <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Versions</MudText>
+                                          <div class="d-flex align-center">
+                                              <MudTooltip Text="Collapse">
+                                                  <MudIconButton Icon="@Icons.Material.Filled.UnfoldLess" Size="Size.Small" OnClick="@(() => _versionsCollapsedRight = true)" />
+                                              </MudTooltip>
+                                              <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Versions</MudText>
+                                          </div>
                                           <div class="d-flex gap-1">
                                               <MudTooltip Text="Create Canvas as New Version">
                                                   <MudIconButton Icon="@Icons.Material.Filled.AddPhotoAlternate" Color="Color.Secondary" Size="Size.Small" OnClick='() => SaveAsNewVersion("Right")' Disabled="@IsChapterLocked" />
@@ -289,6 +339,7 @@ else
                                           }
                                       </div>
                                   </MudPaper>
+                                  }
                                 </div>
                             }
                         }
@@ -363,8 +414,14 @@ else
                 <MudTabPanel Text="Tasks">
                     <div class="px-4 mb-6" style="flex-shrink: 0;">
                 <MudPaper Elevation="0" Class="pa-4 border-1 mud-border-lines-default rounded-lg">
-                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-3">NEW TASK</MudText>
-                    
+                    <div class="d-flex align-center justify-space-between @(_newTaskFormCollapsed ? "" : "mb-3")">
+                        <MudText Typo="Typo.subtitle2" Class="font-weight-bold">NEW TASK</MudText>
+                        <MudTooltip Text="@(_newTaskFormCollapsed ? "Expand form" : "Collapse form to see more tasks")">
+                            <MudIconButton Icon="@(_newTaskFormCollapsed ? Icons.Material.Filled.ExpandMore : Icons.Material.Filled.ExpandLess)" Size="Size.Small" OnClick="@(() => _newTaskFormCollapsed = !_newTaskFormCollapsed)" />
+                        </MudTooltip>
+                    </div>
+                    @if (!_newTaskFormCollapsed)
+                    {
                     <MudSelect T="string" Label="Task Type" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" Value="@TaskType" ValueChanged="OnTaskTypeChanged">
                         <MudSelectItem Value="@("BACKGROUND")">
                             <div class="d-flex align-center"><MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" Color="Color.Info" Class="mr-2"/> Background</div>
@@ -430,10 +487,11 @@ else
                     </div>
 
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateTask" Disabled="@IsChapterLocked">Create Task</MudButton>
+                    }
                 </MudPaper>
             </div>
 
-            <div class="px-4" style="flex-grow: 1; overflow-y: auto;">
+            <div class="px-4 mf-active-tasks">
                   <div class="d-flex justify-space-between align-center mb-3">
                       <MudText Typo="Typo.subtitle2" Class="font-weight-bold">ACTIVE TASKS</MudText>
                       <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">@ActiveTasks.Count</MudChip>
@@ -667,6 +725,13 @@ else
     private bool _isSplitView = false;
     private int _splitPageIndex = 0;
     private List<PageModel> _splitUploadedPages = new();
+
+    // Versions panel collapse state (default collapsed to save canvas space)
+    private bool _versionsCollapsedLeft = true;
+    private bool _versionsCollapsedRight = true;
+
+    // Collapse the NEW TASK form to give the ACTIVE TASKS list more room (laptop screens)
+    private bool _newTaskFormCollapsed = false;
 
     private SemaphoreSlim _dbSemaphore = new SemaphoreSlim(1, 1);
 
@@ -1257,7 +1322,10 @@ else
                 foreach (var c in contributors)
                 {
                     var u = await UserService.GetUserByIdAsync(c.UserId);
-                    if (u != null) assistantList.Add(u);
+                    // This dropdown assigns production tasks, so only list contributors whose
+                    // role is Assistant — exclude Editor / Mangaka contributors of the series.
+                    if (u != null && string.Equals(u.RoleName, "Assistant", StringComparison.OrdinalIgnoreCase))
+                        assistantList.Add(u);
                 }
                 _assistantUsers = assistantList;
             }
@@ -1509,11 +1577,20 @@ else
             if (_rightCanvasRef != null)
                 await _rightCanvasRef.InvokeVoidAsync("loadImage", "");
         }
-        // Sync split view pane when chapter changes
+        // Sync split view pane when chapter changes. Updating the data alone does not
+        // re-render the right canvas (it is JS-rendered), so drive it through
+        // OnSplitPageChanged to actually load the new chapter's page into the right pane.
         if (_isSplitView)
         {
             _splitUploadedPages = UploadedPages.ToList();
-            _splitPageIndex = 0;
+            if (_splitUploadedPages.Any())
+            {
+                await OnSplitPageChanged(1);
+            }
+            else
+            {
+                _splitPageIndex = 0;
+            }
         }
         StateHasChanged();
         } catch (TaskCanceledException) {
@@ -2139,8 +2216,8 @@ else
                     var shadowDraft = await JS.InvokeAsync<string>("getMmsDraft", page.ChapterPageId.ToString());
                     if (HasMeaningfulDraft(shadowDraft, v.Regions))
                     {
-                        Snackbar.Add($"⚠️ Phát hiện bản nháp chưa lưu cho trang bên phải.", Severity.Warning, config => {
-                            config.Action = "Khôi phục";
+                        Snackbar.Add($"⚠️ Unsaved draft detected for the right page.", Severity.Warning, config => {
+                            config.Action = "Restore";
                             config.ActionColor = Color.Primary;
                             config.OnClick = snackbar => {
                                 _ = _rightCanvasRef.InvokeVoidAsync("loadRegions", shadowDraft).AsTask();
@@ -2264,7 +2341,7 @@ else
                 var shadowDraft = await JS.InvokeAsync<string>("getMmsDraft", page.ChapterPageId.ToString());
                 if (HasMeaningfulDraft(shadowDraft, activeVersion.Regions))
                 {
-                    Snackbar.Add($"⚠️ Phát hiện bản nháp chưa lưu cho trang này.", Severity.Warning, config => {
+                    Snackbar.Add($"⚠️ Unsaved draft detected for this page.", Severity.Warning, config => {
                         config.Action = "Khôi phục";
                         config.ActionColor = Color.Primary;
                         config.OnClick = snackbar => {
@@ -2885,13 +2962,14 @@ else
         }
     }
 
-    private async Task RunTranslateAI()
+    private async Task RunTranslateAI(string targetLang = "vi")
     {
+        var lang = targetLang == "en" ? "en" : "vi";
         IsProcessing = true;
         StateHasChanged();
-        
-        Snackbar.Add("Running Translation...", Severity.Info);
-        var translateResult = await GetActiveCanvas()!.InvokeAsync<string>("callTranslateAPI");
+
+        Snackbar.Add(lang == "en" ? "Running translation (English)..." : "Running translation (Vietnamese)...", Severity.Info);
+        var translateResult = await GetActiveCanvas()!.InvokeAsync<string>("callTranslateAPI", lang);
         
         IsProcessing = false;
         StateHasChanged();
