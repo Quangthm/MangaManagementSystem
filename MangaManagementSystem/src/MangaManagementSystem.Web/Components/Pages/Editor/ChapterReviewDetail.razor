@@ -7,6 +7,7 @@
 @inject IEditorChapterReviewApiClient ChapterReviewApiClient
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthStateProvider
+@inject ISnackbar Snackbar
 
 <EditorLayout>
     <div class="mf-page">
@@ -50,6 +51,37 @@
                 </div>
                 <MudChip T="string" Color="@GetStatusColor(_detail.StatusCode)" Size="Size.Medium">@_detail.StatusCode.Replace("_", " ")</MudChip>
             </MudStack>
+
+            @if (_detail.StatusCode == "UNDER_REVIEW")
+            {
+                <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Review Decision</MudText>
+                    <MudStack Row="true" Spacing="3">
+                        <MudButton Variant="Variant.Filled" Color="Color.Success"
+                                   StartIcon="@Icons.Material.Filled.CheckCircle"
+                                   OnClick="@(() => OpenDecisionDialog("APPROVED"))"
+                                   Disabled="_submitting">
+                            Approve Chapter
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Warning"
+                                   StartIcon="@Icons.Material.Filled.Comment"
+                                   OnClick="@(() => OpenDecisionDialog("REVISION_REQUESTED"))"
+                                   Disabled="_submitting">
+                            Request Revision
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Error"
+                                   StartIcon="@Icons.Material.Filled.Cancel"
+                                   OnClick="@(() => OpenDecisionDialog("CANCELLED"))"
+                                   Disabled="_submitting">
+                            Cancel Chapter
+                        </MudButton>
+                    </MudStack>
+                    @if (_submitting)
+                    {
+                        <MudProgressLinear Indeterminate="true" Class="mt-3" />
+                    }
+                </MudPaper>
+            }
 
             <MudGrid>
                 <!-- Pages -->
@@ -156,6 +188,56 @@
     </div>
 </EditorLayout>
 
+<!-- Decision dialog -->
+<MudDialog @bind-IsVisible="_dialogVisible" T="bool">
+    <DialogContent>
+        @if (_selectedDecision == "APPROVED")
+        {
+            <MudText Typo="Typo.h6" Class="mb-3">Approve Chapter</MudText>
+            <MudText Class="mf-muted mb-3">
+                This chapter will be marked as <strong>APPROVED</strong> and may proceed toward scheduling and release.
+            </MudText>
+            <MudTextField @bind-Value="_dialogComments" Label="Comments (optional)" Lines="3" Variant="Variant.Outlined" />
+        }
+        else if (_selectedDecision == "REVISION_REQUESTED")
+        {
+            <MudText Typo="Typo.h6" Class="mb-3">Request Revision</MudText>
+            <MudText Class="mf-muted mb-3">
+                Use this when the chapter can be <strong>fixed and resubmitted</strong>. The Mangaka will be able to edit and resubmit the chapter with new page versions.
+            </MudText>
+            <MudTextField @bind-Value="_dialogComments" Label="Comments (required)" Lines="3" Variant="Variant.Outlined" Required="true" />
+            @if (_dialogValidationError != null)
+            {
+                <MudText Color="Color.Error" Typo="Typo.caption">@_dialogValidationError</MudText>
+            }
+        }
+        else if (_selectedDecision == "CANCELLED")
+        {
+            <MudText Typo="Typo.h6" Class="mb-3">Cancel Chapter</MudText>
+            <MudAlert Severity="Severity.Error" Class="mb-3">
+                <strong>Warning:</strong> Cancellation is <strong>terminal</strong> for this chapter attempt.
+                The chapter cannot be edited, resubmitted, approved, scheduled, or released.
+                A replacement chapter draft must be created to redo the work.
+            </MudAlert>
+            <MudText Class="mf-muted mb-3">
+                Use this <strong>only</strong> when this chapter attempt should not proceed.
+                If the chapter can still be fixed, use <strong>Request Revision</strong> instead.
+            </MudText>
+            <MudTextField @bind-Value="_dialogComments" Label="Comments (required)" Lines="3" Variant="Variant.Outlined" Required="true" />
+            @if (_dialogValidationError != null)
+            {
+                <MudText Color="Color.Error" Typo="Typo.caption">@_dialogValidationError</MudText>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="CloseDialog">Cancel</MudButton>
+        <MudButton Color="@GetDecisionColor(_selectedDecision)" Variant="Variant.Filled" OnClick="ConfirmDecision" Disabled="_submitting">
+            @GetDecisionButtonLabel(_selectedDecision)
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
 @code {
     [Parameter] public Guid ChapterId { get; set; }
 
@@ -164,6 +246,12 @@
     private bool _accessDenied;
     private string? _error;
     private Guid _currentUserId;
+
+    private bool _dialogVisible;
+    private string? _selectedDecision;
+    private string? _dialogComments;
+    private string? _dialogValidationError;
+    private bool _submitting;
 
     protected override async Task OnInitializedAsync()
     {
@@ -215,12 +303,99 @@
 
     private void GoBack() => Nav.NavigateTo("/editor/chapters");
 
+    private void OpenDecisionDialog(string decisionCode)
+    {
+        _selectedDecision = decisionCode;
+        _dialogComments = null;
+        _dialogValidationError = null;
+        _dialogVisible = true;
+    }
+
+    private void CloseDialog()
+    {
+        _dialogVisible = false;
+        _selectedDecision = null;
+        _dialogComments = null;
+        _dialogValidationError = null;
+    }
+
+    private async Task ConfirmDecision()
+    {
+        if (_submitting) return;
+
+        _dialogValidationError = null;
+
+        var comments = _dialogComments?.Trim();
+
+        if (_selectedDecision == "REVISION_REQUESTED" || _selectedDecision == "CANCELLED")
+        {
+            if (string.IsNullOrWhiteSpace(comments))
+            {
+                _dialogValidationError = "Comments are required for this decision.";
+                return;
+            }
+        }
+
+        _submitting = true;
+        try
+        {
+            var request = new SubmitChapterEditorialReviewRequest(
+                _selectedDecision!,
+                !string.IsNullOrWhiteSpace(comments) ? comments : null,
+                null);
+
+            await ChapterReviewApiClient.SubmitReviewDecisionAsync(
+                _currentUserId, ChapterId, request);
+
+            CloseDialog();
+
+            var decisionLabel = _selectedDecision switch
+            {
+                "APPROVED" => "approved",
+                "REVISION_REQUESTED" => "returned for revision",
+                "CANCELLED" => "cancelled",
+                _ => "updated"
+            };
+
+            Snackbar.Add($"Chapter has been {decisionLabel}.", Severity.Success);
+
+            await LoadDetail();
+        }
+        catch (Exception ex)
+        {
+            CloseDialog();
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
     private Color GetStatusColor(string status) => status switch
     {
         "UNDER_REVIEW" => Color.Warning,
         "REVISION_REQUESTED" => Color.Error,
         "ON_HOLD" => Color.Info,
         "APPROVED" => Color.Success,
+        "SCHEDULED" => Color.Tertiary,
+        "CANCELLED" => Color.Dark,
         _ => Color.Default
+    };
+
+    private static Color GetDecisionColor(string? decision) => decision switch
+    {
+        "APPROVED" => Color.Success,
+        "REVISION_REQUESTED" => Color.Warning,
+        "CANCELLED" => Color.Error,
+        _ => Color.Default
+    };
+
+    private static string GetDecisionButtonLabel(string? decision) => decision switch
+    {
+        "APPROVED" => "Approve Chapter",
+        "REVISION_REQUESTED" => "Request Revision",
+        "CANCELLED" => "Cancel Chapter",
+        _ => "Confirm"
     };
 }

@@ -7,9 +7,8 @@ using System.Threading.Tasks;
 namespace MangaManagementSystem.Domain.Interfaces
 {
     /// <summary>
-    /// Read-only repository for the Tantou Editor Chapter Review Queue. All queries use EF
-    /// <c>AsNoTracking</c>. No writes or stored-procedure transitions live here. Returns
-    /// Domain records and primitive counts — DTO shaping happens in the Application handler.
+    /// Repository for the Tantou Editor Chapter Review Queue. Read queries use EF
+    /// <c>AsNoTracking</c>. Write operations use EF transactions.
     /// </summary>
     public interface IEditorChapterReviewRepository
     {
@@ -37,6 +36,19 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<EditorChapterReviewDetail?> GetReviewDetailForEditorAsync(
             Guid chapterId,
             Guid actorUserId,
+            CancellationToken ct = default);
+
+        /// <summary>
+        /// Creates a <c>ChapterEditorialReview</c> and updates the chapter status in one EF
+        /// transaction. Validates actor permission, chapter state, and required comments before
+        /// persisting.
+        /// </summary>
+        Task<ChapterEditorialReviewResult> SubmitChapterEditorialReviewAsync(
+            Guid actorUserId,
+            Guid chapterId,
+            string decisionCode,
+            string? comments,
+            Guid? markupFileId,
             CancellationToken ct = default);
     }
 
@@ -97,4 +109,15 @@ namespace MangaManagementSystem.Domain.Interfaces
         DateTime CreatedAtUtc,
         string? CreatedByDisplayName,
         bool IsResolved);
+
+    /// <summary>
+    /// Result of a chapter editorial review decision write operation.
+    /// </summary>
+    public sealed record ChapterEditorialReviewResult(
+        Guid ChapterId,
+        string StatusCode,
+        Guid ReviewId,
+        string DecisionCode,
+        string? Comments,
+        DateTime ReviewedAtUtc);
 }

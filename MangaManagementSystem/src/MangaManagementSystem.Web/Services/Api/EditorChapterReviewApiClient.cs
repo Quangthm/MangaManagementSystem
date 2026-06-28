@@ -104,6 +104,43 @@ namespace MangaManagementSystem.Web.Services.Api
             return EditorChapterReviewDetailResult.Failure(message);
         }
 
+        public async Task<SubmitChapterEditorialReviewResponse> SubmitReviewDecisionAsync(
+            Guid actorUserId,
+            Guid chapterId,
+            SubmitChapterEditorialReviewRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            using var requestMessage = new HttpRequestMessage(
+                HttpMethod.Post, $"api/editor/chapters/{chapterId}/review-decision")
+            {
+                Content = JsonContent.Create(request)
+            };
+            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content
+                    .ReadFromJsonAsync<SubmitChapterEditorialReviewResponse>(
+                        cancellationToken: cancellationToken);
+
+                if (result is null)
+                {
+                    throw new InvalidOperationException(
+                        "The review decision returned no data. Please refresh and try again.");
+                }
+
+                return result;
+            }
+
+            var message = await ExtractErrorMessageAsync(response);
+            _logger.LogWarning(
+                "Submit review decision for chapter {ChapterId} failed: {StatusCode} {ReasonPhrase}",
+                chapterId, (int)response.StatusCode, response.ReasonPhrase);
+            throw new InvalidOperationException(message);
+        }
+
         private static async Task<string> ExtractErrorMessageAsync(HttpResponseMessage response)
         {
             try

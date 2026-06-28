@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Domain.Entities;
@@ -188,6 +189,120 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 chapter.CreatedByUser?.DisplayName,
                 pageDetails,
                 openAnnotations);
+        }
+
+        public async Task<ChapterEditorialReviewResult> SubmitChapterEditorialReviewAsync(
+            Guid actorUserId,
+            Guid chapterId,
+            string decisionCode,
+            string? comments,
+            Guid? markupFileId,
+            CancellationToken ct = default)
+        {
+            if (actorUserId == Guid.Empty)
+                throw new InvalidOperationException("A valid signed-in user is required.");
+
+            if (chapterId == Guid.Empty)
+                throw new InvalidOperationException("A valid chapter is required.");
+
+            var allowedDecisions = new[] { "APPROVED", "REVISION_REQUESTED", "CANCELLED" };
+            if (!allowedDecisions.Contains(decisionCode))
+                throw new InvalidOperationException(
+                    "Decision code must be one of: APPROVED, REVISION_REQUESTED, CANCELLED.");
+
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(ct);
+
+            try
+            {
+                var chapter = await _dbContext.Chapters
+                    .Include(c => c.Series)
+                    .FirstOrDefaultAsync(c => c.ChapterId == chapterId, ct);
+
+                if (chapter == null)
+                    throw new InvalidOperationException("Chapter does not exist.");
+
+                bool isAuthorized = await _dbContext.ActiveSeriesContributors
+                    .AnyAsync(sc =>
+                        sc.SeriesId == chapter.SeriesId &&
+                        sc.UserId == actorUserId &&
+                        sc.RoleName == TantouEditorRole,
+                        ct);
+
+                if (!isAuthorized)
+                    throw new InvalidOperationException(
+                        "You are not authorized to review this chapter.");
+
+                string previousStatusCode = chapter.StatusCode;
+
+                if (previousStatusCode != StatusUnderReview)
+                    throw new InvalidOperationException(
+                        "This chapter is no longer under review and cannot receive a review decision.");
+
+                var review = new ChapterEditorialReview
+                {
+                    ChapterId = chapterId,
+                    ReviewerUserId = actorUserId,
+                    DecisionCode = decisionCode,
+                    Feedback = comments,
+                    MarkupFileId = markupFileId,
+                    ReviewedAtUtc = DateTime.UtcNow
+                };
+
+                _dbContext.ChapterEditorialReviews.Add(review);
+
+                string newStatusCode = decisionCode switch
+                {
+                    "APPROVED" => "APPROVED",
+                    "REVISION_REQUESTED" => "REVISION_REQUESTED",
+                    "CANCELLED" => "CANCELLED",
+                    _ => throw new InvalidOperationException($"Unknown decision code: {decisionCode}")
+                };
+
+                chapter.StatusCode = newStatusCode;
+                chapter.UpdatedAtUtc = DateTime.UtcNow;
+
+                var actorRoleName = await _dbContext.ActiveSeriesContributors
+                    .Where(sc => sc.SeriesId == chapter.SeriesId && sc.UserId == actorUserId)
+                    .Select(sc => sc.RoleName)
+                    .FirstOrDefaultAsync(ct);
+
+                var detailJson = JsonSerializer.Serialize(new
+                {
+                    decision = review.DecisionCode,
+                    reviewer = actorUserId,
+                    previousStatus = previousStatusCode,
+                    newStatus = newStatusCode
+                });
+
+                var auditEvent = new AuditEvent
+                {
+                    OccurredAtUtc = DateTime.UtcNow,
+                    ActorUserId = actorUserId,
+                    ActorRoleName = actorRoleName,
+                    ActionCode = "CHAPTER_EDITORIAL_REVIEW_CREATED",
+                    EntityType = "Chapter",
+                    EntityId = chapterId.ToString(),
+                    DetailJson = detailJson
+                };
+
+                _dbContext.AuditEvents.Add(auditEvent);
+
+                await _dbContext.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
+
+                return new ChapterEditorialReviewResult(
+                    chapter.ChapterId,
+                    chapter.StatusCode,
+                    review.ChapterEditorialReviewId,
+                    review.DecisionCode,
+                    review.Feedback,
+                    review.ReviewedAtUtc);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(ct);
+                throw;
+            }
         }
 
 

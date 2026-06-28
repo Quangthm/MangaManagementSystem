@@ -30,6 +30,16 @@ namespace MangaManagementSystem.Web.Services.Api
             Guid actorUserId,
             Guid chapterId,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Submits a final review decision (APPROVED / REVISION_REQUESTED / CANCELLED) for a
+        /// chapter currently UNDER_REVIEW.
+        /// </summary>
+        Task<SubmitChapterEditorialReviewResponse> SubmitReviewDecisionAsync(
+            Guid actorUserId,
+            Guid chapterId,
+            SubmitChapterEditorialReviewRequest request,
+            CancellationToken cancellationToken = default);
     }
 
     /// <summary>

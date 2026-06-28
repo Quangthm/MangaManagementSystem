@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.API.Contracts;
 using MangaManagementSystem.Application.DTOs.Editor;
+using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.SubmitChapterEditorialReview;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queries.GetEditorChapterReviewDetail;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queries.GetEditorChapterReviewQueue;
 using MediatR;
@@ -99,6 +100,53 @@ namespace MangaManagementSystem.API.Controllers.Editor
                 _logger.LogError(ex, "Unexpected error loading chapter review detail {ChapterId}.", chapterId);
                 return Problem(
                     detail: "We could not load the chapter review right now. Please try again later.",
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
+        }
+
+        /// <summary>
+        /// Records a final chapter editorial review decision (APPROVED / REVISION_REQUESTED /
+        /// CANCELLED) and updates the chapter status in one transaction.
+        /// Route: POST /api/editor/chapters/{chapterId}/review-decision
+        /// </summary>
+        [HttpPost("{chapterId:guid}/review-decision")]
+        public async Task<IActionResult> SubmitReviewDecisionAsync(
+            Guid chapterId,
+            [FromBody] SubmitChapterEditorialReviewRequest request,
+            CancellationToken cancellationToken)
+        {
+            if (!TryResolveActorUserId(out Guid actorUserId))
+            {
+                return BadRequest(new ApiErrorResponse(
+                    "Could not identify the requesting user. Please sign in again."));
+            }
+
+            if (string.IsNullOrWhiteSpace(request.DecisionCode))
+            {
+                return BadRequest(new ApiErrorResponse("A decision code is required."));
+            }
+
+            try
+            {
+                var command = new SubmitChapterEditorialReviewCommand(
+                    actorUserId,
+                    chapterId,
+                    request.DecisionCode,
+                    request.Comments,
+                    request.MarkupFileId);
+
+                var result = await _mediator.Send(command, cancellationToken);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new ApiErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error submitting review decision for chapter {ChapterId}.", chapterId);
+                return Problem(
+                    detail: "We could not process the review decision right now. Please try again later.",
                     statusCode: StatusCodes.Status500InternalServerError);
             }
         }

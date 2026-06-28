@@ -82,4 +82,23 @@ namespace MangaManagementSystem.Application.DTOs.Editor
         DateTime CreatedAtUtc,
         string? CreatedByDisplayName,
         bool IsResolved);
+
+    /// <summary>
+    /// Request body for submitting a chapter editorial review decision.
+    /// </summary>
+    public sealed record SubmitChapterEditorialReviewRequest(
+        string DecisionCode,
+        string? Comments,
+        Guid? MarkupFileId = null);
+
+    /// <summary>
+    /// Response after a successful chapter editorial review decision.
+    /// </summary>
+    public sealed record SubmitChapterEditorialReviewResponse(
+        Guid ChapterId,
+        string StatusCode,
+        Guid ReviewId,
+        string DecisionCode,
+        string? Comments,
+        DateTime ReviewedAtUtc);
 }
