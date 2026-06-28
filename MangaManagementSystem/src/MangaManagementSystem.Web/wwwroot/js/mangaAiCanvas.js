@@ -1003,7 +1003,7 @@ async function callSegmentAPI() {
     return false;
 }
 
-async function callTranslateAPI() {
+async function callTranslateAPI(targetLang) {
     let targets = regions.filter(r => r.selected);
     if (targets.length === 0) targets = regions; // Fallback to all if none selected
     if (targets.length === 0) return "no_regions";
@@ -1026,6 +1026,7 @@ async function callTranslateAPI() {
 
         const payload = {
             image_base64: imageBase64,
+            target_lang: (targetLang === 'en' ? 'en' : 'vi'),
             regions: targets.map(r => ({
                 id: r.id, x: r.x, y: r.y, width: r.width, height: r.height
             }))
