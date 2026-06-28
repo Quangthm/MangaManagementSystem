@@ -40,8 +40,8 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<IEnumerable<ChapterDto>> GetChaptersBySeriesIdAsync(Guid seriesId)
         {
-            var all = await _unitOfWork.Chapters.GetAllAsync();
-            return all.Where(c => c.SeriesId == seriesId).Select(MapToDto);
+            var chapters = await _unitOfWork.Chapters.FindAsync(c => c.SeriesId == seriesId);
+            return chapters.Select(MapToDto);
         }
 
         public async Task DeleteChapterAsync(Guid id)

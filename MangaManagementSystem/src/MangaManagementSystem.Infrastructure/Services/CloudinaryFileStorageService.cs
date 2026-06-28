@@ -231,7 +231,8 @@ namespace MangaManagementSystem.Infrastructure.Services
 
             if (uploadResult == null || uploadResult.StatusCode != System.Net.HttpStatusCode.OK)
             {
-                throw new InvalidOperationException("Cloudinary upload failed.");
+                var errMsg = uploadResult?.Error?.Message ?? uploadResult?.StatusCode.ToString() ?? "Unknown";
+                throw new InvalidOperationException($"Cloudinary upload failed: {errMsg}");
             }
 
             return uploadResult;
