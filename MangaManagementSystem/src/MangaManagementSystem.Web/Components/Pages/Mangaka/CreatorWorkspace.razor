@@ -542,8 +542,14 @@ else
                 <MudTabPanel Text="Annotations">
                     <div class="px-4 mb-6" style="flex-shrink: 0;">
                         <MudPaper Elevation="0" Class="pa-4 border-1 mud-border-lines-default rounded-lg">
-                            <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-3">NEW ANNOTATION</MudText>
-                            
+                            <div class="d-flex align-center justify-space-between @(_newAnnotationFormCollapsed ? "" : "mb-3")">
+                                <MudText Typo="Typo.subtitle2" Class="font-weight-bold">NEW ANNOTATION</MudText>
+                                <MudTooltip Text="@(_newAnnotationFormCollapsed ? "Expand form" : "Collapse form to see more issues")">
+                                    <MudIconButton Icon="@(_newAnnotationFormCollapsed ? Icons.Material.Filled.ExpandMore : Icons.Material.Filled.ExpandLess)" Size="Size.Small" OnClick="@(() => _newAnnotationFormCollapsed = !_newAnnotationFormCollapsed)" />
+                                </MudTooltip>
+                            </div>
+                            @if (!_newAnnotationFormCollapsed)
+                            {
                             <MudSelect T="string" Label="Issue Type" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" @bind-Value="AnnotationType">
                                 <MudSelectItem Value="@("BACKGROUND_INCONSISTENCY")">Background Issue</MudSelectItem>
                                 <MudSelectItem Value="@("SHADING_ERROR")">Shading Error</MudSelectItem>
@@ -585,10 +591,11 @@ else
                             </div>
 
                             <MudButton Variant="Variant.Filled" Color="Color.Warning" FullWidth="true" StartIcon="@Icons.Material.Filled.AddComment" OnClick="CreateAnnotation" Disabled="@IsChapterLocked">Add Annotation</MudButton>
+                            }
                         </MudPaper>
                     </div>
 
-                    <div class="px-4" style="flex-grow: 1; overflow-y: auto;">
+                    <div class="px-4 mf-active-tasks">
                         <div class="d-flex justify-space-between align-center mb-3">
                             <div class="d-flex align-center gap-2">
                                 <MudText Typo="Typo.subtitle2" Class="font-weight-bold">PAGE ISSUES</MudText>
@@ -732,6 +739,9 @@ else
 
     // Collapse the NEW TASK form to give the ACTIVE TASKS list more room (laptop screens)
     private bool _newTaskFormCollapsed = false;
+
+    // Collapse the NEW ANNOTATION form to give the PAGE ISSUES list more room
+    private bool _newAnnotationFormCollapsed = false;
 
     private SemaphoreSlim _dbSemaphore = new SemaphoreSlim(1, 1);
 
