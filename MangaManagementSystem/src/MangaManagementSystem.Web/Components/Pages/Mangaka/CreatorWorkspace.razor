@@ -456,8 +456,10 @@ else
                               _ => Color.Default
                           };
                           var initials = string.Join("", task.Assistant.Split(' ').Select(n => n[0]));
+                          var isTargetTask = _taskFilterId != null && task.DbId.HasValue && task.DbId.ToString() == _taskFilterId;
                           
-                          <MudPaper Elevation="0" Class="pa-3 border-1 mud-border-lines-default rounded-lg">
+                          <MudPaper Elevation="0" Class="pa-3 border-1 mud-border-lines-default rounded-lg"
+                                    Style="@(isTargetTask ? "border-left: 3px solid #4f46e5; background: #eef2ff;" : "")">
                               <div class="d-flex justify-space-between">
                                   <div class="d-flex">
                                       <MudIcon Icon="@icon" Size="Size.Small" Color="@iconColor" Class="mr-2 mt-1" />
@@ -654,6 +656,7 @@ else
     [Parameter] public string Slug { get; set; } = string.Empty;
     [SupplyParameterFromQuery] public string? chapterId { get; set; }
     [SupplyParameterFromQuery] public string? returnUrl { get; set; }
+    [SupplyParameterFromQuery] public string? taskId { get; set; }
 
     private string? SeriesId { get; set; }
     private bool _accessDenied = false;
@@ -675,6 +678,8 @@ else
     private int SelectedChapter = 0;
     private int SelectedPage = 0;
 
+    private Guid? _taskTargetVersionId;
+    private string? _taskFilterId;
     private bool _isRightPanelOpen = true;
 
     /// <summary>
@@ -1296,7 +1301,39 @@ else
                     
                     if (Chapters.Any())
                     {
-                        if (!string.IsNullOrWhiteSpace(chapterId) && Guid.TryParse(chapterId, out var targetChapterId))
+                        Guid? resolveChapterId = null;
+
+                        if (!string.IsNullOrWhiteSpace(taskId) && Guid.TryParse(taskId, out var parsedTaskId))
+                        {
+                            try
+                            {
+                                var task = await TaskService.GetChapterPageTaskByIdAsync(parsedTaskId);
+                                if (task != null)
+                                {
+                                    resolveChapterId = task.ChapterId;
+                                    _taskTargetVersionId = task.SourceChapterPageVersionId;
+                                    _taskFilterId = taskId;
+                                }
+                            }
+                            catch
+                            {
+                                // fall through to default chapter selection
+                            }
+                        }
+
+                        if (resolveChapterId.HasValue)
+                        {
+                            var targetChapter = Chapters.FirstOrDefault(c => c.ChapterId == resolveChapterId.Value);
+                            if (targetChapter != null)
+                            {
+                                await SelectChapter(targetChapter.Id);
+                            }
+                            else
+                            {
+                                await SelectChapter(Chapters.First().Id);
+                            }
+                        }
+                        else if (!string.IsNullOrWhiteSpace(chapterId) && Guid.TryParse(chapterId, out var targetChapterId))
                         {
                             var targetChapter = Chapters.FirstOrDefault(c => c.ChapterId == targetChapterId);
                             if (targetChapter != null)
@@ -1450,7 +1487,20 @@ else
 
         if (UploadedPages.Any())
         {
-            await LoadPage(0);
+            int targetIndex = 0;
+            if (_taskTargetVersionId.HasValue)
+            {
+                for (int i = 0; i < UploadedPages.Count; i++)
+                {
+                    var page = UploadedPages[i];
+                    if (page.Versions.Any(v => v.ChapterPageVersionId == _taskTargetVersionId.Value))
+                    {
+                        targetIndex = i;
+                        break;
+                    }
+                }
+            }
+            await LoadPage(targetIndex);
         }
         else
         {

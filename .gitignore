@@ -427,3 +427,23 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Database backups
+*.bak
+db/sqlserver/backup/*.bak
+
+# SonarQube / SonarScanner local files
+.sonarqube/
+.scannerwork/
+coverage.xml
+coverage*.xml
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# Local Docker/SonarQube bind-mounted data, if any
+sonarqube_data/
+sonarqube_extensions/
+sonarqube_logs/
+sonarqube_db_data/

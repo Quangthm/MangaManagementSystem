@@ -1,0 +1,130 @@
+services:
+  manga-sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: manga-sqlserver
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${SA_PASSWORD}"
+      MSSQL_PID: "Developer"
+    ports:
+      - "14333:1433"
+    volumes:
+      - manga_sqlserver_data:/var/opt/mssql
+      - ./db/sqlserver/backup:/var/opt/mssql/backup
+    networks:
+      - manga-network
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -C -Q "SELECT 1" || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  manga-api:
+    build:
+      context: .
+      dockerfile: src/MangaManagementSystem.API/Dockerfile
+    container_name: manga-api
+    restart: unless-stopped
+    depends_on:
+      manga-sqlserver:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: "${ASPNETCORE_ENVIRONMENT}"
+      ASPNETCORE_URLS: "http://+:8080"
+
+      ConnectionStrings__DefaultConnection: "Server=manga-sqlserver,1433;Database=${DB_NAME};User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True;Encrypt=False;"
+
+      Jwt__Key: "${JWT_KEY}"
+      Jwt__Issuer: "${JWT_ISSUER}"
+      Jwt__Audience: "${JWT_AUDIENCE}"
+
+      Smtp__Username: "${SMTP_USERNAME}"
+      Smtp__Password: "${SMTP_PASSWORD}"
+      Smtp__FromEmail: "${SMTP_FROM_EMAIL}"
+
+      Authentication__Google__ClientId: "${GOOGLE_CLIENT_ID}"
+      Authentication__Google__ClientSecret: "${GOOGLE_CLIENT_SECRET}"
+
+      Recaptcha__SiteKey: "${RECAPTCHA_SITE_KEY}"
+      Recaptcha__SecretKey: "${RECAPTCHA_SECRET_KEY}"
+
+      Cloudinary__CloudName: "${CLOUDINARY_CLOUD_NAME}"
+      Cloudinary__ApiKey: "${CLOUDINARY_API_KEY}"
+      Cloudinary__ApiSecret: "${CLOUDINARY_API_SECRET}"
+    ports:
+      - "7256:8080"
+    networks:
+      - manga-network
+
+  manga-web:
+    build:
+      context: .
+      dockerfile: src/MangaManagementSystem.Web/Dockerfile
+    container_name: manga-web
+    restart: unless-stopped
+    depends_on:
+      - manga-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: "${ASPNETCORE_ENVIRONMENT}"
+      ASPNETCORE_URLS: "http://+:8080"
+
+      # Adjust this key to match your actual appsettings key.
+      # Some projects use ApiSettings__BaseUrl, ApiBaseUrl, BackendApi, etc.
+      ApiSettings__BaseUrl: "http://manga-api:8080"
+
+      Recaptcha__SiteKey: "${RECAPTCHA_SITE_KEY}"
+      Recaptcha__SecretKey: "${RECAPTCHA_SECRET_KEY}"
+    ports:
+      - "5244:8080"
+    networks:
+      - manga-network
+
+  sonarqube-db:
+    image: postgres:16
+    container_name: sonarqube-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: "${SONARQUBE_JDBC_USERNAME}"
+      POSTGRES_PASSWORD: "${SONARQUBE_JDBC_PASSWORD}"
+      POSTGRES_DB: "${SONARQUBE_DB}"
+    volumes:
+      - sonarqube_db_data:/var/lib/postgresql/data
+    networks:
+      - sonar-network
+
+  sonarqube:
+    image: sonarqube:community
+    container_name: sonarqube
+    restart: unless-stopped
+    depends_on:
+      - sonarqube-db
+    environment:
+      SONAR_JDBC_URL: "jdbc:postgresql://sonarqube-db:5432/${SONARQUBE_DB}"
+      SONAR_JDBC_USERNAME: "${SONARQUBE_JDBC_USERNAME}"
+      SONAR_JDBC_PASSWORD: "${SONARQUBE_JDBC_PASSWORD}"
+
+      # Local Docker Desktop convenience.
+      # Remove this later if you make a real shared server.
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
+    ports:
+      - "9000:9000"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
+    networks:
+      - sonar-network
+
+volumes:
+  manga_sqlserver_data:
+  sonarqube_db_data:
+  sonarqube_data:
+  sonarqube_extensions:
+  sonarqube_logs:
+
+networks:
+  manga-network:
+    driver: bridge
+  sonar-network:
+    driver: bridge

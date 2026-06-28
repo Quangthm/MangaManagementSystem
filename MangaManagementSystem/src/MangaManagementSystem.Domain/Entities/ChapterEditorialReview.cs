@@ -14,5 +14,6 @@ public class ChapterEditorialReview : BaseEntity
         public string? Feedback { get; set; }
         public Guid? MarkupFileId { get; set; }
         public FileResource? MarkupFile { get; set; }
+        public DateTime ReviewedAtUtc { get; set; }
     }
 }

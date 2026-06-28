@@ -299,7 +299,7 @@
 | ID | Functional Requirement | Source Business Rules |
 |---|---|---|
 | FR-CH-001 | The system shall require each chapter to belong to exactly one series. | BR-CH-001 |
-| FR-CH-002 | The system shall require chapter number labels to be unique within the same series. | BR-CH-002 |
+| FR-CH-002 | The system shall require chapter number labels to be unique among non-cancelled chapters within the same series. | BR-CH-002 |
 | FR-CH-003 | The system shall create each new chapter with `DRAFT` status by default. | BR-CH-003 |
 | FR-CH-004 | The system shall store the current chapter workflow state in `Chapter.status_code`. | BR-CH-004 |
 | FR-CH-005 | The system shall restrict chapter status to `DRAFT`, `UNDER_REVIEW`, `REVISION_REQUESTED`, `APPROVED`, `SCHEDULED`, `RELEASED`, `ON_HOLD`, or `CANCELLED`. | BR-CH-005 |
@@ -443,7 +443,7 @@
 | FR-CH-SUB-001 | The system shall represent chapter submission by changing `Chapter.status_code` to `UNDER_REVIEW`. | BR-CH-SUB-001 |
 | FR-CH-SUB-002 | The system shall not require a separate `ChapterSubmission` row in MVP. | BR-CH-SUB-001 |
 | FR-CH-SUB-003 | The system shall define a submitted chapter as the current active page versions of all non-deleted chapter pages at submission time. | BR-CH-SUB-002 |
-| FR-CH-SUB-004 | The system shall prevent page creation, page deletion, and page version upload while a chapter is `UNDER_REVIEW`, `APPROVED`, `SCHEDULED`, or `RELEASED`. | BR-CH-SUB-003 |
+| FR-CH-SUB-004 | The system shall prevent page creation, page deletion, and page version upload while a chapter is `UNDER_REVIEW`, `APPROVED`, `SCHEDULED`, `RELEASED`, or `CANCELLED`. | BR-CH-SUB-003 |
 | FR-CH-SUB-005 | The system shall allow chapter pages and page versions to become editable again when the chapter status becomes `REVISION_REQUESTED`. | BR-CH-SUB-004 |
 | FR-CH-SUB-006 | The system shall store chapter content as page-level assets through `ChapterPageVersion`. | BR-CH-SUB-005 |
 | FR-CH-SUB-007 | The system shall not require one chapter-level submission file or generated PDF for MVP. | BR-CH-SUB-006 |
@@ -453,7 +453,7 @@
 | FR-CH-REV-004 | The system shall require each editorial review to be performed by one valid reviewer user. | BR-CH-REV-004 |
 | FR-CH-REV-005 | The system shall restrict chapter editorial review creation to authorized Tantou Editors or approved review roles. | BR-CH-REV-005 |
 | FR-CH-REV-006 | The system shall restrict chapter editorial review decisions to `APPROVED`, `REVISION_REQUESTED`, or `CANCELLED`. | BR-CH-REV-006 |
-| FR-CH-REV-007 | The system shall require meaningful comments or a markup file when the review decision is `REVISION_REQUESTED` or `CANCELLED`. | BR-CH-REV-007 |
+| FR-CH-REV-007 | The system shall require non-blank meaningful comments when the review decision is `REVISION_REQUESTED` or `CANCELLED`. | BR-CH-REV-007 |
 | FR-CH-REV-008 | The system shall allow an optional markup file to support chapter editorial feedback. | BR-CH-REV-008 |
 | FR-CH-REV-009 | The system shall require any provided markup file to reference an existing `FileResource`. | BR-CH-REV-008 |
 | FR-CH-REV-010 | The system shall store page-specific annotations separately from the chapter-level editorial review decision. | BR-CH-REV-009 |
@@ -474,6 +474,11 @@
 | FR-CH-CANCEL-003 | The system shall preserve pages, page versions, page regions, annotations, files, and review history when a chapter is cancelled. | BR-CH-CANCEL-003 |
 | FR-CH-CANCEL-004 | The system shall allow editors to use `REVISION_REQUESTED` instead of `CANCELLED` when the chapter can still be fixed and resubmitted. | BR-CH-CANCEL-004 |
 | FR-CH-CANCEL-005 | The system shall prevent chapter cancellation without a chapter editorial review decision in MVP. | BR-CH-CANCEL-005 |
+| FR-CH-CANCEL-006 | The system shall treat a cancelled chapter as terminal for the current chapter attempt and prevent editing, new page-version upload, resubmission, approval, scheduling, and release for that cancelled chapter. | BR-CH-CANCEL-006 |
+| FR-CH-CANCEL-007 | The system shall allow a Mangaka to create a new replacement chapter draft with the same chapter number label after the previous chapter with that label has been cancelled. | BR-CH-CANCEL-007 |
+| FR-CH-CANCEL-008 | The system shall enforce chapter-number uniqueness only among non-cancelled chapters in the same series. | BR-CH-CANCEL-008 |
+| FR-CH-CANCEL-009 | The system shall not require a `replacement_of_chapter_id` relationship for replacement chapter drafts in MVP. | BR-CH-CANCEL-009 |
+| FR-CH-CANCEL-010 | The system shall keep cancelled chapter materials read-only and require redo work to be created under the new replacement chapter. | BR-CH-CANCEL-010 |
 
 ---
 

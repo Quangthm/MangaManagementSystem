@@ -294,7 +294,7 @@
 | Rule ID | Business Rule | Review Status |
 |---|---|---|
 | BR-CH-001 | Each chapter belongs to exactly one series. | Active draft |
-| BR-CH-002 | Chapter number labels must be unique within the same series. | Active draft |
+| BR-CH-002 | Chapter number labels must be unique among non-cancelled chapters within the same series. Cancelled chapters are preserved for history but do not reserve the chapter number label for future replacement drafts. | Active draft |
 | BR-CH-003 | A chapter starts with `DRAFT` status when it is created. | Active draft |
 | BR-CH-004 | `Chapter.status_code` stores only the current workflow status of the chapter. | Active draft |
 | BR-CH-005 | A chapter may move through statuses such as `DRAFT`, `UNDER_REVIEW`, `REVISION_REQUESTED`, `APPROVED`, `SCHEDULED`, `RELEASED`, `ON_HOLD`, and `CANCELLED`. | Active draft |
@@ -432,7 +432,7 @@
 |---|---|---|
 | BR-CH-SUB-001 | In the MVP, a chapter submission is represented by changing `Chapter.status_code` to `UNDER_REVIEW`, not by creating a separate `ChapterSubmission` row. | Active draft |
 | BR-CH-SUB-002 | A submitted chapter consists of the current active page versions of all non-deleted chapter pages at the time it is submitted for review. | Active draft |
-| BR-CH-SUB-003 | The system must prevent page creation, page deletion, and page version upload while the chapter is `UNDER_REVIEW`, `APPROVED`, `SCHEDULED`, or `RELEASED`. | Active draft |
+| BR-CH-SUB-003 | The system must prevent page creation, page deletion, and page version upload while the chapter is `UNDER_REVIEW`, `APPROVED`, `SCHEDULED`, `RELEASED`, or `CANCELLED`. | Active draft |
 | BR-CH-SUB-004 | When revision is requested, the chapter becomes editable again and new page versions may be uploaded. | Active draft |
 | BR-CH-SUB-005 | Chapter content is stored as page-level assets through `ChapterPageVersion`, not as one required chapter-level submission file. | Active draft |
 | BR-CH-SUB-006 | A chapter-level submission file or generated PDF is a future enhancement, not required for MVP. | Active draft |
@@ -442,8 +442,8 @@
 | BR-CH-REV-004 | Each editorial review must be performed by one valid reviewer user. | Active draft |
 | BR-CH-REV-005 | Only authorized Tantou Editors or approved review roles may create chapter editorial reviews. | Active draft |
 | BR-CH-REV-006 | An editorial review decision must be one of `APPROVED`, `REVISION_REQUESTED`, or `CANCELLED`. | Active draft |
-| BR-CH-REV-007 | If the review decision is `REVISION_REQUESTED` or `CANCELLED`, the review must include meaningful comments or a markup file. | Active draft |
-| BR-CH-REV-008 | A markup file is optional supporting feedback and must reference an existing `FileResource` when provided. | Active draft |
+| BR-CH-REV-007 | If the review decision is `REVISION_REQUESTED` or `CANCELLED`, the review must include non-blank meaningful comments. | Active draft |
+| BR-CH-REV-008 | A markup file is optional supporting feedback for chapter editorial review and must reference an existing `FileResource` when provided. | Active draft |
 | BR-CH-REV-009 | Page-specific annotations are stored separately on page regions/page versions, while `ChapterEditorialReview` stores the final chapter-level review decision. | Active draft |
 | BR-CH-REV-010 | Creating an editorial review should trigger a chapter status update according to the decision. | Active draft |
 | BR-CH-REV-011 | If the decision is `APPROVED`, the chapter status should become `APPROVED`. | Active draft |
@@ -462,6 +462,11 @@
 | BR-CH-CANCEL-003 | Cancelling a chapter must not automatically delete its pages, page versions, page regions, annotations, files, or review history. | Active draft |
 | BR-CH-CANCEL-004 | If the chapter can still be fixed and resubmitted, the editor should use `REVISION_REQUESTED`, not `CANCELLED`. | Active draft |
 | BR-CH-CANCEL-005 | Chapter cancellation without editorial review is not allowed in MVP; chapter cancellation must be recorded through a chapter editorial review decision. | Active draft |
+| BR-CH-CANCEL-006 | A cancelled chapter is terminal for the current chapter attempt: it must not be edited, receive new page versions, be resubmitted for review, be approved, be scheduled, or be released. | Active draft |
+| BR-CH-CANCEL-007 | A Mangaka may create a new replacement chapter draft using the same chapter number label after the previous chapter with that label has been cancelled. | Active draft |
+| BR-CH-CANCEL-008 | The database should enforce chapter-label uniqueness with a filtered unique index for non-cancelled chapters, for example `(series_id, chapter_number_label) WHERE status_code <> N'CANCELLED'`, instead of a permanent unique constraint that includes cancelled chapters. | Active draft |
+| BR-CH-CANCEL-009 | Replacement chapter drafts are new `Chapter` records; the MVP does not require a `replacement_of_chapter_id` relationship. | Active draft |
+| BR-CH-CANCEL-010 | Cancelled chapter materials remain read-only historical reference. New pages and page versions for the redo work must belong to the new replacement chapter, so existing page-number uniqueness remains scoped within each chapter. | Active draft |
 
 ---
 

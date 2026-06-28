@@ -16,7 +16,9 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
             builder.Property(c => c.ChapterId).ValueGeneratedOnAdd();
             builder.Property(c => c.ChapterNumberLabel).IsRequired().HasMaxLength(20);
             builder.Property(c => c.StatusCode).HasMaxLength(50).HasDefaultValue("DRAFT");
+            builder.Property(c => c.PlannedReleaseDate).HasColumnType("date");
             builder.Property(c => c.CreatedAtUtc).IsRequired();
+            builder.Property(c => c.UpdatedAtUtc);
             builder.HasIndex(c => c.SeriesId).HasDatabaseName("ix_chapter_series_id");
             builder.HasIndex(c => c.StatusCode).HasDatabaseName("ix_chapter_status_code");
             builder.HasIndex(c => new { c.SeriesId, c.ChapterNumberLabel }).IsUnique();

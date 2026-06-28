@@ -43,7 +43,7 @@ namespace MangaManagementSystem.Application.Services
         {
             // Use the Include-based read so the DTO returns populated PageRegions.
             var entity = await _unitOfWork.ChapterPageTasks.GetByIdWithRegionsAsync(id);
-            return entity == null ? null : MapToDto(entity);
+            return entity == null ? null : MapToDtoWithFullContext(entity);
         }
 
         public async Task<IEnumerable<ChapterPageTaskDto>> GetChapterPageTasksByAssignedUserIdAsync(Guid assignedToUserId)
