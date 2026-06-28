@@ -3,6 +3,37 @@
 > Tóm tắt nhanh để tiếp tục. Chi tiết đầy đủ từng vòng: `docs/revision/Mangaka/2026-06-27-workspace-perf-and-draft-fix.md` (Round 1→10).
 > File chính làm việc: `src/MangaManagementSystem.Web/Components/Pages/Mangaka/CreatorWorkspace.razor` (~2.700 dòng, Blazor Server, dùng pattern cũ Web→Application service trực tiếp).
 
+---
+
+## 🔀 CẬP NHẬT — Integration với main mới (session 2026-06-28, vòng 2)
+
+**Trạng thái:** đã merge workspace fixes vào `origin/main` mới (37 commit) ở **local branch `feature/workspace-integration`** (CHƯA push — leader sẽ PR).
+
+- Commit `abaa03a` = snapshot toàn bộ workspace fixes (bảo toàn trước merge).
+- Commit `588a79d` = merge `origin/main` (c04e6f0) vào branch.
+- **Conflict thật: 1** — `setup-secrets.ps1` (team xóa, chuyển docker/.env) → đã chấp nhận xóa theo team + quy tắc bảo mật. 3 file khác (`CreatorWorkspace.razor`, `QuickSelectService.cs`, Infra `DependencyInjection.cs`) auto-merge sạch.
+- **Build verify:** Web **0 errors / 51 warnings**, API **0 errors / 23 warnings** (baseline). DI không trùng đăng ký; interceptor + layout + typed client OK.
+
+**Hướng mới từ team (AGENTS.md):** EF Core + Unit of Work là default cho workflow mới/đang sửa; **KHÔNG** ép refactor SP cũ (defer). → Fix workspace (ExecuteDelete, UnitOfWork transaction, raw SQL thay SP thiếu) đã đúng hướng này.
+
+**DB cần re-apply (data-preserving):** 2 constraint đổi trong `MangaManagementSystem_Schema.sql`:
+- `uq_chapter_series_chapter_number` (UNIQUE mọi status) → **drop**, thay bằng filtered index `ux_chapter_series_chapter_number_active` WHERE `status_code <> 'CANCELLED'` → **cho tái dùng số của chapter CANCELLED** (fix root cause bug số chapter ở tầng DB; workaround đánh số C# của workspace giờ hơi thừa).
+- `ck_chapter_editorial_review_feedback_required` siết lại (REVISION_REQUESTED cần comments; CANCELLED cần comments + markup).
+- Script áp sẵn: `scratchpad/apply-merged-constraints.sql`. Không có EF migration mới, không đổi Procedures/Views/SeedData.
+
+**Điểm tích hợp cần làm tiếp (đã chốt hướng SÂU với user):** route chapter create/delete/submit của workspace qua hệ **chapter CQRS mới của team** (`Features/Mangaka/Chapters/...`, `MangakaChaptersController`, `MangakaChapterApiClient`, `Chapters.razor`) + kéo thêm các luồng assistant/editor chạm workspace. → **Chờ user smoke test bản merge trước**, rồi mới làm.
+
+**DB local đã reset (cách B):** drop + chạy lại nguyên văn script nhóm (Schema→Procedures→SeedData→User_Test→mock) bằng sqlcmd `-E -I`. Khớp schema GitHub, constraint mới đã vào. Xem [[db-reset-via-sqlcmd]].
+
+### Feature work sau merge (đã build OK, CHƯA smoke test runtime)
+- **Versions panel** (Left+Right pane): thêm đóng/mở (mặc định đóng) để tiết kiệm canvas — `_versionsCollapsedLeft/Right`.
+- **Split view đổi chapter:** `SelectChapter` giờ gọi `OnSplitPageChanged(1)` để render lại canvas Right (trước chỉ Left đổi).
+- **Draft warning:** dịch message sang tiếng Anh ("Unsaved draft detected...", action "Restore").
+- **Assign to Assistant:** lọc dropdown chỉ còn `RoleName == "Assistant"` (trước hiện cả Editor/Mangaka contributor).
+- **Translate Selected:** thành menu chọn **VI/EN** (`target_lang` xuyên suốt UI→JS→`TranslateRequestDto`→AiService→Python).
+- **Chất lượng dịch (AI service `main.py`):** OCR vùng đầy đủ (không co 3px), helper `translate_text` (ép `source='ja'`, fallback auto, giữ gốc nếu fail), helper `translate_texts` **gom cả trang dịch 1 request** (có ngữ cảnh, fallback per-bubble nếu lệch dòng). Áp cho cả `translate-selected` và `clean-and-translate`. **Cần restart uvicorn.**
+- **Task Panel layout (laptop):** CSS `.workspace-tabs` cho MudTabs lấp đầy chiều cao → vùng ACTIVE TASKS thành khu cuộn thật (`.mf-active-tasks`, min 140px); form NEW TASK thu gọn được (`_newTaskFormCollapsed`).
+
 ## ⚠️ ĐIỀU QUAN TRỌNG NHẤT
 Mọi sửa đổi là **CODE đã build OK (0 errors)** nhưng app đang chạy của user vẫn là **bản build cũ**
 (mỗi lần verify chỉ `dotnet build` ra thư mục scratch để tránh khóa DLL). → **Phải REBUILD + RESTART
