@@ -1,107 +1,37 @@
 ﻿@namespace MangaManagementSystem.Web.Components.Layouts
-@inject NavigationManager Nav
 
-<div class="mf-shell">
-    <aside class="mf-sidebar mf-editor-sidebar">
-
-        <div class="mf-sidebar-profile-area">
-            <UserAvatarMenu />
+<RoleSidebarLayout SidebarCssClass="mf-editor-sidebar"
+                   NavTitle="Editorial Workflow"
+                   OverviewHref="/dashboard"
+                   NavItems="_navItems">
+    <ExtraNavContent>
+        <div class="mf-nav-title mt-4">
+            Ranking &amp; Context
         </div>
 
-        <nav class="mf-nav-section">
-            <div class="mf-nav-title">Editorial Workflow</div>
-
-            <NavLink href="/editor"
-                     class="mf-nav-link"
-                     Match="NavLinkMatch.All">
-                <MudIcon Icon="mdi-view-dashboard"
-                         Size="Size.Small"
-                         Class="mf-nav-icon" />
-                Dashboard
-            </NavLink>
-
-            <NavLink href="/editor/series"
-                     class="mf-nav-link"
-                     Match="NavLinkMatch.Prefix">
-                <MudIcon Icon="mdi-book-open-page-variant"
-                         Size="Size.Small"
-                         Class="mf-nav-icon" />
-                Series Library
-            </NavLink>
-
-            <NavLink href="/editor/proposals"
-                     class="mf-nav-link"
-                     Match="NavLinkMatch.Prefix">
-                <MudIcon Icon="mdi-file-document-edit"
-                         Size="Size.Small"
-                         Class="mf-nav-icon" />
-                Proposals
-            </NavLink>
-
-            <NavLink href="/editor/chapters"
-                     class="mf-nav-link"
-                     Match="NavLinkMatch.Prefix">
-                <MudIcon Icon="mdi-bookshelf"
-                         Size="Size.Small"
-                         Class="mf-nav-icon" />
-                Chapters
-            </NavLink>
-
-            <NavLink href="/editor/annotations"
-                     class="mf-nav-link"
-                     Match="NavLinkMatch.Prefix">
-                <MudIcon Icon="mdi-pen"
-                         Size="Size.Small"
-                         Class="mf-nav-icon" />
-                Annotations
-            </NavLink>
-
-            <div class="mf-nav-title mt-4">
-                Ranking &amp; Context
-            </div>
-
-            <NavLink href="/ranking"
-                     class="mf-nav-link"
-                     Match="NavLinkMatch.Prefix">
-                <MudIcon Icon="mdi-chart-line"
-                         Size="Size.Small"
-                         Class="mf-nav-icon" />
-                Series Ranking
-            </NavLink>
-        </nav>
-
-        <MudSpacer />
-
-        <div class="pa-4">
-            <MudButton FullWidth="true"
-                       Variant="Variant.Outlined"
-                       Color="Color.Default"
-                       OnClick="BackToOverview">
-                Back to Overview
-            </MudButton>
-
-        </div>
-    </aside>
-
-    <main class="mf-main">
+        <NavLink href="/ranking"
+                 class="mf-nav-link"
+                 Match="NavLinkMatch.Prefix">
+            <MudIcon Icon="mdi-chart-line"
+                     Size="Size.Small"
+                     Class="mf-nav-icon" />
+            Series Ranking
+        </NavLink>
+    </ExtraNavContent>
+    <ChildContent>
         @ChildContent
-    </main>
-</div>
+    </ChildContent>
+</RoleSidebarLayout>
 
 @code {
-    [Parameter]
-    public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
 
-    private void BackToOverview()
-    {
-        Nav.NavigateTo("/dashboard");
-    }
+    private static readonly IReadOnlyList<RoleSidebarLayout.RoleSidebarNavItem> _navItems =
+    [
+        new("/editor", "Dashboard", "mdi-view-dashboard", true),
+        new("/editor/series", "Series Library", "mdi-book-open-page-variant"),
+        new("/editor/proposals", "Proposals", "mdi-file-document-edit"),
+        new("/editor/chapters", "Chapters", "mdi-bookshelf"),
+        new("/editor/annotations", "Annotations", "mdi-pen"),
+    ];
 }
-
-<style>
-    .mf-sidebar-profile-area {
-        padding: 18px 11px 14px;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-    }
-</style>
-

@@ -1,67 +1,19 @@
 ﻿@namespace MangaManagementSystem.Web.Components.Layouts
-@inject NavigationManager Nav
 
-<div class="mf-shell">
-    <aside class="mf-sidebar mf-assistant-sidebar">
-
-        <div class="mf-sidebar-profile-area">
-            <UserAvatarMenu />
-        </div>
-
-        <nav class="mf-nav-section">
-            <div class="mf-nav-title">Main Menu</div>
-
-            <NavLink href="/assistant"
-                     class="mf-nav-link"
-                     Match="NavLinkMatch.All">
-                Dashboard
-            </NavLink>
-
-            <NavLink href="/assistant/tasks"
-                     class="mf-nav-link"
-                     Match="NavLinkMatch.Prefix">
-                Assigned Tasks
-            </NavLink>
-
-            <NavLink href="/assistant/completed-work"
-                     class="mf-nav-link"
-                     Match="NavLinkMatch.Prefix">
-                Completed Work
-            </NavLink>
-        </nav>
-
-        <MudSpacer />
-
-        <div class="pa-4">
-            <MudButton FullWidth="true"
-                       Variant="Variant.Outlined"
-                       Color="Color.Default"
-                       OnClick="BackToOverview">
-                Back to Overview
-            </MudButton>
-
-        </div>
-    </aside>
-
-    <main class="mf-main">
-        @ChildContent
-    </main>
-</div>
+<RoleSidebarLayout SidebarCssClass="mf-assistant-sidebar"
+                   NavTitle="Main Menu"
+                   OverviewHref="/dashboard"
+                   NavItems="_navItems">
+    @ChildContent
+</RoleSidebarLayout>
 
 @code {
-    [Parameter]
-    public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
 
-    private void BackToOverview()
-    {
-        Nav.NavigateTo("/dashboard");
-    }
+    private static readonly IReadOnlyList<RoleSidebarLayout.RoleSidebarNavItem> _navItems =
+    [
+        new("/assistant", "Dashboard", "", true),
+        new("/assistant/tasks", "Assigned Tasks"),
+        new("/assistant/completed-work", "Completed Work"),
+    ];
 }
-
-<style>
-    .mf-sidebar-profile-area {
-        padding: 18px 11px 14px;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-    }
-</style>
-

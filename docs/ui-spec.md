@@ -858,10 +858,26 @@ Display selected content.
 |---|---|
 | Mangaka | Save/adjust regions when permitted, create production-tracking annotations, update/resolve Mangaka-created annotations, assign selected page regions as tasks to Assistants, review task output, upload new page versions, submit chapter for review. Mangaka cannot update or resolve Tantou Editor-created annotations. Task page context is derived from selected regions, not from a direct task `chapter_page_id`. |
 | Assistant | View assigned regions/tasks, upload task output as a page version for the same logical page derived from the linked task regions when allowed, mark work ready for review. |
-| Tantou Editor | Add editorial-review annotations linked to one or more page regions, update unresolved annotation text when permitted, resolve Mangaka-created or Tantou Editor-created annotations, review regions/page context, request revision or approve/cancel chapter through chapter review workflow. |
+| Tantou Editor | Add editorial-review annotations linked to one or more page regions, update unresolved annotation text when permitted, resolve Mangaka-created or Tantou Editor-created annotations, review regions/page context, approve chapters, request revision with required comments, or cancel chapters with required comments and optional markup through the chapter review workflow. |
 | Editorial Board Member | No workspace access by default. |
 | Editorial Board Chief | No workspace access by default unless future permission grants it. |
 | Admin | No manga production actions. |
+
+### Chapter editorial decision UI
+
+| Decision action | Required input | Result | UI meaning |
+|---|---|---|---|
+| Approve Chapter | None required | `Chapter.status_code = APPROVED` | Chapter may proceed toward scheduling/release. |
+| Request Revision | Non-blank comments; optional markup file | `Chapter.status_code = REVISION_REQUESTED` | Same chapter becomes editable again and can receive new page versions. |
+| Cancel Chapter | Non-blank comments; optional markup file | `Chapter.status_code = CANCELLED` | Current chapter attempt is terminal/read-only and cannot be edited or resubmitted. |
+
+### Cancelled chapter UI behavior
+
+- Cancelled chapters should show a clear read-only state.
+- Cancelled chapters must not show normal edit, page upload, resubmit, approve, schedule, or release actions.
+- Mangaka users may be offered a **Create Replacement Draft** action for a cancelled chapter.
+- A replacement draft creates a new `Chapter` row with the same chapter number label under the same series.
+- The cancelled chapter remains visible as historical reference; no `replacement_of_chapter_id` relationship is required in MVP.
 
 ---
 
@@ -933,6 +949,7 @@ For MVP, symbolic `returnContext` is safer and easier to avoid open-redirect mis
 | Update annotation text | Mangaka-created unresolved annotations only | No | Mangaka-created or Tantou Editor-created unresolved annotations | No | No | No |
 | Resolve annotation | Mangaka-created annotations only | No | Mangaka-created or Tantou Editor-created annotations | No | No | No |
 | Submit chapter for review | Yes | No | No | No | No | No |
+| Create replacement draft for cancelled chapter | Yes, if contributor | No | No | No | No | No |
 | Final chapter review decision | No | No | Yes | No | No | No |
 
 ---
@@ -963,3 +980,6 @@ For MVP, symbolic `returnContext` is safer and easier to avoid open-redirect mis
 - Mangaka cannot update or resolve Tantou Editor-created annotations.
 - Tantou Editors can create editorial-review annotations and update/resolve both Mangaka-created and Tantou Editor-created annotations when they are active contributors for the series.
 - Back navigation returns to `/series/{slug}` by default or to the original workflow context when provided.
+- Chapter revision and cancellation decisions require non-blank comments, while markup files are optional.
+- Cancelled chapter screens are read-only and do not allow edit, upload, resubmit, schedule, or release actions.
+- Mangaka contributors can create a replacement draft for a cancelled chapter using the same chapter number label.

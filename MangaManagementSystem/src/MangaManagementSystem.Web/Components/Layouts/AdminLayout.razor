@@ -1,168 +1,64 @@
-﻿@namespace MangaManagementSystem.Web.Components.Layouts
-@inject NavigationManager Nav
+@namespace MangaManagementSystem.Web.Components.Layouts
 
-<div class="mf-shell mf-admin-shell">
-    <aside class="mf-sidebar mf-admin-sidebar">
+<RoleSidebarLayout SidebarCssClass="mf-admin-sidebar"
+                   NavTitle="Main Navigation"
+                   OverviewHref="/dashboard"
+                   NavItems="_navItems">
+    <ExtraNavContent>
+        <NavLink href="/admin/users"
+                 class="mf-nav-link"
+                 Match="NavLinkMatch.Prefix">
+            User Management
+        </NavLink>
 
-        <div class="mf-sidebar-profile-area">
-            <UserAvatarMenu />
+        <NavLink href="/admin/audit-logs"
+                 class="mf-nav-link"
+                 Match="NavLinkMatch.Prefix">
+            Audit Logs
+        </NavLink>
+
+        <NavLink href="/admin/files"
+                 class="mf-nav-link"
+                 Match="NavLinkMatch.Prefix">
+            File Management
+        </NavLink>
+
+        <AuthorizeView Roles="Admin">
+            <Authorized>
+                <NavLink href="/admin/user-approval"
+                         class="mf-nav-link"
+                         Match="NavLinkMatch.Prefix">
+                    User Approval
+                </NavLink>
+            </Authorized>
+        </AuthorizeView>
+
+        <NavLink href="/admin/board-polls"
+                 class="mf-nav-link"
+                 Match="NavLinkMatch.Prefix">
+            Board Polls
+        </NavLink>
+
+        <div class="mf-nav-title mt-3">System</div>
+
+        <div class="mf-nav-link disabled">
+            Role &amp; Permissions (Not available)
         </div>
 
-        <nav class="mf-nav-section">
-            <div class="mf-nav-title">Main Navigation</div>
-
-            <NavLink href="/admin"
-                     class="mf-nav-link"
-                     Match="NavLinkMatch.All">
-                Dashboard
-            </NavLink>
-
-            <NavLink href="/admin/users"
-                     class="mf-nav-link"
-                     Match="NavLinkMatch.Prefix">
-                User Management
-            </NavLink>
-
-            <NavLink href="/admin/audit-logs"
-                     class="mf-nav-link"
-                     Match="NavLinkMatch.Prefix">
-                Audit Logs
-            </NavLink>
-
-            <NavLink href="/admin/files"
-                     class="mf-nav-link"
-                     Match="NavLinkMatch.Prefix">
-                File Management
-            </NavLink>
-
-            <div class="mf-nav-title mt-3">System</div>
-
-            <div class="mf-nav-link disabled">
-                Role &amp; Permissions (Not available)
-            </div>
-
-            <div class="mf-nav-link disabled">
-                System Settings (Not available)
-            </div>
-        </nav>
-
-        <MudSpacer />
-
-        <div class="pa-4">
-            <MudButton FullWidth="true"
-                       Variant="Variant.Outlined"
-                       Color="Color.Default"
-                       OnClick="BackToOverview">
-                Back to Overview
-            </MudButton>
+        <div class="mf-nav-link disabled">
+            System Settings (Not available)
         </div>
-    </aside>
-
-    <main class="mf-main">
+    </ExtraNavContent>
+    <ChildContent>
         @ChildContent
-    </main>
-</div>
+    </ChildContent>
+</RoleSidebarLayout>
 
 @code {
-    [Parameter]
-    public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
 
-    private void BackToOverview()
-    {
-        Nav.NavigateTo("/dashboard");
-    }
+    private static readonly IReadOnlyList<RoleSidebarLayout.RoleSidebarNavItem> _navItems =
+    [
+        new("/admin", "Dashboard", "", true),
+    ];
 }
-
-<style>
-    .mf-admin-shell {
-        min-height: 100vh;
-        display: flex;
-        background: var(--mf-page-bg);
-        color: var(--mf-text);
-    }
-
-    .mf-admin-shell .mf-admin-sidebar {
-        width: 264px;
-        flex: 0 0 264px;
-    }
-
-    .mf-admin-shell .mf-sidebar-profile-area {
-        padding: 18px 11px 14px;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-    }
-
-    .mf-admin-shell .mf-nav-section {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        padding: 16px 12px 20px;
-    }
-
-    .mf-admin-shell .mf-nav-title {
-        padding: 0 10px;
-        margin-bottom: 4px;
-        color: #8f9bbb;
-        font-size: 0.7rem;
-        font-weight: 800;
-        letter-spacing: 0.08em;
-        line-height: 1.4;
-        text-transform: uppercase;
-    }
-
-    .mf-admin-shell .mf-nav-link {
-        display: flex;
-        align-items: center;
-        width: 100%;
-        min-height: 42px;
-        padding: 10px 12px;
-        border-radius: 9px;
-        color: #d7e4ff;
-        line-height: 1.3;
-        transition:
-            background-color 0.16s ease,
-            color 0.16s ease,
-            box-shadow 0.16s ease;
-    }
-
-    .mf-admin-shell .mf-nav-link:hover {
-        color: #ffffff;
-        background: rgba(255, 255, 255, 0.08);
-    }
-
-    .mf-admin-shell .mf-nav-link.active {
-        color: #ffffff;
-        background: rgba(79, 125, 243, 0.2);
-        box-shadow: inset 3px 0 0 var(--mf-primary);
-    }
-
-    .mf-admin-shell .mf-nav-link.disabled {
-        color: rgba(215, 228, 255, 0.45);
-        cursor: not-allowed;
-        pointer-events: none;
-    }
-
-    .mf-admin-shell > .mf-main {
-        flex: 1;
-        min-width: 0;
-        min-height: 100vh;
-    }
-
-    @@media (max-width: 760px) {
-        .mf-admin-shell {
-            display: block;
-        }
-
-        .mf-admin-shell .mf-admin-sidebar {
-            width: 100%;
-            height: auto;
-            min-height: auto;
-            position: relative;
-            top: auto;
-            flex-basis: auto;
-        }
-
-        .mf-admin-shell > .mf-main {
-            min-height: auto;
-        }
-    }
-</style>

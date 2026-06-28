@@ -1,4 +1,4 @@
-﻿# Manga Creation Workflow and Publishing Management System â€” Business Flows / Use Case Notes
+# Manga Creation Workflow and Publishing Management System â€” Business Flows / Use Case Notes
 
 > **Purpose:** Record agreed business flows in a clear step-by-step format so the team can understand how UI, backend, Cloudinary, SQL Server procedures, and audit behavior should work together.
 >
@@ -1782,6 +1782,95 @@ audit.AuditEvent
 - Keep audit trail complete and traceable per task.
 
 
+
+## BF-CH-001 — Chapter Editorial Review Decision
+
+**Status:** Agreed
+**Primary actor:** Tantou Editor
+**Goal:** Record the final chapter-level editorial decision while preserving page-level annotations and review history.
+
+### Main Flow
+
+```text
+Tantou Editor opens the submitted chapter review queue
+→ Editor opens the chapter workspace/detail for a chapter in UNDER_REVIEW
+→ Editor reviews current active page versions, regions, annotations, and any supporting context
+→ Editor chooses one decision: APPROVED / REVISION_REQUESTED / CANCELLED
+→ If decision is REVISION_REQUESTED or CANCELLED, editor enters non-blank comments
+→ Editor may optionally attach an EDITORIAL_ATTACHMENT markup file
+→ Backend validates actor permission, chapter status, required comments, and optional markup file
+→ Backend creates manga.ChapterEditorialReview
+→ Backend updates manga.Chapter.status_code according to the decision
+→ Backend writes the chapter review audit event
+→ UI refreshes the chapter status and review history
+```
+
+### Decision Outcomes
+
+| Decision | Chapter status after review | Meaning |
+|---|---|---|
+| `APPROVED` | `APPROVED` | The chapter is accepted and may proceed toward scheduling/release. |
+| `REVISION_REQUESTED` | `REVISION_REQUESTED` | The same chapter attempt can be edited and resubmitted with new page versions. |
+| `CANCELLED` | `CANCELLED` | The current chapter attempt is a hard stop and becomes read-only historical reference. |
+
+### Important Notes
+
+- `REVISION_REQUESTED` and `CANCELLED` both require non-blank comments.
+- Markup files are optional for both `REVISION_REQUESTED` and `CANCELLED`.
+- Page-specific annotations remain separate from the final chapter-level review decision.
+- `CANCELLED` is not a normal fix-and-resubmit outcome. Use `REVISION_REQUESTED` when the chapter can still be fixed.
+
+### System Should Try To
+
+- Make the difference between revision and cancellation clear in the UI.
+- Preserve review decisions and page-level context.
+- Avoid deleting historical chapter materials.
+
+---
+
+## BF-CH-002 — Create Replacement Chapter After Cancellation
+
+**Status:** Agreed
+**Primary actor:** Mangaka
+**Goal:** Allow a Mangaka to redo a cancelled chapter as a new chapter draft using the same chapter number label, while preserving the cancelled attempt as history.
+
+### Main Flow
+
+```text
+Mangaka opens a cancelled chapter
+→ UI shows the cancelled chapter as read-only
+→ UI explains that the current chapter attempt cannot be edited or resubmitted
+→ Mangaka chooses Create Replacement Draft
+→ Backend validates actor is an active Mangaka contributor for the series
+→ Backend validates the source chapter status is CANCELLED
+→ Backend creates a new manga.Chapter row for the same series and chapter_number_label
+→ New chapter starts with status_code = DRAFT
+→ Mangaka creates pages/uploads page versions under the new chapter
+→ Cancelled chapter pages, page versions, regions, annotations, files, and reviews remain preserved as read-only historical reference
+```
+
+### Database Behavior
+
+```text
+Old unique constraint on (series_id, chapter_number_label) is replaced by a filtered unique index:
+unique among non-cancelled chapters only
+```
+
+### Important Notes
+
+- No `replacement_of_chapter_id` relationship is required in MVP.
+- A cancelled chapter does not reserve its chapter number label.
+- Page number uniqueness remains scoped to each chapter, so the replacement chapter can create its own pages starting from page 1.
+- The old cancelled chapter should not be edited, resubmitted, approved, scheduled, or released.
+
+### System Should Try To
+
+- Preserve the cancelled attempt for traceability.
+- Make redo work explicit by creating a new chapter draft.
+- Avoid accidental edits to cancelled chapter materials.
+
+---
+
 # 7. Workflow Template for Future Additions
 
 Use this template when adding new flows.
@@ -1830,11 +1919,11 @@ Add detailed flows for these when the team finalizes them:
 - Series contributor assignment flow
 - Tantou Editor proposal review flow
 - Chapter creation flow
+- Replacement chapter draft after cancellation flow
 - Chapter page upload/versioning flow
 - General page modification temporary download/save-as-version flow
 - AI suggestion generation before saving PageRegion records
 - Assistant task assignment and submission flow
-- Chapter editorial review flow
 - Board vote flow
 - Cancel serialization poll flow
 - Ranking snapshot generation flow

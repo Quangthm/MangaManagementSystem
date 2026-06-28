@@ -1,73 +1,20 @@
 ﻿@namespace MangaManagementSystem.Web.Components.Layouts
-@inject NavigationManager Nav
 
-<div class="mf-shell">
-    <aside class="mf-sidebar mf-dashboard-sidebar">
-
-        <div class="mf-sidebar-profile-area">
-            <UserAvatarMenu />
-        </div>
-
-        <nav class="mf-nav-section">
-            <div class="mf-nav-title">Workspace</div>
-
-            <NavLink href="/dashboard"
-                     class="mf-nav-link"
-                     Match="NavLinkMatch.All">
-                Overview
-            </NavLink>
-
-            <NavLink href="/dashboard/records"
-                     class="mf-nav-link"
-                     Match="NavLinkMatch.Prefix">
-                Editorial Records
-            </NavLink>
-
-            <NavLink href="/dashboard/studio"
-                     class="mf-nav-link"
-                     Match="NavLinkMatch.Prefix">
-                Studio Progress
-            </NavLink>
-
-            <NavLink href="/dashboard/workspace"
-                     class="mf-nav-link"
-                     Match="NavLinkMatch.Prefix">
-                Review Workspace
-            </NavLink>
-        </nav>
-
-        <MudSpacer />
-
-        <div class="pa-4">
-            <MudButton FullWidth="true"
-                       Variant="Variant.Outlined"
-                       Color="Color.Default"
-                       OnClick="BackToOverview">
-                Back to Overview
-            </MudButton>
-
-        </div>
-    </aside>
-
-    <main class="mf-main">
-        @ChildContent
-    </main>
-</div>
+<RoleSidebarLayout SidebarCssClass="mf-dashboard-sidebar"
+                   NavTitle="Workspace"
+                   OverviewHref="/dashboard"
+                   NavItems="_navItems">
+    @ChildContent
+</RoleSidebarLayout>
 
 @code {
-    [Parameter]
-    public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
 
-    private void BackToOverview()
-    {
-        Nav.NavigateTo("/dashboard");
-    }
+    private static readonly IReadOnlyList<RoleSidebarLayout.RoleSidebarNavItem> _navItems =
+    [
+        new("/dashboard", "Overview", "", true),
+        new("/dashboard/records", "Editorial Records"),
+        new("/dashboard/studio", "Studio Progress"),
+        new("/dashboard/workspace", "Review Workspace"),
+    ];
 }
-
-<style>
-    .mf-sidebar-profile-area {
-        padding: 18px 11px 14px;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-    }
-</style>
-
