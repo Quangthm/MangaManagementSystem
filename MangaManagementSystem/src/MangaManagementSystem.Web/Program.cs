@@ -137,7 +137,8 @@ builder.Services.AddHttpClient<IAdminFileApiClient, AdminFileApiClient>((sp, cli
 
                 client.BaseAddress =
                     new Uri(settings.Value.BaseUrl);
-            });
+            })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
 
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddAntiforgery();

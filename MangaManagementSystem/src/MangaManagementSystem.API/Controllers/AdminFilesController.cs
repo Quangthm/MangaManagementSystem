@@ -1,4 +1,5 @@
 using System.Net;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using MangaManagementSystem.API.Contracts;
@@ -9,6 +10,7 @@ using MangaManagementSystem.Application.Features.Admin.Files.Commands;
 using MangaManagementSystem.Application.Features.Admin.Files.Queries;
 using MangaManagementSystem.Application.Interfaces;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Options;
@@ -16,6 +18,7 @@ using Microsoft.Extensions.Options;
 namespace MangaManagementSystem.API.Controllers
 {
     [ApiController]
+    [Authorize(Roles = "Admin")]
     [Route("api/admin/files")]
     public sealed class AdminFilesController
         : ControllerBase
@@ -743,29 +746,24 @@ namespace MangaManagementSystem.API.Controllers
             IActionResult? Error)>
             ResolveAdminActorAsync()
         {
-            if (!Request.Headers.TryGetValue(
-                    InternalApiOptions.HeaderName,
-                    out var suppliedKey)
-                || !KeysMatch(
-                    suppliedKey.ToString(),
-                    _internalApiOptions.Key))
+            if (User.Identity?.IsAuthenticated != true)
             {
-                _logger.LogWarning(
-                    "Rejected unauthorized internal Admin file request.");
-
                 return (
                     null,
                     Unauthorized(
                         new ApiErrorResponse(
-                            AuthErrorCodes.UnauthorizedInternalRequest,
-                            "Unauthorized internal request.")));
+                            AdminFileErrorCodes.AccessDenied,
+                            "Authentication is required.")));
             }
 
-            if (!Request.Headers.TryGetValue(
-                    InternalApiOptions.ActorUserIdHeaderName,
-                    out var actorUserIdHeader)
-                || !Guid.TryParse(
-                    actorUserIdHeader.ToString(),
+            var actorUserIdValue =
+                User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? User.FindFirst("sub")?.Value
+                ?? User.FindFirst("user_id")?.Value
+                ?? User.FindFirst("UserId")?.Value;
+
+            if (!Guid.TryParse(
+                    actorUserIdValue,
                     out var actorUserId)
                 || actorUserId == Guid.Empty)
             {
@@ -775,23 +773,6 @@ namespace MangaManagementSystem.API.Controllers
                         new ApiErrorResponse(
                             AdminFileErrorCodes.AccessDenied,
                             "Authenticated administrator information is invalid.")));
-            }
-
-            if (!Request.Headers.TryGetValue(
-                    InternalApiOptions.ActorRoleHeaderName,
-                    out var actorRoleHeader)
-                || !string.Equals(
-                    actorRoleHeader.ToString(),
-                    AdminRoleName,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                return (
-                    null,
-                    StatusCode(
-                        StatusCodes.Status403Forbidden,
-                        new ApiErrorResponse(
-                            AdminFileErrorCodes.AccessDenied,
-                            "Administrator access is required.")));
             }
 
             var actor =
