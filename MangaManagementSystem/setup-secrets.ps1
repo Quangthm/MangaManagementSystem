@@ -22,16 +22,19 @@ $root = $PSScriptRoot
 # ---------------------------------------------------------------------------
 $secrets = @{
     "ConnectionStrings:DefaultConnection" = "Server=localhost;Database=MangaManagementDB;User Id=sa;Password=12345;TrustServerCertificate=True;Encrypt=False;MultipleActiveResultSets=true"
-    "Smtp:Username"                       = "thanhlong060206@gmail.com"
-    "Smtp:Password"                       = "zrvx wltq wglp kjyu"
-    "Smtp:FromEmail"                      = "thanhlong060206@gmail.com"
-    "Authentication:Google:ClientId"      = "399671906693-s9ef5nlmclqroddoektr7v4345ub6ch6.apps.googleusercontent.com"
-    "Authentication:Google:ClientSecret"  = "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"
+    "Smtp:Username"                       = "qtang889706@gmail.com"
+    "Smtp:Password"                       = "xckv xpjt fpmf gsqu"
+    "Smtp:FromEmail"                      = "qtang889706@gmail.com"
+    "Jwt:Key"                             = "46FpzM4RLUOCuoHSq6rzkJTr3iAnvjT7zT3Du3A3GNsyMyrC+2nWeNRZbpVrRHLV9wgM4BtwurkTrODPoJypSg=="
+    "Jwt:Issuer"                          = "MangaManagementSystem"
+    "Jwt:Audience"                        = "MangaManagementSystemUsers"
+    "Authentication:Google:ClientId"      = "567365691593-d5ohser29b7plhhutt8jifqq0kg0us94.apps.googleusercontent.com"
+    "Authentication:Google:ClientSecret"  = "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"
     "Cloudinary:CloudName"                = "dvpbtdju8"
-    "Cloudinary:ApiKey"                   = "911425412829516"
-    "Cloudinary:ApiSecret"                = "UtZqXPPZF2_2Ol7jk3DYI0A5B_k"
-    "Recaptcha:SiteKey"                   = "6LcDEAstAAAAAIdZ40z465BLGSUKFOCDkeLO_KNz"
-    "Recaptcha:SecretKey"                 = "6LcDEAstAAAAAF6rVrBJt9M6rt_7VuDjhj5i4Kc-"
+    "Cloudinary:ApiKey"                   = "159224476371744"
+    "Cloudinary:ApiSecret"                = "-zpW6kN0wiVxrSJbATXe3J43KMY"
+    "Recaptcha:SiteKey"                   = "6Lfz5TctAAAAABH4t_FH5KMZVWA1fEaNYVOGqwlO"
+    "Recaptcha:SecretKey"                 = "6Lfz5TctAAAAAGF9VlQkT2z_YwXONxFxiTno_Hxi"
 }
 
 # ---------------------------------------------------------------------------

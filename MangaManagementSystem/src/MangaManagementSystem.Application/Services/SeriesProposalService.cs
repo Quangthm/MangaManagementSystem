@@ -24,8 +24,8 @@ namespace MangaManagementSystem.Application.Services
             var entity = await _unitOfWork.SeriesProposals.GetByIdWithDetailsAsync(seriesProposalId, ct);
             if (entity == null) return null;
 
-            var allContributors = await _unitOfWork.SeriesContributors.GetAllAsync();
-            var hasTantou = allContributors.Any(c => c.SeriesId == entity.SeriesId && c.EndDate == null && c.User?.Role?.RoleName == "Tantou Editor");
+            var contributors = await _unitOfWork.SeriesContributors.FindAsync(c => c.SeriesId == entity.SeriesId && c.EndDate == null && c.User != null && c.User.Role != null && c.User.Role.RoleName == "Tantou Editor");
+            var hasTantou = contributors.Any();
 
             return MapToDto(entity, hasTantou);
         }

@@ -407,6 +407,8 @@ async def translate_selected(req: TranslateSelectedRequest):
         img_bytes = base64.b64decode(data)
         nparr = np.frombuffer(img_bytes, np.uint8)
         image_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if image_bgr is None:
+            return JSONResponse(status_code=400, content={"error": "Could not decode the uploaded image."})
         clean_bgr = image_bgr.copy()
 
         translated_results = []
@@ -444,8 +446,13 @@ async def translate_selected(req: TranslateSelectedRequest):
             })
 
             if original_text:
-                clean_roi = clean_bubble(roi)
-                clean_bgr[y_s:y2_s, x_s:x2_s] = clean_roi
+                # Bubble cleaning is best-effort: a failure on one region must not
+                # 500 the whole translate request (was the cause of the 500 error).
+                try:
+                    clean_roi = clean_bubble(roi)
+                    clean_bgr[y_s:y2_s, x_s:x2_s] = clean_roi
+                except Exception:
+                    import traceback; traceback.print_exc()
 
         _, buffer = cv2.imencode('.png', clean_bgr)
         clean_base64 = base64.b64encode(buffer).decode('utf-8')

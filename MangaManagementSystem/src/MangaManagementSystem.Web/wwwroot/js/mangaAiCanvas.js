@@ -491,8 +491,17 @@ function loadImage(dataUrl) {
                 redraw();
                 resolve();
             };
+            // CRITICAL: the fallback image must also resolve on failure, otherwise this
+            // Promise never settles and the C# `await loadImage` hangs forever — which
+            // froze the page navigation (the load guard stayed stuck) after a reload.
+            img2.onerror = () => {
+                console.error('Failed to load image (with and without CORS):', dataUrl);
+                resolve();
+            };
             img2.src = dataUrl;
         };
+        // Safety net: never let a stuck network request hang the awaiting C# code.
+        setTimeout(() => resolve(), 20000);
         img.src = dataUrl;
     });
 }
@@ -545,7 +554,7 @@ function updateRegionData(id, data) {
     }
 }
 
-function loadRegions(savedRegionsStr) {
+function loadRegions(savedRegionsStr, silent) {
     if (!savedRegionsStr) {
         regions = [];
     } else if (typeof savedRegionsStr === 'string') {
@@ -561,8 +570,15 @@ function loadRegions(savedRegionsStr) {
     } else {
         regions = [];
     }
-    saveState();
-    if (typeof dotNetRef !== 'undefined' && dotNetRef) syncToBlazor();
+    // Reset undo/redo history to the freshly loaded page so Undo cannot reach
+    // back into a previously viewed page's regions.
+    historyStack = [];
+    historyIndex = -1;
+    // Push the loaded state as the baseline. When `silent` (programmatic page
+    // navigation) this does NOT echo a change back to Blazor, which previously
+    // caused a false "unsaved draft" warning + an extra render on every load.
+    saveState(true);
+    if (!silent && typeof dotNetRef !== 'undefined' && dotNetRef) syncToBlazor();
     redraw();
 }
 
@@ -831,7 +847,7 @@ function drawVerticalText(context, region, x, y, maxWidth, maxHeight) {
 // ---------------------------------------------
 // HISTORY & SYNC
 // ---------------------------------------------
-function saveState() {
+function saveState(silent) {
     // Drop future redo history
     if (historyIndex < historyStack.length - 1) {
         historyStack = historyStack.slice(0, historyIndex + 1);
@@ -848,7 +864,9 @@ function saveState() {
         imgSrc: imgSrc
     });
     historyIndex++;
-    if (typeof dotNetRef !== 'undefined' && dotNetRef) syncToBlazor();
+    // `silent` is used when loading the baseline state of a freshly opened page,
+    // so we don't echo a phantom "regions changed" event back to Blazor.
+    if (!silent && typeof dotNetRef !== 'undefined' && dotNetRef) syncToBlazor();
 }
 
 function undo() {
@@ -1077,6 +1095,70 @@ function exportRegions() {
     return JSON.stringify(regions);
 }
 
+// Renders the FINISHED page (clean/translated background + translated text only) to a PNG
+// data URL — no editor chrome (region boxes, handles, #labels, note icons, pins).
+function exportRenderedImage() {
+    const w = backgroundCanvas.width;
+    const h = backgroundCanvas.height;
+    if (!w || !h) {
+        try { return canvas.toDataURL('image/png'); } catch (e) { return currentDataUrl || ''; }
+    }
+    const off = document.createElement('canvas');
+    off.width = w;
+    off.height = h;
+    const octx = off.getContext('2d');
+    octx.drawImage(backgroundCanvas, 0, 0);
+    regions.forEach(r => {
+        if (r.translatedText && r.translatedText.trim() !== '') {
+            octx.save();
+            octx.beginPath();
+            octx.rect(r.x, r.y, r.width, r.height);
+            octx.clip();
+            drawWrappedText(octx, r, r.x, r.y, r.width, r.height);
+            octx.restore();
+        }
+    });
+    try {
+        return off.toDataURL('image/png');
+    } catch (e) {
+        // Canvas tainted (cross-origin image without CORS) — fall back to the source URL.
+        return currentDataUrl || '';
+    }
+}
+
+// Renders the finished page and triggers a browser download. Nothing is stored on the
+// server — this only saves a PNG file to the user's machine.
+function downloadRenderedImage(filename) {
+    const dataUrl = exportRenderedImage();
+    if (!dataUrl) return false;
+    try {
+        const parts = dataUrl.split(',');
+        const mime = (parts[0].match(/:(.*?);/) || [])[1] || 'image/png';
+        let blob;
+        if (parts[0].indexOf('base64') !== -1) {
+            const bstr = atob(parts[1]);
+            let n = bstr.length;
+            const u8 = new Uint8Array(n);
+            while (n--) u8[n] = bstr.charCodeAt(n);
+            blob = new Blob([u8], { type: mime });
+        } else {
+            blob = new Blob([decodeURIComponent(parts[1])], { type: mime });
+        }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename || 'page.png';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        return true;
+    } catch (e) {
+        console.error('Download failed', e);
+        return false;
+    }
+}
+
 
 
     return {
@@ -1098,7 +1180,33 @@ function exportRegions() {
         redo,
         exportImage,
         exportRegions,
+        exportRenderedImage,
+        downloadRenderedImage,
         callSegmentAPI,
         callTranslateAPI
     };
 }
+
+// Warms the browser HTTP cache for upcoming page images. crossOrigin must match
+// the canvas loader ('anonymous') so the cached response is actually reused.
+window.mmsPreloadImages = function(urls) {
+    try {
+        (urls || []).forEach(function(u) {
+            if (u) {
+                var img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.src = u;
+            }
+        });
+    } catch (e) {}
+};
+
+window.saveMmsDraft = function(pageId, data) {
+    try { localStorage.setItem('mms_draft_page_' + pageId, data); } catch(e) {}
+};
+window.getMmsDraft = function(pageId) {
+    try { return localStorage.getItem('mms_draft_page_' + pageId); } catch(e) { return null; }
+};
+window.clearMmsDraft = function(pageId) {
+    try { localStorage.removeItem('mms_draft_page_' + pageId); } catch(e) {}
+};
