@@ -1,11 +1,9 @@
 using System.Net;
 using System.Security.Claims;
-using System.Security.Cryptography;
 using System.Text;
 using MangaManagementSystem.API.Contracts;
-using MangaManagementSystem.API.Options;
-using MangaManagementSystem.Application.DTOs.Admin;
 using MangaManagementSystem.Application.DTOs.Auth;
+using MangaManagementSystem.Application.DTOs.Admin;
 using MangaManagementSystem.Application.Features.Admin.Files.Commands;
 using MangaManagementSystem.Application.Features.Admin.Files.Queries;
 using MangaManagementSystem.Application.Interfaces;
@@ -13,7 +11,6 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
-using Microsoft.Extensions.Options;
 
 namespace MangaManagementSystem.API.Controllers
 {
@@ -71,24 +68,17 @@ namespace MangaManagementSystem.API.Controllers
             _httpClientFactory;
         private readonly ILogger<AdminFilesController>
             _logger;
-        private readonly InternalApiOptions
-            _internalApiOptions;
 
         public AdminFilesController(
             ISender sender,
             IUserService userService,
             IHttpClientFactory httpClientFactory,
-            ILogger<AdminFilesController> logger,
-            IOptions<InternalApiOptions>
-                internalApiOptions)
+            ILogger<AdminFilesController> logger)
         {
             _sender = sender;
             _userService = userService;
             _httpClientFactory = httpClientFactory;
-            _logger = logger;
-            _internalApiOptions =
-                internalApiOptions.Value;
-        }
+            _logger = logger;}
 
         [HttpGet]
         public async Task<IActionResult> SearchAsync(
@@ -876,33 +866,6 @@ namespace MangaManagementSystem.API.Controllers
                 : fileName;
         }
 
-        private static bool KeysMatch(
-            string suppliedKey,
-            string expectedKey)
-        {
-            if (string.IsNullOrWhiteSpace(
-                    suppliedKey)
-                || string.IsNullOrWhiteSpace(
-                    expectedKey))
-            {
-                return false;
-            }
-
-            var suppliedBytes =
-                Encoding.UTF8.GetBytes(
-                    suppliedKey);
-
-            var expectedBytes =
-                Encoding.UTF8.GetBytes(
-                    expectedKey);
-
-            return suppliedBytes.Length ==
-                    expectedBytes.Length
-                && CryptographicOperations
-                    .FixedTimeEquals(
-                        suppliedBytes,
-                        expectedBytes);
-        }
 
         private sealed record RemoteFileResult(
             HttpStatusCode StatusCode,

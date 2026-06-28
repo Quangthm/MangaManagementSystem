@@ -1,15 +1,11 @@
 using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
 using MangaManagementSystem.API.Contracts;
-using MangaManagementSystem.API.Options;
 using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.Features.Admin.Audit.Queries;
 using MangaManagementSystem.Application.Interfaces;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
 
 namespace MangaManagementSystem.API.Controllers
 {
@@ -41,22 +37,15 @@ namespace MangaManagementSystem.API.Controllers
         private readonly IUserService _userService;
         private readonly ILogger<AdminAuditEventsController>
             _logger;
-        private readonly InternalApiOptions
-            _internalApiOptions;
 
         public AdminAuditEventsController(
             ISender sender,
             IUserService userService,
-            ILogger<AdminAuditEventsController> logger,
-            IOptions<InternalApiOptions>
-                internalApiOptions)
+            ILogger<AdminAuditEventsController> logger)
         {
             _sender = sender;
             _userService = userService;
-            _logger = logger;
-            _internalApiOptions =
-                internalApiOptions.Value;
-        }
+            _logger = logger;}
 
         [HttpGet]
         public async Task<IActionResult> SearchAsync(
@@ -222,32 +211,5 @@ namespace MangaManagementSystem.API.Controllers
                 null);
         }
 
-        private static bool KeysMatch(
-            string suppliedKey,
-            string expectedKey)
-        {
-            if (string.IsNullOrWhiteSpace(
-                    suppliedKey)
-                || string.IsNullOrWhiteSpace(
-                    expectedKey))
-            {
-                return false;
-            }
-
-            var suppliedBytes =
-                Encoding.UTF8.GetBytes(
-                    suppliedKey);
-
-            var expectedBytes =
-                Encoding.UTF8.GetBytes(
-                    expectedKey);
-
-            return suppliedBytes.Length ==
-                    expectedBytes.Length
-                && CryptographicOperations
-                    .FixedTimeEquals(
-                        suppliedBytes,
-                        expectedBytes);
-        }
     }
 }
