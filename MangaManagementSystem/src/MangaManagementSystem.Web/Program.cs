@@ -117,7 +117,8 @@ namespace MangaManagementSystem.Web
 
                 client.BaseAddress =
                     new Uri(settings.Value.BaseUrl);
-            });
+            })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
 
             builder.Services
                 .AddHttpClient<IReferenceDataApiClient, ReferenceDataApiClient>((sp, client) =>
