@@ -53,7 +53,10 @@ namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queri
                     a.IssueTypeCode,
                     a.CreatedAtUtc,
                     a.CreatedByDisplayName,
-                    a.IsResolved))
+                    a.IsResolved,
+                    a.PageNumber,
+                    a.CurrentVersionId,
+                    a.CurrentVersionNo))
                 .ToList();
 
             int currentVersionCount = pages.Count(p => p.CurrentVersionId.HasValue);

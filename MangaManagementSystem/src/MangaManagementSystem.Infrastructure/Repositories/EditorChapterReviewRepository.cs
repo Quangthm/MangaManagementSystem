@@ -165,14 +165,39 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     r.ChapterPageVersion.ChapterPage != null &&
                     r.ChapterPageVersion.ChapterPage.ChapterId == chapterId))
                 .OrderByDescending(a => a.CreatedAtUtc)
-                .Select(a => new EditorChapterReviewDetailAnnotation(
+                .Select(a => new
+                {
                     a.ChapterPageAnnotationId,
-                    a.AnnotationText ?? string.Empty,
+                    AnnotationText = a.AnnotationText ?? string.Empty,
                     a.IssueTypeCode,
                     a.CreatedAtUtc,
-                    a.AnnotatedByUser != null ? a.AnnotatedByUser.DisplayName : null,
-                    a.ResolvedAtUtc != null))
+                    DisplayName = a.AnnotatedByUser != null ? a.AnnotatedByUser.DisplayName : null,
+                    FirstRegion = a.PageRegions
+                        .Where(r => r.ChapterPageVersion != null
+                                 && r.ChapterPageVersion.ChapterPage != null
+                                 && r.ChapterPageVersion.ChapterPage.ChapterId == chapterId)
+                        .Select(r => new
+                        {
+                            PageNumber = r.ChapterPageVersion!.ChapterPage!.PageNo,
+                            r.ChapterPageVersion.ChapterPageVersionId,
+                            r.ChapterPageVersion.VersionNo
+                        })
+                        .FirstOrDefault()
+                })
                 .ToListAsync(ct);
+
+            var annotations = openAnnotations
+                .Select(a => new EditorChapterReviewDetailAnnotation(
+                    a.ChapterPageAnnotationId,
+                    a.AnnotationText,
+                    a.IssueTypeCode,
+                    a.CreatedAtUtc,
+                    a.DisplayName,
+                    false,
+                    a.FirstRegion != null ? (int?)a.FirstRegion.PageNumber : null,
+                    a.FirstRegion != null ? (Guid?)a.FirstRegion.ChapterPageVersionId : null,
+                    a.FirstRegion != null ? (short?)a.FirstRegion.VersionNo : null))
+                .ToList();
 
             int pageCount = pageDetails.Count;
 
@@ -188,7 +213,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 chapter.CreatedAtUtc,
                 chapter.CreatedByUser?.DisplayName,
                 pageDetails,
-                openAnnotations);
+                annotations);
         }
 
         public async Task<ChapterEditorialReviewResult> SubmitChapterEditorialReviewAsync(
@@ -238,6 +263,20 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     throw new InvalidOperationException(
                         "This chapter is no longer under review and cannot receive a review decision.");
 
+                if (markupFileId.HasValue)
+                {
+                    bool validMarkup = await _dbContext.FileResources
+                        .AnyAsync(f => f.FileResourceId == markupFileId.Value
+                                    && f.FilePurposeCode == "EDITORIAL_ATTACHMENT"
+                                    && f.DeletedAtUtc == null, ct);
+
+                    if (!validMarkup)
+                        throw new InvalidOperationException(
+                            "The attached markup file is invalid or has been deleted.");
+                }
+
+                var reviewedAtUtc = DateTime.UtcNow;
+
                 var review = new ChapterEditorialReview
                 {
                     ChapterId = chapterId,
@@ -245,7 +284,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     DecisionCode = decisionCode,
                     Feedback = comments,
                     MarkupFileId = markupFileId,
-                    ReviewedAtUtc = DateTime.UtcNow
+                    ReviewedAtUtc = reviewedAtUtc
                 };
 
                 _dbContext.ChapterEditorialReviews.Add(review);
@@ -258,8 +297,15 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     _ => throw new InvalidOperationException($"Unknown decision code: {decisionCode}")
                 };
 
-                chapter.StatusCode = newStatusCode;
-                chapter.UpdatedAtUtc = DateTime.UtcNow;
+                int updated = await _dbContext.Chapters
+                    .Where(c => c.ChapterId == chapterId && c.StatusCode == StatusUnderReview)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(c => c.StatusCode, newStatusCode)
+                        .SetProperty(c => c.UpdatedAtUtc, DateTime.UtcNow), ct);
+
+                if (updated == 0)
+                    throw new InvalidOperationException(
+                        "This chapter is no longer under review and cannot receive a review decision.");
 
                 var actorRoleName = await _dbContext.ActiveSeriesContributors
                     .Where(sc => sc.SeriesId == chapter.SeriesId && sc.UserId == actorUserId)
@@ -268,18 +314,22 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
                 var detailJson = JsonSerializer.Serialize(new
                 {
-                    decision = review.DecisionCode,
-                    reviewer = actorUserId,
-                    previousStatus = previousStatusCode,
-                    newStatus = newStatusCode
+                    chapter_id = chapterId,
+                    series_id = chapter.SeriesId,
+                    chapter_editorial_review_id = review.ChapterEditorialReviewId,
+                    old_status_code = previousStatusCode,
+                    new_status_code = newStatusCode,
+                    decision_code = decisionCode,
+                    has_markup_file = markupFileId.HasValue,
+                    markup_file_id = markupFileId
                 });
 
                 var auditEvent = new AuditEvent
                 {
-                    OccurredAtUtc = DateTime.UtcNow,
+                    OccurredAtUtc = reviewedAtUtc,
                     ActorUserId = actorUserId,
                     ActorRoleName = actorRoleName,
-                    ActionCode = "CHAPTER_EDITORIAL_REVIEW_CREATED",
+                    ActionCode = "CHAPTER_EDITORIAL_REVIEW_RECORDED",
                     EntityType = "Chapter",
                     EntityId = chapterId.ToString(),
                     DetailJson = detailJson
@@ -292,7 +342,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
                 return new ChapterEditorialReviewResult(
                     chapter.ChapterId,
-                    chapter.StatusCode,
+                    newStatusCode,
                     review.ChapterEditorialReviewId,
                     review.DecisionCode,
                     review.Feedback,

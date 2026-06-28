@@ -171,6 +171,177 @@ dotnet build MangaManagementSystem\MangaManagementSystem.slnx --no-incremental
 
 ## Remaining follow-ups
 - Markup file upload for editorial review decisions
-- Audit action code enforcement if team confirms action code constraints
 - Workspace review actions (owned by another teammate)
 - Notifications to Mangaka when review decision is recorded
+
+---
+
+## Follow-up Fix — Queue Navigation, Detail Route Layout, and EF Parity Verification
+
+### Date
+2026-06-28 (same day follow-up)
+
+### Problem
+`/editor/chapters` queue did not route to `/editor/chapters/{chapterId}`, so the new quick action panel was unreachable from the queue. The "Review Chapter" button was navigating to the workspace URL instead of the detail route.
+
+### Root cause found
+`ChapterReviewList.razor` line 110-111: The "Review Chapter" button called `Nav.NavigateTo(context.WorkspaceUrl)` instead of `Nav.NavigateTo($"/editor/chapters/{context.ChapterId}")`.
+
+### Route/Layout Decision
+`/editor/chapters/{ChapterId:guid}` is a routed detail page inside the existing `EditorLayout`. It is not a left-sidebar navigation item. The existing `/editor/chapters` sidebar item remains the parent navigation item.
+
+### Files changed in this follow-up
+- `src/MangaManagementSystem.Web/Components/Pages/Editor/ChapterReviewList.razor`
+  - Changed "Review Chapter" button to navigate to `/editor/chapters/{chapterId}`
+  - Added separate "Workspace" button (outlined, secondary) preserving workspace navigatio
+- `src/MangaManagementSystem.Infrastructure/Repositories/EditorChapterReviewRepository.cs`
+  - Changed audit action code from `CHAPTER_EDITORIAL_REVIEW_CREATED` to `CHAPTER_EDITORIAL_REVIEW_RECORDED`
+  - Added concurrency guard: `ExecuteUpdateAsync` with `WHERE chapter_id = {id} AND status_code = N'UNDER_REVIEW'`, rejects if affected rows == 0
+  - Added optional markup FileResource validation: verifies FileResource exists, `FilePurposeCode = EDITORIAL_ATTACHMENT`, `DeletedAtUtc IS NULL`
+  - Enriched audit detail JSON: chapter_id, series_id, chapter_editorial_review_id, old_status_code, new_status_code, decision_code, has_markup_file, markup_file_id
+
+### Queue navigation behavior
+- Each chapter row now has two actions:
+  - **Review Chapter** (filled primary) → `/editor/chapters/{chapterId}`
+  - **Workspace** (outlined secondary) → existing workspace URL
+- Workspace behavior fully preserved
+
+### Detail route/layout behavior
+- Route: `@page "/editor/chapters/{ChapterId:guid}"` — unchanged, already correct
+- Layout: `<EditorLayout>` wrapper — unchanged, already correct
+- Back button: `Nav.NavigateTo("/editor/chapters")` — unchanged, already correct
+- Quick action panel: visible when `StatusCode == "UNDER_REVIEW"` — unchanged, already correct
+
+### Sidebar nav decision
+- `/editor/chapters` nav item uses `MatchAll = false` (default, meaning `NavLinkMatch.Prefix`)
+- Therefore `/editor/chapters/{chapterId}` correctly highlights the "Chapters" sidebar item
+- No sidebar changes needed
+
+### Workspace behavior preserved
+- Workspace button still available on queue rows as "Workspace" (outlined)
+- Workspace button still available on detail page as "Review in Workspace"
+- No workspace navigation paths changed
+
+### Stored procedure baseline parity
+
+| Check | Result |
+|-------|--------|
+| Decision mapping (APPROVED→APPROVED, REVISION_REQUESTED→REVISION_REQUESTED, CANCELLED→CANCELLED) | Matches |
+| Required comments for REVISION_REQUESTED and CANCELLED | Matches |
+| UNDER_REVIEW guard (reject non-UNDER_REVIEW chapters) | Matches |
+| Active Tantou Editor guard (via ActiveSeriesContributors) | Matches |
+| Active contributor guard (same as queue/detail) | Matches |
+| Optional markup guard (validates FileResource exists, EDITORIAL_ATTACHMENT, not deleted) | Added |
+| Transactional review insert + status update + audit (one transaction) | Matches |
+| Concurrency/double-submit guard (ExecuteUpdateAsync with status condition) | Added |
+| Audit action code `CHAPTER_EDITORIAL_REVIEW_RECORDED` | Matches baseline |
+| Audit detail JSON (chapter_id, series_id, review_id, old/new status, decision, markup) | Enriched |
+
+### Build result
+```
+dotnet build MangaManagementSystem\MangaManagementSystem.slnx --no-incremental
+```
+- Build succeeded
+- 0 errors
+- 47 warnings (all pre-existing)
+
+### Manual test checklist
+- [ ] Open `/editor/chapters`
+- [ ] Confirm each row has "Review Chapter" (primary) and "Workspace" (outlined) buttons
+- [ ] Click "Review Chapter" — confirm URL becomes `/editor/chapters/{chapterId}`
+- [ ] Confirm page stays inside EditorLayout/sidebar shell
+- [ ] Confirm no new detail route item appears in left sidebar
+- [ ] Confirm "Chapters" sidebar item remains active/highlighted
+- [ ] Confirm quick actions appear for `UNDER_REVIEW`
+- [ ] Click "Workspace" — confirm workspace opens
+- [ ] Confirm workspace return/back behavior still works
+- [ ] Approve chapter and confirm status becomes `APPROVED`
+- [ ] Request revision with comments and confirm status becomes `REVISION_REQUESTED`
+- [ ] Cancel with comments and confirm status becomes `CANCELLED`
+- [ ] Try blank comments for revision/cancel and confirm UI blocks it
+- [ ] Try double-submit/stale submit and confirm backend rejects second decision
+- [ ] Confirm no stored procedure was added
+
+---
+
+## Follow-up Fix — Detail Page Runtime UX
+
+### Date
+2026-06-28 (second follow-up)
+
+### Problem
+Runtime testing of `/editor/chapters/{ChapterId:guid}` showed:
+1. **Review decision buttons did not open dialogs** — `MudDialog` used invalid attribute `@bind-IsVisible` and `T="bool"` which produced MUD0002 warnings and failed at runtime.
+2. **Whole-chapter Workspace action was duplicated** — appeared in both the Pages card header and the bottom-right Review card.
+3. **Pages table lacked pagination** — no `RowsPerPage` or pager controls.
+4. **No per-page workspace navigation** — clicking a page row did not open the workspace at that page.
+5. **Open Annotations section was flat** — no pagination, no grouping by page/version.
+6. **Annotations lacked page/version context** — DTO and repository did not populate page number or version ID.
+
+### Dialog fix approach
+Changed `MudDialog @bind-IsVisible="_dialogVisible" T="bool"` to `MudDialog @bind-Visible="_dialogVisible" Options="_dialogOptions"` with proper `TitleContent`, matching the existing `ProposalReviewDetail.razor` pattern used throughout the project. Removed all 3 MUD0002 MudDialog warnings.
+
+### Duplicate Workspace action removed
+Removed the `Review in Workspace` button from the Pages card header. Kept only the bottom-right Review card's `Review in Workspace` button which explains the purpose.
+
+### Pages pagination added
+`MudTable` with `RowsPerPage="5"` for built-in pagination when more than 5 pages exist.
+
+### Page click/navigation behavior
+Added `Open in Workspace` button per page row that navigates to:
+```
+/series/{slug}/workspace?chapterId={id}&page={pageNumber}&version={versionId}&returnUrl=/editor/chapters/{id}
+```
+Falls back to page-only URL when version ID is unavailable.
+
+### Annotation grouping/pagination added
+Annotations now grouped by `(PageNumber, VersionNo, VersionId)` displayed as:
+```
+Page 1 · Version v1
+  [annotation cards...]
+```
+Manual pagination: 5 groups per page with Previous/Next controls.
+
+### Annotation click/navigation behavior
+Clicking an annotation navigates to:
+```
+/series/{slug}/workspace?chapterId={id}&page={pageNumber}&version={versionId}&returnUrl=/editor/chapters/{id}
+```
+Falls back to page-only, then chapter workspace URL.
+
+### DTO/read-model changes
+- `EditorChapterReviewAnnotationDto`: Added `PageNumber`, `CurrentVersionId`, `CurrentVersionNo` fields
+- Domain `EditorChapterReviewDetailAnnotation`: Added same fields
+- Repository: Updated annotation query to project page number and version ID from first region's page version
+- Handler: Updated mapping to pass new fields
+
+### Files changed
+- `Web/Components/Pages/Editor/ChapterReviewDetail.razor` — full rewrite for dialog, pagination, grouping, navigation
+- `Application/DTOs/Editor/EditorChapterReviewDtos.cs` — added page/version fields to annotation DTO
+- `Domain/Interfaces/IEditorChapterReviewRepository.cs` — added page/version fields to domain annotation record
+- `Infrastructure/Repositories/EditorChapterReviewRepository.cs` — updated annotation query to project page/version context
+- `Application/Features/Editor/ChapterReviews/Queries/GetEditorChapterReviewDetail/GetEditorChapterReviewDetailQueryHandler.cs` — updated annotation mapping
+
+### Build result
+```
+dotnet build MangaManagementSystem\MangaManagementSystem.slnx --no-incremental
+```
+- Build succeeded
+- 0 errors
+- 45 warnings (removed 3 MudDialog MUD0002, added 1 MudPaper MUD0002 for `OnClick` — same false-positive pattern used across project)
+
+### Manual test checklist
+- [ ] Open `/editor/chapters`
+- [ ] Click `Review Chapter`
+- [ ] Confirm detail page opens
+- [ ] Click `Approve Chapter` and confirm dialog opens
+- [ ] Click `Request Revision` and confirm dialog opens
+- [ ] Click `Cancel Chapter` and confirm dialog opens
+- [ ] Try blank comments for Request Revision and Cancel; confirm UI blocks submission
+- [ ] Confirm only one whole-chapter `Review in Workspace` button remains (bottom-right card)
+- [ ] Confirm Pages section paginates when enough pages exist (RowsPerPage=5)
+- [ ] Click page `Open in Workspace` button and confirm workspace opens at that page
+- [ ] Confirm Open Annotations section is grouped by page/version
+- [ ] Confirm Open Annotations section paginates when enough annotation groups exist (5 per page)
+- [ ] Click an annotation card and confirm workspace opens to that page context
+- [ ] Confirm no workspace behavior was broken

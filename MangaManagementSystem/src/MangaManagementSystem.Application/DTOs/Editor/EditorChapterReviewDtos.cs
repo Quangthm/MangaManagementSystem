@@ -81,7 +81,10 @@ namespace MangaManagementSystem.Application.DTOs.Editor
         string IssueTypeCode,
         DateTime CreatedAtUtc,
         string? CreatedByDisplayName,
-        bool IsResolved);
+        bool IsResolved,
+        int? PageNumber,
+        Guid? CurrentVersionId,
+        short? CurrentVersionNo);
 
     /// <summary>
     /// Request body for submitting a chapter editorial review decision.

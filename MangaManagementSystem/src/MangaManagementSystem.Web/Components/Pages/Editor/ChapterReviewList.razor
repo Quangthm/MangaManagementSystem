@@ -105,19 +105,19 @@
                                 <MudChip T="string" Color="@GetStatusColor(context.StatusCode)" Size="Size.Small">@context.StatusCode.Replace("_", " ")</MudChip>
                             </MudTd>
                             <MudTd DataLabel="Actions">
-                                @if (!string.IsNullOrWhiteSpace(context.WorkspaceUrl))
-                                {
+                                <MudStack Row="true" Spacing="2">
                                     <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
-                                               OnClick="@(() => Nav.NavigateTo(context.WorkspaceUrl))">
+                                               OnClick="@(() => Nav.NavigateTo($"/editor/chapters/{context.ChapterId}"))">
                                         Review Chapter
                                     </MudButton>
-                                }
-                                else
-                                {
-                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Default" Disabled="true">
-                                        Review Chapter
-                                    </MudButton>
-                                }
+                                    @if (!string.IsNullOrWhiteSpace(context.WorkspaceUrl))
+                                    {
+                                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Secondary"
+                                                   OnClick="@(() => Nav.NavigateTo(context.WorkspaceUrl))">
+                                            Workspace
+                                        </MudButton>
+                                    }
+                                </MudStack>
                             </MudTd>
                         </RowTemplate>
                     </MudTable>

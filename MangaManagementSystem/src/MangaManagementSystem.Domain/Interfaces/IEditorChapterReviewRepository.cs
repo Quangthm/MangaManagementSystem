@@ -108,7 +108,10 @@ namespace MangaManagementSystem.Domain.Interfaces
         string IssueTypeCode,
         DateTime CreatedAtUtc,
         string? CreatedByDisplayName,
-        bool IsResolved);
+        bool IsResolved,
+        int? PageNumber,
+        Guid? CurrentVersionId,
+        short? CurrentVersionNo);
 
     /// <summary>
     /// Result of a chapter editorial review decision write operation.
