@@ -1,12 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Security.Claims;
 using MangaManagementSystem.Application.DTOs.Admin;
 using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.DTOs.Manga;
-using MangaManagementSystem.Web.Options;
-using Microsoft.AspNetCore.Components.Authorization;
-using Microsoft.Extensions.Options;
 
 namespace MangaManagementSystem.Web.Services.Api
 {
@@ -16,25 +12,13 @@ namespace MangaManagementSystem.Web.Services.Api
         private readonly HttpClient _httpClient;
         private readonly ILogger<AdminUserApiClient>
             _logger;
-        private readonly AuthenticationStateProvider
-            _authenticationStateProvider;
-        private readonly InternalApiOptions
-            _internalApiOptions;
 
         public AdminUserApiClient(
             HttpClient httpClient,
-            ILogger<AdminUserApiClient> logger,
-            AuthenticationStateProvider
-                authenticationStateProvider,
-            IOptions<InternalApiOptions>
-                internalApiOptions)
+            ILogger<AdminUserApiClient> logger)
         {
             _httpClient = httpClient;
             _logger = logger;
-            _authenticationStateProvider =
-                authenticationStateProvider;
-            _internalApiOptions =
-                internalApiOptions.Value;
         }
 
         public async Task<IReadOnlyList<UserDto>>
@@ -368,69 +352,15 @@ namespace MangaManagementSystem.Web.Services.Api
                     cancellationToken);
         }
 
-        private async Task<HttpRequestMessage>
+        private static Task<HttpRequestMessage>
             CreateAuthorizedRequestAsync(
                 HttpMethod method,
                 string requestUri)
         {
-            var authenticationState =
-                await _authenticationStateProvider
-                    .GetAuthenticationStateAsync();
-
-            var principal =
-                authenticationState.User;
-
-            if (principal.Identity?.IsAuthenticated
-                != true)
-            {
-                throw new InvalidOperationException(
-                    "You must be logged in as an administrator.");
-            }
-
-            var actorUserIdValue =
-                principal.FindFirst(
-                    ClaimTypes.NameIdentifier)?.Value;
-
-            var actorRole =
-                principal.FindFirst(
-                    ClaimTypes.Role)?.Value
-                ?? principal.FindFirst("role")?.Value;
-
-            if (!Guid.TryParse(
-                    actorUserIdValue,
-                    out var actorUserId))
-            {
-                throw new InvalidOperationException(
-                    "The current administrator id is invalid.");
-            }
-
-            if (!string.Equals(
-                    actorRole,
-                    "Admin",
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException(
-                    "Administrator access is required.");
-            }
-
-            var request =
+            return Task.FromResult(
                 new HttpRequestMessage(
                     method,
-                    requestUri);
-
-            request.Headers.TryAddWithoutValidation(
-                InternalApiOptions.HeaderName,
-                _internalApiOptions.Key);
-
-            request.Headers.TryAddWithoutValidation(
-                InternalApiOptions.ActorUserIdHeaderName,
-                actorUserId.ToString("D"));
-
-            request.Headers.TryAddWithoutValidation(
-                InternalApiOptions.ActorRoleHeaderName,
-                actorRole);
-
-            return request;
+                    requestUri));
         }
 
         private static void AddQueryValue(
