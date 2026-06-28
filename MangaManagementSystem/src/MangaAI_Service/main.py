@@ -136,6 +136,67 @@ def ocr_manga_region(roi_bgr):
         return ""
 
 
+def translate_text(text, target_lang):
+    """
+    Dịch text manga tiếng Nhật sang ngôn ngữ đích, ổn định hơn bản cũ:
+    - Ép source='ja' trước (đáng tin hơn auto-detect với đoạn chữ ngắn của manga).
+    - Nếu lỗi thì fallback sang auto-detect.
+    - Nếu vẫn không dịch được thì TRẢ LẠI text gốc (không để bong bóng trống).
+    Bỏ ký tự xuống dòng do OCR chèn để dịch mạch hơn.
+    """
+    if not text or not text.strip():
+        return ""
+
+    cleaned = " ".join(text.split())
+    for src in ("ja", "auto"):
+        try:
+            out = GoogleTranslator(source=src, target=target_lang).translate(cleaned)
+            if out and out.strip():
+                return out.strip()
+        except Exception:
+            continue
+    return cleaned
+
+
+def translate_texts(texts, target_lang):
+    """
+    Dịch CẢ TRANG trong một request để có ngữ cảnh (tốt hơn dịch từng bong bóng rời).
+    Nối các đoạn không rỗng bằng xuống dòng → dịch 1 lần → tách lại theo dòng.
+    Nếu số dòng trả về không khớp (Google gộp/tách dòng) thì fallback dịch từng đoạn.
+    Trả về list cùng độ dài input; đoạn rỗng giữ rỗng.
+    """
+    results = [""] * len(texts)
+    idxs = [i for i, t in enumerate(texts) if t and t.strip()]
+    if not idxs:
+        return results
+
+    cleaned = [" ".join(texts[i].split()) for i in idxs]
+
+    # Chỉ 1 đoạn thì không cần gom
+    if len(cleaned) == 1:
+        results[idxs[0]] = translate_text(texts[idxs[0]], target_lang)
+        return results
+
+    joined = "\n".join(cleaned)
+    for src in ("ja", "auto"):
+        try:
+            out = GoogleTranslator(source=src, target=target_lang).translate(joined)
+            if not out:
+                continue
+            parts = [p.strip() for p in out.split("\n")]
+            if len(parts) == len(cleaned):
+                for k, i in enumerate(idxs):
+                    results[i] = parts[k] if parts[k] else cleaned[k]
+                return results
+        except Exception:
+            continue
+
+    # Fallback: dịch từng đoạn riêng (vẫn hơn để trống)
+    for i in idxs:
+        results[i] = translate_text(texts[i], target_lang)
+    return results
+
+
 def clean_bubble(roi_bgr):
     """
     Xóa chữ trong bong bóng thoại manga và tô lại màu nền đều.
@@ -327,6 +388,7 @@ async def clean_and_translate(file: UploadFile = File(...)):
     try:
         regions = detect_speech_bubbles(image_bgr)
         translated_results = []
+        original_texts = []
 
         for i, reg in enumerate(regions):
             x, y, w, h = reg["x"], reg["y"], reg["width"], reg["height"]
@@ -346,30 +408,27 @@ async def clean_and_translate(file: UploadFile = File(...)):
 
             roi = image_bgr[y_s:y2_s, x_s:x2_s]
 
-            # ── 1. OCR bằng manga-ocr ──
-            original_text = ocr_manga_region(roi)
-
-            # ── 2. Dịch ──
-            translated_text = ""
-            if original_text and len(original_text) >= 1:
-                try:
-                    translated_text = GoogleTranslator(
-                        source='auto', target='vi'
-                    ).translate(original_text)
-                except:
-                    translated_text = "[Lỗi dịch]"
+            # ── 1. OCR bằng manga-ocr (đọc trên vùng đầy đủ, không co rìa) ──
+            ocr_roi = image_bgr[y:y2, x:x2]
+            original_text = ocr_manga_region(ocr_roi)
+            original_texts.append(original_text)
 
             translated_results.append({
                 "pageRegionId": i + 1,
                 "x": x, "y": y, "width": w, "height": h,
                 "originalText": original_text,
-                "translatedText": translated_text,
+                "translatedText": "",
             })
 
-            # ── 3. Tô trắng bên trong bong bóng (xóa chữ sạch) ──
+            # ── 2. Tô trắng bên trong bong bóng (xóa chữ sạch) ──
             if original_text:
                 clean_roi = clean_bubble(roi)
                 clean_bgr[y_s:y2_s, x_s:x2_s] = clean_roi
+
+        # ── 3. Dịch GOM cả trang trong MỘT request để có ngữ cảnh ──
+        translations = translate_texts(original_texts, 'vi')
+        for res, tr in zip(translated_results, translations):
+            res["translatedText"] = tr
 
         _, buffer = cv2.imencode('.png', clean_bgr)
         clean_base64 = base64.b64encode(buffer).decode('utf-8')
@@ -397,11 +456,17 @@ class RegionInput(BaseModel):
 class TranslateSelectedRequest(BaseModel):
     image_base64: str
     regions: List[RegionInput]
+    target_lang: Optional[str] = "vi"  # "vi" (Vietnamese) or "en" (English)
 
 @app.post("/api/ai/translate-selected")
 async def translate_selected(req: TranslateSelectedRequest):
     """API 3: Dịch chỉ các vùng được người dùng chọn."""
     try:
+        # Resolve target language (whitelist; default Vietnamese)
+        target_lang = (req.target_lang or "vi").lower()
+        if target_lang not in ("vi", "en"):
+            target_lang = "vi"
+
         # Decode ảnh từ base64
         header, data = req.image_base64.split(",", 1) if "," in req.image_base64 else ("", req.image_base64)
         img_bytes = base64.b64decode(data)
@@ -412,6 +477,7 @@ async def translate_selected(req: TranslateSelectedRequest):
         clean_bgr = image_bgr.copy()
 
         translated_results = []
+        original_texts = []
         for i, reg in enumerate(req.regions):
             x, y, w, h = reg.x, reg.y, reg.width, reg.height
             y2 = min(image_bgr.shape[0], y + h)
@@ -428,21 +494,18 @@ async def translate_selected(req: TranslateSelectedRequest):
 
             roi = image_bgr[y_s:y2_s, x_s:x2_s]
 
-            original_text = ocr_manga_region(roi)
-
-            translated_text = ""
-            if original_text and len(original_text) >= 1:
-                try:
-                    translated_text = GoogleTranslator(source='auto', target='vi').translate(original_text)
-                except:
-                    translated_text = "[Lỗi dịch]"
+            # OCR đọc trên vùng ĐẦY ĐỦ (không co 3px) để không cắt mất chữ ở rìa bong
+            # bóng; vùng co (roi) chỉ dùng cho việc xóa chữ (clean_bubble) bên dưới.
+            ocr_roi = image_bgr[y:y2, x:x2]
+            original_text = ocr_manga_region(ocr_roi)
+            original_texts.append(original_text)
 
             translated_results.append({
                 "id": reg.id,
                 "pageRegionId": i + 1,
                 "x": x, "y": y, "width": w, "height": h,
                 "originalText": original_text,
-                "translatedText": translated_text,
+                "translatedText": "",
             })
 
             if original_text:
@@ -453,6 +516,11 @@ async def translate_selected(req: TranslateSelectedRequest):
                     clean_bgr[y_s:y2_s, x_s:x2_s] = clean_roi
                 except Exception:
                     import traceback; traceback.print_exc()
+
+        # Dịch GOM cả trang trong MỘT request để có ngữ cảnh, rồi gán lại từng bong bóng.
+        translations = translate_texts(original_texts, target_lang)
+        for res, tr in zip(translated_results, translations):
+            res["translatedText"] = tr
 
         _, buffer = cv2.imencode('.png', clean_bgr)
         clean_base64 = base64.b64encode(buffer).decode('utf-8')
