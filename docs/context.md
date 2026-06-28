@@ -300,7 +300,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 ### Chapter
 
 - Each chapter belongs to exactly one series.
-- Chapter number labels must be unique within the same series.
+- Chapter number labels must be unique among non-cancelled chapters within the same series; cancelled chapters are preserved but do not reserve the label for a replacement draft.
 - New chapters start with `DRAFT`.
 - `Chapter.status_code` stores the current workflow status only.
 - Chapter statuses include `DRAFT`, `UNDER_REVIEW`, `REVISION_REQUESTED`, `APPROVED`, `SCHEDULED`, `RELEASED`, `ON_HOLD`, and `CANCELLED`.
@@ -385,7 +385,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 
 - MVP chapter submission is represented by changing `Chapter.status_code` to `UNDER_REVIEW`.
 - A submitted chapter consists of current active page versions of non-deleted chapter pages.
-- Page creation, deletion, and version upload are blocked while chapter is `UNDER_REVIEW`, `APPROVED`, `SCHEDULED`, or `RELEASED`.
+- Page creation, deletion, and version upload are blocked while chapter is `UNDER_REVIEW`, `APPROVED`, `SCHEDULED`, `RELEASED`, or `CANCELLED`.
 - When revision is requested, the chapter becomes editable again.
 - Chapter content is stored as page-level assets through `ChapterPageVersion`.
 - Chapter-level submission file/PDF is future enhancement.
@@ -397,8 +397,8 @@ The project uses **permission-based actor grouping** for shared features and rol
 - A chapter may have multiple editorial review records over revision cycles.
 - Only authorized Tantou Editors or approved review roles may create chapter reviews.
 - Decision values are `APPROVED`, `REVISION_REQUESTED`, and `CANCELLED`.
-- `REVISION_REQUESTED` and `CANCELLED` require meaningful comments or a markup file.
-- Markup files reference `FileResource`.
+- `REVISION_REQUESTED` and `CANCELLED` require non-blank meaningful comments; markup files are optional supporting feedback.
+- Markup files are optional and reference `FileResource` when provided.
 - Page annotations support review; `ChapterEditorialReview` stores final chapter-level decision.
 - Creating a review updates chapter status according to decision and should be audit-logged.
 
@@ -406,8 +406,12 @@ The project uses **permission-based actor grouping** for shared features and rol
 
 - Chapter cancellation is normally done through editorial review with `decision_code = CANCELLED`.
 - Cancelled chapters cannot proceed to `SCHEDULED` or `RELEASED`.
+- A cancelled chapter is terminal for the current chapter attempt: it cannot be edited, receive new page versions, be resubmitted, be approved, scheduled, or released.
 - Cancellation does not delete pages, versions, regions, annotations, files, or review history.
 - If fixable, use `REVISION_REQUESTED` instead of `CANCELLED`.
+- If the current direction is very off and the work must be redone, the Mangaka creates a new replacement `Chapter` draft with the same chapter number label.
+- The schema should enforce chapter number uniqueness only among non-cancelled chapters, using a filtered unique index that excludes `CANCELLED` chapters.
+- The MVP does not require a `replacement_of_chapter_id` relationship; the cancelled chapter remains read-only historical reference and redo work belongs to the new chapter.
 - Admin cancellation without editorial review is not allowed in MVP.
 
 ## 4.12 Publication Planning
