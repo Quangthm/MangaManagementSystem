@@ -2,12 +2,10 @@
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
-@using MangaManagementSystem.Application.DTOs.Manga
-@using MangaManagementSystem.Application.Interfaces
+@using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Mangaka,Tantou Editor,Assistant")]
 @inject NavigationManager Nav
-@inject IChapterPageTaskService TaskService
-@inject IChapterPageVersionService VersionService
+@inject IAssistantTaskApiClient AssistantTaskClient
 @inject AuthenticationStateProvider AuthStateProvider
 
 @if (!string.IsNullOrWhiteSpace(_redirectUrl))
@@ -65,7 +63,14 @@ else
                 return;
             }
 
-            var task = await TaskService.GetChapterPageTaskByIdAsync(TaskId);
+            var actorUserIdRaw = user.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(actorUserIdRaw) || !Guid.TryParse(actorUserIdRaw, out var actorUserId))
+            {
+                _error = "Could not identify your user account.";
+                return;
+            }
+
+            var task = await AssistantTaskClient.GetTaskDetailAsync(actorUserId, TaskId);
             if (task is null)
             {
                 _error = "Task not found.";
@@ -79,6 +84,11 @@ else
             }
 
             string queryParams = $"?taskId={TaskId}";
+
+            if (task.ChapterId.HasValue)
+            {
+                queryParams += $"&chapterId={task.ChapterId.Value}";
+            }
 
             if (!string.IsNullOrWhiteSpace(_returnUrl))
             {
