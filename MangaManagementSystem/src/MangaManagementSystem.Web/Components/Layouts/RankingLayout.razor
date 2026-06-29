@@ -1,79 +1,39 @@
 ﻿@namespace MangaManagementSystem.Web.Components.Layouts
-@inject NavigationManager Nav
 
-<div class="mf-shell">
-    <aside class="mf-sidebar mf-ranking-sidebar">
+<RoleSidebarLayout SidebarCssClass="mf-ranking-sidebar"
+                   NavTitle="Editorial Board"
+                   OverviewHref="/dashboard"
+                   NavItems="_navItems">
+    <ExtraNavContent>
+        <div class="mf-nav-title mt-3">Not Available</div>
 
-        <div class="mf-sidebar-profile-area">
-            <UserAvatarMenu />
+        <div class="mf-nav-link disabled">
+            Series Rankings (Not available)
         </div>
 
-        <nav class="mf-nav-section">
-            <div class="mf-nav-title">Editorial Board</div>
-
-            <NavLink href="/ranking"
-                     class="mf-nav-link"
-                     Match="NavLinkMatch.All">
-                Dashboard
-            </NavLink>
-
-            <NavLink href="/board-decision"
-                     class="mf-nav-link"
-                     Match="NavLinkMatch.Prefix">
-                Board Decision Workspace
-            </NavLink>
-
-            <div class="mf-nav-title mt-3">Not Available</div>
-
-            <div class="mf-nav-link disabled">
-                Series Rankings (Not available)
-            </div>
-
-            <div class="mf-nav-link disabled">
-                Performance Tracking (Not available)
-            </div>
-
-            <div class="mf-nav-link disabled">
-                Cancellation Risk (Not available)
-            </div>
-
-            <div class="mf-nav-link disabled">
-                Board Decisions (Not available)
-            </div>
-        </nav>
-
-        <MudSpacer />
-
-        <div class="pa-4">
-            <MudButton FullWidth="true"
-                       Variant="Variant.Outlined"
-                       Color="Color.Default"
-                       OnClick="BackToOverview">
-                Back to Overview
-            </MudButton>
-
+        <div class="mf-nav-link disabled">
+            Performance Tracking (Not available)
         </div>
-    </aside>
 
-    <main class="mf-main">
+        <div class="mf-nav-link disabled">
+            Cancellation Risk (Not available)
+        </div>
+
+        <div class="mf-nav-link disabled">
+            Board Decisions (Not available)
+        </div>
+    </ExtraNavContent>
+    <ChildContent>
         @ChildContent
-    </main>
-</div>
+    </ChildContent>
+</RoleSidebarLayout>
 
 @code {
-    [Parameter]
-    public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
 
-    private void BackToOverview()
-    {
-        Nav.NavigateTo("/dashboard");
-    }
+    private static readonly IReadOnlyList<RoleSidebarLayout.RoleSidebarNavItem> _navItems =
+    [
+        new("/ranking", "Dashboard", "", true),
+        new("/board-decision", "Board Decision Workspace"),
+    ];
 }
-
-<style>
-    .mf-sidebar-profile-area {
-        padding: 18px 11px 14px;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-    }
-</style>
-

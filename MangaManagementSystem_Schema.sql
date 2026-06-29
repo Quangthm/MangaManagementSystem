@@ -644,12 +644,17 @@ CREATE TABLE manga.Chapter (
 		OR planned_release_date IS NOT NULL
 		),
 	CONSTRAINT fk_chapter_series FOREIGN KEY (series_id) REFERENCES manga.Series(series_id),
-	CONSTRAINT fk_chapter_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id),
-	CONSTRAINT uq_chapter_series_chapter_number UNIQUE (
-		series_id,
-		chapter_number_label
-		)
+	CONSTRAINT fk_chapter_created_by FOREIGN KEY (created_by_user_id) REFERENCES auth.Users(user_id)
 	);
+
+CREATE UNIQUE INDEX ux_chapter_series_chapter_number_active
+ON manga.Chapter
+(
+    series_id,
+    chapter_number_label
+)
+WHERE status_code <> N'CANCELLED';
+
 
 CREATE INDEX ix_chapter_series_id ON manga.Chapter (series_id);
 
@@ -946,11 +951,24 @@ CREATE TABLE manga.ChapterEditorialReview (
 			N'CANCELLED'
 			)
 		),
-	CONSTRAINT ck_chapter_editorial_review_feedback_required CHECK (
-		decision_code = N'APPROVED'
-		OR comments IS NOT NULL
-		OR markup_file_id IS NOT NULL
-		),
+	CONSTRAINT ck_chapter_editorial_review_feedback_required
+CHECK
+(
+    decision_code = N'APPROVED'
+
+    OR
+    (
+        decision_code = N'REVISION_REQUESTED'
+        AND NULLIF(LTRIM(RTRIM(comments)), N'') IS NOT NULL
+    )
+
+    OR
+    (
+        decision_code = N'CANCELLED'
+        AND NULLIF(LTRIM(RTRIM(comments)), N'') IS NOT NULL
+        AND markup_file_id IS NOT NULL
+    )
+),
 	CONSTRAINT fk_chapter_editorial_review_chapter FOREIGN KEY (chapter_id) REFERENCES manga.Chapter(chapter_id),
 	CONSTRAINT fk_chapter_editorial_review_reviewer FOREIGN KEY (reviewer_user_id) REFERENCES auth.Users(user_id),
 	CONSTRAINT fk_chapter_editorial_review_markup_file FOREIGN KEY (markup_file_id) REFERENCES manga.FileResource(file_resource_id)

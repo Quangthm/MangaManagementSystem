@@ -67,8 +67,28 @@ Blazor Web
 -> ASP.NET Core API controller
 -> IMediator.Send(command/query)
 -> Application command/query handler
--> Infrastructure repository / adapter / stored-procedure wrapper
--> SQL Server stored procedure or EF read query
+-> Infrastructure EF Core repository / Unit of Work
+-> SQL Server
+```
+
+Legacy stored-procedure-backed workflows may continue to use this transitional flow until they are deliberately refactored:
+
+```text
+Blazor Web
+-> typed Web API client
+-> ASP.NET Core API controller
+-> IMediator.Send(command/query)
+-> Application command/query handler
+-> Infrastructure stored-procedure wrapper
+-> SQL Server stored procedure
+```
+
+Default direction going forward:
+
+```text
+New or actively changed workflow = prefer EF Core + Unit of Work.
+Existing stable stored-procedure workflow = keep for now unless the task explicitly refactors it.
+Stored-procedure refactoring = defer to a later dedicated cleanup unless the current task requires it.
 ```
 
 Do not implement new business workflows using this anti-pattern:
@@ -222,35 +242,63 @@ Rules:
 
 ---
 
-## Database and stored procedure rules
+## Database, EF Core, and stored procedure rules
 
 SQL Server is the system of record for workflow state.
 
-Use stored procedures or wrapper procedures for workflows involving:
+### Default database interaction direction
+
+Use EF Core as the **default** database interaction approach for new and actively changed workflows.
+
+Prefer EF Core + Unit of Work for:
 
 * Multi-table writes
 * Status transitions
 * FileResource creation and business-record linking
 * Approval/rejection/cancellation
-* Account/security changes
-* Audit logging
-* Concurrency-sensitive operations
-* Business rules that must rollback together
+* Audit event creation
+* UI-driven workflows that create or update object graphs
+* Batch/multi-row workflows such as Quick Select
+* Workflows with business rules that are still changing
+* Workflows where maintainability and C# debugging are more important than SQL-side procedural logic
 
-EF Core is acceptable for:
+Business rules should primarily live in C# Application command/query handlers and validators. SQL constraints remain the final data-integrity guard.
 
-* Simple read models
-* List screens
-* Dashboard queries
-* Filters/search
-* Simple read-only joins
-* `AsNoTracking` query projections
+### Unit of Work rule
 
-Do not implement important multi-table workflows as separate uncoordinated EF `SaveChangesAsync` calls.
+Do not implement important multi-table workflows as separate uncoordinated `SaveChangesAsync` calls.
+
+For important writes:
+
+```text
+Application handler
+-> load required entities
+-> validate business rules
+-> apply state changes
+-> create audit event when needed
+-> SaveChangesAsync once inside one EF transaction / Unit of Work
+```
+
+Use explicit EF transactions when one command must atomically update several records or combine business rows with audit rows.
+
+### Legacy stored procedure policy
+
+Existing stored-procedure-backed workflows may remain in place for now.
+
+Do not refactor old stored procedures just because this document now prefers EF Core. Defer broad stored-procedure migration to a later dedicated cleanup unless the current task explicitly requires it or the stored-procedure shape blocks the requested feature.
+
+Keep or use stored procedures only when clearly justified, such as:
+
+* Stable legacy workflows that already work
+* Highly set-based database operations
+* Concurrency-sensitive operations where SQL locking is simpler
+* Reporting/aggregation queries that are significantly clearer or faster in SQL
+* One optimized database operation that would otherwise require many round trips
+* Transitional compatibility with existing code
 
 Stored-procedure call wrappers belong in Infrastructure.
 
-Required SQL wrapper conventions:
+Required SQL wrapper conventions for legacy/still-used procedures:
 
 * Use `CommandType.StoredProcedure`.
 * Use strongly typed `SqlParameter`.
@@ -270,9 +318,10 @@ Rules:
 * Business tables should reference files through `file_resource_id`.
 * Do not store raw Cloudinary URLs directly in business tables when a `FileResource` relationship is available.
 * Backend validates files before upload.
-* Backend uploads to Cloudinary before SQL workflow.
-* SQL stored procedure/wrapper links `FileResource` and business records atomically.
-* If Cloudinary upload succeeds but SQL workflow fails, backend must attempt Cloudinary cleanup.
+* Backend uploads to Cloudinary before the database workflow.
+* EF Core Unit of Work should link `FileResource` and business records atomically for new or actively changed workflows.
+* Legacy stored-procedure workflows may continue to link `FileResource` and business records through SQL wrappers until deliberately refactored.
+* If Cloudinary upload succeeds but the later database workflow fails, backend must attempt Cloudinary cleanup.
 * Never keep a SQL transaction open while uploading to Cloudinary.
 * `sha256_hash` is required for FileResource metadata.
 
@@ -616,16 +665,19 @@ Clean Architecture placement:
 - Application:
 - Infrastructure:
 - Domain:
-- Database/SP:
+- Database/EF/SP:
 
 Web-to-API flow:
-Razor Page -> Typed API Client -> API Controller -> IMediator.Send -> Handler -> Repository/SP -> SQL Server
+Razor Page -> Typed API Client -> API Controller -> IMediator.Send -> Handler -> EF Repository/Unit of Work -> SQL Server
+
+Legacy SP flow if applicable:
+Razor Page -> Typed API Client -> API Controller -> IMediator.Send -> Handler -> Stored-procedure wrapper -> SQL Server stored procedure
 
 Files likely to change:
 - ...
 
-DB/SP impact:
-- None / existing proc / new proc / changed proc
+DB/EF/SP impact:
+- EF Core default / existing legacy proc / new proc only if justified / changed proc only if explicitly required
 
 Verification:
 - build command
@@ -645,7 +697,7 @@ For simple bug fixes, a shorter plan is acceptable, but still mention the archit
 * Use feature-based controllers and typed clients.
 * Keep UI state in Razor components, not business workflow rules.
 * Keep API controllers thin.
-* Keep important workflow validation in Application and SQL stored procedures.
+* Keep important workflow validation primarily in Application command handlers/validators; use SQL constraints as final guards and legacy stored procedures only where still intentionally retained.
 * Keep external service implementation in Infrastructure.
 * Prefer `AsNoTracking` for read-only EF queries.
 * Use `CancellationToken` for async operations.
@@ -667,7 +719,8 @@ Files changed
 - path: purpose
 
 Architecture flow
-- Web -> typed API client -> API -> MediatR -> Application -> Infrastructure -> SQL/SP
+- Web -> typed API client -> API -> MediatR -> Application -> Infrastructure EF Core/UoW -> SQL Server
+- Mention legacy SP wrapper only if the task still uses one
 
 Verification
 - Build/test command and result
@@ -712,8 +765,8 @@ When the user asks for a new feature:
 
 1. Map the request to the MVP actor and business flow.
 2. Check whether it is in scope.
-3. Check whether it touches schema, stored procedures, API, Web, or all layers.
-4. State the implementation path.
+3. Check whether it touches schema, EF Core mappings/repositories, legacy stored procedures, API, Web, or all layers.
+4. State the implementation path and prefer EF Core for new/changed workflows unless a stored procedure is clearly justified.
 5. Execute only the requested scope.
 6. Update `docs/revision` with evidence.
 
