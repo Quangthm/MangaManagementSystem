@@ -504,3 +504,87 @@ dotnet build MangaManagementSystem\MangaManagementSystem.slnx --no-incremental
 - [ ] Try Cancel with file but blank comments and confirm it is rejected
 - [ ] Try Approve with optional file and confirm comments remain optional
 - [ ] Confirm no stored procedure was added
+
+---
+
+## Follow-up Implementation — Review History, Queue Tracking, and Chapter Info Cleanup
+
+### Date
+2026-06-29
+
+### Problem
+Runtime testing showed:
+- The Chapter Info card showed `Current versions`, which implied chapter-level versioning. In the current model, versioning belongs to `ChapterPageVersion`, not `Chapter`.
+- The detail page did not show past editorial review decisions.
+- Uploaded markup files were stored but not visible after review.
+- The queue behaved like an UNDER_REVIEW-only queue, while editors need to track all responsible chapters.
+- Queue actions used "Review Chapter" even for chapters that are not currently reviewable.
+
+### Fix
+
+#### `Current versions` removed from Chapter Info
+Removed the `Current versions: N` line from the Chapter Info card. The `CurrentVersionCount` field was removed from `EditorChapterReviewDetailDto` since it was a computed read-model value (count of pages with current versions) and misleading as chapter-level metadata. No database column was added.
+
+#### Page-level version labels preserved
+Page-level version labels (`Current Version`, `Version`, `v1`, etc.) in the Pages table remain because they refer to `ChapterPageVersion`. The `CurrentVersionId` and `CurrentVersionNo` fields on `EditorChapterReviewPageDto` are computed per-page read-model values and were not changed.
+
+#### All-status queue/filter behavior
+The queue now shows chapters in all valid statuses (`DRAFT`, `UNDER_REVIEW`, `REVISION_REQUESTED`, `APPROVED`, `SCHEDULED`, `RELEASED`, `ON_HOLD`, `CANCELLED`) when `All` is selected. The repository was updated to include all statuses instead of only the 3 reviewable ones. The filter dropdown includes all 8 statuses plus `All` as default.
+
+#### Grouping by series
+Chapters are grouped by series title on the queue page. Each series gets a header row (`Series: {Title}`) with its own `MudTable` of chapters. Search and filter are applied client-side before grouping. Series sorted alphabetically, chapters within each series sorted by chapter number label.
+
+#### `Review Chapter` renamed to `View Chapter`
+The action button renamed from "Review Chapter" to "View Chapter". Navigates to `/editor/chapters/{chapterId}` and is available for all statuses. Workspace action remains separate.
+
+#### Review decision panel hidden for non-UNDER_REVIEW
+Decision panel already had `_detail.StatusCode == "UNDER_REVIEW"` conditional. Added `else` branch with info alert: "This chapter is not currently under review. Review decisions are only available for chapters with UNDER_REVIEW status."
+
+#### Editorial review history section added
+New `Editorial Review History` section in the detail page sidebar, after Chapter Info and Workspace cards. Shows past `ChapterEditorialReview` records sorted newest-first. Each record displays: decision code (colored chip), reviewed by, reviewed at, comments, and markup file button if attached.
+
+#### Markup file display added
+If `markup_file_id` exists and file is active, shows button with file name and `Target="_blank"` using Cloudinary secure URL as `Href`. Raw URLs are never visible as text.
+
+#### No database `CurrentVersion` column added
+`CurrentVersionCount` removed from DTO only. No schema changes.
+
+### New DTOs/records
+- `EditorChapterReviewHistoryDto` (Application DTO)
+- `EditorChapterReviewHistoryItem` (Domain read record)
+
+### Files changed
+- `Application/DTOs/Editor/EditorChapterReviewDtos.cs`
+- `Domain/Interfaces/IEditorChapterReviewRepository.cs`
+- `Infrastructure/Repositories/EditorChapterReviewRepository.cs`
+- `Application/Features/Editor/ChapterReviews/Queries/GetEditorChapterReviewDetail/GetEditorChapterReviewDetailQueryHandler.cs`
+- `Web/Components/Pages/Editor/ChapterReviewList.razor`
+- `Web/Components/Pages/Editor/ChapterReviewDetail.razor`
+
+### Build result
+```
+dotnet build MangaManagementSystem\MangaManagementSystem.slnx --no-incremental
+```
+- Build succeeded
+- 0 errors
+- 47 warnings (all pre-existing)
+
+### Manual test checklist
+- [ ] Open `/editor/chapters`
+- [ ] Confirm chapters are grouped by series
+- [ ] Confirm filter includes All, Draft, Under Review, Revision Requested, Approved, Scheduled, Released, On Hold, Cancelled
+- [ ] Confirm All shows chapters from all valid statuses for responsible series
+- [ ] Confirm each row uses `View Chapter`
+- [ ] Confirm `View Chapter` opens `/editor/chapters/{chapterId}` for every status
+- [ ] Confirm Workspace action remains separate if present
+- [ ] Open an UNDER_REVIEW chapter and confirm Review Decision panel appears
+- [ ] Open APPROVED chapter and confirm Review Decision panel is hidden
+- [ ] Open REVISION_REQUESTED chapter and confirm Review Decision panel is hidden
+- [ ] Open CANCELLED chapter and confirm Review Decision panel is hidden
+- [ ] Confirm Chapter Info no longer shows `Current versions`
+- [ ] Confirm page-level Version labels remain in the Pages table
+- [ ] Confirm Editorial Review History appears on detail page
+- [ ] Confirm previous decisions show decision, comments, reviewed by, reviewed at
+- [ ] Confirm attached markup file appears as a safe file button/link
+- [ ] Confirm raw Cloudinary URL is not shown as visible text
+- [ ] Confirm no DB column named CurrentVersion was added

@@ -23,7 +23,18 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         private const string StatusApproved = "APPROVED";
         private const string StatusRevisionRequested = "REVISION_REQUESTED";
         private const string StatusOnHold = "ON_HOLD";
+        private const string StatusDraft = "DRAFT";
+        private const string StatusScheduled = "SCHEDULED";
+        private const string StatusReleased = "RELEASED";
+        private const string StatusCancelled = "CANCELLED";
         private const string TantouEditorRole = "Tantou Editor";
+
+        private static readonly string[] AllChapterStatuses =
+        {
+            StatusDraft, StatusUnderReview, StatusRevisionRequested,
+            StatusApproved, StatusScheduled, StatusReleased,
+            StatusOnHold, StatusCancelled
+        };
 
         private readonly ApplicationDbContext _dbContext;
 
@@ -63,8 +74,6 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
             // ── Chapter list filtered by selected status ────────────────────────
 
-            var reviewableStatuses = new[] { StatusUnderReview, StatusRevisionRequested, StatusOnHold };
-
             IQueryable<Chapter> baseQuery = _dbContext.Chapters
                 .AsNoTracking()
                 .Include(c => c.Series)
@@ -77,7 +86,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             }
             else
             {
-                baseQuery = baseQuery.Where(c => reviewableStatuses.Contains(c.StatusCode));
+                baseQuery = baseQuery.Where(c => AllChapterStatuses.Contains(c.StatusCode));
             }
 
             List<EditorChapterReviewChapter> chapters = await baseQuery
@@ -201,6 +210,25 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
             int pageCount = pageDetails.Count;
 
+            // Editorial review history for this chapter
+            var reviewHistory = await _dbContext.ChapterEditorialReviews
+                .AsNoTracking()
+                .Where(r => r.ChapterId == chapterId)
+                .OrderByDescending(r => r.ReviewedAtUtc)
+                .Select(r => new EditorChapterReviewHistoryItem(
+                    r.ChapterEditorialReviewId,
+                    r.DecisionCode,
+                    r.Feedback,
+                    r.ReviewedAtUtc,
+                    r.ReviewerUserId,
+                    r.ReviewerUser != null ? r.ReviewerUser.DisplayName ?? r.ReviewerUser.Username : "Unknown",
+                    r.MarkupFileId,
+                    r.MarkupFile != null ? r.MarkupFile.OriginalFileName : null,
+                    r.MarkupFile != null ? r.MarkupFile.CloudinarySecureUrl : null,
+                    r.MarkupFile != null ? r.MarkupFile.ContentType : null,
+                    r.MarkupFile != null ? (long?)r.MarkupFile.FileSizeBytes : null))
+                .ToListAsync(ct);
+
             return new EditorChapterReviewDetail(
                 chapter.ChapterId,
                 chapter.SeriesId,
@@ -213,7 +241,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 chapter.CreatedAtUtc,
                 chapter.CreatedByUser?.DisplayName,
                 pageDetails,
-                annotations);
+                annotations,
+                reviewHistory);
         }
 
         public async Task<ChapterEditorialReviewResult> SubmitChapterEditorialReviewAsync(

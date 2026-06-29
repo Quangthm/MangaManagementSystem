@@ -52,12 +52,12 @@ namespace MangaManagementSystem.Application.DTOs.Editor
         string? ChapterTitle,
         string StatusCode,
         int PageCount,
-        int CurrentVersionCount,
         DateTime CreatedAtUtc,
         string? SubmittedByDisplayName,
         string? AssignedEditorDisplayName,
         IReadOnlyList<EditorChapterReviewPageDto> Pages,
         IReadOnlyList<EditorChapterReviewAnnotationDto> OpenAnnotations,
+        IReadOnlyList<EditorChapterReviewHistoryDto> EditorialReviewHistory,
         string? WorkspaceUrl,
         bool CanOpenWorkspace);
 
@@ -85,6 +85,21 @@ namespace MangaManagementSystem.Application.DTOs.Editor
         int? PageNumber,
         Guid? CurrentVersionId,
         short? CurrentVersionNo);
+
+    /// <summary>
+    /// A single entry in the editorial review history for a chapter.
+    /// </summary>
+    public sealed record EditorChapterReviewHistoryDto(
+        Guid ReviewId,
+        string DecisionCode,
+        string? Comments,
+        DateTime ReviewedAtUtc,
+        string ReviewerDisplayName,
+        Guid? MarkupFileId,
+        string? MarkupFileName,
+        string? MarkupFileUrl,
+        string? MarkupContentType,
+        long? MarkupFileSizeBytes);
 
     /// <summary>
     /// Request body for submitting a chapter editorial review decision.

@@ -15,9 +15,10 @@ namespace MangaManagementSystem.Domain.Interfaces
         /// <summary>
         /// Returns KPI counts and a filtered chapter list for the review queue page.
         /// <paramref name="statusFilter"/> narrows the chapter list; null/empty/"all" means
-        /// all reviewable statuses (UNDER_REVIEW, REVISION_REQUESTED, ON_HOLD). Each chapter
-        /// carries its page count (derived from the ChapterPages table) and its parent Series
-        /// (with Slug) so the handler can build workspace URLs.
+        /// all valid chapter statuses (DRAFT, UNDER_REVIEW, REVISION_REQUESTED, APPROVED,
+        /// SCHEDULED, RELEASED, ON_HOLD, CANCELLED). Each chapter carries its page count
+        /// (derived from the ChapterPages table) and its parent Series (with Slug) so the
+        /// handler can build workspace URLs.
         ///
         /// Scope: only chapters belonging to series where <paramref name="actorUserId"/> is an
         /// active Tantou Editor contributor are counted and listed.
@@ -93,7 +94,8 @@ namespace MangaManagementSystem.Domain.Interfaces
         DateTime CreatedAtUtc,
         string? SubmittedByDisplayName,
         IReadOnlyList<EditorChapterReviewDetailPage> Pages,
-        IReadOnlyList<EditorChapterReviewDetailAnnotation> OpenAnnotations);
+        IReadOnlyList<EditorChapterReviewDetailAnnotation> OpenAnnotations,
+        IReadOnlyList<EditorChapterReviewHistoryItem> EditorialReviewHistory);
 
     public sealed record EditorChapterReviewDetailPage(
         Guid ChapterPageId,
@@ -112,6 +114,22 @@ namespace MangaManagementSystem.Domain.Interfaces
         int? PageNumber,
         Guid? CurrentVersionId,
         short? CurrentVersionNo);
+
+    /// <summary>
+    /// A single editorial review decision from the chapter's review history.
+    /// </summary>
+    public sealed record EditorChapterReviewHistoryItem(
+        Guid ReviewId,
+        string DecisionCode,
+        string? Comments,
+        DateTime ReviewedAtUtc,
+        Guid ReviewerUserId,
+        string ReviewerDisplayName,
+        Guid? MarkupFileId,
+        string? MarkupFileName,
+        string? MarkupFileUrl,
+        string? MarkupContentType,
+        long? MarkupFileSizeBytes);
 
     /// <summary>
     /// Result of a chapter editorial review decision write operation.

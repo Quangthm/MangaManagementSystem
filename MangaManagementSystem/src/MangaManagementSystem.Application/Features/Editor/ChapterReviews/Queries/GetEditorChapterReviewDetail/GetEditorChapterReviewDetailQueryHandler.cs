@@ -59,7 +59,19 @@ namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queri
                     a.CurrentVersionNo))
                 .ToList();
 
-            int currentVersionCount = pages.Count(p => p.CurrentVersionId.HasValue);
+            var reviewHistory = detail.EditorialReviewHistory
+                .Select(h => new EditorChapterReviewHistoryDto(
+                    h.ReviewId,
+                    h.DecisionCode,
+                    h.Comments,
+                    h.ReviewedAtUtc,
+                    h.ReviewerDisplayName,
+                    h.MarkupFileId,
+                    h.MarkupFileName,
+                    h.MarkupFileUrl,
+                    h.MarkupContentType,
+                    h.MarkupFileSizeBytes))
+                .ToList();
 
             string? workspaceUrl = !string.IsNullOrWhiteSpace(detail.SeriesSlug)
                 ? $"/series/{detail.SeriesSlug}/workspace?chapterId={detail.ChapterId}&returnUrl={Uri.EscapeDataString($"/editor/chapters/{detail.ChapterId}")}"
@@ -74,13 +86,12 @@ namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queri
                 detail.ChapterTitle,
                 detail.StatusCode,
                 detail.PageCount,
-                currentVersionCount,
                 detail.CreatedAtUtc,
                 detail.SubmittedByDisplayName,
-                // No chapter-to-editor assignment concept exists in the schema (MVP).
                 AssignedEditorDisplayName: null,
                 pages,
                 annotations,
+                reviewHistory,
                 workspaceUrl,
                 CanOpenWorkspace: workspaceUrl is not null);
         }

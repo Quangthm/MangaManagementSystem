@@ -13,7 +13,7 @@
     <div class="mf-page">
         <div class="mf-page-header">
             <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Chapter Review Queue</MudText>
-            <MudText Typo="Typo.body1" Class="mf-muted">Review submitted chapters page by page and record editorial decisions</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Track all chapters for your responsible series and record editorial decisions</MudText>
         </div>
 
         @if (_loading)
@@ -60,16 +60,21 @@
 
             <MudPaper Class="pa-5 mf-card" Elevation="0">
                 <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
-                    <MudText Typo="Typo.h6" Class="font-weight-bold">Chapters Awaiting Review</MudText>
+                    <MudText Typo="Typo.h6" Class="font-weight-bold">Chapters</MudText>
                     <div class="d-flex align-center gap-2">
                         <MudTextField @bind-Value="_searchText" Label="Search series, chapter, or title"
                                       Immediate="true" Variant="Variant.Outlined"
                                       Style="min-width: 300px; max-width: 400px;" />
                         <MudSelect T="string" Label="Filter" Value="@_statusFilter" ValueChanged="OnFilterChanged" Variant="Variant.Outlined" Style="width: 220px; min-width: 220px; max-width: 220px;">
                             <MudSelectItem Value="@("all")">All</MudSelectItem>
+                            <MudSelectItem Value="@("DRAFT")">Draft</MudSelectItem>
                             <MudSelectItem Value="@("UNDER_REVIEW")">Under Review</MudSelectItem>
                             <MudSelectItem Value="@("REVISION_REQUESTED")">Revision Requested</MudSelectItem>
+                            <MudSelectItem Value="@("APPROVED")">Approved</MudSelectItem>
+                            <MudSelectItem Value="@("SCHEDULED")">Scheduled</MudSelectItem>
+                            <MudSelectItem Value="@("RELEASED")">Released</MudSelectItem>
                             <MudSelectItem Value="@("ON_HOLD")">On Hold</MudSelectItem>
+                            <MudSelectItem Value="@("CANCELLED")">Cancelled</MudSelectItem>
                         </MudSelect>
                         <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadQueue" StartIcon="@Icons.Material.Filled.Refresh" Size="Size.Small">Refresh</MudButton>
                     </div>
@@ -79,48 +84,66 @@
                 {
                     <MudPaper Class="pa-8 text-center mf-card" Elevation="0">
                         <MudIcon Icon="@Icons.Material.Outlined.CheckCircle" Size="Size.Large" Color="Color.Success" Class="mb-3" />
-                        <MudText Typo="Typo.h6">No Chapters Pending Review</MudText>
-                        <MudText Class="mf-muted">All submitted chapters have been reviewed.</MudText>
+                        <MudText Typo="Typo.h6">No Chapters Found</MudText>
+                        <MudText Class="mf-muted">No chapters match the current filter for your responsible series.</MudText>
                     </MudPaper>
                 }
                 else
                 {
-                    <MudTable Items="@GetFilteredChapters()" Hover="true" Dense="true" RowsPerPage="15">
-                        <HeaderContent>
-                            <MudTh>Series</MudTh>
-                            <MudTh>Chapter</MudTh>
-                            <MudTh>Title</MudTh>
-                            <MudTh>Pages</MudTh>
-                            <MudTh>Created</MudTh>
-                            <MudTh>Status</MudTh>
-                            <MudTh>Actions</MudTh>
-                        </HeaderContent>
-                        <RowTemplate>
-                            <MudTd DataLabel="Series">@context.SeriesTitle</MudTd>
-                            <MudTd DataLabel="Chapter">@context.ChapterNumberLabel</MudTd>
-                            <MudTd DataLabel="Title">@(context.ChapterTitle ?? "—")</MudTd>
-                            <MudTd DataLabel="Pages">@context.PageCount pages</MudTd>
-                            <MudTd DataLabel="Created">@context.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</MudTd>
-                            <MudTd DataLabel="Status">
-                                <MudChip T="string" Color="@GetStatusColor(context.StatusCode)" Size="Size.Small">@context.StatusCode.Replace("_", " ")</MudChip>
-                            </MudTd>
-                            <MudTd DataLabel="Actions">
-                                <MudStack Row="true" Spacing="2">
-                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
-                                               OnClick="@(() => Nav.NavigateTo($"/editor/chapters/{context.ChapterId}"))">
-                                        Review Chapter
-                                    </MudButton>
-                                    @if (!string.IsNullOrWhiteSpace(context.WorkspaceUrl))
-                                    {
-                                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Secondary"
-                                                   OnClick="@(() => Nav.NavigateTo(context.WorkspaceUrl))">
-                                            Workspace
-                                        </MudButton>
-                                    }
-                                </MudStack>
-                            </MudTd>
-                        </RowTemplate>
-                    </MudTable>
+                    var grouped = GetGroupedChapters();
+                    @if (grouped.Count == 0)
+                    {
+                        <MudPaper Class="pa-8 text-center mf-card" Elevation="0">
+                            <MudIcon Icon="@Icons.Material.Outlined.CheckCircle" Size="Size.Large" Color="Color.Success" Class="mb-3" />
+                            <MudText Typo="Typo.h6">No Chapters Found</MudText>
+                            <MudText Class="mf-muted">No chapters match the current filter for your responsible series.</MudText>
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        @foreach (var group in grouped)
+                        {
+                            <div class="mb-4">
+                                <MudText Typo="Typo.h6" Class="font-weight-bold mb-2" Color="Color.Primary">
+                                    Series: @group.SeriesTitle
+                                </MudText>
+                                <MudTable Items="@group.Chapters" Hover="true" Dense="true" RowsPerPage="15">
+                                    <HeaderContent>
+                                        <MudTh>Chapter</MudTh>
+                                        <MudTh>Title</MudTh>
+                                        <MudTh>Pages</MudTh>
+                                        <MudTh>Created</MudTh>
+                                        <MudTh>Status</MudTh>
+                                        <MudTh>Actions</MudTh>
+                                    </HeaderContent>
+                                    <RowTemplate>
+                                        <MudTd DataLabel="Chapter">@context.ChapterNumberLabel</MudTd>
+                                        <MudTd DataLabel="Title">@(context.ChapterTitle ?? "—")</MudTd>
+                                        <MudTd DataLabel="Pages">@context.PageCount pages</MudTd>
+                                        <MudTd DataLabel="Created">@context.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</MudTd>
+                                        <MudTd DataLabel="Status">
+                                            <MudChip T="string" Color="@GetStatusColor(context.StatusCode)" Size="Size.Small">@context.StatusCode.Replace("_", " ")</MudChip>
+                                        </MudTd>
+                                        <MudTd DataLabel="Actions">
+                                            <MudStack Row="true" Spacing="2">
+                                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                                           OnClick="@(() => Nav.NavigateTo($"/editor/chapters/{context.ChapterId}"))">
+                                                    View Chapter
+                                                </MudButton>
+                                                @if (!string.IsNullOrWhiteSpace(context.WorkspaceUrl))
+                                                {
+                                                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Secondary"
+                                                               OnClick="@(() => Nav.NavigateTo(context.WorkspaceUrl))">
+                                                        Workspace
+                                                    </MudButton>
+                                                }
+                                            </MudStack>
+                                        </MudTd>
+                                    </RowTemplate>
+                                </MudTable>
+                            </div>
+                        }
+                    }
                 }
             </MudPaper>
         }
@@ -177,16 +200,22 @@
 
     private Color GetStatusColor(string status) => status switch
     {
+        "DRAFT" => Color.Default,
         "UNDER_REVIEW" => Color.Warning,
         "REVISION_REQUESTED" => Color.Error,
-        "ON_HOLD" => Color.Info,
         "APPROVED" => Color.Success,
+        "SCHEDULED" => Color.Tertiary,
+        "RELEASED" => Color.Info,
+        "ON_HOLD" => Color.Info,
+        "CANCELLED" => Color.Dark,
         _ => Color.Default
     };
 
-    private IEnumerable<EditorChapterReviewQueueItemDto> GetFilteredChapters()
+    private record ChapterGroup(string SeriesTitle, List<EditorChapterReviewQueueItemDto> Chapters);
+
+    private List<ChapterGroup> GetGroupedChapters()
     {
-        if (_queue?.Chapters == null) return Array.Empty<EditorChapterReviewQueueItemDto>();
+        if (_queue?.Chapters == null) return new List<ChapterGroup>();
 
         var filtered = _queue.Chapters.AsEnumerable();
 
@@ -198,6 +227,10 @@
                 (c.ChapterTitle != null && c.ChapterTitle.Contains(_searchText, StringComparison.OrdinalIgnoreCase)));
         }
 
-        return filtered;
+        return filtered
+            .GroupBy(c => new { c.SeriesId, c.SeriesTitle })
+            .OrderBy(g => g.Key.SeriesTitle)
+            .Select(g => new ChapterGroup(g.Key.SeriesTitle, g.OrderBy(c => c.ChapterNumberLabel).ToList()))
+            .ToList();
     }
 }
