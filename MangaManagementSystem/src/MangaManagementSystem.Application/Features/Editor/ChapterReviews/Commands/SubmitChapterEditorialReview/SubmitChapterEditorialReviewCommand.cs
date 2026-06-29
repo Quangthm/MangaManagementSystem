@@ -9,5 +9,7 @@ namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Comma
         Guid ChapterId,
         string DecisionCode,
         string? Comments,
-        Guid? MarkupFileId) : IRequest<SubmitChapterEditorialReviewResponse>;
+        byte[]? MarkupFileBytes,
+        string? MarkupFileName,
+        string? MarkupContentType) : IRequest<SubmitChapterEditorialReviewResponse>;
 }

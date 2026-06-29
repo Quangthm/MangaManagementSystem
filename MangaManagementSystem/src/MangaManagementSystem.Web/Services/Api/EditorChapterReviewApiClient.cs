@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Editor;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.Logging;
 
 namespace MangaManagementSystem.Web.Services.Api
@@ -16,6 +17,7 @@ namespace MangaManagementSystem.Web.Services.Api
     public class EditorChapterReviewApiClient : IEditorChapterReviewApiClient
     {
         private const string ActorUserIdHeader = "X-Actor-User-Id";
+        private const long MaxMarkupFileSize = 10 * 1024 * 1024; // 10 MB
 
         private readonly HttpClient _httpClient;
         private readonly ILogger<EditorChapterReviewApiClient> _logger;
@@ -102,6 +104,59 @@ namespace MangaManagementSystem.Web.Services.Api
                 "Load chapter review detail {ChapterId} failed: {StatusCode} {ReasonPhrase}",
                 chapterId, (int)response.StatusCode, response.ReasonPhrase);
             return EditorChapterReviewDetailResult.Failure(message);
+        }
+
+        public async Task<SubmitChapterEditorialReviewResponse> SubmitReviewDecisionWithMarkupAsync(
+            Guid actorUserId,
+            Guid chapterId,
+            string decisionCode,
+            string? comments,
+            IBrowserFile? markupFile,
+            CancellationToken cancellationToken = default)
+        {
+            using var content = new MultipartFormDataContent();
+            content.Add(new StringContent(decisionCode), nameof(decisionCode));
+            if (!string.IsNullOrWhiteSpace(comments))
+            {
+                content.Add(new StringContent(comments), nameof(comments));
+            }
+
+            if (markupFile is not null)
+            {
+                var fileContent = new StreamContent(markupFile.OpenReadStream(MaxMarkupFileSize));
+                fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(markupFile.ContentType);
+                content.Add(fileContent, "MarkupFile", markupFile.Name);
+            }
+
+            using var requestMessage = new HttpRequestMessage(
+                HttpMethod.Post, $"api/editor/chapters/{chapterId}/review-decision/with-markup")
+            {
+                Content = content
+            };
+            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content
+                    .ReadFromJsonAsync<SubmitChapterEditorialReviewResponse>(
+                        cancellationToken: cancellationToken);
+
+                if (result is null)
+                {
+                    throw new InvalidOperationException(
+                        "The review decision returned no data. Please refresh and try again.");
+                }
+
+                return result;
+            }
+
+            var message = await ExtractErrorMessageAsync(response);
+            _logger.LogWarning(
+                "Submit review decision with markup for chapter {ChapterId} failed: {StatusCode} {ReasonPhrase}",
+                chapterId, (int)response.StatusCode, response.ReasonPhrase);
+            throw new InvalidOperationException(message);
         }
 
         public async Task<SubmitChapterEditorialReviewResponse> SubmitReviewDecisionAsync(

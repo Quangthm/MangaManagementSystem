@@ -3,8 +3,13 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Editor;
+using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.Application.Features.Editor.SeriesProposals;
+using MangaManagementSystem.Application.Features.Editor.SeriesProposals.Common;
+using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Domain.Interfaces;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.SubmitChapterEditorialReview
 {
@@ -15,10 +20,17 @@ namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Comma
         private const int MaxCommentsLength = 2000;
 
         private readonly IEditorChapterReviewRepository _repository;
+        private readonly IFileStorageService _fileStorageService;
+        private readonly ILogger<SubmitChapterEditorialReviewCommandHandler> _logger;
 
-        public SubmitChapterEditorialReviewCommandHandler(IEditorChapterReviewRepository repository)
+        public SubmitChapterEditorialReviewCommandHandler(
+            IEditorChapterReviewRepository repository,
+            IFileStorageService fileStorageService,
+            ILogger<SubmitChapterEditorialReviewCommandHandler> logger)
         {
             _repository = repository;
+            _fileStorageService = fileStorageService;
+            _logger = logger;
         }
 
         public async Task<SubmitChapterEditorialReviewResponse> Handle(
@@ -47,21 +59,57 @@ namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Comma
                         $"Comments are required when the decision is {request.DecisionCode}.");
             }
 
-            var result = await _repository.SubmitChapterEditorialReviewAsync(
-                request.ActorUserId,
-                request.ChapterId,
-                request.DecisionCode,
-                comments,
-                request.MarkupFileId,
-                cancellationToken);
+            // Optional markup upload (Cloudinary, outside the SQL transaction).
+            FileUploadResultDto? markup = null;
+            bool hasMarkup = request.MarkupFileBytes is { Length: > 0 };
 
-            return new SubmitChapterEditorialReviewResponse(
-                result.ChapterId,
-                result.StatusCode,
-                result.ReviewId,
-                result.DecisionCode,
-                result.Comments,
-                result.ReviewedAtUtc);
+            if (hasMarkup)
+            {
+                markup = await EditorialMarkupUploader.ValidateAndUploadAsync(
+                    _fileStorageService,
+                    request.MarkupFileBytes!,
+                    request.MarkupFileName,
+                    request.MarkupContentType);
+            }
+
+            try
+            {
+                var uploadMeta = markup is not null
+                    ? new MangaManagementSystem.Domain.Interfaces.UploadedFileMetadata(
+                        markup.OriginalFileName,
+                        markup.PublicId,
+                        markup.SecureUrl,
+                        markup.ContentType,
+                        markup.FileSizeBytes,
+                        markup.Sha256Hash)
+                    : null;
+
+                var result = await _repository.SubmitChapterEditorialReviewAsync(
+                    request.ActorUserId,
+                    request.ChapterId,
+                    request.DecisionCode,
+                    comments,
+                    uploadMeta,
+                    cancellationToken);
+
+                return new SubmitChapterEditorialReviewResponse(
+                    result.ChapterId,
+                    result.StatusCode,
+                    result.ReviewId,
+                    result.DecisionCode,
+                    result.Comments,
+                    result.ReviewedAtUtc);
+            }
+            catch
+            {
+                if (markup is not null)
+                {
+                    await EditorialMarkupUploader.TryCleanupAsync(
+                        _fileStorageService, _logger, markup,
+                        $"Workflow failed after markup upload for chapter {request.ChapterId} (decision: {request.DecisionCode}).");
+                }
+                throw;
+            }
         }
 
         private static string? NormalizeComments(string? value)

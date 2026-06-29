@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Editor;
+using Microsoft.AspNetCore.Components.Forms;
 
 namespace MangaManagementSystem.Web.Services.Api
 {
@@ -39,6 +40,18 @@ namespace MangaManagementSystem.Web.Services.Api
             Guid actorUserId,
             Guid chapterId,
             SubmitChapterEditorialReviewRequest request,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Submits a final review decision with an optional markup file attachment via
+        /// multipart/form-data.
+        /// </summary>
+        Task<SubmitChapterEditorialReviewResponse> SubmitReviewDecisionWithMarkupAsync(
+            Guid actorUserId,
+            Guid chapterId,
+            string decisionCode,
+            string? comments,
+            IBrowserFile? markupFile,
             CancellationToken cancellationToken = default);
     }
 

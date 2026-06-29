@@ -345,3 +345,162 @@ dotnet build MangaManagementSystem\MangaManagementSystem.slnx --no-incremental
 - [ ] Confirm Open Annotations section paginates when enough annotation groups exist (5 per page)
 - [ ] Click an annotation card and confirm workspace opens to that page context
 - [ ] Confirm no workspace behavior was broken
+
+---
+
+## Follow-up Fix — Detail Page Table Simplification and Annotation Filter
+
+### Date
+2026-06-28 (third follow-up)
+
+### Problem
+Runtime testing showed:
+- `Open image` in the Pages table was redundant (Workspace already shows images) and exposed Cloudinary URLs directly.
+- The Pages table had separate Preview and Actions columns making the UI noisy; page rows should navigate directly.
+- The Actions column was unnecessary — page navigation should be via row click.
+- Editors needed unresolved annotation counts per page/current version for quick context.
+- Open Annotations section needed a page filter for focused review.
+
+### Fix
+
+#### Preview/Open image column removed
+Removed the entire `Preview` column and `Open image` links. No Cloudinary image URLs are exposed from the detail page.
+
+#### Actions column removed
+Removed the `Actions` column and the `Open in Workspace` per-row button. Row navigation is now via direct click.
+
+#### Page row/Current Version click navigates to Workspace
+- Clicking a page row (the Page number `MudTd`) opens Workspace for that page/version.
+- `Current Version` text is a clickable `MudButton` that also opens Workspace.
+- Destination: `/series/{slug}/workspace?chapterId={id}&page={pn}&version={vid}&returnUrl=/editor/chapters/{id}`
+
+#### Unresolved Annotations count added
+New `Unresolved Annotations` column shows the count of unresolved open annotations per page:
+- Matched by `PageNumber` and `CurrentVersionId` (fallback to page-only if no version).
+- Display: `MudChip` (warning color for >0, outlined for 0).
+- Computed client-side from `_detail.OpenAnnotations` — no backend changes needed.
+
+#### Open Annotations page filter added
+`MudSelect` at top of Open Annotations section with options:
+- "All pages" (default)
+- "Page 1", "Page 2", etc. from the pages list
+- Filter resets annotation pagination to page 1 on change.
+- Empty state: "No open annotations for Page N." when filtered page has none.
+
+### Files changed
+- `Web/Components/Pages/Editor/ChapterReviewDetail.razor`
+  - Removed Preview and Actions columns from Pages table
+  - Removed Open image links (Cloudinary URL exposure)
+  - Made page rows and Current Version clickable (workspace navigation)
+  - Added Unresolved Annotations column
+  - Added page filter to Open Annotations section
+  - Added `_annotationPageFilter`, `GetUnresolvedAnnotationCount`, `OnAnnotationPageFilterChanged`
+
+### Build result
+```
+dotnet build MangaManagementSystem\MangaManagementSystem.slnx --no-incremental
+```
+- Build succeeded
+- 0 errors
+- 46 warnings (added 1 MudTd OnClick MUD0002 — same false-positive pattern as MudPaper OnClick across the project)
+
+### Manual test checklist
+- [ ] Open `/editor/chapters`
+- [ ] Click `Review Chapter`
+- [ ] Confirm detail page opens
+- [ ] Confirm Pages table no longer shows `Open image`
+- [ ] Confirm direct Cloudinary image URL is no longer exposed from Pages table
+- [ ] Confirm Pages table no longer has Actions column
+- [ ] Click a page row and confirm Workspace opens at that page/version
+- [ ] Click Current Version and confirm Workspace opens at that page/version
+- [ ] Confirm Unresolved Annotations count is shown per page/current version
+- [ ] Confirm Open Annotations has page filter
+- [ ] Filter annotations by page and confirm only that page's groups show
+- [ ] Confirm annotation grouping and pagination still work
+- [ ] Confirm Approve/Request Revision/Cancel dialogs still work
+- [ ] Confirm bottom-right Review in Workspace button still works
+
+---
+
+## Follow-up Implementation — Markup File Upload for Review Decisions
+
+### Date
+2026-06-28 (fourth follow-up)
+
+### Problem
+Editor review decisions supported nullable `MarkupFileId`, but the UI always submitted null and there was no upload path for editorial markup/review attachments. The Tantou Editor needed to optionally attach PDF, Word documents, or images as supporting materials for review decisions.
+
+### Fix
+
+#### Existing upload helper/pattern reused
+Reused `EditorialMarkupUploader` and `EditorialMarkupValidation` from the series proposal workflow. These provide:
+- File validation (extension, content type, size ≤10 MB)
+- Cloudinary upload through `IFileStorageService`
+- sha256 hash verification
+- Best-effort cleanup if upload succeeds but DB write fails
+
+#### Endpoint strategy
+- Kept existing JSON endpoint `POST /api/editor/chapters/{chapterId}/review-decision` for no-file submissions.
+- Added new multipart endpoint `POST /api/editor/chapters/{chapterId}/review-decision/with-markup` with `[Consumes("multipart/form-data")]`.
+- UI always calls multipart endpoint when a file is selected, JSON endpoint otherwise.
+
+#### UI file picker behavior
+`MudFileUpload` with `Accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"` in the decision dialog. Shows selected file name, size, and a clear button. File selection is optional for all decisions.
+
+#### FileResource creation with `EDITORIAL_ATTACHMENT`
+Repository creates a `FileResource` entity in the EF transaction with:
+- `FilePurposeCode = "EDITORIAL_ATTACHMENT"`
+- Original file name, Cloudinary public ID, secure URL, content type, size, sha256 hash
+- `UploadedByUserId = actorUserId`, `UploadedAtUtc`
+
+#### Cloudinary upload / sha256 behavior
+`EditorialMarkupUploader.ValidateAndUploadAsync` validates file metadata, uploads to Cloudinary via `IFileStorageService`, verifies sha256 hash is present, and returns `FileUploadResultDto`. If hash is missing, the upload is cleaned up and an error is thrown.
+
+#### Transaction behavior
+1. File uploaded to Cloudinary outside EF transaction (via `EditorialMarkupUploader`).
+2. Repository starts EF transaction:
+   - Creates `FileResource` row
+   - Creates `ChapterEditorialReview` with `markup_file_id`
+   - Updates `Chapter.status_code` via `ExecuteUpdateAsync` (concurrency guarded)
+   - Writes audit event
+   - Commits atomically
+
+#### Cleanup behavior
+If the handler's upload succeeds but the repository transaction fails, `EditorialMarkupUploader.TryCleanupAsync` performs best-effort Cloudinary deletion of the orphaned file.
+
+#### Markup display after review
+Deferred to follow-up. The `ChapterEditorialReview.markup_file_id` is correctly populated and the FileResource exists, but the detail page does not yet display attached markup files after a review decision.
+
+### Files changed
+- `Application/Features/.../SubmitChapterEditorialReviewCommand.cs` — added `MarkupFileBytes`, `MarkupFileName`, `MarkupContentType`
+- `Application/Features/.../SubmitChapterEditorialReviewCommandHandler.cs` — added `IFileStorageService`, `EditorialMarkupUploader` orchestration, cleanup on failure
+- `Domain/Interfaces/IEditorChapterReviewRepository.cs` — added `UploadedFileMetadata` record; modified `SubmitChapterEditorialReviewAsync` signature
+- `Infrastructure/Repositories/EditorChapterReviewRepository.cs` — creates `FileResource` in EF transaction, enriched audit detail
+- `API/Controllers/Editor/EditorChapterReviewsController.cs` — fixed JSON endpoint, added multipart endpoint, added `SubmitChapterEditorialReviewFormRequest`
+- `Web/Services/Api/IEditorChapterReviewApiClient.cs` — added `SubmitReviewDecisionWithMarkupAsync`
+- `Web/Services/Api/EditorChapterReviewApiClient.cs` — implemented multipart upload
+- `Web/Components/Pages/Editor/ChapterReviewDetail.razor` — added file picker to decision dialog with file name/size display and clear button
+
+### Build result
+```
+dotnet build MangaManagementSystem\MangaManagementSystem.slnx --no-incremental
+```
+- Build succeeded
+- 0 errors
+- 47 warnings (all pre-existing)
+
+### Manual test checklist
+- [ ] Open `/editor/chapters`
+- [ ] Open an UNDER_REVIEW chapter detail
+- [ ] Click Request Revision
+- [ ] Enter comments and attach a valid PDF/DOCX/image
+- [ ] Submit and confirm decision succeeds
+- [ ] Confirm `ChapterEditorialReview.markup_file_id` is not null
+- [ ] Confirm `FileResource.file_purpose_code = EDITORIAL_ATTACHMENT`
+- [ ] Confirm file has `sha256_hash`
+- [ ] Confirm chapter status becomes `REVISION_REQUESTED`
+- [ ] Try unsupported file type and confirm UI/API rejects it
+- [ ] Try Request Revision with file but blank comments and confirm it is rejected
+- [ ] Try Cancel with file but blank comments and confirm it is rejected
+- [ ] Try Approve with optional file and confirm comments remain optional
+- [ ] Confirm no stored procedure was added

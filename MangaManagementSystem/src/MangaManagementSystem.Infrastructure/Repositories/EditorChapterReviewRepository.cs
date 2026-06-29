@@ -221,7 +221,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             Guid chapterId,
             string decisionCode,
             string? comments,
-            Guid? markupFileId,
+            UploadedFileMetadata? markup,
             CancellationToken ct = default)
         {
             if (actorUserId == Guid.Empty)
@@ -263,19 +263,29 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     throw new InvalidOperationException(
                         "This chapter is no longer under review and cannot receive a review decision.");
 
-                if (markupFileId.HasValue)
-                {
-                    bool validMarkup = await _dbContext.FileResources
-                        .AnyAsync(f => f.FileResourceId == markupFileId.Value
-                                    && f.FilePurposeCode == "EDITORIAL_ATTACHMENT"
-                                    && f.DeletedAtUtc == null, ct);
-
-                    if (!validMarkup)
-                        throw new InvalidOperationException(
-                            "The attached markup file is invalid or has been deleted.");
-                }
-
                 var reviewedAtUtc = DateTime.UtcNow;
+                Guid? markupFileId = null;
+
+                if (markup is not null)
+                {
+                    var fileResource = new FileResource
+                    {
+                        FilePurposeCode = "EDITORIAL_ATTACHMENT",
+                        OriginalFileName = markup.OriginalFileName,
+                        CloudinaryPublicId = markup.PublicId,
+                        CloudinarySecureUrl = markup.SecureUrl,
+                        ContentType = markup.ContentType,
+                        FileSizeBytes = markup.FileSizeBytes,
+                        Sha256Hash = markup.Sha256Hash,
+                        UploadedByUserId = actorUserId,
+                        UploadedAtUtc = reviewedAtUtc
+                    };
+
+                    _dbContext.FileResources.Add(fileResource);
+                    await _dbContext.SaveChangesAsync(ct);
+
+                    markupFileId = fileResource.FileResourceId;
+                }
 
                 var review = new ChapterEditorialReview
                 {
@@ -321,7 +331,10 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     new_status_code = newStatusCode,
                     decision_code = decisionCode,
                     has_markup_file = markupFileId.HasValue,
-                    markup_file_id = markupFileId
+                    markup_file_id = markupFileId,
+                    markup_file_name = markup?.OriginalFileName,
+                    markup_content_type = markup?.ContentType,
+                    markup_file_size = markup?.FileSizeBytes
                 });
 
                 var auditEvent = new AuditEvent

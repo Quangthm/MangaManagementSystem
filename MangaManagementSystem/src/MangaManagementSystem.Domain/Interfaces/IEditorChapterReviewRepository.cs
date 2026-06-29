@@ -48,7 +48,7 @@ namespace MangaManagementSystem.Domain.Interfaces
             Guid chapterId,
             string decisionCode,
             string? comments,
-            Guid? markupFileId,
+            UploadedFileMetadata? markup,
             CancellationToken ct = default);
     }
 
@@ -123,4 +123,15 @@ namespace MangaManagementSystem.Domain.Interfaces
         string DecisionCode,
         string? Comments,
         DateTime ReviewedAtUtc);
+
+    /// <summary>
+    /// Metadata for an uploaded file ready to be persisted as a <c>FileResource</c>.
+    /// </summary>
+    public sealed record UploadedFileMetadata(
+        string OriginalFileName,
+        string PublicId,
+        string SecureUrl,
+        string ContentType,
+        long FileSizeBytes,
+        string? Sha256Hash);
 }

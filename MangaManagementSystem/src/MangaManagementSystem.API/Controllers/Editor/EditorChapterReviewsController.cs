@@ -7,11 +7,23 @@ using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queries.GetEditorChapterReviewDetail;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queries.GetEditorChapterReviewQueue;
 using MediatR;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
 namespace MangaManagementSystem.API.Controllers.Editor
 {
+    /// <summary>
+    /// Multipart form request for submitting a chapter editorial review decision with an
+    /// optional markup file attachment.
+    /// </summary>
+    public sealed class SubmitChapterEditorialReviewFormRequest
+    {
+        public string DecisionCode { get; set; } = string.Empty;
+        public string? Comments { get; set; }
+        public IFormFile? MarkupFile { get; set; }
+    }
+
     /// <summary>
     /// Thin HTTP boundary for the Tantou Editor Chapter Review queue and detail. Resolves the
     /// actor, dispatches one MediatR query, returns the result. No business logic, EF, or SQL
@@ -133,7 +145,9 @@ namespace MangaManagementSystem.API.Controllers.Editor
                     chapterId,
                     request.DecisionCode,
                     request.Comments,
-                    request.MarkupFileId);
+                    MarkupFileBytes: null,
+                    MarkupFileName: null,
+                    MarkupContentType: null);
 
                 var result = await _mediator.Send(command, cancellationToken);
                 return Ok(result);
@@ -145,6 +159,68 @@ namespace MangaManagementSystem.API.Controllers.Editor
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Unexpected error submitting review decision for chapter {ChapterId}.", chapterId);
+                return Problem(
+                    detail: "We could not process the review decision right now. Please try again later.",
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
+        }
+
+        /// <summary>
+        /// Records a final chapter editorial review decision with an optional markup file
+        /// attachment. Route: POST /api/editor/chapters/{chapterId}/review-decision/with-markup
+        /// </summary>
+        [HttpPost("{chapterId:guid}/review-decision/with-markup")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> SubmitReviewDecisionWithMarkupAsync(
+            Guid chapterId,
+            [FromForm] SubmitChapterEditorialReviewFormRequest request,
+            CancellationToken cancellationToken)
+        {
+            if (!TryResolveActorUserId(out Guid actorUserId))
+            {
+                return BadRequest(new ApiErrorResponse(
+                    "Could not identify the requesting user. Please sign in again."));
+            }
+
+            if (string.IsNullOrWhiteSpace(request.DecisionCode))
+            {
+                return BadRequest(new ApiErrorResponse("A decision code is required."));
+            }
+
+            byte[]? markupBytes = null;
+            string? markupFileName = null;
+            string? markupContentType = null;
+
+            if (request.MarkupFile is { Length: > 0 })
+            {
+                using var ms = new System.IO.MemoryStream();
+                await request.MarkupFile.CopyToAsync(ms, cancellationToken);
+                markupBytes = ms.ToArray();
+                markupFileName = request.MarkupFile.FileName;
+                markupContentType = request.MarkupFile.ContentType;
+            }
+
+            try
+            {
+                var command = new SubmitChapterEditorialReviewCommand(
+                    actorUserId,
+                    chapterId,
+                    request.DecisionCode,
+                    request.Comments,
+                    markupBytes,
+                    markupFileName,
+                    markupContentType);
+
+                var result = await _mediator.Send(command, cancellationToken);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new ApiErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error submitting review decision with markup for chapter {ChapterId}.", chapterId);
                 return Problem(
                     detail: "We could not process the review decision right now. Please try again later.",
                     statusCode: StatusCodes.Status500InternalServerError);
