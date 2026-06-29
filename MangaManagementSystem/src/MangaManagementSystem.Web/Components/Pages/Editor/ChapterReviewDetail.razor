@@ -276,49 +276,10 @@
 
                     <!-- Editorial Review History -->
                     <MudPaper Class="pa-5 mf-card" Elevation="0">
-                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Editorial Review History</MudText>
-                        @{
-                            var reviewHistory = _detail?.EditorialReviewHistory ?? Array.Empty<EditorChapterReviewHistoryDto>();
-                        }
-                        @if (reviewHistory.Count == 0)
-                        {
-                            <MudText Class="mf-muted">No editorial review decisions have been recorded for this chapter yet.</MudText>
-                        }
-                        else
-                        {
-                            @foreach (var review in reviewHistory)
-                            {
-                                <MudPaper Class="pa-3 mb-3" Elevation="1">
-                                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
-                                        <MudChip T="string" Color="@GetDecisionChipColor(review.DecisionCode)" Size="Size.Small">
-                                            @review.DecisionCode.Replace("_", " ")
-                                        </MudChip>
-                                        <MudText Typo="Typo.caption" Class="mf-muted">
-                                            @review.ReviewedAtUtc.ToLocalTime().ToString("MMM d, yyyy HH:mm")
-                                        </MudText>
-                                    </MudStack>
-                                    <MudText Typo="Typo.body2" Class="mb-1">
-                                        <strong>Reviewed by:</strong> @review.ReviewerDisplayName
-                                    </MudText>
-                                    @if (!string.IsNullOrWhiteSpace(review.Comments))
-                                    {
-                                        <MudText Typo="Typo.body2" Class="mb-1">
-                                            <strong>Comments:</strong> @review.Comments
-                                        </MudText>
-                                    }
-                                    @if (review.MarkupFileId.HasValue && !string.IsNullOrWhiteSpace(review.MarkupFileUrl))
-                                    {
-                                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
-                                                   Href="@review.MarkupFileUrl"
-                                                   Target="_blank"
-                                                   StartIcon="@Icons.Material.Filled.AttachFile"
-                                                   Class="mt-1">
-                                            @(review.MarkupFileName ?? "Open markup")
-                                        </MudButton>
-                                    }
-                                </MudPaper>
-                            }
-                        }
+                        <ChapterEditorialReviewHistoryPanel
+                            Reviews="@(_detail?.EditorialReviewHistory ?? Array.Empty<EditorChapterReviewHistoryDto>())"
+                            PageSize="5"
+                            EmptyText="No editorial review decisions have been recorded for this chapter yet." />
                     </MudPaper>
                 </MudItem>
             </MudGrid>
@@ -668,13 +629,5 @@
         "REVISION_REQUESTED" => "Request Revision",
         "CANCELLED" => "Cancel Chapter",
         _ => "Review Decision"
-    };
-
-    private static Color GetDecisionChipColor(string? decision) => decision switch
-    {
-        "APPROVED" => Color.Success,
-        "REVISION_REQUESTED" => Color.Warning,
-        "CANCELLED" => Color.Error,
-        _ => Color.Default
     };
 }
