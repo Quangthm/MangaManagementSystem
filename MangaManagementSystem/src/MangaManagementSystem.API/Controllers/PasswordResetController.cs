@@ -1,12 +1,9 @@
-using System.Security.Cryptography;
-using System.Text;
-using MangaManagementSystem.API.Contracts;
-using MangaManagementSystem.API.Options;
+﻿using MangaManagementSystem.API.Contracts;
 using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.Features.Auth.PasswordReset;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
 
 namespace MangaManagementSystem.API.Controllers
 {
@@ -21,31 +18,21 @@ namespace MangaManagementSystem.API.Controllers
         private readonly ISender _sender;
         private readonly ILogger<PasswordResetController>
             _logger;
-        private readonly InternalApiOptions
-            _internalApiOptions;
 
         public PasswordResetController(
             ISender sender,
-            ILogger<PasswordResetController> logger,
-            IOptions<InternalApiOptions> internalApiOptions)
+            ILogger<PasswordResetController> logger)
         {
             _sender = sender;
             _logger = logger;
-            _internalApiOptions =
-                internalApiOptions.Value;
         }
 
+        [AllowAnonymous]
         [HttpPost("request")]
-        [ApiExplorerSettings(IgnoreApi = true)]
         public async Task<IActionResult> RequestAsync(
             [FromBody] RequestPasswordResetRequest request,
             CancellationToken cancellationToken)
         {
-            if (!HasValidInternalApiKey())
-            {
-                return InternalUnauthorized();
-            }
-
             if (!ModelState.IsValid)
             {
                 return BadRequest(
@@ -74,17 +61,12 @@ namespace MangaManagementSystem.API.Controllers
                     GenericRequestMessage));
         }
 
+        [AllowAnonymous]
         [HttpPost("complete")]
-        [ApiExplorerSettings(IgnoreApi = true)]
         public async Task<IActionResult> CompleteAsync(
             [FromBody] CompletePasswordResetRequest request,
             CancellationToken cancellationToken)
         {
-            if (!HasValidInternalApiKey())
-            {
-                return InternalUnauthorized();
-            }
-
             if (!ModelState.IsValid)
             {
                 return BadRequest(
@@ -124,51 +106,6 @@ namespace MangaManagementSystem.API.Controllers
                         AuthErrorCodes.PasswordResetCompleteFailed,
                         "The password could not be reset right now. Please request a new link."));
             }
-        }
-
-        private IActionResult InternalUnauthorized()
-        {
-            _logger.LogWarning(
-                "Rejected unauthorized internal password-reset request.");
-
-            return Unauthorized(
-                new ApiErrorResponse(
-                    AuthErrorCodes.UnauthorizedInternalRequest,
-                    "Unauthorized internal request."));
-        }
-
-        private bool HasValidInternalApiKey()
-        {
-            return Request.Headers.TryGetValue(
-                    InternalApiOptions.HeaderName,
-                    out var suppliedKey)
-                && KeysMatch(
-                    suppliedKey.ToString(),
-                    _internalApiOptions.Key);
-        }
-
-        private static bool KeysMatch(
-            string suppliedKey,
-            string expectedKey)
-        {
-            if (string.IsNullOrWhiteSpace(suppliedKey)
-                || string.IsNullOrWhiteSpace(expectedKey))
-            {
-                return false;
-            }
-
-            var suppliedBytes =
-                Encoding.UTF8.GetBytes(
-                    suppliedKey);
-
-            var expectedBytes =
-                Encoding.UTF8.GetBytes(
-                    expectedKey);
-
-            return suppliedBytes.Length == expectedBytes.Length
-                && CryptographicOperations.FixedTimeEquals(
-                    suppliedBytes,
-                    expectedBytes);
         }
     }
 }

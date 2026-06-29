@@ -1,14 +1,13 @@
-using System.Security.Cryptography;
-using System.Text;
+﻿using System.Security.Claims;
 using MangaManagementSystem.API.Contracts;
-using MangaManagementSystem.API.Options;
 using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
 
 namespace MangaManagementSystem.API.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/profile")]
     public sealed class ProfileController : ControllerBase
@@ -26,20 +25,17 @@ namespace MangaManagementSystem.API.Controllers
         private readonly IFileStorageService _fileStorageService;
         private readonly IFileResourceService _fileResourceService;
         private readonly ILogger<ProfileController> _logger;
-        private readonly InternalApiOptions _internalApiOptions;
 
         public ProfileController(
             IUserService userService,
             IFileStorageService fileStorageService,
             IFileResourceService fileResourceService,
-            ILogger<ProfileController> logger,
-            IOptions<InternalApiOptions> internalApiOptions)
+            ILogger<ProfileController> logger)
         {
             _userService = userService;
             _fileStorageService = fileStorageService;
             _fileResourceService = fileResourceService;
             _logger = logger;
-            _internalApiOptions = internalApiOptions.Value;
         }
 
         [HttpGet("{userId:guid}")]
@@ -349,28 +345,26 @@ namespace MangaManagementSystem.API.Controllers
             IActionResult? Error)>
             ResolveAuthorizedActorAsync()
         {
-            if (!Request.Headers.TryGetValue(
-                    InternalApiOptions.HeaderName,
-                    out var suppliedKey)
-                || !KeysMatch(
-                    suppliedKey.ToString(),
-                    _internalApiOptions.Key))
+            if (User.Identity?.IsAuthenticated != true)
             {
                 _logger.LogWarning(
-                    "Rejected unauthorized internal profile request.");
+                    "Rejected unauthenticated profile request.");
 
                 return (
                     null,
                     Unauthorized(
                         new ProfileMessageResponse(
-                            "Unauthorized internal request.")));
+                            "Authentication is required.")));
             }
 
-            if (!Request.Headers.TryGetValue(
-                    InternalApiOptions.ActorUserIdHeaderName,
-                    out var actorUserIdHeader)
-                || !Guid.TryParse(
-                    actorUserIdHeader.ToString(),
+            var actorUserIdValue =
+                User.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? User.FindFirstValue("sub")
+                ?? User.FindFirstValue("user_id")
+                ?? User.FindFirstValue("UserId");
+
+            if (!Guid.TryParse(
+                    actorUserIdValue,
                     out var actorUserId)
                 || actorUserId == Guid.Empty)
             {
@@ -381,11 +375,11 @@ namespace MangaManagementSystem.API.Controllers
                             "Authenticated actor information is invalid.")));
             }
 
-            if (!Request.Headers.TryGetValue(
-                    InternalApiOptions.ActorRoleHeaderName,
-                    out var actorRoleHeader)
-                || string.IsNullOrWhiteSpace(
-                    actorRoleHeader.ToString()))
+            var actorRole =
+                User.FindFirstValue(ClaimTypes.Role)
+                ?? User.FindFirstValue("role");
+
+            if (string.IsNullOrWhiteSpace(actorRole))
             {
                 return (
                     null,
@@ -422,12 +416,12 @@ namespace MangaManagementSystem.API.Controllers
 
             if (!string.Equals(
                     actor.RoleName,
-                    actorRoleHeader.ToString(),
+                    actorRole,
                     StringComparison.OrdinalIgnoreCase))
             {
                 _logger.LogWarning(
-                    "Rejected profile request because supplied role {SuppliedRole} did not match stored role {StoredRole} for user {ActorUserId}.",
-                    actorRoleHeader.ToString(),
+                    "Rejected profile request because JWT role {SuppliedRole} did not match stored role {StoredRole} for user {ActorUserId}.",
+                    actorRole,
                     actor.RoleName,
                     actor.UserId);
 
@@ -452,34 +446,6 @@ namespace MangaManagementSystem.API.Controllers
                 StatusCodes.Status403Forbidden,
                 new ProfileMessageResponse(
                     "You may only manage your own profile."));
-        }
-
-        private static bool KeysMatch(
-            string suppliedKey,
-            string expectedKey)
-        {
-            if (string.IsNullOrWhiteSpace(
-                    suppliedKey)
-                || string.IsNullOrWhiteSpace(
-                    expectedKey))
-            {
-                return false;
-            }
-
-            var suppliedBytes =
-                Encoding.UTF8.GetBytes(
-                    suppliedKey);
-
-            var expectedBytes =
-                Encoding.UTF8.GetBytes(
-                    expectedKey);
-
-            return suppliedBytes.Length ==
-                    expectedBytes.Length
-                && CryptographicOperations
-                    .FixedTimeEquals(
-                        suppliedBytes,
-                        expectedBytes);
         }
     }
 }

@@ -1,15 +1,13 @@
-using System.IdentityModel.Tokens.Jwt;
+﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Security.Cryptography;
 using System.Text;
 using MangaManagementSystem.API.Contracts;
-using MangaManagementSystem.API.Options;
 using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.Features.Auth.Queries;
 using MangaManagementSystem.Application.Features.Auth.Registration;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 namespace MangaManagementSystem.API.Controllers
@@ -21,25 +19,20 @@ namespace MangaManagementSystem.API.Controllers
     {
         private readonly ISender _sender;
         private readonly ILogger<AuthController> _logger;
-        private readonly InternalApiOptions
-            _internalApiOptions;
         private readonly IConfiguration
             _configuration;
 
         public AuthController(
             ISender sender,
             ILogger<AuthController> logger,
-            IOptions<InternalApiOptions>
-                internalApiOptions,
             IConfiguration configuration)
         {
             _sender = sender;
             _logger = logger;
-            _internalApiOptions =
-                internalApiOptions.Value;
             _configuration = configuration;
         }
 
+        [AllowAnonymous]
         [HttpPost("login")]
         public async Task<IActionResult> LoginAsync(
             [FromBody] LoginRequest request,
@@ -96,18 +89,13 @@ namespace MangaManagementSystem.API.Controllers
             }
         }
 
+        [AllowAnonymous]
         [HttpPost("google-login/resolve")]
-        [ApiExplorerSettings(IgnoreApi = true)]
         public async Task<IActionResult>
             ResolveGoogleLoginAsync(
                 [FromBody] GoogleLoginRequest request,
                 CancellationToken cancellationToken)
         {
-            if (!HasValidInternalApiKey())
-            {
-                return InternalUnauthorized();
-            }
-
             if (!ModelState.IsValid)
             {
                 return BadRequest(
@@ -158,18 +146,13 @@ namespace MangaManagementSystem.API.Controllers
             }
         }
 
+        [AllowAnonymous]
         [HttpPost("google-signup")]
-        [ApiExplorerSettings(IgnoreApi = true)]
         public async Task<IActionResult>
             GoogleSignupAsync(
                 [FromBody] GoogleSignupRequest request,
                 CancellationToken cancellationToken)
         {
-            if (!HasValidInternalApiKey())
-            {
-                return InternalUnauthorized();
-            }
-
             if (!ModelState.IsValid)
             {
                 return BadRequest(
@@ -316,27 +299,6 @@ namespace MangaManagementSystem.API.Controllers
                 .WriteToken(token);
         }
 
-        private IActionResult InternalUnauthorized()
-        {
-            _logger.LogWarning(
-                "Rejected unauthorized internal authentication request.");
-
-            return Unauthorized(
-                new ApiErrorResponse(
-                    AuthErrorCodes.UnauthorizedInternalRequest,
-                    "Unauthorized internal request."));
-        }
-
-        private bool HasValidInternalApiKey()
-        {
-            return Request.Headers.TryGetValue(
-                    InternalApiOptions.HeaderName,
-                    out var suppliedKey)
-                && KeysMatch(
-                    suppliedKey.ToString(),
-                    _internalApiOptions.Key);
-        }
-
         private static int
             ResolveAuthenticationFailureStatus(
                 string? errorCode)
@@ -358,34 +320,6 @@ namespace MangaManagementSystem.API.Controllers
                 _ =>
                     StatusCodes.Status401Unauthorized
             };
-        }
-
-        private static bool KeysMatch(
-            string suppliedKey,
-            string expectedKey)
-        {
-            if (string.IsNullOrWhiteSpace(
-                    suppliedKey)
-                || string.IsNullOrWhiteSpace(
-                    expectedKey))
-            {
-                return false;
-            }
-
-            var suppliedBytes =
-                Encoding.UTF8.GetBytes(
-                    suppliedKey);
-
-            var expectedBytes =
-                Encoding.UTF8.GetBytes(
-                    expectedKey);
-
-            return suppliedBytes.Length ==
-                    expectedBytes.Length
-                && CryptographicOperations
-                    .FixedTimeEquals(
-                        suppliedBytes,
-                        expectedBytes);
         }
     }
 }

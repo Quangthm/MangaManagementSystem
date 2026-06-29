@@ -1,7 +1,5 @@
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using MangaManagementSystem.Application.DTOs.Auth;
-using MangaManagementSystem.Web.Options;
-using Microsoft.Extensions.Options;
 
 namespace MangaManagementSystem.Web.Services.Api
 {
@@ -10,19 +8,13 @@ namespace MangaManagementSystem.Web.Services.Api
     {
         private readonly HttpClient _httpClient;
         private readonly ILogger<AuthApiClient> _logger;
-        private readonly InternalApiOptions
-            _internalApiOptions;
 
         public AuthApiClient(
             HttpClient httpClient,
-            ILogger<AuthApiClient> logger,
-            IOptions<InternalApiOptions>
-                internalApiOptions)
+            ILogger<AuthApiClient> logger)
         {
             _httpClient = httpClient;
             _logger = logger;
-            _internalApiOptions =
-                internalApiOptions.Value;
         }
 
         public async Task<LoginApiResult> LoginAsync(
@@ -57,18 +49,13 @@ namespace MangaManagementSystem.Web.Services.Api
                 string email,
                 CancellationToken cancellationToken = default)
         {
-            using var request =
-                CreateInternalRequest(
-                    HttpMethod.Post,
+            using var response =
+                await _httpClient.PostAsJsonAsync(
                     "api/auth/google-login/resolve",
                     new
                     {
                         Email = email
-                    });
-
-            using var response =
-                await _httpClient.SendAsync(
-                    request,
+                    },
                     cancellationToken);
 
             LogFailure(
@@ -89,9 +76,8 @@ namespace MangaManagementSystem.Web.Services.Api
                 string roleName,
                 CancellationToken cancellationToken = default)
         {
-            using var request =
-                CreateInternalRequest(
-                    HttpMethod.Post,
+            using var response =
+                await _httpClient.PostAsJsonAsync(
                     "api/auth/google-signup",
                     new
                     {
@@ -99,11 +85,7 @@ namespace MangaManagementSystem.Web.Services.Api
                         GoogleDisplayName =
                             googleDisplayName,
                         RoleName = roleName
-                    });
-
-            using var response =
-                await _httpClient.SendAsync(
-                    request,
+                    },
                     cancellationToken);
 
             LogFailure(
@@ -116,27 +98,6 @@ namespace MangaManagementSystem.Web.Services.Api
                     response,
                     "The Google sign-up response was empty.",
                     cancellationToken);
-        }
-
-        private HttpRequestMessage
-            CreateInternalRequest(
-                HttpMethod method,
-                string requestUri,
-                object payload)
-        {
-            var request =
-                new HttpRequestMessage(
-                    method,
-                    requestUri);
-
-            request.Headers.TryAddWithoutValidation(
-                InternalApiOptions.HeaderName,
-                _internalApiOptions.Key);
-
-            request.Content =
-                JsonContent.Create(payload);
-
-            return request;
         }
 
         private void LogFailure(

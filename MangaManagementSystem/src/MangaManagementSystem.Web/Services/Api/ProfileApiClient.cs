@@ -1,13 +1,9 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Security.Claims;
 using System.Text.Json;
 using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.DTOs.Manga;
-using MangaManagementSystem.Web.Options;
-using Microsoft.AspNetCore.Components.Authorization;
-using Microsoft.Extensions.Options;
 
 namespace MangaManagementSystem.Web.Services.Api
 {
@@ -22,29 +18,20 @@ namespace MangaManagementSystem.Web.Services.Api
 
         private readonly HttpClient _httpClient;
         private readonly ILogger<ProfileApiClient> _logger;
-        private readonly AuthenticationStateProvider
-            _authenticationStateProvider;
-        private readonly InternalApiOptions _internalApiOptions;
 
         public ProfileApiClient(
             HttpClient httpClient,
-            ILogger<ProfileApiClient> logger,
-            AuthenticationStateProvider authenticationStateProvider,
-            IOptions<InternalApiOptions> internalApiOptions)
+            ILogger<ProfileApiClient> logger)
         {
             _httpClient = httpClient;
             _logger = logger;
-            _authenticationStateProvider =
-                authenticationStateProvider;
-            _internalApiOptions =
-                internalApiOptions.Value;
         }
 
         public async Task<UserDto> GetProfileAsync(
             Guid userId)
         {
             using var request =
-                await CreateAuthorizedRequestAsync(
+                CreateAuthorizedRequest(
                     HttpMethod.Get,
                     $"api/profile/{userId:D}");
 
@@ -60,7 +47,7 @@ namespace MangaManagementSystem.Web.Services.Api
             Guid fileResourceId)
         {
             using var request =
-                await CreateAuthorizedRequestAsync(
+                CreateAuthorizedRequest(
                     HttpMethod.Get,
                     $"api/profile/files/{fileResourceId:D}");
 
@@ -84,7 +71,7 @@ namespace MangaManagementSystem.Web.Services.Api
                 string displayName)
         {
             using var request =
-                await CreateAuthorizedRequestAsync(
+                CreateAuthorizedRequest(
                     HttpMethod.Put,
                     $"api/profile/{userId:D}/display-name");
 
@@ -176,7 +163,7 @@ namespace MangaManagementSystem.Web.Services.Api
                 safeFileName);
 
             using var request =
-                await CreateAuthorizedRequestAsync(
+                CreateAuthorizedRequest(
                     HttpMethod.Post,
                     requestUri);
 
@@ -190,65 +177,14 @@ namespace MangaManagementSystem.Web.Services.Api
                 defaultErrorMessage);
         }
 
-        private async Task<HttpRequestMessage>
-            CreateAuthorizedRequestAsync(
+        private static HttpRequestMessage
+            CreateAuthorizedRequest(
                 HttpMethod method,
                 string requestUri)
         {
-            var authenticationState =
-                await _authenticationStateProvider
-                    .GetAuthenticationStateAsync();
-
-            var principal =
-                authenticationState.User;
-
-            if (principal.Identity?.IsAuthenticated != true)
-            {
-                throw new InvalidOperationException(
-                    "You must be logged in to manage a profile.");
-            }
-
-            var actorUserId =
-                principal.FindFirst(
-                    ClaimTypes.NameIdentifier)?.Value;
-
-            var actorRole =
-                principal.FindFirst(
-                    ClaimTypes.Role)?.Value
-                ?? principal.FindFirst("role")?.Value;
-
-            if (!Guid.TryParse(
-                    actorUserId,
-                    out var parsedActorUserId))
-            {
-                throw new InvalidOperationException(
-                    "The current user id is invalid.");
-            }
-
-            if (string.IsNullOrWhiteSpace(actorRole))
-            {
-                throw new InvalidOperationException(
-                    "The current user role is unavailable.");
-            }
-
-            var request =
-                new HttpRequestMessage(
-                    method,
-                    requestUri);
-
-            request.Headers.TryAddWithoutValidation(
-                InternalApiOptions.HeaderName,
-                _internalApiOptions.Key);
-
-            request.Headers.TryAddWithoutValidation(
-                InternalApiOptions.ActorUserIdHeaderName,
-                parsedActorUserId.ToString("D"));
-
-            request.Headers.TryAddWithoutValidation(
-                InternalApiOptions.ActorRoleHeaderName,
-                actorRole);
-
-            return request;
+            return new HttpRequestMessage(
+                method,
+                requestUri);
         }
 
         private async Task<T> ReadRequiredAsync<T>(

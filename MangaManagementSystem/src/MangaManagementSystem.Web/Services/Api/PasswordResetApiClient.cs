@@ -1,6 +1,4 @@
-using System.Net.Http.Json;
-using MangaManagementSystem.Web.Options;
-using Microsoft.Extensions.Options;
+﻿using System.Net.Http.Json;
 
 namespace MangaManagementSystem.Web.Services.Api
 {
@@ -8,19 +6,14 @@ namespace MangaManagementSystem.Web.Services.Api
         : IPasswordResetApiClient
     {
         private readonly HttpClient _httpClient;
-        private readonly InternalApiOptions
-            _internalApiOptions;
         private readonly ILogger<PasswordResetApiClient>
             _logger;
 
         public PasswordResetApiClient(
             HttpClient httpClient,
-            IOptions<InternalApiOptions> internalApiOptions,
             ILogger<PasswordResetApiClient> logger)
         {
             _httpClient = httpClient;
-            _internalApiOptions =
-                internalApiOptions.Value;
             _logger = logger;
         }
 
@@ -29,18 +22,14 @@ namespace MangaManagementSystem.Web.Services.Api
             string resetPageUrl,
             CancellationToken cancellationToken = default)
         {
-            using var request =
-                CreateInternalRequest(
+            using var response =
+                await _httpClient.PostAsJsonAsync(
                     "api/password-reset/request",
                     new
                     {
                         Email = email,
                         ResetPageUrl = resetPageUrl
-                    });
-
-            using var response =
-                await _httpClient.SendAsync(
-                    request,
+                    },
                     cancellationToken);
 
             await EnsureSuccessAsync(
@@ -54,43 +43,20 @@ namespace MangaManagementSystem.Web.Services.Api
             string newPassword,
             CancellationToken cancellationToken = default)
         {
-            using var request =
-                CreateInternalRequest(
+            using var response =
+                await _httpClient.PostAsJsonAsync(
                     "api/password-reset/complete",
                     new
                     {
                         Token = token,
                         NewPassword = newPassword
-                    });
-
-            using var response =
-                await _httpClient.SendAsync(
-                    request,
+                    },
                     cancellationToken);
 
             await EnsureSuccessAsync(
                 response,
                 "Password reset completion",
                 cancellationToken);
-        }
-
-        private HttpRequestMessage CreateInternalRequest(
-            string requestUri,
-            object payload)
-        {
-            var request =
-                new HttpRequestMessage(
-                    HttpMethod.Post,
-                    requestUri);
-
-            request.Headers.TryAddWithoutValidation(
-                InternalApiOptions.HeaderName,
-                _internalApiOptions.Key);
-
-            request.Content =
-                JsonContent.Create(payload);
-
-            return request;
         }
 
         private async Task EnsureSuccessAsync(

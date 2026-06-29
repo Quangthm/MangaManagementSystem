@@ -33,19 +33,7 @@ namespace MangaManagementSystem.Web
             builder.Services.AddMemoryCache();
             builder.Services.Configure<ApiSettings>(builder.Configuration.GetSection(ApiSettings.SectionName));
             builder.Services.AddScoped<ApiAuthorizationMessageHandler>();
-
-            builder.Services
-                .AddOptions<InternalApiOptions>()
-                .Bind(
-                    builder.Configuration.GetSection(
-                        InternalApiOptions.SectionName))
-                .Validate(
-                    options =>
-                        !string.IsNullOrWhiteSpace(
-                            options.Key),
-                    "InternalApi:Key is required.")
-                .ValidateOnStart();
-            builder.Services.AddHttpClient<IRegistrationApiClient, RegistrationApiClient>((sp, client) =>
+builder.Services.AddHttpClient<IRegistrationApiClient, RegistrationApiClient>((sp, client) =>
             {
                 var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
                 client.BaseAddress = new Uri(settings.Value.BaseUrl);
@@ -93,14 +81,16 @@ namespace MangaManagementSystem.Web
                 client.BaseAddress =
                     new Uri(settings.Value.BaseUrl);
             });
-            builder.Services.AddHttpClient<IProfileApiClient, ProfileApiClient>((sp, client) =>
-            {
-                var settings =
-                    sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+            builder.Services
+                .AddHttpClient<IProfileApiClient, ProfileApiClient>((sp, client) =>
+                {
+                    var settings =
+                        sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
 
-                client.BaseAddress =
-                    new Uri(settings.Value.BaseUrl);
-            });
+                    client.BaseAddress =
+                        new Uri(settings.Value.BaseUrl);
+                })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
             builder.Services.AddHttpClient<IAdminUserApiClient, AdminUserApiClient>((sp, client) =>
             {
                 var settings =
