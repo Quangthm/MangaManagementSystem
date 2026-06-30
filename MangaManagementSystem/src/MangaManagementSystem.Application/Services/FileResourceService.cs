@@ -43,6 +43,13 @@ namespace MangaManagementSystem.Application.Services
             return entity == null ? null : MapToDto(entity);
         }
 
+        public async Task<IEnumerable<FileResourceDto>> GetFileResourcesByIdsAsync(IEnumerable<Guid> ids)
+        {
+            var idSet = ids.ToHashSet();
+            var entities = await _unitOfWork.FileResources.FindAsync(f => idSet.Contains(f.FileResourceId));
+            return entities.Select(MapToDto);
+        }
+
         public async Task<IEnumerable<FileResourceDto>> GetAllFileResourcesAsync()
         {
             var entities = await _unitOfWork.FileResources.GetAllAsync();
@@ -57,6 +64,15 @@ namespace MangaManagementSystem.Application.Services
             if (entity == null || entity.DeletedAtUtc != null)
             {
                 return false;
+            }
+
+            // CHECK ck_file_resource_deleted_pair requires deleted_at_utc and
+            // deleted_by_user_id to be set together. Saving deleted_at with a null
+            // deleted_by violates it ("error saving the entity changes") — which was the
+            // cause of the failing "delete page version" action.
+            if (deletedByUserId is null || deletedByUserId == Guid.Empty)
+            {
+                throw new InvalidOperationException("A valid signed-in user is required to delete a file resource.");
             }
 
             entity.DeletedAtUtc = DateTime.UtcNow;

@@ -29,7 +29,8 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         [Required] decimal Height,
         decimal? ConfidenceScore,
         [Required][MaxLength(20)] string SourceType,
-        string? OriginalText
+        string? OriginalText,
+        Guid? PageRegionId = null
     );
 
     public record UpdatePageRegionDto(

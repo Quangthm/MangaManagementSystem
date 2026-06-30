@@ -1,0 +1,170 @@
+@namespace MangaManagementSystem.Web.Components.Pages.Mangaka
+@using Microsoft.AspNetCore.Components.Web
+@using MudBlazor
+
+@*
+    Chapter list sidebar extracted from CreatorWorkspace so it does NOT re-render on
+    every canvas interaction / page navigation. The parent owns all state and logic;
+    this component only renders + raises callbacks. ShouldRender gates re-renders to
+    when the visible chapter data actually changes (see BuildSignature).
+*@
+
+<aside class="mf-workspace-sidebar py-4 d-flex flex-column border-r-1 mud-border-lines-default" style="width: 250px; flex-shrink: 0; background-color: white; height: 100%; overflow: hidden;">
+    <MudNavMenu Class="mud-width-full flex-grow-1" Style="overflow-y: auto;">
+        <div class="px-4 mt-6 mb-2">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" StartIcon="@Icons.Material.Filled.Add" Class="rounded-lg" OnClick="OnAddChapter" Disabled="@IsAddingChapter">
+                @if (IsAddingChapter) { <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/> } else { <span>New Chapter</span> }
+            </MudButton>
+        </div>
+
+        <MudText Typo="Typo.caption" Class="mf-muted px-4 font-weight-bold mt-4 mb-2 d-block">CHAPTERS</MudText>
+
+        <MudList T="int" Class="px-2">
+            @foreach (var chapter in Chapters)
+            {
+                var isCurrent = (chapter.Id == SelectedChapter);
+                var bgClass = isCurrent ? "background-color: #f3f4f6;" : "";
+                var textColor = isCurrent ? Color.Primary : Color.Default;
+
+                <MudListItem Class="rounded-lg" Style="@bgClass" OnClick="@(() => OnSelectChapter.InvokeAsync(chapter.Id))">
+                    @if (chapter.IsRenaming)
+                    {
+                        <div class="d-flex align-center w-100" @onclick:stopPropagation="true">
+                            <MudTextField @bind-Value="chapter.Title" Placeholder="Chapter Title"
+                                         Variant="Variant.Outlined" Margin="Margin.Dense"
+                                         OnKeyDown="@(async e => await HandleRenameKeyDown(e, chapter))"
+                                         Immediate="true" AutoFocus="true" Class="flex-grow-1 mr-1" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Default" OnClick="@(() => OnCancelRename.InvokeAsync(chapter))" />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="d-flex justify-space-between align-center w-100">
+                            <div class="d-flex align-center" style="min-width: 0;">
+                                <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Small" Class="mr-3 mf-muted flex-shrink-0" />
+                                <div style="min-width: 0;">
+                                    <MudText Typo="Typo.body2" Class="font-weight-bold" Color="@textColor" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Chapter @chapter.Id</MudText>
+                                    @if (!string.IsNullOrWhiteSpace(chapter.Title))
+                                    {
+                                        <MudText Typo="Typo.caption" Class="mf-muted" Style="display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">@chapter.Title</MudText>
+                                    }
+                                    <MudText Typo="Typo.caption" Class="mf-muted" Style="display: block;">@chapter.PageCount pages</MudText>
+                                </div>
+                            </div>
+                            <div class="d-flex align-center flex-shrink-0">
+                                @if (isCurrent)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Class="mr-2">Active</MudChip>
+                                }
+                                else
+                                {
+                                    var statusLabel = chapter.StatusCode == "UNDER_REVIEW" ? "Review" : (chapter.StatusCode == "APPROVED" ? "Approved" : (chapter.StatusCode == "REVISION_REQUESTED" ? "Revision" : "Draft"));
+                                    <MudText Typo="Typo.caption" Class="mf-muted mr-2">@statusLabel</MudText>
+                                }
+
+                                <div @onclick:stopPropagation="true">
+                                    @if (chapter.StatusCode == "APPROVED" || chapter.StatusCode == "PUBLISHED" || chapter.StatusCode == "RELEASED" || chapter.StatusCode == "SCHEDULED")
+                                    {
+                                        <MudTooltip Text="Chapter is locked and approved">
+                                            <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" Color="Color.Success" Class="pa-1" />
+                                        </MudTooltip>
+                                    }
+                                    else
+                                    {
+                                        <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                                            @if (chapter.StatusCode == "DRAFT" || chapter.StatusCode == "REVISION_REQUESTED")
+                                            {
+                                                <MudMenuItem OnClick="@(() => OnSubmitChapter.InvokeAsync(chapter.ChapterId))">
+                                                    <div class="d-flex align-center">
+                                                        <MudIcon Icon="@Icons.Material.Filled.Send" Size="Size.Small" Color="Color.Primary" Class="mr-2" />
+                                                        <MudText Typo="Typo.body2">Submit for Review</MudText>
+                                                    </div>
+                                                </MudMenuItem>
+                                                <MudMenuItem OnClick="@(() => OnPromptRename.InvokeAsync(chapter))">
+                                                    <div class="d-flex align-center">
+                                                        <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Default" Class="mr-2" />
+                                                        <MudText Typo="Typo.body2">Rename</MudText>
+                                                    </div>
+                                                </MudMenuItem>
+                                                <MudMenuItem OnClick="@(() => OnDeleteChapter.InvokeAsync(chapter.Id))">
+                                                    <div class="d-flex align-center">
+                                                        <MudIcon Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" Class="mr-2" />
+                                                        <MudText Typo="Typo.body2" Color="Color.Error">Delete</MudText>
+                                                    </div>
+                                                </MudMenuItem>
+                                            }
+                                            else if (chapter.StatusCode == "UNDER_REVIEW")
+                                            {
+                                                <MudMenuItem OnClick="@(() => OnCancelSubmission.InvokeAsync(chapter.ChapterId))">
+                                                    <div class="d-flex align-center">
+                                                        <MudIcon Icon="@Icons.Material.Filled.Undo" Size="Size.Small" Color="Color.Warning" Class="mr-2" />
+                                                        <MudText Typo="Typo.body2">Cancel Submission</MudText>
+                                                    </div>
+                                                </MudMenuItem>
+                                            }
+                                        </MudMenu>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </MudListItem>
+            }
+        </MudList>
+    </MudNavMenu>
+</aside>
+
+@code {
+    [Parameter] public List<CreatorWorkspace.ChapterModel> Chapters { get; set; } = new();
+    [Parameter] public int SelectedChapter { get; set; }
+    [Parameter] public bool IsAddingChapter { get; set; }
+
+    [Parameter] public EventCallback OnAddChapter { get; set; }
+    [Parameter] public EventCallback<int> OnSelectChapter { get; set; }
+    [Parameter] public EventCallback<Guid> OnSubmitChapter { get; set; }
+    [Parameter] public EventCallback<CreatorWorkspace.ChapterModel> OnPromptRename { get; set; }
+    [Parameter] public EventCallback<CreatorWorkspace.ChapterModel> OnSaveRename { get; set; }
+    [Parameter] public EventCallback<CreatorWorkspace.ChapterModel> OnCancelRename { get; set; }
+    [Parameter] public EventCallback<int> OnDeleteChapter { get; set; }
+    [Parameter] public EventCallback<Guid> OnCancelSubmission { get; set; }
+
+    private string _lastSignature = "";
+
+    private async Task HandleRenameKeyDown(KeyboardEventArgs e, CreatorWorkspace.ChapterModel chapter)
+    {
+        if (e.Key == "Enter")
+        {
+            await OnSaveRename.InvokeAsync(chapter);
+        }
+        else if (e.Key == "Escape")
+        {
+            await OnCancelRename.InvokeAsync(chapter);
+        }
+    }
+
+    // Skip re-rendering the sidebar unless the visible chapter data changed. This
+    // stops the (relatively heavy) chapter list + menus from re-diffing on every
+    // canvas region update / page navigation in the parent.
+    protected override bool ShouldRender()
+    {
+        var signature = BuildSignature();
+        if (signature == _lastSignature) return false;
+        _lastSignature = signature;
+        return true;
+    }
+
+    private string BuildSignature()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append(SelectedChapter).Append('|').Append(IsAddingChapter).Append('|');
+        foreach (var c in Chapters)
+        {
+            sb.Append(c.Id).Append(':')
+              .Append(c.StatusCode).Append(':')
+              .Append(c.PageCount).Append(':')
+              .Append(c.IsRenaming).Append(':')
+              .Append(c.Title).Append(';');
+        }
+        return sb.ToString();
+    }
+}
