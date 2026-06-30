@@ -1,0 +1,133 @@
+@using MangaManagementSystem.Application.DTOs.Editor
+
+@if (ShowTitle)
+{
+    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">@Title</MudText>
+}
+
+@if (_pagedReviews.Count == 0)
+{
+    @if (ShowEmptyState)
+    {
+        <MudText Class="mf-muted">@EmptyText</MudText>
+    }
+}
+else
+{
+    @foreach (var review in _pagedReviews)
+    {
+        <MudPaper Class="pa-3 mb-3" Elevation="1">
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
+                <MudChip T="string" Color="@GetDecisionChipColor(review.DecisionCode)" Size="Size.Small">
+                    @FormatDecisionCode(review.DecisionCode)
+                </MudChip>
+                <MudText Typo="Typo.caption" Class="mf-muted">
+                    @review.ReviewedAtUtc.ToLocalTime().ToString("MMM d, yyyy HH:mm")
+                </MudText>
+            </MudStack>
+            <MudText Typo="Typo.body2" Class="mb-1">
+                <strong>Reviewed by:</strong> @review.ReviewerDisplayName
+            </MudText>
+            @if (!string.IsNullOrWhiteSpace(review.Comments))
+            {
+                <MudText Typo="Typo.body2" Class="mb-1">
+                    <strong>Comments:</strong> @review.Comments
+                </MudText>
+            }
+            @if (review.MarkupFileId.HasValue && !string.IsNullOrWhiteSpace(review.MarkupFileUrl))
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                           Href="@review.MarkupFileUrl"
+                           Target="_blank"
+                           StartIcon="@Icons.Material.Filled.AttachFile"
+                           Class="mt-1">
+                    @(review.MarkupFileName ?? "Open markup")
+                </MudButton>
+            }
+        </MudPaper>
+    }
+
+    @if (GetTotalPages() > 1)
+    {
+        <MudStack Row="true" Justify="Justify.Center" AlignItems="AlignItems.Center" Spacing="2" Class="mt-2">
+            <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                       Disabled="@(_currentPage <= 1)"
+                       OnClick="PreviousPage">
+                Previous
+            </MudButton>
+            <MudText Typo="Typo.body2">Page @_currentPage of @GetTotalPages()</MudText>
+            <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                       Disabled="@(_currentPage >= GetTotalPages())"
+                       OnClick="NextPage">
+                Next
+            </MudButton>
+        </MudStack>
+    }
+}
+
+@code {
+    [Parameter] public IReadOnlyList<EditorChapterReviewHistoryDto> Reviews { get; set; } = Array.Empty<EditorChapterReviewHistoryDto>();
+    [Parameter] public int PageSize { get; set; } = 3;
+    [Parameter] public bool ShowEmptyState { get; set; } = true;
+    [Parameter] public string EmptyText { get; set; } = "No editorial review history yet.";
+    [Parameter] public string Title { get; set; } = "Editorial Review History";
+    [Parameter] public bool ShowTitle { get; set; } = true;
+
+    private int _currentPage = 1;
+    private IReadOnlyList<EditorChapterReviewHistoryDto> _sortedReviews = Array.Empty<EditorChapterReviewHistoryDto>();
+    private IReadOnlyList<EditorChapterReviewHistoryDto> _pagedReviews = Array.Empty<EditorChapterReviewHistoryDto>();
+
+    protected override void OnParametersSet()
+    {
+        _sortedReviews = (Reviews ?? Array.Empty<EditorChapterReviewHistoryDto>())
+            .OrderByDescending(r => r.ReviewedAtUtc)
+            .ToList();
+
+        _currentPage = Math.Min(_currentPage, GetTotalPages());
+        _currentPage = Math.Max(1, _currentPage);
+        UpdatePagedReviews();
+    }
+
+    private void PreviousPage()
+    {
+        _currentPage = Math.Max(1, _currentPage - 1);
+        UpdatePagedReviews();
+    }
+
+    private void NextPage()
+    {
+        _currentPage = Math.Min(GetTotalPages(), _currentPage + 1);
+        UpdatePagedReviews();
+    }
+
+    private int GetTotalPages()
+    {
+        var safePageSize = Math.Max(1, PageSize);
+        return Math.Max(1, (int)Math.Ceiling(_sortedReviews.Count / (double)safePageSize));
+    }
+
+    private void UpdatePagedReviews()
+    {
+        var safePageSize = Math.Max(1, PageSize);
+        _pagedReviews = _sortedReviews
+            .Skip((_currentPage - 1) * safePageSize)
+            .Take(safePageSize)
+            .ToList();
+    }
+
+    private static Color GetDecisionChipColor(string? decisionCode) => decisionCode switch
+    {
+        "APPROVED" => Color.Success,
+        "REVISION_REQUESTED" => Color.Warning,
+        "CANCELLED" => Color.Error,
+        _ => Color.Default
+    };
+
+    private static string FormatDecisionCode(string? decisionCode) => decisionCode switch
+    {
+        "APPROVED" => "APPROVED",
+        "REVISION_REQUESTED" => "REVISION REQUESTED",
+        "CANCELLED" => "CANCELLED",
+        _ => decisionCode?.Replace("_", " ") ?? "UNKNOWN"
+    };
+}
