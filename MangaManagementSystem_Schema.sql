@@ -660,6 +660,8 @@ CREATE INDEX ix_chapter_series_id ON manga.Chapter (series_id);
 
 CREATE INDEX ix_chapter_status_code ON manga.Chapter (status_code);
 
+CREATE INDEX ix_chapter_released_at ON manga.Chapter (released_at_utc) WHERE released_at_utc IS NOT NULL;
+
 CREATE TABLE manga.ChapterPage (
 	chapter_page_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_chapter_page_id DEFAULT NEWID() CONSTRAINT pk_chapter_page PRIMARY KEY,
 	chapter_id UNIQUEIDENTIFIER NOT NULL,
