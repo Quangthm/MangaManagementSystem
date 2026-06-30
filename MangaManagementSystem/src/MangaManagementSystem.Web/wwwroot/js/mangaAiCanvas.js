@@ -4,6 +4,7 @@ let dotNetRef;
 let originalImg = null;
 let regions = [];
 let annotations = [];
+let regionsHidden = false;
 let nextId = 1;
 
 // View state (Zoom & Pan)
@@ -79,6 +80,27 @@ function initCanvas(canvasId, containerId, dotnet) {
     container.appendChild(selectionDiv);
 
     setupEvents();
+
+    // Re-fit / repaint when the container size changes. After a browser reload the canvas
+    // can be measured before the flex layout settles (container clientWidth 0), which leaves
+    // the image + region overlay computed at scale 0 = invisible ("everything gone after
+    // reload even though the DB has it"). When a valid size finally arrives, recompute the fit
+    // if the current scale is broken, then repaint so the saved regions reappear. A valid
+    // existing scale is left untouched so the user's zoom is not reset on normal resizes.
+    if (typeof ResizeObserver !== 'undefined') {
+        const ro = new ResizeObserver(() => {
+            if (!originalImg) return;
+            const cw = container.clientWidth, ch = container.clientHeight;
+            if (cw > 0 && ch > 0 && (!(scale > 0) || !isFinite(scale))) {
+                scale = Math.min(cw / originalImg.width, ch / originalImg.height);
+                panX = (cw - originalImg.width * scale) / 2;
+                panY = (ch - originalImg.height * scale) / 2;
+                applyTransform();
+            }
+            redraw();
+        });
+        ro.observe(container);
+    }
 }
 
 function setupEvents() {
@@ -308,6 +330,9 @@ function setupEvents() {
         if (isBrushing) {
             isBrushing = false;
             saveState();
+            // Brush paints image pixels (not regions); tell Blazor so it can warn the user that
+            // the edit only persists via "Save as New Version".
+            if (dotNetRef) dotNetRef.invokeMethodAsync('OnImageEdited');
             return;
         }
 
@@ -588,6 +613,34 @@ function selectRegion(id) {
     redraw();
 }
 
+// Selects every region (e.g. to translate or assign the whole page at once).
+function selectAllRegions() {
+    let changed = false;
+    regions.forEach(r => { if (!r.selected) { r.selected = true; changed = true; } });
+    if (changed) {
+        syncToBlazor();
+        redraw();
+    }
+}
+
+// Shows/hides the region detection frames (boxes, labels, handles) on the canvas. Translated
+// text stays visible so the user can preview the page without the editing chrome.
+function setRegionsVisible(visible) {
+    regionsHidden = !visible;
+    redraw();
+}
+
+// Clears the current region selection (e.g. after a task/annotation is created from selected
+// regions, so the next action starts from a clean state).
+function clearSelection() {
+    let changed = false;
+    regions.forEach(r => { if (r.selected) { r.selected = false; changed = true; } });
+    if (changed) {
+        syncToBlazor();
+        redraw();
+    }
+}
+
 function deleteRegion(id) {
     regions = regions.filter(r => r.id !== id);
     saveState();
@@ -596,15 +649,20 @@ function deleteRegion(id) {
 }
 
 function deleteSelectedRegions() {
-    const hasSelected = regions.some(r => r.selected);
-    if (!hasSelected) return;
-    
+    // Keyboard Delete/Backspace path keeps a lightweight native confirm.
+    if (!regions.some(r => r.selected)) return;
     if (window.confirm("Are you sure you want to delete the selected panel(s)?")) {
-        regions = regions.filter(r => !r.selected);
-        saveState();
-        syncToBlazor();
-        redraw();
+        deleteSelectedRegionsConfirmed();
     }
+}
+
+// Deletes without prompting — the toolbar button already confirmed via the MudBlazor dialog.
+function deleteSelectedRegionsConfirmed() {
+    if (!regions.some(r => r.selected)) return;
+    regions = regions.filter(r => !r.selected);
+    saveState();
+    syncToBlazor();
+    redraw();
 }
 
 function approveSelectedRegions() {
@@ -652,7 +710,7 @@ function redraw() {
     regions.forEach(r => {
         const hasText = r.translatedText && r.translatedText.trim() !== '';
 
-        // Fill
+        // Fill / translated text
         if (hasText) {
             ctx.save();
             ctx.beginPath();
@@ -660,10 +718,14 @@ function redraw() {
             ctx.clip();
             drawWrappedText(ctx, r, r.x, r.y, r.width, r.height);
             ctx.restore();
-        } else {
+        } else if (!regionsHidden) {
             ctx.fillStyle = r.selected ? 'rgba(52,152,219,0.2)' : 'rgba(231,76,60,0.1)';
             ctx.fillRect(r.x, r.y, r.width, r.height);
         }
+
+        // When detection frames are hidden, show only the translated text (a clean preview) and
+        // skip all editing chrome: boxes, #labels, note icons and resize handles.
+        if (regionsHidden) return;
 
         let statusColor = '#e74c3c'; // Todo
         if (r.status === 'InProgress') statusColor = '#f39c12';
@@ -1173,8 +1235,12 @@ function downloadRenderedImage(filename) {
         updateRegionData,
         loadRegions,
         selectRegion,
+        selectAllRegions,
+        clearSelection,
+        setRegionsVisible,
         deleteRegion,
         deleteSelectedRegions,
+        deleteSelectedRegionsConfirmed,
         approveSelectedRegions,
         setBrushSettings,
         undo,
@@ -1211,3 +1277,19 @@ window.getMmsDraft = function(pageId) {
 window.clearMmsDraft = function(pageId) {
     try { localStorage.removeItem('mms_draft_page_' + pageId); } catch(e) {}
 };
+
+// Unsaved-changes guard. Blazor sets this flag true on an edit and false after autosave.
+// When set, the browser shows its native "Leave site? Changes may not be saved" dialog on
+// tab close / reload / back, so an accidental navigation cannot drop in-flight edits.
+window.mmsHasUnsaved = false;
+window.setUnsavedFlag = function(flag) { window.mmsHasUnsaved = !!flag; };
+if (!window.__mmsUnloadGuard) {
+    window.__mmsUnloadGuard = true;
+    window.addEventListener('beforeunload', function(e) {
+        if (window.mmsHasUnsaved) {
+            e.preventDefault();
+            e.returnValue = ''; // required for Chrome to show the prompt
+            return '';
+        }
+    });
+}

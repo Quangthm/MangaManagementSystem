@@ -183,10 +183,37 @@ namespace MangaManagementSystem.Application.Services
                 }
             }
 
-            // Delete remaining (which were not in the new dtos)
-            foreach (var r in existing)
+            // Delete remaining (regions the user removed locally and that are NOT in the new dtos).
+            // BR-ANN-017 / BR-PGTASK: a region that is still referenced by an annotation or a page
+            // task must NOT be deleted — doing so would orphan open feedback / assigned work (and
+            // hits the no-cascade FKs). Such regions are kept even if their box was removed locally.
+            if (existing.Count > 0)
             {
-                _unitOfWork.PageRegions.Delete(r);
+                var candidateIds = existing.Select(r => r.PageRegionId).ToList();
+
+                var linkedAnnotations = await _unitOfWork.ChapterPageAnnotations.GetByPageRegionIdsAsync(candidateIds);
+                var protectedIds = linkedAnnotations
+                    .SelectMany(a => a.PageRegions.Select(pr => pr.PageRegionId))
+                    .ToHashSet();
+
+                var version = await _unitOfWork.ChapterPageVersions.GetByIdAsync(chapterPageVersionId);
+                if (version != null)
+                {
+                    var tasks = await _unitOfWork.ChapterPageTasks.GetByChapterPageIdWithRegionsAsync(version.ChapterPageId);
+                    foreach (var taskRegionId in tasks.SelectMany(t => t.PageRegions.Select(pr => pr.PageRegionId)))
+                    {
+                        protectedIds.Add(taskRegionId);
+                    }
+                }
+
+                foreach (var r in existing)
+                {
+                    if (protectedIds.Contains(r.PageRegionId))
+                    {
+                        continue; // keep: still linked to an annotation or task
+                    }
+                    _unitOfWork.PageRegions.Delete(r);
+                }
             }
 
             await _unitOfWork.SaveChangesAsync();
