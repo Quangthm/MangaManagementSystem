@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Domain.Entities;
@@ -22,7 +23,18 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         private const string StatusApproved = "APPROVED";
         private const string StatusRevisionRequested = "REVISION_REQUESTED";
         private const string StatusOnHold = "ON_HOLD";
+        private const string StatusDraft = "DRAFT";
+        private const string StatusScheduled = "SCHEDULED";
+        private const string StatusReleased = "RELEASED";
+        private const string StatusCancelled = "CANCELLED";
         private const string TantouEditorRole = "Tantou Editor";
+
+        private static readonly string[] AllChapterStatuses =
+        {
+            StatusDraft, StatusUnderReview, StatusRevisionRequested,
+            StatusApproved, StatusScheduled, StatusReleased,
+            StatusOnHold, StatusCancelled
+        };
 
         private readonly ApplicationDbContext _dbContext;
 
@@ -62,8 +74,6 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
             // ── Chapter list filtered by selected status ────────────────────────
 
-            var reviewableStatuses = new[] { StatusUnderReview, StatusRevisionRequested, StatusOnHold };
-
             IQueryable<Chapter> baseQuery = _dbContext.Chapters
                 .AsNoTracking()
                 .Include(c => c.Series)
@@ -76,7 +86,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             }
             else
             {
-                baseQuery = baseQuery.Where(c => reviewableStatuses.Contains(c.StatusCode));
+                baseQuery = baseQuery.Where(c => AllChapterStatuses.Contains(c.StatusCode));
             }
 
             List<EditorChapterReviewChapter> chapters = await baseQuery
@@ -164,16 +174,60 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     r.ChapterPageVersion.ChapterPage != null &&
                     r.ChapterPageVersion.ChapterPage.ChapterId == chapterId))
                 .OrderByDescending(a => a.CreatedAtUtc)
-                .Select(a => new EditorChapterReviewDetailAnnotation(
+                .Select(a => new
+                {
                     a.ChapterPageAnnotationId,
-                    a.AnnotationText ?? string.Empty,
+                    AnnotationText = a.AnnotationText ?? string.Empty,
                     a.IssueTypeCode,
                     a.CreatedAtUtc,
-                    a.AnnotatedByUser != null ? a.AnnotatedByUser.DisplayName : null,
-                    a.ResolvedAtUtc != null))
+                    DisplayName = a.AnnotatedByUser != null ? a.AnnotatedByUser.DisplayName : null,
+                    FirstRegion = a.PageRegions
+                        .Where(r => r.ChapterPageVersion != null
+                                 && r.ChapterPageVersion.ChapterPage != null
+                                 && r.ChapterPageVersion.ChapterPage.ChapterId == chapterId)
+                        .Select(r => new
+                        {
+                            PageNumber = r.ChapterPageVersion!.ChapterPage!.PageNo,
+                            r.ChapterPageVersion.ChapterPageVersionId,
+                            r.ChapterPageVersion.VersionNo
+                        })
+                        .FirstOrDefault()
+                })
                 .ToListAsync(ct);
 
+            var annotations = openAnnotations
+                .Select(a => new EditorChapterReviewDetailAnnotation(
+                    a.ChapterPageAnnotationId,
+                    a.AnnotationText,
+                    a.IssueTypeCode,
+                    a.CreatedAtUtc,
+                    a.DisplayName,
+                    false,
+                    a.FirstRegion != null ? (int?)a.FirstRegion.PageNumber : null,
+                    a.FirstRegion != null ? (Guid?)a.FirstRegion.ChapterPageVersionId : null,
+                    a.FirstRegion != null ? (short?)a.FirstRegion.VersionNo : null))
+                .ToList();
+
             int pageCount = pageDetails.Count;
+
+            // Editorial review history for this chapter
+            var reviewHistory = await _dbContext.ChapterEditorialReviews
+                .AsNoTracking()
+                .Where(r => r.ChapterId == chapterId)
+                .OrderByDescending(r => r.ReviewedAtUtc)
+                .Select(r => new EditorChapterReviewHistoryItem(
+                    r.ChapterEditorialReviewId,
+                    r.DecisionCode,
+                    r.Feedback,
+                    r.ReviewedAtUtc,
+                    r.ReviewerUserId,
+                    r.ReviewerUser != null ? r.ReviewerUser.DisplayName ?? r.ReviewerUser.Username : "Unknown",
+                    r.MarkupFileId,
+                    r.MarkupFile != null ? r.MarkupFile.OriginalFileName : null,
+                    r.MarkupFile != null ? r.MarkupFile.CloudinarySecureUrl : null,
+                    r.MarkupFile != null ? r.MarkupFile.ContentType : null,
+                    r.MarkupFile != null ? (long?)r.MarkupFile.FileSizeBytes : null))
+                .ToListAsync(ct);
 
             return new EditorChapterReviewDetail(
                 chapter.ChapterId,
@@ -187,7 +241,160 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 chapter.CreatedAtUtc,
                 chapter.CreatedByUser?.DisplayName,
                 pageDetails,
-                openAnnotations);
+                annotations,
+                reviewHistory);
+        }
+
+        public async Task<ChapterEditorialReviewResult> SubmitChapterEditorialReviewAsync(
+            Guid actorUserId,
+            Guid chapterId,
+            string decisionCode,
+            string? comments,
+            UploadedFileMetadata? markup,
+            CancellationToken ct = default)
+        {
+            if (actorUserId == Guid.Empty)
+                throw new InvalidOperationException("A valid signed-in user is required.");
+
+            if (chapterId == Guid.Empty)
+                throw new InvalidOperationException("A valid chapter is required.");
+
+            var allowedDecisions = new[] { "APPROVED", "REVISION_REQUESTED", "CANCELLED" };
+            if (!allowedDecisions.Contains(decisionCode))
+                throw new InvalidOperationException(
+                    "Decision code must be one of: APPROVED, REVISION_REQUESTED, CANCELLED.");
+
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(ct);
+
+            try
+            {
+                var chapter = await _dbContext.Chapters
+                    .Include(c => c.Series)
+                    .FirstOrDefaultAsync(c => c.ChapterId == chapterId, ct);
+
+                if (chapter == null)
+                    throw new InvalidOperationException("Chapter does not exist.");
+
+                bool isAuthorized = await _dbContext.ActiveSeriesContributors
+                    .AnyAsync(sc =>
+                        sc.SeriesId == chapter.SeriesId &&
+                        sc.UserId == actorUserId &&
+                        sc.RoleName == TantouEditorRole,
+                        ct);
+
+                if (!isAuthorized)
+                    throw new InvalidOperationException(
+                        "You are not authorized to review this chapter.");
+
+                string previousStatusCode = chapter.StatusCode;
+
+                if (previousStatusCode != StatusUnderReview)
+                    throw new InvalidOperationException(
+                        "This chapter is no longer under review and cannot receive a review decision.");
+
+                var reviewedAtUtc = DateTime.UtcNow;
+                Guid? markupFileId = null;
+
+                if (markup is not null)
+                {
+                    var fileResource = new FileResource
+                    {
+                        FilePurposeCode = "EDITORIAL_ATTACHMENT",
+                        OriginalFileName = markup.OriginalFileName,
+                        CloudinaryPublicId = markup.PublicId,
+                        CloudinarySecureUrl = markup.SecureUrl,
+                        ContentType = markup.ContentType,
+                        FileSizeBytes = markup.FileSizeBytes,
+                        Sha256Hash = markup.Sha256Hash,
+                        UploadedByUserId = actorUserId,
+                        UploadedAtUtc = reviewedAtUtc
+                    };
+
+                    _dbContext.FileResources.Add(fileResource);
+                    await _dbContext.SaveChangesAsync(ct);
+
+                    markupFileId = fileResource.FileResourceId;
+                }
+
+                var review = new ChapterEditorialReview
+                {
+                    ChapterId = chapterId,
+                    ReviewerUserId = actorUserId,
+                    DecisionCode = decisionCode,
+                    Feedback = comments,
+                    MarkupFileId = markupFileId,
+                    ReviewedAtUtc = reviewedAtUtc
+                };
+
+                _dbContext.ChapterEditorialReviews.Add(review);
+
+                string newStatusCode = decisionCode switch
+                {
+                    "APPROVED" => "APPROVED",
+                    "REVISION_REQUESTED" => "REVISION_REQUESTED",
+                    "CANCELLED" => "CANCELLED",
+                    _ => throw new InvalidOperationException($"Unknown decision code: {decisionCode}")
+                };
+
+                int updated = await _dbContext.Chapters
+                    .Where(c => c.ChapterId == chapterId && c.StatusCode == StatusUnderReview)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(c => c.StatusCode, newStatusCode)
+                        .SetProperty(c => c.UpdatedAtUtc, DateTime.UtcNow), ct);
+
+                if (updated == 0)
+                    throw new InvalidOperationException(
+                        "This chapter is no longer under review and cannot receive a review decision.");
+
+                var actorRoleName = await _dbContext.ActiveSeriesContributors
+                    .Where(sc => sc.SeriesId == chapter.SeriesId && sc.UserId == actorUserId)
+                    .Select(sc => sc.RoleName)
+                    .FirstOrDefaultAsync(ct);
+
+                var detailJson = JsonSerializer.Serialize(new
+                {
+                    chapter_id = chapterId,
+                    series_id = chapter.SeriesId,
+                    chapter_editorial_review_id = review.ChapterEditorialReviewId,
+                    old_status_code = previousStatusCode,
+                    new_status_code = newStatusCode,
+                    decision_code = decisionCode,
+                    has_markup_file = markupFileId.HasValue,
+                    markup_file_id = markupFileId,
+                    markup_file_name = markup?.OriginalFileName,
+                    markup_content_type = markup?.ContentType,
+                    markup_file_size = markup?.FileSizeBytes
+                });
+
+                var auditEvent = new AuditEvent
+                {
+                    OccurredAtUtc = reviewedAtUtc,
+                    ActorUserId = actorUserId,
+                    ActorRoleName = actorRoleName,
+                    ActionCode = "CHAPTER_EDITORIAL_REVIEW_RECORDED",
+                    EntityType = "Chapter",
+                    EntityId = chapterId.ToString(),
+                    DetailJson = detailJson
+                };
+
+                _dbContext.AuditEvents.Add(auditEvent);
+
+                await _dbContext.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
+
+                return new ChapterEditorialReviewResult(
+                    chapter.ChapterId,
+                    newStatusCode,
+                    review.ChapterEditorialReviewId,
+                    review.DecisionCode,
+                    review.Feedback,
+                    review.ReviewedAtUtc);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(ct);
+                throw;
+            }
         }
 
 

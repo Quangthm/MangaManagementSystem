@@ -3,6 +3,7 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
 @using MangaManagementSystem.Application.DTOs.Manga
+@using MangaManagementSystem.Application.DTOs.Editor
 @using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Mangaka")]
 @inject IMangakaChapterApiClient ChapterClient
@@ -86,7 +87,7 @@
             else
             {
                 <MudGrid>
-                    @foreach (var chapter in _filteredChapters)
+                    @foreach (var chapter in GetPagedChapters())
                     {
                         <MudItem xs="12" md="6">
                             <MudPaper Class="pa-5 mf-card" Elevation="0">
@@ -144,27 +145,66 @@
                                     @if (chapter.StatusCode == "DRAFT" || chapter.StatusCode == "REVISION_REQUESTED")
                                     {
                                         <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
-                                                   OnClick="@(() => OpenEditDialog(chapter))">
+                                                   OnClick="@(() => OpenEditDialog(chapter))"
+>
                                             Edit
                                         </MudButton>
                                         <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
                                                    Disabled="@_actionInProgress"
-                                                   OnClick="@(() => SubmitForReview(chapter.ChapterId))">
+                                                   OnClick="@(() => SubmitForReview(chapter.ChapterId))"
+>
                                             Submit for Review
                                         </MudButton>
                                     }
                                     else if (chapter.StatusCode == "APPROVED")
                                     {
                                         <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                                                   OnClick="@(() => OpenScheduleDialog(chapter))">
+                                                   OnClick="@(() => OpenScheduleDialog(chapter))"
+>
                                             Schedule Release
                                         </MudButton>
                                     }
+                                    @if (chapter.EditorialReviewHistory != null && chapter.EditorialReviewHistory.Count > 0)
+                                    {
+                                        <MudButton Variant="Variant.Text" Size="Size.Small"
+                                                   StartIcon="@(IsReviewHistoryExpanded(chapter.ChapterId) ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.History)"
+                                                   OnClick="@(() => ToggleReviewHistory(chapter.ChapterId))"
+>
+                                            @(IsReviewHistoryExpanded(chapter.ChapterId) ? "Hide History" : "Review History")
+                                        </MudButton>
+                                    }
                                 </MudStack>
+
+                                @if (IsReviewHistoryExpanded(chapter.ChapterId))
+                                {
+                                    <MudDivider Class="my-3" />
+                                    <ChapterEditorialReviewHistoryPanel
+                                        Reviews="@(chapter.EditorialReviewHistory ?? Array.Empty<EditorChapterReviewHistoryDto>())"
+                                        PageSize="3"
+                                        ShowTitle="true"
+                                        EmptyText="No editorial review history yet." />
+                                }
                             </MudPaper>
                         </MudItem>
                     }
                 </MudGrid>
+
+                @if (GetChapterCardsTotalPages() > 1)
+                {
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.Center" Spacing="2" Class="mt-4">
+                        <MudButton Variant="Variant.Outlined"
+                                   Disabled="@(_chapterCardsPage <= 1)"
+                                   OnClick="PreviousChapterCardsPage">
+                            Previous
+                        </MudButton>
+                        <MudText Typo="Typo.body2">Page @_chapterCardsPage of @GetChapterCardsTotalPages()</MudText>
+                        <MudButton Variant="Variant.Outlined"
+                                   Disabled="@(_chapterCardsPage >= GetChapterCardsTotalPages())"
+                                   OnClick="NextChapterCardsPage">
+                            Next
+                        </MudButton>
+                    </MudStack>
+                }
             }
         }
 
@@ -283,6 +323,11 @@
     private MangakaChapterListItemDto? _scheduleChapter;
     private DateTime? _scheduleDate;
 
+    private readonly HashSet<Guid> _expandedReviewHistoryChapterIds = new();
+
+    private const int ChapterCardsPageSize = 10;
+    private int _chapterCardsPage = 1;
+
     private IEnumerable<MangakaChapterListItemDto> _filteredChapters => ApplyFilters(_chapters);
 
     protected override async Task OnInitializedAsync()
@@ -342,11 +387,13 @@
     private void OnSeriesFilterChanged(Guid? value)
     {
         _selectedSeriesId = value;
+        ResetChapterCardsPage();
     }
 
     private void OnStatusFilterChanged(string value)
     {
         _statusFilter = value ?? "ALL";
+        ResetChapterCardsPage();
     }
 
     private void OpenCreateDialog()
@@ -475,6 +522,7 @@
         try
         {
             _chapters = await ChapterClient.GetMyChaptersAsync(_currentUserId);
+            ResetChapterCardsPage();
         }
         catch (Exception ex)
         {
@@ -515,4 +563,48 @@
         "CANCELLED" => "Cancelled",
         _ => status ?? "Unknown"
     };
+
+    // ── Review History helpers ─────────────────────────────────────────
+
+    private bool IsReviewHistoryExpanded(Guid chapterId)
+        => _expandedReviewHistoryChapterIds.Contains(chapterId);
+
+    private void ToggleReviewHistory(Guid chapterId)
+    {
+        if (!_expandedReviewHistoryChapterIds.Add(chapterId))
+        {
+            _expandedReviewHistoryChapterIds.Remove(chapterId);
+        }
+    }
+
+    // ── Chapter Card Pagination helpers ──────────────────────────────────
+
+    private IReadOnlyList<MangakaChapterListItemDto> GetPagedChapters()
+    {
+        return _filteredChapters
+            .Skip((_chapterCardsPage - 1) * ChapterCardsPageSize)
+            .Take(ChapterCardsPageSize)
+            .ToList();
+    }
+
+    private int GetChapterCardsTotalPages()
+    {
+        var count = _filteredChapters.Count();
+        return Math.Max(1, (int)Math.Ceiling(count / (double)ChapterCardsPageSize));
+    }
+
+    private void PreviousChapterCardsPage()
+    {
+        _chapterCardsPage = Math.Max(1, _chapterCardsPage - 1);
+    }
+
+    private void NextChapterCardsPage()
+    {
+        _chapterCardsPage = Math.Min(GetChapterCardsTotalPages(), _chapterCardsPage + 1);
+    }
+
+    private void ResetChapterCardsPage()
+    {
+        _chapterCardsPage = 1;
+    }
 }

@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
+using MangaManagementSystem.Application.DTOs.Editor;
 
 namespace MangaManagementSystem.Application.DTOs.Manga
 {
     /// <summary>
-    /// Mangaka chapter list item with latest editorial review summary.
+    /// Mangaka chapter list item with latest editorial review summary and full review history.
     /// </summary>
     public sealed record MangakaChapterListItemDto(
         Guid ChapterId,
@@ -17,7 +18,8 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         DateTime? ReleasedAtUtc,
         DateTime CreatedAtUtc,
         DateTime? UpdatedAtUtc,
-        ChapterEditorialReviewSummaryDto? LatestReview);
+        ChapterEditorialReviewSummaryDto? LatestReview,
+        IReadOnlyList<EditorChapterReviewHistoryDto> EditorialReviewHistory);
 
     /// <summary>
     /// Summary of the latest chapter editorial review decision.
@@ -29,6 +31,7 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         string? Comments,
         Guid? MarkupFileId,
         string? MarkupFileUrl,
+        string? MarkupFileName,
         DateTime ReviewedAtUtc);
 
     /// <summary>
