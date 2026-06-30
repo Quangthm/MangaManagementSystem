@@ -42,6 +42,10 @@ public class TranslateRequestDto
 
     [JsonPropertyName("regions")]
     public List<AiRegionDto> Regions { get; set; } = new();
+
+    /// <summary>Target language for translation: "vi" (Vietnamese) or "en" (English). Defaults to "vi".</summary>
+    [JsonPropertyName("target_lang")]
+    public string TargetLang { get; set; } = "vi";
 }
 
 public class TranslateResponseDto

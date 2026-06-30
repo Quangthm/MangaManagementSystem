@@ -27,5 +27,14 @@ namespace MangaManagementSystem.Domain.Interfaces
         IGenericRepository<AuditEvent> AuditEvents { get; }
         IGenericRepository<SeriesBoardVote> SeriesBoardVotes { get; }
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
+
+        /// <summary>Begins a database transaction on the shared context (no-op if one is already active).</summary>
+        Task BeginTransactionAsync(CancellationToken cancellationToken = default);
+
+        /// <summary>Commits the active transaction (no-op if none).</summary>
+        Task CommitTransactionAsync(CancellationToken cancellationToken = default);
+
+        /// <summary>Rolls back the active transaction and clears the change tracker (no-op if none).</summary>
+        Task RollbackTransactionAsync(CancellationToken cancellationToken = default);
     }
 }

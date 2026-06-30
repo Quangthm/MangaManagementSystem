@@ -1,6 +1,8 @@
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
 using MangaManagementSystem.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,6 +12,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
     public class UnitOfWork : IUnitOfWork
     {
         private readonly ApplicationDbContext _context;
+        private IDbContextTransaction? _transaction;
         public ISeriesRepository Series { get; }
         public IChapterRepository Chapters { get; }
         public IUserRepository Users { get; }
@@ -87,8 +90,44 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             }
         }
 
+        public async Task BeginTransactionAsync(CancellationToken cancellationToken = default)
+        {
+            if (_transaction != null) return;
+            _transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        }
+
+        public async Task CommitTransactionAsync(CancellationToken cancellationToken = default)
+        {
+            if (_transaction == null) return;
+            try
+            {
+                await _transaction.CommitAsync(cancellationToken);
+            }
+            finally
+            {
+                await _transaction.DisposeAsync();
+                _transaction = null;
+            }
+        }
+
+        public async Task RollbackTransactionAsync(CancellationToken cancellationToken = default)
+        {
+            if (_transaction == null) return;
+            try
+            {
+                await _transaction.RollbackAsync(cancellationToken);
+                _context.ChangeTracker.Clear();
+            }
+            finally
+            {
+                await _transaction.DisposeAsync();
+                _transaction = null;
+            }
+        }
+
         public void Dispose()
         {
+            _transaction?.Dispose();
             _context.Dispose();
             GC.SuppressFinalize(this);
         }

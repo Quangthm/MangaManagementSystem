@@ -40,8 +40,8 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<IEnumerable<SeriesContributorDto>> GetSeriesContributorsBySeriesIdAsync(Guid seriesId)
         {
-            var all = await _unitOfWork.SeriesContributors.GetAllAsync();
-            return all.Where(c => c.SeriesId == seriesId).Select(MapToDto);
+            var contributors = await _unitOfWork.SeriesContributors.FindAsync(c => c.SeriesId == seriesId);
+            return contributors.Select(MapToDto);
         }
 
         public async Task<SeriesContributorDto?> UpdateSeriesContributorAsync(UpdateSeriesContributorDto dto)
