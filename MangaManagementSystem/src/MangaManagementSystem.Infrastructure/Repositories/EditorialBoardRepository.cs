@@ -5,6 +5,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using System.Data;
 using System.Data.Common;
+using System.Text.Json;
 
 namespace MangaManagementSystem.Infrastructure.Repositories;
 
@@ -268,6 +269,19 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                     "Proposal not found or cannot be opened for board poll.");
             }
 
+            var hasExistingOpenPoll = await HasExistingOpenPollAsync(
+                connection,
+                transaction,
+                proposalInfo.SeriesId,
+                request.PollTypeCode,
+                cancellationToken);
+
+            if (hasExistingOpenPoll)
+            {
+                throw new InvalidOperationException(
+                    "This series already has an open board poll of this type. Close or cancel the existing poll before opening a new one.");
+            }
+
             await using var command = connection.CreateCommand();
             command.Transaction = transaction;
 
@@ -324,6 +338,29 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 chiefUserId,
                 cancellationToken);
 
+            var openPollAuditJson =
+                $$"""
+                {
+                  "poll_id": "{{pollId}}",
+                  "series_id": "{{proposalInfo.SeriesId}}",
+                  "proposal_id": "{{request.ProposalId}}",
+                  "poll_type_code": "{{request.PollTypeCode}}",
+                  "poll_reason": {{JsonSerializer.Serialize(request.PollReason)}},
+                  "publication_frequency_code": {{JsonSerializer.Serialize(request.PublicationFrequencyCode)}},
+                  "ends_at_utc": {{JsonSerializer.Serialize(request.EndsAtUtc)}}
+                }
+                """;
+
+            await AppendAuditEventAsync(
+                connection,
+                transaction,
+                chiefUserId,
+                "SERIES_BOARD_POLL_OPENED",
+                "SeriesBoardPoll",
+                pollId,
+                openPollAuditJson,
+                cancellationToken);
+
             await transaction.CommitAsync(cancellationToken);
 
             return new OpenSeriesBoardPollResultDto(
@@ -331,6 +368,14 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 SeriesId: proposalInfo.SeriesId,
                 ProposalId: request.ProposalId,
                 PollStatusCode: "OPEN");
+        }
+        catch (SqlException ex) when (ex.Number is 2601 or 2627)
+        {
+            await TryRollbackAsync(transaction, cancellationToken);
+
+            throw new InvalidOperationException(
+                "This series already has an open board poll of this type. Close or cancel the existing poll before opening a new one.",
+                ex);
         }
         catch
         {
@@ -353,106 +398,143 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             await connection.OpenAsync(cancellationToken);
         }
 
-        await using var command = connection.CreateCommand();
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
-        command.CommandText =
-            """
-            SET XACT_ABORT ON;
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
 
-            IF NOT EXISTS (
-                SELECT 1
-                FROM manga.SeriesBoardPoll
-                WHERE series_board_poll_id = @pollId
-                  AND poll_status_code = N'OPEN'
-                  AND (
-                      ends_at_utc IS NULL
-                      OR ends_at_utc > SYSUTCDATETIME()
-                  )
-            )
-            BEGIN
-                THROW 58601, 'Poll is not open or has expired.', 1;
-            END;
+            command.CommandText =
+                """
+                SET XACT_ABORT ON;
 
-            DECLARE @result TABLE
-            (
-                series_board_vote_id UNIQUEIDENTIFIER,
-                choice_code NVARCHAR(50),
-                vote_reason NVARCHAR(500),
-                voted_at_utc DATETIME2(0)
-            );
-
-            UPDATE manga.SeriesBoardVote
-            SET choice_code = @choiceCode,
-                vote_reason = @voteReason,
-                voted_at_utc = SYSUTCDATETIME()
-            OUTPUT
-                inserted.series_board_vote_id,
-                inserted.choice_code,
-                inserted.vote_reason,
-                inserted.voted_at_utc
-            INTO @result
-            WHERE series_board_poll_id = @pollId
-              AND user_id = @voterUserId;
-
-            IF @@ROWCOUNT = 0
-            BEGIN
-                INSERT INTO manga.SeriesBoardVote
-                (
-                    series_board_poll_id,
-                    user_id,
-                    choice_code,
-                    vote_reason,
-                    voted_at_utc
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM manga.SeriesBoardPoll
+                    WHERE series_board_poll_id = @pollId
+                      AND poll_status_code = N'OPEN'
+                      AND (
+                          ends_at_utc IS NULL
+                          OR ends_at_utc > SYSUTCDATETIME()
+                      )
                 )
+                BEGIN
+                    THROW 58601, 'Poll is not open or has expired.', 1;
+                END;
+
+                DECLARE @result TABLE
+                (
+                    series_board_vote_id UNIQUEIDENTIFIER,
+                    choice_code NVARCHAR(50),
+                    vote_reason NVARCHAR(500),
+                    voted_at_utc DATETIME2(0)
+                );
+
+                UPDATE manga.SeriesBoardVote
+                SET choice_code = @choiceCode,
+                    vote_reason = @voteReason,
+                    voted_at_utc = SYSUTCDATETIME()
                 OUTPUT
                     inserted.series_board_vote_id,
                     inserted.choice_code,
                     inserted.vote_reason,
                     inserted.voted_at_utc
                 INTO @result
-                VALUES
-                (
-                    @pollId,
-                    @voterUserId,
-                    @choiceCode,
-                    @voteReason,
-                    SYSUTCDATETIME()
-                );
-            END;
+                WHERE series_board_poll_id = @pollId
+                  AND user_id = @voterUserId;
 
-            SELECT
-                series_board_vote_id,
-                choice_code,
-                vote_reason,
-                voted_at_utc
-            FROM @result;
-            """;
+                IF @@ROWCOUNT = 0
+                BEGIN
+                    INSERT INTO manga.SeriesBoardVote
+                    (
+                        series_board_poll_id,
+                        user_id,
+                        choice_code,
+                        vote_reason,
+                        voted_at_utc
+                    )
+                    OUTPUT
+                        inserted.series_board_vote_id,
+                        inserted.choice_code,
+                        inserted.vote_reason,
+                        inserted.voted_at_utc
+                    INTO @result
+                    VALUES
+                    (
+                        @pollId,
+                        @voterUserId,
+                        @choiceCode,
+                        @voteReason,
+                        SYSUTCDATETIME()
+                    );
+                END;
 
-        AddGuidParameter(command, "@pollId", request.PollId);
-        AddGuidParameter(command, "@voterUserId", voterUserId);
-        AddStringParameter(command, "@choiceCode", request.ChoiceCode, 50);
-        AddNullableStringParameter(command, "@voteReason", request.VoteReason, 500);
+                SELECT
+                    series_board_vote_id,
+                    choice_code,
+                    vote_reason,
+                    voted_at_utc
+                FROM @result;
+                """;
 
-        try
-        {
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            AddGuidParameter(command, "@pollId", request.PollId);
+            AddGuidParameter(command, "@voterUserId", voterUserId);
+            AddStringParameter(command, "@choiceCode", request.ChoiceCode, 50);
+            AddNullableStringParameter(command, "@voteReason", request.VoteReason, 500);
 
-            if (!await reader.ReadAsync(cancellationToken))
+            CastSeriesBoardVoteResultDto result;
+
+            await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
             {
-                throw new InvalidOperationException("Could not save vote.");
+                if (!await reader.ReadAsync(cancellationToken))
+                {
+                    throw new InvalidOperationException("Could not save vote.");
+                }
+
+                result = new CastSeriesBoardVoteResultDto(
+                    PollId: request.PollId,
+                    VoteId: reader.GetGuid(0),
+                    UserId: voterUserId,
+                    ChoiceCode: reader.GetString(1),
+                    VoteReason: reader.IsDBNull(2) ? null : reader.GetString(2),
+                    VotedAtUtc: reader.GetDateTime(3));
             }
 
-            return new CastSeriesBoardVoteResultDto(
-                PollId: request.PollId,
-                VoteId: reader.GetGuid(0),
-                UserId: voterUserId,
-                ChoiceCode: reader.GetString(1),
-                VoteReason: reader.IsDBNull(2) ? null : reader.GetString(2),
-                VotedAtUtc: reader.GetDateTime(3));
+            var voteAuditJson =
+                $$"""
+                {
+                  "poll_id": "{{result.PollId}}",
+                  "vote_id": "{{result.VoteId}}",
+                  "choice_code": "{{result.ChoiceCode}}",
+                  "vote_reason": {{JsonSerializer.Serialize(result.VoteReason)}},
+                  "voted_at_utc": "{{result.VotedAtUtc:O}}"
+                }
+                """;
+
+            await AppendAuditEventAsync(
+                connection,
+                transaction,
+                voterUserId,
+                "SERIES_BOARD_VOTE_CAST",
+                "SeriesBoardVote",
+                result.VoteId,
+                voteAuditJson,
+                cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+
+            return result;
         }
         catch (SqlException ex) when (ex.Number == 58601)
         {
+            await TryRollbackAsync(transaction, cancellationToken);
             throw new InvalidOperationException("Poll is not open or has expired.", ex);
+        }
+        catch
+        {
+            await TryRollbackAsync(transaction, cancellationToken);
+            throw;
         }
     }
 
@@ -665,6 +747,28 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                     EndedAtUtc: reader.GetDateTime(5));
             }
 
+            var closePollAuditJson =
+                $$"""
+                {
+                  "poll_id": "{{result.PollId}}",
+                  "series_id": "{{result.SeriesId}}",
+                  "poll_status_code": "{{result.PollStatusCode}}",
+                  "series_status_code": "{{result.SeriesStatusCode}}",
+                  "publication_frequency_code": {{JsonSerializer.Serialize(result.PublicationFrequencyCode)}},
+                  "ended_at_utc": "{{result.EndedAtUtc:O}}"
+                }
+                """;
+
+            await AppendAuditEventAsync(
+                connection,
+                transaction,
+                chiefUserId,
+                "SERIES_BOARD_POLL_CLOSED",
+                "SeriesBoardPoll",
+                result.PollId,
+                closePollAuditJson,
+                cancellationToken);
+
             await transaction.CommitAsync(cancellationToken);
 
             return result;
@@ -703,80 +807,142 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             await connection.OpenAsync(cancellationToken);
         }
 
-        await using var command = connection.CreateCommand();
-
-        command.CommandText =
-            """
-            DECLARE @now DATETIME2(0) = SYSUTCDATETIME();
-
-            DECLARE @result TABLE
-            (
-                poll_id UNIQUEIDENTIFIER,
-                series_id UNIQUEIDENTIFIER,
-                poll_status_code NVARCHAR(50),
-                publication_frequency_code NVARCHAR(50),
-                ended_at_utc DATETIME2(0)
-            );
-
-            UPDATE p
-            SET poll_status_code = N'CANCELLED',
-                ends_at_utc =
-                    CASE
-                        WHEN @now <= p.started_at_utc
-                            THEN DATEADD(SECOND, 1, p.started_at_utc)
-                        ELSE @now
-                    END
-            OUTPUT
-                inserted.series_board_poll_id,
-                inserted.series_id,
-                inserted.poll_status_code,
-                inserted.board_publication_frequency_code,
-                inserted.ends_at_utc
-            INTO @result
-            FROM manga.SeriesBoardPoll p
-            WHERE p.series_board_poll_id = @pollId
-              AND p.poll_status_code = N'OPEN';
-
-            IF NOT EXISTS (SELECT 1 FROM @result)
-            BEGIN
-                THROW 58621, 'Open poll was not found or has already been closed/cancelled.', 1;
-            END;
-
-            SELECT
-                r.poll_id,
-                r.series_id,
-                r.poll_status_code,
-                s.status_code AS series_status_code,
-                r.publication_frequency_code,
-                r.ended_at_utc
-            FROM @result r
-            INNER JOIN manga.Series s
-                ON s.series_id = r.series_id;
-            """;
-
-        AddGuidParameter(command, "@pollId", pollId);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
         try
         {
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
 
-            if (!await reader.ReadAsync(cancellationToken))
+            command.CommandText =
+                """
+                DECLARE @now DATETIME2(0) = SYSUTCDATETIME();
+
+                DECLARE @result TABLE
+                (
+                    poll_id UNIQUEIDENTIFIER,
+                    series_id UNIQUEIDENTIFIER,
+                    poll_status_code NVARCHAR(50),
+                    publication_frequency_code NVARCHAR(50),
+                    ended_at_utc DATETIME2(0)
+                );
+
+                UPDATE p
+                SET poll_status_code = N'CANCELLED',
+                    ends_at_utc =
+                        CASE
+                            WHEN @now <= p.started_at_utc
+                                THEN DATEADD(SECOND, 1, p.started_at_utc)
+                            ELSE @now
+                        END
+                OUTPUT
+                    inserted.series_board_poll_id,
+                    inserted.series_id,
+                    inserted.poll_status_code,
+                    inserted.board_publication_frequency_code,
+                    inserted.ends_at_utc
+                INTO @result
+                FROM manga.SeriesBoardPoll p
+                WHERE p.series_board_poll_id = @pollId
+                  AND p.poll_status_code = N'OPEN';
+
+                IF NOT EXISTS (SELECT 1 FROM @result)
+                BEGIN
+                    THROW 58621, 'Open poll was not found or has already been closed/cancelled.', 1;
+                END;
+
+                SELECT
+                    r.poll_id,
+                    r.series_id,
+                    r.poll_status_code,
+                    s.status_code AS series_status_code,
+                    r.publication_frequency_code,
+                    r.ended_at_utc
+                FROM @result r
+                INNER JOIN manga.Series s
+                    ON s.series_id = r.series_id;
+                """;
+
+            AddGuidParameter(command, "@pollId", pollId);
+
+            FinalizeBoardPollResultDto result;
+
+            await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
             {
-                throw new InvalidOperationException("Could not cancel board poll.");
+                if (!await reader.ReadAsync(cancellationToken))
+                {
+                    throw new InvalidOperationException("Could not cancel board poll.");
+                }
+
+                result = new FinalizeBoardPollResultDto(
+                    PollId: reader.GetGuid(0),
+                    SeriesId: reader.GetGuid(1),
+                    PollStatusCode: reader.GetString(2),
+                    SeriesStatusCode: reader.GetString(3),
+                    PublicationFrequencyCode: reader.IsDBNull(4) ? null : reader.GetString(4),
+                    EndedAtUtc: reader.GetDateTime(5));
             }
 
-            return new FinalizeBoardPollResultDto(
-                PollId: reader.GetGuid(0),
-                SeriesId: reader.GetGuid(1),
-                PollStatusCode: reader.GetString(2),
-                SeriesStatusCode: reader.GetString(3),
-                PublicationFrequencyCode: reader.IsDBNull(4) ? null : reader.GetString(4),
-                EndedAtUtc: reader.GetDateTime(5));
+            var cancelPollAuditJson =
+                $$"""
+                {
+                  "poll_id": "{{result.PollId}}",
+                  "series_id": "{{result.SeriesId}}",
+                  "poll_status_code": "{{result.PollStatusCode}}",
+                  "series_status_code": "{{result.SeriesStatusCode}}",
+                  "publication_frequency_code": {{JsonSerializer.Serialize(result.PublicationFrequencyCode)}},
+                  "ended_at_utc": "{{result.EndedAtUtc:O}}"
+                }
+                """;
+
+            await AppendAuditEventAsync(
+                connection,
+                transaction,
+                chiefUserId,
+                "SERIES_BOARD_POLL_CANCELLED",
+                "SeriesBoardPoll",
+                result.PollId,
+                cancelPollAuditJson,
+                cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+
+            return result;
         }
         catch (SqlException ex) when (ex.Number == 58621)
         {
+            await TryRollbackAsync(transaction, cancellationToken);
             throw new InvalidOperationException(ex.Message, ex);
         }
+        catch
+        {
+            await TryRollbackAsync(transaction, cancellationToken);
+            throw;
+        }
+    }
+
+    private static async Task AppendAuditEventAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        Guid actorUserId,
+        string actionCode,
+        string entityType,
+        Guid entityId,
+        string detailJson,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandType = CommandType.StoredProcedure;
+        command.CommandText = "audit.usp_AuditEvent_Append";
+
+        AddGuidParameter(command, "@actor_user_id", actorUserId);
+        AddStringParameter(command, "@action_code", actionCode, 64);
+        AddStringParameter(command, "@entity_type", entityType, 128);
+        AddGuidParameter(command, "@entity_id", entityId);
+        AddNullableStringParameter(command, "@detail_json", detailJson, -1);
+
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static async Task<int> ExecuteScalarIntAsync(
@@ -1015,6 +1181,40 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
     }
 
     private sealed record ProposalForPoll(Guid ProposalId, Guid SeriesId);
+
+    private static async Task<bool> HasExistingOpenPollAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        Guid seriesId,
+        string pollTypeCode,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+
+        command.CommandText =
+            """
+            SELECT CASE
+                WHEN EXISTS
+                (
+                    SELECT 1
+                    FROM manga.SeriesBoardPoll
+                    WHERE series_id = @seriesId
+                      AND poll_type_code = @pollTypeCode
+                      AND poll_status_code = N'OPEN'
+                )
+                THEN CAST(1 AS bit)
+                ELSE CAST(0 AS bit)
+            END;
+            """;
+
+        AddGuidParameter(command, "@seriesId", seriesId);
+        AddStringParameter(command, "@pollTypeCode", pollTypeCode, 50);
+
+        var result = await command.ExecuteScalarAsync(cancellationToken);
+
+        return result is bool boolValue && boolValue;
+    }
 
     private static async Task<ProposalForPoll?> GetProposalForPollAsync(
         DbConnection connection,
@@ -1302,8 +1502,7 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             "NO_DECISION" => "No Decision",
             "PENDING" => "Voting in Progress",
             "INVALIDATED" => "Cancelled",
+            _ => resultCode
         };
     }
-
-
 }

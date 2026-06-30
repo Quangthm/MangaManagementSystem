@@ -61,22 +61,29 @@ public sealed class EditorialBoardController : ControllerBase
         [FromBody] OpenPollApiRequest request,
         CancellationToken cancellationToken)
     {
-        var chiefUserId = GetCurrentUserId();
+        try
+        {
+            var chiefUserId = GetCurrentUserId();
 
-        var commandRequest = new OpenSeriesBoardPollRequestDto(
-            ProposalId: proposalId,
-            PollTypeCode: request.PollTypeCode,
-            PollReason: request.PollReason,
-            PublicationFrequencyCode: request.PublicationFrequencyCode,
-            EndsAtUtc: request.EndsAtUtc);
+            var commandRequest = new OpenSeriesBoardPollRequestDto(
+                ProposalId: proposalId,
+                PollTypeCode: request.PollTypeCode,
+                PollReason: request.PollReason,
+                PublicationFrequencyCode: request.PublicationFrequencyCode,
+                EndsAtUtc: request.EndsAtUtc);
 
-        var result = await _mediator.Send(
-            new OpenSeriesBoardPollCommand(
-                ChiefUserId: chiefUserId,
-                Request: commandRequest),
-            cancellationToken);
+            var result = await _mediator.Send(
+                new OpenSeriesBoardPollCommand(
+                    ChiefUserId: chiefUserId,
+                    Request: commandRequest),
+                cancellationToken);
 
-        return Ok(result);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
     }
 
     [HttpPost("polls/{pollId:guid}/votes")]
@@ -86,20 +93,27 @@ public sealed class EditorialBoardController : ControllerBase
         [FromBody] CastVoteApiRequest request,
         CancellationToken cancellationToken)
     {
-        var voterUserId = GetCurrentUserId();
+        try
+        {
+            var voterUserId = GetCurrentUserId();
 
-        var commandRequest = new CastSeriesBoardVoteRequestDto(
-            PollId: pollId,
-            ChoiceCode: request.ChoiceCode,
-            VoteReason: request.VoteReason);
+            var commandRequest = new CastSeriesBoardVoteRequestDto(
+                PollId: pollId,
+                ChoiceCode: request.ChoiceCode,
+                VoteReason: request.VoteReason);
 
-        var result = await _mediator.Send(
-            new CastSeriesBoardVoteCommand(
-                VoterUserId: voterUserId,
-                Request: commandRequest),
-            cancellationToken);
+            var result = await _mediator.Send(
+                new CastSeriesBoardVoteCommand(
+                    VoterUserId: voterUserId,
+                    Request: commandRequest),
+                cancellationToken);
 
-        return Ok(result);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
     }
 
     [HttpPost("polls/{pollId:guid}/final-approval")]
@@ -108,15 +122,22 @@ public sealed class EditorialBoardController : ControllerBase
         Guid pollId,
         CancellationToken cancellationToken)
     {
-        var chiefUserId = GetCurrentUserId();
+        try
+        {
+            var chiefUserId = GetCurrentUserId();
 
-        var result = await _mediator.Send(
-            new FinalizeBoardPollApprovalCommand(
-                PollId: pollId,
-                ChiefUserId: chiefUserId),
-            cancellationToken);
+            var result = await _mediator.Send(
+                new FinalizeBoardPollApprovalCommand(
+                    PollId: pollId,
+                    ChiefUserId: chiefUserId),
+                cancellationToken);
 
-        return Ok(result);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
     }
 
     [HttpPost("polls/{pollId:guid}/cancel")]
@@ -125,15 +146,22 @@ public sealed class EditorialBoardController : ControllerBase
         Guid pollId,
         CancellationToken cancellationToken)
     {
-        var chiefUserId = GetCurrentUserId();
+        try
+        {
+            var chiefUserId = GetCurrentUserId();
 
-        var result = await _mediator.Send(
-            new CancelBoardPollCommand(
-                PollId: pollId,
-                ChiefUserId: chiefUserId),
-            cancellationToken);
+            var result = await _mediator.Send(
+                new CancelBoardPollCommand(
+                    PollId: pollId,
+                    ChiefUserId: chiefUserId),
+                cancellationToken);
 
-        return Ok(result);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
     }
 
     private Guid GetCurrentUserId()
