@@ -55,7 +55,6 @@ namespace MangaManagementSystem.Infrastructure
             services.AddScoped<IReferenceDataRepository, ReferenceDataRepository>();
             services.AddScoped<ISeriesContributorManagementRepository, SeriesContributorRepository>();
             services.AddScoped<IQuickSelectRepository, QuickSelectRepository>();
-            services.AddScoped<ILandingPageRepository, LandingPageRepository>();
 
             // Unit of Work
             services.AddScoped<IUnitOfWork, UnitOfWork>();

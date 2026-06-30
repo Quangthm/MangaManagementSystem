@@ -690,7 +690,7 @@
             && !string.IsNullOrWhiteSpace(_quickSelectDefaultDescription);
     }
 
-    private void OpenQuickSelect()
+    private async Task OpenQuickSelect()
     {
         _showQuickSelect = true;
         _quickSelectSelectedSeriesId = null;
@@ -713,7 +713,7 @@
         _quickSelectPageOverrides = new();
         _quickSelectSubmitting = false;
 
-        _ = LoadQuickSelectSeriesAsync();
+        await LoadQuickSelectSeriesAsync();
     }
 
     private void CloseQuickSelect()

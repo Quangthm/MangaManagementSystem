@@ -1,8 +1,6 @@
 @page "/"
 @layout PublicLayout
-@using MangaManagementSystem.Domain.Interfaces
 @inject NavigationManager Nav
-@inject ILandingPageRepository LandingPageRepo
 
 <PageTitle>MangaFlow — Manga Production Workflow Management</PageTitle>
 
@@ -49,74 +47,6 @@
                     </MudStack>
                 </MudItem>
 
-                <MudItem xs="12" md="6" Class="mt-8 mt-md-0">
-                    @* Dashboard panel — not a card *@
-                    <div class="mf-dashboard mf-fade-up" style="animation-delay:0.15s; position:relative;">
-                        <div class="mf-glow-ring"></div>
-                        <div style="position:relative;z-index:1;">
-                            <div class="mf-dash-header">
-                                <MudText Typo="Typo.body2" Class="font-weight-medium" Style="color:rgba(255,255,255,.9);">Production Board</MudText>
-                                <span class="mf-dash-live">Live</span>
-                            </div>
-
-                            <div class="mf-dash-body">
-                            <div class="mf-dash-row">
-                                <span class="mf-dash-label">Volume Progress</span>
-                                <span class="mf-dash-value">@data.ReleasedChapters / @data.TotalChapters</span>
-                            </div>
-                            <div class="mf-dash-track">
-                                <div class="mf-dash-fill" style="width:@(data.TotalChapters > 0 ? (data.ReleasedChapters * 100 / data.TotalChapters) : 0)%;"></div>
-                            </div>
-
-                            <div class="mf-dash-grid">
-                                <div class="mf-dash-stat">
-                                    <span class="mf-dash-stat-value">@data.ActiveReviews</span>
-                                    <span class="mf-dash-stat-label">Active Reviews</span>
-                                </div>
-                                <div class="mf-dash-stat">
-                                    <span class="mf-dash-stat-value">@data.PendingTasks <span class="mf-dash-trend mf-dash-trend-down">&#8595;</span></span>
-                                    <span class="mf-dash-stat-label">Pending Tasks</span>
-                                </div>
-                                <div class="mf-dash-stat">
-                                    <span class="mf-dash-stat-value">@data.OpenBoardPolls <span class="mf-dash-trend mf-dash-trend-up">&#8593;</span></span>
-                                    <span class="mf-dash-stat-label">Board Polls</span>
-                                </div>
-                                <div class="mf-dash-stat">
-                                    <span class="mf-dash-stat-value">@data.CompletedTasks <span class="mf-dash-trend mf-dash-trend-up">&#8593;</span></span>
-                                    <span class="mf-dash-stat-label">Completed</span>
-                                </div>
-                            </div>
-
-                            <div class="mf-dash-divider"></div>
-
-                            <MudText Typo="Typo.caption" Class="font-weight-medium" Style="color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.06em;font-size:.65rem;margin-bottom:8px;">Recent Activity</MudText>
-                            <div class="mf-dash-activity">
-                                @if (data.RecentActivities.Count == 0)
-                                {
-                                    <div class="mf-dash-activity-item">
-                                        <span class="mf-dash-dot" style="background:var(--mf-slate-400);"></span>
-                                        <span style="color:rgba(255,255,255,.35);">No recent activity</span>
-                                    </div>
-                                }
-                                @foreach (var act in data.RecentActivities)
-                                {
-                                    var dotColor = act.TypeCode switch
-                                    {
-                                        "approved" => "var(--mf-teal)",
-                                        "submitted" => "var(--mf-amber)",
-                                        "opened" => "var(--mf-secondary)",
-                                        _ => "var(--mf-slate-400)"
-                                    };
-                                    <div class="mf-dash-activity-item">
-                                        <span class="mf-dash-dot" style="background:@dotColor;"></span>
-                                        <span>@act.Label</span>
-                                    </div>
-                                }
-                            </div>
-                            </div>
-                        </div>
-                    </div>
-                </MudItem>
             </MudGrid>
         </MudContainer>
     </div>
@@ -223,13 +153,6 @@
 </div>
 
 @code {
-    private LandingPageData data = new(0, 0, 0, 0, 0, 0, 0, Array.Empty<LandingPageActivityItem>());
-
-    protected override async Task OnInitializedAsync()
-    {
-        data = await LandingPageRepo.GetDashboardDataAsync();
-    }
-
     private readonly List<FeatureItem> Features = new()
     {
         new(Icons.Material.Filled.LibraryBooks, "Chapter & Page Management",

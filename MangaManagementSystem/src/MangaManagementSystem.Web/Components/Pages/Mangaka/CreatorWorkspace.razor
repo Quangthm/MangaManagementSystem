@@ -4,8 +4,10 @@
 @using System.Security.Claims
 @using System.Text.Json
 @using MangaManagementSystem.Application.Interfaces
+@using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Web.Services.Api
 @using MangaManagementSystem.Web.Services
+@using Microsoft.AspNetCore.Components.Forms
 @attribute [Authorize(Roles = "Mangaka,Tantou Editor,Assistant")]
 @inject NavigationManager Nav
 @inject IJSRuntime JS
@@ -24,6 +26,7 @@
 @inject IFileStorageService FileStorageService
 @inject IFileResourceService FileResourceService
 @inject IAiService AiService
+@inject IAssistantTaskSubmissionService AssistantTaskSubmissionService
 
 @if (_accessDenied)
 {
@@ -109,8 +112,156 @@ else
     <div class="mf-workspace-body d-flex flex-grow-1 overflow-hidden">
         
         <!-- Left Sidebar -->
-        <aside class="mf-workspace-sidebar py-4 d-flex flex-column border-r-1 mud-border-lines-default" style="width: 250px; flex-shrink: 0; background-color: white; height: 100%; overflow: hidden;">
-            <MudNavMenu Class="mud-width-full flex-grow-1" Style="overflow-y: auto;">
+        <aside class="mf-workspace-sidebar py-4 d-flex flex-column border-r-1 mud-border-lines-default" style="width: 320px; flex-shrink: 0; background-color: white; height: 100%; overflow: hidden;">
+            @if (_isAssistantMode && _activeAssistantTask != null)
+            {
+                @* ─── Assistant Task Panel ─── *@
+                <div class="px-4 d-flex flex-column" style="height: 100%; overflow: hidden;">
+                    <div class="d-flex align-center mb-4" style="flex-shrink: 0;">
+                        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="/assistant/tasks" Class="mr-1" Size="Size.Small" />
+                        <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Task Details</MudText>
+                    </div>
+
+                    <div style="overflow-y: auto; flex-grow: 1;">
+                        @* Task Info Card *@
+                        <MudPaper Elevation="0" Class="pa-3 border-1 mud-border-lines-default rounded-lg mb-3">
+                            <div class="d-flex justify-space-between align-center mb-2">
+                                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">@_activeAssistantTask.TypeCode</MudChip>
+                                @{
+                                    var taskStatus = _activeAssistantTask.StatusCode switch
+                                    {
+                                        "ASSIGNED" => "Assigned",
+                                        "UNDER_REVIEW" => "Under Review",
+                                        "COMPLETED" => "Completed",
+                                        "CANCELLED" => "Cancelled",
+                                        _ => _activeAssistantTask.StatusCode
+                                    };
+                                    var taskColor = _activeAssistantTask.StatusCode switch
+                                    {
+                                        "ASSIGNED" => Color.Primary,
+                                        "UNDER_REVIEW" => Color.Warning,
+                                        "COMPLETED" => Color.Success,
+                                        "CANCELLED" => Color.Default,
+                                        _ => Color.Default
+                                    };
+                                }
+                                <MudChip T="string" Size="Size.Small" Color="@taskColor" Variant="Variant.Filled">@taskStatus</MudChip>
+                            </div>
+                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-1">@_activeAssistantTask.TaskTitle</MudText>
+                            <MudText Typo="Typo.body2" Class="mf-muted mb-2">@_activeAssistantTask.TaskDescription</MudText>
+                            <MudText Typo="Typo.caption" Class="mf-muted">
+                                Page @_activeAssistantTask.PageNo &bull; @_activeAssistantTask.SeriesTitle
+                                @if (!string.IsNullOrWhiteSpace(_activeAssistantTask.ChapterTitle))
+                                {
+                                    <text>&bull; @_activeAssistantTask.ChapterTitle</text>
+                                }
+                            </MudText>
+                        </MudPaper>
+
+                        @* Regions Info *@
+                        @if (_activeAssistantTask.PageRegions.Any())
+                        {
+                            <MudPaper Elevation="0" Class="pa-3 border-1 mud-border-lines-default rounded-lg mb-3">
+                                <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2">Target Regions</MudText>
+                                <div class="d-flex flex-wrap gap-1">
+                                    @foreach (var r in _activeAssistantTask.PageRegions)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Outlined">
+                                            Region (X:@((int)r.X), Y:@((int)r.Y))
+                                        </MudChip>
+                                    }
+                                </div>
+                            </MudPaper>
+                        }
+
+                        @* Version History *@
+                        <MudPaper Elevation="0" Class="pa-3 border-1 mud-border-lines-default rounded-lg mb-3">
+                            <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2">Page Versions</MudText>
+                            @if (UploadedPages.Count > ActivePageIndex && ActivePageIndex >= 0)
+                            {
+                                var currentPage = UploadedPages[ActivePageIndex];
+                                if (currentPage.Versions.Any())
+                                {
+                                    <div class="d-flex flex-column gap-1">
+                                        @for (int i = currentPage.Versions.Count - 1; i >= 0; i--)
+                                        {
+                                            var ver = currentPage.Versions[i];
+                                            var isCurrent = ver.IsCurrentVersion;
+                                            <div class="d-flex align-center px-2 py-1 rounded-lg" Style="@(isCurrent ? "background: #eef2ff;" : "")">
+                                                <MudIcon Icon="@(isCurrent ? Icons.Material.Filled.CheckCircle : Icons.Material.Outlined.Circle)" Size="Size.Small" Color="@(isCurrent ? Color.Success : Color.Default)" Class="mr-1" />
+                                                <MudText Typo="Typo.body2">v@(ver.VersionNo)</MudText>
+                                                @if (isCurrent) { <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text" Class="ml-1">current</MudChip> }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.caption" Class="mf-muted">No versions yet</MudText>
+                                }
+                            }
+                        </MudPaper>
+
+                        @* Submit Work Section *@
+                        @if (_activeAssistantTask.StatusCode == "ASSIGNED")
+                        {
+                            <MudPaper Elevation="0" Class="pa-3 border-1 mud-border-lines-default rounded-lg mb-3">
+                                <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-3">Submit Work</MudText>
+
+                                <MudText Typo="Typo.caption" Class="mf-muted mb-2">Upload a new version of this page with your work.</MudText>
+
+                                <InputFile OnChange="@(e => { _selectedSubmitFile = e.File; })" accept="image/*" hidden id="submitFileInput" />
+                                <MudButton HtmlTag="label" for="submitFileInput" Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" StartIcon="@Icons.Material.Filled.CloudUpload" Class="mb-3" Disabled="@_isSubmittingTask">
+                                    @if (_selectedSubmitFile != null)
+                                    {
+                                        <span>@_selectedSubmitFile.Name</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Choose File</span>
+                                    }
+                                </MudButton>
+
+                                <MudTextField T="string" Label="Version Notes (optional)" @bind-Value="_versionNotes" Variant="Variant.Outlined" Lines="2" Margin="Margin.Dense" Class="mb-3" Disabled="@_isSubmittingTask" />
+
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" StartIcon="@Icons.Material.Filled.Send" OnClick="SubmitAssistantWorkAsync" Disabled="@(_selectedSubmitFile == null || _isSubmittingTask)">
+                                    @if (_isSubmittingTask)
+                                    {
+                                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                                        <span class="ml-1">Submitting...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Save &amp; Submit for Review</span>
+                                    }
+                                </MudButton>
+                            </MudPaper>
+                        }
+                        else if (_activeAssistantTask.StatusCode == "UNDER_REVIEW")
+                        {
+                            <MudPaper Elevation="0" Class="pa-3 border-1 mud-border-lines-default rounded-lg mb-3" Style="background: #fefce8;">
+                                <div class="d-flex align-center">
+                                    <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" Color="Color.Warning" Class="mr-2" />
+                                    <MudText Typo="Typo.body2" Class="font-weight-bold">Submitted for Review</MudText>
+                                </div>
+                                <MudText Typo="Typo.caption" Class="mf-muted mt-1">Waiting for mangaka or editor to review your work.</MudText>
+                            </MudPaper>
+                        }
+                        else if (_activeAssistantTask.StatusCode == "COMPLETED")
+                        {
+                            <MudPaper Elevation="0" Class="pa-3 border-1 mud-border-lines-default rounded-lg mb-3" Style="background: #f0fdf4;">
+                                <div class="d-flex align-center">
+                                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" Color="Color.Success" Class="mr-2" />
+                                    <MudText Typo="Typo.body2" Class="font-weight-bold">Task Completed</MudText>
+                                </div>
+                            </MudPaper>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                <MudNavMenu Class="mud-width-full flex-grow-1" Style="overflow-y: auto;">
                     <div class="px-4 mt-6 mb-2">
                         <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" StartIcon="@Icons.Material.Filled.Add" Class="rounded-lg" OnClick="AddNewChapter" Disabled="@_isAddingChapter">
                             @if (_isAddingChapter) { <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/> } else { <span>New Chapter</span> }
@@ -211,7 +362,8 @@ else
                             </MudListItem>
                         }
                     </MudList>
-            </MudNavMenu>
+                </MudNavMenu>
+            }
         </aside>
 
         <!-- Main Canvas Area -->
@@ -688,7 +840,7 @@ else
     // AutoSave
     private bool _isAutoSaving = false;
     private System.Threading.Timer? _autoSaveTimer;
-    private SemaphoreSlim _autoSaveSemaphore = new SemaphoreSlim(1, 1);
+    private readonly SemaphoreSlim _dbLock = new SemaphoreSlim(1, 1);
 
     private bool _seriesNotFound = false;
     private bool _isAddingChapter = false;
@@ -701,6 +853,13 @@ else
     private Guid? _taskTargetVersionId;
     private string? _taskFilterId;
     private bool _isRightPanelOpen = true;
+
+    // Assistant mode
+    private bool _isAssistantMode;
+    private ChapterPageTaskDto? _activeAssistantTask;
+    private IBrowserFile? _selectedSubmitFile;
+    private string _versionNotes = "";
+    private bool _isSubmittingTask;
 
     /// <summary>
     /// Context-aware back-navigation URL. When the workspace is opened from the Editor chapter
@@ -882,8 +1041,80 @@ else
         {
             Snackbar.Add($"Error creating task: {ex.Message}", Severity.Error);
         }
+        finally
+        {
+            _dbLock.Release();
+        }
     }
-    
+
+    private async Task SubmitAssistantWorkAsync()
+    {
+        if (_selectedSubmitFile == null || _activeAssistantTask == null) return;
+
+        _isSubmittingTask = true;
+        try
+        {
+            await _dbLock.WaitAsync();
+            try
+            {
+                // 1. Read file bytes
+                using var stream = _selectedSubmitFile.OpenReadStream(maxAllowedSize: 1024 * 1024 * 20);
+                using var memoryStream = new MemoryStream();
+                await stream.CopyToAsync(memoryStream);
+                var fileBytes = memoryStream.ToArray();
+
+                // 2. Upload to Cloudinary
+                var uploadResult = await FileStorageService.UploadFileAsync(
+                    fileBytes,
+                    _selectedSubmitFile.Name,
+                    _selectedSubmitFile.ContentType,
+                    "CHAPTER_PAGE_VERSION");
+
+                // 3. Create request DTO for submission service
+                var request = new AssistantTaskSubmitRequestDto(
+                    ActorUserId: _currentUserId!.Value,
+                    ChapterPageTaskId: _activeAssistantTask.ChapterPageTaskId,
+                    StorageProviderCode: "CLOUDINARY",
+                    PublicId: uploadResult.PublicId,
+                    SecureUrl: uploadResult.SecureUrl,
+                    OriginalFileName: uploadResult.OriginalFileName,
+                    ContentType: uploadResult.ContentType,
+                    FileSizeBytes: uploadResult.FileSizeBytes,
+                    Sha256Hash: uploadResult.Sha256Hash,
+                    VersionNote: string.IsNullOrWhiteSpace(_versionNotes) ? null : _versionNotes);
+
+                // 4. Submit task (creates FileResource + ChapterPageVersion + marks task UNDER_REVIEW)
+                var result = await AssistantTaskSubmissionService.SubmitTaskWorkAsync(request);
+
+                // 5. Update UI — reload page to show new version
+                _activeAssistantTask = _activeAssistantTask with { StatusCode = "UNDER_REVIEW" };
+                _selectedSubmitFile = null;
+                _versionNotes = "";
+                Snackbar.Add("Work submitted for review successfully!", Severity.Success);
+                StateHasChanged();
+
+                // Reload page to show new version
+                if (ActivePageIndex >= 0 && ActivePageIndex < UploadedPages.Count)
+                {
+                    await LoadPage(ActivePageIndex);
+                }
+            }
+            finally
+            {
+                _dbLock.Release();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to submit work: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSubmittingTask = false;
+            StateHasChanged();
+        }
+    }
+
     private async Task CycleTaskStatus(ProductionTask task)
     {
         if (task.Status == "In Progress" || task.Status == "Todo")
@@ -901,6 +1132,7 @@ else
         {
             try
             {
+                await _dbLock.WaitAsync();
                 var existingTask = await TaskService.GetChapterPageTaskByIdAsync(task.DbId.Value);
                 if (existingTask != null)
                 {
@@ -934,11 +1166,15 @@ else
             {
                 Snackbar.Add($"Error updating task status in DB: {ex.Message}", Severity.Error);
             }
+            finally
+            {
+                _dbLock.Release();
+            }
         }
         
         StateHasChanged();
     }
-
+    
     private async Task DeleteTask(int taskId)
     {
         if (IsChapterLocked) return;
@@ -949,15 +1185,23 @@ else
 
         if (result == true)
         {
-            var task = ActiveTasks.FirstOrDefault(t => t.Id == taskId);
-            if (task != null)
+            await _dbLock.WaitAsync();
+            try
             {
-                if (task.DbId.HasValue)
+                var task = ActiveTasks.FirstOrDefault(t => t.Id == taskId);
+                if (task != null)
                 {
-                    await TaskService.DeleteChapterPageTaskAsync(task.DbId.Value);
+                    if (task.DbId.HasValue)
+                    {
+                        await TaskService.DeleteChapterPageTaskAsync(task.DbId.Value);
+                    }
+                    ActiveTasks.Remove(task);
+                    StateHasChanged();
                 }
-                ActiveTasks.Remove(task);
-                StateHasChanged();
+            }
+            finally
+            {
+                _dbLock.Release();
             }
         }
     }
@@ -1033,23 +1277,25 @@ else
                 Height = 0.01
             });
         }
-        var regionIds = await EnsureRegionsSavedAsync(regionsToSave);
 
-        int newId = ActiveAnnotations.Any() ? ActiveAnnotations.Max(t => t.Id) + 1 : 1;
-        
-        string target;
-        if (PendingPinX.HasValue && PendingPinY.HasValue)
-            target = $"Pin at ({Math.Round(PendingPinX.Value)}, {Math.Round(PendingPinY.Value)})";
-        else if (SelectedRegions.Any())
-        {
-            var targets = SelectedRegions.Select(r => $"Panel {r.Id} [X:{Math.Round(r.X)}, Y:{Math.Round(r.Y)}, W:{Math.Round(r.Width)}, H:{Math.Round(r.Height)}]");
-            target = string.Join("\n", targets);
-        }
-        else
-            target = $"Whole Page ({SelectedPage})";
-
+        await _dbLock.WaitAsync();
         try
         {
+            var regionIds = await EnsureRegionsSavedAsync(regionsToSave);
+
+            int newId = ActiveAnnotations.Any() ? ActiveAnnotations.Max(t => t.Id) + 1 : 1;
+            
+            string target;
+            if (PendingPinX.HasValue && PendingPinY.HasValue)
+                target = $"Pin at ({Math.Round(PendingPinX.Value)}, {Math.Round(PendingPinY.Value)})";
+            else if (SelectedRegions.Any())
+            {
+                var targets = SelectedRegions.Select(r => $"Panel {r.Id} [X:{Math.Round(r.X)}, Y:{Math.Round(r.Y)}, W:{Math.Round(r.Width)}, H:{Math.Round(r.Height)}]");
+                target = string.Join("\n", targets);
+            }
+            else
+                target = $"Whole Page ({SelectedPage})";
+
             var annDto = new CreateChapterPageAnnotationDto(
                 IssueTypeCode: AnnotationType,
                 AnnotatedByUserId: _currentUserId.Value,
@@ -1079,6 +1325,10 @@ else
         catch (Exception ex)
         {
             Snackbar.Add($"Error creating annotation: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _dbLock.Release();
         }
         if (GetActiveCanvas() != null)
         {
@@ -1245,12 +1495,27 @@ else
                         {
                             try
                             {
-                                var task = await TaskService.GetChapterPageTaskByIdAsync(parsedTaskId);
-                                if (task != null)
+                                if (_currentRoleName == "Assistant")
                                 {
-                                    resolveChapterId = task.ChapterId;
-                                    _taskTargetVersionId = task.SourceChapterPageVersionId;
-                                    _taskFilterId = taskId;
+                                    var task = await TaskService.GetAssignedTaskDetailForAssistantAsync(_currentUserId.Value, parsedTaskId);
+                                    if (task != null)
+                                    {
+                                        _isAssistantMode = true;
+                                        _activeAssistantTask = task;
+                                        resolveChapterId = task.ChapterId;
+                                        _taskTargetVersionId = task.SourceChapterPageVersionId;
+                                        _taskFilterId = taskId;
+                                    }
+                                }
+                                else
+                                {
+                                    var task = await TaskService.GetChapterPageTaskByIdAsync(parsedTaskId);
+                                    if (task != null)
+                                    {
+                                        resolveChapterId = task.ChapterId;
+                                        _taskTargetVersionId = task.SourceChapterPageVersionId;
+                                        _taskFilterId = taskId;
+                                    }
                                 }
                             }
                             catch
@@ -1825,69 +2090,77 @@ else
             var files = e.GetMultipleFiles(100);
             if (files.Any())
             {
-                foreach (var file in files)
+                await _dbLock.WaitAsync();
+                try
                 {
-                    using var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 20);
-                    using var memoryStream = new MemoryStream();
-                    await stream.CopyToAsync(memoryStream);
-                    var fileBytes = memoryStream.ToArray();
-                    
-                    var base64 = Convert.ToBase64String(fileBytes);
-                    var dataUrl = $"data:{file.ContentType};base64,{base64}";
-                    
-                    var activeChap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
-                    if (activeChap != null)
+                    foreach (var file in files)
                     {
-                        // 1. Upload to Storage
-                        var uploadResult = await FileStorageService.UploadFileAsync(fileBytes, file.Name, file.ContentType, "CHAPTER_PAGE_VERSION");
+                        using var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 20);
+                        using var memoryStream = new MemoryStream();
+                        await stream.CopyToAsync(memoryStream);
+                        var fileBytes = memoryStream.ToArray();
                         
-                        // 2. Create File Resource DB entry
-                        var fileResource = await FileResourceService.CreateFileResourceAsync(new CreateFileResourceDto(
-                            FilePurposeCode: "CHAPTER_PAGE_VERSION",
-                            OriginalFileName: file.Name,
-                            CloudinaryPublicId: uploadResult.PublicId,
-                            CloudinarySecureUrl: uploadResult.SecureUrl,
-                            ContentType: file.ContentType,
-                            FileSizeBytes: fileBytes.Length,
-                            Sha256Hash: uploadResult.Sha256Hash,
-                            UploadedByUserId: _currentUserId
-                        ));
+                        var base64 = Convert.ToBase64String(fileBytes);
+                        var dataUrl = $"data:{file.ContentType};base64,{base64}";
                         
-                        // 3. Create Chapter Page
-                        int newPageNo = activeChap.Pages.Count + 1;
-                        var dbPage = await PageService.CreateChapterPageAsync(new CreateChapterPageDto(
-                            ChapterId: activeChap.ChapterId,
-                            PageNo: newPageNo,
-                            PageNotes: null
-                        ));
+                        var activeChap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
+                        if (activeChap != null)
+                        {
+                            // 1. Upload to Storage
+                            var uploadResult = await FileStorageService.UploadFileAsync(fileBytes, file.Name, file.ContentType, "CHAPTER_PAGE_VERSION");
+                            
+                            // 2. Create File Resource DB entry
+                            var fileResource = await FileResourceService.CreateFileResourceAsync(new CreateFileResourceDto(
+                                FilePurposeCode: "CHAPTER_PAGE_VERSION",
+                                OriginalFileName: file.Name,
+                                CloudinaryPublicId: uploadResult.PublicId,
+                                CloudinarySecureUrl: uploadResult.SecureUrl,
+                                ContentType: file.ContentType,
+                                FileSizeBytes: fileBytes.Length,
+                                Sha256Hash: uploadResult.Sha256Hash,
+                                UploadedByUserId: _currentUserId
+                            ));
+                            
+                            // 3. Create Chapter Page
+                            int newPageNo = activeChap.Pages.Count + 1;
+                            var dbPage = await PageService.CreateChapterPageAsync(new CreateChapterPageDto(
+                                ChapterId: activeChap.ChapterId,
+                                PageNo: newPageNo,
+                                PageNotes: null
+                            ));
+                            
+                            // 4. Create Chapter Page Version
+                            var dbVersion = await VersionService.CreateChapterPageVersionAsync(new CreateChapterPageVersionDto(
+                                ChapterPageId: dbPage.ChapterPageId,
+                                VersionNo: 1,
+                                PageFileId: fileResource.FileResourceId,
+                                VersionNote: "Original Upload"
+                            ));
+                            
+                            await VersionService.SetCurrentVersionAsync(dbPage.ChapterPageId, dbVersion.ChapterPageVersionId);
                         
-                        // 4. Create Chapter Page Version
-                        var dbVersion = await VersionService.CreateChapterPageVersionAsync(new CreateChapterPageVersionDto(
-                            ChapterPageId: dbPage.ChapterPageId,
-                            VersionNo: 1,
-                            PageFileId: fileResource.FileResourceId,
-                            VersionNote: "Original Upload"
-                        ));
-                        
-                        await VersionService.SetCurrentVersionAsync(dbPage.ChapterPageId, dbVersion.ChapterPageVersionId);
-                    
-                        var newPage = new PageModel { ChapterPageId = dbPage.ChapterPageId };
-                        newPage.Versions.Add(new PageVersionModel { 
-                            VersionNo = 1, 
-                            DataUrl = dataUrl, 
-                            Note = "Original Upload",
-                            ChapterPageVersionId = dbVersion.ChapterPageVersionId,
-                            IsCurrentVersion = true
-                        });
-                        activeChap.Pages.Add(newPage);
+                            var newPage = new PageModel { ChapterPageId = dbPage.ChapterPageId };
+                            newPage.Versions.Add(new PageVersionModel { 
+                                VersionNo = 1, 
+                                DataUrl = dataUrl, 
+                                Note = "Original Upload",
+                                ChapterPageVersionId = dbVersion.ChapterPageVersionId,
+                                IsCurrentVersion = true
+                            });
+                            activeChap.Pages.Add(newPage);
+                        }
                     }
+                }
+                finally
+                {
+                    _dbLock.Release();
                 }
                 
                 var chap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
                 if (chap != null) chap.PageCount = chap.Pages.Count;
 
                 StateHasChanged();
-                await Task.Delay(1); // Yield to allow DOM to render pagination if it was empty
+                await Task.Delay(1);
 
                 int newPageIndex = chap != null ? Math.Max(0, chap.Pages.Count - files.Count) : ActivePageIndex;
                 await LoadPage(newPageIndex);
@@ -1918,10 +2191,9 @@ else
         }
     }
 
-    private void OnPageChanged(int pageNumber)
+    private async Task OnPageChanged(int pageNumber)
     {
-        // MudPagination pageNumber is 1-indexed
-        _ = LoadPage(pageNumber - 1);
+        await LoadPage(pageNumber - 1);
     }
 
     private async Task LoadPage(int index)
@@ -1949,77 +2221,85 @@ else
             
             try
             {
-                var dbTasks = await TaskService.GetChapterPageTasksByChapterPageIdAsync(page.ChapterPageId);
-                ActiveTasks.Clear();
-                int idCounter = 1;
-                foreach (var t in dbTasks)
+                await _dbLock.WaitAsync();
+                try
                 {
-                    var statusMap = t.StatusCode switch
+                    var dbTasks = await TaskService.GetChapterPageTasksByChapterPageIdAsync(page.ChapterPageId);
+                    ActiveTasks.Clear();
+                    int idCounter = 1;
+                    foreach (var t in dbTasks)
                     {
-                        "ASSIGNED" => "Todo",
-                        "IN_PROGRESS" => "In Progress",
-                        "UNDER_REVIEW" => "Review",
-                        "COMPLETED" => "Done",
-                        _ => "Todo"
-                    };
-                    ActiveTasks.Add(new ProductionTask
-                    {
-                        Id = idCounter++,
-                        DbId = t.ChapterPageTaskId,
-                        Type = t.TypeCode,
-                        Assistant = t.AssignedUsername ?? t.AssignedToDisplayName ?? t.AssignedToUserId.ToString(),
-                        Target = $"Page {SelectedPage}",
-                        Description = t.TaskDescription,
-                        Status = statusMap,
-                        Regions = t.PageRegions?.Select(r => new RegionModel { 
-                            Id = ParseRegionId(r.RegionLabel),
-                            DbId = r.PageRegionId, 
-                            Type = r.TypeCode, 
-                            X = (double)r.X, 
-                            Y = (double)r.Y, 
-                            Width = (double)r.Width, 
-                            Height = (double)r.Height 
-                        }).ToList() ?? new List<RegionModel>()
-                    });
-                }
+                        var statusMap = t.StatusCode switch
+                        {
+                            "ASSIGNED" => "Todo",
+                            "IN_PROGRESS" => "In Progress",
+                            "UNDER_REVIEW" => "Review",
+                            "COMPLETED" => "Done",
+                            _ => "Todo"
+                        };
+                        ActiveTasks.Add(new ProductionTask
+                        {
+                            Id = idCounter++,
+                            DbId = t.ChapterPageTaskId,
+                            Type = t.TypeCode,
+                            Assistant = t.AssignedUsername ?? t.AssignedToDisplayName ?? t.AssignedToUserId.ToString(),
+                            Target = $"Page {SelectedPage}",
+                            Description = t.TaskDescription,
+                            Status = statusMap,
+                            Regions = t.PageRegions?.Select(r => new RegionModel { 
+                                Id = ParseRegionId(r.RegionLabel),
+                                DbId = r.PageRegionId, 
+                                Type = r.TypeCode, 
+                                X = (double)r.X, 
+                                Y = (double)r.Y, 
+                                Width = (double)r.Width, 
+                                Height = (double)r.Height 
+                            }).ToList() ?? new List<RegionModel>()
+                        });
+                    }
 
-                var dbAnnotations = await AnnotationService.GetChapterPageAnnotationsByChapterPageIdAsync(page.ChapterPageId);
-                ActiveAnnotations.Clear();
-                int annIdCounter = 1;
-                foreach (var a in dbAnnotations)
-                {
-                      var pinRegion = a.PageRegions?.FirstOrDefault(r => r.Width <= 0.05m && r.Height <= 0.05m);
-                      var targetRegions = a.PageRegions?.Where(r => r.Width > 0.05m).Select(r => $"Panel [X:{Math.Round(r.X)}, Y:{Math.Round(r.Y)}, W:{Math.Round(r.Width)}, H:{Math.Round(r.Height)}]").ToList() ?? new List<string>();
-                    
-                    string annTarget;
-                    if (pinRegion != null)
-                        annTarget = $"Pin at ({Math.Round(pinRegion.X)}, {Math.Round(pinRegion.Y)})";
-                    else if (targetRegions.Any())
-                        annTarget = string.Join("\n", targetRegions);
-                    else
-                        annTarget = $"Page {SelectedPage}";
-                    
-                    ActiveAnnotations.Add(new AnnotationModel
+                    var dbAnnotations = await AnnotationService.GetChapterPageAnnotationsByChapterPageIdAsync(page.ChapterPageId);
+                    ActiveAnnotations.Clear();
+                    int annIdCounter = 1;
+                    foreach (var a in dbAnnotations)
                     {
-                        Id = annIdCounter++,
-                        DbId = a.ChapterPageAnnotationId,
-                        Type = a.IssueTypeCode,
-                        Comment = a.AnnotationText,
-                        Target = annTarget,
-                        PageNumber = SelectedPage,
-                        PinX = pinRegion != null ? (double?)pinRegion.X : null,
-                        PinY = pinRegion != null ? (double?)pinRegion.Y : null,
-                        IsResolved = a.ResolvedByUserId != null,
-                        Regions = a.PageRegions?.Select(r => new RegionModel { 
-                            Id = ParseRegionId(r.RegionLabel),
-                            DbId = r.PageRegionId, 
-                            Type = r.TypeCode, 
-                            X = (double)r.X, 
-                            Y = (double)r.Y, 
-                            Width = (double)r.Width, 
-                            Height = (double)r.Height 
-                        }).ToList() ?? new List<RegionModel>()
-                    });
+                          var pinRegion = a.PageRegions?.FirstOrDefault(r => r.Width <= 0.05m && r.Height <= 0.05m);
+                          var targetRegions = a.PageRegions?.Where(r => r.Width > 0.05m).Select(r => $"Panel [X:{Math.Round(r.X)}, Y:{Math.Round(r.Y)}, W:{Math.Round(r.Width)}, H:{Math.Round(r.Height)}]").ToList() ?? new List<string>();
+                        
+                        string annTarget;
+                        if (pinRegion != null)
+                            annTarget = $"Pin at ({Math.Round(pinRegion.X)}, {Math.Round(pinRegion.Y)})";
+                        else if (targetRegions.Any())
+                            annTarget = string.Join("\n", targetRegions);
+                        else
+                            annTarget = $"Page {SelectedPage}";
+                        
+                        ActiveAnnotations.Add(new AnnotationModel
+                        {
+                            Id = annIdCounter++,
+                            DbId = a.ChapterPageAnnotationId,
+                            Type = a.IssueTypeCode,
+                            Comment = a.AnnotationText,
+                            Target = annTarget,
+                            PageNumber = SelectedPage,
+                            PinX = pinRegion != null ? (double?)pinRegion.X : null,
+                            PinY = pinRegion != null ? (double?)pinRegion.Y : null,
+                            IsResolved = a.ResolvedByUserId != null,
+                            Regions = a.PageRegions?.Select(r => new RegionModel { 
+                                Id = ParseRegionId(r.RegionLabel),
+                                DbId = r.PageRegionId, 
+                                Type = r.TypeCode, 
+                                X = (double)r.X, 
+                                Y = (double)r.Y, 
+                                Width = (double)r.Width, 
+                                Height = (double)r.Height 
+                            }).ToList() ?? new List<RegionModel>()
+                        });
+                    }
+                }
+                finally
+                {
+                    _dbLock.Release();
                 }
             }
             catch (Exception ex)
@@ -2157,33 +2437,42 @@ else
 
                 var uploadResult = await FileStorageService.UploadFileAsync(bytes, $"page_{SelectedPage}_v{nextVersionNo}.png", "image/png", "CHAPTER_PAGE_VERSION");
                 
-                var fileResourceDto = await FileResourceService.CreateFileResourceAsync(new CreateFileResourceDto(
-                    FilePurposeCode: "CHAPTER_PAGE_VERSION",
-                    OriginalFileName: uploadResult.OriginalFileName,
-                    CloudinaryPublicId: uploadResult.PublicId,
-                    CloudinarySecureUrl: uploadResult.SecureUrl,
-                    ContentType: uploadResult.ContentType,
-                    FileSizeBytes: uploadResult.FileSizeBytes,
-                    Sha256Hash: uploadResult.Sha256Hash,
-                    UploadedByUserId: _currentUserId
-                ));
-
-                var versionDto = await VersionService.CreateChapterPageVersionAsync(new CreateChapterPageVersionDto(
-                    ChapterPageId: page.ChapterPageId,
-                    VersionNo: (short)nextVersionNo,
-                    PageFileId: fileResourceDto.FileResourceId,
-                    VersionNote: $"New Version {nextVersionNo}"
-                ));
-                
-                var newVersionModel = new PageVersionModel 
+                PageVersionModel newVersionModel = null!;
+                await _dbLock.WaitAsync();
+                try
                 {
-                    ChapterPageVersionId = versionDto.ChapterPageVersionId,
-                    VersionNo = nextVersionNo,
-                    Regions = "[]", // DO NOT CLONE REGIONS!
-                    DataUrl = dataUrl,
-                    Note = $"New Version {nextVersionNo}"
-                };
-                page.Versions.Add(newVersionModel);
+                    var fileResourceDto = await FileResourceService.CreateFileResourceAsync(new CreateFileResourceDto(
+                        FilePurposeCode: "CHAPTER_PAGE_VERSION",
+                        OriginalFileName: uploadResult.OriginalFileName,
+                        CloudinaryPublicId: uploadResult.PublicId,
+                        CloudinarySecureUrl: uploadResult.SecureUrl,
+                        ContentType: uploadResult.ContentType,
+                        FileSizeBytes: uploadResult.FileSizeBytes,
+                        Sha256Hash: uploadResult.Sha256Hash,
+                        UploadedByUserId: _currentUserId
+                    ));
+
+                    var versionDto = await VersionService.CreateChapterPageVersionAsync(new CreateChapterPageVersionDto(
+                        ChapterPageId: page.ChapterPageId,
+                        VersionNo: (short)nextVersionNo,
+                        PageFileId: fileResourceDto.FileResourceId,
+                        VersionNote: $"New Version {nextVersionNo}"
+                    ));
+
+                    newVersionModel = new PageVersionModel 
+                    {
+                        ChapterPageVersionId = versionDto.ChapterPageVersionId,
+                        VersionNo = nextVersionNo,
+                        Regions = "[]",
+                        DataUrl = dataUrl,
+                        Note = $"New Version {nextVersionNo}"
+                    };
+                    page.Versions.Add(newVersionModel);
+                }
+                finally
+                {
+                    _dbLock.Release();
+                }
                 
                 await SetActiveVersion(pane, newVersionModel);
                 
@@ -2215,6 +2504,7 @@ else
         StateHasChanged();
         Snackbar.Add("Setting active version...", Severity.Info);
 
+        await _dbLock.WaitAsync();
         try
         {
             await VersionService.SetCurrentVersionAsync(page.ChapterPageId, version.ChapterPageVersionId);
@@ -2235,6 +2525,7 @@ else
         {
             IsProcessing = false;
             StateHasChanged();
+            _dbLock.Release();
         }
     }
 
@@ -2259,36 +2550,44 @@ else
                     StateHasChanged();
                     Snackbar.Add("Deleting version...", Severity.Info);
 
+                    await _dbLock.WaitAsync();
                     try
                     {
-                        if (versionToDelete.ChapterPageVersionId != Guid.Empty)
+                        try
                         {
-                            var versionDetails = await VersionService.GetChapterPageVersionByIdAsync(versionToDelete.ChapterPageVersionId);
-                            if (versionDetails != null)
+                            if (versionToDelete.ChapterPageVersionId != Guid.Empty)
                             {
-                                var fileResourceDetails = await FileResourceService.GetFileResourceByIdAsync(versionDetails.PageFileId);
-                                if (fileResourceDetails != null && !string.IsNullOrEmpty(fileResourceDetails.CloudinaryPublicId))
+                                var versionDetails = await VersionService.GetChapterPageVersionByIdAsync(versionToDelete.ChapterPageVersionId);
+                                if (versionDetails != null)
                                 {
-                                    await FileStorageService.DeleteFileAsync(fileResourceDetails.CloudinaryPublicId, "image");
-                                    await FileResourceService.DeleteFileResourceAsync(fileResourceDetails.FileResourceId, _currentUserId);
+                                    var fileResourceDetails = await FileResourceService.GetFileResourceByIdAsync(versionDetails.PageFileId);
+                                    if (fileResourceDetails != null && !string.IsNullOrEmpty(fileResourceDetails.CloudinaryPublicId))
+                                    {
+                                        await FileStorageService.DeleteFileAsync(fileResourceDetails.CloudinaryPublicId, "image");
+                                        await FileResourceService.DeleteFileResourceAsync(fileResourceDetails.FileResourceId, _currentUserId);
+                                    }
+                                    await VersionService.DeleteChapterPageVersionAsync(versionToDelete.ChapterPageVersionId);
                                 }
-                                await VersionService.DeleteChapterPageVersionAsync(versionToDelete.ChapterPageVersionId);
                             }
-                        }
 
-                        page.Versions.RemoveAt(page.ActiveVersionIndex);
-                        int nextIndex = Math.Max(0, page.Versions.Count - 1);
-                        await SwitchVersion(pane, nextIndex, isDeleting: true);
-                        Snackbar.Add("Version deleted successfully.", Severity.Success);
-                    }
-                    catch (Exception ex)
-                    {
-                        Snackbar.Add($"Failed to delete version: {ex.Message}", Severity.Error);
+                            page.Versions.RemoveAt(page.ActiveVersionIndex);
+                            int nextIndex = Math.Max(0, page.Versions.Count - 1);
+                            await SwitchVersion(pane, nextIndex, isDeleting: true);
+                            Snackbar.Add("Version deleted successfully.", Severity.Success);
+                        }
+                        catch (Exception ex)
+                        {
+                            Snackbar.Add($"Failed to delete version: {ex.Message}", Severity.Error);
+                        }
+                        finally
+                        {
+                            IsProcessing = false;
+                            StateHasChanged();
+                        }
                     }
                     finally
                     {
-                        IsProcessing = false;
-                        StateHasChanged();
+                        _dbLock.Release();
                     }
                 }
             }
@@ -2464,6 +2763,7 @@ else
         var chapter = Chapters.FirstOrDefault(c => c.ChapterId == chapterId);
         if (chapter != null)
         {
+            await _dbLock.WaitAsync();
             try
             {
                 await ChapterService.UpdateChapterStatusAsync(chapterId, "DRAFT");
@@ -2476,6 +2776,10 @@ else
             {
                 Snackbar.Add($"Failed to unlock chapter: {ex.Message}", Severity.Error);
             }
+            finally
+            {
+                _dbLock.Release();
+            }
         }
     }
 
@@ -2487,7 +2791,7 @@ else
 
     private async void PerformAutoSave(object? state)
     {
-        var acquired = await _autoSaveSemaphore.WaitAsync(0);
+        var acquired = await _dbLock.WaitAsync(0);
         if (!acquired) return;
         try
         {
@@ -2508,7 +2812,7 @@ else
         }
         finally
         {
-            _autoSaveSemaphore.Release();
+            _dbLock.Release();
         }
     }
 
@@ -2558,7 +2862,7 @@ else
     public void Dispose()
     {
         _autoSaveTimer?.Dispose();
-        _autoSaveSemaphore?.Dispose();
+        _dbLock?.Dispose();
         _objRef?.Dispose();
     }
 
