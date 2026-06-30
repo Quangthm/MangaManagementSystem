@@ -807,14 +807,55 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 sp.series_id,
                 s.slug,
                 sp.proposal_title,
-                u.display_name,
+                submitted_by.display_name AS author_name,
                 ISNULL(genres.genre_names, N'Unknown Genre') AS genre_display,
-                sp.status_code
+                ISNULL(tags.tag_names, N'') AS tag_display,
+                sp.status_code,
+                CAST(sp.proposal_version_no AS INT) AS proposal_version_no,
+                sp.synopsis_snapshot,
+                COALESCE(reviewed_by.display_name, N'Editorial Team') AS submitted_by_editor_name,
+                COALESCE(reviewed_by.display_name, N'Editorial Team') AS assigned_editor_name,
+                proposal_file.original_file_name AS proposal_file_name,
+                proposal_file.cloudinary_secure_url AS proposal_file_url,
+                markup_file.original_file_name AS markup_file_name,
+                markup_file.cloudinary_secure_url AS markup_file_url,
+                CASE
+                    WHEN EXISTS
+                    (
+                        SELECT 1
+                        FROM manga.SeriesBoardPoll open_start_poll
+                        WHERE open_start_poll.series_id = sp.series_id
+                          AND open_start_poll.poll_type_code = N'START_SERIALIZATION'
+                          AND open_start_poll.poll_status_code = N'OPEN'
+                    )
+                        THEN CAST(1 AS BIT)
+                    ELSE CAST(0 AS BIT)
+                END AS has_start_serialization_open_poll,
+                CASE
+                    WHEN EXISTS
+                    (
+                        SELECT 1
+                        FROM manga.SeriesBoardPoll open_cancel_poll
+                        WHERE open_cancel_poll.series_id = sp.series_id
+                          AND open_cancel_poll.poll_type_code = N'CANCEL_SERIALIZATION'
+                          AND open_cancel_poll.poll_status_code = N'OPEN'
+                    )
+                        THEN CAST(1 AS BIT)
+                    ELSE CAST(0 AS BIT)
+                END AS has_cancel_serialization_open_poll
             FROM manga.SeriesProposal sp
             INNER JOIN manga.Series s
                 ON s.series_id = sp.series_id
-            INNER JOIN auth.Users u
-                ON u.user_id = sp.submitted_by_user_id
+            INNER JOIN auth.Users submitted_by
+                ON submitted_by.user_id = sp.submitted_by_user_id
+            LEFT JOIN auth.Users reviewed_by
+                ON reviewed_by.user_id = sp.reviewed_by_user_id
+            LEFT JOIN manga.FileResource proposal_file
+                ON proposal_file.file_resource_id = sp.proposal_file_id
+               AND proposal_file.deleted_at_utc IS NULL
+            LEFT JOIN manga.FileResource markup_file
+                ON markup_file.file_resource_id = sp.markup_file_id
+               AND markup_file.deleted_at_utc IS NULL
             OUTER APPLY
             (
                 SELECT
@@ -824,6 +865,15 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                     ON g.genre_id = sg.genre_id
                 WHERE sg.series_id = s.series_id
             ) genres
+            OUTER APPLY
+            (
+                SELECT
+                    STRING_AGG(CONVERT(NVARCHAR(MAX), t.tag_name), N', ') AS tag_names
+                FROM manga.SeriesTag st
+                INNER JOIN manga.Tag t
+                    ON t.tag_id = st.tag_id
+                WHERE st.series_id = s.series_id
+            ) tags
             WHERE sp.status_code IN (
                 N'UNDER_EDITORIAL_REVIEW',
                 N'UNDER_BOARD_REVIEW',
@@ -848,7 +898,18 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 Title: GetStringOrDefault(reader, 3, "Untitled Proposal"),
                 Author: GetStringOrDefault(reader, 4, "Unknown Author"),
                 Genre: GetStringOrDefault(reader, 5, "Unknown Genre"),
-                Status: MapProposalStatus(GetStringOrDefault(reader, 6, "UNKNOWN"))));
+                TagsDisplay: GetStringOrDefault(reader, 6, string.Empty),
+                Status: MapProposalStatus(GetStringOrDefault(reader, 7, "UNKNOWN")),
+                VersionNumber: ToInt32(reader, 8),
+                Synopsis: GetStringOrDefault(reader, 9, "No synopsis provided."),
+                SubmittedByEditorName: GetStringOrDefault(reader, 10, "Editorial Team"),
+                AssignedEditor: GetStringOrDefault(reader, 11, "Editorial Team"),
+                ProposalFileName: reader.IsDBNull(12) ? null : reader.GetString(12),
+                ProposalFileUrl: reader.IsDBNull(13) ? null : reader.GetString(13),
+                MarkupFileName: reader.IsDBNull(14) ? null : reader.GetString(14),
+                MarkupFileUrl: reader.IsDBNull(15) ? null : reader.GetString(15),
+                HasStartSerializationOpenPoll: ToBoolean(reader, 16),
+                HasCancelSerializationOpenPoll: ToBoolean(reader, 17)));
         }
 
         return rows;
@@ -1114,6 +1175,12 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             : Convert.ToInt32(reader.GetValue(ordinal));
     }
 
+    private static bool ToBoolean(DbDataReader reader, int ordinal)
+    {
+        return !reader.IsDBNull(ordinal)
+            && Convert.ToBoolean(reader.GetValue(ordinal));
+    }
+
     private static string GetStringOrDefault(
         DbDataReader reader,
         int ordinal,
@@ -1238,5 +1305,5 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         };
     }
 
-  
+
 }
