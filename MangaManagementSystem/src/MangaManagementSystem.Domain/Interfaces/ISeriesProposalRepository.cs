@@ -30,6 +30,13 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<IReadOnlyList<SeriesProposal>> GetMySeriesProposalsAsync(Guid actorUserId, CancellationToken ct = default);
 
         /// <summary>
+        /// Returns a single proposal by ID, scoped to the specified actor's active Mangaka
+        /// contributor memberships. Returns null when not found or not authorized.
+        /// Same eager includes as GetMySeriesProposalsAsync. Read-only EF query.
+        /// </summary>
+        Task<SeriesProposal?> GetMySeriesProposalDetailAsync(Guid actorUserId, Guid seriesProposalId, CancellationToken ct = default);
+
+        /// <summary>
         /// Returns true when the specified user is an active Tantou Editor contributor of the
         /// given series (SeriesContributor.EndDate IS NULL, User ACTIVE, Role 'Tantou Editor').
         /// This mirrors the membership predicate used by the editorial-review stored procedures

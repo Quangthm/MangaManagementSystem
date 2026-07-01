@@ -3,6 +3,7 @@
 @using System.Security.Claims
 @using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Web.Services.Api
+@using MangaManagementSystem.Web.Components.Shared
 @attribute [Authorize(Roles = "Tantou Editor")]
 @inject IEditorProposalApiClient EditorProposalApiClient
 @inject NavigationManager Nav
@@ -16,76 +17,33 @@
             <MudText Typo="Typo.body1" Class="mf-muted">Review submitted proposals and make editorial decisions</MudText>
         </div>
 
-        <MudPaper Class="pa-5 mf-card" Elevation="0">
-            <div class="d-flex align-center mb-4 gap-3">
-                <MudTextField @bind-Value="_searchText" Label="Search series, proposal, or submitter"
-                              Immediate="true" Variant="Variant.Outlined"
-                              Style="min-width: 300px; max-width: 400px;" />
-                <MudSelect T="string" Label="Filter by Status" Value="@_statusFilter" ValueChanged="OnFilterChanged" Variant="Variant.Outlined" Style="min-width: 200px; max-width: 200px;">
-                    <MudSelectItem Value="@((string?)null)">All Proposals</MudSelectItem>
-                    <MudSelectItem Value="@("UNDER_EDITORIAL_REVIEW")">Under Editorial Review</MudSelectItem>
-                    <MudSelectItem Value="@("UNDER_BOARD_REVIEW")">Under Board Review</MudSelectItem>
-                    <MudSelectItem Value="@("REVISION_REQUESTED")">Revision Requested</MudSelectItem>
-                    <MudSelectItem Value="@("CANCELLED")">Cancelled</MudSelectItem>
-                    <MudSelectItem Value="@("APPROVED")">Approved</MudSelectItem>
-                </MudSelect>
-                <MudSpacer />
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadProposals" StartIcon="@Icons.Material.Filled.Refresh">Refresh</MudButton>
-            </div>
-
-            @if (_loading)
-            {
-                <MudProgressLinear Indeterminate="true" />
-            }
-            else if (_error != null)
-            {
-                <MudAlert Severity="Severity.Error">Failed to load proposals: @_error</MudAlert>
-            }
-            else if (_proposals == null || !_proposals.Any())
-            {
-                <MudPaper Class="pa-8 text-center mf-card" Elevation="0">
-                    <MudIcon Icon="@Icons.Material.Outlined.CheckCircle" Size="Size.Large" Color="Color.Success" Class="mb-3" />
-                    <MudText Typo="Typo.h6">All Caught Up!</MudText>
-                    <MudText Class="mf-muted">No proposals match your filter.</MudText>
-                </MudPaper>
-            }
-            else
-            {
-                <MudTable Items="@GetFilteredProposals()" Hover="true" RowsPerPage="15">
-                    <HeaderContent>
-                        <MudTh>Series</MudTh>
-                        <MudTh>Version</MudTh>
-                        <MudTh>Submitted By</MudTh>
-                        <MudTh>Submitted</MudTh>
-                        <MudTh>Reviewer</MudTh>
-                        <MudTh>Reviewed</MudTh>
-                        <MudTh>Status</MudTh>
-                        <MudTh>Actions</MudTh>
-                    </HeaderContent>
-                    <RowTemplate>
-                        <MudTd DataLabel="Series">
-                            <MudText Typo="Typo.body1" Class="font-weight-bold">@context.SeriesTitle</MudText>
-                            <MudText Typo="Typo.caption" Class="mf-muted">@context.ProposalTitle</MudText>
-                        </MudTd>
-                        <MudTd DataLabel="Version">@($"v{context.ProposalVersionNo}")</MudTd>
-                        <MudTd DataLabel="Submitted By">@context.SubmitterDisplayName</MudTd>
-                        <MudTd DataLabel="Submitted">@context.SubmittedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</MudTd>
-                        <MudTd DataLabel="Reviewer">
-                            @(string.IsNullOrWhiteSpace(context.ReviewerDisplayName) ? "—" : context.ReviewerDisplayName)
-                        </MudTd>
-                        <MudTd DataLabel="Reviewed">
-                            @(context.ReviewedAtUtc.HasValue ? context.ReviewedAtUtc.Value.ToLocalTime().ToString("MMM d, yyyy") : "—")
-                        </MudTd>
-                        <MudTd DataLabel="Status">
-                            <MudChip T="string" Color="@GetStatusColor(context.StatusCode)" Size="Size.Small">@context.StatusCode.Replace("_", " ")</MudChip>
-                        </MudTd>
-                        <MudTd DataLabel="Actions">
-                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => OpenProposal(context.SeriesProposalId))">Review</MudButton>
-                        </MudTd>
-                    </RowTemplate>
-                </MudTable>
-            }
-        </MudPaper>
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (_error != null)
+        {
+            <MudAlert Severity="Severity.Error">Failed to load proposals: @_error</MudAlert>
+        }
+        else if (_proposals == null || !_proposals.Any())
+        {
+            <MudPaper Class="pa-8 text-center mf-card" Elevation="0">
+                <MudIcon Icon="@Icons.Material.Outlined.CheckCircle" Size="Size.Large" Color="Color.Success" Class="mb-3" />
+                <MudText Typo="Typo.h6">All Caught Up!</MudText>
+                <MudText Class="mf-muted">No proposals match your filter.</MudText>
+            </MudPaper>
+        }
+        else
+        {
+            <SeriesProposalTable Items="@_mappedItems"
+                                 DefaultStatusFilter="UNDER_EDITORIAL_REVIEW"
+                                 ShowGenreFilter="true"
+                                 ShowTagFilter="true"
+                                 ShowReviewerColumns="true"
+                                 AvailableGenres="_availableGenres"
+                                 AvailableTags="_availableTags"
+                                 RowClicked="OnRowClicked" />
+        }
     </div>
 </EditorLayout>
 
@@ -93,8 +51,9 @@
     private bool _loading = true;
     private string? _error;
     private IReadOnlyList<ProposalQueueItemDto>? _proposals;
-    private string? _statusFilter = "UNDER_EDITORIAL_REVIEW";
-    private string _searchText = "";
+    private IReadOnlyList<SeriesProposalListItemModel> _mappedItems = Array.Empty<SeriesProposalListItemModel>();
+    private IReadOnlyList<GenreDto> _availableGenres = Array.Empty<GenreDto>();
+    private IReadOnlyList<TagDto> _availableTags = Array.Empty<TagDto>();
     private Guid _currentUserId;
 
     protected override async Task OnInitializedAsync()
@@ -105,17 +64,9 @@
         {
             var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (Guid.TryParse(idClaim, out var userId))
-            {
                 _currentUserId = userId;
-            }
         }
 
-        await LoadProposals();
-    }
-
-    private async Task OnFilterChanged(string? newStatus)
-    {
-        _statusFilter = newStatus;
         await LoadProposals();
     }
 
@@ -125,7 +76,20 @@
         _error = null;
         try
         {
-            _proposals = await EditorProposalApiClient.GetQueueAsync(_currentUserId, _statusFilter);
+            _proposals = await EditorProposalApiClient.GetQueueAsync(_currentUserId, statusCode: null);
+            _mappedItems = _proposals.Select(MapToListItem).ToList().AsReadOnly();
+            _availableGenres = _proposals
+                .SelectMany(p => p.Genres)
+                .DistinctBy(g => g.GenreId)
+                .OrderBy(g => g.GenreName)
+                .ToList()
+                .AsReadOnly();
+            _availableTags = _proposals
+                .SelectMany(p => p.Tags)
+                .DistinctBy(t => t.TagId)
+                .OrderBy(t => t.TagName)
+                .ToList()
+                .AsReadOnly();
         }
         catch (Exception ex)
         {
@@ -137,34 +101,22 @@
         }
     }
 
-    private IEnumerable<ProposalQueueItemDto> GetFilteredProposals()
-    {
-        if (_proposals == null) return Array.Empty<ProposalQueueItemDto>();
+    private static SeriesProposalListItemModel MapToListItem(ProposalQueueItemDto p) => new(
+        SeriesProposalId: p.SeriesProposalId,
+        SeriesTitle: p.SeriesTitle,
+        ProposalTitle: p.ProposalTitle,
+        ProposalVersionNo: p.ProposalVersionNo,
+        SubmittedByDisplayName: p.SubmitterDisplayName,
+        SubmittedAtUtc: p.SubmittedAtUtc,
+        ReviewerDisplayName: p.ReviewerDisplayName,
+        ReviewedAtUtc: p.ReviewedAtUtc,
+        StatusCode: p.StatusCode,
+        HasMarkup: p.MarkupFileId.HasValue,
+        Genres: p.Genres,
+        Tags: p.Tags
+    );
 
-        var filtered = _proposals.AsEnumerable();
-
-        if (!string.IsNullOrWhiteSpace(_searchText))
-        {
-            filtered = filtered.Where(p =>
-                p.SeriesTitle.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
-                p.ProposalTitle.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
-                p.SubmitterDisplayName.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
-        }
-
-        return filtered;
-    }
-
-    private Color GetStatusColor(string status) => status switch
-    {
-        "UNDER_EDITORIAL_REVIEW" => Color.Warning,
-        "UNDER_BOARD_REVIEW" => Color.Info,
-        "REVISION_REQUESTED" => Color.Error,
-        "CANCELLED" => Color.Default,
-        "APPROVED" => Color.Success,
-        _ => Color.Default
-    };
-
-    private void OpenProposal(Guid seriesProposalId)
+    private void OnRowClicked(Guid seriesProposalId)
     {
         Nav.NavigateTo($"/editor/proposals/{seriesProposalId}");
     }
