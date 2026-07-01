@@ -46,7 +46,8 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         string? ProposalFileUrl,
         string? ProposalFileName,
         Guid? MarkupFileId,
-        string? MarkupFileUrl
+        string? MarkupFileUrl,
+        bool CurrentEditorIsActiveContributor = false
     );
 
     public record ProposalQueueFilterDto(
@@ -154,7 +155,8 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         string SubmittedByDisplayName,
         string? ReviewedByDisplayName,
         ProposalFileRefDto ProposalFile,
-        ProposalFileRefDto? MarkupFile);
+        ProposalFileRefDto? MarkupFile,
+        string? SeriesCoverUrl = null);
 
     /// <summary>
     /// Lean file reference for API-facing DTOs. Maps FileResource.CloudinarySecureUrl → SecureUrl

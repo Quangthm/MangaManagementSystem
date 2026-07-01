@@ -11,6 +11,7 @@ namespace MangaManagementSystem.Web.Components.Shared
     /// </summary>
     public sealed record SeriesProposalListItemModel(
         Guid SeriesProposalId,
+        Guid SeriesId,
         string SeriesTitle,
         string ProposalTitle,
         short ProposalVersionNo,
@@ -21,6 +22,7 @@ namespace MangaManagementSystem.Web.Components.Shared
         string StatusCode,
         bool HasMarkup,
         IReadOnlyList<GenreDto> Genres,
-        IReadOnlyList<TagDto> Tags
+        IReadOnlyList<TagDto> Tags,
+        bool CurrentActorIsActiveContributor = false
     );
 }

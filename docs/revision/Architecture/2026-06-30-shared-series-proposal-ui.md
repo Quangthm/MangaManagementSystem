@@ -175,5 +175,66 @@ Build succeeded.
 - [ ] Confirm Editor route still requires Editor role
 
 ## Remaining Follow-ups
-- Mangaka detail does not currently load a cover URL (maps to null). If a cover is available from the backend, the query handler should include it.
 - Editor ProposalList loads ALL proposals and filters client-side (status filter was moved from API to component). The shared table handles filtering locally. This is acceptable since proposals are typically not massive.
+
+## Follow-up Fix — Shared Proposal Table Regression Cleanup
+
+### Problem
+Runtime testing after the shared proposal UI refactor showed:
+- Editor proposal queue did not default to Under Editorial Review (status code vs label mismatch).
+- Shared table columns were inconsistent between Editor and Mangaka.
+- Table pagination was missing.
+- Status filter counts disappeared.
+- Shared table visual styling regressed to generic black/white controls.
+- Mangaka proposal detail did not load cover image.
+- Editor proposal queue needed an optional filter for proposals belonging to the current editor's active series.
+
+### Fix
+- **Default status filtering**: Normalized to use status codes (`DefaultStatusFilterCode`). Editor passes `UNDER_EDITORIAL_REVIEW`, Mangaka passes `ALL`. Component internally maps codes to display labels but compares by code.
+- **Status counts**: Each chip shows `Label (N)` where N = loaded items matching that status code, computed from all loaded items (before current status filtering).
+- **Client-side pagination**: Added inside `SeriesProposalTable.razor`. Default `PageSize = 10`. Pagination after all filters/search/sort. Resets to page 1 on any filter/search/sort/items change. Shown only when total pages > 1.
+- **Column alignment**: Base columns (Series, Proposal, Version, Submitted, Status, Markup, chevron) always shown. Optional columns via parameters: `ShowSubmitterColumn`, `ShowReviewerColumns`. Editor shows all; Mangaka hides submitter/reviewer.
+- **Styling**: Restored polished component-scoped styling — rounded status chips, active chip highlight, card-like table wrapper, clean toolbar spacing, clickable rows with chevron.
+- **Mangaka cover URL**: Added `.Include(sp => sp.Series).ThenInclude(s => s.CoverFile)` to the Mangaka detail repository query. Added `SeriesCoverUrl` field to `MangakaSeriesProposalDto`. Handler and ProposalDetail page now map the cover URL.
+- **Editor My Series Only**: Added `CurrentEditorIsActiveContributor` field to `ProposalQueueItemDto`. Extended `GetEditorialProposalQueueQuery` with `ActorUserId`. Handler queries `IsActiveTantouEditorContributorAsync` per unique series ID. Controller reads actor ID from `X-Actor-User-Id` header. Editor ProposalList uses this flag to filter — no reviewer-history heuristic.
+
+### Files Changed (regression fix only)
+| Layer | File | Change |
+|-------|------|--------|
+| Application DTO | `DTOs/Manga/SeriesProposalDtos.cs` | Added `CurrentEditorIsActiveContributor` to `ProposalQueueItemDto`; added `SeriesCoverUrl` to `MangakaSeriesProposalDto` |
+| Application Query | `Features/Editor/.../GetEditorialProposalQueueQuery.cs` | Added `ActorUserId` parameter |
+| Application Handler | `Features/Editor/.../GetEditorialProposalQueueQueryHandler.cs` | Queries active contributor per series, maps flag to DTO |
+| Application Handler | `Features/Mangaka/.../GetMySeriesProposalDetailQueryHandler.cs` | Maps `SeriesCoverUrl` |
+| API Controller | `Controllers/Editor/EditorProposalsController.cs` | Reads actor ID from header, passes to query |
+| Infrastructure | `Repositories/SeriesProposalRepository.cs` | Added `CoverFile` include to `GetMySeriesProposalDetailAsync` |
+| Web Shared | `Components/Shared/SeriesProposalTable.razor` | Status code filtering, counts, pagination, column flags, scoped styling |
+| Web Shared | `Components/Shared/SeriesProposalListItemModel.cs` | Added `SeriesId`, `CurrentActorIsActiveContributor` |
+| Web Page | `Pages/Editor/ProposalList.razor` | Uses contributor flag, correct table params, My Series Only toggle |
+| Web Page | `Pages/Mangaka/Proposals.razor` | Correct params, SeriesId mapping |
+| Web Page | `Pages/Mangaka/ProposalDetail.razor` | Maps `SeriesCoverUrl` from DTO |
+
+### Build Result
+```
+dotnet build MangaManagementSystem\MangaManagementSystem.slnx --no-incremental
+0 errors, 52 warnings (all pre-existing)
+```
+
+### Manual Test Checklist
+- [ ] Open `/editor/proposals`.
+- [ ] Confirm Under Editorial Review is selected by default.
+- [ ] Confirm status filters show counts.
+- [ ] Confirm table styling is polished and consistent with the app.
+- [ ] Confirm table paginates after filters/search/sort.
+- [ ] Confirm row click still opens `/editor/proposals/{id}`.
+- [ ] Confirm Editor can toggle `My Series Only`.
+- [ ] Confirm `My Series Only` only shows proposals for active contributor series.
+- [ ] Confirm global discovery remains default when toggle is off.
+- [ ] Open `/mangaka/proposals`.
+- [ ] Confirm All is selected by default.
+- [ ] Confirm status filters show counts.
+- [ ] Confirm genre/tag/search/sort still work.
+- [ ] Confirm table columns align visually with Editor mode.
+- [ ] Confirm table paginates after filters/search/sort.
+- [ ] Open `/mangaka/proposals/{id}`.
+- [ ] Confirm cover image loads when available.
+- [ ] Confirm no Editor-only actions appear.

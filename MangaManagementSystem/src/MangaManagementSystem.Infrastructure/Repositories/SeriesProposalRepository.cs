@@ -120,6 +120,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .AsNoTracking()
                 .Include(sp => sp.Series).ThenInclude(s => s.Genres)
                 .Include(sp => sp.Series).ThenInclude(s => s.Tags)
+                .Include(sp => sp.Series).ThenInclude(s => s.CoverFile)
                 .Include(sp => sp.SubmittedByUser)
                 .Include(sp => sp.ReviewedByUser)
                 .Include(sp => sp.ProposalFile)

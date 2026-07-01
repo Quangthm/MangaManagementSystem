@@ -68,7 +68,8 @@ namespace MangaManagementSystem.Application.Features.Mangaka.SeriesProposals.Que
                         OriginalFileName: proposal.MarkupFile.OriginalFileName,
                         ContentType: proposal.MarkupFile.ContentType,
                         FileSizeBytes: proposal.MarkupFile.FileSizeBytes,
-                        SecureUrl: proposal.MarkupFile.CloudinarySecureUrl));
+                        SecureUrl: proposal.MarkupFile.CloudinarySecureUrl),
+                SeriesCoverUrl: proposal.Series?.CoverFile?.CloudinarySecureUrl);
         }
 
         private static IReadOnlyList<GenreDto> MapGenres(IEnumerable<Domain.Entities.Genre>? genres)

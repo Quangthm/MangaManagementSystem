@@ -98,7 +98,7 @@
         SeriesProposalId: p.SeriesProposalId,
         SeriesTitle: p.SeriesTitle,
         SeriesSlug: p.SeriesSlug,
-        SeriesCoverUrl: null,
+        SeriesCoverUrl: p.SeriesCoverUrl,
         ProposalVersionNo: p.ProposalVersionNo,
         ProposalTitle: p.ProposalTitle,
         SynopsisSnapshot: p.SynopsisSnapshot,
@@ -116,6 +116,6 @@
         MarkupFileName: p.MarkupFile?.OriginalFileName,
         MarkupFileUrl: p.MarkupFile?.SecureUrl,
         WithdrawnAtUtc: p.WithdrawnAtUtc,
-        HasEditorialDecision: p.Comments is not null
+        HasEditorialDecision: p.ReviewedAtUtc.HasValue
     );
 }

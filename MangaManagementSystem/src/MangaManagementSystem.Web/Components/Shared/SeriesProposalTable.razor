@@ -2,53 +2,52 @@
 @using MangaManagementSystem.Application.DTOs.Manga
 @using MudBlazor
 
-<MudPaper Class="pa-5 mf-card" Elevation="0">
-    @* ── Filter / Search / Sort row ── *@
-    <div class="d-flex flex-wrap align-center mb-4" style="gap:12px;">
-        @* Status chips *@
-        <div class="d-flex flex-wrap" style="gap:6px;">
-            @foreach (var (label, statuses) in StatusFilterGroups)
+<div class="mf-proposal-page">
+    @* ── Filter / Search / Sort toolbar ── *@
+    <div class="mf-proposal-toolbar">
+        <div class="mf-proposal-chips">
+            @foreach (var opt in _statusOptions)
             {
-                var isActive = _selectedStatusFilter == label;
-                <MudButton Variant="Variant.Outlined"
-                           Size="Size.Small"
-                           Color="@(isActive ? Color.Info : Color.Default)"
-                           OnClick="@(() => OnStatusChipClicked(label, statuses))"
-                           Class="mf-status-chip"
-                           Style="@(isActive ? "background:#eef2ff; color:#4f46e5; border-color:#4f46e5;" : "")">
-                    @label
-                </MudButton>
+                var isActive = _selectedStatusCode == opt.Code;
+                var count = opt.Code == "ALL"
+                    ? (Items?.Count ?? 0)
+                    : (Items?.Count(p => p.StatusCode == opt.Code) ?? 0);
+                <button @onclick="@(() => OnStatusChipClicked(opt.Code))"
+                        style="padding: 6px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: @(isActive ? 600 : 500); cursor: pointer; white-space: nowrap;
+                               background: @(isActive ? "#4f46e5" : "#f1f5f9"); color: @(isActive ? "#fff" : "#475569");
+                               border: 1px solid @(isActive ? "#4f46e5" : "#e2e8f0"); transition: all 0.15s ease;">
+                    @opt.Label (@count)
+                </button>
             }
         </div>
 
-        <MudSpacer />
+        <div class="mf-proposal-toolbar-right">
+            <MudTextField T="string" @bind-Value="_searchText"
+                           @bind-Value:after="ResetPageAndState"
+                           Placeholder="Search by title or series"
+                           Adornment="Adornment.Start"
+                           AdornmentIcon="@Icons.Material.Filled.Search"
+                           Variant="Variant.Outlined" Margin="Margin.Dense"
+                           Immediate="true"
+                           Style="font-size: 0.8rem; width: 240px;" />
 
-        <MudTextField @bind-Value="_searchText"
-                       @bind-Value:after="() => _filterResetAction?.Invoke()"
-                       Placeholder="Search by title or series"
-                       Adornment="Adornment.Start"
-                       AdornmentIcon="@Icons.Material.Filled.Search"
-                       Variant="Variant.Outlined" Margin="Margin.Dense"
-                       Immediate="true"
-                       Style="width:240px; flex-shrink:0;"
-                       Class="mf-compact" />
-
-        <MudSelect T="string" @bind-Value="_sortMode"
-                    @bind-Value:after="() => _filterResetAction?.Invoke()"
-                    Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
-                    Style="width:180px; flex-shrink:0;"
-                    Class="mf-compact">
-            <MudSelectItem T="string" Value="@("submitted")">Recently Submitted</MudSelectItem>
-            <MudSelectItem T="string" Value="@("reviewed")">Reviewed Date</MudSelectItem>
-            <MudSelectItem T="string" Value="@("title")">Proposal Title A-Z</MudSelectItem>
-            <MudSelectItem T="string" Value="@("status")">Status</MudSelectItem>
-        </MudSelect>
+            <MudSelect T="string" @bind-Value="_sortMode"
+                        @bind-Value:after="ResetPageAndState"
+                        Variant="Variant.Outlined" Margin="Margin.Dense"
+                        Dense="true"
+                        Style="font-size: 0.8rem; width: 180px;">
+                <MudSelectItem T="string" Value="@("submitted")">Recently Submitted</MudSelectItem>
+                <MudSelectItem T="string" Value="@("reviewed")">Reviewed Date</MudSelectItem>
+                <MudSelectItem T="string" Value="@("title")">Proposal Title A-Z</MudSelectItem>
+                <MudSelectItem T="string" Value="@("status")">Status</MudSelectItem>
+            </MudSelect>
+        </div>
     </div>
 
     @* ── Genre / Tag filter row ── *@
     @if (ShowGenreFilter || ShowTagFilter)
     {
-        <div class="d-flex flex-wrap align-center mb-4" style="gap:8px;">
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 20px;">
             @if (ShowGenreFilter && _availableGenres.Count > 0)
             {
                 <ReferenceMultiSelectFilter TItem="GenreDto"
@@ -80,118 +79,161 @@
             @if (_filterGenreIds.Count > 0 || _filterTagIds.Count > 0)
             {
                 <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
-                           OnClick="ClearRefFilters" Style="text-transform:none;">
+                           OnClick="ClearRefFilters"
+                           Style="font-size: 0.72rem; text-transform: none;">
                     Clear filters
                 </MudButton>
             }
         </div>
     }
 
-    @* ── Loading / Empty / Table ── *@
+    @* ── Empty state ── *@
     @if (Items is null || Items.Count == 0)
     {
-        <MudPaper Class="pa-8 text-center mf-card" Elevation="0">
-            <MudIcon Icon="@Icons.Material.Outlined.Inbox" Size="Size.Large" Color="Color.Default" Class="mb-3" />
-            <MudText Typo="Typo.h6" Class="mf-muted">No proposals match your filter.</MudText>
-        </MudPaper>
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64px 24px; color: #94a3b8; gap: 16px;">
+            <MudIcon Icon="@Icons.Material.Filled.Inbox" Style="font-size: 56px; opacity: 0.5;" />
+            <div style="font-size: 0.95rem; font-weight: 500; color: #64748b; text-align: center; max-width: 360px;">
+                No proposals match your filter.
+            </div>
+        </div>
+    }
+    else if (FilteredSortedItems.Count == 0)
+    {
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64px 24px; color: #94a3b8; gap: 16px;">
+            <MudIcon Icon="@Icons.Material.Filled.Inbox" Style="font-size: 56px; opacity: 0.5;" />
+            <div style="font-size: 0.95rem; font-weight: 500; color: #64748b; text-align: center; max-width: 360px;">
+                No proposals match your current filters.
+            </div>
+        </div>
     }
     else
     {
-        <MudTable Items="@FilteredSortedItems" Hover="true" RowsPerPage="15" Class="mf-proposal-table">
-            <HeaderContent>
-                <MudTh>Series</MudTh>
-                <MudTh>Proposal</MudTh>
-                <MudTh>Version</MudTh>
+        @* ── Proposal table ── *@
+        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+            <div style="display: grid; grid-template-columns: @GetGridColumns(); padding: 10px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 0.72rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">
+                <span>Series</span>
+                <span>Proposal</span>
+                <span>Version</span>
+                @if (ShowSubmitterColumn)
+                {
+                    <span>Submitted By</span>
+                }
+                <span>Submitted</span>
                 @if (ShowReviewerColumns)
                 {
-                    <MudTh>Submitted By</MudTh>
-                    <MudTh>Submitted</MudTh>
-                    <MudTh>Reviewer</MudTh>
-                    <MudTh>Reviewed</MudTh>
+                    <span>Reviewer</span>
+                    <span>Reviewed</span>
                 }
-                <MudTh>Status</MudTh>
-                <MudTh></MudTh>
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd DataLabel="Series" Style="cursor:pointer;" @onclick="@(() => RowClicked.InvokeAsync(context.SeriesProposalId))">
-                    <MudText Typo="Typo.body1" Class="font-weight-bold">@context.SeriesTitle</MudText>
-                </MudTd>
-                <MudTd DataLabel="Proposal" Style="cursor:pointer;" @onclick="@(() => RowClicked.InvokeAsync(context.SeriesProposalId))">
-                    <MudText Typo="Typo.body2">@context.ProposalTitle</MudText>
-                </MudTd>
-                <MudTd DataLabel="Version" Style="cursor:pointer;" @onclick="@(() => RowClicked.InvokeAsync(context.SeriesProposalId))">
-                    @($"v{context.ProposalVersionNo}")
-                </MudTd>
-                @if (ShowReviewerColumns)
-                {
-                    <MudTd DataLabel="Submitted By" Style="cursor:pointer;" @onclick="@(() => RowClicked.InvokeAsync(context.SeriesProposalId))">
-                        @context.SubmittedByDisplayName
-                    </MudTd>
-                    <MudTd DataLabel="Submitted" Style="cursor:pointer;" @onclick="@(() => RowClicked.InvokeAsync(context.SeriesProposalId))">
-                        @context.SubmittedAtUtc.ToLocalTime().ToString("MMM d, yyyy")
-                    </MudTd>
-                    <MudTd DataLabel="Reviewer" Style="cursor:pointer;" @onclick="@(() => RowClicked.InvokeAsync(context.SeriesProposalId))">
-                        @(string.IsNullOrWhiteSpace(context.ReviewerDisplayName) ? "—" : context.ReviewerDisplayName)
-                    </MudTd>
-                    <MudTd DataLabel="Reviewed" Style="cursor:pointer;" @onclick="@(() => RowClicked.InvokeAsync(context.SeriesProposalId))">
-                        @(context.ReviewedAtUtc.HasValue ? context.ReviewedAtUtc.Value.ToLocalTime().ToString("MMM d, yyyy") : "—")
-                    </MudTd>
-                }
-                <MudTd DataLabel="Status" Style="cursor:pointer;" @onclick="@(() => RowClicked.InvokeAsync(context.SeriesProposalId))">
-                    <MudChip T="string" Color="@GetStatusColor(context.StatusCode)" Size="Size.Small">
-                        @StatusDisplayLabel(context.StatusCode)
-                    </MudChip>
-                </MudTd>
-                <MudTd DataLabel="">
-                    <div class="d-flex align-center gap-2" style="white-space:nowrap;">
-                        @if (context.HasMarkup)
+                <span>Status</span>
+                <span>Markup</span>
+                <span></span>
+            </div>
+            @foreach (var p in PagedItems)
+            {
+                <div @onclick="@(() => RowClicked.InvokeAsync(p.SeriesProposalId))"
+                     style="display: grid; grid-template-columns: @GetGridColumns(); padding: 12px 20px; border-bottom: 1px solid #f1f5f9; align-items: center; cursor: pointer; transition: background 0.12s;"
+                     onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+                    <span style="font-weight: 600; font-size: 0.85rem; color: #111827; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="@p.SeriesTitle">@p.SeriesTitle</span>
+                    <span style="font-size: 0.85rem; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="@p.ProposalTitle">@p.ProposalTitle</span>
+                    <span style="font-size: 0.8rem; color: #64748b;">v@p.ProposalVersionNo</span>
+                    @if (ShowSubmitterColumn)
+                    {
+                        <span style="font-size: 0.8rem; color: #64748b;">@p.SubmittedByDisplayName</span>
+                    }
+                    <span style="font-size: 0.78rem; color: #64748b;">@p.SubmittedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</span>
+                    @if (ShowReviewerColumns)
+                    {
+                        <span style="font-size: 0.8rem; color: #64748b;">@(string.IsNullOrWhiteSpace(p.ReviewerDisplayName) ? "—" : p.ReviewerDisplayName)</span>
+                        <span style="font-size: 0.78rem; color: #64748b;">@(p.ReviewedAtUtc.HasValue ? p.ReviewedAtUtc.Value.ToLocalTime().ToString("MMM d, yyyy") : "—")</span>
+                    }
+                    <span style="display: inline-block;">
+                        <span style="background: @StatusColor(p.StatusCode); color: #fff; font-size: 0.68rem; padding: 2px 8px; border-radius: 10px; font-weight: 600; white-space: nowrap;">
+                            @StatusDisplayLabel(p.StatusCode)
+                        </span>
+                    </span>
+                    <span>
+                        @if (p.HasMarkup)
                         {
-                            <MudIcon Icon="@Icons.Material.Filled.AttachFile" Size="Size.Small" Style="color:#10b981;" />
+                            <MudIcon Icon="@Icons.Material.Filled.AttachFile" Size="Size.Small" Style="color: #10b981; font-size: 16px;" />
                         }
-                        <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small"
-                                 Style="color:#cbd5e1; cursor:pointer;"
-                                 @onclick="@(() => RowClicked.InvokeAsync(context.SeriesProposalId))" />
-                    </div>
-                </MudTd>
-            </RowTemplate>
-        </MudTable>
+                    </span>
+                    <span style="text-align: right;">
+                        <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" Style="color: #cbd5e1;" />
+                    </span>
+                </div>
+            }
+        </div>
+
+        @* ── Pagination ── *@
+        @if (TotalPages > 1)
+        {
+            <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 20px;">
+                <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                           Disabled="@(_currentPage <= 1)"
+                           OnClick="@(() => { _currentPage--; })">
+                    Prev
+                </MudButton>
+
+                @for (int pg = 1; pg <= TotalPages; pg++)
+                {
+                    int pageNum = pg;
+                    bool isCurrent = pageNum == _currentPage;
+                    <MudButton Size="Size.Small"
+                               Variant="@(isCurrent ? Variant.Filled : Variant.Outlined)"
+                               Color="@(isCurrent ? Color.Primary : Color.Default)"
+                               OnClick="@(() => { _currentPage = pageNum; })">
+                        @pageNum
+                    </MudButton>
+                }
+
+                <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                           Disabled="@(_currentPage >= TotalPages)"
+                           OnClick="@(() => { _currentPage++; })">
+                    Next
+                </MudButton>
+            </div>
+        }
     }
-</MudPaper>
+</div>
 
 @code {
     [Parameter] public IReadOnlyList<SeriesProposalListItemModel> Items { get; set; } = Array.Empty<SeriesProposalListItemModel>();
-    [Parameter] public string DefaultStatusFilter { get; set; } = "All";
+    [Parameter] public string DefaultStatusFilterCode { get; set; } = "ALL";
     [Parameter] public bool ShowGenreFilter { get; set; } = true;
     [Parameter] public bool ShowTagFilter { get; set; } = true;
+    [Parameter] public bool ShowSubmitterColumn { get; set; } = true;
     [Parameter] public bool ShowReviewerColumns { get; set; } = true;
     [Parameter] public EventCallback<Guid> RowClicked { get; set; }
     [Parameter] public IReadOnlyList<GenreDto> AvailableGenres { get; set; } = Array.Empty<GenreDto>();
     [Parameter] public IReadOnlyList<TagDto> AvailableTags { get; set; } = Array.Empty<TagDto>();
+    [Parameter] public int PageSize { get; set; } = 10;
 
-    private string _selectedStatusFilter = "All";
+    private sealed record StatusOption(string Code, string Label);
+
+    private static readonly StatusOption[] _statusOptions =
+    [
+        new("ALL", "All"),
+        new("UNDER_EDITORIAL_REVIEW", "Under Editorial Review"),
+        new("UNDER_BOARD_REVIEW", "Under Board Review"),
+        new("REVISION_REQUESTED", "Revision Requested"),
+        new("APPROVED", "Approved"),
+        new("CANCELLED", "Cancelled"),
+        new("WITHDRAWN", "Withdrawn"),
+    ];
+
+    private string _selectedStatusCode = "ALL";
     private string _searchText = "";
     private string _sortMode = "submitted";
+    private int _currentPage = 1;
     private HashSet<Guid> _filterGenreIds = new();
     private HashSet<Guid> _filterTagIds = new();
-    private Action? _filterResetAction;
 
     private IReadOnlyList<GenreDto> _availableGenres = Array.Empty<GenreDto>();
     private IReadOnlyList<TagDto> _availableTags = Array.Empty<TagDto>();
 
-    private static readonly (string Label, string[] Statuses)[] StatusFilterGroups =
-    [
-        ("All", Array.Empty<string>()),
-        ("Under Editorial Review", new[] { "UNDER_EDITORIAL_REVIEW" }),
-        ("Under Board Review", new[] { "UNDER_BOARD_REVIEW" }),
-        ("Revision Requested", new[] { "REVISION_REQUESTED" }),
-        ("Approved", new[] { "APPROVED" }),
-        ("Cancelled", new[] { "CANCELLED" }),
-        ("Withdrawn", new[] { "WITHDRAWN" }),
-    ];
-
     protected override void OnInitialized()
     {
-        _selectedStatusFilter = DefaultStatusFilter;
+        _selectedStatusCode = NormalizeStatusCode(DefaultStatusFilterCode);
     }
 
     protected override void OnParametersSet()
@@ -200,21 +242,43 @@
         _availableTags = AvailableTags;
     }
 
-    private void OnStatusChipClicked(string label, string[] statuses)
+    private static string NormalizeStatusCode(string? code)
     {
-        _selectedStatusFilter = label;
+        if (string.IsNullOrWhiteSpace(code)) return "ALL";
+        if (code.Equals("ALL", StringComparison.OrdinalIgnoreCase)) return "ALL";
+        // If it's already a known code, return it.
+        if (_statusOptions.Any(o => string.Equals(o.Code, code, StringComparison.OrdinalIgnoreCase)))
+            return code.ToUpperInvariant();
+        // If it's a label, map it back to code.
+        var match = _statusOptions.FirstOrDefault(o =>
+            string.Equals(o.Label, code, StringComparison.OrdinalIgnoreCase));
+        return match?.Code ?? "ALL";
+    }
+
+    private void OnStatusChipClicked(string code)
+    {
+        _selectedStatusCode = code;
+        _currentPage = 1;
+        StateHasChanged();
+    }
+
+    private void ResetPageAndState()
+    {
+        _currentPage = 1;
         StateHasChanged();
     }
 
     private void OnGenreFilterChanged(HashSet<Guid> ids)
     {
         _filterGenreIds = ids;
+        _currentPage = 1;
         StateHasChanged();
     }
 
     private void OnTagFilterChanged(HashSet<Guid> ids)
     {
         _filterTagIds = ids;
+        _currentPage = 1;
         StateHasChanged();
     }
 
@@ -222,6 +286,7 @@
     {
         _filterGenreIds.Clear();
         _filterTagIds.Clear();
+        _currentPage = 1;
         StateHasChanged();
     }
 
@@ -233,9 +298,8 @@
 
             IEnumerable<SeriesProposalListItemModel> result = Items;
 
-            var group = StatusFilterGroups.FirstOrDefault(g => g.Label == _selectedStatusFilter);
-            if (group.Statuses is { Length: > 0 })
-                result = result.Where(p => group.Statuses.Contains(p.StatusCode));
+            if (_selectedStatusCode != "ALL")
+                result = result.Where(p => p.StatusCode == _selectedStatusCode);
 
             if (!string.IsNullOrWhiteSpace(_searchText))
             {
@@ -264,6 +328,31 @@
         }
     }
 
+    private int TotalPages => PageSize <= 0
+        ? 0
+        : (int)Math.Ceiling((double)FilteredSortedItems.Count / PageSize);
+
+    private IReadOnlyList<SeriesProposalListItemModel> PagedItems =>
+        FilteredSortedItems
+            .Skip((_currentPage - 1) * PageSize)
+            .Take(PageSize)
+            .ToList()
+            .AsReadOnly();
+
+    private string GetGridColumns()
+    {
+        // Base: Series, Proposal, Version, Submitted, Status, Markup, chevron
+        var cols = new List<string> { "2fr", "2fr", "80px", "110px", "130px", "60px", "40px" };
+        if (ShowSubmitterColumn)
+            cols.Insert(3, "130px");
+        if (ShowReviewerColumns)
+        {
+            cols.Insert(cols.Count - 3, "120px");
+            cols.Insert(cols.Count - 3, "100px");
+        }
+        return string.Join(" ", cols);
+    }
+
     private static string StatusDisplayLabel(string statusCode) => statusCode switch
     {
         "UNDER_EDITORIAL_REVIEW" => "Under Editorial Review",
@@ -275,14 +364,14 @@
         _ => statusCode.Replace("_", " "),
     };
 
-    private static Color GetStatusColor(string statusCode) => statusCode switch
+    private static string StatusColor(string statusCode) => statusCode switch
     {
-        "UNDER_EDITORIAL_REVIEW" => Color.Warning,
-        "UNDER_BOARD_REVIEW" => Color.Info,
-        "REVISION_REQUESTED" => Color.Error,
-        "CANCELLED" => Color.Default,
-        "APPROVED" => Color.Success,
-        "WITHDRAWN" => Color.Default,
-        _ => Color.Default,
+        "UNDER_EDITORIAL_REVIEW" => "#0ea5e9",
+        "UNDER_BOARD_REVIEW" => "#8b5cf6",
+        "REVISION_REQUESTED" => "#f59e0b",
+        "APPROVED" => "#059669",
+        "CANCELLED" => "#dc2626",
+        "WITHDRAWN" => "#64748b",
+        _ => "#64748b",
     };
 }

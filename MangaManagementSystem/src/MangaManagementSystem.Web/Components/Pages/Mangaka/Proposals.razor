@@ -34,9 +34,10 @@
         else
         {
             <SeriesProposalTable Items="@_mappedItems"
-                                 DefaultStatusFilter="All"
+                                 DefaultStatusFilterCode="ALL"
                                  ShowGenreFilter="true"
                                  ShowTagFilter="true"
+                                 ShowSubmitterColumn="false"
                                  ShowReviewerColumns="false"
                                  AvailableGenres="_availableGenres"
                                  AvailableTags="_availableTags"
@@ -93,6 +94,7 @@
 
     private static SeriesProposalListItemModel MapToListItem(MangakaSeriesProposalDto p) => new(
         SeriesProposalId: p.SeriesProposalId,
+        SeriesId: p.SeriesId,
         SeriesTitle: p.SeriesTitle,
         ProposalTitle: p.ProposalTitle,
         ProposalVersionNo: p.ProposalVersionNo,
@@ -103,7 +105,8 @@
         StatusCode: p.StatusCode,
         HasMarkup: p.MarkupFile is not null,
         Genres: p.Genres,
-        Tags: p.Tags
+        Tags: p.Tags,
+        CurrentActorIsActiveContributor: false
     );
 
     protected override async Task OnInitializedAsync()

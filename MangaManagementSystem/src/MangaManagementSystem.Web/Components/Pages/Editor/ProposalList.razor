@@ -35,10 +35,20 @@
         }
         else
         {
-            <SeriesProposalTable Items="@_mappedItems"
-                                 DefaultStatusFilter="UNDER_EDITORIAL_REVIEW"
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                <MudCheckBox T="bool" @bind-Value="_mySeriesOnly" Label="My Series Only"
+                             Color="Color.Primary" Dense="true"
+                             Style="font-size: 0.82rem;" />
+                <MudText Typo="Typo.caption" Class="mf-muted">
+                    Show only proposals for series where you are an active contributor
+                </MudText>
+            </div>
+
+            <SeriesProposalTable Items="@GetDisplayItems()"
+                                 DefaultStatusFilterCode="UNDER_EDITORIAL_REVIEW"
                                  ShowGenreFilter="true"
                                  ShowTagFilter="true"
+                                 ShowSubmitterColumn="true"
                                  ShowReviewerColumns="true"
                                  AvailableGenres="_availableGenres"
                                  AvailableTags="_availableTags"
@@ -50,6 +60,7 @@
 @code {
     private bool _loading = true;
     private string? _error;
+    private bool _mySeriesOnly;
     private IReadOnlyList<ProposalQueueItemDto>? _proposals;
     private IReadOnlyList<SeriesProposalListItemModel> _mappedItems = Array.Empty<SeriesProposalListItemModel>();
     private IReadOnlyList<GenreDto> _availableGenres = Array.Empty<GenreDto>();
@@ -68,6 +79,17 @@
         }
 
         await LoadProposals();
+    }
+
+    private IReadOnlyList<SeriesProposalListItemModel> GetDisplayItems()
+    {
+        if (!_mySeriesOnly)
+            return _mappedItems;
+
+        return _mappedItems
+            .Where(p => p.CurrentActorIsActiveContributor)
+            .ToList()
+            .AsReadOnly();
     }
 
     private async Task LoadProposals()
@@ -103,6 +125,7 @@
 
     private static SeriesProposalListItemModel MapToListItem(ProposalQueueItemDto p) => new(
         SeriesProposalId: p.SeriesProposalId,
+        SeriesId: p.SeriesId,
         SeriesTitle: p.SeriesTitle,
         ProposalTitle: p.ProposalTitle,
         ProposalVersionNo: p.ProposalVersionNo,
@@ -113,7 +136,8 @@
         StatusCode: p.StatusCode,
         HasMarkup: p.MarkupFileId.HasValue,
         Genres: p.Genres,
-        Tags: p.Tags
+        Tags: p.Tags,
+        CurrentActorIsActiveContributor: p.CurrentEditorIsActiveContributor
     );
 
     private void OnRowClicked(Guid seriesProposalId)
