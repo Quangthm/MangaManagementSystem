@@ -27,6 +27,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         private const string RevisionRequestedStatus = "REVISION_REQUESTED";
         private const string ApprovedStatus = "APPROVED";
         private const string ScheduledStatus = "SCHEDULED";
+        private const string CancelledStatus = "CANCELLED";
 
         private readonly ApplicationDbContext _context;
 
@@ -177,6 +178,92 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
                 chapter.StatusCode = UnderReviewStatus;
                 chapter.UpdatedAtUtc = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+
+                return await GetChapterByIdForActorAsync(actorUserId, chapter.ChapterId, cancellationToken);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+        }
+
+        public async Task<MangakaChapterListItemDto> CancelChapterSubmissionAsync(
+            Guid actorUserId,
+            Guid chapterId,
+            CancellationToken cancellationToken = default)
+        {
+            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+
+            try
+            {
+                var chapter = await _context.Chapters
+                    .FirstOrDefaultAsync(c => c.ChapterId == chapterId, cancellationToken);
+
+                if (chapter == null)
+                    throw new InvalidOperationException("Chapter does not exist.");
+
+                await EnsureActiveMangakaContributorAsync(actorUserId, chapter.SeriesId, cancellationToken);
+
+                if (chapter.StatusCode != UnderReviewStatus)
+                    throw new InvalidOperationException("Only a chapter that is UNDER_REVIEW can have its submission cancelled.");
+
+                chapter.StatusCode = DraftStatus;
+                chapter.UpdatedAtUtc = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+
+                return await GetChapterByIdForActorAsync(actorUserId, chapter.ChapterId, cancellationToken);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+        }
+
+        public async Task<MangakaChapterListItemDto> CancelChapterAsync(
+            Guid actorUserId,
+            Guid chapterId,
+            CancellationToken cancellationToken = default)
+        {
+            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+
+            try
+            {
+                var chapter = await _context.Chapters
+                    .FirstOrDefaultAsync(c => c.ChapterId == chapterId, cancellationToken);
+
+                if (chapter == null)
+                    throw new InvalidOperationException("Chapter does not exist.");
+
+                await EnsureActiveMangakaContributorAsync(actorUserId, chapter.SeriesId, cancellationToken);
+
+                if (chapter.StatusCode == CancelledStatus)
+                    throw new InvalidOperationException("This chapter is already cancelled.");
+
+                // BR-CH-002 / BR-CH-CANCEL: cancelling preserves the chapter and all its content; it only
+                // sets status_code = CANCELLED (a cancelled chapter does not reserve its number) and is audited.
+                chapter.StatusCode = CancelledStatus;
+                chapter.UpdatedAtUtc = DateTime.UtcNow;
+
+                _context.AuditEvents.Add(new AuditEvent
+                {
+                    OccurredAtUtc = DateTime.UtcNow,
+                    ActorUserId = actorUserId,
+                    ActorRoleName = "Mangaka",
+                    ActionCode = "CHAPTER_CANCELLED",
+                    EntityType = "Chapter",
+                    EntityId = chapterId.ToString(),
+                    DetailJson = System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        chapter_number_label = chapter.ChapterNumberLabel
+                    })
+                });
 
                 await _context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);

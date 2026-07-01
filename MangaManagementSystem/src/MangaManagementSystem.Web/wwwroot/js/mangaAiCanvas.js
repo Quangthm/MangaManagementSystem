@@ -450,6 +450,43 @@ function applyTransform() {
 }
 
 let currentDataUrl = null;
+// True only for an IN-SESSION translation preview (clean + translate run on the current canvas).
+// While true, syncToBlazor() does NOT push translatedText into the C# version buffer, so a generic
+// Save / pending-flush never bakes the translation onto the source version (e.g. the original v1).
+// The translation is captured ONLY by "Create new version" (which reads exportRegions() directly).
+// Loading/switching a version resets this, so editing a real translated version still saves its text.
+let translationPreview = false;
+
+// Draws the loaded image and fits it to the container. If the container has no size yet (which
+// happens intermittently during fast page navigation, before layout settles), retries on the next
+// animation frame instead of computing scale = 0 — that scale-0 was what left the canvas blank.
+function fitImageOntoCanvas(image, attempt) {
+    attempt = attempt || 0;
+    originalImg = image;
+    backgroundCanvas.width = image.width;
+    backgroundCanvas.height = image.height;
+    bgCtx.drawImage(image, 0, 0);
+
+    canvas.style.display = 'block';
+    canvas.width = image.width;
+    canvas.height = image.height;
+    canvas.style.width = image.width + 'px';
+    canvas.style.height = image.height + 'px';
+    canvas.style.maxWidth = 'none';
+    canvas.style.maxHeight = 'none';
+
+    const cw = container.clientWidth, ch = container.clientHeight;
+    if ((cw === 0 || ch === 0) && attempt < 30) {
+        requestAnimationFrame(() => fitImageOntoCanvas(image, attempt + 1));
+        return;
+    }
+    const safeW = cw || image.width, safeH = ch || image.height;
+    scale = Math.min(safeW / image.width, safeH / image.height);
+    panX = (safeW - image.width * scale) / 2;   // center
+    panY = (safeH - image.height * scale) / 2;
+    applyTransform();
+    redraw();
+}
 
 function loadImage(dataUrl) {
     currentDataUrl = dataUrl;
@@ -467,58 +504,13 @@ function loadImage(dataUrl) {
         }
         const img = new Image();
         img.crossOrigin = 'anonymous';
+        img.onload = () => { fitImageOntoCanvas(img); resolve(); };
         img.onerror = () => {
-            console.error('Failed to load image from URL:', dataUrl);
-            resolve();
-        };
-        img.onload = () => {
-            originalImg = img;
-            backgroundCanvas.width = img.width;
-            backgroundCanvas.height = img.height;
-            bgCtx.drawImage(img, 0, 0);
-
-            canvas.style.display = 'block'; // Show when loaded
-            canvas.width = img.width;
-            canvas.height = img.height;
-            canvas.style.width = img.width + 'px';
-            canvas.style.height = img.height + 'px';
-            canvas.style.maxWidth = 'none';
-            canvas.style.maxHeight = 'none';
-
-            scale = Math.min(container.clientWidth / img.width, container.clientHeight / img.height);
-            // Center
-            panX = (container.clientWidth - img.width * scale) / 2;
-            panY = (container.clientHeight - img.height * scale) / 2;
-            applyTransform();
-            
-            redraw();
-            resolve();
-        };
-        img.onerror = () => {
-            // Fallback: if CORS fails, try without crossOrigin
+            // CORS failed — retry without crossOrigin (canvas becomes tainted but still displays).
             const img2 = new Image();
-            img2.onload = () => {
-                originalImg = img2;
-                backgroundCanvas.width = img2.width;
-                backgroundCanvas.height = img2.height;
-                bgCtx.drawImage(img2, 0, 0);
-                canvas.style.display = 'block';
-                canvas.width = img2.width;
-                canvas.height = img2.height;
-                canvas.style.width = img2.width + 'px';
-                canvas.style.height = img2.height + 'px';
-                canvas.style.maxWidth = 'none';
-                canvas.style.maxHeight = 'none';
-                scale = Math.min(container.clientWidth / img2.width, container.clientHeight / img2.height);
-                panX = (container.clientWidth - img2.width * scale) / 2;
-                panY = (container.clientHeight - img2.height * scale) / 2;
-                applyTransform();
-                redraw();
-                resolve();
-            };
-            // CRITICAL: the fallback image must also resolve on failure, otherwise this
-            // Promise never settles and the C# `await loadImage` hangs forever — which
-            // froze the page navigation (the load guard stayed stuck) after a reload.
+            img2.onload = () => { fitImageOntoCanvas(img2); resolve(); };
+            // CRITICAL: the fallback must also resolve on failure, otherwise the Promise never settles
+            // and the awaiting C# `await loadImage` hangs (which froze page navigation after a reload).
             img2.onerror = () => {
                 console.error('Failed to load image (with and without CORS):', dataUrl);
                 resolve();
@@ -580,6 +572,8 @@ function updateRegionData(id, data) {
 }
 
 function loadRegions(savedRegionsStr, silent) {
+    // Switching/loading a version is a fresh state, not an in-session translation preview.
+    translationPreview = false;
     if (!savedRegionsStr) {
         regions = [];
     } else if (typeof savedRegionsStr === 'string') {
@@ -609,6 +603,15 @@ function loadRegions(savedRegionsStr, silent) {
 
 function selectRegion(id) {
     regions.forEach(r => r.selected = (r.id === id));
+    syncToBlazor();
+    redraw();
+}
+
+// Selects exactly the regions whose dbId is in the given list — used to highlight a task's or
+// annotation's panels on the page when its card is clicked. dbIds: array of PageRegion GUID strings.
+function selectRegionsByDbIds(dbIds) {
+    const set = new Set((dbIds || []).map(String));
+    regions.forEach(r => { r.selected = (r.dbId != null && set.has(String(r.dbId))); });
     syncToBlazor();
     redraw();
 }
@@ -985,7 +988,13 @@ function redo() {
 
 function syncToBlazor() {
     if (dotNetRef) {
-        dotNetRef.invokeMethodAsync('OnRegionsUpdated', JSON.stringify(regions), historyIndex > 0, historyIndex < historyStack.length - 1);
+        // During an in-session translation preview, strip translatedText from the payload so the
+        // version's save buffer (and any generic Save / pending-flush) never persists the translation
+        // onto the source version. "Create new version" uses exportRegions() (full, untouched).
+        const payload = translationPreview
+            ? regions.map(r => ({ ...r, translatedText: '' }))
+            : regions;
+        dotNetRef.invokeMethodAsync('OnRegionsUpdated', JSON.stringify(payload), historyIndex > 0, historyIndex < historyStack.length - 1);
     }
 }
 
@@ -1118,6 +1127,7 @@ async function callTranslateAPI(targetLang) {
                         });
 
                         saveState();
+                        translationPreview = true;   // canvas now holds a preview, not a saveable edit
                         if (typeof dotNetRef !== 'undefined' && dotNetRef) syncToBlazor();
                         redraw();
                         resolve("success");
@@ -1133,6 +1143,7 @@ async function callTranslateAPI(targetLang) {
                     }
                 });
                 saveState();
+                translationPreview = true;   // canvas now holds a preview, not a saveable edit
                 if (typeof dotNetRef !== 'undefined' && dotNetRef) syncToBlazor();
                 redraw();
                 return "success";
@@ -1235,6 +1246,7 @@ function downloadRenderedImage(filename) {
         updateRegionData,
         loadRegions,
         selectRegion,
+        selectRegionsByDbIds,
         selectAllRegions,
         clearSelection,
         setRegionsVisible,
@@ -1266,16 +1278,6 @@ window.mmsPreloadImages = function(urls) {
             }
         });
     } catch (e) {}
-};
-
-window.saveMmsDraft = function(pageId, data) {
-    try { localStorage.setItem('mms_draft_page_' + pageId, data); } catch(e) {}
-};
-window.getMmsDraft = function(pageId) {
-    try { return localStorage.getItem('mms_draft_page_' + pageId); } catch(e) { return null; }
-};
-window.clearMmsDraft = function(pageId) {
-    try { localStorage.removeItem('mms_draft_page_' + pageId); } catch(e) {}
 };
 
 // Unsaved-changes guard. Blazor sets this flag true on an edit and false after autosave.

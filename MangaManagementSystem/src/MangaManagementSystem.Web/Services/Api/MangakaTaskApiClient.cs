@@ -86,6 +86,23 @@ namespace MangaManagementSystem.Web.Services.Api
             await EnsureSuccessAsync(response, cancellationToken);
         }
 
+        public async Task<ChapterPageTaskDto> CreateTaskAsync(Guid actorUserId, CreateMangakaTaskRequest request, CancellationToken cancellationToken = default)
+        {
+            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "api/mangaka/tasks");
+            httpRequest.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+            httpRequest.Content = new StringContent(
+                JsonSerializer.Serialize(request, _jsonOptions),
+                Encoding.UTF8, "application/json");
+
+            var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+            await EnsureSuccessAsync(response, cancellationToken);
+
+            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            return JsonSerializer.Deserialize<ChapterPageTaskDto>(content, _jsonOptions)
+                ?? throw new InvalidOperationException(
+                    "The task was created but no confirmation was returned. Please refresh and verify.");
+        }
+
         public async Task<IReadOnlyList<EligibleAssistantDto>> GetEligibleAssistantsAsync(Guid actorUserId, Guid taskId, CancellationToken cancellationToken = default)
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, $"api/mangaka/tasks/{taskId}/eligible-assistants");

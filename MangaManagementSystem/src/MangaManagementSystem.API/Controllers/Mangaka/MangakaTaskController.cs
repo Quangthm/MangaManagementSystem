@@ -96,6 +96,63 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         }
 
         /// <summary>
+        /// Create a single page task assigned to an assistant. Actor (creator) from header.
+        /// Route: POST /api/mangaka/tasks
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> CreateTaskAsync([FromBody] CreateMangakaTaskRequest? request)
+        {
+            if (request == null)
+            {
+                return BadRequest("Task details are required.");
+            }
+
+            if (!TryResolveActorUserId(out Guid actorUserId))
+            {
+                return BadRequest("Could not identify the requesting user. Please sign in again.");
+            }
+
+            try
+            {
+                var dto = new CreateChapterPageTaskDto(
+                    ActorUserId: actorUserId,
+                    AssignedToUserId: request.AssignedToUserId,
+                    TypeCode: request.TypeCode,
+                    StatusCode: "ASSIGNED",           // create SP owns the authoritative default
+                    TaskTitle: request.TaskTitle,
+                    TaskDescription: request.TaskDescription,
+                    PriorityLevel: request.PriorityLevel,
+                    DueAtUtc: null,
+                    CompensationAmount: request.CompensationAmount,
+                    CompletedPageVersionId: null,
+                    PageRegionIds: request.PageRegionIds ?? new List<Guid>());
+
+                var created = await _taskService.CreateChapterPageTaskAsync(dto);
+
+                await TryNotifyAssistantAsync(created.ChapterPageTaskId, actorUserId, "NEW_TASK_ASSIGNED",
+                    "New Task Assigned", "You have been assigned a new production task.");
+
+                return Ok(created);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Microsoft.Data.SqlClient.SqlException ex)
+            {
+                _logger.LogWarning(ex, "SQL error creating task.");
+                return BadRequest(MapSqlException(ex));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating task.");
+                return Problem(
+                    detail: "Could not create the task right now. Please try again later.",
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
+        }
+
+        /// <summary>
         /// Approve/complete a task. Task must be UNDER_REVIEW.
         /// Route: POST /api/mangaka/tasks/{taskId}/approve
         /// </summary>

@@ -23,4 +23,10 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         [Required] int PageNo,
         string? PageNotes
     );
+
+    /// <summary>Web → API body to update a page's whole-page note.</summary>
+    public sealed record UpdatePageNotesRequest(string? PageNotes);
+
+    /// <summary>Web → API body to fetch non-deleted page counts for several chapters.</summary>
+    public sealed record PageCountsRequest(IReadOnlyList<Guid> ChapterIds);
 }

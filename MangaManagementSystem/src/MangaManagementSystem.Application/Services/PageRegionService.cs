@@ -32,7 +32,8 @@ namespace MangaManagementSystem.Application.Services
                 ConfidenceScore = dto.ConfidenceScore,
                 SourceType = dto.SourceType,
                 OriginalText = dto.OriginalText,
-                CreatedAtUtc = DateTime.UtcNow
+                CreatedAtUtc = DateTime.UtcNow,
+                CreatedByUserId = dto.CreatedByUserId
             };
             await _unitOfWork.PageRegions.AddAsync(entity);
             await _unitOfWork.SaveChangesAsync();
@@ -177,7 +178,8 @@ namespace MangaManagementSystem.Application.Services
                         ConfidenceScore = dto.ConfidenceScore,
                         SourceType = dto.SourceType,
                         OriginalText = dto.OriginalText,
-                        CreatedAtUtc = DateTime.UtcNow
+                        CreatedAtUtc = DateTime.UtcNow,
+                        CreatedByUserId = dto.CreatedByUserId
                     };
                     await _unitOfWork.PageRegions.AddAsync(entity);
                 }

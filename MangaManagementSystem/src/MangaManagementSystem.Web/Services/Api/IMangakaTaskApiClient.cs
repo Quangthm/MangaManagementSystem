@@ -9,6 +9,7 @@ namespace MangaManagementSystem.Web.Services.Api
         Task ApproveTaskAsync(Guid actorUserId, Guid taskId, string? reason = null, CancellationToken cancellationToken = default);
         Task ReturnTaskForReworkAsync(Guid actorUserId, Guid taskId, string reason, CancellationToken cancellationToken = default);
         Task CancelTaskAsync(Guid actorUserId, Guid taskId, string reason, CancellationToken cancellationToken = default);
+        Task<ChapterPageTaskDto> CreateTaskAsync(Guid actorUserId, CreateMangakaTaskRequest request, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<EligibleAssistantDto>> GetEligibleAssistantsAsync(Guid actorUserId, Guid taskId, CancellationToken cancellationToken = default);
         Task<ReassignChapterPageTaskResult> ReassignTaskAsync(Guid actorUserId, Guid taskId, ReassignChapterPageTaskRequest request, CancellationToken cancellationToken = default);
 

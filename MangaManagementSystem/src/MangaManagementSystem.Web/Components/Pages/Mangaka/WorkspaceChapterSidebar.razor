@@ -42,13 +42,17 @@
                         <div class="d-flex justify-space-between align-center w-100">
                             <div class="d-flex align-center" style="min-width: 0;">
                                 <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Small" Class="mr-3 mf-muted flex-shrink-0" />
-                                <div style="min-width: 0;">
+                                <div style="min-width: 0; display: flex; flex-direction: column; align-items: flex-start;">
                                     <MudText Typo="Typo.body2" Class="font-weight-bold" Color="@textColor" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Chapter @chapter.Id</MudText>
                                     @if (!string.IsNullOrWhiteSpace(chapter.Title))
                                     {
-                                        <MudText Typo="Typo.caption" Class="mf-muted" Style="display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">@chapter.Title</MudText>
+                                        <MudText Typo="Typo.caption" Class="mf-muted" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">@chapter.Title</MudText>
                                     }
-                                    <MudText Typo="Typo.caption" Class="mf-muted" Style="display: block;">@chapter.PageCount pages</MudText>
+                                    <MudText Typo="Typo.caption" Class="mf-muted">@chapter.PageCount pages</MudText>
+                                    @if (chapter.IsPending)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined" Class="mt-1" Style="margin-left: 0; height: 18px; font-size: 0.6rem;">Unsaved</MudChip>
+                                    }
                                 </div>
                             </div>
                             <div class="d-flex align-center flex-shrink-0">
@@ -163,6 +167,7 @@
               .Append(c.StatusCode).Append(':')
               .Append(c.PageCount).Append(':')
               .Append(c.IsRenaming).Append(':')
+              .Append(c.IsPending).Append(':')
               .Append(c.Title).Append(';');
         }
         return sb.ToString();

@@ -30,7 +30,8 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         decimal? ConfidenceScore,
         [Required][MaxLength(20)] string SourceType,
         string? OriginalText,
-        Guid? PageRegionId = null
+        Guid? PageRegionId = null,
+        Guid? CreatedByUserId = null
     );
 
     public record UpdatePageRegionDto(

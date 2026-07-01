@@ -15,6 +15,9 @@
 @inject ISeriesService SeriesService
 @inject IChapterService ChapterService
 @inject ISeriesApiClient SeriesApiClient
+@inject IMangakaChapterApiClient MangakaChapterApi
+@inject IMangakaTaskApiClient MangakaTaskApi
+@inject IMangakaPageApiClient MangakaPageApi
 @inject IChapterPageService PageService
 @inject IChapterPageVersionService VersionService
 @inject IPageRegionService RegionService
@@ -114,6 +117,23 @@ else
                     }
                 }
             }
+            @if (_headerChap != null && _currentRoleName == "Mangaka"
+                 && (_headerChap.StatusCode == "DRAFT" || _headerChap.StatusCode == "REVISION_REQUESTED"))
+            {
+                <MudButton Variant="Variant.Filled" Color="@(HasUnsavedChanges ? Color.Warning : Color.Default)" Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Save" Class="mr-2" DisableElevation="true"
+                           OnClick="SaveAllChangesAsync" Disabled="@(!HasUnsavedChanges || _saveState == SaveStatus.Saving)">
+                    @(_saveState == SaveStatus.Saving ? "Saving…" : "Save")
+                </MudButton>
+                @if (HasUnsavedChanges)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Default" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.Undo" Class="mr-2" DisableElevation="true"
+                               OnClick="DiscardChangesAsync" Disabled="@(_saveState == SaveStatus.Saving)">
+                        Discard
+                    </MudButton>
+                }
+            }
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.FileDownload" DisableElevation="true" OnClick="ExportCurrentPage">Export</MudButton>
         </div>
     </header>
@@ -140,7 +160,8 @@ else
             <div class="d-flex justify-center mt-4" style="position: absolute; left: 50%; transform: translateX(-50%); z-index: 100;">
                 <MudPaper Elevation="2" Class="d-flex align-center rounded-pill px-2 py-1 gap-1" Style="background: white;">
                     <InputFile id="fileInput" OnChange="HandleFileUpload" hidden accept="image/*" multiple disabled="@IsChapterLocked" />
-                    <MudButton HtmlTag="label" for="fileInput" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.CloudUpload" Class="rounded-pill px-3 mr-1" Style="background: linear-gradient(90deg, #7c3aed, #c026d3); color: white; font-weight: bold; font-size: 0.65rem; letter-spacing: 0.5px; height: 28px;" Disabled="@IsChapterLocked">UPLOAD PAGES</MudButton>
+                    <InputFile id="doublePageInput" OnChange="HandleDoublePageSelected" hidden accept="image/*" disabled="@IsChapterLocked" />
+                    <MudButton OnClick="@(() => _showUploadChoice = true)" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.CloudUpload" Class="rounded-pill px-3 mr-1" Style="background: linear-gradient(90deg, #7c3aed, #c026d3); color: white; font-weight: bold; font-size: 0.65rem; letter-spacing: 0.5px; height: 28px;" Disabled="@IsChapterLocked">UPLOAD PAGES</MudButton>
                     <MudDivider Vertical="true" FlexItem="true" Class="mx-1" />
                     <MudTooltip Text="@(_isSplitView ? "Exit Split View" : "Split View")">
                         <MudIconButton Icon="@(_isSplitView ? Icons.Material.Filled.VerticalSplit : Icons.Material.Filled.VerticalSplit)" Color="@(_isSplitView ? Color.Primary : Color.Default)" OnClick="ToggleSplitView" Size="Size.Small" />
@@ -372,6 +393,12 @@ else
                     @if (UploadedPages.Any())
                     {
                         <MudPagination Count="@UploadedPages.Count" Selected="@(ActivePageIndex + 1)" SelectedChanged="OnPageChanged" Disabled="@_isPageLoading" Variant="Variant.Filled" Color="Color.Primary" ShowFirstButton="@false" ShowLastButton="@false" />
+                        @if (UploadedPages.Count(p => p.ChapterPageId == Guid.Empty) is int unsavedPageCount && unsavedPageCount > 0)
+                        {
+                            <MudTooltip Text="Pages added but not yet saved to the database">
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined" Class="ml-2">@unsavedPageCount unsaved</MudChip>
+                            </MudTooltip>
+                        }
                     }
                     else
                     {
@@ -477,14 +504,18 @@ else
 
                     <MudTextField T="string" Label="Task description..." @bind-Value="TaskDescription" Variant="Variant.Outlined" Lines="3" Margin="Margin.Dense" Class="mb-3" />
 
+                    <MudNumericField T="decimal" Label="Compensation" @bind-Value="TaskCompensation" Variant="Variant.Outlined"
+                                     Margin="Margin.Dense" Class="mb-3" Min="0" Max="9999999999.99M" Format="0.##"
+                                     HelperText="Per-task amount (metadata only; 0 = none)." />
+
                     <div class="d-flex flex-column mb-3">
                         <MudText Typo="Typo.caption" Class="mf-muted mb-1">Panel Target (Hold Shift to select multiple)</MudText>
-                        <div class="d-flex flex-wrap gap-1">
+                        <div class="d-flex flex-wrap gap-1" style="max-height: 120px; overflow-y: auto;">
                             @if (SelectedRegions.Any())
                             {
                                 @foreach (var reg in SelectedRegions)
                                 {
-                                    <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled">Panel @reg.Id (X:@Math.Round(reg.X) Y:@Math.Round(reg.Y) W:@Math.Round(reg.Width) H:@Math.Round(reg.Height))</MudChip>
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled">Panel @reg.Id</MudChip>
                                 }
                             }
                             else if (SelectedPage > 0)
@@ -518,31 +549,43 @@ else
                               "SFX" => Icons.Material.Filled.CheckCircle,
                               _ => Icons.Material.Filled.Assignment
                           };
-                          var iconColor = task.Status == "Done" ? Color.Success : Color.Info;
+                          // Status labels mirror the DB enum (ASSIGNED/UNDER_REVIEW/COMPLETED/CANCELLED).
+                          // The chip is READ-ONLY here: transitions are role-owned (Assistant submit ->
+                          // In Review; Mangaka approve -> Completed / return -> Assigned / cancel -> Cancelled).
+                          var isTerminal = task.Status == "Completed" || task.Status == "Cancelled";
+                          var iconColor = task.Status == "Completed" ? Color.Success : (task.Status == "Cancelled" ? Color.Default : Color.Info);
                           var chipColor = task.Status switch {
-                              "Done" => Color.Success,
-                              "Review" => Color.Warning,
-                              "In Progress" => Color.Info,
+                              "Completed" => Color.Success,
+                              "In Review" => Color.Warning,
+                              "Cancelled" => Color.Error,
                               _ => Color.Default
                           };
                           var initials = string.Join("", task.Assistant.Split(' ').Select(n => n[0]));
                           var isTargetTask = _taskFilterId != null && task.DbId.HasValue && task.DbId.ToString() == _taskFilterId;
                           
                           <MudPaper Elevation="0" Class="pa-3 border-1 mud-border-lines-default rounded-lg"
-                                    Style="@(isTargetTask ? "border-left: 3px solid #4f46e5; background: #eef2ff;" : "")">
+                                    Style="@($"cursor: pointer; {(isTargetTask ? "border-left: 3px solid #4f46e5; background: #eef2ff;" : "")}")"
+                                    @onclick="@(() => SelectTaskPanels(task))">
                               <div class="d-flex justify-space-between">
                                   <div class="d-flex">
                                       <MudIcon Icon="@icon" Size="Size.Small" Color="@iconColor" Class="mr-2 mt-1" />
                                       <div>
-                                          <MudText Typo="Typo.body2" Class="@(task.Status == "Done" ? "font-weight-bold text-decoration-line-through" : "font-weight-bold")">@task.Type &bull; @task.Target</MudText>
+                                          <MudText Typo="Typo.body2" Class="@(isTerminal ? "font-weight-bold text-decoration-line-through" : "font-weight-bold")">@task.Type &bull; @task.Target</MudText>
                                           <MudText Typo="Typo.caption" Class="mf-muted d-flex align-center mt-1">
                                               <MudAvatar Size="Size.Small" Color="Color.Primary" Class="mr-1" Style="width:16px; height:16px; font-size:8px;">@initials</MudAvatar> @task.Assistant
                                           </MudText>
                                       </div>
                                   </div>
                                   <div class="d-flex align-center" @onclick:stopPropagation="true">
-                                      <MudChip T="string" Size="Size.Small" Color="@chipColor" Variant="Variant.Outlined" OnClick="@(() => CycleTaskStatus(task))" Style="cursor: pointer;">@task.Status</MudChip>
-                                      <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Default" Class="ml-1" OnClick="@(() => DeleteTask(task.Id))" Disabled="@IsChapterLocked" />
+                                      <MudTooltip Text="Status is set by the workflow (assistant submits / Mangaka reviews), not edited here.">
+                                          <MudChip T="string" Size="Size.Small" Color="@chipColor" Variant="Variant.Outlined">@task.Status</MudChip>
+                                      </MudTooltip>
+                                      @if (!isTerminal)
+                                      {
+                                          <MudTooltip Text="Cancel task">
+                                              <MudIconButton Icon="@Icons.Material.Filled.Cancel" Size="Size.Small" Color="Color.Error" Class="ml-1" OnClick="@(() => OpenCancelTaskDialog(task.Id))" Disabled="@IsChapterLocked" />
+                                          </MudTooltip>
+                                      }
                                   </div>
                               </div>
                           </MudPaper>
@@ -579,7 +622,7 @@ else
                             <MudTextField T="string" Label="Comment..." @bind-Value="AnnotationComment" Variant="Variant.Outlined" Lines="3" Margin="Margin.Dense" Class="mb-3" />
                             <div class="d-flex flex-column mt-3">
                                 <MudText Typo="Typo.caption" Class="mf-muted mb-1">Target</MudText>
-                                <div class="d-flex flex-wrap gap-1">
+                                <div class="d-flex flex-wrap gap-1" style="max-height: 120px; overflow-y: auto;">
                                     @if (PendingPinX.HasValue && PendingPinY.HasValue)
                                     {
                                         <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Filled">Pin at (@Math.Round(PendingPinX.Value), @Math.Round(PendingPinY.Value))</MudChip>
@@ -622,7 +665,8 @@ else
                             @foreach (var ann in ActiveAnnotations.Where(a => a.PageNumber == SelectedPage && MatchesActiveVersion(a.VersionId)))
                             {
                                 var annColor = ann.IsResolved ? Color.Success : Color.Error;
-                                <MudPaper Elevation="0" Class="pa-3 border-1 mud-border-lines-default rounded-lg">
+                                <MudPaper Elevation="0" Class="pa-3 border-1 mud-border-lines-default rounded-lg"
+                                          Style="cursor: pointer;" @onclick="@(() => SelectAnnotationPanels(ann))">
                                     <div class="d-flex justify-space-between align-start">
                                         <div class="d-flex flex-column">
                                             <div class="d-flex align-center mb-1">
@@ -650,7 +694,7 @@ else
                                                 <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Class="mr-1" Style="font-size: 12px;"/> @ann.Author
                                             </MudText>
                                         </div>
-                                        <div>
+                                        <div @onclick:stopPropagation="true">
                                             @if (!ann.IsResolved)
                                             {
                                                 <MudTooltip Text="Resolve Issue"><MudIconButton Icon="@Icons.Material.Filled.Check" Size="Size.Small" Color="Color.Success" OnClick="@(() => ResolveAnnotation(ann.Id))" Disabled="@IsChapterLocked" /></MudTooltip>
@@ -664,11 +708,18 @@ else
                 </MudTabPanel>
                 <MudTabPanel Text="Notes">
                     <div class="px-4 d-flex flex-column gap-3 mb-4" style="height: 100%;">
-                        <MudText Typo="Typo.subtitle2" Class="font-weight-bold mt-2">VERSION NOTE</MudText>
                         @if (UploadedPages.Any())
                         {
                             var activePage = UploadedPages[ActivePageIndex];
-                            if (activePage.Versions.Any() && activePage.ActiveVersionIndex >= 0 && activePage.ActiveVersionIndex < activePage.Versions.Count)
+
+                            <MudText Typo="Typo.subtitle2" Class="font-weight-bold mt-2">PAGE NOTE</MudText>
+                            <MudTextField T="string" Label="@($"Page {SelectedPage} Note")" @bind-Value="activePage.PageNotes" Variant="Variant.Outlined" Lines="4" FullWidth="true" Placeholder="Notes about this page (applies to the whole page, all versions)…" />
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SavePageNote" Disabled="@IsChapterLocked">Save Page Note</MudButton>
+
+                            <MudDivider Class="my-2" />
+
+                            <MudText Typo="Typo.subtitle2" Class="font-weight-bold">VERSION NOTE</MudText>
+                            @if (activePage.Versions.Any() && activePage.ActiveVersionIndex >= 0 && activePage.ActiveVersionIndex < activePage.Versions.Count)
                             {
                                 var activeVer = activePage.Versions[activePage.ActiveVersionIndex];
                                 <MudTextField T="string" Label="@($"v{activeVer.VersionNo} Note")" @bind-Value="activeVer.Note" Variant="Variant.Outlined" Lines="8" FullWidth="true" />
@@ -679,6 +730,11 @@ else
                                 <MudText Typo="Typo.body2" Class="mf-muted">No version selected.</MudText>
                             }
                         }
+                        else
+                        {
+                            <MudText Typo="Typo.subtitle2" Class="font-weight-bold mt-2">PAGE NOTE</MudText>
+                            <MudText Typo="Typo.body2" Class="mf-muted">No page selected.</MudText>
+                        }
                     </div>
                 </MudTabPanel>
             </MudTabs>
@@ -686,6 +742,63 @@ else
         </aside>
 
     </div>
+
+    @* Add-pages chooser: multi-image upload vs split a double-page spread *@
+    @if (_showUploadChoice)
+    {
+        <MudOverlay Visible="true" OnClick="@(() => _showUploadChoice = false)" DarkBackground="true">
+            <div @onclick:stopPropagation style="display:flex; align-items:center; justify-content:center; width:100%; height:100%;">
+                <MudCard Style="width: 460px; max-width: 92vw; border-radius: 14px;">
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-1">Add Pages</MudText>
+                        <MudText Typo="Typo.body2" Class="mf-muted mb-4">Choose how to add pages to this chapter.</MudText>
+                        <div class="d-flex flex-column gap-3">
+                            <MudButton HtmlTag="label" for="fileInput" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                                       StartIcon="@Icons.Material.Filled.CloudUpload" OnClick="@(() => _showUploadChoice = false)">
+                                Upload Pages (multiple images)
+                            </MudButton>
+                            <MudButton HtmlTag="label" for="doublePageInput" Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true"
+                                       StartIcon="@Icons.Material.Filled.ContentCut" OnClick="@(() => _showUploadChoice = false)">
+                                Split Double Page (one spread → two pages)
+                            </MudButton>
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </div>
+        </MudOverlay>
+    }
+
+    @* Split a double-page spread into two single pages, each cropped to the 2:3 manga page ratio.
+       Reuses the same ImageCropDialog as the series-cover crop. The result is added as a PENDING
+       page (buffered) — nothing is uploaded/saved until the user clicks Save. *@
+    @if (_showDoublePageCrop && !string.IsNullOrWhiteSpace(_doublePageSourceDataUrl))
+    {
+        <ImageCropDialog @key="_doublePageStep"
+                         SourceDataUrl="@_doublePageSourceDataUrl"
+                         AspectRatio="@(2.0 / 3.0)"
+                         OutputWidth="1240"
+                         OutputHeight="1860"
+                         OutputContentType="image/png"
+                         CropDescription="@($"Split double page — {(_doublePageStep == 1 ? "RIGHT page (1 of 2)" : "LEFT page (2 of 2)")}")"
+                         HelperText="Manga pages use a 2:3 frame. Position the frame over one page of the spread and confirm. In manga reading order the RIGHT page comes first."
+                         OutputFileNamePrefix="@($"page-spread-{_doublePageStep}")"
+                         OnConfirm="@OnDoublePageCropConfirmed"
+                         OnCancel="@OnDoublePageCropCancelled" />
+    }
+
+    <MudDialog @bind-Visible="_showCancelTaskDialog" Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
+        <TitleContent><MudText Typo="Typo.h6">Cancel Task</MudText></TitleContent>
+        <DialogContent>
+            <MudText Class="mb-3">The task is preserved for traceability and moved to <b>Cancelled</b>. Provide a reason:</MudText>
+            <MudTextField @bind-Value="_cancelTaskReason" Immediate="true" Label="Cancellation Reason" Lines="4" Variant="Variant.Outlined" Required="true" />
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="@(() => _showCancelTaskDialog = false)" Disabled="@_cancelTaskInProgress">Keep Task</MudButton>
+            <MudButton Color="Color.Error" Variant="Variant.Filled"
+                       Disabled="@(string.IsNullOrWhiteSpace(_cancelTaskReason) || _cancelTaskInProgress)"
+                       OnClick="ConfirmCancelTask">Cancel Task</MudButton>
+        </DialogActions>
+    </MudDialog>
 </div>
 }
 
@@ -806,6 +919,7 @@ else
     private string TaskType { get; set; } = "BACKGROUND";
     private Guid? AssignedAssistantId { get; set; }
     private string TaskDescription { get; set; } = "";
+    private decimal TaskCompensation { get; set; } = 0m;   // manga.ChapterPageTask.compensation_amount (metadata; no currency unit per BR)
     
     private void OnTaskTypeChanged(string value) => TaskType = value;
     private void OnAssistantChanged(Guid? value) => AssignedAssistantId = value;
@@ -819,7 +933,7 @@ else
         public string Target { get; set; } = "";
         public string Assistant { get; set; } = "";
         public string Description { get; set; } = "";
-        public string Status { get; set; } = "Todo";
+        public string Status { get; set; } = "Assigned";
         public Guid? VersionId { get; set; }   // version this task belongs to (via its regions)
         public List<RegionModel> Regions { get; set; } = new();
     }
@@ -871,7 +985,8 @@ else
                     ConfidenceScore: null,
                     SourceType: "MANUAL",
                     OriginalText: region.OriginalText,
-                    PageRegionId: region.DbId
+                    PageRegionId: region.DbId,
+                    CreatedByUserId: _currentUserId
                 );
 
                 var dbRegion = await RegionService.CreatePageRegionAsync(newRegionDto);
@@ -917,50 +1032,51 @@ else
             return;
         }
 
+        // compensation_amount is DECIMAL(12,2) >= 0. Validate up front so a bad value gives a friendly
+        // message instead of a raw SQL CHECK/overflow error (the field also clamps via Min/Max).
+        if (TaskCompensation < 0)
+        {
+            Snackbar.Add("Compensation cannot be negative.", Severity.Warning);
+            return;
+        }
+        if (TaskCompensation > 9_999_999_999.99m)
+        {
+            Snackbar.Add("Compensation is too large (max 9,999,999,999.99).", Severity.Warning);
+            return;
+        }
+
+        // A task references PageRegion(s) of a saved page version (BR-PGTASK-001/007), so the page
+        // must be persisted first. Prompt to Save if it is still in the buffer.
+        if (!await EnsureSavedBeforeAsync()) return;
+
         var regionsToSave = SelectedRegions.ToList();
         if (!regionsToSave.Any())
         {
-            regionsToSave.Add(new RegionModel
-            {
-                Type = "OTHER",
-                X = 0,
-                Y = 0,
-                Width = 0.01,
-                Height = 0.01
-            });
+            // BR-PGTASK-001/007/008: a task is anchored to PageRegion(s); do not fabricate a (0,0)
+            // region (the source of phantom "(0,0)" markers). Require the panel(s) to be selected.
+            Snackbar.Add("Please select the panel(s) this task applies to.", Severity.Warning);
+            return;
         }
         var regionIds = await EnsureRegionsSavedAsync(regionsToSave);
 
         int newId = ActiveTasks.Any() ? ActiveTasks.Max(t => t.Id) + 1 : 1;
         
-        string target;
-        if (SelectedRegions.Any())
-        {
-            var targets = SelectedRegions.Select(r => $"Panel {r.Id} [X:{Math.Round(r.X)}, Y:{Math.Round(r.Y)}, W:{Math.Round(r.Width)}, H:{Math.Round(r.Height)}]");
-            target = string.Join("\n", targets);
-        }
-        else
-        {
-            target = $"Page {SelectedPage}";
-        }
+        // Show only the panel number(s) — same #N shown on the canvas — not raw coordinates.
+        string target = SelectedRegions.Any()
+            ? string.Join(", ", SelectedRegions.Select(r => $"Panel #{r.Id}"))
+            : $"Page {SelectedPage}";
 
         try
         {
-            var taskDto = new CreateChapterPageTaskDto(
-                ActorUserId: _currentUserId.Value,
+            // Architecture: create the task via the typed API client (→ controller → service → SP).
+            var dbTask = await MangakaTaskApi.CreateTaskAsync(_currentUserId.Value, new CreateMangakaTaskRequest(
                 AssignedToUserId: AssignedAssistantId.Value,
                 TypeCode: TaskType,
-                StatusCode: "TODO",
                 TaskTitle: $"{TaskType} Task for {target}",
                 TaskDescription: TaskDescription,
                 PriorityLevel: 2,
-                DueAtUtc: null,
-                CompensationAmount: null,
-                CompletedPageVersionId: null,
-                PageRegionIds: regionIds
-            );
-
-            var dbTask = await TaskService.CreateChapterPageTaskAsync(taskDto);
+                CompensationAmount: Math.Round(TaskCompensation, 2, MidpointRounding.AwayFromZero),
+                PageRegionIds: regionIds));
 
             var assistantName = _assistantUsers.FirstOrDefault(u => u.UserId == AssignedAssistantId.Value)?.Username ?? AssignedAssistantId.ToString();
 
@@ -972,10 +1088,12 @@ else
                 Assistant = assistantName,
                 Target = target,
                 Description = TaskDescription,
-                Status = "Todo",
-                VersionId = GetActiveVersionId()
+                Status = "Assigned",
+                VersionId = GetActiveVersionId(),
+                Regions = regionsToSave.ToList()   // so clicking the new card highlights its panels immediately
             });
             TaskDescription = ""; // Reset form
+            TaskCompensation = 0m;
             Snackbar.Add("Task assigned successfully!", Severity.Success);
             StateHasChanged();
         }
@@ -985,81 +1103,59 @@ else
         }
     }
     
-    private async Task CycleTaskStatus(ProductionTask task)
-    {
-        if (task.Status == "In Progress" || task.Status == "Todo")
-        {
-            task.Status = task.Status == "Todo" ? "In Progress" : "Todo";
-            Snackbar.Add("Status updated. Tasks can only be moved to Review/Done by assistants submitting work.", Severity.Info);
-        }
-        else
-        {
-            Snackbar.Add("Cannot manually cycle Review/Done status. Assistants must submit work.", Severity.Warning);
-            return;
-        }
-        
-        if (task.DbId.HasValue)
-        {
-            try
-            {
-                var existingTask = await TaskService.GetChapterPageTaskByIdAsync(task.DbId.Value);
-                if (existingTask != null)
-                {
-                    var statusCodeDb = task.Status switch
-                    {
-                        "Todo" => "ASSIGNED",
-                        "In Progress" => "ASSIGNED",
-                        "Review" => "UNDER_REVIEW",
-                        "Done" => "COMPLETED",
-                        _ => "ASSIGNED"
-                    };
-                    
-                    var updateDto = new Application.DTOs.Manga.UpdateChapterPageTaskDto(
-                        existingTask.ChapterPageTaskId,
-                        existingTask.AssignedToUserId,
-                        existingTask.TypeCode,
-                        statusCodeDb,
-                        existingTask.TaskTitle,
-                        existingTask.TaskDescription,
-                        existingTask.PriorityLevel,
-                        existingTask.DueAtUtc,
-                        existingTask.CompensationAmount,
-                        existingTask.CompletedPageVersionId,
-                        existingTask.PageRegions.Select(r => r.PageRegionId).ToList()
-                    );
-                    
-                    await TaskService.UpdateChapterPageTaskAsync(updateDto);
-                }
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add($"Error updating task status in DB: {ex.Message}", Severity.Error);
-            }
-        }
-        
-        StateHasChanged();
-    }
+    // CycleTaskStatus removed: it flipped a cosmetic "Todo"/"In Progress" label that both mapped to
+    // ASSIGNED (a no-op DB write), contradicting BR-PGTASK-016 (no "started" tracking) and letting the
+    // Mangaka pretend to set a status they do not own. Status is now read-only in the workspace;
+    // transitions happen via their role-owned actions (assistant submit, Mangaka approve/return/cancel).
 
-    private async Task DeleteTask(int taskId)
+    // Cancel — never hard-delete. BR-PGTASK-015/027/029/031: a saved task is preserved and moved to
+    // CANCELLED with a reason for traceability + audit. The reason is collected by the dialog below
+    // and recorded by the SP (usp_ChapterPageTask_Cancel), which also blocks cancelling a task that
+    // is already COMPLETED/CANCELLED.
+    private bool _showCancelTaskDialog;
+    private int _cancelTaskLocalId;
+    private string _cancelTaskReason = string.Empty;
+    private bool _cancelTaskInProgress;
+
+    private void OpenCancelTaskDialog(int taskId)
     {
         if (IsChapterLocked) return;
-        bool? result = await DialogService.ShowMessageBox(
-            "Delete Task", 
-            "Are you sure you want to delete this task?", 
-            yesText: "Delete", cancelText: "Cancel");
+        _cancelTaskLocalId = taskId;
+        _cancelTaskReason = string.Empty;
+        _showCancelTaskDialog = true;
+    }
 
-        if (result == true)
+    private async Task ConfirmCancelTask()
+    {
+        if (string.IsNullOrWhiteSpace(_cancelTaskReason)) return;   // SP requires a non-empty reason
+        var task = ActiveTasks.FirstOrDefault(t => t.Id == _cancelTaskLocalId);
+        if (task == null) { _showCancelTaskDialog = false; return; }
+
+        _cancelTaskInProgress = true;
+        try
         {
-            var task = ActiveTasks.FirstOrDefault(t => t.Id == taskId);
-            if (task != null)
+            if (task.DbId.HasValue && _currentUserId.HasValue)
             {
-                if (task.DbId.HasValue)
-                {
-                    await TaskService.DeleteChapterPageTaskAsync(task.DbId.Value);
-                }
-                ActiveTasks.Remove(task);
-                StateHasChanged();
+                // Architecture: cancel via the typed API client (→ controller → MediatR/service → SP).
+                await MangakaTaskApi.CancelTaskAsync(_currentUserId.Value, task.DbId.Value, _cancelTaskReason.Trim());
+                task.Status = "Cancelled";   // kept in the list (greyed out), not removed — for traceability
             }
+            else
+            {
+                // No DbId means it was never persisted — safe to drop from the working set.
+                ActiveTasks.Remove(task);
+            }
+            _showCancelTaskDialog = false;
+            Snackbar.Add("Task cancelled.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to cancel task: {ex.InnerException?.Message ?? ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _cancelTaskInProgress = false;
+            StateHasChanged();
         }
     }
 
@@ -1122,9 +1218,32 @@ else
         }
     }
 
+    // Saves manga.ChapterPage.page_notes (whole-page note, shared across versions). Explicit button,
+    // immediate write — same pattern as the version note. The page must be persisted first.
+    private async Task SavePageNote()
+    {
+        if (!UploadedPages.Any()) return;
+        if (!await EnsureSavedBeforeAsync()) return;
+        var activePage = UploadedPages[ActivePageIndex];
+        if (activePage.ChapterPageId == Guid.Empty || !_currentUserId.HasValue) return;
+
+        try
+        {
+            // Architecture: update the page note via the typed API client (the server keeps chapter/page_no).
+            await MangakaPageApi.UpdateNotesAsync(_currentUserId.Value, activePage.ChapterPageId, activePage.PageNotes);
+            Snackbar.Add("Page note saved.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving page note: {ex.Message}", Severity.Error);
+        }
+    }
+
     private async Task SaveVersionNote()
     {
         if (!UploadedPages.Any()) return;
+        // The note is stored on the saved ChapterPageVersion, so the page must be persisted first.
+        if (!await EnsureSavedBeforeAsync()) return;
         var activePage = UploadedPages[ActivePageIndex];
         if (!activePage.Versions.Any()) return;
         var activeVer = activePage.Versions[activePage.ActiveVersionIndex];
@@ -1160,6 +1279,10 @@ else
             return;
         }
 
+        // An annotation is anchored to PageRegion(s) of a saved page version (BR-ANN-001/004), so
+        // the page must be persisted first. Prompt to Save if it is still in the buffer.
+        if (!await EnsureSavedBeforeAsync()) return;
+
         var regionsToSave = SelectedRegions.ToList();
         if (PendingPinX.HasValue && PendingPinY.HasValue)
         {
@@ -1174,29 +1297,22 @@ else
         }
         else if (!regionsToSave.Any())
         {
-            regionsToSave.Add(new RegionModel
-            {
-                Type = "OTHER",
-                X = 0,
-                Y = 0,
-                Width = 0.01,
-                Height = 0.01
-            });
+            // BR-ANN-001/002: an annotation must anchor to a PageRegion. Do NOT fabricate a (0,0)
+            // region — that is what later surfaced as a phantom "Pin at (0,0)". Require an explicit
+            // target: select one or more panels, or place a pin.
+            Snackbar.Add("Please select a panel or place a pin to anchor this annotation.", Severity.Warning);
+            return;
         }
         var regionIds = await EnsureRegionsSavedAsync(regionsToSave);
 
         int newId = ActiveAnnotations.Any() ? ActiveAnnotations.Max(t => t.Id) + 1 : 1;
         
+        // Show only the panel number(s) — same #N shown on the canvas — not raw coordinates.
         string target;
         if (PendingPinX.HasValue && PendingPinY.HasValue)
             target = $"Pin at ({Math.Round(PendingPinX.Value)}, {Math.Round(PendingPinY.Value)})";
-        else if (SelectedRegions.Any())
-        {
-            var targets = SelectedRegions.Select(r => $"Panel {r.Id} [X:{Math.Round(r.X)}, Y:{Math.Round(r.Y)}, W:{Math.Round(r.Width)}, H:{Math.Round(r.Height)}]");
-            target = string.Join("\n", targets);
-        }
         else
-            target = $"Whole Page ({SelectedPage})";
+            target = string.Join(", ", SelectedRegions.Select(r => $"Panel #{r.Id}"));
 
         try
         {
@@ -1219,9 +1335,10 @@ else
                 PageNumber = SelectedPage,
                 PinX = PendingPinX,
                 PinY = PendingPinY,
-                VersionId = GetActiveVersionId()
+                VersionId = GetActiveVersionId(),
+                Regions = regionsToSave.ToList()   // so clicking the new card highlights its panels immediately
             });
-            AnnotationComment = ""; 
+            AnnotationComment = "";
             PendingPinX = null;
             PendingPinY = null;
             Snackbar.Add("Annotation added successfully!", Severity.Success);
@@ -1314,6 +1431,7 @@ else
         public bool IsRenaming { get; set; } = false;
         public List<PageModel> Pages { get; set; } = new();
         public bool IsPagesLoaded { get; set; } = false;
+        public bool IsPending => ChapterId == Guid.Empty;       // created in buffer, not yet in the DB
     }
 
     private List<ChapterModel> Chapters = new();
@@ -1390,13 +1508,14 @@ else
 
         if (!string.IsNullOrWhiteSpace(SeriesId) && Guid.TryParse(SeriesId, out Guid id))
         {
-            var series = await SeriesService.GetSeriesByIdAsync(id);
+            // Architecture: series header info via the typed API client (by slug), not SeriesService.
+            var series = await SeriesApiClient.GetSeriesDetailAsync(Slug);
             if (series != null)
             {
                 SeriesTitle = series.Title;
                 SeriesSubtitle = string.Join(", ", series.Genres.Select(g => g.GenreName));
                 
-                var chapters = await ChapterService.GetChaptersBySeriesIdAsync(id);
+                var chapters = await MangakaChapterApi.GetSeriesChaptersAsync(_currentUserId!.Value, id);
                 if (chapters != null && chapters.Any())
                 {
                     var chapterModels = chapters
@@ -1411,7 +1530,7 @@ else
                         Title = c.ChapterTitle ?? ""
                     }).OrderBy(c => c.Id).ToList();
                     
-                    var pageCountsDict = await PageService.GetPageCountsByChapterIdsAsync(chapterModels.Select(c => c.ChapterId));
+                    var pageCountsDict = await MangakaPageApi.GetCountsAsync(_currentUserId!.Value, chapterModels.Select(c => c.ChapterId).ToList());
                     foreach(var cm in chapterModels)
                     {
                         if (pageCountsDict.TryGetValue(cm.ChapterId, out int cnt))
@@ -1428,7 +1547,7 @@ else
                         {
                             try
                             {
-                                var task = await TaskService.GetChapterPageTaskByIdAsync(parsedTaskId);
+                                var task = await MangakaTaskApi.GetTaskDetailAsync(_currentUserId!.Value, parsedTaskId);
                                 if (task != null)
                                 {
                                     resolveChapterId = task.ChapterId;
@@ -1500,7 +1619,7 @@ else
             {
                 _isLoadingChapter = true;
                 StateHasChanged();
-                var pages = (await PageService.GetChapterPagesByChapterIdAsync(chapter.ChapterId)).ToList();
+                var pages = (await MangakaPageApi.GetByChapterAsync(_currentUserId!.Value, chapter.ChapterId)).ToList();
                 var pageIds = pages.Select(p => p.ChapterPageId).Distinct();
                 var allVersions = (await VersionService.GetChapterPageVersionsByPageIdsAsync(pageIds)).ToList();
                 
@@ -1526,7 +1645,7 @@ else
 
                 foreach(var p in pages)
                 {
-                    var pageModel = new PageModel { ChapterPageId = p.ChapterPageId };
+                    var pageModel = new PageModel { ChapterPageId = p.ChapterPageId, PageNotes = p.PageNotes };
                     var versions = versionsGrouped[p.ChapterPageId];
                     foreach(var v in versions)
                     {
@@ -1625,10 +1744,13 @@ else
         }
         else
         {
+            // Chapter genuinely has no pages (the list has finished loading): clear the canvas and
+            // prompt to upload. Reliable here, unlike the racy first-render check.
             if (_leftCanvasRef != null)
                 await _leftCanvasRef.InvokeVoidAsync("loadImage", "");
             if (_rightCanvasRef != null)
                 await _rightCanvasRef.InvokeVoidAsync("loadImage", "");
+            Snackbar.Add("Please upload an image to begin.", Severity.Info);
         }
         // Sync split view pane when chapter changes. Updating the data alone does not
         // re-render the right canvas (it is JS-rendered), so drive it through
@@ -1656,40 +1778,49 @@ else
 
     private async Task SubmitChapterForReview(Guid chapterId)
     {
-        var chapter = Chapters.FirstOrDefault(c => c.ChapterId == chapterId);
-        if (chapter != null)
+        // Resolve by id, or — when the chapter is still pending (Guid.Empty) — the selected one.
+        var chapter = (chapterId != Guid.Empty ? Chapters.FirstOrDefault(c => c.ChapterId == chapterId) : null)
+                      ?? Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
+        if (chapter == null) return;
+
+        // Submitting needs the chapter and its pages saved to the DB first.
+        if (!await EnsureSavedBeforeAsync("chapter")) return;
+        if (chapter.ChapterId == Guid.Empty) return;   // safety: save did not produce an id
+
+        if (!_currentUserId.HasValue) return;
+
+        try
         {
-            try
-            {
-                await ChapterService.UpdateChapterStatusAsync(chapterId, "UNDER_REVIEW");
-                chapter.StatusCode = "UNDER_REVIEW";
-                chapter.IsCompleted = false; // Just to be safe since it's mapped to PUBLISHED originally
-                StateHasChanged();
-                Snackbar.Add("Chapter submitted for review.", Severity.Success);
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add($"Failed to submit: {ex.Message}", Severity.Error);
-            }
+            // Architecture: route through the typed API client (Razor → API client → controller →
+            // MediatR → handler → SP), not a direct Application service call.
+            var result = await MangakaChapterApi.SubmitChapterForReviewAsync(_currentUserId.Value, chapter.ChapterId);
+            chapter.StatusCode = result.StatusCode;   // authoritative status from the server (UNDER_REVIEW)
+            chapter.IsCompleted = false;
+            StateHasChanged();
+            Snackbar.Add("Chapter submitted for review.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to submit: {ex.Message}", Severity.Error);
         }
     }
 
     private async Task CancelSubmission(Guid chapterId)
     {
         var chapter = Chapters.FirstOrDefault(c => c.ChapterId == chapterId);
-        if (chapter != null)
+        if (chapter == null || !_currentUserId.HasValue) return;
+
+        try
         {
-            try
-            {
-                await ChapterService.UpdateChapterStatusAsync(chapterId, "DRAFT");
-                chapter.StatusCode = "DRAFT";
-                StateHasChanged();
-                Snackbar.Add("Submission cancelled. Chapter is now back to DRAFT.", Severity.Info);
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add($"Failed to cancel submission: {ex.Message}", Severity.Error);
-            }
+            // Architecture: route through the typed API client (→ controller → MediatR → handler → EF).
+            var result = await MangakaChapterApi.CancelChapterSubmissionAsync(_currentUserId.Value, chapterId);
+            chapter.StatusCode = result.StatusCode;   // authoritative status from the server (DRAFT)
+            StateHasChanged();
+            Snackbar.Add("Submission cancelled. Chapter is now back to DRAFT.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to cancel submission: {ex.Message}", Severity.Error);
         }
     }
 
@@ -1709,25 +1840,25 @@ else
                 // filtered index, and the workspace hides cancelled chapters. Computing
                 // the next number from the visible list alone collided with a hidden
                 // cancelled chapter ("duplicate key (series, 1)"). Use the full list.
-                var allChapters = await ChapterService.GetChaptersBySeriesIdAsync(seriesGuid);
+                // Read-only number probe (no DB write): pick a display number that does not collide
+                // with existing chapters, including hidden CANCELLED ones. The authoritative
+                // chapter_number_label is re-checked at Save time in FlushPendingAsync.
+                var allChapters = await MangakaChapterApi.GetSeriesChaptersAsync(_currentUserId!.Value, seriesGuid);
                 int maxExisting = allChapters
                     .Select(c => int.TryParse(c.ChapterNumberLabel, out var n) ? n : 0)
                     .DefaultIfEmpty(0)
                     .Max();
                 int newId = Math.Max(maxExisting, Chapters.Any() ? Chapters.Max(c => c.Id) : 0) + 1;
 
-                var dbChapter = await ChapterService.CreateChapterAsync(new CreateChapterDto(
-                    SeriesId: seriesGuid,
-                    ChapterNumberLabel: newId.ToString(),
-                    ChapterTitle: null,
-                    StatusCode: "DRAFT",
-                    PlannedReleaseDate: null,
-                    CreatedByUserId: _currentUserId
-                ));
-
-                Chapters.Add(new ChapterModel { Id = newId, ChapterId = dbChapter.ChapterId, PageCount = 0, IsCompleted = false, Title = "" });
+                // MANUAL-SAVE: create the chapter in the in-memory buffer only (ChapterId stays
+                // Guid.Empty). It is persisted by SaveAllChangesAsync → FlushPendingAsync when the
+                // user clicks Save, so throwaway "test" chapters never hit the DB. IsPagesLoaded=true
+                // keeps SelectChapter from trying to load pages for an id that does not exist yet.
+                Chapters.Add(new ChapterModel { Id = newId, ChapterId = Guid.Empty, PageCount = 0, IsCompleted = false, Title = "", IsPagesLoaded = true });
                 await SelectChapter(newId);
-                Snackbar.Add($"Created Chapter {newId}", Severity.Success);
+                _saveState = SaveStatus.Dirty;
+                _ = JS.InvokeVoidAsync("setUnsavedFlag", true);
+                Snackbar.Add($"Chapter {newId} added (unsaved). Click Save to persist.", Severity.Info);
             }
             else
             {
@@ -1759,11 +1890,13 @@ else
 
         if (chapter.ChapterId != Guid.Empty)
         {
+            if (!_currentUserId.HasValue) return;
             try
             {
-                // BR-CH-CANCEL-003: cancel = set status_code = CANCELLED in the DB (preserve content),
-                // not a hard delete. The audit trail records the actor.
-                await ChapterService.CancelChapterAsync(chapter.ChapterId, _currentUserId, "Mangaka");
+                // Architecture: cancel via the typed API client (→ controller → MediatR → handler → EF,
+                // which sets CANCELLED + writes the CHAPTER_CANCELLED audit event). Content preserved.
+                var dto = await MangakaChapterApi.CancelChapterAsync(_currentUserId.Value, chapter.ChapterId);
+                chapter.StatusCode = dto.StatusCode;   // authoritative (CANCELLED)
             }
             catch (Exception ex)
             {
@@ -1771,10 +1904,12 @@ else
                 return;
             }
         }
+        else
+        {
+            // Never-saved pending chapter: just drop it locally (nothing in the DB to cancel).
+            chapter.StatusCode = "CANCELLED";
+        }
 
-        // Reflect the cancellation locally: the chapter stays in the list (preserved) but is now
-        // CANCELLED and therefore locked.
-        chapter.StatusCode = "CANCELLED";
         Snackbar.Add($"Chapter {chapter.Id} cancelled.", Severity.Success);
         StateHasChanged();
     }
@@ -1786,11 +1921,18 @@ else
 
     private async Task SaveChapterName(ChapterModel chapter)
     {
-        if (chapter.ChapterId != Guid.Empty)
+        if (chapter.ChapterId != Guid.Empty && _currentUserId.HasValue)
         {
             try
             {
-                await ChapterService.UpdateChapterTitleAsync(chapter.ChapterId, chapter.Title);
+                // Architecture: update the draft (title) via the typed API client. The request carries
+                // the current number label (unchanged) + the new title.
+                await MangakaChapterApi.UpdateChapterDraftAsync(
+                    _currentUserId.Value,
+                    chapter.ChapterId,
+                    new UpdateChapterDraftRequest(
+                        chapter.Id.ToString(),
+                        string.IsNullOrWhiteSpace(chapter.Title) ? null : chapter.Title));
                 Snackbar.Add("Chapter renamed successfully.", Severity.Success);
             }
             catch (Exception ex)
@@ -1832,13 +1974,23 @@ else
         public bool IsCurrentVersion { get; set; } = false;
         public bool IsDeleted { get; set; } = false;
         public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+
+        // MANUAL-SAVE buffer: a freshly uploaded page is held in memory (raw bytes + a base64 data
+        // URL for display) and only pushed to Cloudinary + DB when the user clicks Save. The id stays
+        // Guid.Empty until then. FlushPendingAsync() consumes these and swaps in the real ids/URL.
+        public byte[]? PendingBytes { get; set; }
+        public string? PendingFileName { get; set; }
+        public string? PendingContentType { get; set; }
+        public bool IsPending => ChapterPageVersionId == Guid.Empty;
     }
 
     public class PageModel
     {
         public Guid ChapterPageId { get; set; }
+        public string? PageNotes { get; set; }                  // manga.ChapterPage.page_notes
         public List<PageVersionModel> Versions { get; set; } = new();
         public int ActiveVersionIndex { get; set; } = 0;
+        public bool IsPending => ChapterPageId == Guid.Empty;   // not yet persisted to the DB
     }
     
     private List<PageModel> UploadedPages 
@@ -1902,7 +2054,32 @@ else
     }
     
     private IJSObjectReference? GetActiveCanvas() => _activePane == "Left" ? _leftCanvasRef : _rightCanvasRef;
-    
+
+    // Clicking a task/annotation card highlights its panels on the page: select on the canvas the
+    // regions whose PageRegionId matches the card's linked regions (pins are skipped — they are not
+    // drawn as selectable boxes). Only active-version cards are shown, so their regions are on canvas.
+    private async Task SelectPanelsByRegions(IEnumerable<RegionModel>? regions)
+    {
+        var canvas = GetActiveCanvas();
+        if (canvas == null) return;
+
+        var dbIds = (regions ?? Enumerable.Empty<RegionModel>())
+            .Where(r => r.DbId.HasValue && !(r.Width <= 0.05 && r.Height <= 0.05))
+            .Select(r => r.DbId!.Value.ToString())
+            .ToArray();
+
+        if (dbIds.Length == 0)
+        {
+            Snackbar.Add("No panel target to highlight on this page.", Severity.Info);
+            return;
+        }
+
+        await canvas.InvokeVoidAsync("selectRegionsByDbIds", new object[] { dbIds });
+    }
+
+    private Task SelectTaskPanels(ProductionTask task) => SelectPanelsByRegions(task.Regions);
+    private Task SelectAnnotationPanels(AnnotationModel ann) => SelectPanelsByRegions(ann.Regions);
+
     public class CanvasInterop
     {
         private readonly CreatorWorkspace _parent;
@@ -1964,48 +2141,176 @@ else
     // can warn the user instead of falsely showing "Saved".
     private bool _imageDirty;
     private bool _imageEditHintShown;
-    private System.Threading.Timer? _autosaveTimer;
-    private const int AutosaveDebounceMs = 4000;
 
-    // Debounced autosave: each content edit resets the timer; it fires once the user has been
-    // idle for AutosaveDebounceMs, then persists dirty regions to the DB. Keeps the DB close to
-    // the latest state (cross-device + Submit-for-review safety) on top of the localStorage draft.
-    private void ScheduleAutosave()
+    // MANUAL SAVE MODEL: there is no autosave timer. Region/structural edits stay in the in-memory
+    // buffer (PageVersionModel.Regions + IsDirty, pending chapters/pages) until the user clicks the
+    // Save button. SaveAllChangesAsync() flushes the buffer to the DB; the header indicator shows
+    // Unsaved changes / Saving… / Saved.
+    private async Task SaveAllChangesAsync()
     {
-        if (IsChapterLocked) return;
-        _autosaveTimer ??= new System.Threading.Timer(_ => { _ = InvokeAsync(DoAutosaveAsync); }, null,
-            System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
-        _autosaveTimer.Change(AutosaveDebounceMs, System.Threading.Timeout.Infinite);
-    }
-
-    private async Task DoAutosaveAsync()
-    {
-        if (IsChapterLocked) return;
-
-        var pagesToSave = UploadedPages.ToList();
-        if (_isSplitView && _splitUploadedPages != null)
+        if (IsChapterLocked)
         {
-            pagesToSave = pagesToSave.Union(_splitUploadedPages).ToList();
+            Snackbar.Add("This chapter is locked and cannot be saved.", Severity.Warning);
+            return;
         }
-        bool anyDirty = pagesToSave.Any(p => p != null
-            && p.Versions.Any()
-            && p.Versions[p.ActiveVersionIndex].IsDirty);
-        if (!anyDirty) return;
 
         _saveState = SaveStatus.Saving;
         StateHasChanged();
         try
         {
-            await SaveProgress(silent: true);
+            // Dependency order: pending chapters + pages (Cloudinary + DB) first, then dirty regions
+            // of the resulting / already-saved versions.
+            await FlushPendingAsync();
+            await SaveProgress();
+            _saveState = SaveStatus.Saved;
+            _lastSavedAtUtc = DateTime.UtcNow;
+            _ = JS.InvokeVoidAsync("setUnsavedFlag", false);
+            Snackbar.Add("Saved.", Severity.Success);
         }
-        catch
+        catch (Exception ex)
         {
-            // Keep state Dirty; the localStorage shadow draft still holds the edit for recovery.
             _saveState = SaveStatus.Dirty;
+            var msg = ex.InnerException?.Message ?? ex.Message;
+            Snackbar.Add($"Save failed: {msg}", Severity.Error);
+            Console.WriteLine(ex.ToString());
         }
         StateHasChanged();
     }
 
+    // Discard the unsaved buffer. Pending chapters/pages live only in memory and dirty regions are
+    // not yet flushed, so reloading the workspace from the DB cleanly reverts everything to the last
+    // saved state. The unsaved flag is cleared first so the navigation guard does not double-prompt.
+    private async Task DiscardChangesAsync()
+    {
+        if (!HasUnsavedChanges) return;
+        bool? r = await DialogService.ShowMessageBox(
+            "Discard changes",
+            "Discard all unsaved changes? Chapters, pages and edits you have not saved will be removed.",
+            yesText: "Discard", cancelText: "Keep editing");
+        if (r != true) return;
+
+        try { await JS.InvokeVoidAsync("setUnsavedFlag", false); } catch { }
+        Nav.NavigateTo(Nav.Uri, forceLoad: true);
+    }
+
+    // Persists in-memory pending chapters and pages to the DB in dependency order
+    // (Chapter → Cloudinary upload → FileResource → ChapterPage → ChapterPageVersion → set current).
+    // Region flushing for the resulting versions is handled by the SaveProgress() call that follows.
+    private async Task FlushPendingAsync()
+    {
+        if (!Guid.TryParse(SeriesId, out var seriesGuid)) return;
+
+        await _dbSemaphore.WaitAsync();
+        try
+        {
+            // 0) Buffered page deletions → commit the deferred soft-deletes first (so a later page
+            //    upload computes its page_no against the already-removed pages). Ids that fail stay
+            //    pending so the next Save retries them.
+            if (_pagesPendingDelete.Count > 0)
+            {
+                var stillPending = new List<Guid>();
+                foreach (var pageId in _pagesPendingDelete)
+                {
+                    try
+                    {
+                        var ok = await MangakaPageApi.DeleteAsync(_currentUserId ?? Guid.Empty, pageId);
+                        if (!ok) stillPending.Add(pageId);
+                    }
+                    catch { stillPending.Add(pageId); }
+                }
+                _pagesPendingDelete.Clear();
+                _pagesPendingDelete.AddRange(stillPending);
+                if (stillPending.Count > 0)
+                    Snackbar.Add($"{stillPending.Count} page(s) could not be deleted (they may have assigned tasks) and will reappear.", Severity.Warning);
+            }
+
+            // 1) Pending chapters → create with a collision-safe chapter_number_label
+            //    (uq_chapter_series_chapter_number counts CANCELLED chapters too).
+            var pendingChapters = Chapters.Where(c => c.ChapterId == Guid.Empty).ToList();
+            if (pendingChapters.Any())
+            {
+                var allCh = await MangakaChapterApi.GetSeriesChaptersAsync(_currentUserId!.Value, seriesGuid);
+                var usedLabels = allCh.Select(c => c.ChapterNumberLabel).Where(l => !string.IsNullOrEmpty(l)).ToHashSet();
+                int nextFree = allCh.Select(c => int.TryParse(c.ChapterNumberLabel, out var n) ? n : 0).DefaultIfEmpty(0).Max();
+
+                foreach (var chap in pendingChapters)
+                {
+                    string label = chap.Id.ToString();
+                    if (usedLabels.Contains(label)) { nextFree++; label = nextFree.ToString(); }
+                    usedLabels.Add(label);
+
+                    // Architecture: create via the typed API client (→ controller → MediatR → handler → SP).
+                    var dbChapter = await MangakaChapterApi.CreateChapterDraftAsync(
+                        _currentUserId!.Value,
+                        new CreateChapterDraftRequest(
+                            SeriesId: seriesGuid,
+                            ChapterNumberLabel: label,
+                            ChapterTitle: string.IsNullOrWhiteSpace(chap.Title) ? null : chap.Title));
+                    chap.ChapterId = dbChapter.ChapterId;
+                }
+            }
+
+            // 2) Pending pages of every (now saved) chapter → upload + create page/version.
+            foreach (var chap in Chapters)
+            {
+                if (chap.ChapterId == Guid.Empty) continue;
+                var pendingPages = chap.Pages.Where(p => p.ChapterPageId == Guid.Empty && p.Versions.Any()).ToList();
+                if (!pendingPages.Any()) continue;
+
+                var existingDbPages = await MangakaPageApi.GetByChapterAsync(_currentUserId!.Value, chap.ChapterId);
+                int maxPageNo = existingDbPages.Any() ? existingDbPages.Max(p => p.PageNo) : 0;
+
+                foreach (var page in pendingPages)
+                {
+                    var ver = page.Versions[0];
+                    if (ver.PendingBytes == null) continue;
+
+                    var uploadResult = await FileStorageService.UploadFileAsync(
+                        ver.PendingBytes, ver.PendingFileName ?? "page", ver.PendingContentType ?? "image/png", "CHAPTER_PAGE_VERSION");
+
+                    var fileResource = await FileResourceService.CreateFileResourceAsync(new CreateFileResourceDto(
+                        FilePurposeCode: "CHAPTER_PAGE_VERSION",
+                        OriginalFileName: ver.PendingFileName ?? "page",
+                        CloudinaryPublicId: uploadResult.PublicId,
+                        CloudinarySecureUrl: uploadResult.SecureUrl,
+                        ContentType: ver.PendingContentType ?? "image/png",
+                        FileSizeBytes: ver.PendingBytes.Length,
+                        Sha256Hash: uploadResult.Sha256Hash,
+                        UploadedByUserId: _currentUserId));
+
+                    maxPageNo++;
+                    var dbPage = await PageService.CreateChapterPageAsync(new CreateChapterPageDto(
+                        ChapterId: chap.ChapterId, PageNo: maxPageNo, PageNotes: null));
+
+                    var dbVersion = await VersionService.CreateChapterPageVersionAsync(new CreateChapterPageVersionDto(
+                        ChapterPageId: dbPage.ChapterPageId,
+                        VersionNo: 1,
+                        PageFileId: fileResource.FileResourceId,
+                        VersionNote: string.IsNullOrEmpty(ver.Note) ? "Original Upload" : ver.Note));
+
+                    await VersionService.SetCurrentVersionAsync(dbPage.ChapterPageId, dbVersion.ChapterPageVersionId);
+
+                    // Promote the in-memory buffer to its saved identity.
+                    page.ChapterPageId = dbPage.ChapterPageId;
+                    ver.ChapterPageVersionId = dbVersion.ChapterPageVersionId;
+                    ver.DataUrl = uploadResult.SecureUrl;      // swap base64 data URL → Cloudinary URL
+                    ver.PendingBytes = null;
+                    ver.PendingFileName = null;
+                    ver.PendingContentType = null;
+                    // Keep IsDirty=true only if regions were drawn before saving, so the following
+                    // SaveProgress() persists them; otherwise the version is now clean.
+                    ver.IsDirty = !string.IsNullOrEmpty(ver.Regions);
+                }
+                chap.PageCount = chap.Pages.Count;
+            }
+        }
+        finally
+        {
+            _dbSemaphore.Release();
+        }
+    }
+
+    // Flushes dirty page-version regions to the DB. Called only by the manual Save button now.
     private async Task SaveProgress(bool silent = false)
     {
         var pagesToSave = UploadedPages.ToList();
@@ -2060,14 +2365,14 @@ else
                                     null,
                                     "MANUAL",
                                     textJson,
-                                    r.DbId
+                                    r.DbId,
+                                    _currentUserId
                                 );
                             }).ToList();
 
                             await RegionService.BulkReplacePageRegionsAsync(currentVersion.ChapterPageVersionId, dtos);
                             currentVersion.IsDirty = false;
                             savedCount++;
-                            try { await JS.InvokeVoidAsync("clearMmsDraft", page.ChapterPageId.ToString()); } catch { }
                         }
                     }
                     catch (Exception ex)
@@ -2094,13 +2399,55 @@ else
 
     private async Task HandleBackClick()
     {
-        await SaveProgress();
+        // Manual-save model: if there are unsaved changes, ask before leaving (Phase 3 dialog).
+        if (HasUnsavedChanges)
+        {
+            bool? result = await DialogService.ShowMessageBox(
+                "Unsaved changes",
+                "You have unsaved changes. Save before leaving?",
+                yesText: "Save", noText: "Discard", cancelText: "Cancel");
+            if (result == null) return;            // Cancel → stay
+            if (result == true) await SaveAllChangesAsync();
+        }
         Nav.NavigateTo(BackHref);
+    }
+
+    // Whether the in-memory buffer has anything not yet persisted to the DB.
+    private bool HasUnsavedChanges =>
+        _imageDirty
+        || _pagesPendingDelete.Count > 0                                                 // buffered page delete
+        || Chapters.Any(c => c.ChapterId == Guid.Empty)                                  // pending chapter
+        || Chapters.SelectMany(c => c.Pages)
+                   .Any(p => p.ChapterPageId == Guid.Empty                                // pending page
+                          || p.Versions.Any(v => v.IsDirty));                             // dirty regions
+
+    // Structural dependencies only: a chapter/page that does not exist in the DB yet. Actions that
+    // must REFERENCE a saved chapter/page (submit, task, annotation, new version, note) gate on this.
+    // It deliberately excludes dirty regions / _imageDirty, which those actions persist themselves
+    // (so "Save as New Version" does not prompt to save the very brush edit it is about to save).
+    private bool HasPendingStructure =>
+        Chapters.Any(c => c.ChapterId == Guid.Empty)
+        || Chapters.SelectMany(c => c.Pages).Any(p => p.ChapterPageId == Guid.Empty);
+
+    // Gating prompt: if there is unsaved structure, ask to Save first. Returns true if the caller
+    // may proceed (nothing pending, or the user saved successfully).
+    private async Task<bool> EnsureSavedBeforeAsync(string what = "page")
+    {
+        if (!HasPendingStructure) return true;
+        bool? r = await DialogService.ShowMessageBox(
+            "Unsaved changes",
+            $"This needs the {what} saved first. Save now?",
+            yesText: "Save", cancelText: "Cancel");
+        if (r != true) return false;
+        await SaveAllChangesAsync();
+        return !HasPendingStructure;   // proceed only if the save actually persisted the structure
     }
 
     public async ValueTask DisposeAsync()
     {
-        await SaveProgress();
+        // Manual-save model: do NOT auto-save on dispose. Unsaved work is guarded by the
+        // beforeunload prompt and the in-app "Unsaved changes" dialog.
+        await Task.CompletedTask;
     }
 
     private async Task ExportCurrentPage()
@@ -2158,16 +2505,111 @@ else
             await _leftCanvasRef.InvokeVoidAsync("initCanvas", "ai-canvas-left", "ai-canvas-container-left", _objRefLeft);
             await _rightCanvasRef.InvokeVoidAsync("initCanvas", "ai-canvas-right", "ai-canvas-container-right", _objRefRight);
             
+            // If a chapter's pages were already loaded by OnInitializedAsync before this first render,
+            // paint the page now that the canvas exists. Do NOT show a "please upload" prompt here:
+            // at first render the page list may still be loading (SelectChapter runs during init),
+            // which previously surfaced a spurious prompt even for chapters that have pages. The
+            // genuine "no pages" hint is shown by SelectChapter once the list has loaded.
             if (UploadedPages.Any())
             {
                 await LoadPage(ActivePageIndex);
             }
-            else
-            {
-                // Wait for user to upload an image.
-                Snackbar.Add("Please upload an image to begin.", Severity.Info);
-            }
         }
+    }
+
+    // Add-pages chooser + double-page split state.
+    private bool _showUploadChoice;
+    private bool _showDoublePageCrop;
+    private string? _doublePageSourceDataUrl;
+    private int _doublePageStep;   // 1 = right page, 2 = left page
+
+    // "Split Double Page" picked one wide spread image → open the crop dialog for its first (right) page.
+    private async Task HandleDoublePageSelected(InputFileChangeEventArgs e)
+    {
+        _showUploadChoice = false;
+        if (IsChapterLocked) return;
+
+        var activeChap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
+        if (activeChap == null)
+        {
+            Snackbar.Add("Please select a chapter first.", Severity.Warning);
+            return;
+        }
+
+        var file = e.File;
+        if (file == null) return;
+
+        try
+        {
+            using var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 20);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            _doublePageSourceDataUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(ms.ToArray())}";
+            _doublePageStep = 1;
+            _showDoublePageCrop = true;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error reading image: {ex.InnerException?.Message ?? ex.Message}", Severity.Error);
+        }
+    }
+
+    // Each confirmed crop becomes a PENDING page. After the first (right) page, the @key change
+    // re-creates the crop dialog on the same source for the second (left) page.
+    private async Task OnDoublePageCropConfirmed((byte[] Bytes, string FileName, string ContentType) result)
+    {
+        var activeChap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
+        if (activeChap == null) { _showDoublePageCrop = false; return; }
+
+        AddPendingPage(activeChap, result.Bytes, result.FileName, result.ContentType);
+        activeChap.PageCount = activeChap.Pages.Count;
+        _saveState = SaveStatus.Dirty;
+        _ = JS.InvokeVoidAsync("setUnsavedFlag", true);
+
+        if (_doublePageStep == 1)
+        {
+            _doublePageStep = 2;   // re-create the crop dialog for the left page of the same spread
+            StateHasChanged();
+            return;
+        }
+
+        // Both pages added.
+        _showDoublePageCrop = false;
+        _doublePageSourceDataUrl = null;
+        _doublePageStep = 0;
+        StateHasChanged();
+        await Task.Delay(1);
+        await LoadPage(Math.Max(0, activeChap.Pages.Count - 2));
+        Snackbar.Add("2 page(s) added from the spread (unsaved). Click Save to persist.", Severity.Info);
+    }
+
+    private void OnDoublePageCropCancelled()
+    {
+        // Pages confirmed before cancelling stay in the buffer (the user can delete them if unwanted).
+        _showDoublePageCrop = false;
+        _doublePageSourceDataUrl = null;
+        _doublePageStep = 0;
+    }
+
+    // Adds one image to the chapter as a PENDING page (manual-save buffer): raw bytes held in memory
+    // + a base64 data URL for the canvas. Nothing hits Cloudinary/DB until Save → FlushPendingAsync.
+    private void AddPendingPage(ChapterModel chap, byte[] bytes, string fileName, string contentType)
+    {
+        var dataUrl = $"data:{contentType};base64,{Convert.ToBase64String(bytes)}";
+        var newPage = new PageModel { ChapterPageId = Guid.Empty };
+        newPage.Versions.Add(new PageVersionModel
+        {
+            VersionNo = 1,
+            DataUrl = dataUrl,
+            Note = "Original Upload",
+            ChapterPageVersionId = Guid.Empty,
+            IsCurrentVersion = true,
+            IsDirty = false,
+            PendingBytes = bytes,
+            PendingFileName = fileName,
+            PendingContentType = contentType
+        });
+        chap.Pages.Add(newPage);
     }
 
     private async Task HandleFileUpload(InputFileChangeEventArgs e)
@@ -2191,87 +2633,34 @@ else
             var files = e.GetMultipleFiles(100);
             if (files.Any())
             {
-                ChapterModel? chap = null;
-                await _dbSemaphore.WaitAsync();
-                try
+                var activeChap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
+                if (activeChap == null)
                 {
-                    var activeChap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
-                    int maxPageNo = 0;
-                    if (activeChap != null)
-                    {
-                        var existingDbPages = await PageService.GetChapterPagesByChapterIdAsync(activeChap.ChapterId);
-                        maxPageNo = existingDbPages.Any() ? existingDbPages.Max(p => p.PageNo) : 0;
-                    }
+                    Snackbar.Add("Please select a chapter first.", Severity.Warning);
+                    return;
+                }
 
-                    foreach (var file in files)
-                    {
-                        using var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 20);
-                        using var memoryStream = new MemoryStream();
-                        await stream.CopyToAsync(memoryStream);
-                        var fileBytes = memoryStream.ToArray();
-                        
-                        if (activeChap != null)
-                        {
-                            // 1. Upload to Storage
-                            var uploadResult = await FileStorageService.UploadFileAsync(fileBytes, file.Name, file.ContentType, "CHAPTER_PAGE_VERSION");
-                            
-                            // 2. Create File Resource DB entry
-                            var fileResource = await FileResourceService.CreateFileResourceAsync(new CreateFileResourceDto(
-                                FilePurposeCode: "CHAPTER_PAGE_VERSION",
-                                OriginalFileName: file.Name,
-                                CloudinaryPublicId: uploadResult.PublicId,
-                                CloudinarySecureUrl: uploadResult.SecureUrl,
-                                ContentType: file.ContentType,
-                                FileSizeBytes: fileBytes.Length,
-                                Sha256Hash: uploadResult.Sha256Hash,
-                                UploadedByUserId: _currentUserId
-                            ));
-                            
-                            // 3. Create Chapter Page
-                            maxPageNo++;
-                            int newPageNo = maxPageNo;
-                            var dbPage = await PageService.CreateChapterPageAsync(new CreateChapterPageDto(
-                                ChapterId: activeChap.ChapterId,
-                                PageNo: newPageNo,
-                                PageNotes: null
-                            ));
-                            
-                            // 4. Create Chapter Page Version
-                            var dbVersion = await VersionService.CreateChapterPageVersionAsync(new CreateChapterPageVersionDto(
-                                ChapterPageId: dbPage.ChapterPageId,
-                                VersionNo: 1,
-                                PageFileId: fileResource.FileResourceId,
-                                VersionNote: "Original Upload"
-                            ));
-                            
-                            await VersionService.SetCurrentVersionAsync(dbPage.ChapterPageId, dbVersion.ChapterPageVersionId);
-                        
-                            var newPage = new PageModel { ChapterPageId = dbPage.ChapterPageId };
-                            newPage.Versions.Add(new PageVersionModel { 
-                                VersionNo = 1, 
-                                DataUrl = uploadResult.SecureUrl, 
-                                Note = "Original Upload",
-                                ChapterPageVersionId = dbVersion.ChapterPageVersionId,
-                                IsCurrentVersion = true
-                            });
-                            activeChap.Pages.Add(newPage);
-                        }
-                    }
-                    
-                    chap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
-                    if (chap != null) chap.PageCount = chap.Pages.Count;
-                }
-                finally
+                // MANUAL-SAVE: hold each uploaded image in the in-memory buffer (raw bytes + a base64
+                // data URL for the canvas). Nothing is uploaded to Cloudinary or written to the DB
+                // until the user clicks Save → FlushPendingAsync. The page/version ids stay
+                // Guid.Empty (pending) until then.
+                int firstNewIndex = activeChap.Pages.Count;
+                foreach (var file in files)
                 {
-                    _dbSemaphore.Release();
+                    using var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 20);
+                    using var memoryStream = new MemoryStream();
+                    await stream.CopyToAsync(memoryStream);
+                    AddPendingPage(activeChap, memoryStream.ToArray(), file.Name, file.ContentType);
                 }
+                activeChap.PageCount = activeChap.Pages.Count;
+                _saveState = SaveStatus.Dirty;
+                _ = JS.InvokeVoidAsync("setUnsavedFlag", true);
 
                 StateHasChanged();
                 await Task.Delay(1); // Yield to allow DOM to render pagination if it was empty
 
-                int newPageIndex = chap != null ? Math.Max(0, chap.Pages.Count - files.Count) : ActivePageIndex;
-                await LoadPage(newPageIndex);
-                Snackbar.Add($"Loaded {files.Count} page(s) successfully!", Severity.Success);
+                await LoadPage(firstNewIndex);
+                Snackbar.Add($"Added {files.Count} page(s) (unsaved). Click Save to persist.", Severity.Info);
             }
         }
         catch (Exception ex)
@@ -2300,19 +2689,6 @@ else
                     // Programmatic load: silent=true to avoid a phantom change echo.
                     await _rightCanvasRef.InvokeVoidAsync("loadRegions",
                         string.IsNullOrEmpty(v.Regions) ? "[]" : v.Regions, true);
-
-                    var shadowDraft = await JS.InvokeAsync<string>("getMmsDraft", page.ChapterPageId.ToString());
-                    if (HasMeaningfulDraft(shadowDraft, v.Regions))
-                    {
-                        Snackbar.Add($"⚠️ Unsaved draft detected for the right page.", Severity.Warning, config => {
-                            config.Action = "Restore";
-                            config.ActionColor = Color.Primary;
-                            config.OnClick = snackbar => {
-                                _ = _rightCanvasRef.InvokeVoidAsync("loadRegions", shadowDraft).AsTask();
-                                return Task.CompletedTask;
-                            };
-                        });
-                    }
                 }
             }
         }
@@ -2333,7 +2709,8 @@ else
         // cannot pile up overlapping DB + JS calls on the Blazor Server circuit
         // (the cause of slow loads and dropped connections).
         if (_isPageLoading) return;
-        await SaveProgress();
+        // Manual-save model: do NOT persist on navigation. Unsaved region edits stay in the
+        // in-memory buffer (PageVersionModel.Regions) and are flushed only by the Save button.
         // MudPagination pageNumber is 1-indexed
         await LoadPage(pageNumber - 1);
     }
@@ -2345,6 +2722,12 @@ else
     // data-heavy page does not re-query the DB. The UI mutates these same list
     // instances (Insert/Remove/property edits), so the cache stays in sync in-session.
     private readonly Dictionary<Guid, (List<ProductionTask> Tasks, List<AnnotationModel> Annotations)> _pageDataCache = new();
+
+    // Manual-save buffer for page deletions: a SAVED page removed via the trash button leaves the
+    // view immediately but its DB soft-delete is deferred to Save (FlushPendingAsync). Because the
+    // row still exists in the DB until then, Discard (reload) brings the page back. A never-saved
+    // pending page is just dropped from memory and never reaches this list.
+    private readonly List<Guid> _pagesPendingDelete = new();
 
     /// <summary>
     /// Returns the regions JSON with the volatile UI-only "selected" flag removed,
@@ -2371,16 +2754,6 @@ else
         }
         catch { }
         return regionsJson.Trim();
-    }
-
-    /// <summary>
-    /// True only when a stored shadow draft differs in real content from the saved
-    /// regions. Prevents false "unsaved draft" warnings on plain page navigation.
-    /// </summary>
-    private static bool HasMeaningfulDraft(string? draft, string? savedRegions)
-    {
-        if (string.IsNullOrWhiteSpace(draft)) return false;
-        return StripSelected(draft) != StripSelected(savedRegions);
     }
 
     /// <summary>
@@ -2426,21 +2799,6 @@ else
                     string.IsNullOrEmpty(activeVersion.Regions) ? "[]" : activeVersion.Regions, true);
                 CanUndo = false;
                 CanRedo = false;
-
-                // Warn only when a stored shadow draft really differs from the
-                // saved regions (ignores selection-only and empty drafts).
-                var shadowDraft = await JS.InvokeAsync<string>("getMmsDraft", page.ChapterPageId.ToString());
-                if (HasMeaningfulDraft(shadowDraft, activeVersion.Regions))
-                {
-                    Snackbar.Add($"⚠️ Unsaved draft detected for this page.", Severity.Warning, config => {
-                        config.Action = "Restore";
-                        config.ActionColor = Color.Primary;
-                        config.OnClick = snackbar => {
-                            _ = _leftCanvasRef.InvokeVoidAsync("loadRegions", shadowDraft).AsTask();
-                            return Task.CompletedTask;
-                        };
-                    });
-                }
             }
 
             // Tasks & annotations are scoped to the ChapterPage (not the version), so
@@ -2461,25 +2819,49 @@ else
                     await _dbSemaphore.WaitAsync();
                     try
                     {
+                        // Map PageRegionId -> the panel number the canvas shows (#N) for the active
+                        // version, so task/annotation targets display the same number the user sees.
+                        var canvasPanelNo = new Dictionary<Guid, int>();
+                        var activeVerForNo = page.Versions.ElementAtOrDefault(page.ActiveVersionIndex);
+                        if (activeVerForNo != null && !string.IsNullOrEmpty(activeVerForNo.Regions))
+                        {
+                            try
+                            {
+                                var canvasRegions = System.Text.Json.JsonSerializer.Deserialize<List<RegionModel>>(
+                                    activeVerForNo.Regions,
+                                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                                if (canvasRegions != null)
+                                    foreach (var cr in canvasRegions)
+                                        if (cr.DbId.HasValue) canvasPanelNo[cr.DbId.Value] = cr.Id;
+                            }
+                            catch { }
+                        }
+
                         var dbTasks = await TaskService.GetChapterPageTasksByChapterPageIdAsync(page.ChapterPageId);
                         int idCounter = 1;
                         foreach (var t in dbTasks)
                         {
                             var statusMap = t.StatusCode switch
                             {
-                                "ASSIGNED" => "Todo",
-                                "IN_PROGRESS" => "In Progress",
-                                "UNDER_REVIEW" => "Review",
-                                "COMPLETED" => "Done",
-                                _ => "Todo"
+                                "ASSIGNED" => "Assigned",
+                                "UNDER_REVIEW" => "In Review",
+                                "COMPLETED" => "Completed",
+                                "CANCELLED" => "Cancelled",
+                                _ => "Assigned"
                             };
+                            var taskPanels = t.PageRegions?.Where(r => r.Width > 0.05m)
+                                .Select(r => canvasPanelNo.TryGetValue(r.PageRegionId, out var no)
+                                    ? $"Panel #{no}"
+                                    : $"Panel #{ParseRegionId(r.RegionLabel)}")
+                                .ToList() ?? new List<string>();
+                            string taskTarget = taskPanels.Any() ? string.Join(", ", taskPanels) : $"Page {SelectedPage}";
                             newTasks.Add(new ProductionTask
                             {
                                 Id = idCounter++,
                                 DbId = t.ChapterPageTaskId,
                                 Type = t.TypeCode,
                                 Assistant = t.AssignedUsername ?? t.AssignedToDisplayName ?? t.AssignedToUserId.ToString(),
-                                Target = $"Page {SelectedPage}",
+                                Target = taskTarget,
                                 Description = t.TaskDescription,
                                 Status = statusMap,
                                 VersionId = t.PageRegions?.FirstOrDefault()?.ChapterPageVersionId,
@@ -2500,13 +2882,17 @@ else
                         foreach (var a in dbAnnotations)
                         {
                               var pinRegion = a.PageRegions?.FirstOrDefault(r => r.Width <= 0.05m && r.Height <= 0.05m);
-                              var targetRegions = a.PageRegions?.Where(r => r.Width > 0.05m).Select(r => $"Panel [X:{Math.Round(r.X)}, Y:{Math.Round(r.Y)}, W:{Math.Round(r.Width)}, H:{Math.Round(r.Height)}]").ToList() ?? new List<string>();
+                              var targetRegions = a.PageRegions?.Where(r => r.Width > 0.05m)
+                                  .Select(r => canvasPanelNo.TryGetValue(r.PageRegionId, out var no)
+                                      ? $"Panel #{no}"
+                                      : $"Panel #{ParseRegionId(r.RegionLabel)}")
+                                  .ToList() ?? new List<string>();
 
                             string annTarget;
                             if (pinRegion != null)
                                 annTarget = $"Pin at ({Math.Round(pinRegion.X)}, {Math.Round(pinRegion.Y)})";
                             else if (targetRegions.Any())
-                                annTarget = string.Join("\n", targetRegions);
+                                annTarget = string.Join(", ", targetRegions);
                             else
                                 annTarget = $"Page {SelectedPage}";
 
@@ -2625,9 +3011,19 @@ else
         if (UploadedPages.Any())
         {
             var pageToDelete = UploadedPages[ActivePageIndex];
+
+            // Guard: a saved page that has tasks or annotations must not be deleted (deleting it would
+            // orphan assigned work / feedback). ActiveTasks/ActiveAnnotations hold the current page's
+            // full set (all versions), loaded in LoadPage.
+            if (pageToDelete.ChapterPageId != Guid.Empty && (ActiveTasks.Any() || ActiveAnnotations.Any()))
+            {
+                Snackbar.Add("This page has tasks or annotations and cannot be deleted.", Severity.Warning);
+                return;
+            }
+
             bool? result = await DialogService.ShowMessageBox(
-                "Delete Page", 
-                "Are you sure you want to delete this page?", 
+                "Delete Page",
+                "Are you sure you want to delete this page?",
                 yesText: "Delete", cancelText: "Cancel");
 
             if (result == true)
@@ -2636,17 +3032,17 @@ else
                 {
                     if (pageToDelete.ChapterPageId != Guid.Empty)
                     {
-                        var success = await PageService.DeleteChapterPageAsync(pageToDelete.ChapterPageId, _currentUserId.Value);
-                        if (!success)
-                        {
-                            Snackbar.Add("Failed to delete page from database.", Severity.Error);
-                            return;
-                        }
+                        // Manual-save: defer the DB soft-delete to Save. The row stays in the DB until
+                        // then, so Discard (reload) restores the page. A never-saved pending page
+                        // (Guid.Empty) is simply dropped from memory below.
+                        _pagesPendingDelete.Add(pageToDelete.ChapterPageId);
                         _pageDataCache.Remove(pageToDelete.ChapterPageId);
                     }
 
                     UploadedPages.RemoveAt(ActivePageIndex);
-                    
+                    _saveState = SaveStatus.Dirty;
+                    _ = JS.InvokeVoidAsync("setUnsavedFlag", true);
+
                     var activeChap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
                     if (activeChap != null) activeChap.PageCount = UploadedPages.Count;
 
@@ -2655,14 +3051,14 @@ else
                         ActivePageIndex = 0;
                         if (_leftCanvasRef != null)
                             await _leftCanvasRef.InvokeVoidAsync("loadImage", ""); // clear canvas
-                        Snackbar.Add("All pages deleted.", Severity.Info);
+                        Snackbar.Add("All pages removed (unsaved). Click Save to apply, or Discard to undo.", Severity.Info);
                     }
                     else
                     {
                         if (ActivePageIndex >= UploadedPages.Count)
                             ActivePageIndex = UploadedPages.Count - 1;
                         await LoadPage(ActivePageIndex);
-                        Snackbar.Add("Page deleted.", Severity.Success);
+                        Snackbar.Add("Page removed (unsaved). Click Save to apply, or Discard to undo.", Severity.Info);
                     }
                     StateHasChanged();
                 }
@@ -2729,9 +3125,8 @@ else
         var canvas = pane == "Left" ? _leftCanvasRef : _rightCanvasRef;
 
         if (page == null) return;
-        await SaveProgress();
-        // Switching to a saved version reloads its image = clean baseline (an unsaved brush on
-        // the previous version was not persisted).
+        // Manual-save model: do NOT auto-persist on switch. Unsaved region edits of the version we
+        // are leaving stay in its in-memory buffer.
         _imageDirty = false;
 
         // Do not overwrite DataUrl in memory with local canvas exports when switching versions
@@ -2752,11 +3147,13 @@ else
                     await canvas.InvokeVoidAsync("loadImage", OptimizedImageUrl(activeVersion.DataUrl));
                 }
 
-                // Load the version's AUTHORITATIVE regions from the DB (not the in-memory model,
-                // which can carry translation/edits that bled in during the session that created a
-                // newer version). This guarantees an older version (e.g. v1) shows its original
-                // saved state for side-by-side comparison with the translated version.
-                if (!activeVersion.IsDeleted && activeVersion.ChapterPageVersionId != Guid.Empty)
+                // Load the version's AUTHORITATIVE regions from the DB so an older version shows its
+                // original saved state. BUT in the manual-save model we must NOT clobber a version
+                // that has unsaved in-memory edits (IsDirty) — reloading from the DB would discard
+                // the user's unsaved buffer. Only reload clean (non-dirty), already-saved versions.
+                if (!activeVersion.IsDeleted
+                    && activeVersion.ChapterPageVersionId != Guid.Empty
+                    && !activeVersion.IsDirty)
                 {
                     activeVersion.Regions = await BuildRegionsJsonFromDbAsync(activeVersion.ChapterPageVersionId);
                 }
@@ -2777,6 +3174,11 @@ else
 
     private async Task SaveAsNewVersion(string pane)
     {
+        // A new version attaches to a saved ChapterPage (BR-CP-014/021). If the page is still in the
+        // buffer, persist it first (this saves version 1 = original upload); the brush edit then
+        // becomes version 2.
+        if (!await EnsureSavedBeforeAsync()) return;
+
         var page = pane == "Left" ? UploadedPages.ElementAtOrDefault(ActivePageIndex) : _splitUploadedPages.ElementAtOrDefault(_splitPageIndex);
         var canvas = pane == "Left" ? _leftCanvasRef : _rightCanvasRef;
 
@@ -2898,6 +3300,8 @@ else
     private async Task HandleUploadVersion(InputFileChangeEventArgs e, string pane)
     {
         if (IsChapterLocked) return;
+        // A new version attaches to a saved ChapterPage; persist a pending page first.
+        if (!await EnsureSavedBeforeAsync()) return;
         var page = pane == "Left" ? UploadedPages.ElementAtOrDefault(ActivePageIndex) : _splitUploadedPages.ElementAtOrDefault(_splitPageIndex);
         var canvas = pane == "Left" ? _leftCanvasRef : _rightCanvasRef;
 
@@ -3249,14 +3653,12 @@ else
             }
         }
         StateHasChanged();
-        // Persist a crash-recovery shadow draft only on real content edits
-        // (auto-segment, translate, draw/move/resize/delete, notes, restore).
+        // Manual-save model: a real region edit only marks the buffer dirty (indicator +
+        // beforeunload guard). Nothing is persisted until the user clicks Save.
         if (page != null && contentChanged)
         {
             _saveState = SaveStatus.Dirty;
-            _ = JS.InvokeVoidAsync("saveMmsDraft", page.ChapterPageId.ToString(), newRegionsStr);
             _ = JS.InvokeVoidAsync("setUnsavedFlag", true); // arm the beforeunload guard
-            ScheduleAutosave();                              // debounced DB autosave
         }
     }
 
@@ -3410,7 +3812,6 @@ else
 
     public void Dispose()
     {
-        _autosaveTimer?.Dispose();
         _objRef?.Dispose();
     }
 
