@@ -23,6 +23,16 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         [Required] IReadOnlyList<Guid> PageRegionIds
     );
 
+    /// <summary>Web → API body to create an annotation. Author is taken from the X-Actor-User-Id header.</summary>
+    public sealed record CreateMangakaAnnotationRequest(
+        string IssueTypeCode,
+        string? AnnotationText,
+        IReadOnlyList<Guid> PageRegionIds
+    );
+
+    /// <summary>Web → API body to resolve an annotation (optional note).</summary>
+    public sealed record ResolveAnnotationRequest(string? ResolutionNote);
+
     public record UpdateChapterPageAnnotationDto(
         [Required] Guid ChapterPageAnnotationId,
         [Required][MaxLength(50)] string IssueTypeCode,

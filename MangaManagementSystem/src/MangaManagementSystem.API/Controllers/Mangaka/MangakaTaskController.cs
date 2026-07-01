@@ -96,6 +96,32 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         }
 
         /// <summary>
+        /// All tasks anchored to a specific chapter page (across versions), for the workspace panel.
+        /// Route: GET /api/mangaka/tasks/by-page/{chapterPageId}
+        /// </summary>
+        [HttpGet("by-page/{chapterPageId:guid}")]
+        public async Task<IActionResult> GetTasksByPageAsync(Guid chapterPageId)
+        {
+            if (chapterPageId == Guid.Empty)
+            {
+                return BadRequest("Invalid page ID.");
+            }
+
+            try
+            {
+                var tasks = await _taskService.GetChapterPageTasksByChapterPageIdAsync(chapterPageId);
+                return Ok(tasks);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading tasks for page {ChapterPageId}.", chapterPageId);
+                return Problem(
+                    detail: "Could not load tasks right now. Please try again later.",
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
+        }
+
+        /// <summary>
         /// Create a single page task assigned to an assistant. Actor (creator) from header.
         /// Route: POST /api/mangaka/tasks
         /// </summary>

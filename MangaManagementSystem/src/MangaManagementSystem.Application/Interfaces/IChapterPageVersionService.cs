@@ -40,5 +40,14 @@ namespace MangaManagementSystem.Application.Interfaces
             IEnumerable<CreatePageRegionDto> regionDtos,
             bool setAsCurrent,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Atomically creates a FileResource, a new ChapterPage, and ChapterPageVersion (version 1)
+        /// in a single database transaction.
+        /// </summary>
+        Task<CreatePageWithVersionResponseDto> CreatePageWithVersionAndFileAsync(
+            CreatePageWithVersionRequestDto request,
+            CancellationToken cancellationToken = default);
     }
 }
+

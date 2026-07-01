@@ -12,23 +12,16 @@
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
-@inject ISeriesService SeriesService
-@inject IChapterService ChapterService
 @inject ISeriesApiClient SeriesApiClient
 @inject IMangakaChapterApiClient MangakaChapterApi
 @inject IMangakaTaskApiClient MangakaTaskApi
 @inject IMangakaPageApiClient MangakaPageApi
-@inject IChapterPageService PageService
-@inject IChapterPageVersionService VersionService
-@inject IPageRegionService RegionService
-@inject IChapterPageTaskService TaskService
-@inject IChapterPageAnnotationService AnnotationService
+@inject IMangakaPageRegionApiClient MangakaRegionApi
+@inject IMangakaAnnotationApiClient MangakaAnnotationApi
+@inject IMangakaSeriesContributorApiClient MangakaContributorApi
 @inject AuthenticationStateProvider AuthStateProvider
-@inject IUserService UserService
 @inject IFileStorageService FileStorageService
-@inject IFileResourceService FileResourceService
 @inject IAiService AiService
-@inject ISeriesContributorService ContributorService
 
 @if (_accessDenied)
 {
@@ -94,18 +87,7 @@ else
             }
             @if (_headerChap != null)
             {
-                @if (_currentRoleName == "Tantou Editor" || _currentRoleName == "Admin")
-                {
-                    @if (_headerChap.StatusCode == "UNDER_REVIEW")
-                    {
-                        <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" StartIcon="@Icons.Material.Filled.Lock" Class="mr-2" DisableElevation="true" OnClick="@(() => ApproveAndLockChapter(_headerChap.ChapterId))">Approve &amp; Lock</MudButton>
-                    }
-                    else if (_headerChap.StatusCode == "APPROVED" || _headerChap.StatusCode == "PUBLISHED" || _headerChap.StatusCode == "RELEASED")
-                    {
-                        <MudButton Variant="Variant.Outlined" Color="Color.Warning" Size="Size.Small" StartIcon="@Icons.Material.Filled.LockOpen" Class="mr-2" OnClick="@(() => UnlockChapter(_headerChap.ChapterId))">Unlock</MudButton>
-                    }
-                }
-                else if (_currentRoleName == "Mangaka")
+                @if (_currentRoleName == "Mangaka")
                 {
                     @if (_headerChap.StatusCode == "DRAFT" || _headerChap.StatusCode == "REVISION_REQUESTED")
                     {
@@ -989,7 +971,7 @@ else
                     CreatedByUserId: _currentUserId
                 );
 
-                var dbRegion = await RegionService.CreatePageRegionAsync(newRegionDto);
+                var dbRegion = await MangakaRegionApi.CreateAsync(_currentUserId ?? Guid.Empty, newRegionDto);
                 region.DbId = dbRegion.PageRegionId;
                 updatedAny = true;
             }
@@ -1250,10 +1232,10 @@ else
 
         try
         {
-            var dbVer = await VersionService.GetChapterPageVersionByIdAsync(activeVer.ChapterPageVersionId);
+            var dbVer = await MangakaPageApi.GetVersionByIdAsync(_currentUserId!.Value, activeVer.ChapterPageVersionId);
             if (dbVer != null)
             {
-                await VersionService.UpdateChapterPageVersionAsync(new UpdateChapterPageVersionDto(
+                await MangakaPageApi.UpdateVersionAsync(_currentUserId!.Value, new UpdateChapterPageVersionDto(
                     ChapterPageVersionId: dbVer.ChapterPageVersionId,
                     ChapterPageId: dbVer.ChapterPageId,
                     VersionNo: dbVer.VersionNo,
@@ -1316,14 +1298,11 @@ else
 
         try
         {
-            var annDto = new CreateChapterPageAnnotationDto(
+            // Architecture: create the annotation via the typed API client (author from actor header).
+            var dbAnn = await MangakaAnnotationApi.CreateAsync(_currentUserId.Value, new CreateMangakaAnnotationRequest(
                 IssueTypeCode: AnnotationType,
-                AnnotatedByUserId: _currentUserId.Value,
                 AnnotationText: AnnotationComment,
-                PageRegionIds: regionIds
-            );
-
-            var dbAnn = await AnnotationService.CreateChapterPageAnnotationAsync(annDto);
+                PageRegionIds: regionIds));
 
             ActiveAnnotations.Insert(0, new AnnotationModel 
             { 
@@ -1375,7 +1354,7 @@ else
             {
                 try
                 {
-                    await AnnotationService.ResolveAnnotationAsync(_currentUserId.Value, ann.DbId.Value);
+                    await MangakaAnnotationApi.ResolveAsync(_currentUserId.Value, ann.DbId.Value);
                     Snackbar.Add("Issue resolved.", Severity.Success);
                 }
                 catch (Exception ex)
@@ -1481,21 +1460,15 @@ else
         // Fetch assistant users for the dropdown from Series Contributors
         try
         {
-            if (Guid.TryParse(SeriesId, out var sId))
+            if (Guid.TryParse(SeriesId, out var sId) && _currentUserId.HasValue)
             {
-                var contributors = await ContributorService.GetSeriesContributorsBySeriesIdAsync(sId);
+                var contributors = await MangakaContributorApi.GetContributorsAsync(_currentUserId.Value, sId);
                 var assistantList = new List<Application.DTOs.Auth.UserDto>();
-                // Only ACTIVE Assistant contributors of THIS series may be assigned production
-                // tasks (BR-PGTASK-004 / BR-ANN-013). Active = EndDate is null; exclude ended
-                // contributors and Editor/Mangaka roles, and de-duplicate by user.
-                foreach (var c in contributors.Where(c => c.EndDate == null))
+                foreach (var c in contributors.Where(c => c.IsActive && string.Equals(c.RoleName, "Assistant", StringComparison.OrdinalIgnoreCase)))
                 {
-                    var u = await UserService.GetUserByIdAsync(c.UserId);
-                    if (u != null
-                        && string.Equals(u.RoleName, "Assistant", StringComparison.OrdinalIgnoreCase)
-                        && assistantList.All(a => a.UserId != u.UserId))
+                    if (assistantList.All(a => a.UserId != c.UserId))
                     {
-                        assistantList.Add(u);
+                        assistantList.Add(new Application.DTOs.Auth.UserDto(c.UserId, c.Username ?? "", c.Username ?? "", c.Email ?? "", null, null, "ACTIVE", DateTime.UtcNow, c.RoleName));
                     }
                 }
                 _assistantUsers = assistantList;
@@ -1620,11 +1593,11 @@ else
                 _isLoadingChapter = true;
                 StateHasChanged();
                 var pages = (await MangakaPageApi.GetByChapterAsync(_currentUserId!.Value, chapter.ChapterId)).ToList();
-                var pageIds = pages.Select(p => p.ChapterPageId).Distinct();
-                var allVersions = (await VersionService.GetChapterPageVersionsByPageIdsAsync(pageIds)).ToList();
+                var pageIds = pages.Select(p => p.ChapterPageId).Distinct().ToList();
+                var allVersions = (await MangakaPageApi.GetVersionsByPageIdsAsync(_currentUserId!.Value, pageIds)).ToList();
                 
-                var fileIds = allVersions.Select(v => v.PageFileId).Where(fid => fid != Guid.Empty).Distinct();
-                var filesDict = (await FileResourceService.GetFileResourcesByIdsAsync(fileIds)).ToDictionary(f => f.FileResourceId);
+                var fileIds = allVersions.Select(v => v.PageFileId).Where(fid => fid != Guid.Empty).Distinct().ToList();
+                var filesDict = (await MangakaPageApi.GetFileResourcesByIdsAsync(_currentUserId!.Value, fileIds)).ToDictionary(f => f.FileResourceId);
                 
                 var verIds = allVersions.Select(v => v.ChapterPageVersionId).Distinct().ToList();
 
@@ -1634,12 +1607,12 @@ else
                 // entire chapter load. Over-cap versions load with no regions but remain
                 // viewable and deletable.
                 const int MaxRegionsPerVersion = 2000;
-                var regionCounts = await RegionService.GetRegionCountsByVersionIdsAsync(verIds);
+                var regionCounts = await MangakaRegionApi.GetCountsAsync(_currentUserId ?? Guid.Empty, verIds);
                 var safeVerIds = verIds
                     .Where(vid => !regionCounts.TryGetValue(vid, out var cnt) || cnt <= MaxRegionsPerVersion)
                     .ToList();
                 bool anyVersionCapped = safeVerIds.Count < verIds.Count;
-                var regionsGrouped = (await RegionService.GetPageRegionsByVersionIdsAsync(safeVerIds)).ToLookup(r => r.ChapterPageVersionId);
+                var regionsGrouped = (await MangakaRegionApi.GetByVersionsAsync(_currentUserId ?? Guid.Empty, safeVerIds)).ToLookup(r => r.ChapterPageVersionId);
                 
                 var versionsGrouped = allVersions.ToLookup(v => v.ChapterPageId);
 
@@ -2268,27 +2241,43 @@ else
                     var uploadResult = await FileStorageService.UploadFileAsync(
                         ver.PendingBytes, ver.PendingFileName ?? "page", ver.PendingContentType ?? "image/png", "CHAPTER_PAGE_VERSION");
 
-                    var fileResource = await FileResourceService.CreateFileResourceAsync(new CreateFileResourceDto(
-                        FilePurposeCode: "CHAPTER_PAGE_VERSION",
-                        OriginalFileName: ver.PendingFileName ?? "page",
-                        CloudinaryPublicId: uploadResult.PublicId,
-                        CloudinarySecureUrl: uploadResult.SecureUrl,
-                        ContentType: ver.PendingContentType ?? "image/png",
-                        FileSizeBytes: ver.PendingBytes.Length,
-                        Sha256Hash: uploadResult.Sha256Hash,
-                        UploadedByUserId: _currentUserId));
-
                     maxPageNo++;
-                    var dbPage = await PageService.CreateChapterPageAsync(new CreateChapterPageDto(
-                        ChapterId: chap.ChapterId, PageNo: maxPageNo, PageNotes: null));
+                    var createReq = new CreatePageWithVersionRequestDto(
+                        ChapterId: chap.ChapterId,
+                        PageNo: maxPageNo,
+                        PageNotes: null,
+                        FileDto: new CreateFileResourceDto(
+                            FilePurposeCode: "CHAPTER_PAGE_VERSION",
+                            OriginalFileName: ver.PendingFileName ?? "page",
+                            CloudinaryPublicId: uploadResult.PublicId,
+                            CloudinarySecureUrl: uploadResult.SecureUrl,
+                            ContentType: ver.PendingContentType ?? "image/png",
+                            FileSizeBytes: ver.PendingBytes.Length,
+                            Sha256Hash: uploadResult.Sha256Hash,
+                            UploadedByUserId: _currentUserId
+                        ),
+                        VersionNote: string.IsNullOrEmpty(ver.Note) ? "Original Upload" : ver.Note
+                    );
 
-                    var dbVersion = await VersionService.CreateChapterPageVersionAsync(new CreateChapterPageVersionDto(
-                        ChapterPageId: dbPage.ChapterPageId,
-                        VersionNo: 1,
-                        PageFileId: fileResource.FileResourceId,
-                        VersionNote: string.IsNullOrEmpty(ver.Note) ? "Original Upload" : ver.Note));
+                    CreatePageWithVersionResponseDto? atomicRes = null;
+                    try
+                    {
+                        atomicRes = await MangakaPageApi.CreatePageWithVersionAsync(_currentUserId!.Value, createReq);
+                    }
+                    catch
+                    {
+                        try { await FileStorageService.DeleteFileAsync(uploadResult.PublicId, "image"); } catch { }
+                        throw;
+                    }
 
-                    await VersionService.SetCurrentVersionAsync(dbPage.ChapterPageId, dbVersion.ChapterPageVersionId);
+                    if (atomicRes == null)
+                    {
+                        try { await FileStorageService.DeleteFileAsync(uploadResult.PublicId, "image"); } catch { }
+                        throw new InvalidOperationException("Failed to atomically create page and version.");
+                    }
+
+                    var dbPage = atomicRes.Page;
+                    var dbVersion = atomicRes.Version;
 
                     // Promote the in-memory buffer to its saved identity.
                     page.ChapterPageId = dbPage.ChapterPageId;
@@ -2370,7 +2359,7 @@ else
                                 );
                             }).ToList();
 
-                            await RegionService.BulkReplacePageRegionsAsync(currentVersion.ChapterPageVersionId, dtos);
+                            await MangakaRegionApi.BulkReplaceAsync(_currentUserId ?? Guid.Empty, currentVersion.ChapterPageVersionId, dtos);
                             currentVersion.IsDirty = false;
                             savedCount++;
                         }
@@ -2837,7 +2826,7 @@ else
                             catch { }
                         }
 
-                        var dbTasks = await TaskService.GetChapterPageTasksByChapterPageIdAsync(page.ChapterPageId);
+                        var dbTasks = await MangakaTaskApi.GetTasksByPageAsync(_currentUserId!.Value, page.ChapterPageId);
                         int idCounter = 1;
                         foreach (var t in dbTasks)
                         {
@@ -2877,7 +2866,7 @@ else
                             });
                         }
 
-                        var dbAnnotations = await AnnotationService.GetChapterPageAnnotationsByChapterPageIdAsync(page.ChapterPageId);
+                        var dbAnnotations = await MangakaAnnotationApi.GetByPageAsync(_currentUserId!.Value, page.ChapterPageId);
                         int annIdCounter = 1;
                         foreach (var a in dbAnnotations)
                         {
@@ -3076,7 +3065,7 @@ else
     // session that produced a newer version. Mirrors the mapping used by the initial load.
     private async Task<string> BuildRegionsJsonFromDbAsync(Guid versionId)
     {
-        var dbRegions = await RegionService.GetPageRegionsByVersionIdsAsync(new[] { versionId });
+        var dbRegions = await MangakaRegionApi.GetByVersionsAsync(_currentUserId ?? Guid.Empty, new[] { versionId });
         var mapped = new List<RegionModel>();
         int idx = 1;
         foreach (var r in dbRegions)
@@ -3241,9 +3230,29 @@ else
                     }).ToList();
 
                 // 2. Atomic create: FileResource + version + regions + set-current (one transaction).
-                var versionDto = await VersionService.CreateVersionWithFileAndRegionsAsync(
-                    page.ChapterPageId, (short)nextVersionNo, fileDto, $"New Version {nextVersionNo}",
-                    regionDtos, setAsCurrent: true);
+                var req = new CreateVersionWithFileAndRegionsRequestDto(
+                    ChapterPageId: page.ChapterPageId,
+                    VersionNo: (short)nextVersionNo,
+                    FileDto: fileDto,
+                    VersionNote: $"New Version {nextVersionNo}",
+                    Regions: regionDtos,
+                    SetAsCurrent: true
+                );
+                ChapterPageVersionDto? versionDto = null;
+                try
+                {
+                    versionDto = await MangakaPageApi.CreateVersionWithFileAndRegionsAsync(_currentUserId!.Value, req);
+                }
+                catch
+                {
+                    try { await FileStorageService.DeleteFileAsync(uploadResult.PublicId, "image"); } catch { }
+                    throw;
+                }
+                if (versionDto == null)
+                {
+                    try { await FileStorageService.DeleteFileAsync(uploadResult.PublicId, "image"); } catch { }
+                    throw new InvalidOperationException("Failed to create version.");
+                }
 
                 // 3. Edit-bleed fix: the in-session edits now belong to the NEW version only. Keep the
                 //    previous version pristine by clearing its dirty flag so SaveProgress never writes
@@ -3364,9 +3373,29 @@ else
                         );
                     }).ToList();
 
-                var versionDto = await VersionService.CreateVersionWithFileAndRegionsAsync(
-                    page.ChapterPageId, (short)nextVersionNo, fileDto, $"Uploaded Version {nextVersionNo}",
-                    regionDtos, setAsCurrent: true);
+                var req = new CreateVersionWithFileAndRegionsRequestDto(
+                    ChapterPageId: page.ChapterPageId,
+                    VersionNo: (short)nextVersionNo,
+                    FileDto: fileDto,
+                    VersionNote: $"Uploaded Version {nextVersionNo}",
+                    Regions: regionDtos,
+                    SetAsCurrent: true
+                );
+                ChapterPageVersionDto? versionDto = null;
+                try
+                {
+                    versionDto = await MangakaPageApi.CreateVersionWithFileAndRegionsAsync(_currentUserId!.Value, req);
+                }
+                catch
+                {
+                    try { await FileStorageService.DeleteFileAsync(uploadResult.PublicId, "image"); } catch { }
+                    throw;
+                }
+                if (versionDto == null)
+                {
+                    try { await FileStorageService.DeleteFileAsync(uploadResult.PublicId, "image"); } catch { }
+                    throw new InvalidOperationException("Failed to create version.");
+                }
 
                 var oldVer = page.Versions.ElementAtOrDefault(page.ActiveVersionIndex);
                 if (oldVer != null) oldVer.IsDirty = false;
@@ -3434,8 +3463,9 @@ else
         {
             // Guard (active task / unresolved annotation) + FileResource soft-delete + audit are all
             // owned by the service. The version row and its regions are kept as a history placeholder.
-            var delResult = await VersionService.DeleteVersionImageAsync(
-                activeVer.ChapterPageVersionId, _currentUserId ?? Guid.Empty, "Mangaka");
+            var delResult = await MangakaPageApi.DeleteVersionImageAsync(
+                _currentUserId ?? Guid.Empty, activeVer.ChapterPageVersionId);
+            if (delResult == null) return;
 
             if (!delResult.Success)
             {
@@ -3478,7 +3508,7 @@ else
 
         try
         {
-            await VersionService.SetCurrentVersionAsync(page.ChapterPageId, version.ChapterPageVersionId);
+            await MangakaPageApi.SetCurrentVersionAsync(_currentUserId!.Value, page.ChapterPageId, version.ChapterPageVersionId);
             
             // Update UI state
             foreach (var v in page.Versions)
@@ -3725,45 +3755,7 @@ else
         }
     }
 
-    private async Task ApproveAndLockChapter(Guid chapterId)
-    {
-        var chapter = Chapters.FirstOrDefault(c => c.ChapterId == chapterId);
-        if (chapter != null)
-        {
-            try
-            {
-                await ChapterService.UpdateChapterStatusAsync(chapterId, "APPROVED");
-                chapter.StatusCode = "APPROVED";
-                chapter.IsCompleted = true;
-                StateHasChanged();
-                Snackbar.Add("Chapter approved & locked successfully.", Severity.Success);
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add($"Failed to approve chapter: {ex.Message}", Severity.Error);
-            }
-        }
-    }
 
-    private async Task UnlockChapter(Guid chapterId)
-    {
-        var chapter = Chapters.FirstOrDefault(c => c.ChapterId == chapterId);
-        if (chapter != null)
-        {
-            try
-            {
-                await ChapterService.UpdateChapterStatusAsync(chapterId, "DRAFT");
-                chapter.StatusCode = "DRAFT";
-                chapter.IsCompleted = false;
-                StateHasChanged();
-                Snackbar.Add("Chapter unlocked. Status back to Draft.", Severity.Info);
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add($"Failed to unlock chapter: {ex.Message}", Severity.Error);
-            }
-        }
-    }
 
 
 

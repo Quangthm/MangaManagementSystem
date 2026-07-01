@@ -67,11 +67,14 @@
 ## 4. Bước tiếp theo cần làm
 
 1. **Migration còn lại (theo template 6 tầng, build xanh ra D:):**
-   - **Workflow entangle "add page" + "save as new version"** (KHÓ NHẤT): giữ upload Cloudinary ở Web → **1 endpoint atomic** tạo FileResource + ChapterPage + ChapterPageVersion + set-current (+ regions cho version mới). Gộp create-page (FlushPendingAsync), VersionService (create/delete/set-current/CreateVersionWithFileAndRegions/getById/update), FileResource, FileStorage.
-   - **PageRegion** (EnsureRegionsSaved/BulkReplace/GetRegionCounts/GetPageRegionsByVersionIds).
-   - **Annotation** (create/resolve/get-by-page) + **Task list-by-page** — migrate chung LoadPage (task+annotation) để không nửa-API-nửa-service.
-   - **AiService** (segment/translate — advisory).
-   - Approve/Unlock chapter: role-gated Editor → migrate qua `IEditorChapterReviewApiClient` **hoặc** bỏ khỏi workspace Mangaka.
+   - ~~**Workflow entangle "add page" + "save as new version"** (KHÓ NHẤT)~~: **ĐÃ HOÀN THÀNH** (đã dựng endpoint atomic `create-with-file` và `versions/create-with-file` trong `MangakaPageController`, migrate toàn bộ `FlushPendingAsync`, `HandleUploadVersion`, manual save, `DeleteVersionImage`, `SetCurrentVersion` sang `IMangakaPageApiClient`, tự động cleanup Cloudinary khi DB lỗi).
+   - ~~Approve/Unlock chapter~~: **ĐÃ HOÀN THÀNH** (đã loại bỏ khỏi workspace Mangaka do là chức năng Editor-gated).
+   - ~~SeriesContributorService & UserService (cho Assistant list)~~: **ĐÃ HOÀN THÀNH** (đã migrate sang `IMangakaSeriesContributorApiClient`).
+   - **Tiếp theo cần làm:**
+   - ~~**PageRegion** (EnsureRegionsSaved/BulkReplace/GetRegionCounts/GetByVersionsAsync)~~: **ĐÃ HOÀN THÀNH** (toàn bộ `CreatorWorkspace.razor` đã sử dụng `IMangakaPageRegionApiClient`).
+   - ~~**Annotation** (create/resolve/get-by-page) + **Task list-by-page**~~: **ĐÃ HOÀN THÀNH** (`LoadPage`, `CreateTask`, `CancelTask`, `CreateAnnotation`, `ResolveAnnotation` trong `CreatorWorkspace.razor` và `TaskWorkspaceRedirect.razor` đã hoàn toàn sử dụng `IMangakaTaskApiClient` & `IMangakaAnnotationApiClient`).
+   - **Tiếp theo cần làm:**
+     - **AiService** (segment/translate — advisory; hiện tại `IAiService` đang gọi thẳng HTTP sang Python AI server 8000).
 2. **Dọn C: temp (đầy 100%)** để build/chạy được.
 3. Chạy `cleanup-phantom-zero-regions.sql` (PART 1 preview trước, đổi ROLLBACK→COMMIT) để dọn pin (0,0) cũ.
 4. Cân nhắc: auth hardening (SecurePolicy Always ở prod, sliding 7 ngày, revoke theo tài khoản) — xem memory `auth-session-hardening-followup`.

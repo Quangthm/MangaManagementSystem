@@ -360,7 +360,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     sc.EndDate))
                 .ToListAsync(cancellationToken);
 
-            // Paginated chapters sorted by ChapterNumberLabel.
+            // Paginated chapters sorted by CreatedAtUtc.
             int totalChapterCount = await _context.Chapters
                 .CountAsync(c => c.SeriesId == series.SeriesId, cancellationToken);
 
@@ -369,7 +369,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             var chapters = await _context.Chapters
                 .AsNoTracking()
                 .Where(c => c.SeriesId == series.SeriesId)
-                .OrderBy(c => c.ChapterNumberLabel)
+                .OrderBy(c => c.CreatedAtUtc)
                 .Skip(skip)
                 .Take(chapterPageSize)
                 .ToListAsync(cancellationToken);

@@ -271,6 +271,75 @@ namespace MangaManagementSystem.Application.Services
             return true;
         }
 
+        public async Task<CreatePageWithVersionResponseDto> CreatePageWithVersionAndFileAsync(
+            CreatePageWithVersionRequestDto request,
+            CancellationToken cancellationToken = default)
+        {
+            await _unitOfWork.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                var file = new FileResource
+                {
+                    FilePurposeCode = request.FileDto.FilePurposeCode,
+                    OriginalFileName = request.FileDto.OriginalFileName,
+                    CloudinaryPublicId = request.FileDto.CloudinaryPublicId,
+                    CloudinarySecureUrl = request.FileDto.CloudinarySecureUrl,
+                    ContentType = request.FileDto.ContentType,
+                    FileSizeBytes = request.FileDto.FileSizeBytes,
+                    Sha256Hash = request.FileDto.Sha256Hash,
+                    UploadedByUserId = request.FileDto.UploadedByUserId,
+                    UploadedAtUtc = DateTime.UtcNow
+                };
+                await _unitOfWork.FileResources.AddAsync(file);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                var page = new ChapterPage
+                {
+                    ChapterId = request.ChapterId,
+                    PageNo = request.PageNo,
+                    PageNotes = request.PageNotes
+                };
+                await _unitOfWork.ChapterPages.AddAsync(page);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                var version = new ChapterPageVersion
+                {
+                    ChapterPageId = page.ChapterPageId,
+                    VersionNo = 1,
+                    PageFileId = file.FileResourceId,
+                    VersionNote = request.VersionNote,
+                    IsCurrentVersion = true
+                };
+                await _unitOfWork.ChapterPageVersions.AddAsync(version);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+                return new CreatePageWithVersionResponseDto(
+                    new ChapterPageDto(page.ChapterPageId, page.ChapterId, page.PageNo, page.PageNotes, null, null),
+                    MapToDto(version),
+                    new FileResourceDto(
+                        file.FileResourceId,
+                        file.FilePurposeCode,
+                        file.OriginalFileName,
+                        file.CloudinaryPublicId,
+                        file.CloudinarySecureUrl,
+                        file.ContentType,
+                        file.FileSizeBytes,
+                        file.Sha256Hash,
+                        file.UploadedByUserId,
+                        file.UploadedAtUtc,
+                        file.DeletedAtUtc,
+                        file.DeletedByUserId)
+                );
+            }
+            catch
+            {
+                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                throw;
+            }
+        }
+
         private static ChapterPageVersionDto MapToDto(ChapterPageVersion v) => new(
             v.ChapterPageVersionId,
             v.ChapterPageId,
@@ -281,3 +350,4 @@ namespace MangaManagementSystem.Application.Services
         );
     }
 }
+

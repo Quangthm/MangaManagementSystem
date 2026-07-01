@@ -6,8 +6,7 @@
 @using MangaManagementSystem.Application.Interfaces
 @attribute [Authorize(Roles = "Mangaka,Tantou Editor,Assistant")]
 @inject NavigationManager Nav
-@inject IChapterPageTaskService TaskService
-@inject IChapterPageVersionService VersionService
+@inject MangaManagementSystem.Web.Services.Api.IMangakaTaskApiClient MangakaTaskApi
 @inject AuthenticationStateProvider AuthStateProvider
 
 @if (!string.IsNullOrWhiteSpace(_redirectUrl))
@@ -65,7 +64,14 @@ else
                 return;
             }
 
-            var task = await TaskService.GetChapterPageTaskByIdAsync(TaskId);
+            var userIdStr = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdStr, out var userId))
+            {
+                _error = "Invalid user identification.";
+                return;
+            }
+
+            var task = await MangakaTaskApi.GetTaskDetailAsync(userId, TaskId);
             if (task is null)
             {
                 _error = "Task not found.";
