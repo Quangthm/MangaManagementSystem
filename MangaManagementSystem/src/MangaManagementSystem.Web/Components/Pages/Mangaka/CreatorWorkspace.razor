@@ -22,6 +22,7 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IFileStorageService FileStorageService
 @inject IAiService AiService
+@inject ISeriesContributorService ContributorService
 
 @if (_accessDenied)
 {
@@ -226,6 +227,7 @@ else
                                               <InputFile id="uploadVersionLeft" OnChange='@(e => HandleUploadVersion(e, "Left"))' hidden accept="image/*" disabled="@IsChapterLocked" />
                                               <MudTooltip Text="Upload Page Version">
                                                   <MudIconButton HtmlTag="label" for="uploadVersionLeft" Icon="@Icons.Material.Filled.Upload" Color="Color.Info" Size="Size.Small" Disabled="@IsChapterLocked" />
+
                                               </MudTooltip>
                                           </div>
                                       </div>
@@ -315,6 +317,7 @@ else
                                               <InputFile id="uploadVersionRight" OnChange='@(e => HandleUploadVersion(e, "Right"))' hidden accept="image/*" disabled="@IsChapterLocked" />
                                               <MudTooltip Text="Upload Page Version">
                                                   <MudIconButton HtmlTag="label" for="uploadVersionRight" Icon="@Icons.Material.Filled.Upload" Color="Color.Info" Size="Size.Small" Disabled="@IsChapterLocked" />
+
                                               </MudTooltip>
                                           </div>
                                       </div>
@@ -1665,8 +1668,9 @@ else
                               });
                           }
 
+                          var camelOptions = new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase };
                           string regionsJson = mappedRegions.Any() 
-                              ? System.Text.Json.JsonSerializer.Serialize(mappedRegions, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }) 
+                              ? System.Text.Json.JsonSerializer.Serialize(mappedRegions, camelOptions) 
                               : "[]";
 
                           pageModel.Versions.Add(new PageVersionModel {
@@ -2115,274 +2119,221 @@ else
     private bool _imageDirty;
     private bool _imageEditHintShown;
 
+    private bool HasUnsavedChanges => _saveState == SaveStatus.Dirty || _imageDirty;
+
+    private async Task DiscardChangesAsync()
+    {
+        var chapter = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
+        if (chapter != null)
+        {
+            chapter.IsPagesLoaded = false;
+            await SelectChapter(SelectedChapter);
+        }
+        _saveState = SaveStatus.Saved;
+        _imageDirty = false;
+    }
+
+    private async Task<bool> EnsureSavedBeforeAsync(string? actionName = null)
+    {
+        if (!HasUnsavedChanges) return true;
+
+        bool? result = await DialogService.ShowMessageBox(
+            "Unsaved changes",
+            "You have unsaved changes. Save before proceeding?",
+            yesText: "Save", noText: "Discard", cancelText: "Cancel");
+
+        if (result == null) return false;
+        if (result == true)
+        {
+            await SaveAllChangesAsync();
+            return true;
+        }
+
+        await DiscardChangesAsync();
+        return true;
+    }
+
     // MANUAL SAVE MODEL: there is no autosave timer. Region/structural edits stay in the in-memory
     // buffer (PageVersionModel.Regions + IsDirty, pending chapters/pages) until the user clicks the
     // Save button. SaveAllChangesAsync() flushes the buffer to the DB; the header indicator shows
     // Unsaved changes / Saving… / Saved.
+    // Flushes dirty page-version regions to the DB. Called only by the manual Save button now.
     private async Task SaveAllChangesAsync()
     {
-        if (IsChapterLocked)
-        {
-            Snackbar.Add("This chapter is locked and cannot be saved.", Severity.Warning);
-            return;
-        }
+        if (_saveState == SaveStatus.Saving) return;
 
-        _saveState = SaveStatus.Saving;
-        StateHasChanged();
-        try
-        {
-            // Dependency order: pending chapters + pages (Cloudinary + DB) first, then dirty regions
-            // of the resulting / already-saved versions.
-            await FlushPendingAsync();
-            await SaveProgress();
-            _saveState = SaveStatus.Saved;
-            _lastSavedAtUtc = DateTime.UtcNow;
-            _ = JS.InvokeVoidAsync("setUnsavedFlag", false);
-            Snackbar.Add("Saved.", Severity.Success);
-        }
-        catch (Exception ex)
-        {
-            _saveState = SaveStatus.Dirty;
-            var msg = ex.InnerException?.Message ?? ex.Message;
-            Snackbar.Add($"Save failed: {msg}", Severity.Error);
-            Console.WriteLine(ex.ToString());
-        }
-        StateHasChanged();
-    }
-
-    // Discard the unsaved buffer. Pending chapters/pages live only in memory and dirty regions are
-    // not yet flushed, so reloading the workspace from the DB cleanly reverts everything to the last
-    // saved state. The unsaved flag is cleared first so the navigation guard does not double-prompt.
-    private async Task DiscardChangesAsync()
-    {
-        if (!HasUnsavedChanges) return;
-        bool? r = await DialogService.ShowMessageBox(
-            "Discard changes",
-            "Discard all unsaved changes? Chapters, pages and edits you have not saved will be removed.",
-            yesText: "Discard", cancelText: "Keep editing");
-        if (r != true) return;
-
-        try { await JS.InvokeVoidAsync("setUnsavedFlag", false); } catch { }
-        Nav.NavigateTo(Nav.Uri, forceLoad: true);
-    }
-
-    // Persists in-memory pending chapters and pages to the DB in dependency order
-    // (Chapter → Cloudinary upload → FileResource → ChapterPage → ChapterPageVersion → set current).
-    // Region flushing for the resulting versions is handled by the SaveProgress() call that follows.
-    private async Task FlushPendingAsync()
-    {
-        if (!Guid.TryParse(SeriesId, out var seriesGuid)) return;
-
-        await _dbSemaphore.WaitAsync();
-        try
-        {
-            // 0) Buffered page deletions → commit the deferred soft-deletes first (so a later page
-            //    upload computes its page_no against the already-removed pages). Ids that fail stay
-            //    pending so the next Save retries them.
-            if (_pagesPendingDelete.Count > 0)
-            {
-                var stillPending = new List<Guid>();
-                foreach (var pageId in _pagesPendingDelete)
-                {
-                    try
-                    {
-                        var ok = await MangakaPageApi.DeleteAsync(_currentUserId ?? Guid.Empty, pageId);
-                        if (!ok) stillPending.Add(pageId);
-                    }
-                    catch { stillPending.Add(pageId); }
-                }
-                _pagesPendingDelete.Clear();
-                _pagesPendingDelete.AddRange(stillPending);
-                if (stillPending.Count > 0)
-                    Snackbar.Add($"{stillPending.Count} page(s) could not be deleted (they may have assigned tasks) and will reappear.", Severity.Warning);
-            }
-
-            // 1) Pending chapters → create with a collision-safe chapter_number_label
-            //    (uq_chapter_series_chapter_number counts CANCELLED chapters too).
-            var pendingChapters = Chapters.Where(c => c.ChapterId == Guid.Empty).ToList();
-            if (pendingChapters.Any())
-            {
-                var allCh = await MangakaChapterApi.GetSeriesChaptersAsync(_currentUserId!.Value, seriesGuid);
-                var usedLabels = allCh.Select(c => c.ChapterNumberLabel).Where(l => !string.IsNullOrEmpty(l)).ToHashSet();
-                int nextFree = allCh.Select(c => int.TryParse(c.ChapterNumberLabel, out var n) ? n : 0).DefaultIfEmpty(0).Max();
-
-                foreach (var chap in pendingChapters)
-                {
-                    string label = chap.Id.ToString();
-                    if (usedLabels.Contains(label)) { nextFree++; label = nextFree.ToString(); }
-                    usedLabels.Add(label);
-
-                    // Architecture: create via the typed API client (→ controller → MediatR → handler → SP).
-                    var dbChapter = await MangakaChapterApi.CreateChapterDraftAsync(
-                        _currentUserId!.Value,
-                        new CreateChapterDraftRequest(
-                            SeriesId: seriesGuid,
-                            ChapterNumberLabel: label,
-                            ChapterTitle: string.IsNullOrWhiteSpace(chap.Title) ? null : chap.Title));
-                    chap.ChapterId = dbChapter.ChapterId;
-                }
-            }
-
-            // 2) Pending pages of every (now saved) chapter → upload + create page/version.
-            foreach (var chap in Chapters)
-            {
-                if (chap.ChapterId == Guid.Empty) continue;
-                var pendingPages = chap.Pages.Where(p => p.ChapterPageId == Guid.Empty && p.Versions.Any()).ToList();
-                if (!pendingPages.Any()) continue;
-
-                var existingDbPages = await MangakaPageApi.GetByChapterAsync(_currentUserId!.Value, chap.ChapterId);
-                int maxPageNo = existingDbPages.Any() ? existingDbPages.Max(p => p.PageNo) : 0;
-
-                foreach (var page in pendingPages)
-                {
-                    var ver = page.Versions[0];
-                    if (ver.PendingBytes == null) continue;
-
-                    var uploadResult = await FileStorageService.UploadFileAsync(
-                        ver.PendingBytes, ver.PendingFileName ?? "page", ver.PendingContentType ?? "image/png", "CHAPTER_PAGE_VERSION");
-
-                    maxPageNo++;
-                    var createReq = new CreatePageWithVersionRequestDto(
-                        ChapterId: chap.ChapterId,
-                        PageNo: maxPageNo,
-                        PageNotes: null,
-                        FileDto: new CreateFileResourceDto(
-                            FilePurposeCode: "CHAPTER_PAGE_VERSION",
-                            OriginalFileName: ver.PendingFileName ?? "page",
-                            CloudinaryPublicId: uploadResult.PublicId,
-                            CloudinarySecureUrl: uploadResult.SecureUrl,
-                            ContentType: ver.PendingContentType ?? "image/png",
-                            FileSizeBytes: ver.PendingBytes.Length,
-                            Sha256Hash: uploadResult.Sha256Hash,
-                            UploadedByUserId: _currentUserId
-                        ),
-                        VersionNote: string.IsNullOrEmpty(ver.Note) ? "Original Upload" : ver.Note
-                    );
-
-                    CreatePageWithVersionResponseDto? atomicRes = null;
-                    try
-                    {
-                        atomicRes = await MangakaPageApi.CreatePageWithVersionAsync(_currentUserId!.Value, createReq);
-                    }
-                    catch
-                    {
-                        try { await FileStorageService.DeleteFileAsync(uploadResult.PublicId, "image"); } catch { }
-                        throw;
-                    }
-
-                    if (atomicRes == null)
-                    {
-                        try { await FileStorageService.DeleteFileAsync(uploadResult.PublicId, "image"); } catch { }
-                        throw new InvalidOperationException("Failed to atomically create page and version.");
-                    }
-
-                    var dbPage = atomicRes.Page;
-                    var dbVersion = atomicRes.Version;
-
-                    // Promote the in-memory buffer to its saved identity.
-                    page.ChapterPageId = dbPage.ChapterPageId;
-                    ver.ChapterPageVersionId = dbVersion.ChapterPageVersionId;
-                    ver.DataUrl = uploadResult.SecureUrl;      // swap base64 data URL → Cloudinary URL
-                    ver.PendingBytes = null;
-                    ver.PendingFileName = null;
-                    ver.PendingContentType = null;
-                    // Keep IsDirty=true only if regions were drawn before saving, so the following
-                    // SaveProgress() persists them; otherwise the version is now clean.
-                    ver.IsDirty = !string.IsNullOrEmpty(ver.Regions);
-                }
-                chap.PageCount = chap.Pages.Count;
-            }
-        }
-        finally
-        {
-            _dbSemaphore.Release();
-        }
-    }
-
-    // Flushes dirty page-version regions to the DB. Called only by the manual Save button now.
-    private async Task SaveProgress(bool silent = false)
-    {
         var pagesToSave = UploadedPages.ToList();
         if (_isSplitView && _splitUploadedPages != null)
         {
             pagesToSave = pagesToSave.Union(_splitUploadedPages).ToList();
         }
 
-        // Nothing edited → skip the DB round-trip, the semaphore, and the toast
-        // entirely. This makes navigating between unedited pages effectively free.
-        bool anyDirty = pagesToSave.Any(p => p != null
-            && p.Versions.Any()
-            && p.Versions[p.ActiveVersionIndex].IsDirty);
-        if (!anyDirty) return;
+        bool hasNewChapters = Chapters.Any(c => c.ChapterId == Guid.Empty);
+        bool hasPendingPages = Chapters.Any(c => c.Pages != null && c.Pages.Any(p => p.ChapterPageId == Guid.Empty || (p.Versions.Any() && p.Versions[p.ActiveVersionIndex].PendingBytes != null)));
+        bool anyDirty = pagesToSave.Any(p => p != null && p.Versions.Any() && p.Versions[p.ActiveVersionIndex].IsDirty);
+
+        if (!hasNewChapters && !hasPendingPages && !anyDirty && _saveState == SaveStatus.Saved) return;
+
+        _saveState = SaveStatus.Saving;
+        StateHasChanged();
 
         int savedCount = 0;
         await _dbSemaphore.WaitAsync();
         try
         {
-        foreach (var page in pagesToSave)
-        {
-            if (page == null) continue;
-            if (page.Versions.Any())
+            if (Guid.TryParse(SeriesId, out Guid seriesGuid))
             {
-                var currentVersion = page.Versions[page.ActiveVersionIndex];
-                if (!currentVersion.IsDirty) continue;
-                if (!string.IsNullOrEmpty(currentVersion.Regions))
+                foreach (var chap in Chapters.Where(c => c.ChapterId == Guid.Empty).ToList())
                 {
                     try
                     {
-                        var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                        var allRegions = System.Text.Json.JsonSerializer.Deserialize<List<RegionModel>>(currentVersion.Regions, options);
-                        
-                        if (allRegions != null)
+                        var req = new CreateChapterDraftRequest(seriesGuid, chap.Id.ToString(), chap.Title);
+                        var createdDto = await MangakaChapterApi.CreateChapterDraftAsync(_currentUserId!.Value, req);
+                        if (createdDto != null)
                         {
-                            var dtos = allRegions.Select(r => {
-                                // Serialize text as JSON to safely store translations without DB schema changes
-                                var textJson = System.Text.Json.JsonSerializer.Serialize(new {
-                                    original = r.OriginalText ?? "",
-                                    translated = r.TranslatedText ?? ""
-                                });
-
-                                string label = !string.IsNullOrEmpty(r.Label) ? r.Label : $"Region_{r.Id}";
-                                return new MangaManagementSystem.Application.DTOs.Manga.CreatePageRegionDto(
-                                    currentVersion.ChapterPageVersionId,
-                                    (r.Type ?? "OTHER").ToUpper(),
-                                    label,
-                                    (decimal)r.X,
-                                    (decimal)r.Y,
-                                    (decimal)r.Width,
-                                    (decimal)r.Height,
-                                    null,
-                                    "MANUAL",
-                                    textJson,
-                                    r.DbId,
-                                    _currentUserId
-                                );
-                            }).ToList();
-
-                            await MangakaRegionApi.BulkReplaceAsync(_currentUserId ?? Guid.Empty, currentVersion.ChapterPageVersionId, dtos);
-                            currentVersion.IsDirty = false;
+                            chap.ChapterId = createdDto.ChapterId;
+                            chap.StatusCode = createdDto.StatusCode;
                             savedCount++;
                         }
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error saving regions: {ex.Message}");
+                        Console.WriteLine($"Error creating chapter draft {chap.Id}: {ex.Message}");
+                        Snackbar.Add($"Failed to create Chapter {chap.Id}: {ex.Message}", Severity.Error);
                     }
                 }
             }
-        }
-        if (savedCount > 0)
-        {
-            // The header save-state indicator now reflects "Saving… / Saved", so the success
-            // toast is redundant noise — keep saves silent and just update the indicator.
-            _lastSavedAtUtc = DateTime.UtcNow;
-            _saveState = SaveStatus.Saved;
-            _ = JS.InvokeVoidAsync("setUnsavedFlag", false);
-        }
+
+            foreach (var chap in Chapters)
+            {
+                if (chap.ChapterId == Guid.Empty || chap.Pages == null) continue;
+                int pageNo = 1;
+                foreach (var page in chap.Pages)
+                {
+                    if (page.ChapterPageId == Guid.Empty || (page.Versions.Any() && page.Versions[page.ActiveVersionIndex].PendingBytes != null))
+                    {
+                        if (page.Versions.Any())
+                        {
+                            var ver = page.Versions[page.ActiveVersionIndex];
+                            if (ver.PendingBytes != null)
+                            {
+                                try
+                                {
+                                    var uploadResult = await FileStorageService.UploadFileAsync(
+                                        ver.PendingBytes,
+                                        ver.PendingFileName ?? $"page_{pageNo}.png",
+                                        ver.PendingContentType ?? "image/png",
+                                        "CHAPTER_PAGE_VERSION");
+
+                                    var fileDto = new CreateFileResourceDto(
+                                        "CHAPTER_PAGE_VERSION",
+                                        uploadResult.OriginalFileName,
+                                        uploadResult.PublicId,
+                                        uploadResult.SecureUrl,
+                                        uploadResult.ContentType,
+                                        uploadResult.FileSizeBytes,
+                                        uploadResult.Sha256Hash,
+                                        _currentUserId);
+
+                                    var createReq = new CreatePageWithVersionRequestDto(
+                                        chap.ChapterId,
+                                        pageNo,
+                                        null,
+                                        fileDto,
+                                        ver.Note ?? "Original Upload");
+
+                                    var createdRes = await MangakaPageApi.CreatePageWithVersionAsync(_currentUserId!.Value, createReq);
+                                    if (createdRes != null)
+                                    {
+                                        page.ChapterPageId = createdRes.Page.ChapterPageId;
+                                        ver.ChapterPageVersionId = createdRes.Version.ChapterPageVersionId;
+                                        ver.DataUrl = uploadResult.SecureUrl;
+                                        ver.PendingBytes = null;
+                                        ver.IsDirty = false;
+                                        savedCount++;
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"Error uploading page {pageNo}: {ex.Message}");
+                                    Snackbar.Add($"Failed to upload page {pageNo}: {ex.Message}", Severity.Error);
+                                }
+                            }
+                        }
+                    }
+                    pageNo++;
+                }
+            }
+
+            foreach (var page in pagesToSave)
+            {
+                if (page == null) continue;
+                if (page.Versions.Any())
+                {
+                    var currentVersion = page.Versions[page.ActiveVersionIndex];
+                    if (!currentVersion.IsDirty || currentVersion.ChapterPageVersionId == Guid.Empty) continue;
+                    if (!string.IsNullOrEmpty(currentVersion.Regions))
+                    {
+                        try
+                        {
+                            var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                            var allRegions = System.Text.Json.JsonSerializer.Deserialize<List<RegionModel>>(currentVersion.Regions, options);
+                            
+                            if (allRegions != null)
+                            {
+                                var dtos = allRegions.Select(r => {
+                                    var textJson = System.Text.Json.JsonSerializer.Serialize(new {
+                                        original = r.OriginalText ?? "",
+                                        translated = r.TranslatedText ?? ""
+                                    });
+
+                                    string label = !string.IsNullOrEmpty(r.Label) ? r.Label : $"Region_{r.Id}";
+                                    return new MangaManagementSystem.Application.DTOs.Manga.CreatePageRegionDto(
+                                        currentVersion.ChapterPageVersionId,
+                                        (r.Type ?? "OTHER").ToUpper(),
+                                        label,
+                                        (decimal)r.X,
+                                        (decimal)r.Y,
+                                        (decimal)r.Width,
+                                        (decimal)r.Height,
+                                        null,
+                                        "MANUAL",
+                                        textJson,
+                                        r.DbId,
+                                        _currentUserId
+                                    );
+                                }).ToList();
+
+                                await MangakaRegionApi.BulkReplaceAsync(_currentUserId ?? Guid.Empty, currentVersion.ChapterPageVersionId, dtos);
+                                currentVersion.IsDirty = false;
+                                savedCount++;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Error saving regions: {ex.Message}");
+                        }
+                    }
+                }
+            }
+
+            if (savedCount > 0 || hasNewChapters || hasPendingPages)
+            {
+                _lastSavedAtUtc = DateTime.UtcNow;
+                _saveState = SaveStatus.Saved;
+                _imageDirty = false;
+                _ = JS.InvokeVoidAsync("setUnsavedFlag", false);
+                Snackbar.Add("Changes saved successfully.", Severity.Success);
+            }
+            else
+            {
+                _saveState = SaveStatus.Saved;
+            }
         }
         finally
         {
             _dbSemaphore.Release();
+            StateHasChanged();
         }
     }
 
@@ -2399,44 +2350,6 @@ else
             if (result == true) await SaveAllChangesAsync();
         }
         Nav.NavigateTo(BackHref);
-    }
-
-    // Whether the in-memory buffer has anything not yet persisted to the DB.
-    private bool HasUnsavedChanges =>
-        _imageDirty
-        || _pagesPendingDelete.Count > 0                                                 // buffered page delete
-        || Chapters.Any(c => c.ChapterId == Guid.Empty)                                  // pending chapter
-        || Chapters.SelectMany(c => c.Pages)
-                   .Any(p => p.ChapterPageId == Guid.Empty                                // pending page
-                          || p.Versions.Any(v => v.IsDirty));                             // dirty regions
-
-    // Structural dependencies only: a chapter/page that does not exist in the DB yet. Actions that
-    // must REFERENCE a saved chapter/page (submit, task, annotation, new version, note) gate on this.
-    // It deliberately excludes dirty regions / _imageDirty, which those actions persist themselves
-    // (so "Save as New Version" does not prompt to save the very brush edit it is about to save).
-    private bool HasPendingStructure =>
-        Chapters.Any(c => c.ChapterId == Guid.Empty)
-        || Chapters.SelectMany(c => c.Pages).Any(p => p.ChapterPageId == Guid.Empty);
-
-    // Gating prompt: if there is unsaved structure, ask to Save first. Returns true if the caller
-    // may proceed (nothing pending, or the user saved successfully).
-    private async Task<bool> EnsureSavedBeforeAsync(string what = "page")
-    {
-        if (!HasPendingStructure) return true;
-        bool? r = await DialogService.ShowMessageBox(
-            "Unsaved changes",
-            $"This needs the {what} saved first. Save now?",
-            yesText: "Save", cancelText: "Cancel");
-        if (r != true) return false;
-        await SaveAllChangesAsync();
-        return !HasPendingStructure;   // proceed only if the save actually persisted the structure
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        // Manual-save model: do NOT auto-save on dispose. Unsaved work is guarded by the
-        // beforeunload prompt and the in-app "Unsaved changes" dialog.
-        await Task.CompletedTask;
     }
 
     private async Task ExportCurrentPage()
@@ -2678,6 +2591,7 @@ else
                     // Programmatic load: silent=true to avoid a phantom change echo.
                     await _rightCanvasRef.InvokeVoidAsync("loadRegions",
                         string.IsNullOrEmpty(v.Regions) ? "[]" : v.Regions, true);
+
                 }
             }
         }
@@ -2717,7 +2631,6 @@ else
     // row still exists in the DB until then, Discard (reload) brings the page back. A never-saved
     // pending page is just dropped from memory and never reaches this list.
     private readonly List<Guid> _pagesPendingDelete = new();
-
     /// <summary>
     /// Returns the regions JSON with the volatile UI-only "selected" flag removed,
     /// so content comparisons ignore selection (an ephemeral, non-persisted) noise.
@@ -2788,6 +2701,7 @@ else
                     string.IsNullOrEmpty(activeVersion.Regions) ? "[]" : activeVersion.Regions, true);
                 CanUndo = false;
                 CanRedo = false;
+
             }
 
             // Tasks & annotations are scoped to the ChapterPage (not the version), so
@@ -2816,9 +2730,9 @@ else
                         {
                             try
                             {
+                                var caseInsensitiveOpts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                                 var canvasRegions = System.Text.Json.JsonSerializer.Deserialize<List<RegionModel>>(
-                                    activeVerForNo.Regions,
-                                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                                    activeVerForNo.Regions, caseInsensitiveOpts);
                                 if (canvasRegions != null)
                                     foreach (var cr in canvasRegions)
                                         if (cr.DbId.HasValue) canvasPanelNo[cr.DbId.Value] = cr.Id;
@@ -2890,7 +2804,7 @@ else
                                 Id = annIdCounter++,
                                 DbId = a.ChapterPageAnnotationId,
                                 Type = a.IssueTypeCode,
-                                Comment = a.AnnotationText,
+                                Comment = a.AnnotationText ?? "",
                                 Target = annTarget,
                                 PageNumber = SelectedPage,
                                 PinX = pinRegion != null ? (double?)pinRegion.X : null,
@@ -3103,8 +3017,9 @@ else
             });
         }
 
+        var camelOptions = new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase };
         return mapped.Any()
-            ? System.Text.Json.JsonSerializer.Serialize(mapped, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase })
+            ? System.Text.Json.JsonSerializer.Serialize(mapped, camelOptions)
             : "[]";
     }
 
@@ -3117,7 +3032,6 @@ else
         // Manual-save model: do NOT auto-persist on switch. Unsaved region edits of the version we
         // are leaving stay in its in-memory buffer.
         _imageDirty = false;
-
         // Do not overwrite DataUrl in memory with local canvas exports when switching versions
 
         if (versionIndex >= 0 && versionIndex < page.Versions.Count)
@@ -3146,7 +3060,6 @@ else
                 {
                     activeVersion.Regions = await BuildRegionsJsonFromDbAsync(activeVersion.ChapterPageVersionId);
                 }
-
                 // Programmatic load: silent=true so switching versions does not mark
                 // the page dirty or write a phantom draft.
                 await canvas.InvokeVoidAsync("loadRegions",
@@ -3193,7 +3106,8 @@ else
                 uploadedPublicId = uploadResult.PublicId;
 
                 var currentRegionsJson = await canvas.InvokeAsync<string>("exportRegions");
-                var currentRegions = System.Text.Json.JsonSerializer.Deserialize<List<RegionModel>>(currentRegionsJson, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                var caseInsensitiveOpts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var currentRegions = System.Text.Json.JsonSerializer.Deserialize<List<RegionModel>>(currentRegionsJson, caseInsensitiveOpts);
 
                 var fileDto = new CreateFileResourceDto(
                     FilePurposeCode: "CHAPTER_PAGE_VERSION",
@@ -3337,7 +3251,8 @@ else
                 uploadedPublicId = uploadResult.PublicId;
 
                 var currentRegionsJson = await canvas.InvokeAsync<string>("exportRegions");
-                var currentRegions = System.Text.Json.JsonSerializer.Deserialize<List<RegionModel>>(currentRegionsJson, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                var caseInsensitiveOpts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var currentRegions = System.Text.Json.JsonSerializer.Deserialize<List<RegionModel>>(currentRegionsJson, caseInsensitiveOpts);
 
                 var fileDto = new CreateFileResourceDto(
                     FilePurposeCode: "CHAPTER_PAGE_VERSION",
@@ -3805,6 +3720,12 @@ else
     public void Dispose()
     {
         _objRef?.Dispose();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _objRef?.Dispose();
+        await ValueTask.CompletedTask;
     }
 
     public class RegionModel

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.Application.DTOs.Editor;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Infrastructure.Persistence;
@@ -392,13 +393,15 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
         private async Task<MangakaChapterListItemDto> MapToDtoAsync(Chapter chapter, CancellationToken cancellationToken)
         {
-            var latestReview = await _context.ChapterEditorialReviews
+            var allReviews = await _context.ChapterEditorialReviews
                 .AsNoTracking()
                 .Include(r => r.ReviewerUser)
                 .Include(r => r.MarkupFile)
                 .Where(r => r.ChapterId == chapter.ChapterId)
                 .OrderByDescending(r => r.ReviewedAtUtc)
-                .FirstOrDefaultAsync(cancellationToken);
+                .ToListAsync(cancellationToken);
+
+            var latestReview = allReviews.FirstOrDefault();
 
             ChapterEditorialReviewSummaryDto? latestReviewDto = null;
             if (latestReview != null)
@@ -410,8 +413,23 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     latestReview.Feedback,
                     latestReview.MarkupFileId,
                     latestReview.MarkupFile?.CloudinarySecureUrl,
+                    latestReview.MarkupFile?.OriginalFileName,
                     latestReview.ReviewedAtUtc);
             }
+
+            var reviewHistory = allReviews
+                .Select(r => new EditorChapterReviewHistoryDto(
+                    r.ChapterEditorialReviewId,
+                    r.DecisionCode,
+                    r.Feedback,
+                    r.ReviewedAtUtc,
+                    r.ReviewerUser?.DisplayName ?? r.ReviewerUser?.Username ?? "Unknown",
+                    r.MarkupFileId,
+                    r.MarkupFile?.OriginalFileName,
+                    r.MarkupFile?.CloudinarySecureUrl,
+                    r.MarkupFile?.ContentType,
+                    r.MarkupFile != null ? (long?)r.MarkupFile.FileSizeBytes : null))
+                .ToList();
 
             return new MangakaChapterListItemDto(
                 chapter.ChapterId,
@@ -424,7 +442,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 chapter.ReleasedAtUtc,
                 chapter.CreatedAtUtc,
                 chapter.UpdatedAtUtc,
-                latestReviewDto);
+                latestReviewDto,
+                reviewHistory);
         }
 
         private static string NormalizeRequiredLabel(string value)

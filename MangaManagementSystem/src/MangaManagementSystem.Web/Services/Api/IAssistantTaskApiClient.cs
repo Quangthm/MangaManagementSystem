@@ -14,7 +14,6 @@ namespace MangaManagementSystem.Web.Services.Api
 
         // Completed work summary
         Task<AssistantCompletedWorkSummaryDto?> GetCompletedWorkAsync(Guid actorUserId, CancellationToken cancellationToken = default);
-
         // Submit operation
         Task<AssistantTaskSubmitResultDto?> SubmitTaskWorkAsync(
             Guid actorUserId,

@@ -515,6 +515,13 @@ function loadImage(dataUrl) {
                 console.error('Failed to load image (with and without CORS):', dataUrl);
                 resolve();
             };
+            // CRITICAL: the fallback image must also resolve on failure, otherwise this
+            // Promise never settles and the C# `await loadImage` hangs forever — which
+            // froze the page navigation (the load guard stayed stuck) after a reload.
+            img2.onerror = () => {
+                console.error('Failed to load image (with and without CORS):', dataUrl);
+                resolve();
+            };
             img2.src = dataUrl;
         };
         // Safety net: never let a stuck network request hang the awaiting C# code.

@@ -21,6 +21,7 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
             builder.Property(c => c.UpdatedAtUtc);
             builder.HasIndex(c => c.SeriesId).HasDatabaseName("ix_chapter_series_id");
             builder.HasIndex(c => c.StatusCode).HasDatabaseName("ix_chapter_status_code");
+            builder.HasIndex(c => c.ReleasedAtUtc).HasDatabaseName("ix_chapter_released_at").HasFilter("[released_at_utc] IS NOT NULL");
             builder.HasIndex(c => new { c.SeriesId, c.ChapterNumberLabel }).IsUnique();
             // moved into ToTable above
             builder.HasOne(c => c.Series).WithMany(s => s.Chapters).HasForeignKey(c => c.SeriesId);

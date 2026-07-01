@@ -196,7 +196,7 @@
                     }
                     else if (!_proposal.CanClaim && !_proposal.HasEditorialDecision
                              && !string.IsNullOrWhiteSpace(_proposal.SeriesStatusCode)
-                             && _proposal.SeriesStatusCode != _proposal.ProposalStatusCode)
+                             && !IsExpectedProposalSeriesStatePair(_proposal.ProposalStatusCode, _proposal.SeriesStatusCode))
                     {
                         <MudAlert Severity="Severity.Warning">
                             Current series state (@_proposal.SeriesStatusCode.Replace("_", " ")) differs from this proposal version. Review actions are unavailable.
@@ -416,6 +416,17 @@
         "APPROVED" => Color.Success,
         _ => Color.Default
     };
+
+    private bool IsExpectedProposalSeriesStatePair(string? proposalStatusCode, string? seriesStatusCode)
+    {
+        // When an editor requests revision on a proposal, the series returns to PROPOSAL_DRAFT.
+        // This is an expected state pair, not a mismatch.
+        if (proposalStatusCode == "REVISION_REQUESTED" && seriesStatusCode == "PROPOSAL_DRAFT")
+            return true;
+
+        // Otherwise, the proposal and series status codes should match.
+        return proposalStatusCode == seriesStatusCode;
+    }
 
     private async Task OnMarkupChanged(IBrowserFile file)
     {

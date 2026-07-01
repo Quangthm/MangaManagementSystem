@@ -7,18 +7,18 @@ using System.Threading.Tasks;
 namespace MangaManagementSystem.Domain.Interfaces
 {
     /// <summary>
-    /// Read-only repository for the Tantou Editor Chapter Review Queue. All queries use EF
-    /// <c>AsNoTracking</c>. No writes or stored-procedure transitions live here. Returns
-    /// Domain records and primitive counts — DTO shaping happens in the Application handler.
+    /// Repository for the Tantou Editor Chapter Review Queue. Read queries use EF
+    /// <c>AsNoTracking</c>. Write operations use EF transactions.
     /// </summary>
     public interface IEditorChapterReviewRepository
     {
         /// <summary>
         /// Returns KPI counts and a filtered chapter list for the review queue page.
         /// <paramref name="statusFilter"/> narrows the chapter list; null/empty/"all" means
-        /// all reviewable statuses (UNDER_REVIEW, REVISION_REQUESTED, ON_HOLD). Each chapter
-        /// carries its page count (derived from the ChapterPages table) and its parent Series
-        /// (with Slug) so the handler can build workspace URLs.
+        /// all valid chapter statuses (DRAFT, UNDER_REVIEW, REVISION_REQUESTED, APPROVED,
+        /// SCHEDULED, RELEASED, ON_HOLD, CANCELLED). Each chapter carries its page count
+        /// (derived from the ChapterPages table) and its parent Series (with Slug) so the
+        /// handler can build workspace URLs.
         ///
         /// Scope: only chapters belonging to series where <paramref name="actorUserId"/> is an
         /// active Tantou Editor contributor are counted and listed.
@@ -37,6 +37,19 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<EditorChapterReviewDetail?> GetReviewDetailForEditorAsync(
             Guid chapterId,
             Guid actorUserId,
+            CancellationToken ct = default);
+
+        /// <summary>
+        /// Creates a <c>ChapterEditorialReview</c> and updates the chapter status in one EF
+        /// transaction. Validates actor permission, chapter state, and required comments before
+        /// persisting.
+        /// </summary>
+        Task<ChapterEditorialReviewResult> SubmitChapterEditorialReviewAsync(
+            Guid actorUserId,
+            Guid chapterId,
+            string decisionCode,
+            string? comments,
+            UploadedFileMetadata? markup,
             CancellationToken ct = default);
     }
 
@@ -81,7 +94,8 @@ namespace MangaManagementSystem.Domain.Interfaces
         DateTime CreatedAtUtc,
         string? SubmittedByDisplayName,
         IReadOnlyList<EditorChapterReviewDetailPage> Pages,
-        IReadOnlyList<EditorChapterReviewDetailAnnotation> OpenAnnotations);
+        IReadOnlyList<EditorChapterReviewDetailAnnotation> OpenAnnotations,
+        IReadOnlyList<EditorChapterReviewHistoryItem> EditorialReviewHistory);
 
     public sealed record EditorChapterReviewDetailPage(
         Guid ChapterPageId,
@@ -96,5 +110,46 @@ namespace MangaManagementSystem.Domain.Interfaces
         string IssueTypeCode,
         DateTime CreatedAtUtc,
         string? CreatedByDisplayName,
-        bool IsResolved);
+        bool IsResolved,
+        int? PageNumber,
+        Guid? CurrentVersionId,
+        short? CurrentVersionNo);
+
+    /// <summary>
+    /// A single editorial review decision from the chapter's review history.
+    /// </summary>
+    public sealed record EditorChapterReviewHistoryItem(
+        Guid ReviewId,
+        string DecisionCode,
+        string? Comments,
+        DateTime ReviewedAtUtc,
+        Guid ReviewerUserId,
+        string ReviewerDisplayName,
+        Guid? MarkupFileId,
+        string? MarkupFileName,
+        string? MarkupFileUrl,
+        string? MarkupContentType,
+        long? MarkupFileSizeBytes);
+
+    /// <summary>
+    /// Result of a chapter editorial review decision write operation.
+    /// </summary>
+    public sealed record ChapterEditorialReviewResult(
+        Guid ChapterId,
+        string StatusCode,
+        Guid ReviewId,
+        string DecisionCode,
+        string? Comments,
+        DateTime ReviewedAtUtc);
+
+    /// <summary>
+    /// Metadata for an uploaded file ready to be persisted as a <c>FileResource</c>.
+    /// </summary>
+    public sealed record UploadedFileMetadata(
+        string OriginalFileName,
+        string PublicId,
+        string SecureUrl,
+        string ContentType,
+        long FileSizeBytes,
+        string? Sha256Hash);
 }

@@ -1,5 +1,6 @@
 @page "/editor/chapters/{ChapterId:guid}"
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
 @using System.Security.Claims
 @using MangaManagementSystem.Application.DTOs.Editor
 @using MangaManagementSystem.Web.Services.Api
@@ -7,13 +8,14 @@
 @inject IEditorChapterReviewApiClient ChapterReviewApiClient
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthStateProvider
+@inject ISnackbar Snackbar
 
 <EditorLayout>
     <div class="mf-page">
         <div class="mf-page-header">
             <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="GoBack" Class="mb-2">Back to Chapters</MudButton>
             <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Chapter Review</MudText>
-            <MudText Typo="Typo.body1" Class="mf-muted">Read-only chapter overview. Use the workspace to review pages and annotations.</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">Review chapter overview, pages, and annotations. Make a final review decision from this page.</MudText>
         </div>
 
         @if (_loading)
@@ -51,21 +53,48 @@
                 <MudChip T="string" Color="@GetStatusColor(_detail.StatusCode)" Size="Size.Medium">@_detail.StatusCode.Replace("_", " ")</MudChip>
             </MudStack>
 
+            @if (_detail.StatusCode == "UNDER_REVIEW")
+            {
+                <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Review Decision</MudText>
+                    <MudStack Row="true" Spacing="3">
+                        <MudButton Variant="Variant.Filled" Color="Color.Success"
+                                   StartIcon="@Icons.Material.Filled.CheckCircle"
+                                   OnClick="@(() => OpenDecisionDialog("APPROVED"))"
+                                   Disabled="_submitting">
+                            Approve Chapter
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Warning"
+                                   StartIcon="@Icons.Material.Filled.Comment"
+                                   OnClick="@(() => OpenDecisionDialog("REVISION_REQUESTED"))"
+                                   Disabled="_submitting">
+                            Request Revision
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Error"
+                                   StartIcon="@Icons.Material.Filled.Cancel"
+                                   OnClick="@(() => OpenDecisionDialog("CANCELLED"))"
+                                   Disabled="_submitting">
+                            Cancel Chapter
+                        </MudButton>
+                    </MudStack>
+                    @if (_submitting)
+                    {
+                        <MudProgressLinear Indeterminate="true" Class="mt-3" />
+                    }
+                </MudPaper>
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info" Class="mb-5">
+                    This chapter is not currently under review. Review decisions are only available for chapters with UNDER_REVIEW status.
+                </MudAlert>
+            }
+
             <MudGrid>
                 <!-- Pages -->
                 <MudItem xs="12" md="8">
                     <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
-                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
-                            <MudText Typo="Typo.h6" Class="font-weight-bold">Pages (@_detail.PageCount)</MudText>
-                            @if (_detail.CanOpenWorkspace && !string.IsNullOrWhiteSpace(_detail.WorkspaceUrl))
-                            {
-                                <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                                           StartIcon="@Icons.Material.Filled.OpenInNew"
-                                           OnClick="@(() => Nav.NavigateTo(_detail.WorkspaceUrl!))">
-                                    Review in Workspace
-                                </MudButton>
-                            }
-                        </MudStack>
+                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Pages (@_detail.PageCount)</MudText>
 
                         @if (_detail.Pages.Count == 0)
                         {
@@ -73,23 +102,41 @@
                         }
                         else
                         {
-                            <MudTable Items="_detail.Pages" Hover="true" Dense="true">
+                            <MudTable Items="_detail.Pages" Hover="true" Dense="true" RowsPerPage="5"
+                                     RowClass="mf-page-row-clickable">
                                 <HeaderContent>
                                     <MudTh>Page</MudTh>
                                     <MudTh>Current Version</MudTh>
-                                    <MudTh>Preview</MudTh>
+                                    <MudTh>Unresolved Annotations</MudTh>
                                 </HeaderContent>
                                 <RowTemplate>
-                                    <MudTd DataLabel="Page">@context.PageNumber</MudTd>
-                                    <MudTd DataLabel="Current Version">@(context.CurrentVersionNo.HasValue ? $"v{context.CurrentVersionNo}" : "—")</MudTd>
-                                    <MudTd DataLabel="Preview">
-                                        @if (!string.IsNullOrWhiteSpace(context.CurrentVersionFileUrl))
+                                    <MudTd DataLabel="Page" Style="cursor: pointer;" OnClick="@(() => OpenWorkspaceForPage(context))">
+                                        @context.PageNumber
+                                    </MudTd>
+                                    <MudTd DataLabel="Current Version">
+                                        @if (context.CurrentVersionNo.HasValue)
                                         {
-                                            <MudLink Href="@context.CurrentVersionFileUrl" Target="_blank">Open image</MudLink>
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                                       OnClick="@(() => OpenWorkspaceForPage(context))">
+                                                v@(context.CurrentVersionNo)
+                                            </MudButton>
                                         }
                                         else
                                         {
-                                            <MudText Class="mf-muted">No image</MudText>
+                                            <MudText Class="mf-muted">—</MudText>
+                                        }
+                                    </MudTd>
+                                    <MudTd DataLabel="Unresolved Annotations">
+                                        @{
+                                            var count = GetUnresolvedAnnotationCount(context);
+                                        }
+                                        @if (count > 0)
+                                        {
+                                            <MudChip T="int" Color="Color.Warning" Size="Size.Small">@count</MudChip>
+                                        }
+                                        else
+                                        {
+                                            <MudChip T="int" Variant="Variant.Outlined" Size="Size.Small">0</MudChip>
                                         }
                                     </MudTd>
                                 </RowTemplate>
@@ -99,27 +146,104 @@
 
                     <!-- Open annotations -->
                     <MudPaper Class="pa-5 mf-card" Elevation="0">
-                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Open Annotations</MudText>
-                        @if (_detail.OpenAnnotations.Count == 0)
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold">
+                                Open Annotations (@_annotations.Count)
+                            </MudText>
+                            @if (_annotations.Count > 0)
+                            {
+                                <MudSelect T="int?" Value="_annotationPageFilter" ValueChanged="OnAnnotationPageFilterChanged"
+                                           Variant="Variant.Outlined" Label="Filter by page" Style="width: 200px;">
+                                    <MudSelectItem Value="@((int?)null)">All pages</MudSelectItem>
+                                    @foreach (var pageNum in _detail?.Pages.Select(p => p.PageNumber).Distinct().OrderBy(p => p) ?? Enumerable.Empty<int>())
+                                    {
+                                        <MudSelectItem Value="@((int?)pageNum)">Page @pageNum</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            }
+                        </MudStack>
+                        @if (_annotations.Count == 0)
                         {
                             <MudText Class="mf-muted">No open annotations for this chapter.</MudText>
                         }
                         else
                         {
-                            <MudList T="EditorChapterReviewAnnotationDto">
-                                @foreach (var ann in _detail.OpenAnnotations)
+                            var filteredAnn = _annotationPageFilter.HasValue
+                                ? _annotations.Where(a => a.PageNumber == _annotationPageFilter.Value).ToList()
+                                : _annotations.ToList();
+
+                            @if (filteredAnn.Count == 0)
+                            {
+                                <MudText Class="mf-muted">No open annotations for Page @_annotationPageFilter.Value.</MudText>
+                            }
+                            else
+                            {
+                                var groupedAnn = filteredAnn
+                                    .GroupBy(a => new { a.PageNumber, a.CurrentVersionNo, a.CurrentVersionId })
+                                    .OrderBy(g => g.Key.PageNumber ?? int.MaxValue)
+                                    .ToList();
+
+                                var annPage = Math.Max(1, _annotationsPage);
+                                var annPageSize = 5;
+                                var annTotalPages = (int)Math.Ceiling((double)groupedAnn.Count / annPageSize);
+                                var annPageGroups = groupedAnn.Skip((annPage - 1) * annPageSize).Take(annPageSize).ToList();
+
+                                @foreach (var group in annPageGroups)
                                 {
-                                    <MudListItem T="EditorChapterReviewAnnotationDto" Value="@ann">
-                                        <div>
-                                            <MudChip T="string" Color="Color.Secondary" Size="Size.Small">@ann.IssueTypeCode.Replace("_", " ")</MudChip>
-                                            <MudText>@ann.Comment</MudText>
-                                            <MudText Typo="Typo.caption" Class="mf-muted">
-                                                By @(string.IsNullOrWhiteSpace(ann.CreatedByDisplayName) ? "Unknown" : ann.CreatedByDisplayName) - @ann.CreatedAtUtc.ToLocalTime().ToString("MMM d, HH:mm")
-                                            </MudText>
-                                        </div>
-                                    </MudListItem>
+                                    var groupHeader = group.Key.PageNumber.HasValue
+                                        ? $"Page {group.Key.PageNumber}" + (group.Key.CurrentVersionNo.HasValue ? $" · Version v{group.Key.CurrentVersionNo}" : "")
+                                        : "Unknown Page";
+
+                                    <div class="mb-4">
+                                        <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2">
+                                            @groupHeader
+                                            @if (group.Key.CurrentVersionId.HasValue && group.Key.PageNumber.HasValue)
+                                            {
+                                                <MudButton Size="Size.Small" Variant="Variant.Text"
+                                                           StartIcon="@Icons.Material.Filled.OpenInNew"
+                                                           OnClick="@(() => OpenWorkspaceForPageContext(group.Key.PageNumber, group.Key.CurrentVersionId))"
+                                                           Class="ml-2">
+                                                    Open
+                                                </MudButton>
+                                            }
+                                        </MudText>
+
+                                        @foreach (var ann in group)
+                                        {
+                                            <MudPaper Class="pa-3 mb-2" Elevation="1" Style="cursor: pointer;"
+                                                      OnClick="@(() => OpenWorkspaceForAnnotation(ann))">
+                                                <div class="d-flex justify-space-between align-center mb-1">
+                                                    <MudChip T="string" Color="Color.Secondary" Size="Size.Small">@ann.IssueTypeCode.Replace("_", " ")</MudChip>
+                                                    <MudText Typo="Typo.caption" Class="mf-muted">
+                                                        @ann.CreatedAtUtc.ToLocalTime().ToString("MMM d, HH:mm")
+                                                    </MudText>
+                                                </div>
+                                                <MudText Typo="Typo.body2">@ann.Comment</MudText>
+                                                <MudText Typo="Typo.caption" Class="mf-muted mt-1">
+                                                    By @(string.IsNullOrWhiteSpace(ann.CreatedByDisplayName) ? "Unknown" : ann.CreatedByDisplayName)
+                                                </MudText>
+                                            </MudPaper>
+                                        }
+                                    </div>
                                 }
-                            </MudList>
+
+                                @if (annTotalPages > 1)
+                                {
+                                    <div class="d-flex align-center justify-center gap-2 mt-4">
+                                        <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                                   OnClick="@(() => { _annotationsPage = Math.Max(1, _annotationsPage - 1); })"
+                                                   Disabled="@(_annotationsPage <= 1)">
+                                            Previous
+                                        </MudButton>
+                                        <MudText Typo="Typo.body2">@_annotationsPage / @annTotalPages</MudText>
+                                        <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                                   OnClick="@(() => { _annotationsPage = Math.Min(annTotalPages, _annotationsPage + 1); })"
+                                                   Disabled="@(_annotationsPage >= annTotalPages)">
+                                            Next
+                                        </MudButton>
+                                    </div>
+                                }
+                            }
                         }
                     </MudPaper>
                 </MudItem>
@@ -133,14 +257,13 @@
                         <MudText><strong>Title:</strong> @(_detail.ChapterTitle ?? "—")</MudText>
                         <MudText><strong>Status:</strong> @_detail.StatusCode.Replace("_", " ")</MudText>
                         <MudText><strong>Pages:</strong> @_detail.PageCount</MudText>
-                        <MudText><strong>Current versions:</strong> @_detail.CurrentVersionCount</MudText>
                         <MudText><strong>Created:</strong> @_detail.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</MudText>
                         <MudText><strong>Creator:</strong> @(_detail.SubmittedByDisplayName ?? "—")</MudText>
                     </MudPaper>
 
                     @if (_detail.CanOpenWorkspace && !string.IsNullOrWhiteSpace(_detail.WorkspaceUrl))
                     {
-                        <MudPaper Class="pa-5 mf-card" Elevation="0">
+                        <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
                             <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">Review</MudText>
                             <MudText Class="mb-3 mf-muted">Open the chapter workspace to review pages, annotations, and record editorial decisions.</MudText>
                             <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
@@ -150,11 +273,94 @@
                             </MudButton>
                         </MudPaper>
                     }
+
+                    <!-- Editorial Review History -->
+                    <MudPaper Class="pa-5 mf-card" Elevation="0">
+                        <ChapterEditorialReviewHistoryPanel
+                            Reviews="@(_detail?.EditorialReviewHistory ?? Array.Empty<EditorChapterReviewHistoryDto>())"
+                            PageSize="5"
+                            EmptyText="No editorial review decisions have been recorded for this chapter yet." />
+                    </MudPaper>
                 </MudItem>
             </MudGrid>
         }
     </div>
 </EditorLayout>
+
+<MudDialog @bind-Visible="_dialogVisible" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            @GetDialogTitle(_selectedDecision)
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_selectedDecision == "APPROVED")
+        {
+            <MudText Class="mf-muted mb-3">
+                This chapter will be marked as <strong>APPROVED</strong> and may proceed toward scheduling and release.
+            </MudText>
+            <MudTextField @bind-Value="_dialogComments" Label="Comments (optional)" Lines="3" Variant="Variant.Outlined" />
+        }
+        else if (_selectedDecision == "REVISION_REQUESTED")
+        {
+            <MudText Class="mf-muted mb-3">
+                Use this when the chapter can be <strong>fixed and resubmitted</strong>. The Mangaka will be able to edit and resubmit the chapter with new page versions.
+            </MudText>
+            <MudTextField @bind-Value="_dialogComments" Label="Comments (required)" Lines="3" Variant="Variant.Outlined" Required="true" />
+            @if (_dialogValidationError != null)
+            {
+                <MudText Color="Color.Error" Typo="Typo.caption">@_dialogValidationError</MudText>
+            }
+        }
+        else if (_selectedDecision == "CANCELLED")
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-3">
+                <strong>Warning:</strong> Cancellation is <strong>terminal</strong> for this chapter attempt.
+                The chapter cannot be edited, resubmitted, approved, scheduled, or released.
+                A replacement chapter draft must be created to redo the work.
+            </MudAlert>
+            <MudText Class="mf-muted mb-3">
+                Use this <strong>only</strong> when this chapter attempt should not proceed.
+                If the chapter can still be fixed, use <strong>Request Revision</strong> instead.
+            </MudText>
+            <MudTextField @bind-Value="_dialogComments" Label="Comments (required)" Lines="3" Variant="Variant.Outlined" Required="true" />
+            @if (_dialogValidationError != null)
+            {
+                <MudText Color="Color.Error" Typo="Typo.caption">@_dialogValidationError</MudText>
+            }
+        }
+
+        <div class="mt-3 pt-3" style="border-top: 1px solid var(--mud-palette-divider);">
+            <MudText Typo="Typo.subtitle2" Class="mb-1">Optional markup / review attachment</MudText>
+            <MudText Typo="Typo.caption" Class="mf-muted mb-2">
+                Attach a PDF, Word document, image, or annotated screenshot to support this review decision.
+            </MudText>
+            <MudFileUpload T="IBrowserFile" FilesChanged="OnMarkupFileChanged" Accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" Disabled="_submitting">
+                <ActivatorContent>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.CloudUpload" Disabled="_submitting">
+                        Select File
+                    </MudButton>
+                </ActivatorContent>
+            </MudFileUpload>
+            @if (_dialogMarkupFile != null)
+            {
+                <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-2">
+                    <MudText Typo="Typo.body2">
+                        @_dialogMarkupFile.Name (@FormatFileSize(_dialogMarkupFile.Size))
+                    </MudText>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="ClearMarkupFile" />
+                </MudStack>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="CloseDialog">Cancel</MudButton>
+        <MudButton Color="@GetDecisionColor(_selectedDecision)" Variant="Variant.Filled" OnClick="ConfirmDecision" Disabled="_submitting">
+            @GetDecisionButtonLabel(_selectedDecision)
+        </MudButton>
+    </DialogActions>
+</MudDialog>
 
 @code {
     [Parameter] public Guid ChapterId { get; set; }
@@ -164,6 +370,25 @@
     private bool _accessDenied;
     private string? _error;
     private Guid _currentUserId;
+
+    private bool _dialogVisible;
+    private string? _selectedDecision;
+    private string? _dialogComments;
+    private string? _dialogValidationError;
+    private bool _submitting;
+    private IBrowserFile? _dialogMarkupFile;
+    private int _annotationsPage = 1;
+    private int? _annotationPageFilter;
+
+    private IReadOnlyList<EditorChapterReviewAnnotationDto> _annotations
+        => _detail?.OpenAnnotations ?? Array.Empty<EditorChapterReviewAnnotationDto>();
+
+    private readonly DialogOptions _dialogOptions = new()
+    {
+        MaxWidth = MaxWidth.Small,
+        FullWidth = true,
+        CloseOnEscapeKey = true
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -186,6 +411,7 @@
         _loading = true;
         _error = null;
         _accessDenied = false;
+        _annotationsPage = 1;
         try
         {
             var result = await ChapterReviewApiClient.GetReviewDetailAsync(_currentUserId, ChapterId);
@@ -215,12 +441,193 @@
 
     private void GoBack() => Nav.NavigateTo("/editor/chapters");
 
+    private void OpenWorkspaceForPage(EditorChapterReviewPageDto page)
+    {
+        var url = $"/series/{_detail?.SeriesSlug ?? ""}/workspace?chapterId={ChapterId}&page={page.PageNumber}";
+        if (page.CurrentVersionId.HasValue)
+        {
+            url += $"&version={page.CurrentVersionId.Value}";
+        }
+        url += $"&returnUrl={Uri.EscapeDataString($"/editor/chapters/{ChapterId}")}";
+        Nav.NavigateTo(url);
+    }
+
+    private void OpenWorkspaceForPageContext(int? pageNumber, Guid? versionId)
+    {
+        if (!pageNumber.HasValue) return;
+        var url = $"/series/{_detail?.SeriesSlug ?? ""}/workspace?chapterId={ChapterId}&page={pageNumber.Value}";
+        if (versionId.HasValue)
+        {
+            url += $"&version={versionId.Value}";
+        }
+        url += $"&returnUrl={Uri.EscapeDataString($"/editor/chapters/{ChapterId}")}";
+        Nav.NavigateTo(url);
+    }
+
+    private int GetUnresolvedAnnotationCount(EditorChapterReviewPageDto page)
+    {
+        if (_detail?.OpenAnnotations is null) return 0;
+
+        return _detail.OpenAnnotations.Count(a =>
+            a.PageNumber == page.PageNumber &&
+            (a.CurrentVersionId == null || page.CurrentVersionId == null ||
+             a.CurrentVersionId == page.CurrentVersionId));
+    }
+
+    private void OnAnnotationPageFilterChanged(int? value)
+    {
+        _annotationPageFilter = value;
+        _annotationsPage = 1;
+    }
+
+    private void OpenWorkspaceForAnnotation(EditorChapterReviewAnnotationDto ann)
+    {
+        if (ann.PageNumber.HasValue)
+        {
+            var url = $"/series/{_detail?.SeriesSlug ?? ""}/workspace?chapterId={ChapterId}&page={ann.PageNumber.Value}";
+            if (ann.CurrentVersionId.HasValue)
+            {
+                url += $"&version={ann.CurrentVersionId.Value}";
+            }
+            url += $"&returnUrl={Uri.EscapeDataString($"/editor/chapters/{ChapterId}")}";
+            Nav.NavigateTo(url);
+        }
+        else if (_detail?.WorkspaceUrl is not null)
+        {
+            Nav.NavigateTo(_detail.WorkspaceUrl);
+        }
+    }
+
+    private void OpenDecisionDialog(string decisionCode)
+    {
+        _selectedDecision = decisionCode;
+        _dialogComments = null;
+        _dialogValidationError = null;
+        _dialogMarkupFile = null;
+        _dialogVisible = true;
+    }
+
+    private void CloseDialog()
+    {
+        _dialogVisible = false;
+        _selectedDecision = null;
+        _dialogComments = null;
+        _dialogValidationError = null;
+        _dialogMarkupFile = null;
+    }
+
+    private void OnMarkupFileChanged(IBrowserFile file)
+    {
+        _dialogMarkupFile = file;
+    }
+
+    private void ClearMarkupFile()
+    {
+        _dialogMarkupFile = null;
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+
+    private async Task ConfirmDecision()
+    {
+        if (_submitting) return;
+
+        _dialogValidationError = null;
+
+        var comments = _dialogComments?.Trim();
+
+        if (_selectedDecision == "REVISION_REQUESTED" || _selectedDecision == "CANCELLED")
+        {
+            if (string.IsNullOrWhiteSpace(comments))
+            {
+                _dialogValidationError = "Comments are required for this decision.";
+                return;
+            }
+        }
+
+        _submitting = true;
+        try
+        {
+            if (_dialogMarkupFile is not null)
+            {
+                await ChapterReviewApiClient.SubmitReviewDecisionWithMarkupAsync(
+                    _currentUserId, ChapterId, _selectedDecision!,
+                    !string.IsNullOrWhiteSpace(comments) ? comments : null,
+                    _dialogMarkupFile);
+            }
+            else
+            {
+                var request = new SubmitChapterEditorialReviewRequest(
+                    _selectedDecision!,
+                    !string.IsNullOrWhiteSpace(comments) ? comments : null,
+                    null);
+
+                await ChapterReviewApiClient.SubmitReviewDecisionAsync(
+                    _currentUserId, ChapterId, request);
+            }
+
+            CloseDialog();
+
+            var decisionLabel = _selectedDecision switch
+            {
+                "APPROVED" => "approved",
+                "REVISION_REQUESTED" => "returned for revision",
+                "CANCELLED" => "cancelled",
+                _ => "updated"
+            };
+
+            Snackbar.Add($"Chapter has been {decisionLabel}.", Severity.Success);
+
+            await LoadDetail();
+        }
+        catch (Exception ex)
+        {
+            CloseDialog();
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
     private Color GetStatusColor(string status) => status switch
     {
         "UNDER_REVIEW" => Color.Warning,
         "REVISION_REQUESTED" => Color.Error,
         "ON_HOLD" => Color.Info,
         "APPROVED" => Color.Success,
+        "SCHEDULED" => Color.Tertiary,
+        "CANCELLED" => Color.Dark,
         _ => Color.Default
+    };
+
+    private static Color GetDecisionColor(string? decision) => decision switch
+    {
+        "APPROVED" => Color.Success,
+        "REVISION_REQUESTED" => Color.Warning,
+        "CANCELLED" => Color.Error,
+        _ => Color.Default
+    };
+
+    private static string GetDecisionButtonLabel(string? decision) => decision switch
+    {
+        "APPROVED" => "Approve Chapter",
+        "REVISION_REQUESTED" => "Request Revision",
+        "CANCELLED" => "Cancel Chapter",
+        _ => "Confirm"
+    };
+
+    private static string GetDialogTitle(string? decision) => decision switch
+    {
+        "APPROVED" => "Approve Chapter",
+        "REVISION_REQUESTED" => "Request Revision",
+        "CANCELLED" => "Cancel Chapter",
+        _ => "Review Decision"
     };
 }

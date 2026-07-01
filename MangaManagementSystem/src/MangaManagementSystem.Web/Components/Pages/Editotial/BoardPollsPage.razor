@@ -195,20 +195,9 @@
                                         <span>Total votes submitted</span>
                                     </div>
 
-                                    <ResultRow Label="Approve"
-                                               Tone="approve"
-                                               Count="@_selectedPoll.ApproveVotes"
-                                               Total="9" />
-
-                                    <ResultRow Label="Reject"
-                                               Tone="reject"
-                                               Count="@_selectedPoll.RejectVotes"
-                                               Total="9" />
-
-                                    <ResultRow Label="Abstain"
-                                               Tone="abstain"
-                                               Count="@_selectedPoll.AbstainVotes"
-                                               Total="9" />
+                                    @RenderResultRow("Approve", "approve", _selectedPoll.ApproveVotes, _selectedPoll.TotalVotes)
+                                    @RenderResultRow("Reject", "reject", _selectedPoll.RejectVotes, _selectedPoll.TotalVotes)
+                                    @RenderResultRow("Abstain", "abstain", _selectedPoll.AbstainVotes, _selectedPoll.TotalVotes)
 
                                     <div class="mf-trajectory-box">
                                         <span>Computed Result</span>
@@ -362,8 +351,22 @@
 
     private static string DeadlineText(EditorialBoardPollDto poll)
     {
-        return poll.EndsAtUtc is null
-            ? "No deadline"
-            : $"Deadline: {poll.EndsAtUtc.Value.ToLocalTime().ToString("MMM dd, yyyy", CultureInfo.InvariantCulture)}";
+        if (poll.EndsAtUtc is null) return "No deadline";
+        var dateStr = poll.EndsAtUtc.Value.ToLocalTime().ToString("MMM dd, yyyy", CultureInfo.InvariantCulture);
+        return $"Deadline: {dateStr}";
     }
+
+    private RenderFragment RenderResultRow(string label, string tone, int count, int total) => __builder =>
+    {
+        var percent = total > 0 ? (int)Math.Round(count * 100.0 / total) : 0;
+        <div class="mf-result-row @tone">
+            <div>
+                <strong>@label</strong>
+                <span>@count (@percent%)</span>
+            </div>
+            <div class="mf-result-bar">
+                <div style="width: @percent%;"></div>
+            </div>
+        </div>
+    };
 }
