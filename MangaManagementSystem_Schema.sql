@@ -1068,10 +1068,6 @@ ON manga.SeriesVoteInput (
     rating_count DESC,
     reading_count DESC,
     series_id
-)
-INCLUDE (
-    data_source_note,
-    entered_at_utc
 );
 GO
 CREATE VIEW manga.vw_SeriesRanking
@@ -1098,10 +1094,7 @@ WITH ScoreBase AS (
                 + svi.reading_count * 0.001
             )
             AS DECIMAL(18, 4)
-        ) AS ranking_score,
-
-        svi.entered_at_utc,
-        svi.updated_at_utc
+        ) AS ranking_score
     FROM manga.SeriesVoteInput svi
     INNER JOIN manga.PublicationPeriod pp
         ON pp.publication_period_id = svi.publication_period_id
@@ -1132,10 +1125,7 @@ SELECT
             rating_count DESC,
             reading_count DESC,
             series_id
-    ) AS rank_position,
-
-    entered_at_utc,
-    updated_at_utc
+    ) AS rank_position
 FROM ScoreBase;
 GO
 CREATE TABLE manga.Notification (
