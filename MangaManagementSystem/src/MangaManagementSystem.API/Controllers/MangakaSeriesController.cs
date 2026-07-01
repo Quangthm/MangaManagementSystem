@@ -11,6 +11,7 @@ using MangaManagementSystem.Application.Features.Mangaka.Series.Commands.UpdateS
 using MangaManagementSystem.Application.Features.Mangaka.Series.Queries.GetMyMangakaSeries;
 using MangaManagementSystem.Application.Features.Mangaka.Series.Queries.GetMyMangakaSeriesCardById;
 using MangaManagementSystem.Application.Features.Mangaka.SeriesProposals.Commands.SubmitSeriesProposal;
+using MangaManagementSystem.Application.Features.Mangaka.SeriesProposals.Queries.GetMySeriesProposalDetail;
 using MangaManagementSystem.Application.Features.Mangaka.SeriesProposals.Queries.GetMySeriesProposals;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -393,6 +394,9 @@ namespace MangaManagementSystem.API.Controllers
         /// User.StatusCode == "ACTIVE", Role.RoleName == "Mangaka".
         /// Uses MediatR/CQRS — all orchestration is in GetMySeriesProposalsQueryHandler.
         /// Route: GET /api/mangaka/series/proposals
+        ///
+        /// Also serves the single-proposal detail at:
+        /// Route: GET /api/mangaka/series/proposals/{proposalId}
         /// </summary>
         [HttpGet("proposals")]
         public async Task<IActionResult> GetMySeriesProposalsAsync(
@@ -417,6 +421,43 @@ namespace MangaManagementSystem.API.Controllers
                     "Unexpected error loading proposals for actor {ActorUserId}.", actorUserId);
                 return Problem(
                     detail: "We could not load your series proposals right now. Please try again later.",
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
+        }
+
+        /// <summary>
+        /// Returns a single proposal by ID, scoped to the requesting Mangaka user's active
+        /// contributor memberships. Read-only tracking query — no mutations.
+        /// Same access rule as GetMySeriesProposalsAsync.
+        /// Route: GET /api/mangaka/series/proposals/{proposalId}
+        /// </summary>
+        [HttpGet("proposals/{proposalId:guid}")]
+        public async Task<IActionResult> GetMySeriesProposalDetailAsync(
+            Guid proposalId,
+            CancellationToken cancellationToken)
+        {
+            if (!TryResolveActorUserId(out Guid actorUserId))
+            {
+                return BadRequest(new ApiErrorResponse(
+                    "Could not identify the requesting user. Please sign in again."));
+            }
+
+            var query = new GetMySeriesProposalDetailQuery(actorUserId, proposalId);
+
+            try
+            {
+                MangakaSeriesProposalDto? result = await _mediator.Send(query, cancellationToken);
+                if (result is null)
+                    return NotFound(new ApiErrorResponse("Proposal not found or you do not have access."));
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Unexpected error loading proposal {ProposalId} for actor {ActorUserId}.",
+                    proposalId, actorUserId);
+                return Problem(
+                    detail: "We could not load the proposal detail right now. Please try again later.",
                     statusCode: StatusCodes.Status500InternalServerError);
             }
         }

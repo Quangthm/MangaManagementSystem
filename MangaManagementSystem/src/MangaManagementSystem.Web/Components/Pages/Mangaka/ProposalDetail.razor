@@ -1,0 +1,121 @@
+@page "/mangaka/proposals/{ProposalId:guid}"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@using MangaManagementSystem.Application.DTOs.Manga
+@using MangaManagementSystem.Web.Components.Layouts
+@using MangaManagementSystem.Web.Services.Api
+@using MangaManagementSystem.Web.Components.Shared
+@attribute [Authorize(Roles = "Mangaka")]
+@inject IMangakaSeriesApiClient MangakaSeriesApiClient
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthStateProvider
+
+<MangakaLayout>
+    <div class="mf-page" style="padding: 24px;">
+        <MudButton Variant="Variant.Text"
+                   StartIcon="@Icons.Material.Filled.ArrowBack"
+                   Style="color: #64748b; margin-bottom: 16px;"
+                   OnClick="@(() => Nav.NavigateTo("/mangaka/proposals"))">
+            Back to Proposals
+        </MudButton>
+
+        <div class="mf-page-header" style="margin-bottom: 24px;">
+            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Proposal Detail</MudText>
+            <MudText Typo="Typo.body1" Class="mf-muted">View your proposal status, review progress, and feedback</MudText>
+        </div>
+
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (_error != null)
+        {
+            <MudAlert Severity="Severity.Error">@_error</MudAlert>
+        }
+        else if (_detailViewModel != null)
+        {
+            <SeriesProposalDetailView Proposal="@_detailViewModel" />
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Warning">Proposal not found or you do not have access.</MudAlert>
+        }
+    </div>
+</MangakaLayout>
+
+@code {
+    [Parameter] public Guid ProposalId { get; set; }
+
+    private bool _loading = true;
+    private string? _error;
+    private Guid _currentUserId;
+    private SeriesProposalDetailViewModel? _detailViewModel;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (Guid.TryParse(idClaim, out var uid))
+                _currentUserId = uid;
+        }
+        catch { }
+
+        await LoadProposalDetail();
+    }
+
+    private async Task LoadProposalDetail()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var proposal = await MangakaSeriesApiClient.GetMySeriesProposalDetailAsync(_currentUserId, ProposalId);
+            if (proposal is null)
+            {
+                _error = "Proposal not found or you do not have access.";
+            }
+            else
+            {
+                _detailViewModel = MapToDetailViewModel(proposal);
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static SeriesProposalDetailViewModel MapToDetailViewModel(MangakaSeriesProposalDto p) => new(
+        SeriesProposalId: p.SeriesProposalId,
+        SeriesTitle: p.SeriesTitle,
+        SeriesSlug: p.SeriesSlug,
+        SeriesCoverUrl: p.SeriesCoverUrl,
+        ProposalVersionNo: p.ProposalVersionNo,
+        ProposalTitle: p.ProposalTitle,
+        SynopsisSnapshot: p.SynopsisSnapshot,
+        Genres: p.Genres,
+        Tags: p.Tags,
+        StatusCode: p.StatusCode,
+        SeriesStatusCode: null,
+        SubmittedByDisplayName: p.SubmittedByDisplayName,
+        SubmittedAtUtc: p.SubmittedAtUtc,
+        ReviewerDisplayName: p.ReviewedByDisplayName,
+        ReviewedAtUtc: p.ReviewedAtUtc,
+        Comments: p.Comments,
+        ProposalFileName: p.ProposalFile.OriginalFileName,
+        ProposalFileUrl: p.ProposalFile.SecureUrl,
+        MarkupFileName: p.MarkupFile?.OriginalFileName,
+        MarkupFileUrl: p.MarkupFile?.SecureUrl,
+        WithdrawnAtUtc: p.WithdrawnAtUtc,
+        HasEditorialDecision: p.ReviewedAtUtc.HasValue
+    );
+}

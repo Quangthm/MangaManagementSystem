@@ -5,6 +5,7 @@ using MangaManagementSystem.Infrastructure.Persistence;
 using MangaManagementSystem.Infrastructure.Repositories;
 using MangaManagementSystem.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using EFCore.NamingConventions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,9 +17,15 @@ namespace MangaManagementSystem.Infrastructure
     {
         public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
         {
-            services.AddDbContext<ApplicationDbContext>(options =>
+            services.AddScoped<MangaManagementSystem.Infrastructure.Persistence.Interceptors.AuditableEntityInterceptor>();
+
+            services.AddDbContext<ApplicationDbContext>((sp, options) =>
+            {
+                var interceptor = sp.GetRequiredService<MangaManagementSystem.Infrastructure.Persistence.Interceptors.AuditableEntityInterceptor>();
                 options.UseSqlServer(configuration.GetConnectionString("DefaultConnection"))
-                    .UseSnakeCaseNamingConvention());
+                       .AddInterceptors(interceptor)
+                       .UseSnakeCaseNamingConvention();
+            });
 
             services.Configure<SmtpSettings>(configuration.GetSection(SmtpSettings.SectionName));
             // Cloudinary settings and client

@@ -6,6 +6,7 @@
 @using MangaManagementSystem.Application.Interfaces
 @using MangaManagementSystem.Web.Services.Api
 @using MangaManagementSystem.Web.Services
+@implements IAsyncDisposable
 @attribute [Authorize(Roles = "Mangaka,Tantou Editor,Assistant")]
 @inject NavigationManager Nav
 @inject IJSRuntime JS
@@ -24,6 +25,7 @@
 @inject IFileStorageService FileStorageService
 @inject IFileResourceService FileResourceService
 @inject IAiService AiService
+@inject ISeriesContributorService ContributorService
 
 @if (_accessDenied)
 {
@@ -46,11 +48,11 @@ else
     <!-- Header -->
     <header class="mf-workspace-header px-4 py-2 d-flex justify-space-between align-center" style="position: relative;">
         <div class="d-flex align-center">
-            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="@BackHref" Class="mr-2" />
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="HandleBackClick" Class="mr-2" />
             <MudText Typo="Typo.h6" Class="font-weight-bold">@SeriesTitle</MudText>
             <MudText Typo="Typo.caption" Class="mf-muted ml-2 mt-1">@SeriesSubtitle</MudText>
         </div>
-
+        
         <div class="d-flex align-center text-center mx-auto" style="position: absolute; left: 50%; transform: translateX(-50%);">
             @if (SelectedChapter > 0 && SelectedPage > 0 && UploadedPages != null && ActivePageIndex >= 0 && ActivePageIndex < UploadedPages.Count)
             {
@@ -68,12 +70,7 @@ else
         </div>
 
         <div class="d-flex align-center gap-2">
-            @if (_isAutoSaving)
-            {
-                <MudText Typo="Typo.caption" Class="mf-muted mr-1" Style="font-size: 0.7rem; display: flex; align-items: center; gap: 4px;">
-                    <MudIcon Icon="@Icons.Material.Filled.Sync" Style="font-size: 13px; animation: mf-spin 1s linear infinite;" /> Auto-saving...
-                </MudText>
-            }
+
             @{
                 var _headerChap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
             }
@@ -107,116 +104,23 @@ else
     </header>
 
     <div class="mf-workspace-body d-flex flex-grow-1 overflow-hidden">
-
-        <!-- Left Sidebar -->
-        <aside class="mf-workspace-sidebar py-4 d-flex flex-column border-r-1 mud-border-lines-default" style="width: 250px; flex-shrink: 0; background-color: white; height: 100%; overflow: hidden;">
-            <MudNavMenu Class="mud-width-full flex-grow-1" Style="overflow-y: auto;">
-                    <div class="px-4 mt-6 mb-2">
-                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" StartIcon="@Icons.Material.Filled.Add" Class="rounded-lg" OnClick="AddNewChapter" Disabled="@_isAddingChapter">
-                            @if (_isAddingChapter) { <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/> } else { <span>New Chapter</span> }
-                        </MudButton>
-                    </div>
-
-                    <MudText Typo="Typo.caption" Class="mf-muted px-4 font-weight-bold mt-4 mb-2 d-block">CHAPTERS</MudText>
-
-                    <MudList T="int" Class="px-2">
-                        @foreach (var chapter in Chapters)
-                        {
-                            var isCurrent = (chapter.Id == SelectedChapter);
-                            var bgClass = isCurrent ? "background-color: #f3f4f6;" : "";
-                            var textColor = isCurrent ? Color.Primary : Color.Default;
-
-                            <MudListItem Class="rounded-lg" Style="@bgClass" OnClick="@(async () => await SelectChapter(chapter.Id))">
-                                @if (chapter.IsRenaming)
-                                {
-                                    <div class="d-flex align-center w-100" @onclick:stopPropagation="true">
-                                        <MudTextField @bind-Value="chapter.Title" Placeholder="Chapter Title"
-                                                     Variant="Variant.Outlined" Margin="Margin.Dense"
-                                                     OnKeyDown="@(async e => await HandleRenameKeyDown(e, chapter))"
-                                                     Immediate="true" AutoFocus="true" Class="flex-grow-1 mr-1" />
-                                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Default" OnClick="@(() => CancelRenameChapter(chapter))" />
-                                    </div>
-                                }
-                                else
-                                {
-                                    <div class="d-flex justify-space-between align-center w-100">
-                                        <div class="d-flex align-center" style="min-width: 0;">
-                                            <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Small" Class="mr-3 mf-muted flex-shrink-0" />
-                                            <div style="min-width: 0;">
-                                                <MudText Typo="Typo.body2" Class="font-weight-bold" Color="@textColor" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Chapter @chapter.Id</MudText>
-                                                @if (!string.IsNullOrWhiteSpace(chapter.Title))
-                                                {
-                                                    <MudText Typo="Typo.caption" Class="mf-muted" Style="display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">@chapter.Title</MudText>
-                                                }
-                                                <MudText Typo="Typo.caption" Class="mf-muted" Style="display: block;">@chapter.PageCount pages</MudText>
-                                            </div>
-                                        </div>
-                                        <div class="d-flex align-center flex-shrink-0">
-                                            @if (isCurrent)
-                                            {
-                                                <MudChip T="string" Size="Size.Small" Color="Color.Primary" Class="mr-2">Active</MudChip>
-                                            }
-                                            else
-                                            {
-                                                var statusLabel = chapter.StatusCode == "UNDER_REVIEW" ? "Review" : (chapter.StatusCode == "APPROVED" ? "Approved" : (chapter.StatusCode == "REVISION_REQUESTED" ? "Revision" : "Draft"));
-                                                <MudText Typo="Typo.caption" Class="mf-muted mr-2">@statusLabel</MudText>
-                                            }
-
-                                            <div @onclick:stopPropagation="true">
-                                                @if (chapter.StatusCode == "APPROVED" || chapter.StatusCode == "PUBLISHED" || chapter.StatusCode == "RELEASED" || chapter.StatusCode == "SCHEDULED")
-                                                {
-                                                    <MudTooltip Text="Chapter is locked and approved">
-                                                        <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" Color="Color.Success" Class="pa-1" />
-                                                    </MudTooltip>
-                                                }
-                                                else
-                                                {
-                                                    <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
-                                                        @if (chapter.StatusCode == "DRAFT" || chapter.StatusCode == "REVISION_REQUESTED")
-                                                        {
-                                                            <MudMenuItem OnClick="@(() => SubmitChapterForReview(chapter.ChapterId))">
-                                                                <div class="d-flex align-center">
-                                                                    <MudIcon Icon="@Icons.Material.Filled.Send" Size="Size.Small" Color="Color.Primary" Class="mr-2" />
-                                                                    <MudText Typo="Typo.body2">Submit for Review</MudText>
-                                                                </div>
-                                                            </MudMenuItem>
-                                                            <MudMenuItem OnClick="@(() => PromptRenameChapter(chapter))">
-                                                                <div class="d-flex align-center">
-                                                                    <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Default" Class="mr-2" />
-                                                                    <MudText Typo="Typo.body2">Rename</MudText>
-                                                                </div>
-                                                            </MudMenuItem>
-                                                            <MudMenuItem OnClick="@(() => DeleteChapter(chapter.Id))">
-                                                                <div class="d-flex align-center">
-                                                                    <MudIcon Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" Class="mr-2" />
-                                                                    <MudText Typo="Typo.body2" Color="Color.Error">Delete</MudText>
-                                                                </div>
-                                                            </MudMenuItem>
-                                                        }
-                                                        else if (chapter.StatusCode == "UNDER_REVIEW")
-                                                        {
-                                                            <MudMenuItem OnClick="@(() => CancelSubmission(chapter.ChapterId))">
-                                                                <div class="d-flex align-center">
-                                                                    <MudIcon Icon="@Icons.Material.Filled.Undo" Size="Size.Small" Color="Color.Warning" Class="mr-2" />
-                                                                    <MudText Typo="Typo.body2">Cancel Submission</MudText>
-                                                                </div>
-                                                            </MudMenuItem>
-                                                        }
-                                                    </MudMenu>
-                                                }
-                                            </div>
-                                        </div>
-                                    </div>
-                                }
-                            </MudListItem>
-                        }
-                    </MudList>
-            </MudNavMenu>
-        </aside>
+        
+        <!-- Left Sidebar (extracted child component with ShouldRender gating) -->
+        <WorkspaceChapterSidebar Chapters="Chapters"
+                                 SelectedChapter="SelectedChapter"
+                                 IsAddingChapter="_isAddingChapter"
+                                 OnAddChapter="AddNewChapter"
+                                 OnSelectChapter="SelectChapter"
+                                 OnSubmitChapter="SubmitChapterForReview"
+                                 OnPromptRename="PromptRenameChapter"
+                                 OnSaveRename="SaveChapterName"
+                                 OnCancelRename="CancelRenameChapter"
+                                 OnDeleteChapter="DeleteChapter"
+                                 OnCancelSubmission="CancelSubmission" />
 
         <!-- Main Canvas Area -->
         <main class="flex-grow-1 d-flex flex-column" style="min-width: 0; background-color: #f8fafc; position: relative;">
-
+            
             <!-- Canvas Toolbar -->
             <div class="d-flex justify-center mt-4" style="position: absolute; left: 50%; transform: translateX(-50%); z-index: 100;">
                 <MudPaper Elevation="2" Class="d-flex align-center rounded-pill px-2 py-1 gap-1" Style="background: white;">
@@ -232,7 +136,7 @@ else
                     <MudTooltip Text="Region Tool"><MudIconButton Icon="@Icons.Material.Filled.Crop" Color="@(CurrentTool == "draw" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("draw"))" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
                     <MudTooltip Text="Brush Tool"><MudIconButton Icon="@Icons.Material.Filled.Brush" Color="@(CurrentTool == "brush" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("brush"))" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
                     <MudTooltip Text="Pin Tool"><MudIconButton Icon="@Icons.Material.Filled.PushPin" Color="@(CurrentTool == "pin" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("pin"))" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
-
+                    
                     @if (CurrentTool == "brush")
                     {
                         <div class="d-flex align-center mx-2">
@@ -242,11 +146,16 @@ else
                     }
 
                     <MudTooltip Text="Auto Segment Panels"><MudIconButton Icon="@Icons.Material.Filled.DashboardCustomize" Color="Color.Secondary" OnClick="RunSegmentAI" Disabled="@(IsProcessing || IsChapterLocked)" Size="Size.Small" /></MudTooltip>
-                    <MudTooltip Text="Translate Selected"><MudIconButton Icon="@Icons.Material.Filled.Translate" Color="Color.Info" OnClick="RunTranslateAI" Disabled="@(IsProcessing || IsChapterLocked)" Size="Size.Small" /></MudTooltip>
+                    <MudTooltip Text="Translate Selected (choose language)">
+                        <MudMenu Icon="@Icons.Material.Filled.Translate" IconColor="Color.Info" Size="Size.Small" Dense="true" Disabled="@(IsProcessing || IsChapterLocked)">
+                            <MudMenuItem Icon="@Icons.Material.Filled.Translate" OnClick='@(() => RunTranslateAI("vi"))'>Tiếng Việt (VI)</MudMenuItem>
+                            <MudMenuItem Icon="@Icons.Material.Filled.Translate" OnClick='@(() => RunTranslateAI("en"))'>English (EN)</MudMenuItem>
+                        </MudMenu>
+                    </MudTooltip>
                     <MudTooltip Text="Delete Selected"><MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" OnClick="DeleteSelectedRegions" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
-
+                    
                     <MudDivider Vertical="true" FlexItem="true" Class="mx-2" />
-
+                    
                     <MudTooltip Text="Zoom In"><MudIconButton Icon="@Icons.Material.Filled.ZoomIn" OnClick="ZoomIn" Size="Size.Small" /></MudTooltip>
                     <MudTooltip Text="Zoom Out"><MudIconButton Icon="@Icons.Material.Filled.ZoomOut" OnClick="ZoomOut" Size="Size.Small" /></MudTooltip>
                     <MudTooltip Text="Undo"><MudIconButton Icon="@Icons.Material.Filled.Undo" OnClick="Undo" Disabled="@(!CanUndo)" Size="Size.Small" /></MudTooltip>
@@ -264,12 +173,38 @@ else
                         if (currentPage.Versions.Count > 0)
                         {
                               <div style="position: absolute; top: 16px; left: 16px; z-index: 10;">
+                                  @if (_versionsCollapsedLeft)
+                                  {
+                                      var viewVerL = currentPage.Versions[Math.Clamp(currentPage.ActiveVersionIndex, 0, currentPage.Versions.Count - 1)];
+                                      <MudTooltip Text="Show Versions">
+                                          <MudPaper Class="rounded-lg d-flex align-center" Elevation="2" Style="background: rgba(255,255,255,0.95); backdrop-filter: blur(8px); border: 1px solid var(--mud-palette-lines-default); cursor: pointer; padding: 2px 8px; gap: 6px;" @onclick="@(() => _versionsCollapsedLeft = false)">
+                                              <MudIcon Icon="@Icons.Material.Filled.Layers" Size="Size.Small" Color="Color.Primary" />
+                                              <MudText Typo="Typo.caption" Class="font-weight-bold">v@(viewVerL.VersionNo)</MudText>
+                                              @if (currentPage.Versions.Count > 1)
+                                              {
+                                                  <MudText Typo="Typo.caption" Class="mf-muted">/@(currentPage.Versions.Count)</MudText>
+                                              }
+                                              <MudIcon Icon="@Icons.Material.Filled.UnfoldMore" Size="Size.Small" Class="mf-muted" />
+                                          </MudPaper>
+                                      </MudTooltip>
+                                  }
+                                  else
+                                  {
                                   <MudPaper Class="pa-2 rounded-lg" Elevation="2" Style="background: rgba(255,255,255,0.95); backdrop-filter: blur(8px); width: 210px; border: 1px solid var(--mud-palette-lines-default);">
                                       <div class="d-flex align-center justify-space-between mb-2">
-                                          <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Versions</MudText>
+                                          <div class="d-flex align-center">
+                                              <MudTooltip Text="Collapse">
+                                                  <MudIconButton Icon="@Icons.Material.Filled.UnfoldLess" Size="Size.Small" OnClick="@(() => _versionsCollapsedLeft = true)" />
+                                              </MudTooltip>
+                                              <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Versions</MudText>
+                                          </div>
                                           <div class="d-flex gap-1">
                                               <MudTooltip Text="Create Canvas as New Version">
                                                   <MudIconButton Icon="@Icons.Material.Filled.AddPhotoAlternate" Color="Color.Secondary" Size="Size.Small" OnClick='() => SaveAsNewVersion("Left")' Disabled="@IsChapterLocked" />
+                                              </MudTooltip>
+                                              <InputFile id="uploadVersionLeft" OnChange='@(e => HandleUploadVersion(e, "Left"))' hidden accept="image/*" disabled="@IsChapterLocked" />
+                                              <MudTooltip Text="Upload Page Version">
+                                                  <MudIconButton HtmlTag="label" for="uploadVersionLeft" Icon="@Icons.Material.Filled.Upload" Color="Color.Info" Size="Size.Small" Disabled="@IsChapterLocked" />
                                               </MudTooltip>
                                               <MudTooltip Text="Delete Selected Version">
                                                   <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" Size="Size.Small" OnClick='() => DeleteCurrentVersion("Left")' Disabled="@(currentPage.Versions.Count <= 1 || IsChapterLocked)" />
@@ -283,21 +218,36 @@ else
                                               var idx = i;
                                               var ver = currentPage.Versions[idx];
                                               bool isSelected = idx == currentPage.ActiveVersionIndex;
-                                              <MudPaper Elevation="0" Class="px-2 py-1 rounded" Style="@($"cursor: pointer; background-color: {(isSelected ? "var(--mud-palette-action-default-hover)" : "transparent")};")" @onclick='() => SwitchVersion("Left", idx)'>
+                                              <MudPaper Elevation="0" Class="px-2 py-1 rounded border-1 mb-1" Style="@(isSelected ? "cursor: pointer; border-color: var(--mud-palette-primary); background-color: var(--mud-palette-action-default-hover);" : "cursor: pointer; border-color: transparent; background-color: transparent;")" @onclick='() => SwitchVersion("Left", idx)'>
                                                   <div class="d-flex align-center justify-space-between">
                                                       <div class="d-flex align-center gap-2">
                                                           <MudIcon Icon="@(ver.IsCurrentVersion ? Icons.Material.Filled.CheckCircle : Icons.Material.Outlined.Circle)" Color="@(ver.IsCurrentVersion ? Color.Success : Color.Default)" Size="Size.Small" />
-                                                          <MudText Typo="Typo.body2" Class="@(isSelected ? "font-weight-bold text-primary" : "")">v@(ver.VersionNo)</MudText>
+                                                          <div>
+                                                              <MudText Typo="Typo.body2" Class="@(isSelected ? "font-weight-bold text-primary" : "")">
+                                                                  v@(ver.VersionNo) @(ver.IsDeleted ? "[Deleted]" : "")
+                                                              </MudText>
+                                                          </div>
                                                       </div>
-                                                      @if (!ver.IsCurrentVersion && isSelected)
-                                                      {
-                                                          <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" OnClick='() => SetActiveVersion("Left", ver)' Disabled="@IsChapterLocked" Class="pa-0 px-2" Style="min-width: unset; text-transform: none; font-size: 0.75rem;">Set Active</MudButton>
-                                                      }
+                                                      <div class="d-flex align-center gap-1">
+                                                          @if (ver.IsCurrentVersion)
+                                                          {
+                                                              <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Filled" Class="ma-0" Style="height: 20px; font-size: 0.65rem;">Submission</MudChip>
+                                                          }
+                                                          @if (isSelected)
+                                                          {
+                                                              <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Outlined" Class="ma-0" Style="height: 20px; font-size: 0.65rem;">Viewing</MudChip>
+                                                          }
+                                                          @if (!ver.IsCurrentVersion && isSelected && !ver.IsDeleted)
+                                                          {
+                                                              <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" OnClick='() => SetActiveVersion("Left", ver)' Disabled="@IsChapterLocked" Class="pa-0 px-1 ml-1" Style="min-width: unset; text-transform: none; font-size: 0.75rem;">Set Active</MudButton>
+                                                          }
+                                                      </div>
                                                   </div>
                                               </MudPaper>
                                           }
                                       </div>
                                   </MudPaper>
+                                  }
                               </div>
                         }
                     }
@@ -305,7 +255,7 @@ else
                         <canvas id="ai-canvas-left" style="position: absolute; left: 0; top: 0; background: white; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); transform-origin: top left;"></canvas>
                     </div>
                 </div>
-
+                
                 <!-- Split View Pane Right -->
                 <div style="display: @(_isSplitView ? "block" : "none"); width: 1px; background: var(--mud-palette-lines-default); flex-shrink: 0;"></div>
                 <div style="display: @(_isSplitView ? "flex" : "none"); flex: 1; position: relative; overflow: hidden; background: #efefef; min-width: 0; border-top: @(_activePane == "Right" ? "4px solid var(--mud-palette-primary)" : "4px solid transparent"); transition: border-color 0.2s ease;" @onmousedown='() => SetActivePane("Right")'>
@@ -315,12 +265,38 @@ else
                             if (splitPage.Versions.Count > 0)
                             {
                                 <div style="position: absolute; top: 16px; right: 16px; z-index: 10;">
+                                  @if (_versionsCollapsedRight)
+                                  {
+                                      var viewVerR = splitPage.Versions[Math.Clamp(splitPage.ActiveVersionIndex, 0, splitPage.Versions.Count - 1)];
+                                      <MudTooltip Text="Show Versions">
+                                          <MudPaper Class="rounded-lg d-flex align-center" Elevation="2" Style="background: rgba(255,255,255,0.95); backdrop-filter: blur(8px); border: 1px solid var(--mud-palette-lines-default); cursor: pointer; padding: 2px 8px; gap: 6px;" @onclick="@(() => _versionsCollapsedRight = false)">
+                                              <MudIcon Icon="@Icons.Material.Filled.Layers" Size="Size.Small" Color="Color.Primary" />
+                                              <MudText Typo="Typo.caption" Class="font-weight-bold">v@(viewVerR.VersionNo)</MudText>
+                                              @if (splitPage.Versions.Count > 1)
+                                              {
+                                                  <MudText Typo="Typo.caption" Class="mf-muted">/@(splitPage.Versions.Count)</MudText>
+                                              }
+                                              <MudIcon Icon="@Icons.Material.Filled.UnfoldMore" Size="Size.Small" Class="mf-muted" />
+                                          </MudPaper>
+                                      </MudTooltip>
+                                  }
+                                  else
+                                  {
                                   <MudPaper Class="pa-2 rounded-lg" Elevation="2" Style="background: rgba(255,255,255,0.95); backdrop-filter: blur(8px); width: 210px; border: 1px solid var(--mud-palette-lines-default);">
                                       <div class="d-flex align-center justify-space-between mb-2">
-                                          <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Versions</MudText>
+                                          <div class="d-flex align-center">
+                                              <MudTooltip Text="Collapse">
+                                                  <MudIconButton Icon="@Icons.Material.Filled.UnfoldLess" Size="Size.Small" OnClick="@(() => _versionsCollapsedRight = true)" />
+                                              </MudTooltip>
+                                              <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Versions</MudText>
+                                          </div>
                                           <div class="d-flex gap-1">
                                               <MudTooltip Text="Create Canvas as New Version">
                                                   <MudIconButton Icon="@Icons.Material.Filled.AddPhotoAlternate" Color="Color.Secondary" Size="Size.Small" OnClick='() => SaveAsNewVersion("Right")' Disabled="@IsChapterLocked" />
+                                              </MudTooltip>
+                                              <InputFile id="uploadVersionRight" OnChange='@(e => HandleUploadVersion(e, "Right"))' hidden accept="image/*" disabled="@IsChapterLocked" />
+                                              <MudTooltip Text="Upload Page Version">
+                                                  <MudIconButton HtmlTag="label" for="uploadVersionRight" Icon="@Icons.Material.Filled.Upload" Color="Color.Info" Size="Size.Small" Disabled="@IsChapterLocked" />
                                               </MudTooltip>
                                               <MudTooltip Text="Delete Selected Version">
                                                   <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" Size="Size.Small" OnClick='() => DeleteCurrentVersion("Right")' Disabled="@(splitPage.Versions.Count <= 1 || IsChapterLocked)" />
@@ -334,21 +310,36 @@ else
                                               var idx = i;
                                               var ver = splitPage.Versions[idx];
                                               bool isSelected = idx == splitPage.ActiveVersionIndex;
-                                              <MudPaper Elevation="0" Class="px-2 py-1 rounded" Style="@($"cursor: pointer; background-color: {(isSelected ? "var(--mud-palette-action-default-hover)" : "transparent")};")" @onclick='() => SwitchVersion("Right", idx)'>
+                                              <MudPaper Elevation="0" Class="px-2 py-1 rounded border-1 mb-1" Style="@(isSelected ? "cursor: pointer; border-color: var(--mud-palette-primary); background-color: var(--mud-palette-action-default-hover);" : "cursor: pointer; border-color: transparent; background-color: transparent;")" @onclick='() => SwitchVersion("Right", idx)'>
                                                   <div class="d-flex align-center justify-space-between">
                                                       <div class="d-flex align-center gap-2">
                                                           <MudIcon Icon="@(ver.IsCurrentVersion ? Icons.Material.Filled.CheckCircle : Icons.Material.Outlined.Circle)" Color="@(ver.IsCurrentVersion ? Color.Success : Color.Default)" Size="Size.Small" />
-                                                          <MudText Typo="Typo.body2" Class="@(isSelected ? "font-weight-bold text-primary" : "")">v@(ver.VersionNo)</MudText>
+                                                          <div>
+                                                              <MudText Typo="Typo.body2" Class="@(isSelected ? "font-weight-bold text-primary" : "")">
+                                                                  v@(ver.VersionNo) @(ver.IsDeleted ? "[Deleted]" : "")
+                                                              </MudText>
+                                                          </div>
                                                       </div>
-                                                      @if (!ver.IsCurrentVersion && isSelected)
-                                                      {
-                                                          <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" OnClick='() => SetActiveVersion("Right", ver)' Disabled="@IsChapterLocked" Class="pa-0 px-2" Style="min-width: unset; text-transform: none; font-size: 0.75rem;">Set Active</MudButton>
-                                                      }
+                                                      <div class="d-flex align-center gap-1">
+                                                          @if (ver.IsCurrentVersion)
+                                                          {
+                                                              <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Filled" Class="ma-0" Style="height: 20px; font-size: 0.65rem;">Submission</MudChip>
+                                                          }
+                                                          @if (isSelected)
+                                                          {
+                                                              <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Outlined" Class="ma-0" Style="height: 20px; font-size: 0.65rem;">Viewing</MudChip>
+                                                          }
+                                                          @if (!ver.IsCurrentVersion && isSelected && !ver.IsDeleted)
+                                                          {
+                                                              <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" OnClick='() => SetActiveVersion("Right", ver)' Disabled="@IsChapterLocked" Class="pa-0 px-1 ml-1" Style="min-width: unset; text-transform: none; font-size: 0.75rem;">Set Active</MudButton>
+                                                          }
+                                                      </div>
                                                   </div>
                                               </MudPaper>
                                           }
                                       </div>
                                   </MudPaper>
+                                  }
                                 </div>
                             }
                         }
@@ -356,7 +347,6 @@ else
                             <canvas id="ai-canvas-right" style="position: absolute; left: 0; top: 0; background: white; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); transform-origin: top left;"></canvas>
                         </div>
                     </div>
-                }
             </div>
 
             <!-- Bottom Pagination -->
@@ -369,14 +359,14 @@ else
                     }
                     @if (UploadedPages.Any())
                     {
-                        <MudPagination Count="@UploadedPages.Count" Selected="@(ActivePageIndex + 1)" SelectedChanged="OnPageChanged" Variant="Variant.Filled" Color="Color.Primary" ShowFirstButton="@false" ShowLastButton="@false" />
+                        <MudPagination Count="@UploadedPages.Count" Selected="@(ActivePageIndex + 1)" SelectedChanged="OnPageChanged" Disabled="@_isPageLoading" Variant="Variant.Filled" Color="Color.Primary" ShowFirstButton="@false" ShowLastButton="@false" />
                     }
                     else
                     {
                         <MudText Typo="Typo.caption" Class="mf-muted">0 / 0</MudText>
                     }
                 </div>
-
+                
                 @if (_isSplitView)
                 {
                     <MudDivider Vertical="true" FlexItem="true" />
@@ -385,7 +375,7 @@ else
                         <MudText Typo="Typo.caption" Class="mf-muted font-weight-bold mr-2">Right Pane:</MudText>
                         @if (_splitUploadedPages.Any())
                         {
-                            <MudPagination Count="@_splitUploadedPages.Count" Selected="@(_splitPageIndex + 1)" SelectedChanged="OnSplitPageChanged" Variant="Variant.Filled" Color="Color.Primary" ShowFirstButton="@false" ShowLastButton="@false" />
+                            <MudPagination Count="@_splitUploadedPages.Count" Selected="@(_splitPageIndex + 1)" SelectedChanged="OnSplitPageChanged" Disabled="@_isPageLoading" Variant="Variant.Filled" Color="Color.Primary" ShowFirstButton="@false" ShowLastButton="@false" />
                         }
                         else
                         {
@@ -393,7 +383,7 @@ else
                         }
                     </div>
                 }
-
+                
                 <MudDivider Vertical="true" FlexItem="true" />
                 <MudTooltip Text="Delete Current Page (Left)">
                     <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="DeleteCurrentPage" Disabled="@IsChapterLocked" />
@@ -402,7 +392,7 @@ else
 
             <!-- Right Panel Toggle Button -->
             <MudTooltip Text="@(_isRightPanelOpen ? "Collapse Task Panel" : "Expand Task Panel")" Placement="Placement.Left">
-                <MudIconButton
+                <MudIconButton 
                     Icon="@(_isRightPanelOpen ? Icons.Material.Filled.ChevronRight : Icons.Material.Filled.ChevronLeft)"
                     OnClick="ToggleRightPanel"
                     Color="Color.Default"
@@ -424,8 +414,14 @@ else
                 <MudTabPanel Text="Tasks">
                     <div class="px-4 mb-6" style="flex-shrink: 0;">
                 <MudPaper Elevation="0" Class="pa-4 border-1 mud-border-lines-default rounded-lg">
-                    <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-3">NEW TASK</MudText>
-
+                    <div class="d-flex align-center justify-space-between @(_newTaskFormCollapsed ? "" : "mb-3")">
+                        <MudText Typo="Typo.subtitle2" Class="font-weight-bold">NEW TASK</MudText>
+                        <MudTooltip Text="@(_newTaskFormCollapsed ? "Expand form" : "Collapse form to see more tasks")">
+                            <MudIconButton Icon="@(_newTaskFormCollapsed ? Icons.Material.Filled.ExpandMore : Icons.Material.Filled.ExpandLess)" Size="Size.Small" OnClick="@(() => _newTaskFormCollapsed = !_newTaskFormCollapsed)" />
+                        </MudTooltip>
+                    </div>
+                    @if (!_newTaskFormCollapsed)
+                    {
                     <MudSelect T="string" Label="Task Type" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" Value="@TaskType" ValueChanged="OnTaskTypeChanged">
                         <MudSelectItem Value="@("BACKGROUND")">
                             <div class="d-flex align-center"><MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" Color="Color.Info" Class="mr-2"/> Background</div>
@@ -439,6 +435,15 @@ else
                         <MudSelectItem Value="@("CLEANUP")">
                             <div class="d-flex align-center"><MudIcon Icon="@Icons.Material.Filled.Brush" Size="Size.Small" Color="Color.Secondary" Class="mr-2"/> Cleanup</div>
                         </MudSelectItem>
+                        <MudSelectItem Value="@("DIALOGUE")">
+                            <div class="d-flex align-center"><MudIcon Icon="@Icons.Material.Filled.ChatBubble" Size="Size.Small" Color="Color.Primary" Class="mr-2"/> Dialogue</div>
+                        </MudSelectItem>
+                        <MudSelectItem Value="@("TYPESETTING")">
+                            <div class="d-flex align-center"><MudIcon Icon="@Icons.Material.Filled.TextFields" Size="Size.Small" Color="Color.Secondary" Class="mr-2"/> Typesetting</div>
+                        </MudSelectItem>
+                        <MudSelectItem Value="@("REVIEW")">
+                            <div class="d-flex align-center"><MudIcon Icon="@Icons.Material.Filled.RateReview" Size="Size.Small" Color="Color.Warning" Class="mr-2"/> Review</div>
+                        </MudSelectItem>
                         <MudSelectItem Value="@("OTHER")">
                             <div class="d-flex align-center"><MudIcon Icon="@Icons.Material.Filled.Assignment" Size="Size.Small" Color="Color.Default" Class="mr-2"/> Other</div>
                         </MudSelectItem>
@@ -451,7 +456,7 @@ else
                                 <div class="d-flex align-center">
                                     <MudAvatar Size="Size.Small" Color="Color.Primary" Class="mr-2" Style="width:24px; height:24px; font-size:10px;">
                                         @(string.IsNullOrWhiteSpace(user.Username) ? "?" : user.Username[0].ToString().ToUpper())
-                                    </MudAvatar>
+                                    </MudAvatar> 
                                     @user.Username
                                 </div>
                             </MudSelectItem>
@@ -482,10 +487,11 @@ else
                     </div>
 
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateTask" Disabled="@IsChapterLocked">Create Task</MudButton>
+                    }
                 </MudPaper>
             </div>
 
-            <div class="px-4" style="flex-grow: 1; overflow-y: auto;">
+            <div class="px-4 mf-active-tasks">
                   <div class="d-flex justify-space-between align-center mb-3">
                       <MudText Typo="Typo.subtitle2" Class="font-weight-bold">ACTIVE TASKS</MudText>
                       <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">@ActiveTasks.Count</MudChip>
@@ -509,7 +515,7 @@ else
                           };
                           var initials = string.Join("", task.Assistant.Split(' ').Select(n => n[0]));
                           var isTargetTask = _taskFilterId != null && task.DbId.HasValue && task.DbId.ToString() == _taskFilterId;
-
+                          
                           <MudPaper Elevation="0" Class="pa-3 border-1 mud-border-lines-default rounded-lg"
                                     Style="@(isTargetTask ? "border-left: 3px solid #4f46e5; background: #eef2ff;" : "")">
                               <div class="d-flex justify-space-between">
@@ -532,17 +538,29 @@ else
                   </MudStack>
             </div>
                 </MudTabPanel>
-
+                
                 <MudTabPanel Text="Annotations">
                     <div class="px-4 mb-6" style="flex-shrink: 0;">
                         <MudPaper Elevation="0" Class="pa-4 border-1 mud-border-lines-default rounded-lg">
-                            <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-3">NEW ANNOTATION</MudText>
-
+                            <div class="d-flex align-center justify-space-between @(_newAnnotationFormCollapsed ? "" : "mb-3")">
+                                <MudText Typo="Typo.subtitle2" Class="font-weight-bold">NEW ANNOTATION</MudText>
+                                <MudTooltip Text="@(_newAnnotationFormCollapsed ? "Expand form" : "Collapse form to see more issues")">
+                                    <MudIconButton Icon="@(_newAnnotationFormCollapsed ? Icons.Material.Filled.ExpandMore : Icons.Material.Filled.ExpandLess)" Size="Size.Small" OnClick="@(() => _newAnnotationFormCollapsed = !_newAnnotationFormCollapsed)" />
+                                </MudTooltip>
+                            </div>
+                            @if (!_newAnnotationFormCollapsed)
+                            {
                             <MudSelect T="string" Label="Issue Type" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" @bind-Value="AnnotationType">
+                                <MudSelectItem Value="@("BACKGROUND_INCONSISTENCY")">Background Issue</MudSelectItem>
+                                <MudSelectItem Value="@("SHADING_ERROR")">Shading Error</MudSelectItem>
+                                <MudSelectItem Value="@("EFFECTS_ERROR")">Effects Error</MudSelectItem>
+                                <MudSelectItem Value="@("CLEANUP_REQUIRED")">Redraw Needed</MudSelectItem>
+                                <MudSelectItem Value="@("DIALOGUE_ERROR")">Dialogue Error</MudSelectItem>
                                 <MudSelectItem Value="@("TYPESETTING_ERROR")">Typo / Typesetting</MudSelectItem>
                                 <MudSelectItem Value="@("TRANSLATION_ERROR")">Translation Error</MudSelectItem>
-                                <MudSelectItem Value="@("CLEANUP_REQUIRED")">Redraw Needed</MudSelectItem>
-                                <MudSelectItem Value="@("BACKGROUND_INCONSISTENCY")">Background Issue</MudSelectItem>
+                                <MudSelectItem Value="@("PANEL_ORDER_ERROR")">Panel Order Error</MudSelectItem>
+                                <MudSelectItem Value="@("CHARACTER_ANATOMY_ERROR")">Anatomy Error</MudSelectItem>
+                                <MudSelectItem Value="@("CONTINUITY_ERROR")">Continuity Error</MudSelectItem>
                                 <MudSelectItem Value="@("OTHER")">Other</MudSelectItem>
                             </MudSelect>
 
@@ -573,12 +591,18 @@ else
                             </div>
 
                             <MudButton Variant="Variant.Filled" Color="Color.Warning" FullWidth="true" StartIcon="@Icons.Material.Filled.AddComment" OnClick="CreateAnnotation" Disabled="@IsChapterLocked">Add Annotation</MudButton>
+                            }
                         </MudPaper>
                     </div>
 
-                    <div class="px-4" style="flex-grow: 1; overflow-y: auto;">
+                    <div class="px-4 mf-active-tasks">
                         <div class="d-flex justify-space-between align-center mb-3">
-                            <MudText Typo="Typo.subtitle2" Class="font-weight-bold">PAGE ISSUES</MudText>
+                            <div class="d-flex align-center gap-2">
+                                <MudText Typo="Typo.subtitle2" Class="font-weight-bold">PAGE ISSUES</MudText>
+                                <MudTooltip Text="@(_showAnnotationsOnCanvas ? "Hide Annotations on Canvas" : "Show Annotations on Canvas")">
+                                    <MudIconButton Icon="@(_showAnnotationsOnCanvas ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)" Size="Size.Small" OnClick="ToggleCanvasAnnotations" />
+                                </MudTooltip>
+                            </div>
                             <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text">@ActiveAnnotations.Count(a => a.PageNumber == SelectedPage)</MudChip>
                         </div>
 
@@ -592,10 +616,16 @@ else
                                             <div class="d-flex align-center mb-1">
                                                 @{
                                                     var annLabel = ann.Type switch {
+                                                        "BACKGROUND_INCONSISTENCY" => "Background Issue",
+                                                        "SHADING_ERROR" => "Shading Error",
+                                                        "EFFECTS_ERROR" => "Effects Error",
+                                                        "CLEANUP_REQUIRED" => "Redraw Needed",
+                                                        "DIALOGUE_ERROR" => "Dialogue Error",
                                                         "TYPESETTING_ERROR" => "Typo / Typesetting",
                                                         "TRANSLATION_ERROR" => "Translation Error",
-                                                        "CLEANUP_REQUIRED" => "Redraw Needed",
-                                                        "BACKGROUND_INCONSISTENCY" => "Background Issue",
+                                                        "PANEL_ORDER_ERROR" => "Panel Order Error",
+                                                        "CHARACTER_ANATOMY_ERROR" => "Anatomy Error",
+                                                        "CONTINUITY_ERROR" => "Continuity Error",
                                                         "OTHER" => "Other",
                                                         _ => ann.Type
                                                     };
@@ -613,12 +643,30 @@ else
                                             {
                                                 <MudTooltip Text="Resolve Issue"><MudIconButton Icon="@Icons.Material.Filled.Check" Size="Size.Small" Color="Color.Success" OnClick="@(() => ResolveAnnotation(ann.Id))" Disabled="@IsChapterLocked" /></MudTooltip>
                                             }
-                                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Default" Class="ml-1" OnClick="@(() => DeleteAnnotation(ann.Id))" Disabled="@IsChapterLocked" />
                                         </div>
                                     </div>
                                 </MudPaper>
                             }
                         </MudStack>
+                    </div>
+                </MudTabPanel>
+                <MudTabPanel Text="Notes">
+                    <div class="px-4 d-flex flex-column gap-3 mb-4" style="height: 100%;">
+                        <MudText Typo="Typo.subtitle2" Class="font-weight-bold mt-2">VERSION NOTE</MudText>
+                        @if (UploadedPages.Any())
+                        {
+                            var activePage = UploadedPages[ActivePageIndex];
+                            if (activePage.Versions.Any() && activePage.ActiveVersionIndex >= 0 && activePage.ActiveVersionIndex < activePage.Versions.Count)
+                            {
+                                var activeVer = activePage.Versions[activePage.ActiveVersionIndex];
+                                <MudTextField T="string" Label="@($"v{activeVer.VersionNo} Note")" @bind-Value="activeVer.Note" Variant="Variant.Outlined" Lines="8" FullWidth="true" />
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveVersionNote" Disabled="@IsChapterLocked">Save Note</MudButton>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.body2" Class="mf-muted">No version selected.</MudText>
+                            }
+                        }
                     </div>
                 </MudTabPanel>
             </MudTabs>
@@ -685,10 +733,17 @@ else
     private int _splitPageIndex = 0;
     private List<PageModel> _splitUploadedPages = new();
 
-    // AutoSave
-    private bool _isAutoSaving = false;
-    private System.Threading.Timer? _autoSaveTimer;
-    private SemaphoreSlim _autoSaveSemaphore = new SemaphoreSlim(1, 1);
+    // Versions panel collapse state (default collapsed to save canvas space)
+    private bool _versionsCollapsedLeft = true;
+    private bool _versionsCollapsedRight = true;
+
+    // Collapse the NEW TASK form to give the ACTIVE TASKS list more room (laptop screens)
+    private bool _newTaskFormCollapsed = false;
+
+    // Collapse the NEW ANNOTATION form to give the PAGE ISSUES list more room
+    private bool _newAnnotationFormCollapsed = false;
+
+    private SemaphoreSlim _dbSemaphore = new SemaphoreSlim(1, 1);
 
     private bool _seriesNotFound = false;
     private bool _isAddingChapter = false;
@@ -707,10 +762,22 @@ else
     /// review flow with a safe returnUrl, the back arrow returns there. Otherwise it falls back
     /// to the series page.
     /// </summary>
-    private string BackHref => SafeReturnUrl.Resolve(returnUrl, $"/series/{Slug}");
+    private string BackHref
+    {
+        get
+        {
+            if (SafeReturnUrl.IsSafe(returnUrl))
+            {
+                if (returnUrl!.StartsWith("/series/", StringComparison.OrdinalIgnoreCase))
+                    return returnUrl!;
+                return SafeReturnUrl.AppendReturnUrl($"/series/{Slug}", returnUrl);
+            }
+            return $"/series/{Slug}";
+        }
+    }
 
     private List<RegionModel> SelectedRegions = new();
-
+    
 
     private string GetRelativeTime(DateTime dateTime)
     {
@@ -723,11 +790,11 @@ else
 
 
 
-
+    
     private string TaskType { get; set; } = "BACKGROUND";
     private Guid? AssignedAssistantId { get; set; }
     private string TaskDescription { get; set; } = "";
-
+    
     private void OnTaskTypeChanged(string value) => TaskType = value;
     private void OnAssistantChanged(Guid? value) => AssignedAssistantId = value;
 
@@ -743,7 +810,7 @@ else
         public string Status { get; set; } = "Todo";
         public List<RegionModel> Regions { get; set; } = new();
     }
-
+    
     private List<ProductionTask> ActiveTasks = new();
 
     private async Task<List<Guid>> EnsureRegionsSavedAsync(IEnumerable<RegionModel> regionsToSave)
@@ -761,17 +828,19 @@ else
         {
             if (region.DbId == null)
             {
+                string label = !string.IsNullOrEmpty(region.Label) ? region.Label : $"Region_{region.Id}";
                 var newRegionDto = new CreatePageRegionDto(
                     ChapterPageVersionId: version.ChapterPageVersionId,
                     TypeCode: region.Type,
-                    RegionLabel: $"Region_{region.Id}",
+                    RegionLabel: label,
                     X: (decimal)region.X,
                     Y: (decimal)region.Y,
                     Width: (decimal)region.Width,
                     Height: (decimal)region.Height,
                     ConfidenceScore: null,
                     SourceType: "MANUAL",
-                    OriginalText: region.OriginalText
+                    OriginalText: region.OriginalText,
+                    PageRegionId: region.DbId
                 );
 
                 var dbRegion = await RegionService.CreatePageRegionAsync(newRegionDto);
@@ -832,7 +901,7 @@ else
         var regionIds = await EnsureRegionsSavedAsync(regionsToSave);
 
         int newId = ActiveTasks.Any() ? ActiveTasks.Max(t => t.Id) + 1 : 1;
-
+        
         string target;
         if (SelectedRegions.Any())
         {
@@ -864,15 +933,15 @@ else
 
             var assistantName = _assistantUsers.FirstOrDefault(u => u.UserId == AssignedAssistantId.Value)?.Username ?? AssignedAssistantId.ToString();
 
-            ActiveTasks.Insert(0, new ProductionTask
-            {
-                Id = newId,
+            ActiveTasks.Insert(0, new ProductionTask 
+            { 
+                Id = newId, 
                 DbId = dbTask.ChapterPageTaskId,
-                Type = TaskType,
-                Assistant = assistantName,
-                Target = target,
-                Description = TaskDescription,
-                Status = "Todo"
+                Type = TaskType, 
+                Assistant = assistantName, 
+                Target = target, 
+                Description = TaskDescription, 
+                Status = "Todo" 
             });
             TaskDescription = ""; // Reset form
             Snackbar.Add("Task assigned successfully!", Severity.Success);
@@ -883,7 +952,7 @@ else
             Snackbar.Add($"Error creating task: {ex.Message}", Severity.Error);
         }
     }
-
+    
     private async Task CycleTaskStatus(ProductionTask task)
     {
         if (task.Status == "In Progress" || task.Status == "Todo")
@@ -896,7 +965,7 @@ else
             Snackbar.Add("Cannot manually cycle Review/Done status. Assistants must submit work.", Severity.Warning);
             return;
         }
-
+        
         if (task.DbId.HasValue)
         {
             try
@@ -912,7 +981,7 @@ else
                         "Done" => "COMPLETED",
                         _ => "ASSIGNED"
                     };
-
+                    
                     var updateDto = new Application.DTOs.Manga.UpdateChapterPageTaskDto(
                         existingTask.ChapterPageTaskId,
                         existingTask.AssignedToUserId,
@@ -926,7 +995,7 @@ else
                         existingTask.CompletedPageVersionId,
                         existingTask.PageRegions.Select(r => r.PageRegionId).ToList()
                     );
-
+                    
                     await TaskService.UpdateChapterPageTaskAsync(updateDto);
                 }
             }
@@ -935,7 +1004,7 @@ else
                 Snackbar.Add($"Error updating task status in DB: {ex.Message}", Severity.Error);
             }
         }
-
+        
         StateHasChanged();
     }
 
@@ -943,8 +1012,8 @@ else
     {
         if (IsChapterLocked) return;
         bool? result = await DialogService.ShowMessageBox(
-            "Delete Task",
-            "Are you sure you want to delete this task?",
+            "Delete Task", 
+            "Are you sure you want to delete this task?", 
             yesText: "Delete", cancelText: "Cancel");
 
         if (result == true)
@@ -982,7 +1051,7 @@ else
     private string AnnotationComment { get; set; } = "";
     private double? PendingPinX = null;
     private double? PendingPinY = null;
-
+    
     [JSInvokable]
     public void OnPinAdded(string pane, double x, double y)
     {
@@ -998,8 +1067,56 @@ else
         CurrentTool = tool;
         StateHasChanged();
     }
-
+    
     private List<AnnotationModel> ActiveAnnotations = new();
+    private bool _showAnnotationsOnCanvas = true;
+
+    private async Task ToggleCanvasAnnotations()
+    {
+        _showAnnotationsOnCanvas = !_showAnnotationsOnCanvas;
+        var canvas = _activePane == "Left" ? _leftCanvasRef : _rightCanvasRef;
+        if (canvas != null)
+        {
+            if (_showAnnotationsOnCanvas)
+            {
+                var currentAnnotations = ActiveAnnotations.Where(a => a.PageNumber == SelectedPage && a.PinX.HasValue && a.PinY.HasValue);
+                await canvas.InvokeVoidAsync("syncAnnotations", currentAnnotations.Select(a => new { pinX = a.PinX.Value, pinY = a.PinY.Value, isResolved = a.IsResolved }));
+            }
+            else
+            {
+                await canvas.InvokeVoidAsync("syncAnnotations", Array.Empty<object>());
+            }
+        }
+    }
+
+    private async Task SaveVersionNote()
+    {
+        if (!UploadedPages.Any()) return;
+        var activePage = UploadedPages[ActivePageIndex];
+        if (!activePage.Versions.Any()) return;
+        var activeVer = activePage.Versions[activePage.ActiveVersionIndex];
+
+        try
+        {
+            var dbVer = await VersionService.GetChapterPageVersionByIdAsync(activeVer.ChapterPageVersionId);
+            if (dbVer != null)
+            {
+                await VersionService.UpdateChapterPageVersionAsync(new UpdateChapterPageVersionDto(
+                    ChapterPageVersionId: dbVer.ChapterPageVersionId,
+                    ChapterPageId: dbVer.ChapterPageId,
+                    VersionNo: dbVer.VersionNo,
+                    PageFileId: dbVer.PageFileId,
+                    VersionNote: activeVer.Note,
+                    IsCurrentVersion: dbVer.IsCurrentVersion
+                ));
+                Snackbar.Add("Version note saved.", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving note: {ex.Message}", Severity.Error);
+        }
+    }
 
     private async Task CreateAnnotation()
     {
@@ -1036,7 +1153,7 @@ else
         var regionIds = await EnsureRegionsSavedAsync(regionsToSave);
 
         int newId = ActiveAnnotations.Any() ? ActiveAnnotations.Max(t => t.Id) + 1 : 1;
-
+        
         string target;
         if (PendingPinX.HasValue && PendingPinY.HasValue)
             target = $"Pin at ({Math.Round(PendingPinX.Value)}, {Math.Round(PendingPinY.Value)})";
@@ -1059,18 +1176,18 @@ else
 
             var dbAnn = await AnnotationService.CreateChapterPageAnnotationAsync(annDto);
 
-            ActiveAnnotations.Insert(0, new AnnotationModel
-            {
-                Id = newId,
+            ActiveAnnotations.Insert(0, new AnnotationModel 
+            { 
+                Id = newId, 
                 DbId = dbAnn.ChapterPageAnnotationId,
-                Type = AnnotationType,
-                Comment = AnnotationComment,
-                Target = target,
+                Type = AnnotationType, 
+                Comment = AnnotationComment, 
+                Target = target, 
                 PageNumber = SelectedPage,
                 PinX = PendingPinX,
                 PinY = PendingPinY
             });
-            AnnotationComment = "";
+            AnnotationComment = ""; 
             PendingPinX = null;
             PendingPinY = null;
             Snackbar.Add("Annotation added successfully!", Severity.Success);
@@ -1103,13 +1220,22 @@ else
         if (ann != null)
         {
             ann.IsResolved = true;
-            if (ann.DbId.HasValue)
+            if (ann.DbId.HasValue && _currentUserId.HasValue)
             {
-                // Note: There is no Update method implemented in backend, but we can do our best.
-                // Depending on the service we might call AnnotationService.Update...
-                // But for now resolving just marks it done in UI unless a method is exposed.
+                try
+                {
+                    await AnnotationService.ResolveAnnotationAsync(_currentUserId.Value, ann.DbId.Value);
+                    Snackbar.Add("Issue resolved.", Severity.Success);
+                }
+                catch (Exception ex)
+                {
+                    Snackbar.Add($"Error resolving issue: {ex.Message}", Severity.Error);
+                }
             }
-            Snackbar.Add("Issue resolved.", Severity.Success);
+            else
+            {
+                Snackbar.Add("Issue resolved locally.", Severity.Success);
+            }
             await SyncAnnotationsToJS();
             StateHasChanged();
         }
@@ -1119,8 +1245,8 @@ else
     {
         if (IsChapterLocked) return;
         bool? result = await DialogService.ShowMessageBox(
-            "Delete Annotation",
-            "Are you sure you want to delete this annotation?",
+            "Delete Annotation", 
+            "Are you sure you want to delete this annotation?", 
             yesText: "Delete", cancelText: "Cancel");
 
         if (result == true)
@@ -1196,15 +1322,26 @@ else
             return;
         }
 
-        // Fetch assistant users for the dropdown
+        // Fetch assistant users for the dropdown from Series Contributors
         try
         {
-            var allUsers = await UserService.GetUsersByRoleAsync("Assistant");
-            _assistantUsers = allUsers.ToList();
+            if (Guid.TryParse(SeriesId, out var sId))
+            {
+                var contributors = await ContributorService.GetSeriesContributorsBySeriesIdAsync(sId);
+                var assistantList = new List<Application.DTOs.Auth.UserDto>();
+                foreach (var c in contributors)
+                {
+                    var u = await UserService.GetUserByIdAsync(c.UserId);
+                    // This dropdown assigns production tasks, so only list contributors whose
+                    // role is Assistant — exclude Editor / Mangaka contributors of the series.
+                    if (u != null && string.Equals(u.RoleName, "Assistant", StringComparison.OrdinalIgnoreCase))
+                        assistantList.Add(u);
+                }
+                _assistantUsers = assistantList;
+            }
         }
         catch (Exception)
         {
-            // fallback or handle gracefully if role not found
             _assistantUsers = new List<Application.DTOs.Auth.UserDto>();
         }
 
@@ -1215,28 +1352,31 @@ else
             {
                 SeriesTitle = series.Title;
                 SeriesSubtitle = string.Join(", ", series.Genres.Select(g => g.GenreName));
-
+                
                 var chapters = await ChapterService.GetChaptersBySeriesIdAsync(id);
                 if (chapters != null && chapters.Any())
                 {
-                    var chapterModels = chapters.Select((c, i) => new ChapterModel
-                    {
-                        Id = int.TryParse(c.ChapterNumberLabel, out int num) ? num : (i + 1),
+                    var chapterModels = chapters
+                        .Where(c => c.StatusCode != "CANCELLED")
+                        .Select((c, i) => new ChapterModel 
+                    { 
+                        Id = int.TryParse(c.ChapterNumberLabel, out int num) ? num : (i + 1), 
                         ChapterId = c.ChapterId,
-                        PageCount = 0,
+                        PageCount = 0, 
                         IsCompleted = c.StatusCode == "PUBLISHED",
                         StatusCode = c.StatusCode,
                         Title = c.ChapterTitle ?? ""
                     }).OrderBy(c => c.Id).ToList();
-
+                    
+                    var pageCountsDict = await PageService.GetPageCountsByChapterIdsAsync(chapterModels.Select(c => c.ChapterId));
                     foreach(var cm in chapterModels)
                     {
-                        var pages = await PageService.GetChapterPagesByChapterIdAsync(cm.ChapterId);
-                        cm.PageCount = pages.Count();
+                        if (pageCountsDict.TryGetValue(cm.ChapterId, out int cnt))
+                            cm.PageCount = cnt;
                     }
-
+                    
                     Chapters = chapterModels;
-
+                    
                     if (Chapters.Any())
                     {
                         Guid? resolveChapterId = null;
@@ -1303,36 +1443,65 @@ else
     private async Task SelectChapter(int chapterId)
     {
         if (_isLoadingChapter) return;
-
+        
         SelectedChapter = chapterId;
         try {
         ActivePageIndex = 0;
         SelectedPage = 0; // Reset selected page to avoid UI crashes
-
+        
         var chapter = Chapters.FirstOrDefault(c => c.Id == chapterId);
         if (chapter != null && !chapter.IsPagesLoaded)
         {
+            await _dbSemaphore.WaitAsync();
             try
             {
                 _isLoadingChapter = true;
                 StateHasChanged();
-                var pages = await PageService.GetChapterPagesByChapterIdAsync(chapter.ChapterId);
-                  foreach(var p in pages)
-                  {
-                      var pageModel = new PageModel { ChapterPageId = p.ChapterPageId };
-                      var versions = await VersionService.GetChapterPageVersionsByChapterPageIdAsync(p.ChapterPageId);
-                      foreach(var v in versions)
-                      {
-                          var file = await FileResourceService.GetFileResourceByIdAsync(v.PageFileId);
-                          var dbRegions = await RegionService.GetPageRegionsByChapterPageVersionIdAsync(v.ChapterPageVersionId);
+                var pages = (await PageService.GetChapterPagesByChapterIdAsync(chapter.ChapterId)).ToList();
+                var pageIds = pages.Select(p => p.ChapterPageId).Distinct();
+                var allVersions = (await VersionService.GetChapterPageVersionsByPageIdsAsync(pageIds)).ToList();
+                
+                var fileIds = allVersions.Select(v => v.PageFileId).Where(fid => fid != Guid.Empty).Distinct();
+                var filesDict = (await FileResourceService.GetFileResourcesByIdsAsync(fileIds)).ToDictionary(f => f.FileResourceId);
+                
+                var verIds = allVersions.Select(v => v.ChapterPageVersionId).Distinct().ToList();
 
+                // Guard against pathological region counts (corrupt / exploded segmentation
+                // data, e.g. a page with hundreds of thousands of regions). Only materialize
+                // regions for versions within a sane cap so one bad page cannot freeze the
+                // entire chapter load. Over-cap versions load with no regions but remain
+                // viewable and deletable.
+                const int MaxRegionsPerVersion = 2000;
+                var regionCounts = await RegionService.GetRegionCountsByVersionIdsAsync(verIds);
+                var safeVerIds = verIds
+                    .Where(vid => !regionCounts.TryGetValue(vid, out var cnt) || cnt <= MaxRegionsPerVersion)
+                    .ToList();
+                bool anyVersionCapped = safeVerIds.Count < verIds.Count;
+                var regionsGrouped = (await RegionService.GetPageRegionsByVersionIdsAsync(safeVerIds)).ToLookup(r => r.ChapterPageVersionId);
+                
+                var versionsGrouped = allVersions.ToLookup(v => v.ChapterPageId);
+
+                foreach(var p in pages)
+                {
+                    var pageModel = new PageModel { ChapterPageId = p.ChapterPageId };
+                    var versions = versionsGrouped[p.ChapterPageId];
+                    foreach(var v in versions)
+                    {
+                        filesDict.TryGetValue(v.PageFileId, out var file);
+                        var dbRegions = regionsGrouped[v.ChapterPageVersionId];
+                          
                           var mappedRegions = new List<RegionModel>();
                           int idx = 1;
                           foreach (var r in dbRegions)
                           {
+                              // Skip pin regions (tiny markers that anchor annotations). They
+                              // are rendered by the annotation pin layer, not as region boxes —
+                              // otherwise they show up as a duplicate "#N" box on the page.
+                              if (r.Width <= 0.05m && r.Height <= 0.05m) continue;
+
                               string origText = r.OriginalText ?? "";
                               string transText = "";
-
+                              
                               if (origText.TrimStart().StartsWith("{"))
                               {
                                   try
@@ -1350,6 +1519,7 @@ else
                               mappedRegions.Add(new RegionModel {
                                   Id = idx++,
                                   DbId = r.PageRegionId,
+                                  Label = r.RegionLabel,
                                   Type = r.TypeCode,
                                   X = (double)r.X,
                                   Y = (double)r.Y,
@@ -1360,8 +1530,8 @@ else
                               });
                           }
 
-                          string regionsJson = mappedRegions.Any()
-                              ? System.Text.Json.JsonSerializer.Serialize(mappedRegions, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase })
+                          string regionsJson = mappedRegions.Any() 
+                              ? System.Text.Json.JsonSerializer.Serialize(mappedRegions, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }) 
                               : "[]";
 
                           pageModel.Versions.Add(new PageVersionModel {
@@ -1370,17 +1540,25 @@ else
                               Note = v.VersionNote ?? "",
                               DataUrl = file?.CloudinarySecureUrl ?? "",
                               Regions = regionsJson,
-                              IsCurrentVersion = v.IsCurrentVersion
+                              IsCurrentVersion = v.IsCurrentVersion,
+                              IsDeleted = (v.PageFileId == Guid.Empty || file == null || file.DeletedAtUtc != null)
                           });
                       }
+                      var activeIdx = pageModel.Versions.FindIndex(v => v.IsCurrentVersion && !v.IsDeleted);
+                      if (activeIdx >= 0) pageModel.ActiveVersionIndex = activeIdx;
                       chapter.Pages.Add(pageModel);
                   }
                   chapter.PageCount = chapter.Pages.Count;
                 chapter.IsPagesLoaded = true;
+                if (anyVersionCapped)
+                {
+                    Snackbar.Add("Một số trang có số lượng vùng (region) bất thường nên tạm bỏ qua khi tải để tránh treo. Hãy xóa trang đó để dọn dữ liệu lỗi.", Severity.Warning);
+                }
             }
             finally
             {
                 _isLoadingChapter = false;
+                _dbSemaphore.Release();
                 StateHasChanged();
             }
         }
@@ -1409,13 +1587,24 @@ else
             if (_rightCanvasRef != null)
                 await _rightCanvasRef.InvokeVoidAsync("loadImage", "");
         }
-        // Sync split view pane when chapter changes
+        // Sync split view pane when chapter changes. Updating the data alone does not
+        // re-render the right canvas (it is JS-rendered), so drive it through
+        // OnSplitPageChanged to actually load the new chapter's page into the right pane.
         if (_isSplitView)
         {
             _splitUploadedPages = UploadedPages.ToList();
-            _splitPageIndex = 0;
+            if (_splitUploadedPages.Any())
+            {
+                await OnSplitPageChanged(1);
+            }
+            else
+            {
+                _splitPageIndex = 0;
+            }
         }
         StateHasChanged();
+        } catch (TaskCanceledException) {
+            // Ignore cancelled tasks during re-rendering or fast switching
         } catch (Exception ex) {
             Snackbar.Add($"Error loading chapter: {ex.Message}", Severity.Error);
             Console.WriteLine(ex.ToString());
@@ -1464,16 +1653,26 @@ else
     private async Task AddNewChapter()
     {
         if (_isAddingChapter) return;
-
+        
         try
         {
             _isAddingChapter = true;
             StateHasChanged();
-
-            int newId = Chapters.Any() ? Chapters.Max(c => c.Id) + 1 : 1;
-
+            
             if (Guid.TryParse(SeriesId, out Guid seriesGuid))
             {
+                // Chapter numbers must be unique across ALL chapters in the series,
+                // including CANCELLED ones: uq_chapter_series_chapter_number is NOT a
+                // filtered index, and the workspace hides cancelled chapters. Computing
+                // the next number from the visible list alone collided with a hidden
+                // cancelled chapter ("duplicate key (series, 1)"). Use the full list.
+                var allChapters = await ChapterService.GetChaptersBySeriesIdAsync(seriesGuid);
+                int maxExisting = allChapters
+                    .Select(c => int.TryParse(c.ChapterNumberLabel, out var n) ? n : 0)
+                    .DefaultIfEmpty(0)
+                    .Max();
+                int newId = Math.Max(maxExisting, Chapters.Any() ? Chapters.Max(c => c.Id) : 0) + 1;
+
                 var dbChapter = await ChapterService.CreateChapterAsync(new CreateChapterDto(
                     SeriesId: seriesGuid,
                     ChapterNumberLabel: newId.ToString(),
@@ -1505,10 +1704,10 @@ else
     private async Task DeleteChapter(int chapterId)
     {
         bool? result = await DialogService.ShowMessageBox(
-            "Delete Chapter",
-            "Are you sure you want to delete this chapter?",
+            "Delete Chapter", 
+            "Are you sure you want to delete this chapter?", 
             yesText: "Delete", cancelText: "Cancel");
-
+            
         if (result == true)
         {
             var chapter = Chapters.FirstOrDefault(c => c.Id == chapterId);
@@ -1516,6 +1715,18 @@ else
             {
                 if (chapter.ChapterId != Guid.Empty)
                 {
+                    // Only the author's own draft chapters are truly deletable. A chapter
+                    // that is under or past editorial review (or already CANCELLED, which is
+                    // terminal) must not be hard-deleted here — cancellation goes through the
+                    // editorial review workflow. This removes the old "delete = set CANCELLED"
+                    // behaviour that was leaving hidden cancelled chapters behind.
+                    var status = chapter.StatusCode;
+                    if (status != "DRAFT" && status != "REVISION_REQUESTED")
+                    {
+                        Snackbar.Add("Chỉ xóa được chapter ở trạng thái nháp (DRAFT/REVISION_REQUESTED). Chapter đang/đã review phải được hủy qua quy trình duyệt biên tập.", Severity.Warning);
+                        return;
+                    }
+
                     try
                     {
                         await ChapterService.DeleteChapterAsync(chapter.ChapterId);
@@ -1526,7 +1737,7 @@ else
                         return;
                     }
                 }
-
+                
                 Chapters.Remove(chapter);
                 if (SelectedChapter == chapterId)
                 {
@@ -1597,8 +1808,10 @@ else
         public string DataUrl { get; set; } = "";
         public string Note { get; set; } = "";
         public string? Regions { get; set; } = null;
+        public bool IsDirty { get; set; } = false;
         public Guid ChapterPageVersionId { get; set; }
         public bool IsCurrentVersion { get; set; } = false;
+        public bool IsDeleted { get; set; } = false;
         public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     }
 
@@ -1608,10 +1821,10 @@ else
         public List<PageVersionModel> Versions { get; set; } = new();
         public int ActiveVersionIndex { get; set; } = 0;
     }
-
-    private List<PageModel> UploadedPages
+    
+    private List<PageModel> UploadedPages 
     {
-        get
+        get 
         {
             var chap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
             return chap != null ? chap.Pages : new List<PageModel>();
@@ -1626,7 +1839,7 @@ else
             var chap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
             if (chap == null) return false;
             var code = chap.StatusCode;
-            return code == "UNDER_REVIEW" || code == "APPROVED" || code == "SCHEDULED" || code == "RELEASED";
+            return code == "UNDER_REVIEW" || code == "APPROVED" || code == "SCHEDULED" || code == "RELEASED" || code == "CANCELLED";
         }
     }
 
@@ -1637,14 +1850,14 @@ else
     private DotNetObjectReference<CanvasInterop>? _objRefLeft;
     private DotNetObjectReference<CanvasInterop>? _objRefRight;
     private string _activePane = "Left";
-
+    
     private void SetActivePane(string pane)
     {
         if (_activePane != pane)
         {
             _activePane = pane;
             SelectedPage = pane == "Left" ? ActivePageIndex + 1 : _splitPageIndex + 1;
-
+            
             // Sync SelectedRegions for the newly active pane
             SelectedRegions.Clear();
             var page = pane == "Left" ? UploadedPages.ElementAtOrDefault(ActivePageIndex) : _splitUploadedPages.ElementAtOrDefault(_splitPageIndex);
@@ -1668,9 +1881,9 @@ else
             StateHasChanged();
         }
     }
-
+    
     private IJSObjectReference? GetActiveCanvas() => _activePane == "Left" ? _leftCanvasRef : _rightCanvasRef;
-
+    
     public class CanvasInterop
     {
         private readonly CreatorWorkspace _parent;
@@ -1679,25 +1892,25 @@ else
 
         [JSInvokable]
         public void OnPinAdded(double x, double y) => _parent.OnPinAdded(Pane, x, y);
-
+        
         [JSInvokable]
         public void OnToolChangedFromJS(string newTool) => _parent.OnToolChangedFromJS(Pane, newTool);
-
+        
         [JSInvokable]
         public void OnRegionsUpdated(string regionsJson, bool canUndo, bool canRedo) => _parent.OnRegionsUpdated(Pane, regionsJson, canUndo, canRedo);
-
+        
         [JSInvokable]
         public Task<string> SegmentImageJS(string base64Image) => _parent.SegmentImageJS(Pane, base64Image);
-
+        
         [JSInvokable]
         public Task<string> TranslateRegionsJS(string payloadJson) => _parent.TranslateRegionsJS(Pane, payloadJson);
     }
-
+    
     private bool IsProcessing = false;
     private string CurrentTool = "select";
     private bool CanUndo = false;
     private bool CanRedo = false;
-
+    
     // Brush settings
     private string BrushColor { get; set; } = "#ffffff";
     private int BrushSize { get; set; } = 20;
@@ -1707,7 +1920,7 @@ else
         BrushColor = e.Value?.ToString() ?? "#ffffff";
         await GetActiveCanvas()!.InvokeVoidAsync("setBrushSettings", BrushColor, BrushSize);
     }
-
+    
     private async Task OnBrushSizeChanged(ChangeEventArgs e)
     {
         if (int.TryParse(e.Value?.ToString(), out int size))
@@ -1721,20 +1934,37 @@ else
 
     private async Task SaveProgress()
     {
-        foreach (var p in new[] { UploadedPages.ElementAtOrDefault(ActivePageIndex), _splitUploadedPages.ElementAtOrDefault(_splitPageIndex) })
+        var pagesToSave = UploadedPages.ToList();
+        if (_isSplitView && _splitUploadedPages != null)
         {
-            var page = p;
+            pagesToSave = pagesToSave.Union(_splitUploadedPages).ToList();
+        }
+
+        // Nothing edited → skip the DB round-trip, the semaphore, and the toast
+        // entirely. This makes navigating between unedited pages effectively free.
+        bool anyDirty = pagesToSave.Any(p => p != null
+            && p.Versions.Any()
+            && p.Versions[p.ActiveVersionIndex].IsDirty);
+        if (!anyDirty) return;
+
+        int savedCount = 0;
+        await _dbSemaphore.WaitAsync();
+        try
+        {
+        foreach (var page in pagesToSave)
+        {
             if (page == null) continue;
             if (page.Versions.Any())
             {
                 var currentVersion = page.Versions[page.ActiveVersionIndex];
+                if (!currentVersion.IsDirty) continue;
                 if (!string.IsNullOrEmpty(currentVersion.Regions))
                 {
                     try
                     {
                         var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                         var allRegions = System.Text.Json.JsonSerializer.Deserialize<List<RegionModel>>(currentVersion.Regions, options);
-
+                        
                         if (allRegions != null)
                         {
                             var dtos = allRegions.Select(r => {
@@ -1744,45 +1974,103 @@ else
                                     translated = r.TranslatedText ?? ""
                                 });
 
+                                string label = !string.IsNullOrEmpty(r.Label) ? r.Label : $"Region_{r.Id}";
                                 return new MangaManagementSystem.Application.DTOs.Manga.CreatePageRegionDto(
                                     currentVersion.ChapterPageVersionId,
                                     (r.Type ?? "OTHER").ToUpper(),
-                                    $"Region_{r.Id}",
+                                    label,
                                     (decimal)r.X,
                                     (decimal)r.Y,
                                     (decimal)r.Width,
                                     (decimal)r.Height,
                                     null,
                                     "MANUAL",
-                                    textJson
+                                    textJson,
+                                    r.DbId
                                 );
                             }).ToList();
 
                             await RegionService.BulkReplacePageRegionsAsync(currentVersion.ChapterPageVersionId, dtos);
+                            currentVersion.IsDirty = false;
+                            savedCount++;
+                            try { await JS.InvokeVoidAsync("clearMmsDraft", page.ChapterPageId.ToString()); } catch { }
                         }
                     }
                     catch (Exception ex)
                     {
-                        Snackbar.Add($"Error saving regions: {ex.Message}", Severity.Error);
-                        return;
+                        Console.WriteLine($"Error saving regions: {ex.Message}");
                     }
                 }
             }
         }
-        Snackbar.Add("Progress saved successfully!", Severity.Success);
+        if (savedCount > 0)
+        {
+            Snackbar.Add("Progress saved successfully!", Severity.Success);
+        }
+        }
+        finally
+        {
+            _dbSemaphore.Release();
+        }
     }
 
-    private void ExportCurrentPage()
+    private async Task HandleBackClick()
     {
-        Snackbar.Add("Page exported successfully!", Severity.Info);
+        await SaveProgress();
+        Nav.NavigateTo(BackHref);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await SaveProgress();
+    }
+
+    private async Task ExportCurrentPage()
+    {
+        var canvas = GetActiveCanvas();
+        if (canvas == null || UploadedPages.Count == 0 || ActivePageIndex < 0 || ActivePageIndex >= UploadedPages.Count)
+        {
+            Snackbar.Add("Không có trang nào để xuất.", Severity.Warning);
+            return;
+        }
+
+        var page = UploadedPages[ActivePageIndex];
+        if (!page.Versions.Any())
+        {
+            Snackbar.Add("Trang này chưa có ảnh để xuất.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            // Build a tidy, unambiguous file name so the user's Downloads folder stays organised.
+            var slugPart = string.IsNullOrWhiteSpace(Slug) ? "page" : Slug;
+            var safeSlug = new string(slugPart.Select(ch => char.IsLetterOrDigit(ch) || ch == '-' || ch == '_' ? ch : '-').ToArray());
+            var fileName = $"{safeSlug}_ch{SelectedChapter}_page{SelectedPage}.png";
+
+            // Renders the finished page (clean background + translated text, no editor boxes) and
+            // downloads it to the user's machine. Nothing is written to the database/Cloudinary.
+            var ok = await canvas.InvokeAsync<bool>("downloadRenderedImage", fileName);
+            if (ok)
+            {
+                Snackbar.Add($"Đã xuất ảnh: {fileName}", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Không xuất được trang (ảnh có thể chưa tải xong). Hãy thử lại.", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Xuất ảnh thất bại: {ex.Message}", Severity.Error);
+            Console.WriteLine(ex.ToString());
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            _autoSaveTimer = new System.Threading.Timer(PerformAutoSave, null, System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
-
             var version = DateTime.Now.Ticks;
             _moduleFactory = await JS.InvokeAsync<IJSObjectReference>("import", $"/js/mangaAiCanvas.js?v={version}");
             _leftCanvasRef = await _moduleFactory.InvokeAsync<IJSObjectReference>("createMangaCanvasInstance");
@@ -1791,7 +2079,7 @@ else
             _objRefRight = DotNetObjectReference.Create(new CanvasInterop(this, "Right"));
             await _leftCanvasRef.InvokeVoidAsync("initCanvas", "ai-canvas-left", "ai-canvas-container-left", _objRefLeft);
             await _rightCanvasRef.InvokeVoidAsync("initCanvas", "ai-canvas-right", "ai-canvas-container-right", _objRefRight);
-
+            
             if (UploadedPages.Any())
             {
                 await LoadPage(ActivePageIndex);
@@ -1825,66 +2113,80 @@ else
             var files = e.GetMultipleFiles(100);
             if (files.Any())
             {
-                foreach (var file in files)
+                ChapterModel? chap = null;
+                await _dbSemaphore.WaitAsync();
+                try
                 {
-                    using var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 20);
-                    using var memoryStream = new MemoryStream();
-                    await stream.CopyToAsync(memoryStream);
-                    var fileBytes = memoryStream.ToArray();
-
-                    var base64 = Convert.ToBase64String(fileBytes);
-                    var dataUrl = $"data:{file.ContentType};base64,{base64}";
-
                     var activeChap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
+                    int maxPageNo = 0;
                     if (activeChap != null)
                     {
-                        // 1. Upload to Storage
-                        var uploadResult = await FileStorageService.UploadFileAsync(fileBytes, file.Name, file.ContentType, "CHAPTER_PAGE_VERSION");
-
-                        // 2. Create File Resource DB entry
-                        var fileResource = await FileResourceService.CreateFileResourceAsync(new CreateFileResourceDto(
-                            FilePurposeCode: "CHAPTER_PAGE_VERSION",
-                            OriginalFileName: file.Name,
-                            CloudinaryPublicId: uploadResult.PublicId,
-                            CloudinarySecureUrl: uploadResult.SecureUrl,
-                            ContentType: file.ContentType,
-                            FileSizeBytes: fileBytes.Length,
-                            Sha256Hash: uploadResult.Sha256Hash,
-                            UploadedByUserId: _currentUserId
-                        ));
-
-                        // 3. Create Chapter Page
-                        int newPageNo = activeChap.Pages.Count + 1;
-                        var dbPage = await PageService.CreateChapterPageAsync(new CreateChapterPageDto(
-                            ChapterId: activeChap.ChapterId,
-                            PageNo: newPageNo,
-                            PageNotes: null
-                        ));
-
-                        // 4. Create Chapter Page Version
-                        var dbVersion = await VersionService.CreateChapterPageVersionAsync(new CreateChapterPageVersionDto(
-                            ChapterPageId: dbPage.ChapterPageId,
-                            VersionNo: 1,
-                            PageFileId: fileResource.FileResourceId,
-                            VersionNote: "Original Upload"
-                        ));
-
-                        await VersionService.SetCurrentVersionAsync(dbPage.ChapterPageId, dbVersion.ChapterPageVersionId);
-
-                        var newPage = new PageModel { ChapterPageId = dbPage.ChapterPageId };
-                        newPage.Versions.Add(new PageVersionModel {
-                            VersionNo = 1,
-                            DataUrl = dataUrl,
-                            Note = "Original Upload",
-                            ChapterPageVersionId = dbVersion.ChapterPageVersionId,
-                            IsCurrentVersion = true
-                        });
-                        activeChap.Pages.Add(newPage);
+                        var existingDbPages = await PageService.GetChapterPagesByChapterIdAsync(activeChap.ChapterId);
+                        maxPageNo = existingDbPages.Any() ? existingDbPages.Max(p => p.PageNo) : 0;
                     }
-                }
 
-                var chap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
-                if (chap != null) chap.PageCount = chap.Pages.Count;
+                    foreach (var file in files)
+                    {
+                        using var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 20);
+                        using var memoryStream = new MemoryStream();
+                        await stream.CopyToAsync(memoryStream);
+                        var fileBytes = memoryStream.ToArray();
+                        
+                        if (activeChap != null)
+                        {
+                            // 1. Upload to Storage
+                            var uploadResult = await FileStorageService.UploadFileAsync(fileBytes, file.Name, file.ContentType, "CHAPTER_PAGE_VERSION");
+                            
+                            // 2. Create File Resource DB entry
+                            var fileResource = await FileResourceService.CreateFileResourceAsync(new CreateFileResourceDto(
+                                FilePurposeCode: "CHAPTER_PAGE_VERSION",
+                                OriginalFileName: file.Name,
+                                CloudinaryPublicId: uploadResult.PublicId,
+                                CloudinarySecureUrl: uploadResult.SecureUrl,
+                                ContentType: file.ContentType,
+                                FileSizeBytes: fileBytes.Length,
+                                Sha256Hash: uploadResult.Sha256Hash,
+                                UploadedByUserId: _currentUserId
+                            ));
+                            
+                            // 3. Create Chapter Page
+                            maxPageNo++;
+                            int newPageNo = maxPageNo;
+                            var dbPage = await PageService.CreateChapterPageAsync(new CreateChapterPageDto(
+                                ChapterId: activeChap.ChapterId,
+                                PageNo: newPageNo,
+                                PageNotes: null
+                            ));
+                            
+                            // 4. Create Chapter Page Version
+                            var dbVersion = await VersionService.CreateChapterPageVersionAsync(new CreateChapterPageVersionDto(
+                                ChapterPageId: dbPage.ChapterPageId,
+                                VersionNo: 1,
+                                PageFileId: fileResource.FileResourceId,
+                                VersionNote: "Original Upload"
+                            ));
+                            
+                            await VersionService.SetCurrentVersionAsync(dbPage.ChapterPageId, dbVersion.ChapterPageVersionId);
+                        
+                            var newPage = new PageModel { ChapterPageId = dbPage.ChapterPageId };
+                            newPage.Versions.Add(new PageVersionModel { 
+                                VersionNo = 1, 
+                                DataUrl = uploadResult.SecureUrl, 
+                                Note = "Original Upload",
+                                ChapterPageVersionId = dbVersion.ChapterPageVersionId,
+                                IsCurrentVersion = true
+                            });
+                            activeChap.Pages.Add(newPage);
+                        }
+                    }
+                    
+                    chap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
+                    if (chap != null) chap.PageCount = chap.Pages.Count;
+                }
+                finally
+                {
+                    _dbSemaphore.Release();
+                }
 
                 StateHasChanged();
                 await Task.Delay(1); // Yield to allow DOM to render pagination if it was empty
@@ -1896,39 +2198,138 @@ else
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Error uploading: {ex.Message}", Severity.Error);
+            var msg = ex.InnerException?.Message ?? ex.Message;
+            Snackbar.Add($"Error uploading: {msg}", Severity.Error);
+            Console.WriteLine(ex.ToString());
         }
     }
 
     private async Task OnSplitPageChanged(int pageNumber)
     {
-        _splitPageIndex = pageNumber - 1;
-        if (_rightCanvasRef != null && _splitUploadedPages.Any())
+        if (_isPageLoading) return;
+        _isPageLoading = true;
+        try
         {
-            var page = _splitUploadedPages[_splitPageIndex];
-            if (page.Versions.Any())
+            _splitPageIndex = pageNumber - 1;
+            if (_rightCanvasRef != null && _splitUploadedPages.Any())
             {
-                var v = page.Versions[page.ActiveVersionIndex];
-                await _rightCanvasRef.InvokeVoidAsync("loadImage", v.DataUrl);
-                if (!string.IsNullOrEmpty(v.Regions))
+                var page = _splitUploadedPages[_splitPageIndex];
+                if (page.Versions.Any())
                 {
-                    await _rightCanvasRef.InvokeVoidAsync("loadRegions", v.Regions);
+                    var v = page.Versions[page.ActiveVersionIndex];
+                    await _rightCanvasRef.InvokeVoidAsync("loadImage", OptimizedImageUrl(v.DataUrl));
+
+                    // Programmatic load: silent=true to avoid a phantom change echo.
+                    await _rightCanvasRef.InvokeVoidAsync("loadRegions",
+                        string.IsNullOrEmpty(v.Regions) ? "[]" : v.Regions, true);
+
+                    var shadowDraft = await JS.InvokeAsync<string>("getMmsDraft", page.ChapterPageId.ToString());
+                    if (HasMeaningfulDraft(shadowDraft, v.Regions))
+                    {
+                        Snackbar.Add($"⚠️ Unsaved draft detected for the right page.", Severity.Warning, config => {
+                            config.Action = "Restore";
+                            config.ActionColor = Color.Primary;
+                            config.OnClick = snackbar => {
+                                _ = _rightCanvasRef.InvokeVoidAsync("loadRegions", shadowDraft).AsTask();
+                                return Task.CompletedTask;
+                            };
+                        });
+                    }
                 }
             }
         }
+        finally
+        {
+            _isPageLoading = false;
+            // Re-render after clearing the guard. The initial load runs from
+            // OnAfterRenderAsync (which does NOT auto-render afterwards), so without this
+            // the UI kept rendering _isPageLoading = true and the pagination stayed
+            // visually Disabled forever after a reload.
+            StateHasChanged();
+        }
     }
 
-    private void OnPageChanged(int pageNumber)
+    private async Task OnPageChanged(int pageNumber)
     {
+        // Ignore clicks while a load is still running so rapid pagination clicks
+        // cannot pile up overlapping DB + JS calls on the Blazor Server circuit
+        // (the cause of slow loads and dropped connections).
+        if (_isPageLoading) return;
+        await SaveProgress();
         // MudPagination pageNumber is 1-indexed
-        _ = LoadPage(pageNumber - 1);
+        await LoadPage(pageNumber - 1);
+    }
+
+    // Re-entrancy guard for page navigation (see OnPageChanged / LoadPage).
+    private bool _isPageLoading = false;
+
+    // Per-page cache of tasks & annotations (keyed by ChapterPageId) so revisiting a
+    // data-heavy page does not re-query the DB. The UI mutates these same list
+    // instances (Insert/Remove/property edits), so the cache stays in sync in-session.
+    private readonly Dictionary<Guid, (List<ProductionTask> Tasks, List<AnnotationModel> Annotations)> _pageDataCache = new();
+
+    /// <summary>
+    /// Returns the regions JSON with the volatile UI-only "selected" flag removed,
+    /// so content comparisons ignore selection (an ephemeral, non-persisted) noise.
+    /// </summary>
+    private static string StripSelected(string? regionsJson)
+    {
+        if (string.IsNullOrWhiteSpace(regionsJson)) return "[]";
+        try
+        {
+            var node = System.Text.Json.Nodes.JsonNode.Parse(regionsJson);
+            if (node is System.Text.Json.Nodes.JsonArray arr)
+            {
+                foreach (var item in arr)
+                {
+                    if (item is System.Text.Json.Nodes.JsonObject obj)
+                    {
+                        obj.Remove("selected");
+                        obj.Remove("Selected");
+                    }
+                }
+                return arr.ToJsonString();
+            }
+        }
+        catch { }
+        return regionsJson.Trim();
+    }
+
+    /// <summary>
+    /// True only when a stored shadow draft differs in real content from the saved
+    /// regions. Prevents false "unsaved draft" warnings on plain page navigation.
+    /// </summary>
+    private static bool HasMeaningfulDraft(string? draft, string? savedRegions)
+    {
+        if (string.IsNullOrWhiteSpace(draft)) return false;
+        return StripSelected(draft) != StripSelected(savedRegions);
+    }
+
+    /// <summary>
+    /// Requests a bandwidth-optimized rendition (auto format + auto quality) from
+    /// Cloudinary WITHOUT any resize, so pixel dimensions — and therefore region
+    /// coordinates — stay identical. Returns the original URL unchanged if it is not
+    /// a recognizable Cloudinary delivery URL or is already transformed.
+    /// </summary>
+    private static string OptimizedImageUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return url ?? "";
+        const string marker = "/upload/";
+        int idx = url.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (idx < 0) return url;
+        int insertAt = idx + marker.Length;
+        if (url.AsSpan(insertAt).StartsWith("f_auto")) return url;
+        return url.Insert(insertAt, "f_auto,q_auto/");
     }
 
     private async Task LoadPage(int index)
     {
-        if (index >= 0 && index < UploadedPages.Count)
+        if (index < 0 || index >= UploadedPages.Count) return;
+        if (_isPageLoading) return;
+        _isPageLoading = true;
+        try
         {
-                        var page = UploadedPages[index];
+            var page = UploadedPages[index];
 
             ActivePageIndex = index;
             SelectedPage = index + 1; // update the header number
@@ -1936,100 +2337,188 @@ else
             if (page.Versions.Any() && _leftCanvasRef != null)
             {
                 var activeVersion = page.Versions[page.ActiveVersionIndex];
-                await _leftCanvasRef.InvokeVoidAsync("loadImage", activeVersion.DataUrl);
-                if (!string.IsNullOrEmpty(activeVersion.Regions))
-                {
-                    await _leftCanvasRef.InvokeVoidAsync("loadRegions", activeVersion.Regions);
-                }
-                else
-                {
-                    await _leftCanvasRef.InvokeVoidAsync("loadRegions", "[]");
-                }
-            }
+                await _leftCanvasRef.InvokeVoidAsync("loadImage", OptimizedImageUrl(activeVersion.DataUrl));
 
-            try
-            {
-                var dbTasks = await TaskService.GetChapterPageTasksByChapterPageIdAsync(page.ChapterPageId);
-                ActiveTasks.Clear();
-                int idCounter = 1;
-                foreach (var t in dbTasks)
+                // Programmatic load: silent=true so the canvas does not echo a
+                // phantom change back to Blazor. A freshly loaded page has no undo.
+                await _leftCanvasRef.InvokeVoidAsync("loadRegions",
+                    string.IsNullOrEmpty(activeVersion.Regions) ? "[]" : activeVersion.Regions, true);
+                CanUndo = false;
+                CanRedo = false;
+
+                // Warn only when a stored shadow draft really differs from the
+                // saved regions (ignores selection-only and empty drafts).
+                var shadowDraft = await JS.InvokeAsync<string>("getMmsDraft", page.ChapterPageId.ToString());
+                if (HasMeaningfulDraft(shadowDraft, activeVersion.Regions))
                 {
-                    var statusMap = t.StatusCode switch
-                    {
-                        "ASSIGNED" => "Todo",
-                        "IN_PROGRESS" => "In Progress",
-                        "UNDER_REVIEW" => "Review",
-                        "COMPLETED" => "Done",
-                        _ => "Todo"
-                    };
-                    ActiveTasks.Add(new ProductionTask
-                    {
-                        Id = idCounter++,
-                        DbId = t.ChapterPageTaskId,
-                        Type = t.TypeCode,
-                        Assistant = t.AssignedUsername ?? t.AssignedToDisplayName ?? t.AssignedToUserId.ToString(),
-                        Target = $"Page {SelectedPage}",
-                        Description = t.TaskDescription,
-                        Status = statusMap,
-                        Regions = t.PageRegions?.Select(r => new RegionModel {
-                            Id = ParseRegionId(r.RegionLabel),
-                            DbId = r.PageRegionId,
-                            Type = r.TypeCode,
-                            X = (double)r.X,
-                            Y = (double)r.Y,
-                            Width = (double)r.Width,
-                            Height = (double)r.Height
-                        }).ToList() ?? new List<RegionModel>()
-                    });
-                }
-
-                var dbAnnotations = await AnnotationService.GetChapterPageAnnotationsByChapterPageIdAsync(page.ChapterPageId);
-                ActiveAnnotations.Clear();
-                int annIdCounter = 1;
-                foreach (var a in dbAnnotations)
-                {
-                      var pinRegion = a.PageRegions?.FirstOrDefault(r => r.Width <= 0.05m && r.Height <= 0.05m);
-                      var targetRegions = a.PageRegions?.Where(r => r.Width > 0.05m).Select(r => $"Panel [X:{Math.Round(r.X)}, Y:{Math.Round(r.Y)}, W:{Math.Round(r.Width)}, H:{Math.Round(r.Height)}]").ToList() ?? new List<string>();
-
-                    string annTarget;
-                    if (pinRegion != null)
-                        annTarget = $"Pin at ({Math.Round(pinRegion.X)}, {Math.Round(pinRegion.Y)})";
-                    else if (targetRegions.Any())
-                        annTarget = string.Join("\n", targetRegions);
-                    else
-                        annTarget = $"Page {SelectedPage}";
-
-                    ActiveAnnotations.Add(new AnnotationModel
-                    {
-                        Id = annIdCounter++,
-                        DbId = a.ChapterPageAnnotationId,
-                        Type = a.IssueTypeCode,
-                        Comment = a.AnnotationText,
-                        Target = annTarget,
-                        PageNumber = SelectedPage,
-                        PinX = pinRegion != null ? (double?)pinRegion.X : null,
-                        PinY = pinRegion != null ? (double?)pinRegion.Y : null,
-                        IsResolved = a.ResolvedByUserId != null,
-                        Regions = a.PageRegions?.Select(r => new RegionModel {
-                            Id = ParseRegionId(r.RegionLabel),
-                            DbId = r.PageRegionId,
-                            Type = r.TypeCode,
-                            X = (double)r.X,
-                            Y = (double)r.Y,
-                            Width = (double)r.Width,
-                            Height = (double)r.Height
-                        }).ToList() ?? new List<RegionModel>()
+                    Snackbar.Add($"⚠️ Unsaved draft detected for this page.", Severity.Warning, config => {
+                        config.Action = "Khôi phục";
+                        config.ActionColor = Color.Primary;
+                        config.OnClick = snackbar => {
+                            _ = _leftCanvasRef.InvokeVoidAsync("loadRegions", shadowDraft).AsTask();
+                            return Task.CompletedTask;
+                        };
                     });
                 }
             }
-            catch (Exception ex)
+
+            // Tasks & annotations are scoped to the ChapterPage (not the version), so
+            // cache them per page and only hit the DB on a cache miss. Revisiting a page
+            // (or switching versions) then needs no extra round-trip.
+            if (_pageDataCache.TryGetValue(page.ChapterPageId, out var cached))
             {
-                Console.WriteLine($"Error loading tasks/annotations: {ex.Message}");
+                ActiveTasks = cached.Tasks;
+                ActiveAnnotations = cached.Annotations;
+            }
+            else
+            {
+                var newTasks = new List<ProductionTask>();
+                var newAnnotations = new List<AnnotationModel>();
+                bool loadedOk = false;
+                try
+                {
+                    await _dbSemaphore.WaitAsync();
+                    try
+                    {
+                        var dbTasks = await TaskService.GetChapterPageTasksByChapterPageIdAsync(page.ChapterPageId);
+                        int idCounter = 1;
+                        foreach (var t in dbTasks)
+                        {
+                            var statusMap = t.StatusCode switch
+                            {
+                                "ASSIGNED" => "Todo",
+                                "IN_PROGRESS" => "In Progress",
+                                "UNDER_REVIEW" => "Review",
+                                "COMPLETED" => "Done",
+                                _ => "Todo"
+                            };
+                            newTasks.Add(new ProductionTask
+                            {
+                                Id = idCounter++,
+                                DbId = t.ChapterPageTaskId,
+                                Type = t.TypeCode,
+                                Assistant = t.AssignedUsername ?? t.AssignedToDisplayName ?? t.AssignedToUserId.ToString(),
+                                Target = $"Page {SelectedPage}",
+                                Description = t.TaskDescription,
+                                Status = statusMap,
+                                Regions = t.PageRegions?.Select(r => new RegionModel {
+                                    Id = ParseRegionId(r.RegionLabel),
+                                    DbId = r.PageRegionId,
+                                    Type = r.TypeCode,
+                                    X = (double)r.X,
+                                    Y = (double)r.Y,
+                                    Width = (double)r.Width,
+                                    Height = (double)r.Height
+                                }).ToList() ?? new List<RegionModel>()
+                            });
+                        }
+
+                        var dbAnnotations = await AnnotationService.GetChapterPageAnnotationsByChapterPageIdAsync(page.ChapterPageId);
+                        int annIdCounter = 1;
+                        foreach (var a in dbAnnotations)
+                        {
+                              var pinRegion = a.PageRegions?.FirstOrDefault(r => r.Width <= 0.05m && r.Height <= 0.05m);
+                              var targetRegions = a.PageRegions?.Where(r => r.Width > 0.05m).Select(r => $"Panel [X:{Math.Round(r.X)}, Y:{Math.Round(r.Y)}, W:{Math.Round(r.Width)}, H:{Math.Round(r.Height)}]").ToList() ?? new List<string>();
+
+                            string annTarget;
+                            if (pinRegion != null)
+                                annTarget = $"Pin at ({Math.Round(pinRegion.X)}, {Math.Round(pinRegion.Y)})";
+                            else if (targetRegions.Any())
+                                annTarget = string.Join("\n", targetRegions);
+                            else
+                                annTarget = $"Page {SelectedPage}";
+
+                            newAnnotations.Add(new AnnotationModel
+                            {
+                                Id = annIdCounter++,
+                                DbId = a.ChapterPageAnnotationId,
+                                Type = a.IssueTypeCode,
+                                Comment = a.AnnotationText,
+                                Target = annTarget,
+                                PageNumber = SelectedPage,
+                                PinX = pinRegion != null ? (double?)pinRegion.X : null,
+                                PinY = pinRegion != null ? (double?)pinRegion.Y : null,
+                                IsResolved = a.ResolvedByUserId != null,
+                                Regions = a.PageRegions?.Select(r => new RegionModel {
+                                    Id = ParseRegionId(r.RegionLabel),
+                                    DbId = r.PageRegionId,
+                                    Type = r.TypeCode,
+                                    X = (double)r.X,
+                                    Y = (double)r.Y,
+                                    Width = (double)r.Width,
+                                    Height = (double)r.Height
+                                }).ToList() ?? new List<RegionModel>()
+                            });
+                        }
+                        loadedOk = true;
+                    }
+                    finally
+                    {
+                        _dbSemaphore.Release();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error loading tasks/annotations: {ex.Message}");
+                }
+
+                ActiveTasks = newTasks;
+                ActiveAnnotations = newAnnotations;
+                // Only cache a fully successful load so a transient error retries next visit.
+                if (loadedOk)
+                {
+                    _pageDataCache[page.ChapterPageId] = (newTasks, newAnnotations);
+                }
             }
 
             await SyncAnnotationsToJS();
             StateHasChanged();
+
+            // Warm the browser cache for the next/previous page images so paging
+            // through a chapter feels instant after the first view. Fire-and-forget
+            // so it never blocks navigation or holds the load guard.
+            _ = PreloadAdjacentPagesAsync(index);
         }
+        finally
+        {
+            _isPageLoading = false;
+            // Re-render after clearing the guard. The initial load runs from
+            // OnAfterRenderAsync (which does NOT auto-render afterwards), so without this
+            // the UI kept rendering _isPageLoading = true and the pagination stayed
+            // visually Disabled forever after a reload.
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Preloads the active-version image of the next and previous pages into the
+    /// browser cache (matching crossOrigin so the canvas load reuses it).
+    /// </summary>
+    private async Task PreloadAdjacentPagesAsync(int index)
+    {
+        try
+        {
+            var urls = new List<string>();
+            void AddUrl(int i)
+            {
+                if (i >= 0 && i < UploadedPages.Count)
+                {
+                    var p = UploadedPages[i];
+                    if (p.Versions.Any())
+                    {
+                        var url = OptimizedImageUrl(p.Versions[p.ActiveVersionIndex].DataUrl);
+                        if (!string.IsNullOrEmpty(url)) urls.Add(url);
+                    }
+                }
+            }
+            AddUrl(index + 1);
+            AddUrl(index - 1);
+            if (urls.Count > 0)
+            {
+                await JS.InvokeVoidAsync("mmsPreloadImages", urls);
+            }
+        }
+        catch { }
     }
 
     private int ParseRegionId(string? regionLabel)
@@ -2054,8 +2543,8 @@ else
         {
             var pageToDelete = UploadedPages[ActivePageIndex];
             bool? result = await DialogService.ShowMessageBox(
-                "Delete Page",
-                "Are you sure you want to delete this page?",
+                "Delete Page", 
+                "Are you sure you want to delete this page?", 
                 yesText: "Delete", cancelText: "Cancel");
 
             if (result == true)
@@ -2070,10 +2559,11 @@ else
                             Snackbar.Add("Failed to delete page from database.", Severity.Error);
                             return;
                         }
+                        _pageDataCache.Remove(pageToDelete.ChapterPageId);
                     }
 
                     UploadedPages.RemoveAt(ActivePageIndex);
-
+                    
                     var activeChap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
                     if (activeChap != null) activeChap.PageCount = UploadedPages.Count;
 
@@ -2107,12 +2597,9 @@ else
         var canvas = pane == "Left" ? _leftCanvasRef : _rightCanvasRef;
 
         if (page == null) return;
-
-        // Auto-save the current canvas background before switching
-        if (!isDeleting && page.Versions.Any() && canvas != null && page.ActiveVersionIndex >= 0 && page.ActiveVersionIndex < page.Versions.Count && page.ActiveVersionIndex != versionIndex)
-        {
-            page.Versions[page.ActiveVersionIndex].DataUrl = await canvas.InvokeAsync<string>("exportImage");
-        }
+        await SaveProgress();
+        
+        // Do not overwrite DataUrl in memory with local canvas exports when switching versions
 
         if (versionIndex >= 0 && versionIndex < page.Versions.Count)
         {
@@ -2120,15 +2607,22 @@ else
             var activeVersion = page.Versions[versionIndex];
             if (canvas != null)
             {
-                await canvas.InvokeVoidAsync("loadImage", activeVersion.DataUrl);
-                if (!string.IsNullOrEmpty(activeVersion.Regions))
+                if (activeVersion.IsDeleted)
                 {
-                    await canvas.InvokeVoidAsync("loadRegions", activeVersion.Regions);
+                    await canvas.InvokeVoidAsync("loadImage", ""); // Clear canvas
+                    Snackbar.Add("This version image has been deleted.", Severity.Warning);
                 }
                 else
                 {
-                    await canvas.InvokeVoidAsync("loadRegions", "[]");
+                    await canvas.InvokeVoidAsync("loadImage", OptimizedImageUrl(activeVersion.DataUrl));
                 }
+
+                // Programmatic load: silent=true so switching versions does not mark
+                // the page dirty or write a phantom draft.
+                await canvas.InvokeVoidAsync("loadRegions",
+                    string.IsNullOrEmpty(activeVersion.Regions) ? "[]" : activeVersion.Regions, true);
+                CanUndo = false;
+                CanRedo = false;
             }
             StateHasChanged();
         }
@@ -2145,6 +2639,7 @@ else
             StateHasChanged();
             Snackbar.Add("Saving new version to cloud...", Severity.Info);
 
+            string? uploadedPublicId = null;
             try
             {
                 var dataUrl = await canvas.InvokeAsync<string>("exportImage");
@@ -2155,9 +2650,14 @@ else
                 var base64Data = dataUrl.Substring(commaIndex + 1);
                 var bytes = Convert.FromBase64String(base64Data);
 
+                // 1. Upload to Cloudinary FIRST (no SQL transaction held during upload).
                 var uploadResult = await FileStorageService.UploadFileAsync(bytes, $"page_{SelectedPage}_v{nextVersionNo}.png", "image/png", "CHAPTER_PAGE_VERSION");
+                uploadedPublicId = uploadResult.PublicId;
 
-                var fileResourceDto = await FileResourceService.CreateFileResourceAsync(new CreateFileResourceDto(
+                var currentRegionsJson = await canvas.InvokeAsync<string>("exportRegions");
+                var currentRegions = System.Text.Json.JsonSerializer.Deserialize<List<RegionModel>>(currentRegionsJson, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                var fileDto = new CreateFileResourceDto(
                     FilePurposeCode: "CHAPTER_PAGE_VERSION",
                     OriginalFileName: uploadResult.OriginalFileName,
                     CloudinaryPublicId: uploadResult.PublicId,
@@ -2166,40 +2666,239 @@ else
                     FileSizeBytes: uploadResult.FileSizeBytes,
                     Sha256Hash: uploadResult.Sha256Hash,
                     UploadedByUserId: _currentUserId
-                ));
+                );
 
-                var versionDto = await VersionService.CreateChapterPageVersionAsync(new CreateChapterPageVersionDto(
-                    ChapterPageId: page.ChapterPageId,
-                    VersionNo: (short)nextVersionNo,
-                    PageFileId: fileResourceDto.FileResourceId,
-                    VersionNote: $"New Version {nextVersionNo}"
-                ));
+                var regionDtos = (currentRegions ?? new List<RegionModel>())
+                    .Where(r => r.Width > 0.05 || r.Height > 0.05) // exclude tiny pin markers
+                    .Select(r =>
+                    {
+                        var textObj = new Dictionary<string, string>
+                        {
+                            { "original", r.OriginalText ?? "" },
+                            { "translated", r.TranslatedText ?? "" }
+                        };
+                        return new CreatePageRegionDto(
+                            ChapterPageVersionId: Guid.Empty, // assigned inside the service
+                            TypeCode: (r.Type ?? "OTHER").ToUpperInvariant(),
+                            RegionLabel: null,
+                            X: (decimal)r.X,
+                            Y: (decimal)r.Y,
+                            Width: (decimal)r.Width,
+                            Height: (decimal)r.Height,
+                            ConfidenceScore: null,
+                            SourceType: "MANUAL",
+                            OriginalText: System.Text.Json.JsonSerializer.Serialize(textObj)
+                        );
+                    }).ToList();
 
+                // 2. Atomic create: FileResource + version + regions + set-current (one transaction).
+                var versionDto = await VersionService.CreateVersionWithFileAndRegionsAsync(
+                    page.ChapterPageId, (short)nextVersionNo, fileDto, $"New Version {nextVersionNo}",
+                    regionDtos, setAsCurrent: true);
+
+                // 3. Edit-bleed fix: the in-session edits now belong to the NEW version only. Keep the
+                //    previous version pristine by clearing its dirty flag so SaveProgress never writes
+                //    those edits back into it.
+                var oldVer = page.Versions.ElementAtOrDefault(page.ActiveVersionIndex);
+                if (oldVer != null) oldVer.IsDirty = false;
+
+                foreach (var v in page.Versions) v.IsCurrentVersion = false;
                 var newVersionModel = new PageVersionModel
                 {
                     ChapterPageVersionId = versionDto.ChapterPageVersionId,
                     VersionNo = nextVersionNo,
-                    Regions = "[]", // DO NOT CLONE REGIONS!
-                    DataUrl = dataUrl,
-                    Note = $"New Version {nextVersionNo}"
+                    Regions = currentRegionsJson,
+                    DataUrl = uploadResult.SecureUrl,
+                    Note = $"New Version {nextVersionNo}",
+                    IsCurrentVersion = true
                 };
                 page.Versions.Add(newVersionModel);
+                page.ActiveVersionIndex = page.Versions.Count - 1;
 
-                await SetActiveVersion(pane, newVersionModel);
-
-                await SwitchVersion(pane, page.Versions.Count - 1);
+                // 4. Show the new version (silent load → no phantom dirty/draft); reset undo history.
+                await canvas.InvokeVoidAsync("loadImage", OptimizedImageUrl(uploadResult.SecureUrl));
+                await canvas.InvokeVoidAsync("loadRegions", string.IsNullOrEmpty(currentRegionsJson) ? "[]" : currentRegionsJson, true);
+                CanUndo = false;
+                CanRedo = false;
 
                 Snackbar.Add($"Created New Version {nextVersionNo}", Severity.Success);
             }
             catch (Exception ex)
             {
-                Snackbar.Add($"Failed to save version: {ex.Message}", Severity.Error);
+                // The DB transaction rolled back; the Cloudinary upload (if it succeeded) is now an
+                // orphan — best-effort delete so we do not leave a dangling file.
+                if (!string.IsNullOrEmpty(uploadedPublicId))
+                {
+                    try { await FileStorageService.DeleteFileAsync(uploadedPublicId, "image"); } catch { }
+                }
+                var msg = ex.InnerException?.Message ?? ex.Message;
+                Snackbar.Add($"Failed to save version: {msg}", Severity.Error);
+                Console.WriteLine(ex.ToString());
             }
             finally
             {
                 IsProcessing = false;
                 StateHasChanged();
             }
+        }
+    }
+
+    private async Task HandleUploadVersion(InputFileChangeEventArgs e, string pane)
+    {
+        if (IsChapterLocked) return;
+        var page = pane == "Left" ? UploadedPages.ElementAtOrDefault(ActivePageIndex) : _splitUploadedPages.ElementAtOrDefault(_splitPageIndex);
+        var canvas = pane == "Left" ? _leftCanvasRef : _rightCanvasRef;
+
+        if (page != null && canvas != null)
+        {
+            var file = e.File;
+            if (file == null) return;
+
+            IsProcessing = true;
+            StateHasChanged();
+            Snackbar.Add("Uploading new version image to cloud...", Severity.Info);
+
+            string? uploadedPublicId = null;
+            try
+            {
+                using var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 20);
+                using var memoryStream = new MemoryStream();
+                await stream.CopyToAsync(memoryStream);
+                var bytes = memoryStream.ToArray();
+                int nextVersionNo = page.Versions.Any() ? page.Versions.Max(v => v.VersionNo) + 1 : 1;
+                var contentType = string.IsNullOrWhiteSpace(file.ContentType) ? "image/png" : file.ContentType;
+
+                var uploadResult = await FileStorageService.UploadFileAsync(bytes, file.Name, contentType, "CHAPTER_PAGE_VERSION");
+                uploadedPublicId = uploadResult.PublicId;
+
+                var currentRegionsJson = await canvas.InvokeAsync<string>("exportRegions");
+                var currentRegions = System.Text.Json.JsonSerializer.Deserialize<List<RegionModel>>(currentRegionsJson, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                var fileDto = new CreateFileResourceDto(
+                    FilePurposeCode: "CHAPTER_PAGE_VERSION",
+                    OriginalFileName: file.Name,
+                    CloudinaryPublicId: uploadResult.PublicId,
+                    CloudinarySecureUrl: uploadResult.SecureUrl,
+                    ContentType: contentType,
+                    FileSizeBytes: bytes.Length,
+                    Sha256Hash: uploadResult.Sha256Hash,
+                    UploadedByUserId: _currentUserId
+                );
+
+                var regionDtos = (currentRegions ?? new List<RegionModel>())
+                    .Where(r => r.Width > 0.05 || r.Height > 0.05) // exclude tiny pin markers
+                    .Select(r =>
+                    {
+                        var textObj = new Dictionary<string, string>
+                        {
+                            { "original", r.OriginalText ?? "" },
+                            { "translated", r.TranslatedText ?? "" }
+                        };
+                        return new CreatePageRegionDto(
+                            ChapterPageVersionId: Guid.Empty, // assigned inside the service
+                            TypeCode: (r.Type ?? "OTHER").ToUpperInvariant(),
+                            RegionLabel: null,
+                            X: (decimal)r.X,
+                            Y: (decimal)r.Y,
+                            Width: (decimal)r.Width,
+                            Height: (decimal)r.Height,
+                            ConfidenceScore: null,
+                            SourceType: "MANUAL",
+                            OriginalText: System.Text.Json.JsonSerializer.Serialize(textObj)
+                        );
+                    }).ToList();
+
+                var versionDto = await VersionService.CreateVersionWithFileAndRegionsAsync(
+                    page.ChapterPageId, (short)nextVersionNo, fileDto, $"Uploaded Version {nextVersionNo}",
+                    regionDtos, setAsCurrent: true);
+
+                var oldVer = page.Versions.ElementAtOrDefault(page.ActiveVersionIndex);
+                if (oldVer != null) oldVer.IsDirty = false;
+
+                foreach (var v in page.Versions) v.IsCurrentVersion = false;
+                var newVersionModel = new PageVersionModel
+                {
+                    ChapterPageVersionId = versionDto.ChapterPageVersionId,
+                    VersionNo = nextVersionNo,
+                    Regions = currentRegionsJson,
+                    DataUrl = uploadResult.SecureUrl,
+                    Note = $"Uploaded Version {nextVersionNo}",
+                    IsCurrentVersion = true
+                };
+                page.Versions.Add(newVersionModel);
+                page.ActiveVersionIndex = page.Versions.Count - 1;
+
+                await canvas.InvokeVoidAsync("loadImage", OptimizedImageUrl(uploadResult.SecureUrl));
+                await canvas.InvokeVoidAsync("loadRegions", string.IsNullOrEmpty(currentRegionsJson) ? "[]" : currentRegionsJson, true);
+                CanUndo = false;
+                CanRedo = false;
+
+                Snackbar.Add($"Uploaded & created Version {nextVersionNo}", Severity.Success);
+            }
+            catch (Exception ex)
+            {
+                if (!string.IsNullOrEmpty(uploadedPublicId))
+                {
+                    try { await FileStorageService.DeleteFileAsync(uploadedPublicId, "image"); } catch { }
+                }
+                var msg = ex.InnerException?.Message ?? ex.Message;
+                Snackbar.Add($"Failed to upload version: {msg}", Severity.Error);
+                Console.WriteLine(ex.ToString());
+            }
+            finally
+            {
+                IsProcessing = false;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task DeleteCurrentVersion(string pane)
+    {
+        var page = pane == "Left" ? UploadedPages.ElementAtOrDefault(ActivePageIndex) : _splitUploadedPages.ElementAtOrDefault(_splitPageIndex);
+        if (page == null || !page.Versions.Any()) return;
+
+        var activeVer = page.Versions[page.ActiveVersionIndex];
+        if (activeVer.VersionNo == 1)
+        {
+            Snackbar.Add("Cannot delete Version 1 (Original).", Severity.Warning);
+            return;
+        }
+
+        // Simplistic constraint check: If it has regions, it might have tasks.
+        // Actually, fetching tasks/annotations here would require additional calls.
+        // For now, if regions exist, warn the user.
+        bool confirm = await DialogService.ShowMessageBox("Confirm Delete", $"Are you sure you want to delete v{activeVer.VersionNo} image? History placeholder will remain.", yesText: "Delete", cancelText: "Cancel") == true;
+        if (!confirm) return;
+
+        IsProcessing = true;
+        StateHasChanged();
+
+        try
+        {
+            var dbVersion = await VersionService.GetChapterPageVersionByIdAsync(activeVer.ChapterPageVersionId);
+            if (dbVersion != null)
+            {
+                await FileResourceService.DeleteFileResourceAsync(dbVersion.PageFileId, _currentUserId);
+                var fileRes = await FileResourceService.GetFileResourceByIdAsync(dbVersion.PageFileId);
+                if (fileRes != null && !string.IsNullOrEmpty(fileRes.CloudinaryPublicId))
+                {
+                    await FileStorageService.DeleteFileAsync(fileRes.CloudinaryPublicId, "image");
+                }
+            }
+
+            activeVer.IsDeleted = true;
+            activeVer.DataUrl = "";
+            Snackbar.Add($"Deleted v{activeVer.VersionNo} image.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error deleting version: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsProcessing = false;
+            StateHasChanged();
         }
     }
 
@@ -2218,7 +2917,7 @@ else
         try
         {
             await VersionService.SetCurrentVersionAsync(page.ChapterPageId, version.ChapterPageVersionId);
-
+            
             // Update UI state
             foreach (var v in page.Versions)
             {
@@ -2229,69 +2928,14 @@ else
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to set active version: {ex.Message}", Severity.Error);
+            var msg = ex.InnerException?.Message ?? ex.Message;
+            Snackbar.Add($"Failed to set active version: {msg}", Severity.Error);
+            Console.WriteLine(ex.ToString());
         }
         finally
         {
             IsProcessing = false;
             StateHasChanged();
-        }
-    }
-
-    private async Task DeleteCurrentVersion(string pane)
-    {
-        if (IsChapterLocked) return;
-
-        var page = pane == "Left" ? UploadedPages.ElementAtOrDefault(ActivePageIndex) : _splitUploadedPages.ElementAtOrDefault(_splitPageIndex);
-        if (page != null)
-        {
-            if (page.Versions.Count > 1)
-            {
-                var versionToDelete = page.Versions[page.ActiveVersionIndex];
-                bool? result = await DialogService.ShowMessageBox(
-                    "Delete Version",
-                    $"Are you sure you want to delete Version {versionToDelete.VersionNo}?",
-                    yesText: "Delete", cancelText: "Cancel");
-
-                if (result == true)
-                {
-                    IsProcessing = true;
-                    StateHasChanged();
-                    Snackbar.Add("Deleting version...", Severity.Info);
-
-                    try
-                    {
-                        if (versionToDelete.ChapterPageVersionId != Guid.Empty)
-                        {
-                            var versionDetails = await VersionService.GetChapterPageVersionByIdAsync(versionToDelete.ChapterPageVersionId);
-                            if (versionDetails != null)
-                            {
-                                var fileResourceDetails = await FileResourceService.GetFileResourceByIdAsync(versionDetails.PageFileId);
-                                if (fileResourceDetails != null && !string.IsNullOrEmpty(fileResourceDetails.CloudinaryPublicId))
-                                {
-                                    await FileStorageService.DeleteFileAsync(fileResourceDetails.CloudinaryPublicId, "image");
-                                    await FileResourceService.DeleteFileResourceAsync(fileResourceDetails.FileResourceId, _currentUserId.Value, _currentRoleName);
-                                }
-                                await VersionService.DeleteChapterPageVersionAsync(versionToDelete.ChapterPageVersionId);
-                            }
-                        }
-
-                        page.Versions.RemoveAt(page.ActiveVersionIndex);
-                        int nextIndex = Math.Max(0, page.Versions.Count - 1);
-                        await SwitchVersion(pane, nextIndex, isDeleting: true);
-                        Snackbar.Add("Version deleted successfully.", Severity.Success);
-                    }
-                    catch (Exception ex)
-                    {
-                        Snackbar.Add($"Failed to delete version: {ex.Message}", Severity.Error);
-                    }
-                    finally
-                    {
-                        IsProcessing = false;
-                        StateHasChanged();
-                    }
-                }
-            }
         }
     }
 
@@ -2314,13 +2958,13 @@ else
     {
         IsProcessing = true;
         StateHasChanged();
-
+        
         Snackbar.Add("Running Segmentation...", Severity.Info);
         var successSegment = await GetActiveCanvas()!.InvokeAsync<bool>("callSegmentAPI");
-
+        
         IsProcessing = false;
         StateHasChanged();
-
+        
         if (successSegment) {
             Snackbar.Add("Segmentation complete.", Severity.Success);
         } else {
@@ -2328,26 +2972,23 @@ else
         }
     }
 
-    private async Task RunTranslateAI()
+    private async Task RunTranslateAI(string targetLang = "vi")
     {
+        var lang = targetLang == "en" ? "en" : "vi";
         IsProcessing = true;
         StateHasChanged();
 
-        Snackbar.Add("Running Translation...", Severity.Info);
-        var translateResult = await GetActiveCanvas()!.InvokeAsync<string>("callTranslateAPI");
-
+        Snackbar.Add(lang == "en" ? "Running translation (English)..." : "Running translation (Vietnamese)...", Severity.Info);
+        var translateResult = await GetActiveCanvas()!.InvokeAsync<string>("callTranslateAPI", lang);
+        
         IsProcessing = false;
         StateHasChanged();
-
+        
         if (translateResult == "success") {
             Snackbar.Add("Translation complete.", Severity.Success);
             if (UploadedPages.Any())
             {
-                var page = UploadedPages[ActivePageIndex];
-                if (page.Versions.Any())
-                {
-                    page.Versions[page.ActiveVersionIndex].DataUrl = await GetActiveCanvas()!.InvokeAsync<string>("exportImage");
-                }
+                // Do not overwrite existing version DataUrl; translation overlay remains on canvas until explicitly saved as a new version
             }
         } else {
             Snackbar.Add($"Translation failed: {translateResult}", Severity.Error);
@@ -2359,11 +3000,20 @@ else
     {
         CanUndo = canUndo;
         CanRedo = canRedo;
-
+        
         var page = pane == "Left" ? UploadedPages.ElementAtOrDefault(ActivePageIndex) : _splitUploadedPages.ElementAtOrDefault(_splitPageIndex);
+        bool contentChanged = false;
         if (page != null && page.Versions.Any())
         {
-            page.Versions[page.ActiveVersionIndex].Regions = newRegionsStr;
+            var activeVer = page.Versions[page.ActiveVersionIndex];
+            // Ignore selection-only differences so that merely clicking a panel
+            // (or a programmatic reload echo) is not treated as an unsaved edit.
+            if (StripSelected(activeVer.Regions) != StripSelected(newRegionsStr))
+            {
+                activeVer.Regions = newRegionsStr;
+                activeVer.IsDirty = true;
+                contentChanged = true;
+            }
         }
 
         if (pane == _activePane)
@@ -2382,13 +3032,18 @@ else
                     }
                 }
                 catch (Exception ex)
-                {
+                { 
                     Console.WriteLine($"Error deserializing regions: {ex.Message}");
                 }
             }
         }
         StateHasChanged();
-        TriggerAutoSave();
+        // Persist a crash-recovery shadow draft only on real content edits
+        // (auto-segment, translate, draw/move/resize/delete, notes, restore).
+        if (page != null && contentChanged)
+        {
+            _ = JS.InvokeVoidAsync("saveMmsDraft", page.ChapterPageId.ToString(), newRegionsStr);
+        }
     }
 
     public async Task<string> SegmentImageJS(string pane, string base64Image)
@@ -2405,7 +3060,7 @@ else
 
             var imageBytes = Convert.FromBase64String(base64Data);
             var result = await AiService.SegmentImageAsync(imageBytes, "image.png", mimeType);
-
+            
             if (result != null)
             {
                 return JsonSerializer.Serialize(result);
@@ -2479,38 +3134,7 @@ else
         }
     }
 
-    private void TriggerAutoSave()
-    {
-        // Debounce: reset timer to fire 3 seconds after last change
-        _autoSaveTimer?.Change(3000, System.Threading.Timeout.Infinite);
-    }
 
-    private async void PerformAutoSave(object? state)
-    {
-        var acquired = await _autoSaveSemaphore.WaitAsync(0);
-        if (!acquired) return;
-        try
-        {
-            await InvokeAsync(async () =>
-            {
-                try
-                {
-                    _isAutoSaving = true;
-                    StateHasChanged();
-                    await SaveProgress();
-                }
-                finally
-                {
-                    _isAutoSaving = false;
-                    StateHasChanged();
-                }
-            });
-        }
-        finally
-        {
-            _autoSaveSemaphore.Release();
-        }
-    }
 
     private async Task ToggleSplitView()
     {
@@ -2557,8 +3181,6 @@ else
 
     public void Dispose()
     {
-        _autoSaveTimer?.Dispose();
-        _autoSaveSemaphore?.Dispose();
         _objRef?.Dispose();
     }
 
@@ -2566,6 +3188,7 @@ else
     {
         public int Id { get; set; }
         public Guid? DbId { get; set; }
+        public string? Label { get; set; }
         public string Type { get; set; } = "panel";
         public double X { get; set; }
         public double Y { get; set; }

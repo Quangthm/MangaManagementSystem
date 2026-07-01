@@ -983,3 +983,75 @@ For MVP, symbolic `returnContext` is safer and easier to avoid open-redirect mis
 - Chapter revision and cancellation decisions require non-blank comments, while markup files are optional.
 - Cancelled chapter screens are read-only and do not allow edit, upload, resubmit, schedule, or release actions.
 - Mangaka contributors can create a replacement draft for a cancelled chapter using the same chapter number label.
+
+---
+
+## 9. Publication Scheduling UI
+
+### Purpose
+
+Support chapter planned release date selection according to the official `Series.publication_frequency_code` and the relevant `PublicationPeriod`.
+
+### Scheduling behavior
+
+| Frequency | UI behavior |
+|---|---|
+| `WEEKLY` | Suggest previous planned release date + 7 days and require the final chosen date to stay inside the next weekly `PublicationPeriod`. |
+| `MONTHLY` | Suggest the same day number in the next month when possible, otherwise the last day of the next month, and require the final chosen date to stay inside the next monthly `PublicationPeriod`. |
+| `IRREGULAR` | Do not enforce next-week or next-month period boundaries. |
+| `NULL` | Show that the official release approach has not been decided yet. |
+
+### PublicationPeriod display
+
+- Weekly publication periods should display their `period_name`, `period_start_date`, and `period_end_date`.
+- Weekly periods start Monday and end Sunday.
+- A weekly period is named after the month containing at least four days of that week.
+- Monthly and yearly periods follow their calendar start/end dates.
+
+### Validation feedback
+
+When a user selects an invalid planned release date, the UI should explain the valid date range, for example:
+
+```text
+This weekly series must schedule the next chapter inside 2026_JULY_WEEK2: 2026-07-06 to 2026-07-12.
+```
+
+### Business date note
+
+- Scheduled chapter period membership uses `Chapter.planned_release_date`.
+- Released chapter period reports use `released_at_utc` converted to Vietnam publication time (UTC+7), then the date part.
+- The UI must not show raw UTC date as the publication business date when period membership matters.
+
+---
+
+## 10. Series Ranking UI
+
+### Purpose
+
+Display dynamic series rankings from `manga.vw_SeriesRanking` for a selected `PublicationPeriod`.
+
+### Ranking list fields
+
+| Field | Notes |
+|---|---|
+| Rank position | Computed by the ranking view using `DENSE_RANK()`. |
+| Series title | Display name of the ranked series. |
+| Slug | Optional; use only if the row links to `/series/{slug}`. |
+| Average rating | Score from period vote input. |
+| Rating count | Number of rating/vote submissions in the period. |
+| Reading count | Number of readers/views/follows in the period. |
+| Ranking score | Computed score from the ranking formula. |
+
+### Filtering behavior
+
+- Ranking should be queried by `publication_period_id`.
+- `period_name` is display-friendly and unique, but backend filtering should prefer the stable ID.
+- The ranking UI does not need to show entered/updated timestamps or source notes; those belong to the vote input management screen.
+
+### Vote input management behavior
+
+- Editorial Board Members and Editorial Board Chiefs may enter or update `SeriesVoteInput` when allowed.
+- Input fields are `rating_count`, `average_rating`, `reading_count`, and optional `data_source_note`.
+- Validation should reject non-positive counts, `average_rating` outside 0 to 10, and `rating_count > reading_count`.
+- The vote input screen should explain that weekly input is period-only and must not include earlier weeks.
+

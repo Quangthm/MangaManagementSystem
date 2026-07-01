@@ -1,0 +1,246 @@
+@using MangaManagementSystem.Web.Components.Shared
+@using MudBlazor
+
+<MudGrid>
+    @* ── Left: Cover image ── *@
+    <MudItem xs="12" md="4">
+        <div style="width:min(100%, 420px); max-width:420px; aspect-ratio:2/3; margin:0 auto; background:#f1f5f9; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:12px;">
+            @if (!string.IsNullOrWhiteSpace(Proposal.SeriesCoverUrl))
+            {
+                <img src="@Proposal.SeriesCoverUrl"
+                     alt="@($"{Proposal.SeriesTitle} cover")"
+                     style="width:100%; height:100%; object-fit:cover; object-position:center; display:block;" />
+            }
+            else
+            {
+                <MudIcon Icon="@Icons.Material.Filled.MenuBook"
+                         Style="font-size:72px; color:#cbd5e1;" />
+            }
+        </div>
+    </MudItem>
+
+    @* ── Center: Proposal info + files + comments ── *@
+    <MudItem xs="12" md="5">
+        <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Class="mb-4">
+                <div>
+                    <MudText Typo="Typo.h5" Class="font-weight-bold">@Proposal.ProposalTitle</MudText>
+                    <MudText Class="mf-muted">@Proposal.SeriesTitle · Proposal v@Proposal.ProposalVersionNo</MudText>
+                </div>
+                <div class="d-flex flex-column align-end gap-1">
+                    <MudChip T="string" Color="@GetStatusColor(Proposal.StatusCode)">
+                        @StatusDisplayLabel(Proposal.StatusCode)
+                    </MudChip>
+                    @if (!string.IsNullOrWhiteSpace(Proposal.SeriesStatusCode)
+                         && Proposal.SeriesStatusCode != Proposal.StatusCode)
+                    {
+                        <MudText Typo="Typo.caption" Class="mf-muted">
+                            Series: @StatusDisplayLabel(Proposal.SeriesStatusCode)
+                        </MudText>
+                    }
+                </div>
+            </MudStack>
+
+            @if (!string.IsNullOrWhiteSpace(Proposal.SeriesStatusCode)
+                 && Proposal.SeriesStatusCode != Proposal.StatusCode)
+            {
+                <MudAlert Severity="Severity.Warning" Class="mb-3" Dense="true">
+                    <MudText Typo="Typo.caption">
+                        Current series state (@StatusDisplayLabel(Proposal.SeriesStatusCode)) differs from this proposal version.
+                    </MudText>
+                </MudAlert>
+            }
+
+            <MudDivider Class="mb-3" />
+
+            <MudText Typo="Typo.subtitle2" Class="mf-muted">Series</MudText>
+            <MudText Class="mb-1">@Proposal.SeriesTitle</MudText>
+            <MudText Typo="Typo.caption" Class="mf-muted mb-3">
+                Slug: <code>@Proposal.SeriesSlug</code>
+            </MudText>
+
+            @if (Proposal.Genres.Count > 0)
+            {
+                <MudText Typo="Typo.subtitle2" Class="mf-muted mt-3">Genre</MudText>
+                <MudText Class="mb-3">@string.Join(", ", Proposal.Genres.Select(g => g.GenreName))</MudText>
+            }
+
+            @if (Proposal.Tags.Count > 0)
+            {
+                <MudText Typo="Typo.subtitle2" Class="mf-muted mt-3">Tags</MudText>
+                <MudText Class="mb-3">@string.Join(", ", Proposal.Tags.Select(t => t.TagName))</MudText>
+            }
+
+            <MudText Typo="Typo.subtitle2" Class="mf-muted mt-3">Synopsis</MudText>
+            <MudPaper Elevation="0" Class="pa-3" Style="background:var(--mud-palette-background-grey);">
+                <div style="white-space:pre-wrap; @(_synopsisExpanded ? "" : "max-height:140px; overflow:hidden;")">
+                    @Proposal.SynopsisSnapshot
+                </div>
+                @if (Proposal.SynopsisSnapshot?.Length > 300)
+                {
+                    <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="ToggleSynopsis" Class="mt-1">
+                        @(_synopsisExpanded ? "Show less" : "View more")
+                    </MudButton>
+                }
+            </MudPaper>
+
+            <MudDivider Class="my-4" />
+
+            <MudText Typo="Typo.subtitle1" Class="font-weight-bold mb-2">Proposal File</MudText>
+            @if (!string.IsNullOrEmpty(Proposal.ProposalFileUrl))
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.OpenInNew"
+                           Href="@Proposal.ProposalFileUrl" Target="_blank">
+                    Open Proposal File
+                </MudButton>
+                @if (!string.IsNullOrEmpty(Proposal.ProposalFileName))
+                {
+                    <MudText Typo="Typo.caption" Class="mf-muted mt-1">@Proposal.ProposalFileName</MudText>
+                }
+            }
+            else
+            {
+                <MudText Class="mf-muted">Proposal file is unavailable.</MudText>
+            }
+        </MudPaper>
+
+        @if (Proposal.HasEditorialDecision)
+        {
+            <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
+                <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Editorial Decision</MudText>
+                @if (!string.IsNullOrWhiteSpace(Proposal.ReviewerDisplayName))
+                {
+                    <MudText Typo="Typo.body2" Class="mf-muted mb-1">
+                        Reviewed by @Proposal.ReviewerDisplayName
+                        @if (Proposal.ReviewedAtUtc.HasValue)
+                        {
+                            <span> on @Proposal.ReviewedAtUtc.Value.ToLocalTime().ToString("MMM d, yyyy h:mm tt")</span>
+                        }
+                    </MudText>
+                }
+                @if (!string.IsNullOrWhiteSpace(Proposal.Comments))
+                {
+                    <MudPaper Elevation="0" Class="pa-3 mt-2" Style="background:var(--mud-palette-warning-hover);">
+                        <MudText Style="white-space:pre-wrap;">@Proposal.Comments</MudText>
+                    </MudPaper>
+                }
+                @if (!string.IsNullOrEmpty(Proposal.MarkupFileUrl))
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Class="mt-3"
+                               StartIcon="@Icons.Material.Filled.OpenInNew"
+                               Href="@Proposal.MarkupFileUrl" Target="_blank">
+                        Open Markup File
+                    </MudButton>
+                    @if (!string.IsNullOrEmpty(Proposal.MarkupFileName))
+                    {
+                        <MudText Typo="Typo.caption" Class="mf-muted mt-1">@Proposal.MarkupFileName</MudText>
+                    }
+                }
+            </MudPaper>
+        }
+
+        @if (!Proposal.HasEditorialDecision && !string.IsNullOrWhiteSpace(Proposal.Comments))
+        {
+            <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
+                <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Review Comments</MudText>
+                <MudPaper Elevation="0" Class="pa-3" Style="background:var(--mud-palette-warning-hover);">
+                    <MudText Style="white-space:pre-wrap;">@Proposal.Comments</MudText>
+                </MudPaper>
+            </MudPaper>
+        }
+
+        @* ── Markup file when no formal editorial decision exists ── *@
+        @if (!Proposal.HasEditorialDecision && !string.IsNullOrEmpty(Proposal.MarkupFileUrl))
+        {
+            <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
+                <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Markup File</MudText>
+                <MudButton Variant="Variant.Outlined" Color="Color.Secondary"
+                           StartIcon="@Icons.Material.Filled.OpenInNew"
+                           Href="@Proposal.MarkupFileUrl" Target="_blank">
+                    Open Markup File
+                </MudButton>
+                @if (!string.IsNullOrEmpty(Proposal.MarkupFileName))
+                {
+                    <MudText Typo="Typo.caption" Class="mf-muted mt-1">@Proposal.MarkupFileName</MudText>
+                }
+            </MudPaper>
+        }
+    </MudItem>
+
+    @* ── Right: Submission info + optional Actions/SidePanel ── *@
+    <MudItem xs="12" md="3">
+        <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
+            <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Submission</MudText>
+            <MudText Typo="Typo.body2" Class="mf-muted">Submitted by</MudText>
+            <MudText Class="mb-2">@Proposal.SubmittedByDisplayName</MudText>
+            <MudText Typo="Typo.body2" Class="mf-muted">Submitted at</MudText>
+            <MudText Class="mb-2">@Proposal.SubmittedAtUtc.ToLocalTime().ToString("MMM d, yyyy h:mm tt")</MudText>
+
+            @if (!string.IsNullOrWhiteSpace(Proposal.ReviewerDisplayName) || Proposal.ReviewedAtUtc.HasValue)
+            {
+                <MudDivider Class="my-3" />
+                <MudText Typo="Typo.body2" Class="mf-muted">Reviewed by</MudText>
+                <MudText Class="mb-2">@(Proposal.ReviewerDisplayName ?? "—")</MudText>
+                <MudText Typo="Typo.body2" Class="mf-muted">Reviewed at</MudText>
+                <MudText>
+                    @(Proposal.ReviewedAtUtc.HasValue
+                        ? Proposal.ReviewedAtUtc.Value.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+                        : "—")
+                </MudText>
+            }
+
+            @if (Proposal.WithdrawnAtUtc.HasValue)
+            {
+                <MudDivider Class="my-3" />
+                <MudAlert Severity="Severity.Error" Dense="true">
+                    <MudText Typo="Typo.caption">
+                        Withdrawn on @Proposal.WithdrawnAtUtc.Value.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+                    </MudText>
+                </MudAlert>
+            }
+        </MudPaper>
+
+        @if (SidePanel is not null)
+        {
+            @SidePanel
+        }
+
+        @if (Actions is not null)
+        {
+            @Actions
+        }
+    </MudItem>
+</MudGrid>
+
+@code {
+    [Parameter, EditorRequired] public SeriesProposalDetailViewModel Proposal { get; set; } = default!;
+    [Parameter] public RenderFragment? Actions { get; set; }
+    [Parameter] public RenderFragment? SidePanel { get; set; }
+
+    private bool _synopsisExpanded;
+
+    private void ToggleSynopsis() => _synopsisExpanded = !_synopsisExpanded;
+
+    private static string StatusDisplayLabel(string statusCode) => statusCode switch
+    {
+        "UNDER_EDITORIAL_REVIEW" => "Under Editorial Review",
+        "UNDER_BOARD_REVIEW" => "Under Board Review",
+        "REVISION_REQUESTED" => "Revision Requested",
+        "APPROVED" => "Approved",
+        "CANCELLED" => "Cancelled",
+        "WITHDRAWN" => "Withdrawn",
+        _ => statusCode.Replace("_", " "),
+    };
+
+    private static Color GetStatusColor(string statusCode) => statusCode switch
+    {
+        "UNDER_EDITORIAL_REVIEW" => Color.Warning,
+        "UNDER_BOARD_REVIEW" => Color.Info,
+        "REVISION_REQUESTED" => Color.Error,
+        "CANCELLED" => Color.Default,
+        "APPROVED" => Color.Success,
+        "WITHDRAWN" => Color.Default,
+        _ => Color.Default,
+    };
+}

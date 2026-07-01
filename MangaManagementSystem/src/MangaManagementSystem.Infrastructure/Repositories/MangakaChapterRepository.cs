@@ -10,6 +10,7 @@ using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace MangaManagementSystem.Infrastructure.Repositories
 {
@@ -166,6 +167,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             try
             {
                 var chapter = await _context.Chapters
+                    .Include(c => c.Series)
                     .FirstOrDefaultAsync(c => c.ChapterId == chapterId, cancellationToken);
 
                 if (chapter == null)
@@ -176,8 +178,34 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 if (chapter.StatusCode != DraftStatus && chapter.StatusCode != RevisionRequestedStatus)
                     throw new InvalidOperationException("Only DRAFT or REVISION_REQUESTED chapters can be submitted for editorial review.");
 
+                string oldStatusCode = chapter.StatusCode;
+                var submittedAtUtc = DateTime.UtcNow;
+
                 chapter.StatusCode = UnderReviewStatus;
-                chapter.UpdatedAtUtc = DateTime.UtcNow;
+                chapter.UpdatedAtUtc = submittedAtUtc;
+
+                var detailJson = JsonSerializer.Serialize(new
+                {
+                    chapter_id = chapterId,
+                    series_id = chapter.SeriesId,
+                    old_status_code = oldStatusCode,
+                    new_status_code = UnderReviewStatus,
+                    submitted_by_user_id = actorUserId,
+                    submitted_at_utc = submittedAtUtc
+                });
+
+                var auditEvent = new AuditEvent
+                {
+                    OccurredAtUtc = submittedAtUtc,
+                    ActorUserId = actorUserId,
+                    ActorRoleName = MangakaRoleName,
+                    ActionCode = "CHAPTER_SUBMITTED_FOR_EDITORIAL_REVIEW",
+                    EntityType = "Chapter",
+                    EntityId = chapterId.ToString(),
+                    DetailJson = detailJson
+                };
+
+                _context.AuditEvents.Add(auditEvent);
 
                 await _context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);

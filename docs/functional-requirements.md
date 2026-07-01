@@ -482,6 +482,7 @@
 
 ---
 
+
 ## 3.17 Publication Planning
 
 | ID | Functional Requirement | Source Business Rules |
@@ -494,7 +495,7 @@
 | FR-PUB-006 | The system shall allow `publication_frequency_code` to be `NULL` before the series is serialized or before the release approach is decided. | BR-PUB-005 |
 | FR-PUB-007 | The system shall control actual chapter release timing through chapter-level release dates. | BR-PUB-006 |
 | FR-PUB-008 | The system shall require chapter scheduling and release status to follow the Chapter status rules. | BR-PUB-008 |
-| FR-PUB-009 | The system shall identify delayed chapters by comparing `planned_release_date` with the current date instead of storing a separate delay status. | BR-PUB-009 |
+| FR-PUB-009 | The system shall identify delayed chapters by comparing `planned_release_date` with the current publication business date instead of storing a separate delay status. | BR-PUB-009 |
 | FR-PUB-010 | The system shall require an Editorial Board Chief to specify publication frequency when opening a `START_SERIALIZATION` poll. | BR-PUB-010 |
 | FR-PUB-011 | The system shall allow Mangaka users to provide or update their preferred publication frequency only while the series is in `PROPOSAL_DRAFT`, without requiring a separate desired publication frequency column on `Series`. | BR-PUB-011 |
 | FR-PUB-012 | The system shall prevent Mangaka users from directly changing the official `Series.publication_frequency_code` after the series leaves `PROPOSAL_DRAFT`. | BR-PUB-012 |
@@ -502,43 +503,67 @@
 | FR-PUB-014 | The system shall allow Mangaka users to request a publication frequency change after the board decision by sending an in-app notification to the Editorial Board Chief. | BR-PUB-014, BR-NOTIF-012 |
 | FR-PUB-015 | The system shall not require a separate official publication-frequency change request table for MVP. | BR-PUB-014, BR-NOTIF-013 |
 | FR-PUB-016 | The system shall allow Editorial Board Chief users to directly change `Series.publication_frequency_code` only when they provide a required audit reason. | BR-PUB-015 |
+| FR-PUB-PERIOD-001 | The system shall store weekly, monthly, and yearly business calendar periods in `PublicationPeriod`. | BR-PUB-PERIOD-001, BR-PUB-PERIOD-003 |
+| FR-PUB-PERIOD-002 | The system shall require each `PublicationPeriod` to have a unique `period_name`, `period_type_code`, `period_start_date`, and `period_end_date`. | BR-PUB-PERIOD-002 |
+| FR-PUB-PERIOD-003 | The system shall generate weekly publication periods from Monday through Sunday. | BR-PUB-PERIOD-006 |
+| FR-PUB-PERIOD-004 | The system shall assign each weekly publication period to the month that contains at least four days of that week. | BR-PUB-PERIOD-007 |
+| FR-PUB-PERIOD-005 | The system shall name weekly publication periods from the owning month and the ordinal week number within that owning month. | BR-PUB-PERIOD-008, BR-PUB-PERIOD-009 |
+| FR-PUB-PERIOD-006 | The system shall generate monthly publication periods from the first to the last calendar day of the month. | BR-PUB-PERIOD-004 |
+| FR-PUB-PERIOD-007 | The system shall generate yearly publication periods from January 1 to December 31. | BR-PUB-PERIOD-005 |
+| FR-PUB-DATE-001 | The system shall determine publication-period membership using the publication business date, not the raw UTC date. | BR-PUB-DATE-001 |
+| FR-PUB-DATE-002 | The system shall use `Chapter.planned_release_date` as the publication business date for scheduled chapter planning. | BR-PUB-DATE-002 |
+| FR-PUB-DATE-003 | The system shall derive the actual release business date by converting `Chapter.released_at_utc` to Vietnam publication time UTC+7 and taking the date part. | BR-PUB-DATE-003 |
+| FR-PUB-DATE-004 | The system shall prevent ranking and publication-period reports from using `CAST(released_at_utc AS DATE)` in UTC as the business period date. | BR-PUB-DATE-004 |
+| FR-PUB-SCHEDULE-001 | The system shall require the next planned chapter of a `WEEKLY` series to fall inside the next weekly `PublicationPeriod` after the previous planned chapter's weekly period. | BR-PUB-SCHEDULE-001 |
+| FR-PUB-SCHEDULE-002 | The system may default the next planned release date of a `WEEKLY` series to the previous planned release date plus seven days. | BR-PUB-SCHEDULE-002 |
+| FR-PUB-SCHEDULE-003 | The system shall allow authorized users to change the default weekly planned date only within the required next weekly `PublicationPeriod`. | BR-PUB-SCHEDULE-003 |
+| FR-PUB-SCHEDULE-004 | The system shall require the next planned chapter of a `MONTHLY` series to fall inside the next monthly `PublicationPeriod` after the previous planned chapter's monthly period. | BR-PUB-SCHEDULE-004 |
+| FR-PUB-SCHEDULE-005 | The system may default the next planned release date of a `MONTHLY` series to the same day number in the next month, or to the last day of that month when the same day does not exist. | BR-PUB-SCHEDULE-005 |
+| FR-PUB-SCHEDULE-006 | The system shall not enforce next-week or next-month scheduling constraints for `IRREGULAR` series. | BR-PUB-SCHEDULE-006 |
+| FR-PUB-SCHEDULE-007 | The system shall not automatically shift future planned schedule periods when a chapter is released late unless an authorized user reschedules it. | BR-PUB-SCHEDULE-008 |
+
 
 ---
 
-## 3.18 Ranking and Reader Vote Input
+---
 
-### 3.18.1 Ranking Snapshot
 
-| ID | Functional Requirement | Source Business Rules |
-|---|---|---|
-| FR-RANK-001 | The system shall store series ranking data as time-based `SeriesRankingSnapshot` records. | BR-RANK-001 |
-| FR-RANK-002 | The system shall not store ranking data as permanent duplicated attributes on `Series` unless caching is required for performance. | BR-RANK-001, BR-RANK-006 |
-| FR-RANK-003 | The system shall store rank, score, and performance data for one series and one ranking period in each ranking snapshot. | BR-RANK-002 |
-| FR-RANK-004 | The system shall allow a series to have many ranking snapshots over time. | BR-RANK-003 |
-| FR-RANK-005 | The system shall prevent duplicate ranking snapshots for the same series, ranking period type, and period start date. | BR-RANK-004 |
-| FR-RANK-006 | The system shall derive the current rank of a series from the latest relevant ranking snapshot. | BR-RANK-005 |
-| FR-RANK-007 | The system shall indicate that a series has no current ranking when no ranking snapshot exists for that series. | BR-RANK-007 |
-| FR-RANK-008 | The system shall preserve ranking snapshots for trend analysis and board decision support. | BR-RANK-008 |
-| FR-RANK-009 | The system shall generate ranking snapshots by aggregating chapter reader vote snapshots within a selected ranking period. | BR-RANK-009 |
-| FR-RANK-010 | The system shall determine weekly, monthly, and seasonal ranking periods by filtering reader vote records using `voted_at_utc`. | BR-RANK-010 |
-| FR-RANK-011 | The system shall accumulate monthly and seasonal ranking snapshots from vote records within the selected calendar period. | BR-RANK-011 |
-| FR-RANK-012 | The system shall allow ranking snapshots to support cancellation-risk evaluation for board review. | BR-RANK-012 |
-| FR-RANK-013 | The system shall prevent a ranking snapshot from automatically cancelling a series. | BR-RANK-012 |
+## 3.18 Ranking and Series Vote Input
 
-### 3.18.2 Reader Vote Input
+### 3.18.1 Series Vote Input
 
 | ID | Functional Requirement | Source Business Rules |
 |---|---|---|
-| FR-VOTE-INPUT-001 | The system shall treat reader vote input as simulated or manually aggregated data in MVP. | BR-VOTE-INPUT-001 |
-| FR-VOTE-INPUT-002 | The system shall not require direct real-reader voting in MVP. | BR-VOTE-INPUT-001 |
-| FR-VOTE-INPUT-003 | The system shall record reader vote input only for released chapters. | BR-VOTE-INPUT-002, BR-VOTE-INPUT-008 |
-| FR-VOTE-INPUT-004 | The system shall store the vote input time or validity time in `voted_at_utc`. | BR-VOTE-INPUT-003 |
-| FR-VOTE-INPUT-005 | The system shall use reader vote records as input evidence for ranking snapshot generation. | BR-VOTE-INPUT-004 |
-| FR-VOTE-INPUT-006 | The system shall prevent negative reader vote counts and feedback counts. | BR-VOTE-INPUT-005 |
-| FR-VOTE-INPUT-007 | The system shall require average rating values to stay within the allowed rating range when provided. | BR-VOTE-INPUT-006 |
-| FR-VOTE-INPUT-008 | The system shall prevent more than one aggregated reader vote snapshot for the same chapter in MVP. | BR-VOTE-INPUT-007 |
-| FR-VOTE-INPUT-009 | The system shall record the Editorial Board Member who entered simulated or aggregated reader vote data. | BR-VOTE-INPUT-009 |
-| FR-VOTE-INPUT-010 | The system shall restrict simulated or aggregated reader vote input to Editorial Board Members in MVP. | BR-VOTE-INPUT-010 |
+| FR-SERIES-VOTE-001 | The system shall treat series vote input as simulated or manually aggregated series-level performance data in MVP. | BR-SERIES-VOTE-001 |
+| FR-SERIES-VOTE-002 | The system shall not require direct real-reader voting in MVP. | BR-SERIES-VOTE-001 |
+| FR-SERIES-VOTE-003 | The system shall require each `SeriesVoteInput` to reference one `PublicationPeriod` and one `Series`. | BR-SERIES-VOTE-002 |
+| FR-SERIES-VOTE-004 | The system shall prevent more than one `SeriesVoteInput` row for the same series and publication period. | BR-SERIES-VOTE-003 |
+| FR-SERIES-VOTE-005 | The system shall store `rating_count`, `average_rating`, and `reading_count` for each series vote input. | BR-SERIES-VOTE-004, BR-SERIES-VOTE-005, BR-SERIES-VOTE-006 |
+| FR-SERIES-VOTE-006 | The system shall require `rating_count` and `reading_count` to be greater than zero. | BR-SERIES-VOTE-007, BR-SERIES-VOTE-008 |
+| FR-SERIES-VOTE-007 | The system shall require `rating_count` to be less than or equal to `reading_count`. | BR-SERIES-VOTE-009 |
+| FR-SERIES-VOTE-008 | The system shall require `average_rating` to be between 0 and 10. | BR-SERIES-VOTE-010 |
+| FR-SERIES-VOTE-009 | The system shall treat vote input as period-only data, so later weekly inputs do not include earlier weekly inputs. | BR-SERIES-VOTE-011 |
+| FR-SERIES-VOTE-010 | The system shall calculate monthly or yearly average ratings from lower-level period data using weighted average by `rating_count` when such aggregation is needed. | BR-SERIES-VOTE-012 |
+| FR-SERIES-VOTE-011 | The system shall record the user and UTC timestamp when series vote input is entered or updated. | BR-SERIES-VOTE-013 |
+| FR-SERIES-VOTE-012 | The system shall restrict simulated or aggregated series vote input to Editorial Board Members or Editorial Board Chief users in MVP. | BR-SERIES-VOTE-014 |
+| FR-SERIES-VOTE-013 | The system shall allow a source note to explain the external report, manual report, spreadsheet, or tracking evidence used for series vote input. | BR-SERIES-VOTE-015 |
+
+### 3.18.2 Dynamic Series Ranking
+
+| ID | Functional Requirement | Source Business Rules |
+|---|---|---|
+| FR-RANK-001 | The system shall calculate series ranking dynamically from `SeriesVoteInput`, `PublicationPeriod`, and `Series`. | BR-RANK-001 |
+| FR-RANK-002 | The system shall not require `SeriesRankingSnapshot` in MVP because there is no ranking finalization workflow. | BR-RANK-001 |
+| FR-RANK-003 | The system shall compute ranking separately for each `publication_period_id`. | BR-RANK-002 |
+| FR-RANK-004 | The system shall expose ranking output through a dynamic view such as `manga.vw_SeriesRanking`. | BR-RANK-003 |
+| FR-RANK-005 | The system shall compute `ranking_score` using `average_rating * LOG10(1 + rating_count) + reading_count * 0.001`. | BR-RANK-004 |
+| FR-RANK-006 | The system shall compute rank position using dense ranking ordered by ranking score, average rating, rating count, reading count, and series ID. | BR-RANK-005 |
+| FR-RANK-007 | The system shall avoid storing `ranking_score` and `rank_position` as duplicated normal columns unless later performance profiling proves caching is required. | BR-RANK-006 |
+| FR-RANK-008 | The system shall prevent ranking results from automatically cancelling a series. | BR-RANK-007 |
+| FR-RANK-009 | The system shall allow ranking evidence to support board review while still requiring the applicable workflow decision for cancellation. | BR-RANK-008 |
+
+
+---
 
 ---
 
@@ -549,11 +574,11 @@
 | FR-NOTIF-001 | The system shall address each notification to exactly one recipient user. | BR-NOTIF-001 |
 | FR-NOTIF-002 | The system shall provide notifications as in-app MVP messages. | BR-NOTIF-002 |
 | FR-NOTIF-003 | The system shall not require email or push notifications in MVP. | BR-NOTIF-002 |
-| FR-NOTIF-004 | The system shall allow a notification to optionally reference a related business entity such as a series, chapter, page task, proposal, board poll, or ranking snapshot. | BR-NOTIF-003 |
+| FR-NOTIF-004 | The system shall allow a notification to optionally reference a related business entity such as a series, chapter, page task, proposal, board poll, or ranking result. | BR-NOTIF-003 |
 | FR-NOTIF-005 | The system shall require `related_entity_type` and `related_entity_id` to both be present or both be null. | BR-NOTIF-004 |
 | FR-NOTIF-006 | The system shall treat a notification as unread when `read_at_utc IS NULL`. | BR-NOTIF-005 |
 | FR-NOTIF-007 | The system shall record `read_at_utc` when a user reads a notification. | BR-NOTIF-006 |
-| FR-NOTIF-008 | The system shall create ranking warning notifications when a ranking snapshot shows high cancellation risk for a series. | BR-NOTIF-007 |
+| FR-NOTIF-008 | The system shall create ranking warning notifications when a ranking result shows high cancellation risk for a series. | BR-NOTIF-007 |
 | FR-NOTIF-009 | The system shall send ranking warning notifications to active Mangaka contributors of the affected series. | BR-NOTIF-008 |
 | FR-NOTIF-010 | The system shall send task assignment notifications to assigned users when page tasks are created. | BR-NOTIF-009 |
 | FR-NOTIF-011 | The system shall send review result notifications to relevant contributors when proposal or chapter review decisions are recorded. | BR-NOTIF-010 |
@@ -572,11 +597,11 @@
 | FR-HIST-001 | The system shall not require separate status-history tables for every workflow entity in MVP. | BR-HIST-001 |
 | FR-HIST-002 | The system shall store the current workflow state of an entity directly on the main entity using `status_code`. | BR-HIST-002 |
 | FR-HIST-003 | The system shall represent important workflow events through existing domain records when applicable. | BR-HIST-003 |
-| FR-HIST-004 | The system shall use proposal records, board polls, board votes, chapter reviews, page versions, task records, ranking snapshots, and notifications as workflow evidence where applicable. | BR-HIST-003 |
+| FR-HIST-004 | The system shall use proposal records, board polls, board votes, chapter reviews, page versions, task records, ranking results, and notifications as workflow evidence where applicable. | BR-HIST-003 |
 | FR-HIST-005 | The system shall record traceability-sensitive workflow actions in audit logs, including approvals, cancellations, status changes, task changes, board poll actions, and account actions. | BR-HIST-004 |
 | FR-HIST-006 | The system shall use notifications to inform actors of important events, not as authoritative status history. | BR-HIST-005 |
 | FR-HIST-007 | The system shall treat `updated_at_utc` as the latest operational update time, not as a complete status transition timeline. | BR-HIST-006 |
-| FR-HIST-008 | The system shall use event-specific timestamps such as `submitted_at_utc`, `reviewed_at_utc`, `voted_at_utc`, `created_at_utc`, and `released_at_utc` for meaningful business events. | BR-HIST-007 |
+| FR-HIST-008 | The system shall use event-specific timestamps such as `submitted_at_utc`, `reviewed_at_utc`, `entered_at_utc`, `created_at_utc`, and `released_at_utc` for meaningful business events. | BR-HIST-007 |
 | FR-HIST-009 | The system shall treat detailed status transition history tables as future scope unless required for audit demonstration or advanced workflow analytics. | BR-HIST-008 |
 
 ---

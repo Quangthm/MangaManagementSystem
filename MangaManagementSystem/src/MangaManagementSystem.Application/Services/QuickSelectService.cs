@@ -239,11 +239,11 @@ namespace MangaManagementSystem.Application.Services
         private async Task ValidateActorIsActiveMangakaContributorAsync(
             Guid actorUserId, Guid seriesId, CancellationToken ct)
         {
-            var contributors = await _unitOfWork.SeriesContributors.GetAllAsync();
-            var isContributor = contributors.Any(sc =>
+            var contributors = await _unitOfWork.SeriesContributors.FindAsync(sc =>
                 sc.UserId == actorUserId &&
                 sc.SeriesId == seriesId &&
                 sc.EndDate == null);
+            var isContributor = contributors.Any();
 
             if (!isContributor)
             {
@@ -263,11 +263,11 @@ namespace MangaManagementSystem.Application.Services
         private async Task ValidateAssignedUserIsActiveAssistantContributorAsync(
             Guid assignedUserId, Guid seriesId, CancellationToken ct)
         {
-            var contributors = await _unitOfWork.SeriesContributors.GetAllAsync();
-            var isContributor = contributors.Any(sc =>
+            var contributors = await _unitOfWork.SeriesContributors.FindAsync(sc =>
                 sc.UserId == assignedUserId &&
                 sc.SeriesId == seriesId &&
                 sc.EndDate == null);
+            var isContributor = contributors.Any();
 
             if (!isContributor)
                 throw new InvalidOperationException(

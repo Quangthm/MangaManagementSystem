@@ -207,7 +207,6 @@ namespace MangaManagementSystem.API.Controllers.Assistant
                     statusCode: StatusCodes.Status500InternalServerError);
             }
         }
-
         /// <summary>
         /// Get annotations linked to the assigned page regions for a task.
         /// Route: GET /api/assistant/tasks/{taskId}/annotations

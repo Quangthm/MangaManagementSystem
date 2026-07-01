@@ -109,6 +109,34 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .ToListAsync(ct);
         }
 
+        /// <summary>
+        /// Returns a single proposal by ID, scoped to the specified actor's active Mangaka
+        /// contributor memberships. Same access predicate as GetMySeriesProposalsAsync.
+        /// </summary>
+        public async Task<SeriesProposal?> GetMySeriesProposalDetailAsync(
+            Guid actorUserId, Guid seriesProposalId, CancellationToken ct = default)
+        {
+            return await _dbContext.Set<SeriesProposal>()
+                .AsNoTracking()
+                .Include(sp => sp.Series).ThenInclude(s => s.Genres)
+                .Include(sp => sp.Series).ThenInclude(s => s.Tags)
+                .Include(sp => sp.Series).ThenInclude(s => s.CoverFile)
+                .Include(sp => sp.SubmittedByUser)
+                .Include(sp => sp.ReviewedByUser)
+                .Include(sp => sp.ProposalFile)
+                .Include(sp => sp.MarkupFile)
+                .FirstOrDefaultAsync(sp =>
+                    sp.SeriesProposalId == seriesProposalId &&
+                    _dbContext.SeriesContributors.Any(sc =>
+                        sc.SeriesId == sp.SeriesId &&
+                        sc.UserId == actorUserId &&
+                        sc.EndDate == null &&
+                        sc.User != null &&
+                        sc.User.StatusCode == "ACTIVE" &&
+                        sc.User.Role != null &&
+                        sc.User.Role.RoleName == "Mangaka"), ct);
+        }
+
         public async Task<bool> IsActiveTantouEditorContributorAsync(
             Guid seriesId, Guid userId, CancellationToken ct = default)
         {
@@ -122,6 +150,26 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     sc.User.StatusCode == "ACTIVE" &&
                     sc.User.Role != null &&
                     sc.User.Role.RoleName == "Tantou Editor", ct);
+        }
+
+        public async Task<IReadOnlyList<ActiveTantouEditorInfo>> GetActiveTantouEditorContributorsAsync(
+            Guid seriesId, CancellationToken ct = default)
+        {
+            return await _dbContext.SeriesContributors
+                .AsNoTracking()
+                .Where(sc =>
+                    sc.SeriesId == seriesId &&
+                    sc.EndDate == null &&
+                    sc.User != null &&
+                    sc.User.StatusCode == "ACTIVE" &&
+                    sc.User.Role != null &&
+                    sc.User.Role.RoleName == "Tantou Editor")
+                .Select(sc => new ActiveTantouEditorInfo(
+                    sc.UserId,
+                    sc.User!.DisplayName ?? sc.User.Username ?? string.Empty,
+                    sc.User.Username,
+                    sc.StartDate))
+                .ToListAsync(ct);
         }
 
         public async Task<Guid?> ClaimEditorialReviewAsync(Guid seriesProposalId, Guid actorUserId, string? notes, CancellationToken ct = default)

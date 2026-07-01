@@ -247,7 +247,7 @@ builder.Services.AddHttpClient<IAdminFileApiClient, AdminFileApiClient>((sp, cli
                 app.UseHsts();
             }
 
-            app.UseHttpsRedirection();
+            app.UseHttpsRedirection();  
             app.UseStaticFiles();
 
             app.UseAuthentication();

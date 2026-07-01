@@ -47,10 +47,25 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<IEnumerable<PageRegionDto>> GetPageRegionsByChapterPageVersionIdAsync(Guid chapterPageVersionId)
         {
-            var all = await _unitOfWork.PageRegions.GetAllAsync();
-            return all
-                .Where(r => r.ChapterPageVersionId == chapterPageVersionId)
-                .Select(MapToDto);
+            var regions = await _unitOfWork.PageRegions.FindAsync(r => r.ChapterPageVersionId == chapterPageVersionId);
+            return regions.Select(MapToDto);
+        }
+
+        public async Task<IEnumerable<PageRegionDto>> GetPageRegionsByVersionIdsAsync(IEnumerable<Guid> chapterPageVersionIds)
+        {
+            var idSet = chapterPageVersionIds.ToHashSet();
+            if (idSet.Count == 0) return Enumerable.Empty<PageRegionDto>();
+            var regions = await _unitOfWork.PageRegions.FindAsync(r => idSet.Contains(r.ChapterPageVersionId));
+            return regions.Select(MapToDto);
+        }
+
+        public async Task<Dictionary<Guid, int>> GetRegionCountsByVersionIdsAsync(IEnumerable<Guid> chapterPageVersionIds)
+        {
+            var idSet = chapterPageVersionIds.ToHashSet();
+            if (idSet.Count == 0) return new Dictionary<Guid, int>();
+            return await _unitOfWork.PageRegions.CountByAsync(
+                r => idSet.Contains(r.ChapterPageVersionId),
+                r => r.ChapterPageVersionId);
         }
 
         public async Task<PageRegionDto?> UpdatePageRegionAsync(UpdatePageRegionDto dto)
@@ -93,28 +108,58 @@ namespace MangaManagementSystem.Application.Services
         public async Task<bool> BulkReplacePageRegionsAsync(Guid chapterPageVersionId, IEnumerable<CreatePageRegionDto> dtos)
         {
             // Get all existing regions for this version
-            var all = await _unitOfWork.PageRegions.GetAllAsync();
-            var existing = all.Where(r => r.ChapterPageVersionId == chapterPageVersionId).ToList();
+            var regions = await _unitOfWork.PageRegions.FindAsync(r => r.ChapterPageVersionId == chapterPageVersionId);
+            var existing = regions.ToList();
+
+            // Exclude pin regions (small bounding boxes used for pins on annotations/tasks) from bulk replacement
+            existing.RemoveAll(r => r.Width <= 0.05m && r.Height <= 0.05m);
 
             // Create or update
             foreach (var dto in dtos)
             {
-                var existingRegion = string.IsNullOrEmpty(dto.RegionLabel)
-                    ? null
-                    : existing.FirstOrDefault(r => r.RegionLabel == dto.RegionLabel);
+                PageRegion? existingRegion = null;
+                if (dto.PageRegionId.HasValue && dto.PageRegionId.Value != Guid.Empty)
+                {
+                    existingRegion = existing.FirstOrDefault(r => r.PageRegionId == dto.PageRegionId.Value);
+                }
+                if (existingRegion == null && !string.IsNullOrEmpty(dto.RegionLabel))
+                {
+                    existingRegion = existing.FirstOrDefault(r => r.RegionLabel == dto.RegionLabel);
+                }
 
                 if (existingRegion != null)
                 {
-                    // Update
-                    existingRegion.TypeCode = dto.TypeCode;
-                    existingRegion.X = dto.X;
-                    existingRegion.Y = dto.Y;
-                    existingRegion.Width = dto.Width;
-                    existingRegion.Height = dto.Height;
-                    existingRegion.ConfidenceScore = dto.ConfidenceScore;
-                    existingRegion.SourceType = dto.SourceType;
-                    existingRegion.OriginalText = dto.OriginalText;
-                    _unitOfWork.PageRegions.Update(existingRegion);
+                    bool isChanged = existingRegion.TypeCode != dto.TypeCode ||
+                                     existingRegion.X != dto.X ||
+                                     existingRegion.Y != dto.Y ||
+                                     existingRegion.Width != dto.Width ||
+                                     existingRegion.Height != dto.Height ||
+                                     existingRegion.ConfidenceScore != dto.ConfidenceScore ||
+                                     existingRegion.SourceType != dto.SourceType ||
+                                     existingRegion.OriginalText != dto.OriginalText ||
+                                     existingRegion.RegionLabel != dto.RegionLabel;
+
+                    if (isChanged)
+                    {
+                        existingRegion.TypeCode = dto.TypeCode;
+                        existingRegion.X = dto.X;
+                        existingRegion.Y = dto.Y;
+                        existingRegion.Width = dto.Width;
+                        existingRegion.Height = dto.Height;
+                        existingRegion.ConfidenceScore = dto.ConfidenceScore;
+                        existingRegion.SourceType = dto.SourceType;
+                        existingRegion.OriginalText = dto.OriginalText;
+                        existingRegion.RegionLabel = dto.RegionLabel;
+                        if (existingRegion.CreatedByUserId.HasValue && existingRegion.CreatedByUserId.Value != Guid.Empty)
+                        {
+                            existingRegion.UpdatedByUserId = existingRegion.CreatedByUserId;
+                        }
+                        else
+                        {
+                            existingRegion.UpdatedByUserId = null;
+                        }
+                        _unitOfWork.PageRegions.Update(existingRegion);
+                    }
                     existing.Remove(existingRegion);
                 }
                 else

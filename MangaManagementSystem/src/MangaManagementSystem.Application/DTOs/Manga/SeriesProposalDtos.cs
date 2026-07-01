@@ -46,7 +46,8 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         string? ProposalFileUrl,
         string? ProposalFileName,
         Guid? MarkupFileId,
-        string? MarkupFileUrl
+        string? MarkupFileUrl,
+        bool CurrentEditorIsActiveContributor = false
     );
 
     public record ProposalQueueFilterDto(
@@ -108,8 +109,20 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         bool CanClaim,
         bool CanRequestRevision,
         bool CanPassToBoard,
-        bool CanCancel
+        bool CanCancel,
+        // Active Tantou Editor contributor context
+        IReadOnlyList<ProposalActiveEditorContributorDto> ActiveTantouEditors,
+        bool HasOtherActiveTantouEditor
     );
+
+    /// <summary>
+    /// An active Tantou Editor contributor for a series, shown on the proposal review detail.
+    /// </summary>
+    public sealed record ProposalActiveEditorContributorDto(
+        Guid UserId,
+        string DisplayName,
+        string? Username,
+        DateTime? StartedAtUtc);
 
     /// <summary>
     /// Result of an editorial review action. Returns the proposal's resulting status code so
@@ -142,7 +155,8 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         string SubmittedByDisplayName,
         string? ReviewedByDisplayName,
         ProposalFileRefDto ProposalFile,
-        ProposalFileRefDto? MarkupFile);
+        ProposalFileRefDto? MarkupFile,
+        string? SeriesCoverUrl = null);
 
     /// <summary>
     /// Lean file reference for API-facing DTOs. Maps FileResource.CloudinarySecureUrl → SecureUrl
