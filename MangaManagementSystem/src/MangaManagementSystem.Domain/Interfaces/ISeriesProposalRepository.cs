@@ -38,6 +38,14 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<bool> IsActiveTantouEditorContributorAsync(Guid seriesId, Guid userId, CancellationToken ct = default);
 
         /// <summary>
+        /// Returns all active Tantou Editor contributors for the given series.
+        /// Active = SeriesContributor.EndDate IS NULL, User ACTIVE, Role 'Tantou Editor'.
+        /// Read-only EF query.
+        /// </summary>
+        Task<IReadOnlyList<ActiveTantouEditorInfo>> GetActiveTantouEditorContributorsAsync(
+            Guid seriesId, CancellationToken ct = default);
+
+        /// <summary>
         /// Submits a series proposal for editorial review via <c>manga.usp_SeriesProposal_Submit</c>.
         /// The stored procedure: validates the series is PROPOSAL_DRAFT, validates the submitter is
         /// an active Mangaka contributor, creates the SERIES_PROPOSAL FileResource, creates the
@@ -70,4 +78,14 @@ namespace MangaManagementSystem.Domain.Interfaces
             string markupOriginalFileName, string markupCloudinaryPublicId, string markupCloudinarySecureUrl, 
             string markupContentType, long markupFileSizeBytes, string? markupSha256Hash = null, CancellationToken ct = default);
     }
+
+    /// <summary>
+    /// Read-only info for an active Tantou Editor contributor of a series.
+    /// Used by proposal detail to display existing active editors.
+    /// </summary>
+    public sealed record ActiveTantouEditorInfo(
+        Guid UserId,
+        string DisplayName,
+        string? Username,
+        DateTime? StartedAtUtc);
 }

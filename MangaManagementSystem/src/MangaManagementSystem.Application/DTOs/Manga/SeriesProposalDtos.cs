@@ -108,8 +108,20 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         bool CanClaim,
         bool CanRequestRevision,
         bool CanPassToBoard,
-        bool CanCancel
+        bool CanCancel,
+        // Active Tantou Editor contributor context
+        IReadOnlyList<ProposalActiveEditorContributorDto> ActiveTantouEditors,
+        bool HasOtherActiveTantouEditor
     );
+
+    /// <summary>
+    /// An active Tantou Editor contributor for a series, shown on the proposal review detail.
+    /// </summary>
+    public sealed record ProposalActiveEditorContributorDto(
+        Guid UserId,
+        string DisplayName,
+        string? Username,
+        DateTime? StartedAtUtc);
 
     /// <summary>
     /// Result of an editorial review action. Returns the proposal's resulting status code so

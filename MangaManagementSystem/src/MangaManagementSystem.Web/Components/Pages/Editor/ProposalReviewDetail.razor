@@ -159,7 +159,24 @@
                         <MudText class="mb-2">@_proposal.SubmittedAtUtc.ToLocalTime().ToString("MMM d, yyyy h:mm tt")</MudText>
                     </MudPaper>
 
-                    @if (_proposal.CanClaim)
+                    @if (_proposal.CanClaim && _proposal.HasOtherActiveTantouEditor)
+                    {
+                        <MudPaper Class="pa-5 mf-card mb-5" Elevation="0" Style="border:2px dashed var(--mud-palette-warning);">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">Active editor already assigned</MudText>
+                            <MudText Typo="Typo.body2" Class="mf-muted mb-3">
+                                This series already has active Tantou Editor(s):
+                                @string.Join(", ", _proposal.ActiveTantouEditors
+                                    .Where(a => a.UserId != _currentUserId)
+                                    .Select(a => a.DisplayName)).
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mb-4">You can still claim this proposal if another editor is needed.</MudText>
+                            <MudButton Variant="Variant.Filled" Color="Color.Warning" FullWidth="true"
+                                       OnClick="@(() => _claimAdditionalDialogOpen = true)" Disabled="_processing">
+                                Claim as Additional Editor
+                            </MudButton>
+                        </MudPaper>
+                    }
+                    else if (_proposal.CanClaim)
                     {
                         <MudPaper Class="pa-5 mf-card mb-5" Elevation="0" Style="border:2px dashed var(--mud-palette-warning);">
                             <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">Unclaimed Proposal</MudText>
@@ -175,6 +192,21 @@
                     {
                         <MudPaper Class="pa-5 mf-card" Elevation="0">
                             <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Decision Actions</MudText>
+                            @if (_proposal.CurrentActorIsActiveTantouEditorContributor)
+                            {
+                                <MudAlert Severity="Severity.Info" Class="mb-3" Dense="true">
+                                    <MudText Typo="Typo.caption">
+                                        You are an active Tantou Editor for this series.
+                                        @if (_proposal.ActiveTantouEditors.Count > 1)
+                                        {
+                                            var others = _proposal.ActiveTantouEditors
+                                                .Where(a => a.UserId != _currentUserId)
+                                                .Select(a => a.DisplayName).ToList();
+                                            <span>Other active editor(s): @string.Join(", ", others).</span>
+                                        }
+                                    </MudText>
+                                </MudAlert>
+                            }
                             <MudStack Spacing="2">
                                 @if (_proposal.CanPassToBoard)
                                 {
@@ -322,6 +354,25 @@
             </MudButton>
         </DialogActions>
     </MudDialog>
+
+    @* ── Claim as Additional Editor confirmation modal ─────────────────── *@
+    <MudDialog @bind-Visible="_claimAdditionalDialogOpen" Options="_dialogOptions">
+        <TitleContent>
+            <MudText Typo="Typo.h6">Additional Editor Confirmation</MudText>
+        </TitleContent>
+        <DialogContent>
+            <MudText>
+                Another Tantou Editor is already active on this series. Claiming will add you as an additional active editor. Continue?
+            </MudText>
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="@(() => _claimAdditionalDialogOpen = false)" Disabled="_processing">Cancel</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Warning" OnClick="ClaimProposal" Disabled="_processing">
+                @if (_processing) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
+                Claim Anyway
+            </MudButton>
+        </DialogActions>
+    </MudDialog>
 </EditorLayout>
 
 @code {
@@ -340,6 +391,7 @@
     private bool _revisionDialogOpen;
     private bool _boardDialogOpen;
     private bool _cancelDialogOpen;
+    private bool _claimAdditionalDialogOpen;
     private string _comments = string.Empty;
     private bool _commentsError;
     private bool _markupError;
@@ -475,6 +527,7 @@
         _revisionDialogOpen = false;
         _boardDialogOpen = false;
         _cancelDialogOpen = false;
+        _claimAdditionalDialogOpen = false;
         ResetModalState();
     }
 
@@ -499,6 +552,7 @@
     private async Task ClaimProposal()
     {
         _processing = true;
+        _claimAdditionalDialogOpen = false;
         try
         {
             await EditorProposalApiClient.ClaimAsync(_currentUserId, ProposalId, "Claimed via Editor UI");
