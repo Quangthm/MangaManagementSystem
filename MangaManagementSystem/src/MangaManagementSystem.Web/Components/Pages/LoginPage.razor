@@ -203,6 +203,21 @@
         background: rgba(89, 74, 226, 0.08);
         color: #594ae2;
     }
+
+    /* Hide native browser password reveal controls so the custom toggle is the only eye icon. */
+    .login-form__input--password::-ms-reveal,
+    .login-form__input--password::-ms-clear {
+        display: none;
+        width: 0;
+        height: 0;
+    }
+
+    .login-form__input--password::-webkit-credentials-auto-fill-button,
+    .login-form__input--password::-webkit-contacts-auto-fill-button {
+        visibility: hidden;
+        display: none !important;
+        pointer-events: none;
+    }
 </style>
 
 @code {
