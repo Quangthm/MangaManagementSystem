@@ -41,12 +41,21 @@
                         </div>
                         <div class="login-form__field">
                             <label class="login-form__label" for="password">Password</label>
-                            <input id="password"
-                                   name="password"
-                                   type="password"
-                                   class="login-form__input"
-                                   required
-                                   autocomplete="current-password" />
+                            <div class="login-form__password-wrapper">
+                                <input id="password"
+                                       name="password"
+                                       type="@LoginPasswordInputType"
+                                       class="login-form__input login-form__input--password"
+                                       required
+                                       autocomplete="current-password" />
+                                <button type="button"
+                                        class="login-form__password-toggle"
+                                        aria-label="@LoginPasswordToggleLabel"
+                                        title="@LoginPasswordToggleLabel"
+                                        @onclick="ToggleLoginPasswordVisibility">
+                                    <MudIcon Icon="@LoginPasswordToggleIcon" Size="Size.Medium" />
+                                </button>
+                            </div>
                         </div>
                         <MudText Align="Align.Right"><MudLink Href="/forgot-password">Forgot Password?</MudLink></MudText>
                         <div id="login-recaptcha" class="my-2 d-flex justify-center"></div>
@@ -160,11 +169,67 @@
     .google-auth-button__icon {
         display: block;
     }
+
+    .login-form__password-wrapper {
+        position: relative;
+        width: 100%;
+        display: block;
+    }
+
+    .login-form__input--password {
+        padding-right: 54px;
+    }
+
+    .login-form__password-toggle {
+        position: absolute;
+        top: 50%;
+        right: 10px;
+        transform: translateY(-50%);
+        width: 38px;
+        height: 38px;
+        padding: 0;
+        border: none;
+        border-radius: 50%;
+        background: transparent;
+        color: rgba(0, 0, 0, 0.58);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2;
+    }
+
+    .login-form__password-toggle:hover {
+        background: rgba(89, 74, 226, 0.08);
+        color: #594ae2;
+    }
 </style>
 
 @code {
     private string? _pageAlertMessage;
     private Severity _pageAlertSeverity = Severity.Info;
+    private bool _showLoginPassword;
+
+    private string LoginPasswordInputType =>
+        _showLoginPassword
+            ? "text"
+            : "password";
+
+    private string LoginPasswordToggleIcon =>
+        _showLoginPassword
+            ? Icons.Material.Filled.VisibilityOff
+            : Icons.Material.Filled.Visibility;
+
+    private string LoginPasswordToggleLabel =>
+        _showLoginPassword
+            ? "Hide password"
+            : "Show password";
+
+    private void ToggleLoginPasswordVisibility()
+    {
+        _showLoginPassword =
+            !_showLoginPassword;
+    }
 
     protected override void OnInitialized()
     {

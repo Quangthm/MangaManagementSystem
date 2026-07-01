@@ -89,7 +89,10 @@
                         <MudTextField Label="Password"
                                       @bind-Value="_password"
                                       Variant="Variant.Outlined"
-                                      InputType="InputType.Password"
+                                      InputType="@RegisterPasswordInputType"
+                                      Adornment="Adornment.End"
+                                      AdornmentIcon="@RegisterPasswordIcon"
+                                      OnAdornmentClick="ToggleRegisterPasswordVisibility"
                                       Required="true"
                                       Disabled="_isSendingOtp" />
                         <div>
@@ -219,6 +222,23 @@
     private string _username = string.Empty;
     private string _email = string.Empty;
     private string _password = string.Empty;
+    private bool _showRegisterPassword;
+
+    private InputType RegisterPasswordInputType =>
+        _showRegisterPassword
+            ? InputType.Text
+            : InputType.Password;
+
+    private string RegisterPasswordIcon =>
+        _showRegisterPassword
+            ? Icons.Material.Filled.VisibilityOff
+            : Icons.Material.Filled.Visibility;
+
+    private void ToggleRegisterPasswordVisibility()
+    {
+        _showRegisterPassword =
+            !_showRegisterPassword;
+    }
     private string _roleName = "Mangaka";
     private string? _displayName = null;
     private string _otpCode = string.Empty;
