@@ -13,6 +13,8 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Quer
     /// <summary>
     /// Handles GetEditorialProposalQueueQuery by reading the editorial queue (filterable by
     /// status) and mapping each proposal to a read-only ProposalQueueItemDto.
+    /// Also computes CurrentEditorIsActiveContributor per proposal using the actor's
+    /// active Tantou Editor contributor memberships.
     /// </summary>
     public sealed class GetEditorialProposalQueueQueryHandler
         : IRequestHandler<GetEditorialProposalQueueQuery, IReadOnlyList<ProposalQueueItemDto>>
@@ -37,10 +39,25 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Quer
                 reviewedByUserId: null,
                 cancellationToken);
 
-            return proposals.Select(MapToDto).ToList();
+            // Determine which series the current actor is an active Tantou Editor contributor for.
+            HashSet<Guid> activeContributorSeriesIds = new();
+            if (request.ActorUserId != Guid.Empty && proposals.Count > 0)
+            {
+                var distinctSeriesIds = proposals.Select(p => p.SeriesId).Distinct().ToList();
+                foreach (var seriesId in distinctSeriesIds)
+                {
+                    if (await _seriesProposalRepository.IsActiveTantouEditorContributorAsync(
+                        seriesId, request.ActorUserId, cancellationToken))
+                    {
+                        activeContributorSeriesIds.Add(seriesId);
+                    }
+                }
+            }
+
+            return proposals.Select(p => MapToDto(p, activeContributorSeriesIds.Contains(p.SeriesId))).ToList();
         }
 
-        private static ProposalQueueItemDto MapToDto(SeriesProposal p) => new(
+        private static ProposalQueueItemDto MapToDto(SeriesProposal p, bool isActiveContributor) => new(
             p.SeriesProposalId,
             p.SeriesId,
             p.Series?.Title ?? string.Empty,
@@ -62,7 +79,8 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Quer
             p.ProposalFile?.CloudinarySecureUrl,
             p.ProposalFile?.OriginalFileName,
             p.MarkupFileId,
-            p.MarkupFile?.CloudinarySecureUrl);
+            p.MarkupFile?.CloudinarySecureUrl,
+            CurrentEditorIsActiveContributor: isActiveContributor);
 
         private static IReadOnlyList<GenreDto> MapGenres(IEnumerable<Domain.Entities.Genre>? genres)
         {

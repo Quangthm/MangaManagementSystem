@@ -340,6 +340,33 @@ namespace MangaManagementSystem.Web.Services.Api
             throw new InvalidOperationException(message);
         }
 
+        public async Task<MangakaSeriesProposalDto?> GetMySeriesProposalDetailAsync(
+            Guid actorUserId,
+            Guid proposalId,
+            CancellationToken cancellationToken = default)
+        {
+            var route = $"api/mangaka/series/proposals/{proposalId}";
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Get, route);
+            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                return null;
+
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<MangakaSeriesProposalDto>(
+                    cancellationToken: cancellationToken);
+            }
+
+            var message = await ExtractErrorMessageAsync(response);
+            _logger.LogWarning(
+                "Load proposal detail {ProposalId} failed: {StatusCode} {ReasonPhrase}",
+                proposalId, (int)response.StatusCode, response.ReasonPhrase);
+            throw new InvalidOperationException(message);
+        }
+
         public async Task<SeriesDto?> GetMySeriesCardByIdAsync(
             Guid actorUserId,
             Guid seriesId,

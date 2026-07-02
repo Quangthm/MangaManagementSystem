@@ -1871,6 +1871,138 @@ unique among non-cancelled chapters only
 
 ---
 
+## BF-PUB-001 — Plan Next Chapter Release Date by Publication Frequency
+
+**Status:** Agreed  
+**Primary actor:** Mangaka / Tantou Editor  
+**Goal:** Suggest and validate a chapter planned release date according to the series' official publication frequency and the relevant `PublicationPeriod`.
+
+### Main Flow
+
+```text
+User opens chapter planning/create/edit screen for a serialized series
+→ UI shows the current Series.publication_frequency_code
+→ Backend finds the latest non-cancelled chapter with planned_release_date for the same series
+→ Backend resolves the PublicationPeriod containing the previous planned_release_date
+→ If frequency is WEEKLY, backend resolves the next weekly PublicationPeriod
+→ If frequency is MONTHLY, backend resolves the next monthly PublicationPeriod
+→ Backend proposes a default planned_release_date
+→ User may keep the default or choose another date
+→ Backend validates the chosen planned_release_date is inside the required next PublicationPeriod
+→ Backend saves Chapter.planned_release_date and chapter status according to Chapter rules
+→ UI refreshes the schedule display
+```
+
+### Default Date Rules
+
+| Frequency | Default |
+|---|---|
+| `WEEKLY` | Previous planned release date + 7 days. |
+| `MONTHLY` | Same day number in the next month when possible; otherwise the last day of the next month. |
+| `IRREGULAR` | No next-period default is required. |
+
+### Important Notes
+
+- Weekly `PublicationPeriod` records start on Monday and end on Sunday.
+- A weekly period belongs to the month that contains at least four days of that week.
+- For scheduled chapters, the business publication date is usually `Chapter.planned_release_date`.
+- For released chapters, the release business date is derived from `released_at_utc` converted to Vietnam publication time (UTC+7), then taking the date part.
+- Frequency enforcement uses planned release dates. A late actual release does not automatically shift the next chapter schedule unless an authorized user reschedules it.
+- `IRREGULAR` series do not enforce next-week or next-month boundaries.
+
+### System Should Try To
+
+- Keep scheduling predictable while allowing date adjustment inside the allowed period.
+- Avoid classifying chapters by raw UTC date when the business date is required.
+- Explain the valid date range to the user when a chosen date is outside the required period.
+
+---
+
+## BF-RANK-001 — Enter Series Vote Input for a Publication Period
+
+**Status:** Agreed  
+**Primary actor:** Editorial Board Member / Editorial Board Chief  
+**Goal:** Enter simulated or manually aggregated series-level performance data for a completed publication period.
+
+### Main Flow
+
+```text
+Board user opens Ranking Input screen
+→ User selects a PublicationPeriod
+→ UI lists eligible series
+→ User selects a series
+→ User enters rating_count, average_rating, reading_count, and optional data_source_note
+→ Backend validates actor role, period/series uniqueness, and numeric constraints
+→ Backend saves or updates manga.SeriesVoteInput
+→ UI refreshes the input list and ranking view
+```
+
+### Database Tables / View
+
+```text
+manga.PublicationPeriod
+manga.SeriesVoteInput
+manga.vw_SeriesRanking
+```
+
+### Important Notes
+
+- There is no public reader voting module in MVP.
+- Vote input is series-level, not chapter-level.
+- A series can have only one `SeriesVoteInput` row per `PublicationPeriod`.
+- `rating_count` and `reading_count` must be greater than zero.
+- `average_rating` must be between 0 and 10.
+- `rating_count` must not exceed `reading_count`.
+- Vote input is period-only. Later weekly input must not include earlier weekly input.
+- `data_source_note` should explain the report or source used for the manual input when relevant.
+
+### System Should Try To
+
+- Make manual input traceable through entered/updated user and UTC timestamps.
+- Keep vote input simple enough for demo data while preserving clear semantics.
+- Prevent duplicate input for the same series and publication period.
+
+---
+
+## BF-RANK-002 — View Dynamic Series Ranking
+
+**Status:** Agreed  
+**Primary actor:** Editorial Board Member / Editorial Board Chief / Tantou Editor / Mangaka  
+**Goal:** View the current dynamic ranking for a selected publication period without using finalized ranking storage.
+
+### Main Flow
+
+```text
+User opens ranking screen
+→ UI selects or filters by PublicationPeriod
+→ Backend queries manga.vw_SeriesRanking for the selected publication_period_id
+→ Database computes ranking_score and DENSE_RANK by publication_period_id
+→ Backend returns ranked series rows
+→ UI displays rank, title, rating count, average rating, reading count, and ranking score
+```
+
+### Ranking Formula
+
+```text
+ranking_score = average_rating * LOG10(1 + rating_count) + reading_count * 0.001
+```
+
+### Important Notes
+
+- Ranking is dynamic and reflects the latest `SeriesVoteInput` data.
+- The MVP does not use `SeriesRankingSnapshot` because there is no ranking finalization workflow.
+- The ranking view should keep technical IDs available for backend filtering and navigation even if the UI hides them.
+- Ranking evidence may support board/editorial review but does not automatically cancel a series.
+
+### System Should Try To
+
+- Query ranking by `publication_period_id`, not by period name.
+- Keep ranking score calculation centralized in SQL view/query logic.
+- Avoid storing duplicated ranking score or rank position unless later performance profiling proves caching is required.
+
+
+---
+
 # 7. Workflow Template for Future Additions
 
 Use this template when adding new flows.
@@ -1926,6 +2058,6 @@ Add detailed flows for these when the team finalizes them:
 - Assistant task assignment and submission flow
 - Board vote flow
 - Cancel serialization poll flow
-- Ranking snapshot generation flow
+- Series vote input and dynamic ranking view flow
 - Notification read/unread flow
 - Cloudinary cleanup failure handling flow

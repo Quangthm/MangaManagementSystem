@@ -470,7 +470,10 @@
 
 ---
 
+
 ## 17. Publication Planning
+
+### 17.1 Publication Frequency
 
 | Rule ID | Business Rule | Review Status |
 |---|---|---|
@@ -487,44 +490,90 @@
 | BR-PUB-011 | Mangaka may provide or update `Series.publication_frequency_code` only while the series is in `PROPOSAL_DRAFT`; before board approval, this value is treated as the Mangaka's proposed/preferred frequency and no separate desired-frequency column is required in MVP. | Active draft |
 | BR-PUB-012 | After the series leaves `PROPOSAL_DRAFT`, Mangaka cannot directly change the official `Series.publication_frequency_code`. | Active draft |
 | BR-PUB-013 | The publication frequency specified through the valid board serialization decision overrides the Mangaka's preference and becomes the official `Series.publication_frequency_code`. | Active draft |
-| BR-PUB-014 | After a board decision has set the official publication frequency, Mangaka may request a publication frequency change by sending an in-app notification to the Editorial Board Chief; MVP does not require a separate official frequency-change request table. | Active draft |
+| BR-PUB-014 | After a board decision has set the official publication frequency, Mangaka may request a publication frequency change by sending an in-app notification to the Editorial Board Chief; MVP does not require a separate official publication-frequency change request table. | Active draft |
 | BR-PUB-015 | Editorial Board Chief may directly change `Series.publication_frequency_code` for a series after providing a required reason that must be written to the audit log. | Active draft |
+
+### 17.2 PublicationPeriod
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-PUB-PERIOD-001 | `PublicationPeriod` represents business calendar periods used for chapter publication planning and series ranking reports. | Active draft |
+| BR-PUB-PERIOD-002 | A `PublicationPeriod` has `period_name`, `period_type_code`, `period_start_date`, and `period_end_date`. | Active draft |
+| BR-PUB-PERIOD-003 | Valid `PublicationPeriod.period_type_code` values are `WEEKLY`, `MONTHLY`, and `YEARLY`. | Active draft |
+| BR-PUB-PERIOD-004 | Monthly publication periods start on the first calendar day of the month and end on the last calendar day of the month. | Active draft |
+| BR-PUB-PERIOD-005 | Yearly publication periods start on January 1 and end on December 31. | Active draft |
+| BR-PUB-PERIOD-006 | Weekly publication periods start on Monday and end on Sunday. | Active draft |
+| BR-PUB-PERIOD-007 | A weekly publication period is assigned to the month that contains at least four days of that Monday-Sunday week. | Active draft |
+| BR-PUB-PERIOD-008 | Weekly period names are generated from the owning month and the ordinal weekly period number within that owning month, such as `2026_JULY_WEEK1`. | Active draft |
+| BR-PUB-PERIOD-009 | A weekly publication period may start in the previous month or end in the next month, but its `period_name` still follows the owning-month rule. | Active draft |
+| BR-PUB-PERIOD-010 | `period_start_date` and `period_end_date` are business calendar dates, not raw UTC timestamp boundaries. | Active draft |
+
+### 17.3 Publication Business Date and UTC Release Time
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-PUB-DATE-001 | `PublicationPeriod` membership is determined by the publication business date, not by the raw UTC date. | Active draft |
+| BR-PUB-DATE-002 | For scheduled chapters, the publication business date is usually `Chapter.planned_release_date`. | Active draft |
+| BR-PUB-DATE-003 | For actually released chapters, the release business date is derived by converting `Chapter.released_at_utc` to the system publication timezone, currently Vietnam time UTC+7, then taking the `DATE` part. | Active draft |
+| BR-PUB-DATE-004 | Ranking and publication-period reports must use the publication business date, not `CAST(released_at_utc AS DATE)` in UTC. | Active draft |
+| BR-PUB-DATE-005 | `released_at_utc` records the exact actual release instant and should not be used directly as the calendar period date without publication-timezone conversion. | Active draft |
+
+### 17.4 Publication Frequency Scheduling Enforcement
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-PUB-SCHEDULE-001 | For a `WEEKLY` serialized series, the next chapter `planned_release_date` must fall inside the next weekly `PublicationPeriod` after the previous planned chapter's weekly `PublicationPeriod`. | Active draft |
+| BR-PUB-SCHEDULE-002 | For a `WEEKLY` serialized series, the system may default the next chapter `planned_release_date` to the previous planned release date plus seven days. | Active draft |
+| BR-PUB-SCHEDULE-003 | For a `WEEKLY` serialized series, Mangaka or an authorized editor may change the default planned release date only within the required next weekly `PublicationPeriod`. | Active draft |
+| BR-PUB-SCHEDULE-004 | For a `MONTHLY` serialized series, the next chapter `planned_release_date` must fall inside the next monthly `PublicationPeriod` after the previous planned chapter's monthly `PublicationPeriod`. | Active draft |
+| BR-PUB-SCHEDULE-005 | For a `MONTHLY` serialized series, the system may default the next chapter `planned_release_date` to the same day number in the next month when possible, otherwise to the last day of the next month. | Active draft |
+| BR-PUB-SCHEDULE-006 | For an `IRREGULAR` serialized series, the system does not enforce next-week or next-month planned release date rules. | Active draft |
+| BR-PUB-SCHEDULE-007 | Publication frequency enforcement is based on planned release dates, while actual release reporting uses `released_at_utc` converted to the system publication timezone. | Active draft |
+| BR-PUB-SCHEDULE-008 | If a chapter is released late, the actual release date may be reported in a later `PublicationPeriod`, but this does not automatically shift the planned schedule of the next chapter unless an authorized user reschedules it. | Active draft |
+
 
 ---
 
-## 18. Ranking and Reader Vote Input
+---
 
-### 18.1 Ranking Snapshot
 
-| Rule ID | Business Rule | Review Status |
-|---|---|---|
-| BR-RANK-001 | Series ranking data is stored as time-based `SeriesRankingSnapshot` records, not directly as permanent attributes of the `Series` record. | Active draft |
-| BR-RANK-002 | Each ranking snapshot represents the rank, score, and performance data of one series for one ranking period. | Active draft |
-| BR-RANK-003 | A series may have many ranking snapshots over time. | Active draft |
-| BR-RANK-004 | One series may only have one ranking snapshot for the same ranking period type and period start date. | Active draft |
-| BR-RANK-005 | The current rank of a series is derived from the latest relevant ranking snapshot. | Active draft |
-| BR-RANK-006 | The system should not duplicate `ranking_score` and `rank_position` in `Series` unless caching is required for performance. | Active draft |
-| BR-RANK-007 | If no ranking snapshot exists for a series, the series has no current ranking yet. | Active draft |
-| BR-RANK-008 | Ranking snapshots should be preserved for trend analysis and board decision support. | Active draft |
-| BR-RANK-009 | Ranking snapshots are generated by aggregating chapter reader vote snapshots within a selected ranking period. | Active draft |
-| BR-RANK-010 | Weekly, monthly, and seasonal ranking periods are determined by filtering reader vote records using `voted_at_utc`. | Active draft |
-| BR-RANK-011 | Monthly and seasonal ranking snapshots are accumulated from vote records within the selected calendar period, not manually entered as separate vote data. | Active draft |
-| BR-RANK-012 | Ranking snapshots may support cancellation-risk evaluation for board review, but the ranking snapshot itself does not automatically cancel a series. | Active draft |
+## 18. Ranking and Series Vote Input
 
-### 18.2 Reader Vote Input
+### 18.1 Series Vote Input
 
 | Rule ID | Business Rule | Review Status |
 |---|---|---|
-| BR-VOTE-INPUT-001 | Reader vote input in MVP is simulated/manual aggregated data, not direct real-reader voting. | Active draft |
-| BR-VOTE-INPUT-002 | Reader vote input is recorded for a released chapter. | Active draft |
-| BR-VOTE-INPUT-003 | Each vote input record stores the time the vote data was entered or considered valid through `voted_at_utc`. | Active draft |
-| BR-VOTE-INPUT-004 | Reader vote records are used as input evidence for ranking snapshot generation. | Active draft |
-| BR-VOTE-INPUT-005 | Reader vote counts and feedback counts cannot be negative. | Active draft |
-| BR-VOTE-INPUT-006 | Average rating, if provided, must be within the allowed rating range. | Active draft |
-| BR-VOTE-INPUT-007 | For MVP, each chapter should have at most one aggregated reader vote snapshot. | Active draft |
-| BR-VOTE-INPUT-008 | A reader vote snapshot should be entered only after the related chapter has been released. | Active draft |
-| BR-VOTE-INPUT-009 | Reader vote input should record the Editorial Board Member who entered the simulated/aggregated vote data. | Active draft |
-| BR-VOTE-INPUT-010 | Only Editorial Board Members may enter simulated or aggregated reader vote input in MVP. | Active draft |
+| BR-SERIES-VOTE-001 | Series vote input in MVP is simulated/manual aggregated series-level performance data, not direct real-reader voting. | Active draft |
+| BR-SERIES-VOTE-002 | `SeriesVoteInput` is tied to exactly one `PublicationPeriod` and one `Series`. | Active draft |
+| BR-SERIES-VOTE-003 | A series may have at most one vote input for the same publication period. | Active draft |
+| BR-SERIES-VOTE-004 | `rating_count` represents the number of rating/vote submissions for the series during that publication period only. | Active draft |
+| BR-SERIES-VOTE-005 | `average_rating` represents the average score from the `rating_count` submissions for that publication period. | Active draft |
+| BR-SERIES-VOTE-006 | `reading_count` represents the number of readers/views/follows reported for the series during that publication period. | Active draft |
+| BR-SERIES-VOTE-007 | `rating_count` must be greater than zero. | Active draft |
+| BR-SERIES-VOTE-008 | `reading_count` must be greater than zero. | Active draft |
+| BR-SERIES-VOTE-009 | `rating_count` must not exceed `reading_count`. | Active draft |
+| BR-SERIES-VOTE-010 | `average_rating` must be between 0 and 10. | Active draft |
+| BR-SERIES-VOTE-011 | Weekly vote input is period-only; Week 2 input must not include Week 1 input. | Active draft |
+| BR-SERIES-VOTE-012 | Monthly and yearly average ratings, when derived from lower-level period inputs, must use weighted averaging: `SUM(average_rating * rating_count) / SUM(rating_count)`. | Active draft |
+| BR-SERIES-VOTE-013 | Series vote input should record the Editorial Board Member who entered the simulated/aggregated vote data and the UTC entry timestamp. | Active draft |
+| BR-SERIES-VOTE-014 | Only Editorial Board Members or Editorial Board Chief users may enter simulated or aggregated series vote input in MVP. | Active draft |
+| BR-SERIES-VOTE-015 | `data_source_note` may describe the report, tracking website, internal spreadsheet, or other evidence used to enter the series vote input. | Active draft |
+
+### 18.2 Dynamic Series Ranking
+
+| Rule ID | Business Rule | Review Status |
+|---|---|---|
+| BR-RANK-001 | Series ranking is calculated dynamically from `SeriesVoteInput` records joined to `PublicationPeriod` and `Series`; the MVP does not require `SeriesRankingSnapshot`. | Active draft |
+| BR-RANK-002 | Ranking is partitioned by `publication_period_id`, so each publication period has its own rank list. | Active draft |
+| BR-RANK-003 | The dynamic ranking view should expose period details, series identity, title/slug when needed for navigation, rating count, average rating, reading count, ranking score, and rank position. | Active draft |
+| BR-RANK-004 | The MVP ranking score is calculated as `average_rating * LOG10(1 + rating_count) + reading_count * 0.001`. | Active draft |
+| BR-RANK-005 | Rank position is computed using `DENSE_RANK()` ordered by ranking score, average rating, rating count, reading count, and `series_id` as a deterministic tie-breaker. | Active draft |
+| BR-RANK-006 | `ranking_score` and `rank_position` are derived values and should not be stored as normal duplicated columns unless later performance profiling proves caching is required. | Active draft |
+| BR-RANK-007 | Ranking results do not automatically cancel a series. | Active draft |
+| BR-RANK-008 | Ranking and cancellation-risk evidence may support board review, but any cancellation still requires the applicable board/editorial workflow decision. | Active draft |
+
+
+---
 
 ---
 
@@ -534,11 +583,11 @@
 |---|---|---|
 | BR-NOTIF-001 | A notification must be addressed to exactly one recipient user. | Active draft |
 | BR-NOTIF-002 | Notifications are used for in-app MVP messages, not email or push notifications. | Active draft |
-| BR-NOTIF-003 | A notification may optionally reference a related business entity such as a series, chapter, page task, proposal, board poll, or ranking snapshot. | Active draft |
+| BR-NOTIF-003 | A notification may optionally reference a related business entity such as a series, chapter, page task, proposal, board poll, or ranking result. | Active draft |
 | BR-NOTIF-004 | If `related_entity_type` is provided, `related_entity_id` must also be provided, and vice versa. | Active draft |
 | BR-NOTIF-005 | A notification is considered unread when `read_at_utc IS NULL`. | Active draft |
 | BR-NOTIF-006 | When a user reads a notification, the system records `read_at_utc`. | Active draft |
-| BR-NOTIF-007 | Ranking warning notifications should be created when a ranking snapshot shows high cancellation risk for a series. | Active draft |
+| BR-NOTIF-007 | Ranking warning notifications should be created when a ranking evidence indicates high cancellation risk for a series. | Active draft |
 | BR-NOTIF-008 | Ranking warning notifications should be sent to active Mangaka contributors of the affected series. | Active draft |
 | BR-NOTIF-009 | Task assignment notifications should be sent to the assigned user when a page task is created. | Active draft |
 | BR-NOTIF-010 | Review result notifications should be sent to relevant contributors when a proposal or chapter review decision is recorded. | Active draft |
@@ -556,11 +605,11 @@
 |---|---|---|
 | BR-HIST-001 | MVP does not use separate status-history tables for every workflow entity. | Active draft |
 | BR-HIST-002 | The current workflow state of an entity is stored directly on the main entity using `status_code`. | Active draft |
-| BR-HIST-003 | Important workflow events should be represented through existing domain records where applicable, such as proposal records, board polls, board votes, chapter reviews, page versions, task records, ranking snapshots, and notifications. | Active draft |
+| BR-HIST-003 | Important workflow events should be represented through existing domain records where applicable, such as proposal records, board polls, board votes, chapter reviews, page versions, task records, ranking results, and notifications. | Active draft |
 | BR-HIST-004 | Audit logs should record important workflow actions that require traceability, such as approvals, cancellations, status changes, task changes, board poll actions, and account actions. | Active draft |
 | BR-HIST-005 | Notifications are used to inform actors of important events, not as the authoritative status history. | Active draft |
 | BR-HIST-006 | `updated_at_utc` represents the latest update time for operational display and should not be treated as a complete status transition timeline. | Active draft |
-| BR-HIST-007 | Specific workflow timestamps, such as `submitted_at_utc`, `reviewed_at_utc`, `voted_at_utc`, `created_at_utc`, and `released_at_utc`, should be used where they describe meaningful business events. | Active draft |
+| BR-HIST-007 | Specific workflow timestamps, such as `submitted_at_utc`, `reviewed_at_utc`, `entered_at_utc`, `created_at_utc`, and `released_at_utc`, should be used where they describe meaningful business events. | Active draft |
 | BR-HIST-008 | Detailed status transition history tables are future scope unless specifically required for audit demonstration or advanced workflow analytics. | Active draft |
 
 ---

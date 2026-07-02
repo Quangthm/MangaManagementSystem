@@ -49,6 +49,21 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Quer
                 await _seriesProposalRepository.IsActiveTantouEditorContributorAsync(
                     proposal.SeriesId, request.ActorUserId, cancellationToken);
 
+            // Query all active Tantou Editor contributors for this series.
+            var activeTantouEditors = await _seriesProposalRepository
+                .GetActiveTantouEditorContributorsAsync(proposal.SeriesId, cancellationToken);
+
+            var activeEditorDtos = activeTantouEditors
+                .Select(info => new ProposalActiveEditorContributorDto(
+                    info.UserId,
+                    info.DisplayName,
+                    info.Username,
+                    info.StartedAtUtc))
+                .ToList();
+
+            bool hasOtherActiveTantouEditor = activeTantouEditors.Any(
+                editor => editor.UserId != request.ActorUserId);
+
             // Claim is represented by active Tantou Editor contributor membership.
             bool currentActorHasClaimed = currentActorIsActiveTantouEditorContributor;
 
@@ -105,7 +120,9 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Quer
                 CanClaim: canClaim,
                 CanRequestRevision: canActOnDecision,
                 CanPassToBoard: canActOnDecision,
-                CanCancel: canActOnDecision);
+                CanCancel: canActOnDecision,
+                ActiveTantouEditors: activeEditorDtos,
+                HasOtherActiveTantouEditor: hasOtherActiveTantouEditor);
         }
 
         private static IReadOnlyList<GenreDto> MapGenres(IEnumerable<Domain.Entities.Genre>? genres)

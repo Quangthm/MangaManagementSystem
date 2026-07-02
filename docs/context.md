@@ -41,7 +41,7 @@ The MVP should stay focused and avoid unnecessary tables unless a table represen
 | Page tasks | Use `ChapterPageTask` as the task header and `ChapterPageTaskRegion` to link one or more target regions; the task's page context is derived from linked `PageRegion` records, not from a direct `chapter_page_id` column on `ChapterPageTask`. |
 | Editorial review | Store final chapter-level review decisions in `ChapterEditorialReview`. Page annotations support the review but do not replace chapter-level decisions. |
 | Publication planning | Use chapter-level planned release dates and release timestamps. Mangaka may provide/update preferred publication frequency only while the series is in `PROPOSAL_DRAFT`; Editorial Board Chief specifies the official frequency in a `START_SERIALIZATION` poll, and an approved poll applies that frequency to `Series.publication_frequency_code`. After board decision, Mangaka may request a frequency change through in-app notification, but only Editorial Board Chief may directly change the official frequency with a required audit reason. |
-| Ranking | Use simulated/manual reader vote input entered by Editorial Board Members and time-based `SeriesRankingSnapshot`. No public reader module in MVP. |
+| Ranking | Use `PublicationPeriod`, `SeriesVoteInput`, and a dynamic ranking view (`manga.vw_SeriesRanking`) based on simulated/manual series-level vote input entered by Editorial Board Members. No public reader module and no `SeriesRankingSnapshot` finalization table in MVP. |
 | Notifications | Use in-app notifications only. Notifications are not the audit trail. |
 | Auditability | Use current status on main records plus domain records and audit logs. Avoid separate status-history tables. |
 | AI support | AI suggestions are advisory and human-reviewed. Accepted region output is saved as `PageRegion`; final translated pages are saved as `ChapterPageVersion`. |
@@ -81,9 +81,9 @@ The project uses **permission-based actor grouping** for shared features and rol
 | Mangaka | Creates and manages series, proposals, chapters, pages, page versions, regions for production, task assignments, assistant task review, chapter submission, ranking monitoring, and response to editorial feedback. |
 | Assistant | Views assigned page tasks, sees linked regions, uploads completed output as a new page version, and tracks task history. |
 | Tantou Editor | Reviews proposals and chapters, views/claims proposals from the editorial review queue, uses page regions and annotations for feedback, records chapter-level editorial decisions, may review translation-related issues, and monitors publication/ranking context. |
-| Editorial Board Member | Views board polls, votes approve/reject/abstain, provides rejection reasons, enters simulated/aggregated reader vote input, and views ranking/cancellation-risk evidence. |
+| Editorial Board Member | Views board polls, votes approve/reject/abstain, provides rejection reasons, enters simulated/aggregated series vote input, and views ranking/cancellation-risk evidence. |
 | Editorial Board Chief | Opens, closes, and cancels board polls; specifies publication frequency when opening `START_SERIALIZATION` polls; may directly change official series publication frequency with a required audit reason; may also vote approve/reject/abstain; provides rejection reasons when voting reject; and views ranking/cancellation-risk evidence. |
-| Admin | Manages accounts, file deletion workflow, audit visibility, traceability, and system-level management. Admin does not own chapter cancellation overrides, publication scheduling, or simulated reader vote input in MVP. |
+| Admin | Manages accounts, file deletion workflow, audit visibility, traceability, and system-level management. Admin does not own chapter cancellation overrides, publication scheduling, or simulated series vote input in MVP. |
 
 ### 3.2 Actor Consolidation Decisions
 
@@ -414,6 +414,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 - The MVP does not require a `replacement_of_chapter_id` relationship; the cancelled chapter remains read-only historical reference and redo work belongs to the new chapter.
 - Admin cancellation without editorial review is not allowed in MVP.
 
+
 ## 4.12 Publication Planning
 
 - Detailed publication planning is chapter-level through `Chapter.planned_release_date` and `Chapter.status_code`.
@@ -429,30 +430,52 @@ The project uses **permission-based actor grouping** for shared features and rol
 - Editorial Board Chief may directly change `Series.publication_frequency_code` only after providing a required reason that must be written to the audit log.
 - The MVP does not store publication frequency history.
 - Delayed chapters can be derived from planned release date rather than a separate delay status.
+- `PublicationPeriod` stores business calendar periods for weekly, monthly, and yearly scheduling/ranking buckets.
+- Weekly publication periods start on Monday and end on Sunday.
+- A weekly publication period belongs to the month that contains at least four days of that Monday-Sunday week, so a week may start in the previous month while still being named as the next month's week.
+- Monthly periods follow first-day-to-last-day calendar month boundaries.
+- Yearly periods follow January 1 to December 31 calendar year boundaries.
+- Publication period membership is determined by the publication business date, not the raw UTC date.
+- For scheduled chapters, the publication business date is usually `Chapter.planned_release_date`.
+- For released chapters, the release business date is derived by converting `Chapter.released_at_utc` to Vietnam publication time (UTC+7) and taking the date part.
+- Ranking and publication-period reports must not use `CAST(released_at_utc AS DATE)` in UTC as the business period date.
+- For `WEEKLY` series, the next chapter planned release date must fall inside the next weekly `PublicationPeriod` after the previous planned chapter's weekly period.
+- For `MONTHLY` series, the next chapter planned release date must fall inside the next monthly `PublicationPeriod` after the previous planned chapter's monthly period.
+- Weekly default scheduling may use previous planned release date + 7 days, while monthly default scheduling may use the same day number in the next month or the last day of that month when needed.
+- Late actual release timestamps do not automatically shift future planned schedule periods unless an authorized user reschedules the chapter.
 
-## 4.13 Ranking and Reader Vote Input
 
-### Ranking Snapshot
+## 4.13 Ranking and Series Vote Input
 
-- Ranking data is stored as time-based `SeriesRankingSnapshot`, not permanent `Series` attributes.
-- Each snapshot represents one series for one ranking period.
-- A series may have many snapshots over time.
-- One series may have only one snapshot per ranking period type and period start date.
-- Current rank is derived from the latest relevant snapshot.
-- If no snapshot exists, the series has no current ranking.
-- Ranking snapshots do not automatically cancel a series.
-- Cancellation risk indicators may be stored as supporting information.
-- Ranking snapshots are generated from simulated/manual reader vote input in MVP.
+### PublicationPeriod
 
-### Reader Vote Input
+- `PublicationPeriod` provides the weekly, monthly, and yearly business periods used by ranking and publication reports.
+- `period_name` is a unique human-readable label such as `2026_JULY_WEEK1`.
+- `period_type_code` uses `WEEKLY`, `MONTHLY`, or `YEARLY`.
+- `period_start_date` and `period_end_date` are business calendar dates, not raw UTC timestamps.
+
+### Series Vote Input
 
 - There is no public reader voting module in MVP.
-- Editorial Board Members may enter simulated or aggregated reader vote input for demo purposes.
-- Reader vote input is recorded for released chapters.
-- A released chapter should have at most one aggregated reader vote input record in MVP.
-- Vote count and feedback count cannot be negative.
-- Average rating must be within the allowed range when provided.
-- Reader vote input records the timestamp and entered-by user.
+- Editorial Board Members may enter simulated or aggregated series-level vote input for demo/reporting purposes.
+- Vote input is tied to one `PublicationPeriod` and one `Series`.
+- One series may have only one `SeriesVoteInput` row per publication period.
+- `rating_count` is the number of rating/vote submissions in that period.
+- `average_rating` is the average score from those rating/vote submissions and must be between 0 and 10.
+- `reading_count` is the number of readers/views/follows reported for that period.
+- `rating_count` and `reading_count` must be greater than zero, and `rating_count` must not exceed `reading_count`.
+- `data_source_note` may explain the report, website, spreadsheet, or other evidence used for manual input.
+- Vote input records entered/updated user IDs and UTC timestamps for traceability.
+
+### Dynamic Series Ranking
+
+- Ranking is calculated dynamically from `SeriesVoteInput`, `PublicationPeriod`, and `Series`.
+- The MVP does not use `SeriesRankingSnapshot` because there is no ranking finalization workflow.
+- `manga.vw_SeriesRanking` computes `ranking_score = average_rating * LOG10(1 + rating_count) + reading_count * 0.001`.
+- Rank position is computed with `DENSE_RANK()` partitioned by `publication_period_id`.
+- `ranking_score` and `rank_position` are derived values and should not be stored as duplicated `Series` attributes unless later profiling proves caching is necessary.
+- Ranking results do not automatically cancel a series.
+- Ranking evidence may support board or editorial review, but cancellation still requires the applicable workflow decision.
 
 ## 4.14 Notifications
 
@@ -469,7 +492,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 
 - Avoid separate status-history tables unless specifically required.
 - Current workflow status is stored directly on main records using `status_code`.
-- Important events are represented by domain records such as proposals, board polls, votes, chapter reviews, page versions, task records, ranking snapshots, notifications, and audit logs.
+- Important events are represented by domain records such as proposals, board polls, votes, chapter reviews, page versions, task records, series vote inputs, dynamic ranking results, notifications, and audit logs.
 - Notifications are not authoritative history.
 - `updated_at_utc` is operational metadata, not a full timeline.
 - Specific event timestamps should be used where meaningful.
@@ -499,7 +522,7 @@ The functional requirements are organized into these groups:
 15. Chapter Editorial Review and Submission
 16. Chapter Cancellation
 17. Publication Planning
-18. Ranking and Reader Vote Input
+18. Ranking and Series Vote Input
 19. Notifications
 20. Status History and Auditability
 
@@ -536,8 +559,8 @@ When implementing, functional requirements should remain traceable to source bus
 - `manga.ChapterPageTask`
 - `manga.ChapterPageTaskRegion`
 - `manga.ChapterEditorialReview`
-- `manga.ReaderVoteInput`
-- `manga.SeriesRankingSnapshot`
+- `manga.SeriesVoteInput`
+- `manga.vw_SeriesRanking`
 - `manga.Notification`
 
 ### 6.3 Audit
@@ -700,7 +723,7 @@ Use direct `status_code` or fixed code columns with database constraints where a
 
 - Account approval/activation/disable management
 - File deletion workflow where permitted
-- Ranking snapshot view
+- Series ranking view
 - Audit log / traceability view
 - Admin dashboard for workflow health
 
@@ -785,7 +808,7 @@ Do not use `ChapterSubmission` in MVP.
 
 ### 10.7 Ranking
 
-Use reader vote input + ranking snapshots.
+Use series vote input + dynamic ranking results.
 
 Do not build public reader voting/accounts for MVP.
 
@@ -828,7 +851,7 @@ Do not assume or add:
 8. ChapterPageTask + task submission/review
 9. ChapterEditorialReview and chapter status transitions
 10. Publication scheduling and release timestamps
-11. ReaderVoteInput + SeriesRankingSnapshot
+11. PublicationPeriod + SeriesVoteInput + vw_SeriesRanking
 12. Notifications
 13. Audit logging / traceability screens
 14. Optional AI segmentation/OCR/translation support

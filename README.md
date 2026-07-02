@@ -1,6 +1,6 @@
 # Manga Creation Workflow and Publishing Management System
 
-> A university MVP project for manga production workflow management, proposal review, chapter/page versioning, assistant task coordination, editorial review, board polling, publication planning, simulated ranking, notifications, and auditability.
+> A university MVP project for manga production workflow management, proposal review, chapter/page versioning, assistant task coordination, editorial review, board polling, publication planning, simulated/dynamic ranking, notifications, and auditability.
 
 ---
 
@@ -19,8 +19,8 @@ The MVP focuses on:
 - page regions, annotations, and assistant tasks,
 - chapter-level editorial review,
 - board poll and vote workflow,
-- chapter release planning,
-- simulated reader vote input and ranking snapshots,
+- publication-period-based chapter release planning,
+- series-level simulated/manual vote input and dynamic ranking,
 - in-app notifications,
 - audit logs and workflow traceability,
 - optional AI-assisted segmentation/OCR/translation suggestions.
@@ -55,8 +55,8 @@ Do **not** treat this repository as production-ready.
 | Annotations | Store annotations through linked `PageRegion` records, not direct annotation coordinates. |
 | Page tasks | Use `ChapterPageTask` as the task header and `ChapterPageTaskRegion` to link one or more target regions; page context is derived from linked regions. |
 | Editorial review | Store final chapter-level review decisions in `ChapterEditorialReview`. |
-| Publication planning | Use chapter-level planned release dates and release timestamps. Mangaka may provide/update preferred publication frequency only while the series is in `PROPOSAL_DRAFT`; Editorial Board Chief specifies official frequency in a `START_SERIALIZATION` poll, and an approved poll applies that frequency. After board decision, Mangaka may request a change through in-app notification, but only Editorial Board Chief may directly change the official frequency with a required audit reason. |
-| Ranking | Use simulated/manual reader vote input entered by Editorial Board Members and time-based `SeriesRankingSnapshot`. |
+| Publication planning | Use `PublicationPeriod` for weekly, monthly, and yearly business calendar periods. Chapter scheduling remains chapter-level through `Chapter.planned_release_date` and release timestamps. Mangaka may provide/update preferred publication frequency only while the series is in `PROPOSAL_DRAFT`; Editorial Board Chief specifies official frequency in a `START_SERIALIZATION` poll, and an approved poll applies that frequency. After board decision, Mangaka may request a change through in-app notification, but only Editorial Board Chief may directly change the official frequency with a required audit reason. |
+| Ranking | Use series-level simulated/manual vote input entered by Editorial Board Members in `SeriesVoteInput`, tied to `PublicationPeriod`. Rankings are calculated dynamically through `vw_SeriesRanking`; no `SeriesRankingSnapshot` table is used in the current MVP workflow. |
 | Notifications | Use in-app notifications only. Notifications are not the audit trail. |
 | Auditability | Use current status on main records plus domain records and audit logs. Avoid generic status-history tables. |
 | AI support | AI suggestions are advisory and human-reviewed. Accepted regions are saved as `PageRegion`; final translated pages are saved as `ChapterPageVersion`. |
@@ -168,7 +168,7 @@ The project uses both role-based actors and shared permission-based actor groups
 5. Revision and cancellation decisions require meaningful comments or a markup file.
 6. Creating a chapter editorial review updates `Chapter.status_code` according to the decision.
 
-### 5.6 Board Poll, Publication Frequency, and Ranking Workflow
+### 5.6 Board Poll, Publication Frequency, Scheduling, and Ranking Workflow
 
 1. Editorial Board Chief may open board polls for `START_SERIALIZATION` or `CANCEL_SERIALIZATION`.
 2. `START_SERIALIZATION` polls require the Editorial Board Chief to specify the publication frequency to apply if approved.
@@ -180,8 +180,15 @@ The project uses both role-based actors and shared permission-based actor groups
 8. Approved `START_SERIALIZATION` poll results apply the board-specified publication frequency as the official series frequency.
 9. After board decision, Mangaka may request a publication frequency change through in-app notification to the Editorial Board Chief.
 10. Editorial Board Chief may directly change official publication frequency only with a required audit reason.
-11. Editorial Board Members enter simulated reader vote input to support ranking demonstration without a public reader module.
-12. Ranking snapshots are stored over time and can support editorial/board decisions.
+11. `PublicationPeriod` defines weekly, monthly, and yearly business calendar buckets used for release planning and ranking reports.
+12. Weekly publication periods start on Monday and end on Sunday, and the owning month is the month with at least four days in that week.
+13. Monthly and yearly publication periods follow normal calendar start and end dates.
+14. For `WEEKLY` series, the next chapter's `planned_release_date` must be inside the next weekly `PublicationPeriod` after the previous planned chapter's period.
+15. For `MONTHLY` series, the next chapter's `planned_release_date` must be inside the next monthly `PublicationPeriod` after the previous planned chapter's month.
+16. For `IRREGULAR` series, the system does not enforce next-week or next-month planned release date rules.
+17. Publication period membership uses the publication business date, not the raw UTC date. Scheduled chapters normally use `Chapter.planned_release_date`; released chapters use `released_at_utc` converted to Vietnam publication time and then cast to a date.
+18. Editorial Board Members enter series-level simulated/manual vote input in `SeriesVoteInput` for a selected `PublicationPeriod`.
+19. Rankings are calculated dynamically from `SeriesVoteInput` through `vw_SeriesRanking`; the current MVP does not use `SeriesRankingSnapshot` because there is no ranking-finalization workflow.
 
 ---
 
@@ -319,14 +326,24 @@ Key rules:
 - Editorial Board Chief may directly change official publication frequency only with a required audit reason.
 - No separate `SeriesBoardDecision` table is required for MVP.
 
-### 7.8 Ranking, Notifications, and Auditability
+### 7.8 Publication Periods, Ranking, Notifications, and Auditability
 
-Handles Editorial Board Member-entered simulated reader vote input, ranking snapshots, in-app notifications, and audit evidence.
+Handles publication-period buckets, chapter release planning support, Editorial Board Member-entered series vote input, dynamic ranking, in-app notifications, and audit evidence.
 
 Key rules:
 
-- Ranking uses simulated/manual aggregated reader vote input entered by Editorial Board Members.
-- Ranking snapshots are stored by period.
+- `PublicationPeriod` stores weekly, monthly, and yearly business calendar periods.
+- Weekly periods run Monday through Sunday and are named after the month that owns at least four days of that week.
+- Monthly and yearly periods follow normal calendar start and end dates.
+- Publication period membership is determined by the publication business date, not by the raw UTC date.
+- Scheduled chapters normally use `Chapter.planned_release_date` as their publication business date.
+- Released chapters use `released_at_utc` converted to Vietnam publication time, then cast to the date part.
+- `WEEKLY` and `MONTHLY` publication frequencies constrain the next chapter's `planned_release_date` to the next matching `PublicationPeriod`.
+- `IRREGULAR` publication frequency does not enforce a fixed weekly or monthly scheduling bucket.
+- Ranking uses series-level simulated/manual aggregated vote input entered by Editorial Board Members in `SeriesVoteInput`.
+- `SeriesVoteInput` stores one row per series and publication period, including rating count, average rating, reading count, data source note, and entry metadata.
+- `vw_SeriesRanking` calculates ranking score and rank position dynamically from `SeriesVoteInput`.
+- The current MVP does not use `SeriesRankingSnapshot` because there is no ranking-finalization workflow.
 - Notifications help users notice workflow events, including publication-frequency change requests, but are not the audit trail.
 - Important workflow actions are audit-logged.
 - Avoid separate status-history tables unless a future requirement needs them.
@@ -373,11 +390,13 @@ AI must **not**:
 | Proposal snapshots | `SeriesProposal` snapshots important submitted proposal content, not derived/current metadata. It does not snapshot genre, tag, or cover file; review screens load current locked series metadata for those values. |
 | Chapter submission | Use `Chapter.status_code = UNDER_REVIEW`; do not create `ChapterSubmission`. |
 | Board decision and publication frequency | Editorial Board Chief owns normal board poll opening, closing, and cancellation; must specify publication frequency for `START_SERIALIZATION`; approved `START_SERIALIZATION` results apply that frequency; compute result from `SeriesBoardPoll` and `SeriesBoardVote`; do not create `SeriesBoardDecision`. |
+| Publication periods | Use `PublicationPeriod` for weekly, monthly, and yearly business calendar buckets. Weekly periods are Monday-Sunday and belong to the month with at least four days in that week. Publication period membership uses publication business date, not raw UTC date. |
+| Dynamic ranking | Use `SeriesVoteInput` plus `vw_SeriesRanking`; do not create `SeriesRankingSnapshot` unless a future finalized-ranking workflow is introduced. |
 | Translation | Do not create structured translation tables for MVP; save final edited/translated page as `ChapterPageVersion`. |
 | AI history | Do not store persistent AI job history if accepted AI output as `PageRegion` is enough. |
 | Annotation coordinates | Do not store direct annotation coordinates; derive location from linked `PageRegion`. |
 | Contributor ownership | Use `SeriesContributor`; do not store direct lead Mangaka ownership on `Series`. |
-| Reader module | No public reader module in MVP; ranking uses simulated/manual aggregated input. |
+| Reader module | No public reader module in MVP; ranking uses series-level simulated/manual aggregated input entered by Editorial Board Members. |
 | Admin scope | Admin includes account, audit, traceability, file deletion, and system-level management responsibilities for MVP, but not chapter cancellation overrides, board poll control, official publication-frequency changes, publication scheduling, or simulated reader vote input. |
 
 ---

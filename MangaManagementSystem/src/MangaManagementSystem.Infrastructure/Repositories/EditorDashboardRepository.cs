@@ -31,19 +31,54 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         public async Task<EditorDashboardData> GetDashboardDataAsync(
             Guid actorUserId, int proposalQueueTake, int recentSeriesTake, CancellationToken ct = default)
         {
-            // KPI counts (computed in SQL).
+            // Active series IDs for the current Tantou Editor.
+            var activeSeriesIds = await _dbContext.ActiveSeriesContributors
+                .AsNoTracking()
+                .Where(asc => asc.UserId == actorUserId)
+                .Select(asc => asc.SeriesId)
+                .ToListAsync(ct);
+
+            // Pending Proposals: global claimable queue (all Tantou Editors discover unclaimed
+            // proposals from here). Not scoped to active contributor series.
             int pendingProposalCount = await _dbContext.SeriesProposals
                 .AsNoTracking()
                 .CountAsync(sp => sp.StatusCode == ProposalStatusUnderEditorialReview, ct);
 
-            int chaptersUnderReviewCount = await _dbContext.Chapters
-                .AsNoTracking()
-                .CountAsync(c => c.StatusCode == ChapterStatusUnderReview, ct);
+            // Chapters Under Review: scoped to series the editor actively contributes to.
+            int chaptersUnderReviewCount;
+            if (activeSeriesIds.Count > 0)
+            {
+                chaptersUnderReviewCount = await _dbContext.Chapters
+                    .AsNoTracking()
+                    .CountAsync(c => c.StatusCode == ChapterStatusUnderReview
+                        && activeSeriesIds.Contains(c.SeriesId), ct);
+            }
+            else
+            {
+                chaptersUnderReviewCount = 0;
+            }
 
-            int pendingAnnotationCount = await _dbContext.ChapterPageAnnotations
-                .AsNoTracking()
-                .CountAsync(a => a.ResolvedAtUtc == null, ct);
+            // Pending Annotations: unresolved annotations only for chapters/pages belonging to
+            // the editor's active contributor series.
+            int pendingAnnotationCount;
+            if (activeSeriesIds.Count > 0)
+            {
+                pendingAnnotationCount = await _dbContext.ChapterPageAnnotations
+                    .AsNoTracking()
+                    .Where(a => a.ResolvedAtUtc == null)
+                    .Where(a => a.PageRegions.Any(pr =>
+                        pr.ChapterPageVersion != null &&
+                        pr.ChapterPageVersion.ChapterPage != null &&
+                        pr.ChapterPageVersion.ChapterPage.Chapter != null &&
+                        activeSeriesIds.Contains(pr.ChapterPageVersion.ChapterPage.Chapter.SeriesId)))
+                    .CountAsync(ct);
+            }
+            else
+            {
+                pendingAnnotationCount = 0;
+            }
 
+            // Serialized Series: already scoped to ActiveSeriesContributors.
             int serializedSeriesCount = await _dbContext.Series
                 .AsNoTracking()
                 .Where(s => s.StatusCode == SeriesStatusSerialized)
