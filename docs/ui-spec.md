@@ -2,7 +2,7 @@
 
 **Project:** Manga Creation Workflow and Publishing Management System  
 **Target UI:** Blazor Server / MudBlazor MVP  
-**Last updated:** 2026-06-09  
+**Last updated:** 2026-07-02  
 **Purpose:** Define the UI behavior for Mangaka-owned series drafting, slug usage, stable series URLs, and the centralized chapter-level workspace.
 
 ---
@@ -883,9 +883,21 @@ Display selected content.
 
 | Decision action | Required input | Result | UI meaning |
 |---|---|---|---|
-| Approve Chapter | None required | `Chapter.status_code = APPROVED` | Chapter may proceed toward scheduling/release. |
+| Approve Chapter with no planned release date | None required | `Chapter.status_code = APPROVED` | Chapter is accepted but still needs a planned release date before it becomes scheduled. |
+| Approve Chapter with an existing valid planned release date | None required | `Chapter.status_code = SCHEDULED` | Chapter is accepted, scheduled, and locked from Mangaka/page content mutation workflows. |
 | Request Revision | Non-blank comments; optional markup file | `Chapter.status_code = REVISION_REQUESTED` | Same chapter becomes editable again and can receive new page versions. |
 | Cancel Chapter | Non-blank comments; optional markup file | `Chapter.status_code = CANCELLED` | Current chapter attempt is terminal/read-only and cannot be edited or resubmitted. |
+
+### Scheduled and on-hold chapter UI behavior
+
+| Actor / status | UI behavior |
+|---|---|
+| Mangaka viewing `SCHEDULED` chapter | Show read-only state and message: `This chapter is scheduled. Content changes are locked. Contact the editor to reschedule or put the chapter on hold.` |
+| Mangaka viewing `ON_HOLD` chapter | Show read-only/on-hold state and hold reason when available. Do not show recovery actions yet. |
+| Tantou Editor viewing `SCHEDULED` chapter | Show planned release date, allowed period information, Reschedule action, and Put On Hold action. |
+| Tantou Editor rescheduling `SCHEDULED` chapter | Require the new date to pass the same publication-frequency validation as normal scheduling. |
+| Tantou Editor putting `SCHEDULED` chapter on hold | Require a non-blank operational/editorial reason. |
+| Any user viewing `SCHEDULED` or `ON_HOLD` workspace | Keep read-only viewing available where authorized, but hide/disable page/content mutation actions. |
 
 ### Cancelled chapter UI behavior
 
@@ -1008,14 +1020,41 @@ For MVP, symbolic `returnContext` is safer and easier to avoid open-redirect mis
 
 Support chapter planned release date selection according to the official `Series.publication_frequency_code` and the relevant `PublicationPeriod`.
 
+Scheduling is chapter-level. The UI must use `Chapter.planned_release_date` and `Chapter.status_code`; it must not present `SCHEDULED` as a series status.
+
+### Actor behavior
+
+| Actor | Allowed behavior |
+|---|---|
+| Mangaka | May set a planned release date while the chapter is still editable/plannable, such as `DRAFT`, `REVISION_REQUESTED`, or `APPROVED`, subject to backend validation. |
+| Mangaka | Cannot edit planned release date, pages, page versions, or content when the chapter is `SCHEDULED` or `ON_HOLD`. |
+| Tantou Editor | May set a planned release date while the chapter is plannable. |
+| Tantou Editor | May reschedule a `SCHEDULED` chapter if the new date stays within the allowed publication period rule. |
+| Tantou Editor | May put a `SCHEDULED` chapter `ON_HOLD` with a required reason. |
+| Editorial Board Chief | Controls official series publication frequency through board/frequency workflows, not chapter-level content scheduling. |
+
 ### Scheduling behavior
 
-| Frequency | UI behavior |
+| Case | Frequency | UI behavior |
+|---|---|---|
+| Previous planned non-cancelled chapter exists | `WEEKLY` | Suggest previous planned release date + 7 days and require the final chosen date to stay inside the next weekly `PublicationPeriod` after the previous chapter's weekly period. |
+| Previous planned non-cancelled chapter exists | `MONTHLY` | Suggest the same day number in the next month when possible, otherwise the last day of the next month, and require the final chosen date to stay inside the next monthly `PublicationPeriod` after the previous chapter's monthly period. |
+| No previous planned non-cancelled chapter exists | `WEEKLY` | Treat this as the first planned chapter; allow the chosen date inside the current weekly `PublicationPeriod` or the next weekly `PublicationPeriod`. |
+| No previous planned non-cancelled chapter exists | `MONTHLY` | Treat this as the first planned chapter; require the chosen date to stay inside the current monthly `PublicationPeriod`. |
+| Any case | `IRREGULAR` | Do not enforce next-week or next-month period boundaries. |
+| Any case | `NULL` | Show that the official release approach has not been decided yet; scheduling may be allowed without strict weekly/monthly validation unless a later workflow defines a stricter rule. |
+
+### Status behavior
+
+| Current chapter state/action | Result |
 |---|---|
-| `WEEKLY` | Suggest previous planned release date + 7 days and require the final chosen date to stay inside the next weekly `PublicationPeriod`. |
-| `MONTHLY` | Suggest the same day number in the next month when possible, otherwise the last day of the next month, and require the final chosen date to stay inside the next monthly `PublicationPeriod`. |
-| `IRREGULAR` | Do not enforce next-week or next-month period boundaries. |
-| `NULL` | Show that the official release approach has not been decided yet. |
+| `DRAFT` or `REVISION_REQUESTED` + valid planned date set | Planned date is saved; chapter remains editable/plannable in its current status. |
+| `UNDER_REVIEW` + editor approves + no planned date | Chapter becomes `APPROVED`. |
+| `UNDER_REVIEW` + editor approves + valid planned date exists | Chapter becomes `SCHEDULED`. |
+| `APPROVED` + valid planned date set | Chapter becomes `SCHEDULED`. |
+| `SCHEDULED` + editor reschedules | Chapter remains `SCHEDULED`. |
+| `SCHEDULED` + editor puts on hold | Chapter becomes `ON_HOLD`. |
+| `ON_HOLD` recovery | Not implemented yet; do not show resume/unschedule/release-from-hold actions. |
 
 ### PublicationPeriod display
 
@@ -1023,6 +1062,8 @@ Support chapter planned release date selection according to the official `Series
 - Weekly periods start Monday and end Sunday.
 - A weekly period is named after the month containing at least four days of that week.
 - Monthly and yearly periods follow their calendar start/end dates.
+- For first planned weekly chapters, the UI should show both the current and next weekly period as allowed ranges.
+- For first planned monthly chapters, the UI should show the current monthly period as the allowed range.
 
 ### Validation feedback
 
@@ -1032,11 +1073,26 @@ When a user selects an invalid planned release date, the UI should explain the v
 This weekly series must schedule the next chapter inside 2026_JULY_WEEK2: 2026-07-06 to 2026-07-12.
 ```
 
+```text
+This is the first planned chapter for a weekly series. Choose a date in the current week or next week publication period.
+```
+
+```text
+This is the first planned chapter for a monthly series. Choose a date in the current monthly publication period.
+```
+
 ### Business date note
 
 - Scheduled chapter period membership uses `Chapter.planned_release_date`.
 - Released chapter period reports use `released_at_utc` converted to Vietnam publication time (UTC+7), then the date part.
 - The UI must not show raw UTC date as the publication business date when period membership matters.
+
+### Scheduled lock display
+
+- A `SCHEDULED` chapter should show a clear locked state for Mangaka users.
+- The workspace may remain viewable if the user is authorized, but saved page/content mutation controls should be hidden or disabled.
+- Editor reschedule and Put On Hold actions should appear only for authorized Tantou Editors.
+- Put On Hold requires a non-blank reason before submission.
 
 ---
 
@@ -1070,4 +1126,3 @@ Display dynamic series rankings from `manga.vw_SeriesRanking` for a selected `Pu
 - Input fields are `rating_count`, `average_rating`, `reading_count`, and optional `data_source_note`.
 - Validation should reject non-positive counts, `average_rating` outside 0 to 10, and `rating_count > reading_count`.
 - The vote input screen should explain that weekly input is period-only and must not include earlier weeks.
-

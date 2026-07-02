@@ -1870,10 +1870,12 @@ Tantou Editor opens the submitted chapter review queue
 → Editor chooses one decision: APPROVED / REVISION_REQUESTED / CANCELLED
 → If decision is REVISION_REQUESTED or CANCELLED, editor enters non-blank comments
 → Editor may optionally attach an EDITORIAL_ATTACHMENT markup file
-→ Backend validates actor permission, chapter status, required comments, and optional markup file
+→ Backend validates actor permission, chapter status, required comments, optional markup file, and scheduling rules when needed
 → Backend creates manga.ChapterEditorialReview
 → Backend updates manga.Chapter.status_code according to the decision
-→ Backend writes the chapter review audit event
+→ If APPROVED and Chapter.planned_release_date is empty, Chapter.status_code becomes APPROVED
+→ If APPROVED and Chapter.planned_release_date already exists and is valid, Chapter.status_code becomes SCHEDULED
+→ Backend writes the chapter review audit event and the scheduling audit detail when approval moves the chapter to SCHEDULED
 → UI refreshes the chapter status and review history
 ```
 
@@ -1881,7 +1883,8 @@ Tantou Editor opens the submitted chapter review queue
 
 | Decision | Chapter status after review | Meaning |
 |---|---|---|
-| `APPROVED` | `APPROVED` | The chapter is accepted and may proceed toward scheduling/release. |
+| `APPROVED` with no planned release date | `APPROVED` | The chapter is accepted but not yet scheduled. |
+| `APPROVED` with a valid planned release date | `SCHEDULED` | The chapter is accepted and locked for planned release. |
 | `REVISION_REQUESTED` | `REVISION_REQUESTED` | The same chapter attempt can be edited and resubmitted with new page versions. |
 | `CANCELLED` | `CANCELLED` | The current chapter attempt is a hard stop and becomes read-only historical reference. |
 
@@ -1891,12 +1894,15 @@ Tantou Editor opens the submitted chapter review queue
 - Markup files are optional for both `REVISION_REQUESTED` and `CANCELLED`.
 - Page-specific annotations remain separate from the final chapter-level review decision.
 - `CANCELLED` is not a normal fix-and-resubmit outcome. Use `REVISION_REQUESTED` when the chapter can still be fixed.
+- Scheduling is chapter-level; this flow must never set `Series.status_code = SCHEDULED`.
+- If approval moves a chapter to `SCHEDULED`, Mangaka/page content mutation workflows become locked.
 
 ### System Should Try To
 
-- Make the difference between revision and cancellation clear in the UI.
+- Make the difference between approved-but-unscheduled and scheduled clear in the UI.
 - Preserve review decisions and page-level context.
 - Avoid deleting historical chapter materials.
+- Explain scheduled lock behavior to Mangaka users.
 
 ---
 
@@ -1943,34 +1949,50 @@ unique among non-cancelled chapters only
 
 ---
 
-## BF-PUB-001 — Plan Next Chapter Release Date by Publication Frequency
+## BF-PUB-001 — Plan Chapter Release Date by Publication Frequency
 
 **Status:** Agreed  
 **Primary actor:** Mangaka / Tantou Editor  
-**Goal:** Suggest and validate a chapter planned release date according to the series' official publication frequency and the relevant `PublicationPeriod`.
+**Goal:** Set and validate a chapter planned release date according to the series' official publication frequency and the relevant `PublicationPeriod`.
 
 ### Main Flow
 
 ```text
-User opens chapter planning/create/edit screen for a serialized series
+User opens chapter planning/create/edit screen for a serialized or publication-planned series
 → UI shows the current Series.publication_frequency_code
-→ Backend finds the latest non-cancelled chapter with planned_release_date for the same series
-→ Backend resolves the PublicationPeriod containing the previous planned_release_date
-→ If frequency is WEEKLY, backend resolves the next weekly PublicationPeriod
-→ If frequency is MONTHLY, backend resolves the next monthly PublicationPeriod
-→ Backend proposes a default planned_release_date
+→ Backend finds the latest non-cancelled chapter with planned_release_date for the same series, excluding the current chapter
+→ If a previous planned chapter exists, backend resolves the PublicationPeriod containing the previous planned_release_date
+→ If no previous planned chapter exists, backend treats the current chapter as the first planned chapter
+→ Backend resolves the allowed PublicationPeriod range according to the frequency and first/non-first rule
+→ Backend may propose a default planned_release_date
 → User may keep the default or choose another date
-→ Backend validates the chosen planned_release_date is inside the required next PublicationPeriod
-→ Backend saves Chapter.planned_release_date and chapter status according to Chapter rules
+→ Backend validates the chosen planned_release_date is inside the allowed PublicationPeriod range
+→ Backend saves Chapter.planned_release_date
+→ If the chapter was APPROVED, backend changes Chapter.status_code to SCHEDULED
+→ If the chapter is still DRAFT or REVISION_REQUESTED, backend keeps the current editable/plannable status
+→ Backend writes an audit event for planned date set or status change when applicable
 → UI refreshes the schedule display
 ```
+
+### Allowed Period Rules
+
+| Case | Frequency | Allowed planned release date |
+|---|---|---|
+| Previous planned non-cancelled chapter exists | `WEEKLY` | Inside the next weekly `PublicationPeriod` after the previous chapter's weekly period. |
+| Previous planned non-cancelled chapter exists | `MONTHLY` | Inside the next monthly `PublicationPeriod` after the previous chapter's monthly period. |
+| No previous planned non-cancelled chapter exists | `WEEKLY` | Inside the current weekly `PublicationPeriod` or the next weekly `PublicationPeriod`. |
+| No previous planned non-cancelled chapter exists | `MONTHLY` | Inside the current monthly `PublicationPeriod`. |
+| Any case | `IRREGULAR` | No weekly/monthly boundary enforcement. |
+| Any case | `NULL` | Scheduling may be allowed without strict weekly/monthly validation unless a later workflow defines stricter behavior. |
 
 ### Default Date Rules
 
 | Frequency | Default |
 |---|---|
-| `WEEKLY` | Previous planned release date + 7 days. |
-| `MONTHLY` | Same day number in the next month when possible; otherwise the last day of the next month. |
+| `WEEKLY` with previous planned chapter | Previous planned release date + 7 days. |
+| `WEEKLY` first planned chapter | A date inside the current or next weekly publication period. |
+| `MONTHLY` with previous planned chapter | Same day number in the next month when possible; otherwise the last day of the next month. |
+| `MONTHLY` first planned chapter | A date inside the current monthly publication period. |
 | `IRREGULAR` | No next-period default is required. |
 
 ### Important Notes
@@ -1980,13 +2002,65 @@ User opens chapter planning/create/edit screen for a serialized series
 - For scheduled chapters, the business publication date is usually `Chapter.planned_release_date`.
 - For released chapters, the release business date is derived from `released_at_utc` converted to Vietnam publication time (UTC+7), then taking the date part.
 - Frequency enforcement uses planned release dates. A late actual release does not automatically shift the next chapter schedule unless an authorized user reschedules it.
-- `IRREGULAR` series do not enforce next-week or next-month boundaries.
+- Scheduling is chapter-level and must not change `Series.status_code`.
+- When an approved chapter receives a valid planned release date, it becomes `SCHEDULED`.
 
 ### System Should Try To
 
 - Keep scheduling predictable while allowing date adjustment inside the allowed period.
 - Avoid classifying chapters by raw UTC date when the business date is required.
-- Explain the valid date range to the user when a chosen date is outside the required period.
+- Explain the valid date range to the user when a chosen date is outside the allowed period.
+- Clearly distinguish first planned chapter behavior from next planned chapter behavior.
+
+---
+
+
+## BF-PUB-002 — Reschedule or Hold a Scheduled Chapter
+
+**Status:** Agreed  
+**Primary actor:** Tantou Editor  
+**Goal:** Allow an editor to manage a scheduled chapter without reopening Mangaka page/content mutation workflows.
+
+### Reschedule Flow
+
+```text
+Tantou Editor opens a chapter with status SCHEDULED
+→ UI shows current planned_release_date and publication frequency
+→ Editor chooses a new planned release date and provides a reason when required by implementation
+→ Backend validates actor permission and Chapter.status_code = SCHEDULED
+→ Backend validates the new date against the same PublicationPeriod rules used for scheduling
+→ Backend updates Chapter.planned_release_date
+→ Chapter.status_code remains SCHEDULED
+→ Backend writes CHAPTER_RESCHEDULED audit detail with old/new planned date and actor
+→ UI refreshes the schedule display
+```
+
+### Put On Hold Flow
+
+```text
+Tantou Editor opens a chapter with status SCHEDULED
+→ Editor chooses Put On Hold
+→ UI requires a non-blank operational/editorial reason
+→ Backend validates actor permission, Chapter.status_code = SCHEDULED, and non-blank reason
+→ Backend changes Chapter.status_code to ON_HOLD
+→ Backend preserves planned_release_date unless a later workflow decides otherwise
+→ Backend writes CHAPTER_PUT_ON_HOLD audit detail with reason and old/new status
+→ UI refreshes the chapter as read-only/on-hold
+```
+
+### Important Notes
+
+- Mangaka users cannot reschedule a `SCHEDULED` chapter.
+- Mangaka users cannot edit chapter content or perform page/content mutation workflows while the chapter is `SCHEDULED` or `ON_HOLD`.
+- Blocked workflows include page creation, page deletion, page-version upload, assistant task output submission that creates or changes page content, and other saved page/content mutations.
+- `ON_HOLD` recovery is intentionally not defined in this flow.
+- Release automation and public release visibility are outside this flow.
+
+### System Should Try To
+
+- Keep scheduled chapters stable for release planning.
+- Give editors controlled schedule management without reopening Mangaka editing.
+- Keep hold reasons traceable and visible enough for later workflow decisions.
 
 ---
 

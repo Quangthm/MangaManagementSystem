@@ -4,6 +4,8 @@
 > **Source of truth:** This context is aligned with the latest `business-rules.md`, `functional-requirements.md`, and `user-stories.md` files.  
 > **Important warning:** This is **not** a payroll, salary, public reader, e-commerce, or full drawing application. Do **not** add modules such as salary calculation, payment processing, public reader accounts, monetization, or full professional drawing tools unless the team leader explicitly changes the scope.
 
+> **Latest scheduling alignment — 2026-07-02:** Publication scheduling is chapter-level. `SCHEDULED` applies to `Chapter.status_code`, not `Series.status_code`; approved chapters with valid planned release dates become `SCHEDULED`; scheduled/on-hold chapters lock Mangaka and page/content mutation workflows; Tantou Editors may reschedule within allowed publication-period rules or place scheduled chapters `ON_HOLD` with a required reason.
+
 ---
 
 ## 1. Project Summary
@@ -307,9 +309,12 @@ The project uses **permission-based actor grouping** for shared features and rol
 - `Chapter.status_code` stores the current workflow status only.
 - Chapter statuses include `DRAFT`, `UNDER_REVIEW`, `REVISION_REQUESTED`, `APPROVED`, `SCHEDULED`, `RELEASED`, `ON_HOLD`, and `CANCELLED`.
 - `planned_release_date` is optional until scheduling.
+- Scheduling is chapter-level. `SCHEDULED` is a chapter status and must not be applied to `Series.status_code`.
 - A chapter can be `SCHEDULED` only if it has a planned release date.
+- If an `APPROVED` chapter receives a valid planned release date, it becomes `SCHEDULED`.
 - A chapter can be `RELEASED` only if it has `released_at_utc`.
-- Editors may place a chapter `ON_HOLD` with a valid operational/editorial reason.
+- Editors may place a `SCHEDULED` chapter `ON_HOLD` with a valid operational/editorial reason.
+- `ON_HOLD` recovery is intentionally deferred to a later workflow.
 - `created_by_user_id` identifies the creator.
 - `updated_at_utc` is for operational display, not full transition history.
 
@@ -334,6 +339,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 - A `ChapterPage` may be soft-deleted from active drafts without deleting historical versions.
 - Page task output should reference the produced `ChapterPageVersion`.
 - Page annotations remain linked to page versions through one or more linked `PageRegion` records.
+- Page creation, page deletion, page-version upload, assistant task output submission that creates or changes page content, and other saved page/content mutations are blocked while a chapter is `UNDER_REVIEW`, `APPROVED`, `SCHEDULED`, `ON_HOLD`, `RELEASED`, or `CANCELLED`.
 
 ## 4.9 Chapter Page Annotation
 
@@ -391,7 +397,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 
 - MVP chapter submission is represented by changing `Chapter.status_code` to `UNDER_REVIEW`.
 - A submitted chapter consists of current active page versions of non-deleted chapter pages.
-- Page creation, deletion, and version upload are blocked while chapter is `UNDER_REVIEW`, `APPROVED`, `SCHEDULED`, `RELEASED`, or `CANCELLED`.
+- Page creation, deletion, page-version upload, assistant task output submission that creates or changes page content, and other saved page/content mutation workflows are blocked while the chapter is `UNDER_REVIEW`, `APPROVED`, `SCHEDULED`, `ON_HOLD`, `RELEASED`, or `CANCELLED`.
 - When revision is requested, the chapter becomes editable again.
 - Chapter content is stored as page-level assets through `ChapterPageVersion`.
 - Chapter-level submission file/PDF is future enhancement.
@@ -407,6 +413,8 @@ The project uses **permission-based actor grouping** for shared features and rol
 - Markup files are optional and reference `FileResource` when provided.
 - Page annotations support review; `ChapterEditorialReview` stores final chapter-level decision.
 - Creating a review updates chapter status according to decision and should be audit-logged.
+- If an editor approves a chapter that has no planned release date, the chapter becomes `APPROVED`.
+- If an editor approves a chapter that already has a valid planned release date, the chapter becomes `SCHEDULED`.
 
 ### Cancellation
 
@@ -420,10 +428,10 @@ The project uses **permission-based actor grouping** for shared features and rol
 - The MVP does not require a `replacement_of_chapter_id` relationship; the cancelled chapter remains read-only historical reference and redo work belongs to the new chapter.
 - Admin cancellation without editorial review is not allowed in MVP.
 
-
 ## 4.12 Publication Planning
 
 - Detailed publication planning is chapter-level through `Chapter.planned_release_date` and `Chapter.status_code`.
+- `SCHEDULED` is a chapter status, not a series status.
 - Series-level publication frequency is only the current high-level label stored as `Series.publication_frequency_code`.
 - Frequency values may be `WEEKLY`, `MONTHLY`, `IRREGULAR`, or `NULL`.
 - `IRREGULAR` means chapters are released when ready and do not follow a fixed weekly or monthly schedule.
@@ -445,11 +453,19 @@ The project uses **permission-based actor grouping** for shared features and rol
 - For scheduled chapters, the publication business date is usually `Chapter.planned_release_date`.
 - For released chapters, the release business date is derived by converting `Chapter.released_at_utc` to Vietnam publication time (UTC+7) and taking the date part.
 - Ranking and publication-period reports must not use `CAST(released_at_utc AS DATE)` in UTC as the business period date.
-- For `WEEKLY` series, the next chapter planned release date must fall inside the next weekly `PublicationPeriod` after the previous planned chapter's weekly period.
-- For `MONTHLY` series, the next chapter planned release date must fall inside the next monthly `PublicationPeriod` after the previous planned chapter's monthly period.
+- Scheduling validation finds the latest non-cancelled chapter in the same series with a planned release date, excluding the current chapter.
+- If a previous planned non-cancelled chapter exists, a `WEEKLY` series must schedule the current chapter inside the next weekly `PublicationPeriod` after the previous chapter's weekly period.
+- If a previous planned non-cancelled chapter exists, a `MONTHLY` series must schedule the current chapter inside the next monthly `PublicationPeriod` after the previous chapter's monthly period.
+- If no previous planned non-cancelled chapter exists, the current chapter is treated as the first planned chapter.
+- For the first planned chapter of a `WEEKLY` series, the planned release date may be inside the current weekly `PublicationPeriod` or the next weekly `PublicationPeriod`.
+- For the first planned chapter of a `MONTHLY` series, the planned release date must be inside the current monthly `PublicationPeriod`.
+- `IRREGULAR` series do not enforce next-week or next-month planned release boundaries.
+- If official frequency is `NULL`, the system may allow scheduling without strict weekly/monthly validation unless a later workflow defines a stricter rule.
 - Weekly default scheduling may use previous planned release date + 7 days, while monthly default scheduling may use the same day number in the next month or the last day of that month when needed.
 - Late actual release timestamps do not automatically shift future planned schedule periods unless an authorized user reschedules the chapter.
-
+- When a chapter is `SCHEDULED`, Mangaka and page/content mutation workflows are locked.
+- Tantou Editors may reschedule a `SCHEDULED` chapter within the allowed period rule or place it `ON_HOLD` with a required reason.
+- Recovery from `ON_HOLD`, release automation, and public release visibility are deferred to later tasks.
 
 ## 4.13 Ranking and Series Vote Input
 
