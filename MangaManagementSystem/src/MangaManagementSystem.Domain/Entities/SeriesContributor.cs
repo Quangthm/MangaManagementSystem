@@ -7,6 +7,7 @@ namespace MangaManagementSystem.Domain.Entities
     {
         public Guid SeriesContributorId { get; set; }
         public Guid SeriesId { get; set; }
+        public Series? Series { get; set; }
         public Guid UserId { get; set; }
         public User? User { get; set; }
         public DateTime StartDate { get; set; }

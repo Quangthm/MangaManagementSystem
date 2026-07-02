@@ -14,7 +14,7 @@ namespace MangaManagementSystem.Domain.Entities
         public string TaskDescription { get; set; } = null!;
         public byte PriorityLevel { get; set; } = 3;
         public DateTime DueAtUtc { get; set; }
-        public decimal? CompensationAmount { get; set; }
+        public decimal CompensationAmount { get; set; }
         public Guid? CompletedPageVersionId { get; set; }
         public ChapterPageVersion? CompletedPageVersion { get; set; }
         public DateTime CreatedAtUtc { get; set; }

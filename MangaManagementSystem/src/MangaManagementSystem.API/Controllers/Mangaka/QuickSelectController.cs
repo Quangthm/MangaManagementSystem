@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 namespace MangaManagementSystem.API.Controllers.Mangaka
 {
     [ApiController]
+    [Authorize]
     [Route("api/mangaka")]
     public class QuickSelectController : ControllerBase
     {

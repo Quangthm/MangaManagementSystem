@@ -16,6 +16,7 @@ namespace MangaManagementSystem.API.Controllers.Editor
     /// dispatches one MediatR query, and returns the result. No business logic, EF, or SQL here.
     /// </summary>
     [ApiController]
+    [Authorize]
     [Route("api/editor/dashboard")]
     public class EditorDashboardController : ControllerBase
     {

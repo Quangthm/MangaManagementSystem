@@ -65,7 +65,10 @@ namespace MangaManagementSystem.Application.Services
             entity.AssignedToUserId = dto.AssignedToUserId;
             entity.TypeCode = dto.TypeCode;
             entity.StatusCode = dto.StatusCode;
+            entity.TaskTitle = dto.TaskTitle ?? entity.TaskTitle;
+            entity.TaskDescription = dto.TaskDescription ?? entity.TaskDescription;
             entity.PriorityLevel = (byte)dto.PriorityLevel;
+            entity.CompensationAmount = dto.CompensationAmount ?? entity.CompensationAmount;
             entity.DueAtUtc = dto.DueAtUtc ?? entity.DueAtUtc;
             entity.CompletedPageVersionId = dto.CompletedPageVersionId;
 

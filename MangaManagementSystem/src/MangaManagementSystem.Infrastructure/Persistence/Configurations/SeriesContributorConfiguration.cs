@@ -14,11 +14,12 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
             });
             builder.HasKey(sc => sc.SeriesContributorId);
             builder.Property(sc => sc.SeriesContributorId).ValueGeneratedOnAdd();
-            builder.Property(sc => sc.StartDate).IsRequired();
+            builder.Property(sc => sc.StartDate).IsRequired().HasColumnType("date");
+            builder.Property(sc => sc.EndDate).HasColumnType("date");
             builder.HasIndex(sc => new { sc.SeriesId, sc.UserId, sc.StartDate }).IsUnique();
             builder.HasIndex(sc => new { sc.SeriesId, sc.UserId }).IsUnique().HasDatabaseName("ux_series_contributor_active_role").HasFilter("end_date IS NULL");
-            builder.HasIndex(sc => sc.SeriesId).HasDatabaseName("ix_series_contributor_series_active").HasFilter("end_date IS NULL");
-            builder.HasIndex(sc => sc.UserId).HasDatabaseName("ix_series_contributor_user_active").HasFilter("end_date IS NULL");
+            builder.HasIndex(sc => new { sc.SeriesId, sc.EndDate }).HasDatabaseName("ix_series_contributor_series_active");
+            builder.HasIndex(sc => new { sc.UserId, sc.EndDate }).HasDatabaseName("ix_series_contributor_user_active");
             // check constraint moved into ToTable above
             builder.HasOne<Series>()
                 .WithMany()

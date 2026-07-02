@@ -85,11 +85,21 @@ namespace MangaManagementSystem.Application.Services
             // be deleted ("error saving the entity changes"). Remove the version's regions
             // first with a set-based delete so this stays fast even for pages that
             // accumulated a very large number of regions.
-            await _unitOfWork.PageRegions.ExecuteDeleteAsync(r => r.ChapterPageVersionId == id);
-
-            _unitOfWork.ChapterPageVersions.Delete(entity);
-            await _unitOfWork.SaveChangesAsync();
-            return true;
+            // Wrap in a transaction so region deletes roll back if the version delete fails.
+            await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                await _unitOfWork.PageRegions.ExecuteDeleteAsync(r => r.ChapterPageVersionId == id);
+                _unitOfWork.ChapterPageVersions.Delete(entity);
+                await _unitOfWork.SaveChangesAsync();
+                await _unitOfWork.CommitTransactionAsync();
+                return true;
+            }
+            catch
+            {
+                await _unitOfWork.RollbackTransactionAsync();
+                throw;
+            }
         }
 
         public async Task<ChapterPageVersionDto> CreateVersionWithFileAndRegionsAsync(

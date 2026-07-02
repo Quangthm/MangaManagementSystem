@@ -24,6 +24,7 @@ namespace MangaManagementSystem.API.Controllers.Editor
     /// lives here.
     /// </summary>
     [ApiController]
+    [Authorize]
     [Route("api/editor/proposals")]
     public class EditorProposalsController : ControllerBase
     {
@@ -51,10 +52,9 @@ namespace MangaManagementSystem.API.Controllers.Editor
             [FromQuery(Name = "status")] string? status,
             CancellationToken cancellationToken)
         {
-            Guid actorUserId = Guid.Empty;
-            if (Request.Headers.TryGetValue(ActorUserIdHeader, out var headerValues))
+            if (!TryResolveActorUserId(out Guid actorUserId))
             {
-                Guid.TryParse(headerValues.FirstOrDefault(), out actorUserId);
+                return BadRequest(new ApiErrorResponse("Could not identify the requesting user. Please sign in again."));
             }
 
             var query = new GetEditorialProposalQueueQuery(actorUserId, status);

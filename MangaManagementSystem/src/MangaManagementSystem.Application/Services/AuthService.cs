@@ -66,6 +66,15 @@ namespace MangaManagementSystem.Application.Services
             string? portfolioContentType = null)
         {
             var normalizedEmail = NormalizeEmail(email);
+
+            // Check email/username availability first before consuming the OTP,
+            // so the user doesn't lose their valid OTP if availability checks fail.
+            var peekData = _otpCacheService.TryPeekRegistrationOtp(normalizedEmail);
+            if (peekData is not null)
+            {
+                await EnsureEmailAndUsernameAvailableAsync(normalizedEmail, peekData.Username);
+            }
+
             var pendingRegistration = _otpCacheService.TryValidateAndRemoveRegistrationOtp(normalizedEmail, otp);
 
             if (pendingRegistration is null)
@@ -84,8 +93,6 @@ namespace MangaManagementSystem.Application.Services
                     PortfolioContentType = portfolioContentType
                 };
             }
-
-            await EnsureEmailAndUsernameAvailableAsync(normalizedEmail, pendingRegistration.Username);
 
             var roleName = pendingRegistration.RoleName;
             var passwordHash = _passwordHasher.HashPassword(pendingRegistration.Password);

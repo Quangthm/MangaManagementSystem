@@ -107,6 +107,9 @@
 </AuthorizeView>
 
 @code {
+    private static string? GetInitial(string? value) =>
+        !string.IsNullOrWhiteSpace(value) ? value[..1].ToUpper() : null;
+
     private bool _loading = true;
     private bool _profileLoadInProgress;
     private bool _disposed;
@@ -127,7 +130,7 @@
 					var dto = await UserService.GetUserByIdAsync(uid);
 					if (dto != null)
 					{
-						_initial = string.IsNullOrWhiteSpace(dto.DisplayName) ? dto.Username?.Substring(0,1).ToUpper() : dto.DisplayName?.Substring(0,1).ToUpper();
+						_initial = GetInitial(dto.DisplayName) ?? GetInitial(dto.Username) ?? "U";
 						if (dto.AvatarFileId.HasValue)
 						{
 							var file = await FileResourceService.GetFileResourceByIdAsync(dto.AvatarFileId.Value);

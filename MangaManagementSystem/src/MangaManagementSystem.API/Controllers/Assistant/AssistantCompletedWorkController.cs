@@ -12,6 +12,7 @@ using Microsoft.Extensions.Logging;
 namespace MangaManagementSystem.API.Controllers.Assistant
 {
     [ApiController]
+    [Authorize]
     [Route("api/assistant/completed-work")]
     public class AssistantCompletedWorkController : ControllerBase
     {

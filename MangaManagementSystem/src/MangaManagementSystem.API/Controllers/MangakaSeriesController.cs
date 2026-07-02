@@ -31,6 +31,7 @@ namespace MangaManagementSystem.API.Controllers
     ///   CancelDraftAsync       → CancelSeriesDraftCommand
     /// </summary>
     [ApiController]
+    [Authorize]
     [Route("api/mangaka/series")]
     public class MangakaSeriesController : ControllerBase
     {

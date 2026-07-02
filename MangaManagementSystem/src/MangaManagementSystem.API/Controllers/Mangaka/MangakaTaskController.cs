@@ -12,6 +12,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
     /// Uses the transitional X-Actor-User-Id header.
     /// </summary>
     [ApiController]
+    [Authorize]
     [Route("api/mangaka/tasks")]
     public class MangakaTaskController : ControllerBase
     {

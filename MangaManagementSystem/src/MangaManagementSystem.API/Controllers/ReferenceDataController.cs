@@ -12,6 +12,7 @@ using Microsoft.Extensions.Logging;
 namespace MangaManagementSystem.API.Controllers
 {
     [ApiController]
+    [Authorize]
     [Route("api/reference")]
     public class ReferenceDataController : ControllerBase
     {

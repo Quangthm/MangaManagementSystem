@@ -22,6 +22,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
     /// failures to safe HTTP responses. No business logic or persistence lives here.
     /// </summary>
     [ApiController]
+    [Authorize]
     [Route("api/mangaka")]
     public sealed class MangakaChaptersController : ControllerBase
     {

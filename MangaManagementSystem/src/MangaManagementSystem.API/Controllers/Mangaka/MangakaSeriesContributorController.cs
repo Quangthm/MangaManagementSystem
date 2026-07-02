@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 namespace MangaManagementSystem.API.Controllers.Mangaka
 {
     [ApiController]
+    [Authorize]
     [Route("api/mangaka/series/{seriesId:guid}/contributors")]
     public sealed class MangakaSeriesContributorController : ControllerBase
     {

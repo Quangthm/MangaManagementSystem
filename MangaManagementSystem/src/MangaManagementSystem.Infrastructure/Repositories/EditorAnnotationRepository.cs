@@ -37,7 +37,6 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .AsNoTracking()
                 .Include(a => a.PageRegions)
                 .Include(a => a.AnnotatedByUser)
-                .Where(a => a.AnnotatedByUserId == actorUserId)
                 .Where(a => a.PageRegions.Any(r =>
                     r.ChapterPageVersion != null &&
                     r.ChapterPageVersion.ChapterPage != null &&

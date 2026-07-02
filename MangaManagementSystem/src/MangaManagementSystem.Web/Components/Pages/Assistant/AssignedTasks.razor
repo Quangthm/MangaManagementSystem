@@ -1,15 +1,18 @@
 ﻿@page "/assistant/tasks"
-@using Microsoft.AspNetCore.Authorization
-@using Microsoft.AspNetCore.Components.Authorization
+@layout AssistantLayout
+
+<style>
+    @@media (max-width: 1024px) { .as-grid-stats { grid-template-columns: repeat(2, 1fr) !important; } .as-grid-cards { grid-template-columns: 1fr !important; } }
+    @@media (max-width: 640px) { .as-grid-stats { grid-template-columns: 1fr !important; } }
+</style>
+
 @using System.Security.Claims
-@using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Assistant")]
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IAssistantTaskApiClient AssistantTaskClient
 
-<AssistantLayout>
     <div style="display: flex; flex-direction: column; height: 100%; background: #f8fafc;">
         @* ── Header ── *@
         <div style="padding: 24px 32px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e2e8f0; background: #f8fafc; flex-shrink: 0;">
@@ -34,7 +37,7 @@
             else
             {
                 @* ── Stat Cards ── *@
-                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
+                <div class="as-grid-stats" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
                     <StatCard Label="Assigned" Value="@_assignedCount.ToString()" Description="Awaiting your work" />
                     <StatCard Label="Under Review" Value="@_underReviewCount.ToString()" Description="Submitted for review" />
                     <StatCard Label="Completed" Value="@_completedCount.ToString()" Description="Approved tasks" />
@@ -49,33 +52,51 @@
                     </div>
                 }
 
-                @* ── Filter Tabs ── *@
-                <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); padding: 12px 16px; margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between;">
-                    <div style="display: flex; gap: 4px;">
-                        <button @onclick="@(() => _filter = "all")" style="padding: 6px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: @(_filter == "all" ? 600 : 500); cursor: pointer; background: @(_filter == "all" ? "#4f46e5" : "#f1f5f9"); color: @(_filter == "all" ? "#fff" : "#475569"); border: 1px solid @(_filter == "all" ? "#4f46e5" : "#e2e8f0");">All</button>
-                        <button @onclick="@(() => _filter = "assigned")" style="padding: 6px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: @(_filter == "assigned" ? 600 : 500); cursor: pointer; background: @(_filter == "assigned" ? "#4f46e5" : "#f1f5f9"); color: @(_filter == "assigned" ? "#fff" : "#475569"); border: 1px solid @(_filter == "assigned" ? "#4f46e5" : "#e2e8f0");">Assigned</button>
-                        <button @onclick="@(() => _filter = "under_review")" style="padding: 6px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: @(_filter == "under_review" ? 600 : 500); cursor: pointer; background: @(_filter == "under_review" ? "#4f46e5" : "#f1f5f9"); color: @(_filter == "under_review" ? "#fff" : "#475569"); border: 1px solid @(_filter == "under_review" ? "#4f46e5" : "#e2e8f0");">Under Review</button>
-                        <button @onclick="@(() => _filter = "overdue")" style="padding: 6px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: @(_filter == "overdue" ? 600 : 500); cursor: pointer; background: @(_filter == "overdue" ? "#dc2626" : "#f1f5f9"); color: @(_filter == "overdue" ? "#fff" : "#475569"); border: 1px solid @(_filter == "overdue" ? "#dc2626" : "#e2e8f0");">Overdue</button>
+                @* ── Search + Filter Tabs ── *@
+                <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); padding: 12px 16px; margin-bottom: 24px; display: flex; flex-direction: column; gap: 12px;">
+                    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 200px; position: relative;">
+                            <input @bind="_searchQuery" @bind:event="oninput" placeholder="Search tasks..." style="width: 100%; padding: 8px 12px 8px 36px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.85rem; color: #111827; outline: none; background: #f8fafc;" />
+                            <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 0.9rem;">🔍</span>
+                        </div>
+                        <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                            <button @onclick="@(() => { _filter = "all"; _currentPage = 1; })" style="padding: 6px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: @(_filter == "all" ? 600 : 500); cursor: pointer; background: @(_filter == "all" ? "#4f46e5" : "#f1f5f9"); color: @(_filter == "all" ? "#fff" : "#475569"); border: 1px solid @(_filter == "all" ? "#4f46e5" : "#e2e8f0");">All</button>
+                            <button @onclick="@(() => { _filter = "assigned"; _currentPage = 1; })" style="padding: 6px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: @(_filter == "assigned" ? 600 : 500); cursor: pointer; background: @(_filter == "assigned" ? "#4f46e5" : "#f1f5f9"); color: @(_filter == "assigned" ? "#fff" : "#475569"); border: 1px solid @(_filter == "assigned" ? "#4f46e5" : "#e2e8f0");">Assigned</button>
+                            <button @onclick="@(() => { _filter = "under_review"; _currentPage = 1; })" style="padding: 6px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: @(_filter == "under_review" ? 600 : 500); cursor: pointer; background: @(_filter == "under_review" ? "#4f46e5" : "#f1f5f9"); color: @(_filter == "under_review" ? "#fff" : "#475569"); border: 1px solid @(_filter == "under_review" ? "#4f46e5" : "#e2e8f0");">Under Review</button>
+                            <button @onclick="@(() => { _filter = "completed"; _currentPage = 1; })" style="padding: 6px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: @(_filter == "completed" ? 600 : 500); cursor: pointer; background: @(_filter == "completed" ? "#166534" : "#f1f5f9"); color: @(_filter == "completed" ? "#fff" : "#475569"); border: 1px solid @(_filter == "completed" ? "#166534" : "#e2e8f0");">Completed</button>
+                            <button @onclick="@(() => { _filter = "overdue"; _currentPage = 1; })" style="padding: 6px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: @(_filter == "overdue" ? 600 : 500); cursor: pointer; background: @(_filter == "overdue" ? "#dc2626" : "#f1f5f9"); color: @(_filter == "overdue" ? "#fff" : "#475569"); border: 1px solid @(_filter == "overdue" ? "#dc2626" : "#e2e8f0");">Overdue</button>
+                        </div>
                     </div>
-                    <div style="color: #94a3b8; font-size: 0.78rem;">
-                        @_filteredTasks.Count task(s)
-                        @if (_filter != "all")
-                        {
-                            <a href="javascript:void(0)" @onclick="ClearFilter" style="margin-left: 8px; color: #4f46e5;">Clear filter</a>
-                        }
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <div style="color: #94a3b8; font-size: 0.78rem;">
+                            @_filteredTasks.Count task(s)
+                            @if (_filter != "all" || !string.IsNullOrWhiteSpace(_searchQuery))
+                            {
+                                <a href="javascript:void(0)" @onclick="ClearFilters" style="margin-left: 8px; color: #4f46e5;">Clear filters</a>
+                            }
+                        </div>
                     </div>
                 </div>
 
                 @if (!_filteredTasks.Any())
                 {
                     <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 48px 24px; text-align: center; color: #94a3b8; font-size: 0.95rem;">
-                        No tasks match the current filter.
+                        @if (!string.IsNullOrWhiteSpace(_searchQuery))
+                        {
+                            <span>No tasks match "<strong>@_searchQuery</strong>".</span>
+                        }
+                        else
+                        {
+                            <span>No tasks match the current filter.</span>
+                        }
                     </div>
                 }
                 else
                 {
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
-                        @foreach (var t in _filteredTasks)
+                    var pageItems = _paginatedTasks;
+                    var totalPages = _totalPages;
+                    <div class="as-grid-cards" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+                        @foreach (var t in pageItems)
                         {
                             var isOverdue = IsOverdue(t);
                             var isDueSoon = IsDueSoon(t);
@@ -131,11 +152,26 @@
                             </div>
                         }
                     </div>
+
+                    @* ── Pagination ── *@
+                    @if (totalPages > 1)
+                    {
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 24px;">
+                            <button @onclick="@(() => _currentPage = 1)" disabled="@(_currentPage == 1)" style="padding: 6px 12px; border-radius: 6px; font-size: 0.78rem; cursor: pointer; background: @(_currentPage == 1 ? "#f1f5f9" : "#fff"); color: @(_currentPage == 1 ? "#94a3b8" : "#374151"); border: 1px solid #e2e8f0; @(_currentPage == 1 ? "cursor: default;" : "")">««</button>
+                            <button @onclick="@(() => _currentPage = Math.Max(1, _currentPage - 1))" disabled="@(_currentPage == 1)" style="padding: 6px 12px; border-radius: 6px; font-size: 0.78rem; cursor: pointer; background: @(_currentPage == 1 ? "#f1f5f9" : "#fff"); color: @(_currentPage == 1 ? "#94a3b8" : "#374151"); border: 1px solid #e2e8f0; @(_currentPage == 1 ? "cursor: default;" : "")">«</button>
+                            @for (int p = Math.Max(1, _currentPage - 2); p <= Math.Min(totalPages, _currentPage + 2); p++)
+                            {
+                                <button @onclick="@(() => _currentPage = p)" style="padding: 6px 12px; border-radius: 6px; font-size: 0.78rem; cursor: pointer; background: @(p == _currentPage ? "#4f46e5" : "#fff"); color: @(p == _currentPage ? "#fff" : "#374151"); border: 1px solid @(p == _currentPage ? "#4f46e5" : "#e2e8f0"); font-weight: @(p == _currentPage ? "600" : "normal");">@p</button>
+                            }
+                            <button @onclick="@(() => _currentPage = Math.Min(totalPages, _currentPage + 1))" disabled="@(_currentPage == totalPages)" style="padding: 6px 12px; border-radius: 6px; font-size: 0.78rem; cursor: pointer; background: @(_currentPage == totalPages ? "#f1f5f9" : "#fff"); color: @(_currentPage == totalPages ? "#94a3b8" : "#374151"); border: 1px solid #e2e8f0; @(_currentPage == totalPages ? "cursor: default;" : "")">»</button>
+                            <button @onclick="@(() => _currentPage = totalPages)" disabled="@(_currentPage == totalPages)" style="padding: 6px 12px; border-radius: 6px; font-size: 0.78rem; cursor: pointer; background: @(_currentPage == totalPages ? "#f1f5f9" : "#fff"); color: @(_currentPage == totalPages ? "#94a3b8" : "#374151"); border: 1px solid #e2e8f0; @(_currentPage == totalPages ? "cursor: default;" : "")">»»</button>
+                            <span style="color: #94a3b8; font-size: 0.78rem; margin-left: 8px;">Page @_currentPage of @totalPages (@_filteredTasks.Count items)</span>
+                        </div>
+                    }
                 }
             }
         </div>
     </div>
-</AssistantLayout>
 
 @code {
     private Guid _currentUserId;
@@ -143,6 +179,9 @@
     private string? _error;
     private IReadOnlyList<ChapterPageTaskDto>? _tasks;
     private string _filter = "all";
+    private string _searchQuery = string.Empty;
+    private int _currentPage = 1;
+    private const int PageSize = 12;
 
     private int _assignedCount;
     private int _underReviewCount;
@@ -167,6 +206,17 @@
                 _ => query
             };
 
+            // Apply search filter
+            if (!string.IsNullOrWhiteSpace(_searchQuery))
+            {
+                var q = _searchQuery.Trim().ToLowerInvariant();
+                query = query.Where(t =>
+                    (t.TaskTitle?.ToLowerInvariant().Contains(q) ?? false) ||
+                    (t.SeriesTitle?.ToLowerInvariant().Contains(q) ?? false) ||
+                    (t.TypeCode?.ToLowerInvariant().Contains(q) ?? false) ||
+                    (t.ChapterNumberLabel?.ToLowerInvariant().Contains(q) ?? false));
+            }
+
             return [.. query.OrderBy(t =>
             {
                 if (t.DueAtUtc.HasValue && t.DueAtUtc.Value < now &&
@@ -176,6 +226,17 @@
             }).ThenBy(t => t.DueAtUtc ?? DateTime.MaxValue)];
         }
     }
+
+    private List<ChapterPageTaskDto> _paginatedTasks
+    {
+        get
+        {
+            var filtered = _filteredTasks;
+            return filtered.Skip((_currentPage - 1) * PageSize).Take(PageSize).ToList();
+        }
+    }
+
+    private int _totalPages => Math.Max(1, (int)Math.Ceiling((double)_filteredTasks.Count / PageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -230,7 +291,12 @@
         return t.DueAtUtc.HasValue && t.DueAtUtc.Value >= now && t.DueAtUtc.Value <= now.AddDays(3);
     }
 
-    private void ClearFilter() => _filter = "all";
+    private void ClearFilters()
+    {
+        _filter = "all";
+        _searchQuery = string.Empty;
+        _currentPage = 1;
+    }
 
     private string GetStatusBg(string status) => status switch
     {

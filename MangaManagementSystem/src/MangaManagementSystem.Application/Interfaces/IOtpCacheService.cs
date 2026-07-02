@@ -5,6 +5,7 @@ namespace MangaManagementSystem.Application.Interfaces
     public interface IOtpCacheService
     {
         void StoreRegistrationOtp(string email, string otp, RegisterDto request);
+        RegisterDto? TryPeekRegistrationOtp(string email);
         RegisterDto? TryValidateAndRemoveRegistrationOtp(string email, string otp);
 
         void StoreEmailVerificationOtp(string email, string otp);

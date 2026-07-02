@@ -1,9 +1,12 @@
 @page "/assistant/task/{TaskId:guid}/submit"
-@using Microsoft.AspNetCore.Authorization
-@using Microsoft.AspNetCore.Components.Authorization
+@layout AssistantLayout
+
+<style>
+    @@media (max-width: 1024px) { .as-grid-main { grid-template-columns: 1fr !important; } }
+</style>
+
 @using Microsoft.AspNetCore.Components.Forms
 @using System.Security.Claims
-@using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Assistant")]
 @inject NavigationManager Nav
@@ -11,7 +14,6 @@
 @inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthStateProvider
 
-<AssistantLayout>
     <div style="display: flex; flex-direction: column; height: 100%; background: #f8fafc;">
         @* ── Header ── *@
         <div style="padding: 24px 32px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e2e8f0; background: #f8fafc; flex-shrink: 0;">
@@ -39,7 +41,7 @@
             }
             else
             {
-                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
+                <div class="as-grid-main" style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
                     <div>
                         <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); padding: 24px;">
                             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
@@ -120,7 +122,6 @@
             }
         </div>
     </div>
-</AssistantLayout>
 
 @code {
     [Parameter] public Guid TaskId { get; set; }

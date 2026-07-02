@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 namespace MangaManagementSystem.API.Controllers.Editor
 {
     [ApiController]
+    [Authorize]
     [Route("api/editor/series")]
     public class EditorSeriesController : ControllerBase
     {

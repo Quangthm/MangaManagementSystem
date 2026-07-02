@@ -13,6 +13,7 @@ namespace MangaManagementSystem.API.Controllers.Assistant
     /// forwards the logged-in user's id here.
     /// </summary>
     [ApiController]
+    [Authorize]
     [Route("api/assistant/tasks")]
     public class AssistantTaskController : ControllerBase
     {

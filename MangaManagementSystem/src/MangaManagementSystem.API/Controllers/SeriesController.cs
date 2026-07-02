@@ -19,6 +19,7 @@ namespace MangaManagementSystem.API.Controllers
     /// case via IMediator, and map known failures to safe HTTP responses.
     /// </summary>
     [ApiController]
+    [Authorize]
     [Route("api/series")]
     public class SeriesController : ControllerBase
     {

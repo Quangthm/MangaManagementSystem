@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace MangaManagementSystem.API.Controllers
 {
     [ApiController]
+    [Authorize]
     [Route("api/profile/password")]
     public sealed class ProfilePasswordController : ControllerBase
     {

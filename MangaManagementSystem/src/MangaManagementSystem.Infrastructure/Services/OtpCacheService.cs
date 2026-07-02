@@ -29,6 +29,16 @@ namespace MangaManagementSystem.Infrastructure.Services
             _memoryCache.Set(key, new CachedRegistrationOtp(otp, request), OtpTtl);
         }
 
+        public RegisterDto? TryPeekRegistrationOtp(string email)
+        {
+            var key = RegistrationKeyPrefix + NormalizeEmail(email);
+            if (_memoryCache.TryGetValue<CachedRegistrationOtp>(key, out var cached) && cached is not null)
+            {
+                return cached.Request;
+            }
+            return null;
+        }
+
         public RegisterDto? TryValidateAndRemoveRegistrationOtp(string email, string otp)
         {
             var key = RegistrationKeyPrefix + NormalizeEmail(email);

@@ -237,17 +237,17 @@ namespace MangaManagementSystem.Application.Services
                 : null
         );
 
-        private static IReadOnlyList<GenreDto> MapGenres(IEnumerable<Genre> genres)
+        private static IReadOnlyList<GenreDto> MapGenres(IEnumerable<Genre>? genres)
         {
-            return genres
+            return (genres ?? [])
                 .OrderBy(g => g.GenreName)
                 .Select(g => new GenreDto(g.GenreId, g.GenreName))
                 .ToList();
         }
 
-        private static IReadOnlyList<TagDto> MapTags(IEnumerable<Tag> tags)
+        private static IReadOnlyList<TagDto> MapTags(IEnumerable<Tag>? tags)
         {
-            return tags
+            return (tags ?? [])
                 .OrderBy(t => t.TagName)
                 .Select(t => new TagDto(t.TagId, t.TagName))
                 .ToList();

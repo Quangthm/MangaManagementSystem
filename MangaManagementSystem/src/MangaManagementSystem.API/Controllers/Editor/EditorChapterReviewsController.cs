@@ -30,6 +30,7 @@ namespace MangaManagementSystem.API.Controllers.Editor
     /// here. Both endpoints are scoped to series the actor contributes to.
     /// </summary>
     [ApiController]
+    [Authorize]
     [Route("api/editor/chapters")]
     public class EditorChapterReviewsController : ControllerBase
     {

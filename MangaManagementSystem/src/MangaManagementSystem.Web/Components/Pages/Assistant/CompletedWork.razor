@@ -1,15 +1,18 @@
 @page "/assistant/completed-work"
-@using Microsoft.AspNetCore.Authorization
-@using Microsoft.AspNetCore.Components.Authorization
+@layout AssistantLayout
+
+<style>
+    @@media (max-width: 1024px) { .as-grid-stats { grid-template-columns: repeat(2, 1fr) !important; } }
+    @@media (max-width: 640px) { .as-grid-stats { grid-template-columns: 1fr !important; } }
+</style>
+
 @using System.Security.Claims
-@using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Assistant")]
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IAssistantTaskApiClient AssistantTaskClient
 
-<AssistantLayout>
     <div style="display: flex; flex-direction: column; height: 100%; background: #f8fafc;">
         @* ── Header ── *@
         <div style="padding: 24px 32px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e2e8f0; background: #f8fafc; flex-shrink: 0;">
@@ -39,7 +42,7 @@
             else
             {
                 @* ── Stat Cards ── *@
-                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
+                <div class="as-grid-stats" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
                     <StatCard Label="Completed Tasks" Value="@_summary.CompletedTaskCount.ToString()" Description="Approved tasks" />
                     <StatCard Label="Approved Regions" Value="@_summary.ApprovedRegionCount.ToString()" Description="Regions completed" />
                     <StatCard Label="Estimated Total" Value="@_summary.TotalEstimatedAmount.ToString("N0")" Description="All completed work" />
@@ -140,7 +143,6 @@
             }
         </div>
     </div>
-</AssistantLayout>
 
 @code {
     private Guid _currentUserId;
