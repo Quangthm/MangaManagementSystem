@@ -175,6 +175,72 @@ namespace MangaManagementSystem.Web.Services.Api
             throw new InvalidOperationException(message);
         }
 
+        public async Task<MangakaChapterListItemDto> CancelChapterSubmissionAsync(
+            Guid actorUserId,
+            Guid chapterId,
+            CancellationToken cancellationToken = default)
+        {
+            using var requestMessage = new HttpRequestMessage(
+                HttpMethod.Post, $"api/mangaka/chapters/{chapterId}/cancel-submission")
+            {
+                Content = JsonContent.Create(new { })
+            };
+            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<MangakaChapterListItemDto>(
+                    cancellationToken: cancellationToken);
+                if (result is null)
+                {
+                    throw new InvalidOperationException(
+                        "The submission was cancelled but no confirmation was returned. Please refresh and verify.");
+                }
+                return result;
+            }
+
+            var message = await ExtractErrorMessageAsync(response);
+            _logger.LogWarning(
+                "Cancel submission for chapter {ChapterId} failed: {StatusCode} {ReasonPhrase}",
+                chapterId, (int)response.StatusCode, response.ReasonPhrase);
+            throw new InvalidOperationException(message);
+        }
+
+        public async Task<MangakaChapterListItemDto> CancelChapterAsync(
+            Guid actorUserId,
+            Guid chapterId,
+            CancellationToken cancellationToken = default)
+        {
+            using var requestMessage = new HttpRequestMessage(
+                HttpMethod.Post, $"api/mangaka/chapters/{chapterId}/cancel")
+            {
+                Content = JsonContent.Create(new { })
+            };
+            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<MangakaChapterListItemDto>(
+                    cancellationToken: cancellationToken);
+                if (result is null)
+                {
+                    throw new InvalidOperationException(
+                        "The chapter was cancelled but no confirmation was returned. Please refresh and verify.");
+                }
+                return result;
+            }
+
+            var message = await ExtractErrorMessageAsync(response);
+            _logger.LogWarning(
+                "Cancel chapter {ChapterId} failed: {StatusCode} {ReasonPhrase}",
+                chapterId, (int)response.StatusCode, response.ReasonPhrase);
+            throw new InvalidOperationException(message);
+        }
+
         public async Task<MangakaChapterListItemDto> ScheduleApprovedChapterAsync(
             Guid actorUserId,
             Guid chapterId,

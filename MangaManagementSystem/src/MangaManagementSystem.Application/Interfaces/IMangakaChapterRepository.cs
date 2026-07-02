@@ -40,6 +40,16 @@ namespace MangaManagementSystem.Application.Interfaces
             Guid chapterId,
             CancellationToken cancellationToken = default);
 
+        Task<MangakaChapterListItemDto> CancelChapterSubmissionAsync(
+            Guid actorUserId,
+            Guid chapterId,
+            CancellationToken cancellationToken = default);
+
+        Task<MangakaChapterListItemDto> CancelChapterAsync(
+            Guid actorUserId,
+            Guid chapterId,
+            CancellationToken cancellationToken = default);
+
         Task<MangakaChapterListItemDto> ScheduleApprovedChapterAsync(
             Guid actorUserId,
             Guid chapterId,

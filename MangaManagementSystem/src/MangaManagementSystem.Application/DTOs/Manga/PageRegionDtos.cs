@@ -30,8 +30,15 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         decimal? ConfidenceScore,
         [Required][MaxLength(20)] string SourceType,
         string? OriginalText,
-        Guid? PageRegionId = null
+        Guid? PageRegionId = null,
+        Guid? CreatedByUserId = null
     );
+
+    /// <summary>Web → API body carrying a set of ChapterPageVersion ids (region reads/counts).</summary>
+    public sealed record VersionIdsRequest(IReadOnlyList<Guid> VersionIds);
+
+    /// <summary>Web → API body to bulk-replace all regions of one version.</summary>
+    public sealed record BulkReplaceRegionsRequest(IReadOnlyList<CreatePageRegionDto> Regions);
 
     public record UpdatePageRegionDto(
         [Required] Guid PageRegionId,
