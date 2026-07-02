@@ -822,6 +822,8 @@ Selected Series
 - Allow authorized navigation between chapters in the selected series.
 - Allow navigation between pages in a selected chapter.
 - Allow viewing historical page versions when permitted.
+- Hide soft-deleted `ChapterPage` records from normal active page navigation by default, while allowing historical/admin views to include them when needed.
+- Do not provide a normal user action to delete a saved `ChapterPageVersion` in the current MVP.
 
 ---
 
@@ -839,6 +841,8 @@ Display selected content.
 - Allow zoom/pan if feasible for MVP.
 - Show empty state if the selected page has no version yet.
 - Show read-only state when user lacks edit permission.
+- Show page-region delete/remove action only for regions that are not linked to annotations, tasks, or other workflow records.
+- If a selected region is linked to an annotation or task, explain that it cannot be deleted because it is part of workflow history.
 
 ---
 
@@ -856,12 +860,24 @@ Display selected content.
 
 | Role | Actions |
 |---|---|
-| Mangaka | Save/adjust regions when permitted, create production-tracking annotations, update/resolve Mangaka-created annotations, assign selected page regions as tasks to Assistants, review task output, upload new page versions, submit chapter for review. Mangaka cannot update or resolve Tantou Editor-created annotations. Task page context is derived from selected regions, not from a direct task `chapter_page_id`. |
+| Mangaka | Save/adjust regions when permitted, delete only unused regions that are not linked to tasks or annotations, create production-tracking annotations, update/resolve Mangaka-created annotations, assign selected page regions as tasks to Assistants, review task output, explicitly save new page versions, soft-delete chapter pages when permitted, and submit chapters for review. Mangaka cannot delete saved page versions in the current MVP and cannot update or resolve Tantou Editor-created annotations. Task page context is derived from selected regions, not from a direct task `chapter_page_id`. |
 | Assistant | View assigned regions/tasks, upload task output as a page version for the same logical page derived from the linked task regions when allowed, mark work ready for review. |
 | Tantou Editor | Add editorial-review annotations linked to one or more page regions, update unresolved annotation text when permitted, resolve Mangaka-created or Tantou Editor-created annotations, review regions/page context, approve chapters, request revision with required comments, or cancel chapters with required comments and optional markup through the chapter review workflow. |
 | Editorial Board Member | No workspace access by default. |
 | Editorial Board Chief | No workspace access by default unless future permission grants it. |
 | Admin | No manga production actions. |
+
+### Page, version, and region retention UI behavior
+
+| UI action | MVP behavior |
+|---|---|
+| Select/upload page file | Preview only until the user explicitly clicks Save/Confirm; it must not create a `ChapterPageVersion` automatically. |
+| Save page version | Creates a new `ChapterPageVersion`, marks it current when appropriate, and keeps previous versions in history. |
+| Delete saved page version | Not available to normal users in the current MVP. Users should save a newer version instead. |
+| Delete page region | Available only when the region is not linked to any task, annotation, or other workflow record. |
+| Delete linked page region | Blocked; show an explanation that linked regions are preserved for workflow traceability. |
+| Soft-delete chapter page | Allowed only when chapter/page workflow rules permit; hides the logical page from active draft navigation but preserves page-version history. |
+| Admin/system purge of old page versions | Future scope after chapter release; not part of normal MVP workspace actions. |
 
 ### Chapter editorial decision UI
 

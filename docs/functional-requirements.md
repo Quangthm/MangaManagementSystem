@@ -35,7 +35,7 @@
 |---|---|---|
 | FR-REG-001 | The system shall allow page regions to be created manually or suggested by AI. | BR-REG-006 |
 | FR-REG-002 | The system shall require each `PageRegion` to belong to exactly one `ChapterPageVersion`. | BR-REG-001 |
-| FR-REG-003 | The system shall restrict `PageRegion.type_code` to `PANEL`, `SPEECH_BUBBLE`, `CHARACTER`, `SFX_TEXT`, `BACKGROUND`, or `OTHER`. | BR-REG-002 |
+| FR-REG-003 | The system shall restrict `PageRegion.type_code` to `PANEL`, `SPEECH_BUBBLE`, `CHARACTER`, `SFX_TEXT`, `BACKGROUND`, `FULL_PAGE`, or `OTHER`. | BR-REG-002 |
 | FR-REG-004 | The system shall store page region coordinates as rectangular bounding boxes using `x`, `y`, `width`, and `height`. | BR-REG-003 |
 | FR-REG-005 | The system shall require each page region width and height to be positive. | BR-REG-004 |
 | FR-REG-006 | The system shall store page region coordinates relative to the original uploaded page image dimensions. | BR-REG-010 |
@@ -63,6 +63,9 @@
 | FR-REG-028 | The system shall allow authorized users to adjust saved page region coordinates, labels, types, and original text when region editing is permitted. | BR-REG-026 |
 | FR-REG-029 | The system shall record `updated_at_utc` and `updated_by_user_id` when a saved `PageRegion` is modified. | BR-REG-027 |
 | FR-REG-030 | The system shall make AI-assisted segmentation tools available to all Authorized Page Workspace Users who have access to the relevant chapter/page version. | BR-REG-028, BR-WORKSPACE-006 |
+| FR-REG-031 | The system shall allow hard deletion of a `PageRegion` only when the region is not connected to any annotation, task, or other workflow record that depends on the region. | BR-REG-033 |
+| FR-REG-032 | The system shall block normal user deletion of `PageRegion` records that are connected to annotations or tasks. | BR-REG-034 |
+| FR-REG-033 | The system shall preserve task-linked and annotation-linked page regions for traceability instead of deleting them. | BR-REG-034 |
 
 ---
 
@@ -339,6 +342,11 @@
 | FR-CP-020 | The system shall allow a `ChapterPage` to be soft-deleted when it is no longer part of the active chapter draft. | BR-CP-019 |
 | FR-CP-021 | The system shall preserve historical `ChapterPageVersion` records when a `ChapterPage` is soft-deleted. | BR-CP-020 |
 | FR-CP-022 | The system shall allow a page task that produces a new page version to remain under review until the Mangaka accepts the submitted version. | BR-CP-022 |
+| FR-CP-023 | The system shall create a `ChapterPageVersion` only after the user explicitly saves or confirms the selected page upload as an official page version. | BR-CP-023 |
+| FR-CP-024 | The system shall not allow normal users to delete saved `ChapterPageVersion` records in the current MVP. | BR-CP-024 |
+| FR-CP-025 | The system shall preserve wrong, outdated, or superseded saved page versions in version history and allow users to replace them only by saving a newer version. | BR-CP-024, BR-CP-025 |
+| FR-CP-026 | The system shall unset the previous current page version when a newly saved page version becomes current for the same logical `ChapterPage`. | BR-CP-012, BR-CP-025 |
+| FR-CP-027 | The system may support a future Admin/system retention workflow to purge old or unused page versions after chapter release, provided referenced workflow history is preserved. | BR-CP-026 |
 
 ---
 

@@ -34,7 +34,7 @@ The MVP should stay focused and avoid unnecessary tables unless a table represen
 | Series contributors | Manage team membership through `SeriesContributor`, not a direct lead Mangaka column on `Series`. |
 | Series proposals | Store formal submitted proposal versions in `SeriesProposal`; revisions create new proposal rows. |
 | Board workflow | Use `SeriesBoardPoll` and `SeriesBoardVote`; Editorial Board Chief opens, closes, and cancels board polls, specifies publication frequency when opening `START_SERIALIZATION` polls, may also vote, and board results are computed from votes. Do **not** use a separate `SeriesBoardDecision` table. |
-| Chapters and pages | Use `Chapter`, `ChapterPage`, and `ChapterPageVersion`. `ChapterPage` is a logical page slot; `ChapterPageVersion` stores uploaded/revised files. |
+| Chapters and pages | Use `Chapter`, `ChapterPage`, and `ChapterPageVersion`. `ChapterPage` is a logical page slot that may be soft-deleted from active drafts; `ChapterPageVersion` stores explicitly saved uploaded/revised files and cannot be deleted by normal users in the current MVP. |
 | Chapter submission | Submit a chapter by changing `Chapter.status_code` to `UNDER_REVIEW`; do **not** create a `ChapterSubmission` table. |
 | Page regions | Store accepted AI/manual regions directly as `PageRegion` records linked to `ChapterPageVersion`. |
 | Page annotations | Store annotation headers in `ChapterPageAnnotation` and link them to one or more `PageRegion` records through `ChapterPageAnnotationRegion`; do not store direct annotation coordinates. |
@@ -112,7 +112,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 ## 4.2 Page Region and AI Detection
 
 - Each `PageRegion` belongs to exactly one `ChapterPageVersion`.
-- Valid region types are `PANEL`, `SPEECH_BUBBLE`, `CHARACTER`, `SFX_TEXT`, `BACKGROUND`, and `OTHER`.
+- Valid region types are `PANEL`, `SPEECH_BUBBLE`, `CHARACTER`, `SFX_TEXT`, `BACKGROUND`, `FULL_PAGE`, and `OTHER`.
 - Regions are rectangular bounding boxes using `x`, `y`, `width`, and `height`.
 - Width and height must be positive.
 - Region source must be `AI` or `MANUAL`.
@@ -132,6 +132,8 @@ The project uses **permission-based actor grouping** for shared features and rol
 - Newly detected AI regions can be temporary suggestions until the user chooses what to save.
 - Duplicate or substantially overlapping regions of the same type should be prevented or warned against.
 - Saved regions may be adjusted by authorized users, and updates should record `updated_at_utc` and `updated_by_user_id`.
+- A `PageRegion` may be hard-deleted only when it is not connected to any task, annotation, or other workflow record that depends on the region.
+- Task-linked and annotation-linked regions must be preserved for traceability; normal deletion should be blocked for those regions.
 
 ## 4.3 File Resource and Cloudinary
 
@@ -323,7 +325,11 @@ The project uses **permission-based actor grouping** for shared features and rol
 - Version numbers are positive and unique per logical page.
 - Higher version number means newer uploaded version.
 - Only one version should be current at a time.
+- Selecting or uploading a page file in the UI does not create a `ChapterPageVersion` until the user explicitly saves or confirms it as an official version.
+- When a newly saved page version becomes current, the previous current version is unset but remains preserved.
 - Old versions remain preserved.
+- In the current MVP, saved `ChapterPageVersion` records cannot be deleted by normal users.
+- Future versions may add an Admin/system purge workflow for old or unused page versions after chapter release, but this is outside MVP and must preserve referenced workflow history.
 - Replacing/revising a page creates a new `ChapterPageVersion`, not a new `ChapterPage`.
 - A `ChapterPage` may be soft-deleted from active drafts without deleting historical versions.
 - Page task output should reference the produced `ChapterPageVersion`.
@@ -774,15 +780,17 @@ Recommended file-related fields/concepts:
 `ChapterPage` and `ChapterPageVersion` are both required concepts:
 
 - `ChapterPage` = logical slot, such as chapter 3 page 7
-- `ChapterPageVersion` = actual uploaded file/version for that slot
+- `ChapterPageVersion` = explicitly saved uploaded file/version for that slot
 
 Only one page version should be current for a logical page at a time.
+
+Selecting or uploading a page file in the UI does not automatically create a `ChapterPageVersion`. The user must explicitly save or confirm the file before it becomes official page-version history. When a newly saved version becomes current, the previous current version is unset but remains available for traceability. In the current MVP, saved page versions cannot be deleted by normal users. A future Admin/system retention workflow may purge old or unused page versions after chapter release only when referenced workflow history is preserved.
 
 ### 10.3 Page Region
 
 `PageRegion` should link to `ChapterPageVersion`, not just `ChapterPage`.
 
-This keeps region and annotation feedback accurate even after newer page versions are uploaded.
+This keeps region and annotation feedback accurate even after newer page versions are uploaded. A `PageRegion` may be hard-deleted only when it is not linked to any task, annotation, or other workflow record. Regions linked to tasks or annotations must be preserved for traceability.
 
 ### 10.4 Annotation
 

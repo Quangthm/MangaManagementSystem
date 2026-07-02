@@ -61,6 +61,8 @@
 | BR-REG-030 | Whole-page regions are used by Quick Select and other workflows that assign tasks or annotations to an entire page without requiring manual region selection. | Active draft |
 | BR-REG-031 | The system should find and reuse an existing whole-page `PageRegion` for a given `ChapterPageVersion` before creating a new one. | Active draft |
 | BR-REG-032 | `FileResource` does not store image width/height. Page image dimensions must be resolved from Cloudinary metadata when needed (e.g. for creating whole-page regions). Cloudinary metadata lookups must not hold an open database transaction. | Active draft |
+| BR-REG-033 | A `PageRegion` may be hard-deleted only when it is not connected to any `ChapterPageAnnotationRegion`, `ChapterPageTaskRegion`, or other workflow record that depends on the region. | Active draft |
+| BR-REG-034 | If a `PageRegion` is connected to an annotation or task, normal user deletion must be blocked and the region must be preserved for traceability. | Active draft |
 
 ---
 
@@ -334,6 +336,10 @@
 | BR-CP-020 | Soft-deleting a `ChapterPage` should not delete its historical `ChapterPageVersion` records. | Active draft |
 | BR-CP-021 | Each revision upload creates a new `ChapterPageVersion`. | Active draft |
 | BR-CP-022 | If a page task produces a new page version, the task may remain under review until the Mangaka accepts the submitted version. | Active draft |
+| BR-CP-023 | Selecting or uploading a page file in the UI must not automatically create a `ChapterPageVersion`; a page version is created only when the user explicitly saves or confirms the selected file as an official version. | Active draft |
+| BR-CP-024 | In the current MVP, normal users cannot delete saved `ChapterPageVersion` records. Wrong, outdated, or superseded saved versions remain in version history and may be replaced only by saving a newer version. | Active draft |
+| BR-CP-025 | When a newly saved page version becomes current, the previously current version for the same `ChapterPage` must be unset as current while remaining preserved for traceability and comparison. | Active draft |
+| BR-CP-026 | Future versions may add an Admin/system retention workflow to purge old or unused page versions after a chapter has been released, but this is outside MVP and must not remove versions still required by regions, annotations, tasks, reviews, release history, or audit. | Future information |
 
 ---
 

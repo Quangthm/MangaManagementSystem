@@ -1296,6 +1296,9 @@ manga.usp_ChapterPageVersion_Create or equivalent page-version workflow procedur
 - Use `file_purpose_code = CHAPTER_PAGE_VERSION` for any file that becomes official page-version content.
 - This includes accepted auto-translation output, accepted future tool output, accepted assistant output, and externally edited output uploaded back into the system.
 - Do not use removed purposes such as `CHAPTER_ASSET`, `TASK_SUBMISSION`, or old `CHAPTER_DRAFT`.
+- Selecting or uploading a page file for preview must not create a `FileResource` or `ChapterPageVersion` until the user explicitly clicks Save/Confirm.
+- In the current MVP, normal users cannot delete a saved `ChapterPageVersion`; they should save a newer version and make it current when the previous saved version is wrong or outdated.
+- Future Admin/system retention may purge old or unused page versions after chapter release, but this is outside MVP and must preserve versions referenced by regions, annotations, tasks, reviews, release history, or audit.
 - The existing page version should not be overwritten.
 - Previous page versions remain available for traceability and comparison.
 - The page-version workflow procedure should own the SQL transaction so `FileResource`, `ChapterPageVersion`, current-version updates, and audit event stay transactionally consistent.
@@ -1412,6 +1415,41 @@ audit.usp_AuditEvent_Append
 - Avoid saving duplicate or temporary AI suggestions unless the user chooses to keep them.
 - Return created IDs in a format that is easy for C# to merge with existing region IDs.
 - Keep audit detail focused on the page version and created region IDs/count.
+
+---
+
+## BF-PAGE-003A — Delete Unused Page Region
+
+**Status:** Agreed  
+**Primary actor:** Authorized Page Workspace User  
+**Goal:** Allow a mistaken or unused saved `PageRegion` to be hard-deleted only when it has not become part of task or annotation history.
+
+### Main Flow
+
+```text
+User opens the chapter/page workspace
+→ User selects a saved PageRegion
+→ UI requests deletion/removal
+→ Backend validates actor permission for the owning series/page workspace
+→ Backend checks whether the PageRegion is linked by ChapterPageAnnotationRegion, ChapterPageTaskRegion, or any other workflow record
+→ If the region is not linked to any dependent workflow record, backend hard-deletes the PageRegion
+→ UI removes the region overlay from the page version
+→ If the region is linked to an annotation or task, backend rejects deletion and returns a clear explanation
+```
+
+### Important Notes
+
+- Hard deletion is allowed only for unused regions that are not connected to tasks, annotations, or other workflow records.
+- A region linked to a task or annotation is part of workflow history and must be preserved.
+- Deleting an unused region must not cascade into annotations, tasks, page versions, or files.
+- Whole-page regions created for Quick Select become non-deletable once linked to a task.
+- The UI should disable or hide the delete action for linked regions when that information is already known.
+
+### System Should Try To
+
+- Let users clean up mistaken unused regions.
+- Prevent deletion from breaking annotation or task history.
+- Keep region deletion simple without introducing a soft-delete lifecycle for unused regions in MVP.
 
 ---
 
@@ -1620,6 +1658,40 @@ audit.usp_AuditEvent_Append
 - Let Tantou Editors clarify Mangaka-created notes during chapter review.
 - Preserve audit traceability for text changes.
 - Avoid silently overwriting feedback history.
+
+## BF-PAGE-005B — Soft Delete Chapter Page from Active Draft
+
+**Status:** Agreed  
+**Primary actor:** Mangaka / authorized chapter page manager  
+**Goal:** Remove a logical `ChapterPage` from the active chapter draft without deleting its historical page-version records.
+
+### Main Flow
+
+```text
+User opens an editable chapter in the chapter/page workspace
+→ User selects a logical ChapterPage
+→ User chooses Remove Page / Soft Delete Page
+→ Backend validates actor permission and chapter editability
+→ Backend marks the ChapterPage as soft-deleted
+→ Backend preserves all related ChapterPageVersion records
+→ Backend preserves related PageRegion, annotation, task, file, and audit history
+→ UI hides the soft-deleted page from normal active draft navigation
+```
+
+### Important Notes
+
+- `ChapterPage` is a logical page slot, so removing it from an active draft should use soft deletion.
+- Soft-deleting a `ChapterPage` must not delete its historical `ChapterPageVersion` rows.
+- If a page already has task, annotation, or review relevance, the history remains available through historical/admin views.
+- Page version deletion is not a normal user action in the current MVP.
+
+### System Should Try To
+
+- Let Mangaka clean up active draft structure without losing history.
+- Keep page-version and feedback history intact.
+- Avoid hard-deleting logical page slots that may already be referenced by workflow history.
+
+---
 
 ## BF-PAGE-006 — Create Chapter Page Task Linked to Page Regions
 
