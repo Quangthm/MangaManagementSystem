@@ -703,13 +703,22 @@
         && _previewContentType.StartsWith(
             "image/",
             StringComparison.OrdinalIgnoreCase);
-    private static bool IsPdfContentType(
+
+    private static bool IsDocumentContentType(
         string? contentType)
     {
         return string.Equals(
-            contentType,
-            "application/pdf",
-            StringComparison.OrdinalIgnoreCase);
+                contentType,
+                "application/pdf",
+                StringComparison.OrdinalIgnoreCase)
+            || string.Equals(
+                contentType,
+                "application/msword",
+                StringComparison.OrdinalIgnoreCase)
+            || string.Equals(
+                contentType,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                StringComparison.OrdinalIgnoreCase);
     }
 
     protected override async Task OnInitializedAsync()
@@ -880,7 +889,7 @@
                     content.ContentType);
 
             if (!content.IsPlaceholder
-                && IsPdfContentType(
+                && IsDocumentContentType(
                     normalizedContentType))
             {
                 await OpenContentInNewTabAsync(
@@ -1169,7 +1178,7 @@
         return file.ContentType.StartsWith(
                 "image/",
                 StringComparison.OrdinalIgnoreCase)
-            || IsPdfContentType(
+            || IsDocumentContentType(
                 file.ContentType);
     }
 

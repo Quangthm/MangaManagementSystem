@@ -145,7 +145,9 @@ namespace MangaManagementSystem.Application.Features.Admin.Files.Queries
                     "image/jpg",
                     "image/gif",
                     "image/webp",
-                    "application/pdf"
+                    "application/pdf",
+                    "application/msword",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 };
 
         internal static AdminFileListItemDto ToListItemDto(
