@@ -35,7 +35,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             var chapters = await _context.Chapters
                 .AsNoTracking()
                 .Where(c => c.SeriesId == seriesId)
-                .OrderBy(c => c.ChapterNumberLabel)
+                .OrderBy(c => c.CreatedAtUtc)
                 .Select(c => new
                 {
                     c.ChapterId,

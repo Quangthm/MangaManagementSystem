@@ -4,6 +4,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.API.Contracts;
 using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.Application.Features.Mangaka.Chapters.Commands.CancelChapter;
+using MangaManagementSystem.Application.Features.Mangaka.Chapters.Commands.CancelChapterSubmission;
 using MangaManagementSystem.Application.Features.Mangaka.Chapters.Commands.CreateChapterDraft;
 using MangaManagementSystem.Application.Features.Mangaka.Chapters.Commands.ScheduleApprovedChapter;
 using MangaManagementSystem.Application.Features.Mangaka.Chapters.Commands.SubmitChapterForReview;
@@ -212,6 +214,76 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 _logger.LogError(ex, "Unexpected error submitting chapter {ChapterId} for review.", chapterId);
                 return Problem(
                     detail: "We could not submit the chapter for review right now. Please try again later.",
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
+        }
+
+        [HttpPost("chapters/{chapterId:guid}/cancel-submission")]
+        public async Task<IActionResult> CancelChapterSubmissionAsync(
+            Guid chapterId,
+            CancellationToken cancellationToken)
+        {
+            if (chapterId == Guid.Empty)
+            {
+                return BadRequest(new ApiErrorResponse("Invalid chapter ID."));
+            }
+
+            if (!TryResolveActorUserId(out Guid actorUserId))
+            {
+                return BadRequest(new ApiErrorResponse(
+                    "Could not identify the requesting user. Please sign in again."));
+            }
+
+            try
+            {
+                MangakaChapterListItemDto result = await _mediator.Send(
+                    new CancelChapterSubmissionCommand(actorUserId, chapterId), cancellationToken);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new ApiErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error cancelling submission for chapter {ChapterId}.", chapterId);
+                return Problem(
+                    detail: "We could not cancel the submission right now. Please try again later.",
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
+        }
+
+        [HttpPost("chapters/{chapterId:guid}/cancel")]
+        public async Task<IActionResult> CancelChapterAsync(
+            Guid chapterId,
+            CancellationToken cancellationToken)
+        {
+            if (chapterId == Guid.Empty)
+            {
+                return BadRequest(new ApiErrorResponse("Invalid chapter ID."));
+            }
+
+            if (!TryResolveActorUserId(out Guid actorUserId))
+            {
+                return BadRequest(new ApiErrorResponse(
+                    "Could not identify the requesting user. Please sign in again."));
+            }
+
+            try
+            {
+                MangakaChapterListItemDto result = await _mediator.Send(
+                    new CancelChapterCommand(actorUserId, chapterId), cancellationToken);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new ApiErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error cancelling chapter {ChapterId}.", chapterId);
+                return Problem(
+                    detail: "We could not cancel the chapter right now. Please try again later.",
                     statusCode: StatusCodes.Status500InternalServerError);
             }
         }
