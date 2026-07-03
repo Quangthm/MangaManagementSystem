@@ -3,6 +3,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.API.Contracts;
 using MangaManagementSystem.Application.DTOs.Editor;
+using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.PutScheduledChapterOnHold;
+using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.RescheduleChapter;
+using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.SetChapterPlannedReleaseDate;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.SubmitChapterEditorialReview;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queries.GetEditorChapterReviewDetail;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queries.GetEditorChapterReviewQueue;
@@ -223,6 +226,108 @@ namespace MangaManagementSystem.API.Controllers.Editor
                 _logger.LogError(ex, "Unexpected error submitting review decision with markup for chapter {ChapterId}.", chapterId);
                 return Problem(
                     detail: "We could not process the review decision right now. Please try again later.",
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
+        }
+
+        [HttpPut("{chapterId:guid}/planned-release-date")]
+        public async Task<IActionResult> SetPlannedReleaseDateAsync(
+            Guid chapterId,
+            [FromBody] SetPlannedReleaseDateApiRequest request,
+            CancellationToken cancellationToken)
+        {
+            if (!TryResolveActorUserId(out Guid actorUserId))
+                return BadRequest(new ApiErrorResponse(
+                    "Could not identify the requesting user. Please sign in again."));
+
+            try
+            {
+                var result = await _mediator.Send(
+                    new EditorSetChapterPlannedReleaseDateCommand(actorUserId, chapterId, request.PlannedReleaseDate),
+                    cancellationToken);
+
+                if (result.PlannedReleaseDate == default)
+                    return BadRequest(new ApiErrorResponse(
+                        result.ValidationMessage ?? "Planned release date could not be set."));
+
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new ApiErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error setting planned release date for chapter {ChapterId}.", chapterId);
+                return Problem(
+                    detail: "We could not set the planned release date right now. Please try again later.",
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
+        }
+
+        [HttpPut("{chapterId:guid}/reschedule")]
+        public async Task<IActionResult> ReschedulePlannedReleaseDateAsync(
+            Guid chapterId,
+            [FromBody] EditorRescheduleChapterRequest request,
+            CancellationToken cancellationToken)
+        {
+            if (!TryResolveActorUserId(out Guid actorUserId))
+                return BadRequest(new ApiErrorResponse(
+                    "Could not identify the requesting user. Please sign in again."));
+
+            if (string.IsNullOrWhiteSpace(request.Reason))
+                return BadRequest(new ApiErrorResponse("A reason is required for rescheduling."));
+
+            try
+            {
+                var result = await _mediator.Send(
+                    new RescheduleChapterPlannedReleaseDateCommand(
+                        actorUserId, chapterId, request.NewPlannedReleaseDate, request.Reason),
+                    cancellationToken);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new ApiErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error rescheduling chapter {ChapterId}.", chapterId);
+                return Problem(
+                    detail: "We could not reschedule the chapter right now. Please try again later.",
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
+        }
+
+        [HttpPost("{chapterId:guid}/hold")]
+        public async Task<IActionResult> PutChapterOnHoldAsync(
+            Guid chapterId,
+            [FromBody] EditorPutChapterOnHoldRequest request,
+            CancellationToken cancellationToken)
+        {
+            if (!TryResolveActorUserId(out Guid actorUserId))
+                return BadRequest(new ApiErrorResponse(
+                    "Could not identify the requesting user. Please sign in again."));
+
+            if (string.IsNullOrWhiteSpace(request.Reason))
+                return BadRequest(new ApiErrorResponse("A reason is required to put a chapter on hold."));
+
+            try
+            {
+                var result = await _mediator.Send(
+                    new PutScheduledChapterOnHoldCommand(actorUserId, chapterId, request.Reason),
+                    cancellationToken);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new ApiErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error putting chapter {ChapterId} on hold.", chapterId);
+                return Problem(
+                    detail: "We could not put the chapter on hold right now. Please try again later.",
                     statusCode: StatusCodes.Status500InternalServerError);
             }
         }

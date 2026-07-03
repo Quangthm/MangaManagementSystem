@@ -51,7 +51,13 @@ namespace MangaManagementSystem.API.Controllers.Editor
             [FromQuery(Name = "status")] string? status,
             CancellationToken cancellationToken)
         {
-            var query = new GetEditorialProposalQueueQuery(status);
+            Guid actorUserId = Guid.Empty;
+            if (Request.Headers.TryGetValue(ActorUserIdHeader, out var headerValues))
+            {
+                Guid.TryParse(headerValues.FirstOrDefault(), out actorUserId);
+            }
+
+            var query = new GetEditorialProposalQueueQuery(actorUserId, status);
 
             try
             {

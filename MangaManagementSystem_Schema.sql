@@ -982,114 +982,152 @@ CREATE INDEX ix_chapter_editorial_review_reviewer ON manga.ChapterEditorialRevie
 
 CREATE INDEX ix_chapter_editorial_review_decision_code ON manga.ChapterEditorialReview (decision_code);
 
-CREATE TABLE manga.SeriesRankingSnapshot (
-	series_ranking_snapshot_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_series_ranking_snapshot_id DEFAULT NEWID() CONSTRAINT pk_series_ranking_snapshot PRIMARY KEY,
-	series_id UNIQUEIDENTIFIER NOT NULL,
-	ranking_period_type_code NVARCHAR(50) NOT NULL,
-	period_start_date DATE NOT NULL,
-	period_end_date DATE NOT NULL,
-	rank_position INT NOT NULL,
-	ranking_score DECIMAL(10, 2) NOT NULL,
-	reader_vote_count INT NOT NULL CONSTRAINT df_series_ranking_snapshot_reader_vote_count DEFAULT(0),
-	cancellation_risk_score DECIMAL(10, 2) NULL,
-	generated_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_ranking_snapshot_generated_at_utc DEFAULT(SYSUTCDATETIME()),
-	generated_by_user_id UNIQUEIDENTIFIER NULL,
-	created_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_ranking_snapshot_created_at_utc DEFAULT(SYSUTCDATETIME()),
-	CONSTRAINT ck_series_ranking_snapshot_period_type_code CHECK (
-		ranking_period_type_code IN (
-			N'WEEKLY',
-			N'MONTHLY',
-			N'SEASONAL'
-			)
-		),
-	CONSTRAINT fk_series_ranking_snapshot_series FOREIGN KEY (series_id) REFERENCES manga.Series(series_id),
-	CONSTRAINT fk_series_ranking_snapshot_generated_by FOREIGN KEY (generated_by_user_id) REFERENCES auth.Users(user_id),
-	CONSTRAINT ck_series_ranking_snapshot_rank_position CHECK (rank_position >= 1),
-	CONSTRAINT ck_series_ranking_snapshot_period CHECK (period_end_date >= period_start_date),
-	CONSTRAINT uq_series_ranking_snapshot_series_period UNIQUE (
-		series_id,
-		ranking_period_type_code,
-		period_start_date
-		)
-	);
+CREATE TABLE manga.PublicationPeriod (
+    publication_period_id UNIQUEIDENTIFIER NOT NULL
+        CONSTRAINT df_publication_period_id DEFAULT NEWID()
+        CONSTRAINT pk_publication_period PRIMARY KEY,
 
-CREATE INDEX ix_series_ranking_snapshot_period_type_code ON manga.SeriesRankingSnapshot (ranking_period_type_code);
+    period_name NVARCHAR(100) NOT NULL,
+    period_type_code NVARCHAR(50) NOT NULL,
 
-CREATE INDEX ix_series_ranking_snapshot_period_start ON manga.SeriesRankingSnapshot (period_start_date);
+    period_start_date DATE NOT NULL,
+    period_end_date DATE NOT NULL,
 
-CREATE INDEX ix_series_ranking_snapshot_period_rank ON manga.SeriesRankingSnapshot (
-	ranking_period_type_code,
-	period_start_date DESC,
-	rank_position
-	) INCLUDE (
-	series_id,
-	ranking_score,
-	reader_vote_count,
-	cancellation_risk_score,
-	period_end_date
-	);
+    CONSTRAINT ck_publication_period_type CHECK (
+        period_type_code IN (N'WEEKLY', N'MONTHLY', N'YEARLY')
+    ),
 
-CREATE INDEX ix_series_ranking_snapshot_series_period ON manga.SeriesRankingSnapshot (
-	series_id,
-	ranking_period_type_code,
-	period_start_date DESC
-	) INCLUDE (
-	rank_position,
-	ranking_score,
-	reader_vote_count,
-	cancellation_risk_score,
-	period_end_date,
-	generated_at_utc
-	);
+    CONSTRAINT ck_publication_period_dates CHECK (
+        period_end_date >= period_start_date
+    ),
 
-CREATE TABLE manga.ChapterReaderVoteSnapshot (
-	chapter_reader_vote_snapshot_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_chapter_reader_vote_snapshot_id DEFAULT NEWID() CONSTRAINT pk_chapter_reader_vote_snapshot PRIMARY KEY,
-	chapter_id UNIQUEIDENTIFIER NOT NULL,
-	reader_vote_count INT NOT NULL CONSTRAINT df_chapter_reader_vote_snapshot_reader_vote_count DEFAULT(0),
-	average_rating DECIMAL(4, 2) NULL,
-	positive_feedback_count INT NULL,
-	negative_feedback_count INT NULL,
-	data_source_note NVARCHAR(500) NULL,
-	entered_by_user_id UNIQUEIDENTIFIER NOT NULL,
-	voted_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_chapter_reader_vote_snapshot_voted_at_utc DEFAULT(SYSUTCDATETIME()),
-	CONSTRAINT ck_chapter_reader_vote_snapshot_counts CHECK (
-		reader_vote_count >= 0
-		AND (
-			positive_feedback_count IS NULL
-			OR positive_feedback_count >= 0
-			)
-		AND (
-			negative_feedback_count IS NULL
-			OR negative_feedback_count >= 0
-			)
-		),
-	CONSTRAINT ck_chapter_reader_vote_snapshot_rating CHECK (
-		average_rating IS NULL
-		OR average_rating BETWEEN 0
-			AND 10
-		),
-	CONSTRAINT fk_chapter_reader_vote_snapshot_chapter FOREIGN KEY (chapter_id) REFERENCES manga.Chapter(chapter_id),
-	CONSTRAINT fk_chapter_reader_vote_snapshot_entered_by FOREIGN KEY (entered_by_user_id) REFERENCES auth.Users(user_id),
-	CONSTRAINT uq_chapter_reader_vote_snapshot_chapter UNIQUE (chapter_id)
-	);
+    CONSTRAINT uq_publication_period_name UNIQUE (period_name),
 
-CREATE INDEX ix_chapter_reader_vote_snapshot_voted_at ON manga.ChapterReaderVoteSnapshot (voted_at_utc) INCLUDE (
-	chapter_id,
-	reader_vote_count,
-	average_rating,
-	positive_feedback_count,
-	negative_feedback_count
-	);
+    CONSTRAINT uq_publication_period_type_start UNIQUE (
+        period_type_code,
+        period_start_date
+    )
+);
 
-CREATE INDEX ix_chapter_reader_vote_snapshot_entered_by ON manga.ChapterReaderVoteSnapshot (
-	entered_by_user_id,
-	voted_at_utc DESC
-	) INCLUDE (
-	chapter_id,
-	reader_vote_count,
-	average_rating
-	);
+CREATE TABLE manga.SeriesVoteInput (
+    series_vote_input_id UNIQUEIDENTIFIER NOT NULL
+        CONSTRAINT df_series_vote_input_id DEFAULT NEWID()
+        CONSTRAINT pk_series_vote_input PRIMARY KEY,
+    publication_period_id UNIQUEIDENTIFIER NOT NULL,
+    series_id UNIQUEIDENTIFIER NOT NULL,
 
+	rating_count INT NOT NULL,
+    average_rating DECIMAL(4, 2) NOT NULL,
+    reading_count INT NOT NULL,
+    data_source_note NVARCHAR(1000) NULL,
+    entered_by_user_id UNIQUEIDENTIFIER NOT NULL,
+    entered_at_utc DATETIME2(0) NOT NULL
+        CONSTRAINT df_series_vote_input_entered_at_utc DEFAULT SYSUTCDATETIME(),
+    updated_by_user_id UNIQUEIDENTIFIER NULL,
+    updated_at_utc DATETIME2(0) NULL,
+    CONSTRAINT fk_series_vote_input_publication_period
+        FOREIGN KEY (publication_period_id)
+        REFERENCES manga.PublicationPeriod(publication_period_id),
+
+    CONSTRAINT fk_series_vote_input_series
+        FOREIGN KEY (series_id)
+        REFERENCES manga.Series(series_id),
+
+    CONSTRAINT fk_series_vote_input_entered_by
+        FOREIGN KEY (entered_by_user_id)
+        REFERENCES auth.Users(user_id),
+
+    CONSTRAINT fk_series_vote_input_updated_by
+        FOREIGN KEY (updated_by_user_id)
+        REFERENCES auth.Users(user_id),
+
+    CONSTRAINT uq_series_vote_input_period_series UNIQUE (
+        publication_period_id,
+        series_id
+    ),
+
+    CONSTRAINT ck_series_vote_input_average_rating CHECK (
+		average_rating BETWEEN 0 AND 10
+    ),
+	CONSTRAINT ck_series_vote_input_rating_count CHECK (
+    rating_count > 0
+),
+
+CONSTRAINT ck_series_vote_input_reading_count CHECK (
+    reading_count > 0
+),
+
+CONSTRAINT ck_series_vote_input_rating_reading_count CHECK (
+    rating_count <= reading_count
+)
+);
+CREATE NONCLUSTERED INDEX ix_series_vote_input_period_ranking
+ON manga.SeriesVoteInput (
+    publication_period_id,
+    average_rating DESC,
+    rating_count DESC,
+    reading_count DESC,
+    series_id
+);
+GO
+CREATE VIEW manga.vw_SeriesRanking
+AS
+WITH ScoreBase AS (
+    SELECT
+        pp.publication_period_id,
+        pp.period_name,
+        pp.period_type_code,
+        pp.period_start_date,
+        pp.period_end_date,
+
+        svi.series_id,
+        s.title,
+        s.slug,
+
+        svi.rating_count,
+        svi.average_rating,
+        svi.reading_count,
+
+        CAST(
+            (
+                svi.average_rating * LOG10(1 + svi.rating_count)
+                + svi.reading_count * 0.001
+            )
+            AS DECIMAL(18, 4)
+        ) AS ranking_score
+    FROM manga.SeriesVoteInput svi
+    INNER JOIN manga.PublicationPeriod pp
+        ON pp.publication_period_id = svi.publication_period_id
+    INNER JOIN manga.Series s
+        ON s.series_id = svi.series_id
+)
+SELECT
+    publication_period_id,
+    period_name,
+    period_type_code,
+    period_start_date,
+    period_end_date,
+
+    series_id,
+    title,
+    slug,
+
+    rating_count,
+    average_rating,
+    reading_count,
+    ranking_score,
+
+    DENSE_RANK() OVER (
+        PARTITION BY publication_period_id
+        ORDER BY
+            ranking_score DESC,
+            average_rating DESC,
+            rating_count DESC,
+            reading_count DESC,
+            series_id
+    ) AS rank_position
+FROM ScoreBase;
+GO
 CREATE TABLE manga.Notification (
 	notification_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_notification_id DEFAULT NEWID() CONSTRAINT pk_notification PRIMARY KEY,
 	recipient_user_id UNIQUEIDENTIFIER NOT NULL,

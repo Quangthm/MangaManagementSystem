@@ -5,9 +5,10 @@ namespace MangaManagementSystem.Application.DTOs.Editor
 {
     /// <summary>
     /// Read-only aggregate for the Tantou Editor dashboard. All values are sourced from the
-    /// database via EF AsNoTracking read queries — no mock data. KPI counts are global MVP
-    /// counts (no per-editor scoping yet for chapter review / annotations) and follow the same
-    /// editorial-review status conventions used elsewhere in the proposal workflow.
+    /// database via EF AsNoTracking read queries — no mock data. Chapters Under Review and
+    /// Pending Annotations are scoped to series where the current editor is an active
+    /// contributor. Serialized Series is also contributor-scoped. Pending Proposals remains a
+    /// global claimable queue for all active Tantou Editors.
     /// </summary>
     public sealed record EditorDashboardDto(
         int PendingProposalCount,

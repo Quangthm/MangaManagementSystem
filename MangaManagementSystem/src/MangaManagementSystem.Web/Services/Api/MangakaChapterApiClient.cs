@@ -275,6 +275,41 @@ namespace MangaManagementSystem.Web.Services.Api
             throw new InvalidOperationException(message);
         }
 
+        /// <summary>
+        /// Sets a planned release date on a plannable chapter (DRAFT, REVISION_REQUESTED, or APPROVED).
+        /// If the chapter is APPROVED, it transitions to SCHEDULED.
+        /// </summary>
+        public async Task<SetChapterPlannedReleaseDateResponse> SetPlannedReleaseDateAsync(
+            Guid actorUserId,
+            Guid chapterId,
+            SetPlannedReleaseDateRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            using var requestMessage = new HttpRequestMessage(
+                HttpMethod.Put, $"api/mangaka/chapters/{chapterId}/planned-release-date")
+            {
+                Content = JsonContent.Create(request)
+            };
+            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<SetChapterPlannedReleaseDateResponse>(
+                    cancellationToken: cancellationToken);
+                if (result is null)
+                    throw new InvalidOperationException("No confirmation was returned. Please refresh and verify.");
+                return result;
+            }
+
+            var message = await ExtractErrorMessageAsync(response);
+            _logger.LogWarning(
+                "Set planned release date for chapter {ChapterId} failed: {StatusCode} {ReasonPhrase}",
+                chapterId, (int)response.StatusCode, response.ReasonPhrase);
+            throw new InvalidOperationException(message);
+        }
+
         private static async Task<string> ExtractErrorMessageAsync(HttpResponseMessage response)
         {
             try

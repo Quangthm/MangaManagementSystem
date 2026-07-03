@@ -30,12 +30,27 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<IReadOnlyList<SeriesProposal>> GetMySeriesProposalsAsync(Guid actorUserId, CancellationToken ct = default);
 
         /// <summary>
+        /// Returns a single proposal by ID, scoped to the specified actor's active Mangaka
+        /// contributor memberships. Returns null when not found or not authorized.
+        /// Same eager includes as GetMySeriesProposalsAsync. Read-only EF query.
+        /// </summary>
+        Task<SeriesProposal?> GetMySeriesProposalDetailAsync(Guid actorUserId, Guid seriesProposalId, CancellationToken ct = default);
+
+        /// <summary>
         /// Returns true when the specified user is an active Tantou Editor contributor of the
         /// given series (SeriesContributor.EndDate IS NULL, User ACTIVE, Role 'Tantou Editor').
         /// This mirrors the membership predicate used by the editorial-review stored procedures
         /// and represents the "claimed" state for editorial review. Read-only EF query.
         /// </summary>
         Task<bool> IsActiveTantouEditorContributorAsync(Guid seriesId, Guid userId, CancellationToken ct = default);
+
+        /// <summary>
+        /// Returns all active Tantou Editor contributors for the given series.
+        /// Active = SeriesContributor.EndDate IS NULL, User ACTIVE, Role 'Tantou Editor'.
+        /// Read-only EF query.
+        /// </summary>
+        Task<IReadOnlyList<ActiveTantouEditorInfo>> GetActiveTantouEditorContributorsAsync(
+            Guid seriesId, CancellationToken ct = default);
 
         /// <summary>
         /// Submits a series proposal for editorial review via <c>manga.usp_SeriesProposal_Submit</c>.
@@ -70,4 +85,14 @@ namespace MangaManagementSystem.Domain.Interfaces
             string markupOriginalFileName, string markupCloudinaryPublicId, string markupCloudinarySecureUrl, 
             string markupContentType, long markupFileSizeBytes, string? markupSha256Hash = null, CancellationToken ct = default);
     }
+
+    /// <summary>
+    /// Read-only info for an active Tantou Editor contributor of a series.
+    /// Used by proposal detail to display existing active editors.
+    /// </summary>
+    public sealed record ActiveTantouEditorInfo(
+        Guid UserId,
+        string DisplayName,
+        string? Username,
+        DateTime? StartedAtUtc);
 }

@@ -4,6 +4,7 @@
 @using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Web.Services.Api
 @using MangaManagementSystem.Web.Services
+@using MangaManagementSystem.Web.Components.Shared
 @attribute [Authorize(Roles = "Tantou Editor")]
 @inject IEditorProposalApiClient EditorProposalApiClient
 @inject NavigationManager Nav
@@ -28,138 +29,26 @@
         }
         else if (_proposal != null)
         {
-            <MudGrid>
-                @* ── Left: Series Cover (portrait 2:3, object-fit: cover) ── *@
-                <MudItem xs="12" md="4">
-                    <div style="width: min(100%, 420px); max-width: 420px; aspect-ratio:2/3; margin:0 auto; background:#f1f5f9; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:12px;">
-                        @if (!string.IsNullOrWhiteSpace(_proposal.SeriesCoverUrl))
-                        {
-                            <img src="@_proposal.SeriesCoverUrl"
-                                 alt="@($"{_proposal.SeriesTitle} cover")"
-                                 style="width:100%; height:100%; object-fit:cover; object-position:center; display:block;" />
-                        }
-                        else
-                        {
-                            <MudIcon Icon="@Icons.Material.Filled.MenuBook"
-                                     Style="font-size:72px; color:#cbd5e1;" />
-                        }
-                    </div>
-                </MudItem>
-
-                @* ── Center: Proposal Info + File + Decision ── *@
-                <MudItem xs="12" md="5">
-                    <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
-                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Class="mb-4">
-                            <div>
-                                <MudText Typo="Typo.h5" Class="font-weight-bold">@_proposal.ProposalTitle</MudText>
-                                <MudText Class="mf-muted">@_proposal.SeriesTitle · Proposal v@_proposal.ProposalVersionNo</MudText>
-                            </div>
-                            <div class="d-flex flex-column align-end gap-1">
-                                <MudChip T="string" Color="@GetStatusColor(_proposal.ProposalStatusCode)">@_proposal.ProposalStatusCode.Replace("_", " ")</MudChip>
-                                @if (!string.IsNullOrWhiteSpace(_proposal.SeriesStatusCode) && _proposal.SeriesStatusCode != _proposal.ProposalStatusCode)
-                                {
-                                    <MudText Typo="Typo.caption" Class="mf-muted">Series: @_proposal.SeriesStatusCode.Replace("_", " ")</MudText>
-                                }
-                            </div>
-                        </MudStack>
-
-                        @if (!string.IsNullOrWhiteSpace(_proposal.SeriesStatusCode) && _proposal.SeriesStatusCode != _proposal.ProposalStatusCode)
-                        {
-                            <MudAlert Severity="Severity.Warning" Class="mb-3" Dense="true">
-                                <MudText Typo="Typo.caption">Current series state (@_proposal.SeriesStatusCode.Replace("_", " ")) differs from this proposal version.</MudText>
-                            </MudAlert>
-                        }
-
-                        <MudDivider Class="mb-3" />
-
-                        <MudText Typo="Typo.subtitle2" Class="mf-muted">Series</MudText>
-                        <MudText Class="mb-1">@_proposal.SeriesTitle</MudText>
-                        <MudText Typo="Typo.caption" Class="mf-muted mb-3">
-                            Slug: <code>@_proposal.SeriesSlug</code>
-                        </MudText>
-
-                        <MudText Typo="Typo.subtitle2" Class="mf-muted mt-3">Genre</MudText>
-                        <MudText Class="mb-3">@string.Join(", ", _proposal.Genres.Select(g => g.GenreName))</MudText>
-
-                        <MudText Typo="Typo.subtitle2" Class="mf-muted mt-3">Synopsis</MudText>
-                        <MudPaper Elevation="0" Class="pa-3" Style="background:var(--mud-palette-background-grey);">
-                            <div style="white-space:pre-wrap; @(_synopsisExpanded ? "" : "max-height:140px; overflow:hidden;")">@_proposal.SynopsisSnapshot</div>
-                            @if (_proposal.SynopsisSnapshot?.Length > 300)
-                            {
-                                <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="ToggleSynopsis" Class="mt-1">
-                                    @(_synopsisExpanded ? "Show less" : "View more")
-                                </MudButton>
-                            }
-                        </MudPaper>
-
-                        <MudDivider Class="my-4" />
-
-                        <MudText Typo="Typo.subtitle1" Class="font-weight-bold mb-2">Proposal File</MudText>
-                        @if (!string.IsNullOrEmpty(_proposal.ProposalFileUrl))
-                        {
-                            <MudButton Variant="Variant.Outlined" Color="Color.Primary"
-                                       StartIcon="@Icons.Material.Filled.OpenInNew"
-                                       Href="@_proposal.ProposalFileUrl" Target="_blank">
-                                Open Proposal File
-                            </MudButton>
-                            @if (!string.IsNullOrEmpty(_proposal.ProposalFileName))
-                            {
-                                <MudText Typo="Typo.caption" Class="mf-muted mt-1">@_proposal.ProposalFileName</MudText>
-                            }
-                        }
-                        else
-                        {
-                            <MudText Class="mf-muted">Proposal file is unavailable.</MudText>
-                        }
-                    </MudPaper>
-
-                    @if (_proposal.HasEditorialDecision)
+            <SeriesProposalDetailView Proposal="@_detailViewModel">
+                <SidePanel>
+                    @if (_proposal.CanClaim && _proposal.HasOtherActiveTantouEditor)
                     {
-                        <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
-                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Editorial Decision</MudText>
-                            @if (!string.IsNullOrWhiteSpace(_proposal.ReviewerDisplayName))
-                            {
-                                <MudText Typo="Typo.body2" Class="mf-muted mb-1">
-                                    Reviewed by @_proposal.ReviewerDisplayName
-                                    @if (_proposal.ReviewedAtUtc.HasValue)
-                                    {
-                                        <span> on @_proposal.ReviewedAtUtc.Value.ToLocalTime().ToString("MMM d, yyyy h:mm tt")</span>
-                                    }
-                                </MudText>
-                            }
-                            @if (!string.IsNullOrWhiteSpace(_proposal.Comments))
-                            {
-                                <MudPaper Elevation="0" Class="pa-3 mt-2" Style="background:var(--mud-palette-warning-hover);">
-                                    <MudText Style="white-space:pre-wrap;">@_proposal.Comments</MudText>
-                                </MudPaper>
-                            }
-                            @if (!string.IsNullOrEmpty(_proposal.MarkupFileUrl))
-                            {
-                                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Class="mt-3"
-                                           StartIcon="@Icons.Material.Filled.OpenInNew"
-                                           Href="@_proposal.MarkupFileUrl" Target="_blank">
-                                    Open Markup File
-                                </MudButton>
-                                @if (!string.IsNullOrEmpty(_proposal.MarkupFileName))
-                                {
-                                    <MudText Typo="Typo.caption" Class="mf-muted mt-1">@_proposal.MarkupFileName</MudText>
-                                }
-                            }
+                        <MudPaper Class="pa-5 mf-card mb-5" Elevation="0" Style="border:2px dashed var(--mud-palette-warning);">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">Active editor already assigned</MudText>
+                            <MudText Typo="Typo.body2" Class="mf-muted mb-3">
+                                This series already has active Tantou Editor(s):
+                                @string.Join(", ", _proposal.ActiveTantouEditors
+                                    .Where(a => a.UserId != _currentUserId)
+                                    .Select(a => a.DisplayName))
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mb-4">You can still claim this proposal if another editor is needed.</MudText>
+                            <MudButton Variant="Variant.Filled" Color="Color.Warning" FullWidth="true"
+                                       OnClick="@(() => _claimAdditionalDialogOpen = true)" Disabled="_processing">
+                                Claim as Additional Editor
+                            </MudButton>
                         </MudPaper>
                     }
-                </MudItem>
-
-                @* ── Right: Submission + Claim/Actions ── *@
-                <MudItem xs="12" md="3">
-                    <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
-                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Submission</MudText>
-                        <MudText Typo="Typo.body2" Class="mf-muted">Submitted by</MudText>
-                        <MudText Class="mb-2">@_proposal.SubmitterDisplayName</MudText>
-                        <MudText Typo="Typo.body2" Class="mf-muted">Submitted at</MudText>
-                        <MudText class="mb-2">@_proposal.SubmittedAtUtc.ToLocalTime().ToString("MMM d, yyyy h:mm tt")</MudText>
-                    </MudPaper>
-
-                    @if (_proposal.CanClaim)
+                    else if (_proposal.CanClaim)
                     {
                         <MudPaper Class="pa-5 mf-card mb-5" Elevation="0" Style="border:2px dashed var(--mud-palette-warning);">
                             <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">Unclaimed Proposal</MudText>
@@ -175,6 +64,21 @@
                     {
                         <MudPaper Class="pa-5 mf-card" Elevation="0">
                             <MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Decision Actions</MudText>
+                            @if (_proposal.CurrentActorIsActiveTantouEditorContributor)
+                            {
+                                <MudAlert Severity="Severity.Info" Class="mb-3" Dense="true">
+                                    <MudText Typo="Typo.caption">
+                                        You are an active Tantou Editor for this series.
+                                        @if (_proposal.ActiveTantouEditors.Count > 1)
+                                        {
+                                            var others = _proposal.ActiveTantouEditors
+                                                .Where(a => a.UserId != _currentUserId)
+                                                .Select(a => a.DisplayName).ToList();
+                                            <span>Other active editor(s): @string.Join(", ", others).</span>
+                                        }
+                                    </MudText>
+                                </MudAlert>
+                            }
                             <MudStack Spacing="2">
                                 @if (_proposal.CanPassToBoard)
                                 {
@@ -211,8 +115,8 @@
                             This proposal is under editorial review. Claim it to record a decision.
                         </MudAlert>
                     }
-                </MudItem>
-            </MudGrid>
+                </SidePanel>
+            </SeriesProposalDetailView>
         }
     </div>
 
@@ -322,17 +226,36 @@
             </MudButton>
         </DialogActions>
     </MudDialog>
+
+    @* ── Claim as Additional Editor confirmation modal ─────────────────── *@
+    <MudDialog @bind-Visible="_claimAdditionalDialogOpen" Options="_dialogOptions">
+        <TitleContent>
+            <MudText Typo="Typo.h6">Additional Editor Confirmation</MudText>
+        </TitleContent>
+        <DialogContent>
+            <MudText>
+                Another Tantou Editor is already active on this series. Claiming will add you as an additional active editor. Continue?
+            </MudText>
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="@(() => _claimAdditionalDialogOpen = false)" Disabled="_processing">Cancel</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Warning" OnClick="ClaimProposal" Disabled="_processing">
+                @if (_processing) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
+                Claim Anyway
+            </MudButton>
+        </DialogActions>
+    </MudDialog>
 </EditorLayout>
 
 @code {
     [Parameter] public Guid ProposalId { get; set; }
 
     private EditorProposalDetailDto? _proposal;
+    private SeriesProposalDetailViewModel? _detailViewModel;
     private bool _loading = true;
     private bool _processing;
     private string? _error;
     private Guid _currentUserId;
-    private bool _synopsisExpanded;
     private string _backLabel = "Back to Queue";
     private string _backHref = "/editor/proposals";
 
@@ -340,6 +263,7 @@
     private bool _revisionDialogOpen;
     private bool _boardDialogOpen;
     private bool _cancelDialogOpen;
+    private bool _claimAdditionalDialogOpen;
     private string _comments = string.Empty;
     private bool _commentsError;
     private bool _markupError;
@@ -366,9 +290,7 @@
         {
             var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (Guid.TryParse(idClaim, out var userId))
-            {
                 _currentUserId = userId;
-            }
         }
 
         _backHref = SafeReturnUrl.Resolve(returnUrl, "/editor/proposals");
@@ -394,6 +316,10 @@
             {
                 _error = "Proposal not found.";
             }
+            else
+            {
+                _detailViewModel = MapToDetailViewModel(_proposal);
+            }
         }
         catch (Exception ex)
         {
@@ -405,46 +331,52 @@
         }
     }
 
-    private void ToggleSynopsis() => _synopsisExpanded = !_synopsisExpanded;
-
-    private Color GetStatusColor(string status) => status switch
-    {
-        "UNDER_EDITORIAL_REVIEW" => Color.Warning,
-        "UNDER_BOARD_REVIEW" => Color.Info,
-        "REVISION_REQUESTED" => Color.Error,
-        "CANCELLED" => Color.Default,
-        "APPROVED" => Color.Success,
-        _ => Color.Default
-    };
+    private static SeriesProposalDetailViewModel MapToDetailViewModel(EditorProposalDetailDto p) => new(
+        SeriesProposalId: p.SeriesProposalId,
+        SeriesTitle: p.SeriesTitle,
+        SeriesSlug: p.SeriesSlug,
+        SeriesCoverUrl: p.SeriesCoverUrl,
+        ProposalVersionNo: p.ProposalVersionNo,
+        ProposalTitle: p.ProposalTitle,
+        SynopsisSnapshot: p.SynopsisSnapshot,
+        Genres: p.Genres,
+        Tags: p.Tags,
+        StatusCode: p.ProposalStatusCode,
+        SeriesStatusCode: p.SeriesStatusCode,
+        SubmittedByDisplayName: p.SubmitterDisplayName,
+        SubmittedAtUtc: p.SubmittedAtUtc,
+        ReviewerDisplayName: p.ReviewerDisplayName,
+        ReviewedAtUtc: p.ReviewedAtUtc,
+        Comments: p.Comments,
+        ProposalFileName: p.ProposalFileName,
+        ProposalFileUrl: p.ProposalFileUrl,
+        MarkupFileName: p.MarkupFileName,
+        MarkupFileUrl: p.MarkupFileUrl,
+        WithdrawnAtUtc: null,
+        HasEditorialDecision: p.HasEditorialDecision
+    );
 
     private bool IsExpectedProposalSeriesStatePair(string? proposalStatusCode, string? seriesStatusCode)
     {
-        // When an editor requests revision on a proposal, the series returns to PROPOSAL_DRAFT.
-        // This is an expected state pair, not a mismatch.
         if (proposalStatusCode == "REVISION_REQUESTED" && seriesStatusCode == "PROPOSAL_DRAFT")
             return true;
-
-        // Otherwise, the proposal and series status codes should match.
         return proposalStatusCode == seriesStatusCode;
     }
 
     private async Task OnMarkupChanged(IBrowserFile file)
     {
         _markupError = false;
-
         if (file == null)
         {
             _markupFile = null;
             _markupBytes = null;
             return;
         }
-
         if (file.Size > MaxMarkupSize)
         {
             Snackbar.Add("The markup file exceeds the maximum allowed size of 10 MB.", Severity.Warning);
             return;
         }
-
         try
         {
             using var stream = file.OpenReadStream(maxAllowedSize: MaxMarkupSize);
@@ -475,6 +407,7 @@
         _revisionDialogOpen = false;
         _boardDialogOpen = false;
         _cancelDialogOpen = false;
+        _claimAdditionalDialogOpen = false;
         ResetModalState();
     }
 
@@ -499,6 +432,7 @@
     private async Task ClaimProposal()
     {
         _processing = true;
+        _claimAdditionalDialogOpen = false;
         try
         {
             await EditorProposalApiClient.ClaimAsync(_currentUserId, ProposalId, "Claimed via Editor UI");
@@ -518,10 +452,7 @@
     private async Task SubmitRequestRevision()
     {
         _commentsError = string.IsNullOrWhiteSpace(_comments);
-        if (_commentsError)
-        {
-            return;
-        }
+        if (_commentsError) return;
 
         _processing = true;
         try
@@ -529,7 +460,6 @@
             await EditorProposalApiClient.RequestRevisionAsync(
                 _currentUserId, ProposalId, _comments,
                 _markupBytes, _markupFile?.Name, _markupFile?.ContentType);
-
             Snackbar.Add("Revision requested.", Severity.Success);
             CloseDialogs();
             await LoadProposal();
@@ -553,7 +483,6 @@
                 _currentUserId, ProposalId,
                 string.IsNullOrWhiteSpace(_comments) ? null : _comments,
                 _markupBytes, _markupFile?.Name, _markupFile?.ContentType);
-
             Snackbar.Add("Proposal passed to board review.", Severity.Success);
             CloseDialogs();
             await LoadProposal();
@@ -572,10 +501,7 @@
     {
         _commentsError = string.IsNullOrWhiteSpace(_comments);
         _markupError = _markupBytes is not { Length: > 0 };
-        if (_commentsError || _markupError)
-        {
-            return;
-        }
+        if (_commentsError || _markupError) return;
 
         _processing = true;
         try
@@ -583,7 +509,6 @@
             await EditorProposalApiClient.CancelAsync(
                 _currentUserId, ProposalId, _comments,
                 _markupBytes!, _markupFile!.Name, _markupFile!.ContentType);
-
             Snackbar.Add("Proposal cancelled.", Severity.Success);
             CloseDialogs();
             await LoadProposal();

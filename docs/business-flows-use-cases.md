@@ -1296,6 +1296,9 @@ manga.usp_ChapterPageVersion_Create or equivalent page-version workflow procedur
 - Use `file_purpose_code = CHAPTER_PAGE_VERSION` for any file that becomes official page-version content.
 - This includes accepted auto-translation output, accepted future tool output, accepted assistant output, and externally edited output uploaded back into the system.
 - Do not use removed purposes such as `CHAPTER_ASSET`, `TASK_SUBMISSION`, or old `CHAPTER_DRAFT`.
+- Selecting or uploading a page file for preview must not create a `FileResource` or `ChapterPageVersion` until the user explicitly clicks Save/Confirm.
+- In the current MVP, normal users cannot delete a saved `ChapterPageVersion`; they should save a newer version and make it current when the previous saved version is wrong or outdated.
+- Future Admin/system retention may purge old or unused page versions after chapter release, but this is outside MVP and must preserve versions referenced by regions, annotations, tasks, reviews, release history, or audit.
 - The existing page version should not be overwritten.
 - Previous page versions remain available for traceability and comparison.
 - The page-version workflow procedure should own the SQL transaction so `FileResource`, `ChapterPageVersion`, current-version updates, and audit event stay transactionally consistent.
@@ -1412,6 +1415,41 @@ audit.usp_AuditEvent_Append
 - Avoid saving duplicate or temporary AI suggestions unless the user chooses to keep them.
 - Return created IDs in a format that is easy for C# to merge with existing region IDs.
 - Keep audit detail focused on the page version and created region IDs/count.
+
+---
+
+## BF-PAGE-003A — Delete Unused Page Region
+
+**Status:** Agreed  
+**Primary actor:** Authorized Page Workspace User  
+**Goal:** Allow a mistaken or unused saved `PageRegion` to be hard-deleted only when it has not become part of task or annotation history.
+
+### Main Flow
+
+```text
+User opens the chapter/page workspace
+→ User selects a saved PageRegion
+→ UI requests deletion/removal
+→ Backend validates actor permission for the owning series/page workspace
+→ Backend checks whether the PageRegion is linked by ChapterPageAnnotationRegion, ChapterPageTaskRegion, or any other workflow record
+→ If the region is not linked to any dependent workflow record, backend hard-deletes the PageRegion
+→ UI removes the region overlay from the page version
+→ If the region is linked to an annotation or task, backend rejects deletion and returns a clear explanation
+```
+
+### Important Notes
+
+- Hard deletion is allowed only for unused regions that are not connected to tasks, annotations, or other workflow records.
+- A region linked to a task or annotation is part of workflow history and must be preserved.
+- Deleting an unused region must not cascade into annotations, tasks, page versions, or files.
+- Whole-page regions created for Quick Select become non-deletable once linked to a task.
+- The UI should disable or hide the delete action for linked regions when that information is already known.
+
+### System Should Try To
+
+- Let users clean up mistaken unused regions.
+- Prevent deletion from breaking annotation or task history.
+- Keep region deletion simple without introducing a soft-delete lifecycle for unused regions in MVP.
 
 ---
 
@@ -1621,6 +1659,40 @@ audit.usp_AuditEvent_Append
 - Preserve audit traceability for text changes.
 - Avoid silently overwriting feedback history.
 
+## BF-PAGE-005B — Soft Delete Chapter Page from Active Draft
+
+**Status:** Agreed  
+**Primary actor:** Mangaka / authorized chapter page manager  
+**Goal:** Remove a logical `ChapterPage` from the active chapter draft without deleting its historical page-version records.
+
+### Main Flow
+
+```text
+User opens an editable chapter in the chapter/page workspace
+→ User selects a logical ChapterPage
+→ User chooses Remove Page / Soft Delete Page
+→ Backend validates actor permission and chapter editability
+→ Backend marks the ChapterPage as soft-deleted
+→ Backend preserves all related ChapterPageVersion records
+→ Backend preserves related PageRegion, annotation, task, file, and audit history
+→ UI hides the soft-deleted page from normal active draft navigation
+```
+
+### Important Notes
+
+- `ChapterPage` is a logical page slot, so removing it from an active draft should use soft deletion.
+- Soft-deleting a `ChapterPage` must not delete its historical `ChapterPageVersion` rows.
+- If a page already has task, annotation, or review relevance, the history remains available through historical/admin views.
+- Page version deletion is not a normal user action in the current MVP.
+
+### System Should Try To
+
+- Let Mangaka clean up active draft structure without losing history.
+- Keep page-version and feedback history intact.
+- Avoid hard-deleting logical page slots that may already be referenced by workflow history.
+
+---
+
 ## BF-PAGE-006 — Create Chapter Page Task Linked to Page Regions
 
 **Status:** Agreed  
@@ -1798,10 +1870,12 @@ Tantou Editor opens the submitted chapter review queue
 → Editor chooses one decision: APPROVED / REVISION_REQUESTED / CANCELLED
 → If decision is REVISION_REQUESTED or CANCELLED, editor enters non-blank comments
 → Editor may optionally attach an EDITORIAL_ATTACHMENT markup file
-→ Backend validates actor permission, chapter status, required comments, and optional markup file
+→ Backend validates actor permission, chapter status, required comments, optional markup file, and scheduling rules when needed
 → Backend creates manga.ChapterEditorialReview
 → Backend updates manga.Chapter.status_code according to the decision
-→ Backend writes the chapter review audit event
+→ If APPROVED and Chapter.planned_release_date is empty, Chapter.status_code becomes APPROVED
+→ If APPROVED and Chapter.planned_release_date already exists and is valid, Chapter.status_code becomes SCHEDULED
+→ Backend writes the chapter review audit event and the scheduling audit detail when approval moves the chapter to SCHEDULED
 → UI refreshes the chapter status and review history
 ```
 
@@ -1809,7 +1883,8 @@ Tantou Editor opens the submitted chapter review queue
 
 | Decision | Chapter status after review | Meaning |
 |---|---|---|
-| `APPROVED` | `APPROVED` | The chapter is accepted and may proceed toward scheduling/release. |
+| `APPROVED` with no planned release date | `APPROVED` | The chapter is accepted but not yet scheduled. |
+| `APPROVED` with a valid planned release date | `SCHEDULED` | The chapter is accepted and locked for planned release. |
 | `REVISION_REQUESTED` | `REVISION_REQUESTED` | The same chapter attempt can be edited and resubmitted with new page versions. |
 | `CANCELLED` | `CANCELLED` | The current chapter attempt is a hard stop and becomes read-only historical reference. |
 
@@ -1819,12 +1894,15 @@ Tantou Editor opens the submitted chapter review queue
 - Markup files are optional for both `REVISION_REQUESTED` and `CANCELLED`.
 - Page-specific annotations remain separate from the final chapter-level review decision.
 - `CANCELLED` is not a normal fix-and-resubmit outcome. Use `REVISION_REQUESTED` when the chapter can still be fixed.
+- Scheduling is chapter-level; this flow must never set `Series.status_code = SCHEDULED`.
+- If approval moves a chapter to `SCHEDULED`, Mangaka/page content mutation workflows become locked.
 
 ### System Should Try To
 
-- Make the difference between revision and cancellation clear in the UI.
+- Make the difference between approved-but-unscheduled and scheduled clear in the UI.
 - Preserve review decisions and page-level context.
 - Avoid deleting historical chapter materials.
+- Explain scheduled lock behavior to Mangaka users.
 
 ---
 
@@ -1868,6 +1946,206 @@ unique among non-cancelled chapters only
 - Preserve the cancelled attempt for traceability.
 - Make redo work explicit by creating a new chapter draft.
 - Avoid accidental edits to cancelled chapter materials.
+
+---
+
+## BF-PUB-001 — Plan Chapter Release Date by Publication Frequency
+
+**Status:** Agreed  
+**Primary actor:** Mangaka / Tantou Editor  
+**Goal:** Set and validate a chapter planned release date according to the series' official publication frequency and the relevant `PublicationPeriod`.
+
+### Main Flow
+
+```text
+User opens chapter planning/create/edit screen for a serialized or publication-planned series
+→ UI shows the current Series.publication_frequency_code
+→ Backend finds the latest non-cancelled chapter with planned_release_date for the same series, excluding the current chapter
+→ If a previous planned chapter exists, backend resolves the PublicationPeriod containing the previous planned_release_date
+→ If no previous planned chapter exists, backend treats the current chapter as the first planned chapter
+→ Backend resolves the allowed PublicationPeriod range according to the frequency and first/non-first rule
+→ Backend may propose a default planned_release_date
+→ User may keep the default or choose another date
+→ Backend validates the chosen planned_release_date is inside the allowed PublicationPeriod range
+→ Backend saves Chapter.planned_release_date
+→ If the chapter was APPROVED, backend changes Chapter.status_code to SCHEDULED
+→ If the chapter is still DRAFT or REVISION_REQUESTED, backend keeps the current editable/plannable status
+→ Backend writes an audit event for planned date set or status change when applicable
+→ UI refreshes the schedule display
+```
+
+### Allowed Period Rules
+
+| Case | Frequency | Allowed planned release date |
+|---|---|---|
+| Previous planned non-cancelled chapter exists | `WEEKLY` | Inside the next weekly `PublicationPeriod` after the previous chapter's weekly period. |
+| Previous planned non-cancelled chapter exists | `MONTHLY` | Inside the next monthly `PublicationPeriod` after the previous chapter's monthly period. |
+| No previous planned non-cancelled chapter exists | `WEEKLY` | Inside the current weekly `PublicationPeriod` or the next weekly `PublicationPeriod`. |
+| No previous planned non-cancelled chapter exists | `MONTHLY` | Inside the current monthly `PublicationPeriod`. |
+| Any case | `IRREGULAR` | No weekly/monthly boundary enforcement. |
+| Any case | `NULL` | Scheduling may be allowed without strict weekly/monthly validation unless a later workflow defines stricter behavior. |
+
+### Default Date Rules
+
+| Frequency | Default |
+|---|---|
+| `WEEKLY` with previous planned chapter | Previous planned release date + 7 days. |
+| `WEEKLY` first planned chapter | A date inside the current or next weekly publication period. |
+| `MONTHLY` with previous planned chapter | Same day number in the next month when possible; otherwise the last day of the next month. |
+| `MONTHLY` first planned chapter | A date inside the current monthly publication period. |
+| `IRREGULAR` | No next-period default is required. |
+
+### Important Notes
+
+- Weekly `PublicationPeriod` records start on Monday and end on Sunday.
+- A weekly period belongs to the month that contains at least four days of that week.
+- For scheduled chapters, the business publication date is usually `Chapter.planned_release_date`.
+- For released chapters, the release business date is derived from `released_at_utc` converted to Vietnam publication time (UTC+7), then taking the date part.
+- Frequency enforcement uses planned release dates. A late actual release does not automatically shift the next chapter schedule unless an authorized user reschedules it.
+- Scheduling is chapter-level and must not change `Series.status_code`.
+- When an approved chapter receives a valid planned release date, it becomes `SCHEDULED`.
+
+### System Should Try To
+
+- Keep scheduling predictable while allowing date adjustment inside the allowed period.
+- Avoid classifying chapters by raw UTC date when the business date is required.
+- Explain the valid date range to the user when a chosen date is outside the allowed period.
+- Clearly distinguish first planned chapter behavior from next planned chapter behavior.
+
+---
+
+
+## BF-PUB-002 — Reschedule or Hold a Scheduled Chapter
+
+**Status:** Agreed  
+**Primary actor:** Tantou Editor  
+**Goal:** Allow an editor to manage a scheduled chapter without reopening Mangaka page/content mutation workflows.
+
+### Reschedule Flow
+
+```text
+Tantou Editor opens a chapter with status SCHEDULED
+→ UI shows current planned_release_date and publication frequency
+→ Editor chooses a new planned release date and provides a reason when required by implementation
+→ Backend validates actor permission and Chapter.status_code = SCHEDULED
+→ Backend validates the new date against the same PublicationPeriod rules used for scheduling
+→ Backend updates Chapter.planned_release_date
+→ Chapter.status_code remains SCHEDULED
+→ Backend writes CHAPTER_RESCHEDULED audit detail with old/new planned date and actor
+→ UI refreshes the schedule display
+```
+
+### Put On Hold Flow
+
+```text
+Tantou Editor opens a chapter with status SCHEDULED
+→ Editor chooses Put On Hold
+→ UI requires a non-blank operational/editorial reason
+→ Backend validates actor permission, Chapter.status_code = SCHEDULED, and non-blank reason
+→ Backend changes Chapter.status_code to ON_HOLD
+→ Backend preserves planned_release_date unless a later workflow decides otherwise
+→ Backend writes CHAPTER_PUT_ON_HOLD audit detail with reason and old/new status
+→ UI refreshes the chapter as read-only/on-hold
+```
+
+### Important Notes
+
+- Mangaka users cannot reschedule a `SCHEDULED` chapter.
+- Mangaka users cannot edit chapter content or perform page/content mutation workflows while the chapter is `SCHEDULED` or `ON_HOLD`.
+- Blocked workflows include page creation, page deletion, page-version upload, assistant task output submission that creates or changes page content, and other saved page/content mutations.
+- `ON_HOLD` recovery is intentionally not defined in this flow.
+- Release automation and public release visibility are outside this flow.
+
+### System Should Try To
+
+- Keep scheduled chapters stable for release planning.
+- Give editors controlled schedule management without reopening Mangaka editing.
+- Keep hold reasons traceable and visible enough for later workflow decisions.
+
+---
+
+## BF-RANK-001 — Enter Series Vote Input for a Publication Period
+
+**Status:** Agreed  
+**Primary actor:** Editorial Board Member / Editorial Board Chief  
+**Goal:** Enter simulated or manually aggregated series-level performance data for a completed publication period.
+
+### Main Flow
+
+```text
+Board user opens Ranking Input screen
+→ User selects a PublicationPeriod
+→ UI lists eligible series
+→ User selects a series
+→ User enters rating_count, average_rating, reading_count, and optional data_source_note
+→ Backend validates actor role, period/series uniqueness, and numeric constraints
+→ Backend saves or updates manga.SeriesVoteInput
+→ UI refreshes the input list and ranking view
+```
+
+### Database Tables / View
+
+```text
+manga.PublicationPeriod
+manga.SeriesVoteInput
+manga.vw_SeriesRanking
+```
+
+### Important Notes
+
+- There is no public reader voting module in MVP.
+- Vote input is series-level, not chapter-level.
+- A series can have only one `SeriesVoteInput` row per `PublicationPeriod`.
+- `rating_count` and `reading_count` must be greater than zero.
+- `average_rating` must be between 0 and 10.
+- `rating_count` must not exceed `reading_count`.
+- Vote input is period-only. Later weekly input must not include earlier weekly input.
+- `data_source_note` should explain the report or source used for the manual input when relevant.
+
+### System Should Try To
+
+- Make manual input traceable through entered/updated user and UTC timestamps.
+- Keep vote input simple enough for demo data while preserving clear semantics.
+- Prevent duplicate input for the same series and publication period.
+
+---
+
+## BF-RANK-002 — View Dynamic Series Ranking
+
+**Status:** Agreed  
+**Primary actor:** Editorial Board Member / Editorial Board Chief / Tantou Editor / Mangaka  
+**Goal:** View the current dynamic ranking for a selected publication period without using finalized ranking storage.
+
+### Main Flow
+
+```text
+User opens ranking screen
+→ UI selects or filters by PublicationPeriod
+→ Backend queries manga.vw_SeriesRanking for the selected publication_period_id
+→ Database computes ranking_score and DENSE_RANK by publication_period_id
+→ Backend returns ranked series rows
+→ UI displays rank, title, rating count, average rating, reading count, and ranking score
+```
+
+### Ranking Formula
+
+```text
+ranking_score = average_rating * LOG10(1 + rating_count) + reading_count * 0.001
+```
+
+### Important Notes
+
+- Ranking is dynamic and reflects the latest `SeriesVoteInput` data.
+- The MVP does not use `SeriesRankingSnapshot` because there is no ranking finalization workflow.
+- The ranking view should keep technical IDs available for backend filtering and navigation even if the UI hides them.
+- Ranking evidence may support board/editorial review but does not automatically cancel a series.
+
+### System Should Try To
+
+- Query ranking by `publication_period_id`, not by period name.
+- Keep ranking score calculation centralized in SQL view/query logic.
+- Avoid storing duplicated ranking score or rank position unless later performance profiling proves caching is required.
+
 
 ---
 
@@ -1926,6 +2204,6 @@ Add detailed flows for these when the team finalizes them:
 - Assistant task assignment and submission flow
 - Board vote flow
 - Cancel serialization poll flow
-- Ranking snapshot generation flow
+- Series vote input and dynamic ranking view flow
 - Notification read/unread flow
 - Cloudinary cleanup failure handling flow
