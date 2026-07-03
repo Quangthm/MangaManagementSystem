@@ -7,8 +7,7 @@
     <base href="/" />
     <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" rel="stylesheet" />
     <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
-    <link href="css/mangaflow.css?v=phase6-shared-layout-20260621" rel="stylesheet" />
-    <link href="css/mangaflow-demo.css" rel="stylesheet" />
+    <link href="css/mangaflow.css?v=@CssVersion" rel="stylesheet" />
     <link href="MangaManagementSystem.Web.styles.css" rel="stylesheet" />
     <HeadOutlet @rendermode="InteractiveServer" />
 </head>
@@ -37,3 +36,9 @@
 </body>
 
 </html>
+
+@code {
+    // Cache-buster for local CSS: a new value each app start so a Stop→Run reliably serves the
+    // latest mangaflow.css instead of a browser-cached copy (no manual hard-refresh needed).
+    private static readonly string CssVersion = DateTime.UtcNow.Ticks.ToString();
+}

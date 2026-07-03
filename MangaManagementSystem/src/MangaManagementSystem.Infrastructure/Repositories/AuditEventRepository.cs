@@ -223,8 +223,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         }
 
         public async Task<IReadOnlyList<string>>
-            GetDistinctEntityTypesAsync(
-                CancellationToken cancellationToken = default)
+    GetDistinctEntityTypesAsync(
+        CancellationToken cancellationToken = default)
         {
             return await _context.AuditEvents
                 .AsNoTracking()
@@ -233,6 +233,17 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .OrderBy(item => item)
                 .ToListAsync(
                     cancellationToken);
+        }
+
+        public async Task AddAsync(
+    AuditEvent auditEvent,
+    CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(auditEvent);
+
+            await _context.AuditEvents.AddAsync(
+                auditEvent,
+                cancellationToken);
         }
     }
 }

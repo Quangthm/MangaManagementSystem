@@ -4,6 +4,7 @@ let dotNetRef;
 let originalImg = null;
 let regions = [];
 let annotations = [];
+let regionsHidden = false;
 let nextId = 1;
 
 // View state (Zoom & Pan)
@@ -62,7 +63,7 @@ function initCanvas(canvasId, containerId, dotnet) {
 
     // CSS HTML đã chuẩn, không cần ghi đè container
 
-
+    
     canvas.style.position = 'absolute';
     canvas.style.left = '0px';
     canvas.style.top = '0px';
@@ -79,6 +80,27 @@ function initCanvas(canvasId, containerId, dotnet) {
     container.appendChild(selectionDiv);
 
     setupEvents();
+
+    // Re-fit / repaint when the container size changes. After a browser reload the canvas
+    // can be measured before the flex layout settles (container clientWidth 0), which leaves
+    // the image + region overlay computed at scale 0 = invisible ("everything gone after
+    // reload even though the DB has it"). When a valid size finally arrives, recompute the fit
+    // if the current scale is broken, then repaint so the saved regions reappear. A valid
+    // existing scale is left untouched so the user's zoom is not reset on normal resizes.
+    if (typeof ResizeObserver !== 'undefined') {
+        const ro = new ResizeObserver(() => {
+            if (!originalImg) return;
+            const cw = container.clientWidth, ch = container.clientHeight;
+            if (cw > 0 && ch > 0 && (!(scale > 0) || !isFinite(scale))) {
+                scale = Math.min(cw / originalImg.width, ch / originalImg.height);
+                panX = (cw - originalImg.width * scale) / 2;
+                panY = (ch - originalImg.height * scale) / 2;
+                applyTransform();
+            }
+            redraw();
+        });
+        ro.observe(container);
+    }
 }
 
 function setupEvents() {
@@ -90,7 +112,7 @@ function setupEvents() {
         const mouseY = e.clientY - rect.top;
 
         const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-
+        
         // Calculate new scale, min 0.1, max 10
         let newScale = scale * zoomFactor;
         newScale = Math.max(0.1, Math.min(newScale, 10));
@@ -99,7 +121,7 @@ function setupEvents() {
         panX = mouseX - (mouseX - panX) * (newScale / scale);
         panY = mouseY - (mouseY - panY) * (newScale / scale);
         scale = newScale;
-
+        
         applyTransform();
     }, { passive: false });
 
@@ -114,11 +136,11 @@ function setupEvents() {
         }
 
         const pos = getMousePos(e);
-
+        
         if (currentTool === 'draw') {
             isDrawing = true;
             drawStart = { x: e.clientX, y: e.clientY };
-
+            
             const rect = container.getBoundingClientRect();
             selectionDiv.style.left = (e.clientX - rect.left) + 'px';
             selectionDiv.style.top = (e.clientY - rect.top) + 'px';
@@ -128,7 +150,7 @@ function setupEvents() {
         } else if (currentTool === 'pin') {
             const pos = getMousePos(e);
             dotNetRef.invokeMethodAsync('OnPinAdded', Math.round(pos.x), Math.round(pos.y));
-
+            
             // Switch back to select tool automatically
             currentTool = 'select';
             dotNetRef.invokeMethodAsync('OnToolChangedFromJS', 'select');
@@ -137,7 +159,7 @@ function setupEvents() {
             lastBrushPos = getMousePos(e);
         } else if (currentTool === 'select') {
             const pos = getMousePos(e);
-
+            
             // Check if clicking on a selected region's handle FIRST
             let clickedHandle = null;
             let clickedRegion = null;
@@ -169,12 +191,12 @@ function setupEvents() {
             }
 
             // Check if clicking inside a region
-            const hit = regions.slice().reverse().find(r =>
-                pos.x >= r.x && pos.x <= r.x + r.width &&
+            const hit = regions.slice().reverse().find(r => 
+                pos.x >= r.x && pos.x <= r.x + r.width && 
                 pos.y >= r.y && pos.y <= r.y + r.height);
-
+            
             if (hit) {
-                // User requested double-click to toggle selection (on/off).
+                // User requested double-click to toggle selection (on/off). 
                 // So single mousedown no longer changes selection, but still allows dragging.
                 isDraggingRegion = true;
                 targetRegion = hit;
@@ -202,7 +224,7 @@ function setupEvents() {
         }
 
         const pos = getMousePos(e);
-
+        
         if (isBrushing) {
             bgCtx.beginPath();
             bgCtx.moveTo(lastBrushPos.x, lastBrushPos.y);
@@ -279,8 +301,8 @@ function setupEvents() {
                 if (found) break;
             }
             if (!found) {
-                const hit = regions.slice().reverse().find(r =>
-                    pos.x >= r.x && pos.x <= r.x + r.width &&
+                const hit = regions.slice().reverse().find(r => 
+                    pos.x >= r.x && pos.x <= r.x + r.width && 
                     pos.y >= r.y && pos.y <= r.y + r.height);
                 if (hit) hoverCursor = 'move';
             }
@@ -291,12 +313,12 @@ function setupEvents() {
             const rect = container.getBoundingClientRect();
             const currentX = e.clientX;
             const currentY = e.clientY;
-
+            
             const left = Math.min(drawStart.x, currentX) - rect.left;
             const top = Math.min(drawStart.y, currentY) - rect.top;
             const width = Math.abs(currentX - drawStart.x);
             const height = Math.abs(currentY - drawStart.y);
-
+            
             selectionDiv.style.left = left + 'px';
             selectionDiv.style.top = top + 'px';
             selectionDiv.style.width = width + 'px';
@@ -308,6 +330,9 @@ function setupEvents() {
         if (isBrushing) {
             isBrushing = false;
             saveState();
+            // Brush paints image pixels (not regions); tell Blazor so it can warn the user that
+            // the edit only persists via "Save as New Version".
+            if (dotNetRef) dotNetRef.invokeMethodAsync('OnImageEdited');
             return;
         }
 
@@ -315,7 +340,7 @@ function setupEvents() {
             isPanning = false;
             container.style.cursor = currentTool === 'pan' ? 'grab' : 'crosshair';
         }
-
+        
         if (isDraggingRegion || isResizing) {
             isDraggingRegion = false;
             isResizing = false;
@@ -328,12 +353,12 @@ function setupEvents() {
         if (isDrawing) {
             isDrawing = false;
             selectionDiv.style.display = 'none';
-
+            
             const rect = container.getBoundingClientRect();
             const startCanvasX = (drawStart.x - rect.left - panX) / scale;
             const startCanvasY = (drawStart.y - rect.top - panY) / scale;
             const endCanvasPos = getMousePos(e);
-
+            
             const x = Math.min(startCanvasX, endCanvasPos.x);
             const y = Math.min(startCanvasY, endCanvasPos.y);
             const w = Math.abs(endCanvasPos.x - startCanvasX);
@@ -358,10 +383,10 @@ function setupEvents() {
     container.addEventListener('dblclick', (e) => {
         if (currentTool !== 'select') return;
         const pos = getMousePos(e);
-        const hit = regions.slice().reverse().find(r =>
-            pos.x >= r.x && pos.x <= r.x + r.width &&
+        const hit = regions.slice().reverse().find(r => 
+            pos.x >= r.x && pos.x <= r.x + r.width && 
             pos.y >= r.y && pos.y <= r.y + r.height);
-
+        
         if (hit) {
             hit.selected = !hit.selected;
             syncToBlazor();
@@ -425,6 +450,43 @@ function applyTransform() {
 }
 
 let currentDataUrl = null;
+// True only for an IN-SESSION translation preview (clean + translate run on the current canvas).
+// While true, syncToBlazor() does NOT push translatedText into the C# version buffer, so a generic
+// Save / pending-flush never bakes the translation onto the source version (e.g. the original v1).
+// The translation is captured ONLY by "Create new version" (which reads exportRegions() directly).
+// Loading/switching a version resets this, so editing a real translated version still saves its text.
+let translationPreview = false;
+
+// Draws the loaded image and fits it to the container. If the container has no size yet (which
+// happens intermittently during fast page navigation, before layout settles), retries on the next
+// animation frame instead of computing scale = 0 — that scale-0 was what left the canvas blank.
+function fitImageOntoCanvas(image, attempt) {
+    attempt = attempt || 0;
+    originalImg = image;
+    backgroundCanvas.width = image.width;
+    backgroundCanvas.height = image.height;
+    bgCtx.drawImage(image, 0, 0);
+
+    canvas.style.display = 'block';
+    canvas.width = image.width;
+    canvas.height = image.height;
+    canvas.style.width = image.width + 'px';
+    canvas.style.height = image.height + 'px';
+    canvas.style.maxWidth = 'none';
+    canvas.style.maxHeight = 'none';
+
+    const cw = container.clientWidth, ch = container.clientHeight;
+    if ((cw === 0 || ch === 0) && attempt < 30) {
+        requestAnimationFrame(() => fitImageOntoCanvas(image, attempt + 1));
+        return;
+    }
+    const safeW = cw || image.width, safeH = ch || image.height;
+    scale = Math.min(safeW / image.width, safeH / image.height);
+    panX = (safeW - image.width * scale) / 2;   // center
+    panY = (safeH - image.height * scale) / 2;
+    applyTransform();
+    redraw();
+}
 
 function loadImage(dataUrl) {
     currentDataUrl = dataUrl;
@@ -442,53 +504,15 @@ function loadImage(dataUrl) {
         }
         const img = new Image();
         img.crossOrigin = 'anonymous';
+        img.onload = () => { fitImageOntoCanvas(img); resolve(); };
         img.onerror = () => {
-            console.error('Failed to load image from URL:', dataUrl);
-            resolve();
-        };
-        img.onload = () => {
-            originalImg = img;
-            backgroundCanvas.width = img.width;
-            backgroundCanvas.height = img.height;
-            bgCtx.drawImage(img, 0, 0);
-
-            canvas.style.display = 'block'; // Show when loaded
-            canvas.width = img.width;
-            canvas.height = img.height;
-            canvas.style.width = img.width + 'px';
-            canvas.style.height = img.height + 'px';
-            canvas.style.maxWidth = 'none';
-            canvas.style.maxHeight = 'none';
-
-            scale = Math.min(container.clientWidth / img.width, container.clientHeight / img.height);
-            // Center
-            panX = (container.clientWidth - img.width * scale) / 2;
-            panY = (container.clientHeight - img.height * scale) / 2;
-            applyTransform();
-
-            redraw();
-            resolve();
-        };
-        img.onerror = () => {
-            // Fallback: if CORS fails, try without crossOrigin
+            // CORS failed — retry without crossOrigin (canvas becomes tainted but still displays).
             const img2 = new Image();
-            img2.onload = () => {
-                originalImg = img2;
-                backgroundCanvas.width = img2.width;
-                backgroundCanvas.height = img2.height;
-                bgCtx.drawImage(img2, 0, 0);
-                canvas.style.display = 'block';
-                canvas.width = img2.width;
-                canvas.height = img2.height;
-                canvas.style.width = img2.width + 'px';
-                canvas.style.height = img2.height + 'px';
-                canvas.style.maxWidth = 'none';
-                canvas.style.maxHeight = 'none';
-                scale = Math.min(container.clientWidth / img2.width, container.clientHeight / img2.height);
-                panX = (container.clientWidth - img2.width * scale) / 2;
-                panY = (container.clientHeight - img2.height * scale) / 2;
-                applyTransform();
-                redraw();
+            img2.onload = () => { fitImageOntoCanvas(img2); resolve(); };
+            // CRITICAL: the fallback must also resolve on failure, otherwise the Promise never settles
+            // and the awaiting C# `await loadImage` hangs (which froze page navigation after a reload).
+            img2.onerror = () => {
+                console.error('Failed to load image (with and without CORS):', dataUrl);
                 resolve();
             };
             // CRITICAL: the fallback image must also resolve on failure, otherwise this
@@ -555,6 +579,8 @@ function updateRegionData(id, data) {
 }
 
 function loadRegions(savedRegionsStr, silent) {
+    // Switching/loading a version is a fresh state, not an in-session translation preview.
+    translationPreview = false;
     if (!savedRegionsStr) {
         regions = [];
     } else if (typeof savedRegionsStr === 'string') {
@@ -588,6 +614,43 @@ function selectRegion(id) {
     redraw();
 }
 
+// Selects exactly the regions whose dbId is in the given list — used to highlight a task's or
+// annotation's panels on the page when its card is clicked. dbIds: array of PageRegion GUID strings.
+function selectRegionsByDbIds(dbIds) {
+    const set = new Set((dbIds || []).map(String));
+    regions.forEach(r => { r.selected = (r.dbId != null && set.has(String(r.dbId))); });
+    syncToBlazor();
+    redraw();
+}
+
+// Selects every region (e.g. to translate or assign the whole page at once).
+function selectAllRegions() {
+    let changed = false;
+    regions.forEach(r => { if (!r.selected) { r.selected = true; changed = true; } });
+    if (changed) {
+        syncToBlazor();
+        redraw();
+    }
+}
+
+// Shows/hides the region detection frames (boxes, labels, handles) on the canvas. Translated
+// text stays visible so the user can preview the page without the editing chrome.
+function setRegionsVisible(visible) {
+    regionsHidden = !visible;
+    redraw();
+}
+
+// Clears the current region selection (e.g. after a task/annotation is created from selected
+// regions, so the next action starts from a clean state).
+function clearSelection() {
+    let changed = false;
+    regions.forEach(r => { if (r.selected) { r.selected = false; changed = true; } });
+    if (changed) {
+        syncToBlazor();
+        redraw();
+    }
+}
+
 function deleteRegion(id) {
     regions = regions.filter(r => r.id !== id);
     saveState();
@@ -596,15 +659,20 @@ function deleteRegion(id) {
 }
 
 function deleteSelectedRegions() {
-    const hasSelected = regions.some(r => r.selected);
-    if (!hasSelected) return;
-
+    // Keyboard Delete/Backspace path keeps a lightweight native confirm.
+    if (!regions.some(r => r.selected)) return;
     if (window.confirm("Are you sure you want to delete the selected panel(s)?")) {
-        regions = regions.filter(r => !r.selected);
-        saveState();
-        syncToBlazor();
-        redraw();
+        deleteSelectedRegionsConfirmed();
     }
+}
+
+// Deletes without prompting — the toolbar button already confirmed via the MudBlazor dialog.
+function deleteSelectedRegionsConfirmed() {
+    if (!regions.some(r => r.selected)) return;
+    regions = regions.filter(r => !r.selected);
+    saveState();
+    syncToBlazor();
+    redraw();
 }
 
 function approveSelectedRegions() {
@@ -643,7 +711,7 @@ function getHandleRects(r) {
 
 function redraw() {
     if (!originalImg) return;
-
+    
     // 1. Draw base image
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(backgroundCanvas, 0, 0);
@@ -652,7 +720,7 @@ function redraw() {
     regions.forEach(r => {
         const hasText = r.translatedText && r.translatedText.trim() !== '';
 
-        // Fill
+        // Fill / translated text
         if (hasText) {
             ctx.save();
             ctx.beginPath();
@@ -660,10 +728,14 @@ function redraw() {
             ctx.clip();
             drawWrappedText(ctx, r, r.x, r.y, r.width, r.height);
             ctx.restore();
-        } else {
+        } else if (!regionsHidden) {
             ctx.fillStyle = r.selected ? 'rgba(52,152,219,0.2)' : 'rgba(231,76,60,0.1)';
             ctx.fillRect(r.x, r.y, r.width, r.height);
         }
+
+        // When detection frames are hidden, show only the translated text (a clean preview) and
+        // skip all editing chrome: boxes, #labels, note icons and resize handles.
+        if (regionsHidden) return;
 
         let statusColor = '#e74c3c'; // Todo
         if (r.status === 'InProgress') statusColor = '#f39c12';
@@ -680,7 +752,7 @@ function redraw() {
         }
         ctx.strokeRect(r.x, r.y, r.width, r.height);
         ctx.setLineDash([]); // Reset line dash
-
+        
         // Draw Handle/ID for all regions
         ctx.fillStyle = r.selected ? '#3498db' : statusColor;
         ctx.fillRect(r.x, r.y - 20, 40, 20);
@@ -700,7 +772,7 @@ function redraw() {
             ctx.font = '16px Arial';
             ctx.fillText('📝', r.x + r.width - 20, r.y - 6);
         }
-
+        
         // Draw resize handles if selected
         if (r.selected) {
             const handles = getHandleRects(r);
@@ -720,7 +792,7 @@ function redraw() {
         const ax = ann.pinX ?? ann.PinX ?? ann.x ?? ann.X;
         const ay = ann.pinY ?? ann.PinY ?? ann.y ?? ann.Y;
         const isResolved = ann.isResolved ?? ann.IsResolved ?? false;
-
+        
         if (ax != null && ay != null) {
             const radius = 12 / scale;
             // Draw pin circle
@@ -728,7 +800,7 @@ function redraw() {
             ctx.arc(ax, ay, radius, 0, 2 * Math.PI);
             ctx.fillStyle = isResolved ? 'rgba(46, 204, 113, 0.9)' : 'rgba(231, 76, 60, 0.9)';
             ctx.fill();
-
+            
             ctx.lineWidth = 2 / scale;
             ctx.strokeStyle = '#ffffff';
             ctx.stroke();
@@ -752,7 +824,7 @@ function drawWrappedText(context, region, x, y, maxWidth, maxHeight) {
     const text = region.translatedText;
     const size = region.fontSize > 0 ? region.fontSize : typo.fontSize;
     context.font = `${size}px ${typo.font}`;
-
+    
     if (region.type === 'SFX') {
         context.font = `italic bold ${size + 4}px ${typo.font}`;
     }
@@ -760,7 +832,7 @@ function drawWrappedText(context, region, x, y, maxWidth, maxHeight) {
     context.fillStyle = typo.color;
     context.textAlign = typo.align;
     context.textBaseline = 'top';
-
+    
     if(typo.stroke) {
         context.strokeStyle = typo.color === '#000000' ? '#ffffff' : '#000000';
         context.lineWidth = region.type === 'SFX' ? 5 : 3;
@@ -775,7 +847,7 @@ function drawWrappedText(context, region, x, y, maxWidth, maxHeight) {
         const testLine = line + words[n] + ' ';
         const metrics = context.measureText(testLine);
         const testWidth = metrics.width;
-
+        
         if (testWidth > maxWidth && n > 0) {
             lines.push(line);
             line = words[n] + ' ';
@@ -789,13 +861,13 @@ function drawWrappedText(context, region, x, y, maxWidth, maxHeight) {
     const lineHeight = size * 1.2;
     const totalTextHeight = lines.length * lineHeight;
     let currentY = y + (maxHeight - totalTextHeight) / 2;
-
+    
     // Draw each line
     lines.forEach(l => {
         let currentX = x;
         if(typo.align === 'center') currentX = x + maxWidth / 2;
         if(typo.align === 'right') currentX = x + maxWidth;
-
+        
         if(typo.stroke) {
             context.strokeText(l, currentX, currentY);
         }
@@ -808,7 +880,7 @@ function drawVerticalText(context, region, x, y, maxWidth, maxHeight) {
     const text = region.translatedText;
     const size = region.fontSize > 0 ? region.fontSize : typo.fontSize;
     context.font = `${size}px ${typo.font}`;
-
+    
     if (region.type === 'SFX') {
         context.font = `italic bold ${size + 4}px ${typo.font}`;
     }
@@ -825,17 +897,17 @@ function drawVerticalText(context, region, x, y, maxWidth, maxHeight) {
 
     // Tách văn bản thành các chữ (words) và lọc bỏ các khoảng trắng rỗng
     const words = text.split(/\s+/).filter(w => w.length > 0);
-
+    
     const lineHeight = size * 1.2;
     const totalTextHeight = words.length * lineHeight;
     // Căn giữa theo chiều dọc
     let currentY = y + (maxHeight - totalTextHeight) / 2;
-
+    
     words.forEach(word => {
         let currentX = x;
         if(typo.align === 'center') currentX = x + maxWidth / 2;
         if(typo.align === 'right') currentX = x + maxWidth;
-
+        
         if(typo.stroke) {
             context.strokeText(word, currentX, currentY);
         }
@@ -874,7 +946,7 @@ function undo() {
         historyIndex--;
         const state = historyStack[historyIndex];
         regions = JSON.parse(JSON.stringify(state.regions));
-
+        
         let currentImgSrc = null;
         try { currentImgSrc = backgroundCanvas.toDataURL('image/png'); } catch(e) { /* tainted */ }
         if (state.imgSrc && state.imgSrc !== currentImgSrc) {
@@ -900,7 +972,7 @@ function redo() {
         historyIndex++;
         const state = historyStack[historyIndex];
         regions = JSON.parse(JSON.stringify(state.regions));
-
+        
         let currentImgSrc2 = null;
         try { currentImgSrc2 = backgroundCanvas.toDataURL('image/png'); } catch(e) { /* tainted */ }
         if (state.imgSrc && state.imgSrc !== currentImgSrc2) {
@@ -923,7 +995,13 @@ function redo() {
 
 function syncToBlazor() {
     if (dotNetRef) {
-        dotNetRef.invokeMethodAsync('OnRegionsUpdated', JSON.stringify(regions), historyIndex > 0, historyIndex < historyStack.length - 1);
+        // During an in-session translation preview, strip translatedText from the payload so the
+        // version's save buffer (and any generic Save / pending-flush) never persists the translation
+        // onto the source version. "Create new version" uses exportRegions() (full, untouched).
+        const payload = translationPreview
+            ? regions.map(r => ({ ...r, translatedText: '' }))
+            : regions;
+        dotNetRef.invokeMethodAsync('OnRegionsUpdated', JSON.stringify(payload), historyIndex > 0, historyIndex < historyStack.length - 1);
     }
 }
 
@@ -968,7 +1046,7 @@ async function callSegmentAPI() {
         const base64Data = await base64Promise;
         const resultStr = await dotNetRef.invokeMethodAsync('SegmentImageJS', base64Data);
         const json = JSON.parse(resultStr);
-
+        
         if (json.status === "success" && json.regions) {
             json.regions.forEach(aiReg => {
                 let isDuplicate = false;
@@ -978,7 +1056,7 @@ async function callSegmentAPI() {
                         break;
                     }
                 }
-
+                
                 if (!isDuplicate) {
                     regions.push({
                         id: nextId++,
@@ -1007,7 +1085,7 @@ async function callTranslateAPI(targetLang) {
     let targets = regions.filter(r => r.selected);
     if (targets.length === 0) targets = regions; // Fallback to all if none selected
     if (targets.length === 0) return "no_regions";
-
+    
     try {
         // Get base64 image data - either from canvas or by fetching the URL
         let imageBase64;
@@ -1031,12 +1109,12 @@ async function callTranslateAPI(targetLang) {
                 id: r.id, x: r.x, y: r.y, width: r.width, height: r.height
             }))
         };
-
+        
         // Call Blazor C# backend instead of direct AI service call
         if (!dotNetRef) return "error: dotNetRef is null";
         const resultStr = await dotNetRef.invokeMethodAsync('TranslateRegionsJS', JSON.stringify(payload));
         const json = JSON.parse(resultStr);
-
+        
         if (json.status === "success" && json.regions) {
             if (json.clean_image_base64) {
                 return new Promise((resolve) => {
@@ -1046,7 +1124,7 @@ async function callTranslateAPI(targetLang) {
                         backgroundCanvas.width = img.width;
                         backgroundCanvas.height = img.height;
                         bgCtx.drawImage(img, 0, 0);
-
+                        
                         json.regions.forEach((r) => {
                             let match = regions.find(x => x.id === r.id);
                             if (match) {
@@ -1056,6 +1134,7 @@ async function callTranslateAPI(targetLang) {
                         });
 
                         saveState();
+                        translationPreview = true;   // canvas now holds a preview, not a saveable edit
                         if (typeof dotNetRef !== 'undefined' && dotNetRef) syncToBlazor();
                         redraw();
                         resolve("success");
@@ -1071,6 +1150,7 @@ async function callTranslateAPI(targetLang) {
                     }
                 });
                 saveState();
+                translationPreview = true;   // canvas now holds a preview, not a saveable edit
                 if (typeof dotNetRef !== 'undefined' && dotNetRef) syncToBlazor();
                 redraw();
                 return "success";
@@ -1173,8 +1253,13 @@ function downloadRenderedImage(filename) {
         updateRegionData,
         loadRegions,
         selectRegion,
+        selectRegionsByDbIds,
+        selectAllRegions,
+        clearSelection,
+        setRegionsVisible,
         deleteRegion,
         deleteSelectedRegions,
+        deleteSelectedRegionsConfirmed,
         approveSelectedRegions,
         setBrushSettings,
         undo,
@@ -1202,12 +1287,18 @@ window.mmsPreloadImages = function(urls) {
     } catch (e) {}
 };
 
-window.saveMmsDraft = function(pageId, data) {
-    try { localStorage.setItem('mms_draft_page_' + pageId, data); } catch(e) {}
-};
-window.getMmsDraft = function(pageId) {
-    try { return localStorage.getItem('mms_draft_page_' + pageId); } catch(e) { return null; }
-};
-window.clearMmsDraft = function(pageId) {
-    try { localStorage.removeItem('mms_draft_page_' + pageId); } catch(e) {}
-};
+// Unsaved-changes guard. Blazor sets this flag true on an edit and false after autosave.
+// When set, the browser shows its native "Leave site? Changes may not be saved" dialog on
+// tab close / reload / back, so an accidental navigation cannot drop in-flight edits.
+window.mmsHasUnsaved = false;
+window.setUnsavedFlag = function(flag) { window.mmsHasUnsaved = !!flag; };
+if (!window.__mmsUnloadGuard) {
+    window.__mmsUnloadGuard = true;
+    window.addEventListener('beforeunload', function(e) {
+        if (window.mmsHasUnsaved) {
+            e.preventDefault();
+            e.returnValue = ''; // required for Chrome to show the prompt
+            return '';
+        }
+    });
+}

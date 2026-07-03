@@ -41,5 +41,8 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<IReadOnlyList<string>>
             GetDistinctEntityTypesAsync(
                 CancellationToken cancellationToken = default);
+        Task AddAsync(
+             AuditEvent auditEvent,
+                CancellationToken cancellationToken = default);
     }
 }

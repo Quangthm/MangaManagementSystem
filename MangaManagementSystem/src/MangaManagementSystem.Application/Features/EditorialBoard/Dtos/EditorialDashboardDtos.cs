@@ -18,7 +18,18 @@ public sealed record EditorialProposalReviewRowDto(
     string Title,
     string Author,
     string Genre,
-    string Status);
+    string TagsDisplay,
+    string Status,
+    int VersionNumber,
+    string Synopsis,
+    string SubmittedByEditorName,
+    string AssignedEditor,
+    string? ProposalFileName,
+    string? ProposalFileUrl,
+    string? MarkupFileName,
+    string? MarkupFileUrl,
+    bool HasStartSerializationOpenPoll,
+    bool HasCancelSerializationOpenPoll);
 
 public sealed record EditorialOpenPollRowDto(
     Guid PollId,

@@ -2904,7 +2904,7 @@ a {
         margin-bottom: 0;
         padding: .5rem .7rem;
     }
-}}
+}
 
 /* ═══════════════════════════════════════════════════════════════
    Board Profile Native Dropdown Fix
@@ -3227,4 +3227,20 @@ a {
     flex: 1 1 auto;
     min-height: 140px;
     overflow-y: auto;
+}
+
+/* Task Panel tabs — keep MudBlazor's NATIVE layout (it shows ◂ ▸ scroll arrows when the panel is
+   too narrow for all three, and switching always works). Trying to stretch/justify the tabs fought
+   MudBlazor's internal scroll logic (it sets the bar to width:max-content + a translateX), which
+   left the bar offset and broke tab switching, so we deliberately do NOT override the layout here.
+   We only restyle the labels: readable size + colour-code by group so they are easy to tell apart
+   (Tasks + Notes = indigo brand, Annotations = amber). */
+.workspace-tabs .mud-tab {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: none;
+    color: rgba(255, 255, 255, 0.78) !important;   /* readable on the indigo tab bar */
+}
+.workspace-tabs .mud-tab.mud-tab-active {
+    color: #ffffff !important;                       /* active tab = full white */
 }

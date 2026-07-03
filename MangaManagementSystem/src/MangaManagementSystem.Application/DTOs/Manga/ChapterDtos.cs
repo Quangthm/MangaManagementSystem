@@ -20,7 +20,8 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         [Required][MaxLength(20)] string ChapterNumberLabel,
         [MaxLength(100)] string? ChapterTitle,
         [MaxLength(50)] string StatusCode,
-        DateTime? PlannedReleaseDate
+        DateTime? PlannedReleaseDate,
+        Guid? CreatedByUserId = null
     );
 
     public record UpdateChapterDto(

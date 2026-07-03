@@ -51,6 +51,20 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         [Required] IReadOnlyList<Guid> PageRegionIds
     );
 
+    /// <summary>
+    /// Web → API request body to create a single page task. The actor (creator) is taken from the
+    /// X-Actor-User-Id header, not the body; status is defaulted by the create SP.
+    /// </summary>
+    public sealed record CreateMangakaTaskRequest(
+        Guid AssignedToUserId,
+        string TypeCode,
+        string TaskTitle,
+        string TaskDescription,
+        int PriorityLevel,
+        decimal? CompensationAmount,
+        IReadOnlyList<Guid> PageRegionIds
+    );
+
     public record UpdateChapterPageTaskDto(
         [Required] Guid ChapterPageTaskId,
         [Required] Guid AssignedToUserId,

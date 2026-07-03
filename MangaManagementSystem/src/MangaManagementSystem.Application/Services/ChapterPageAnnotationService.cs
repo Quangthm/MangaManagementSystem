@@ -80,19 +80,12 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(entity);
         }
 
-        public async Task<bool> DeleteChapterPageAnnotationAsync(Guid id)
-        {
-            var entity = await _unitOfWork.ChapterPageAnnotations.GetByIdWithRegionsAsync(id);
-            if (entity == null)
-            {
-                return false;
-            }
-
-            entity.PageRegions.Clear();
-            _unitOfWork.ChapterPageAnnotations.Delete(entity);
-            await _unitOfWork.SaveChangesAsync();
-            return true;
-        }
+        public Task<bool> DeleteChapterPageAnnotationAsync(Guid id) =>
+            // BR-ANN-017 / BR-ANN-024: annotations are preserved for traceability and must not be
+            // hard-deleted. Feedback is closed by resolving the annotation (ResolveAnnotationAsync),
+            // which keeps the annotation row and its linked PageRegion records intact.
+            throw new InvalidOperationException(
+                "Annotations cannot be deleted. Resolve the annotation instead to preserve its history.");
 
         public async Task<bool> ResolveAnnotationAsync(Guid actorUserId, Guid annotationId, string? resolutionNote = null)
         {

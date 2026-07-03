@@ -10,7 +10,7 @@ namespace MangaManagementSystem.Application.Interfaces
     /// Repository interface for Mangaka chapter workflow operations.
     /// Lives in Application because it returns Application DTOs.
     /// </summary>
-    public interface IMangakaChapterRepository
+    public partial interface IMangakaChapterRepository
     {
         Task<IReadOnlyList<MangakaChapterListItemDto>> GetMyChaptersAsync(
             Guid actorUserId,
@@ -36,6 +36,16 @@ namespace MangaManagementSystem.Application.Interfaces
             CancellationToken cancellationToken = default);
 
         Task<MangakaChapterListItemDto> SubmitChapterForReviewAsync(
+            Guid actorUserId,
+            Guid chapterId,
+            CancellationToken cancellationToken = default);
+
+        Task<MangakaChapterListItemDto> CancelChapterSubmissionAsync(
+            Guid actorUserId,
+            Guid chapterId,
+            CancellationToken cancellationToken = default);
+
+        Task<MangakaChapterListItemDto> CancelChapterAsync(
             Guid actorUserId,
             Guid chapterId,
             CancellationToken cancellationToken = default);

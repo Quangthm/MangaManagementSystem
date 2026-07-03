@@ -56,7 +56,7 @@
                                 <th>Author</th>
                                 <th>Genre</th>
                                 <th>Version</th>
-                                <th>Submitted</th>
+                                <th>Submitted From Editor</th>
                                 <th>Status</th>
                                 <th>Assigned Editor</th>
                                 <th>Actions</th>
@@ -84,8 +84,8 @@
                                         <td class="mf-strong">@proposal.Title</td>
                                         <td>@proposal.Author</td>
                                         <td>@proposal.Genre</td>
-                                        <td class="mf-mono">@proposal.Version</td>
-                                        <td>@proposal.Submitted</td>
+                                        <td class="mf-mono">@proposal.VersionLabel</td>
+                                        <td>@proposal.SubmittedFromEditor</td>
 
                                         <td>
                                             <StatusBadge Status="@proposal.Status" />
@@ -146,23 +146,36 @@
                                 </div>
 
                                 <div class="mf-info-tile">
+                                    <span>Tags</span>
+
+                                    @if (SelectedProposal.Tags.Count == 0)
+                                    {
+                                        <strong>No tags</strong>
+                                    }
+                                    else
+                                    {
+                                        <div class="mf-tag-list">
+                                            @foreach (var tag in SelectedProposal.Tags)
+                                            {
+                                                <span class="mf-tag-pill">@tag</span>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+
+                                <div class="mf-info-tile">
                                     <span>Target Audience</span>
                                     <strong>@SelectedProposal.TargetAudience</strong>
                                 </div>
 
                                 <div class="mf-info-tile">
-                                    <span>Est. Length</span>
-                                    <strong>@SelectedProposal.EstimatedLength</strong>
-                                </div>
-
-                                <div class="mf-info-tile">
-                                    <span>Submitted</span>
-                                    <strong>@SelectedProposal.Submitted</strong>
+                                    <span>Submitted From Editor</span>
+                                    <strong>@SelectedProposal.SubmittedFromEditor</strong>
                                 </div>
 
                                 <div class="mf-info-tile">
                                     <span>Version</span>
-                                    <strong>@SelectedProposal.Version</strong>
+                                    <strong>@SelectedProposal.VersionLabel</strong>
                                 </div>
                             </div>
 
@@ -190,28 +203,53 @@
                                     </div>
                                 }
                             </div>
-
-                            <h3>D. Editorial Notes</h3>
-
-                            <textarea class="mf-textarea"
-                                      @bind="EditorialNote"
-                                      placeholder="Write internal editorial notes..."></textarea>
                         </div>
 
                         <aside class="mf-proposal-side">
                             <section class="mf-side-panel">
                                 <h3>C. Attachments</h3>
 
-                                @foreach (var attachment in SelectedProposal.Attachments)
+                                @if (SelectedProposal.Attachments.Count == 0)
                                 {
-                                    <div class="mf-attachment">@attachment</div>
+                                    <div class="mf-attachment empty">
+                                        No attachment file available.
+                                    </div>
+                                }
+                                else
+                                {
+                                    @foreach (var attachment in SelectedProposal.Attachments)
+                                    {
+                                        @if (attachment.HasUrl)
+                                        {
+                                            <a class="mf-attachment"
+                                               href="@attachment.Url"
+                                               target="_blank"
+                                               rel="noopener noreferrer">
+                                                <span>
+                                                    <strong>@attachment.Label</strong>
+                                                    <small>@attachment.DisplayName</small>
+                                                </span>
+
+                                                <span class="mf-open-file">Open</span>
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <div class="mf-attachment empty">
+                                                <span>
+                                                    <strong>@attachment.Label</strong>
+                                                    <small>No file URL available.</small>
+                                                </span>
+                                            </div>
+                                        }
+                                    }
                                 }
                             </section>
 
                             <AuthorizeView Roles="Editorial Board Chief">
                                 <Authorized>
                                     <section class="mf-side-panel">
-                                        <h3>E. Open Poll</h3>
+                                        <h3>D. Open Poll</h3>
 
                                         <div class="mf-open-poll-box">
                                             <div class="mf-panel-title">
@@ -265,6 +303,7 @@
                                             {
                                                 <button type="button"
                                                         class="mf-btn mf-btn-soft full"
+                                                        disabled="@HasCurrentPollTypeConflict"
                                                         @onclick="StartDeadlinePicker">
                                                     @(ConfirmedOpenPollDeadline is null
                                                         ? "Set deadline (optional)"
@@ -275,14 +314,22 @@
                                             <label class="mf-label">Poll reason</label>
 
                                             <textarea class="mf-textarea"
+                                                      disabled="@HasCurrentPollTypeConflict"
                                                       @bind="PollReason"
                                                       placeholder="Explain why this proposal should go to board vote..."></textarea>
 
+                                            @if (HasCurrentPollTypeConflict)
+                                            {
+                                                <div class="mf-alert warning">
+                                                    @CurrentOpenPollConflictMessage
+                                                </div>
+                                            }
+
                                             <button type="button"
                                                     class="mf-btn mf-btn-primary full"
-                                                    disabled="@IsOpeningPoll"
+                                                    disabled="@IsOpenPollDisabled"
                                                     @onclick="ConfirmOpenPollAsync">
-                                                @(IsOpeningPoll ? "Opening..." : "Confirm & Open Poll")
+                                                @OpenPollButtonText
                                             </button>
 
                                             @if (!string.IsNullOrWhiteSpace(OpenPollMessage))
@@ -304,6 +351,9 @@
 </MangaFlowShell>
 
 @code {
+    private const string DuplicateOpenPollMessage =
+        "This series already has an open board poll of this type. Close or cancel the existing poll before opening a new one.";
+
     private string SearchText { get; set; } = string.Empty;
     private string? StatusFilter { get; set; }
     private ProposalItem? SelectedProposal { get; set; }
@@ -316,15 +366,68 @@
     private bool IsOpeningPoll { get; set; }
     private bool IsLoading { get; set; } = true;
 
+    private string? OpenPollConflictType { get; set; }
+
     private string OpenPollDeadlineDraftText { get; set; } = string.Empty;
     private DateTime? ConfirmedOpenPollDeadline { get; set; }
     private string? OpenPollMessage { get; set; }
     private bool OpenPollSucceeded { get; set; }
 
     private string? ErrorMessage { get; set; }
-    private string EditorialNote { get; set; } = string.Empty;
 
     private IReadOnlyList<ProposalItem> Proposals { get; set; } = Array.Empty<ProposalItem>();
+
+    private bool HasCurrentPollTypeConflict
+    {
+        get
+        {
+            if (SelectedProposal is null)
+            {
+                return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(OpenPollConflictType)
+                && OpenPollConflictType == PollType)
+            {
+                return true;
+            }
+
+            if (SelectedProposal.HasGenericOpenPollConflict)
+            {
+                return true;
+            }
+
+            return PollType switch
+            {
+                "START_SERIALIZATION" => SelectedProposal.HasStartSerializationOpenPoll,
+                "CANCEL_SERIALIZATION" => SelectedProposal.HasCancelSerializationOpenPoll,
+                _ => false
+            };
+        }
+    }
+
+    private string CurrentOpenPollConflictMessage =>
+        SelectedProposal?.EquivalentOpenPollMessage ?? DuplicateOpenPollMessage;
+
+    private bool IsOpenPollDisabled =>
+        IsOpeningPoll
+        || SelectedProposal is null
+        || HasCurrentPollTypeConflict;
+
+    private string OpenPollButtonText
+    {
+        get
+        {
+            if (HasCurrentPollTypeConflict)
+            {
+                return "Poll Already Exists";
+            }
+
+            return IsOpeningPoll
+                ? "Opening..."
+                : "Confirm & Open Poll";
+        }
+    }
 
     private string OpenPollAlertClass =>
         OpenPollSucceeded
@@ -363,6 +466,145 @@
 
     private static ProposalItem MapProposal(EditorialProposalReviewRowDto proposal)
     {
+        var versionNumber = GetOptionalInt(
+            proposal,
+            "VersionNumber",
+            "ProposalVersion",
+            "VersionNo");
+
+        var versionLabel = versionNumber > 0
+            ? $"Version {versionNumber}"
+            : GetOptionalString(
+                proposal,
+                "Version",
+                "VersionLabel",
+                "LatestVersionLabel");
+
+        if (string.IsNullOrWhiteSpace(versionLabel))
+        {
+            versionLabel = "Version unavailable";
+        }
+
+        var assignedEditor = GetAssignedEditorOrDefault(proposal);
+
+        var submittedFromEditor = GetOptionalString(
+            proposal,
+            "SubmittedByEditorName",
+            "SubmittedFromEditorName",
+            "ReviewedByEditorName",
+            "ReviewedByName",
+            "EditorName");
+
+        if (string.IsNullOrWhiteSpace(submittedFromEditor))
+        {
+            submittedFromEditor = assignedEditor;
+        }
+
+        var targetAudience = GetOptionalString(
+            proposal,
+            "TargetAudience",
+            "Audience");
+
+        if (string.IsNullOrWhiteSpace(targetAudience))
+        {
+            targetAudience = "Editorial Review";
+        }
+
+        var tags = GetOptionalStringList(
+            proposal,
+            "Tags",
+            "TagNames",
+            "TagsDisplay");
+
+        var proposalFileName = GetOptionalString(
+            proposal,
+            "ProposalFileName",
+            "ProposalOriginalFileName",
+            "ProposalFileDisplayName");
+
+        var proposalFileUrl = GetOptionalString(
+            proposal,
+            "ProposalFileUrl",
+            "ProposalFileSecureUrl",
+            "ProposalFilePublicUrl");
+
+        var markupFileName = GetOptionalString(
+            proposal,
+            "MarkupFileName",
+            "MarkupOriginalFileName",
+            "MarkupFileDisplayName");
+
+        var markupFileUrl = GetOptionalString(
+            proposal,
+            "MarkupFileUrl",
+            "MarkupFileSecureUrl",
+            "MarkupFilePublicUrl");
+
+        var attachments = new List<AttachmentItem>();
+
+        if (!string.IsNullOrWhiteSpace(proposalFileName)
+            || !string.IsNullOrWhiteSpace(proposalFileUrl))
+        {
+            attachments.Add(new AttachmentItem(
+                Label: "Proposal file",
+                DisplayName: string.IsNullOrWhiteSpace(proposalFileName)
+                    ? "Open proposal file"
+                    : proposalFileName,
+                Url: proposalFileUrl));
+        }
+
+        if (!string.IsNullOrWhiteSpace(markupFileName)
+            || !string.IsNullOrWhiteSpace(markupFileUrl))
+        {
+            attachments.Add(new AttachmentItem(
+                Label: "Markup file",
+                DisplayName: string.IsNullOrWhiteSpace(markupFileName)
+                    ? "Open markup file"
+                    : markupFileName,
+                Url: markupFileUrl));
+        }
+
+        var hasStartSerializationOpenPoll = GetOptionalBool(
+            proposal,
+            "HasStartSerializationOpenPoll",
+            "HasStartSerializationOpenBoardPoll",
+            "HasStartOpenPoll");
+
+        var hasCancelSerializationOpenPoll = GetOptionalBool(
+            proposal,
+            "HasCancelSerializationOpenPoll",
+            "HasCancelSerializationOpenBoardPoll",
+            "HasCancelOpenPoll");
+
+        var hasGenericOpenPollConflict = GetOptionalBool(
+            proposal,
+            "HasEquivalentOpenPoll",
+            "HasOpenPoll",
+            "HasActivePoll",
+            "HasExistingOpenPoll");
+
+        var equivalentOpenPollMessage = GetOptionalString(
+            proposal,
+            "EquivalentOpenPollMessage",
+            "OpenPollBlockReason",
+            "ExistingOpenPollMessage");
+
+        if (string.IsNullOrWhiteSpace(equivalentOpenPollMessage))
+        {
+            equivalentOpenPollMessage = DuplicateOpenPollMessage;
+        }
+
+        var synopsis = GetOptionalString(
+            proposal,
+            "Synopsis",
+            "ProposalSynopsis",
+            "Summary");
+
+        if (string.IsNullOrWhiteSpace(synopsis))
+        {
+            synopsis = "No synopsis is available from the current API response.";
+        }
+
         return new ProposalItem
         {
             ProposalId = proposal.ProposalId,
@@ -371,22 +613,26 @@
             Title = proposal.Title,
             Author = proposal.Author,
             Genre = proposal.Genre,
-            Version = "Latest",
-            Submitted = "From API",
+            Tags = tags,
+            VersionNumber = versionNumber,
+            VersionLabel = versionLabel,
+            SubmittedFromEditor = submittedFromEditor,
             Status = proposal.Status,
-            AssignedEditor = "Editorial Team",
-            TargetAudience = "Editorial Review",
-            EstimatedLength = "TBD",
-            Synopsis = "Proposal details are loaded from the editorial proposal record. Full proposal detail endpoint can extend this section later.",
+            AssignedEditor = assignedEditor,
+            TargetAudience = targetAudience,
+            Synopsis = synopsis,
+            HasStartSerializationOpenPoll = hasStartSerializationOpenPoll,
+            HasCancelSerializationOpenPoll = hasCancelSerializationOpenPoll,
+            HasGenericOpenPollConflict = hasGenericOpenPollConflict,
+            EquivalentOpenPollMessage = equivalentOpenPollMessage,
             History = new List<HistoryItem>
             {
-                new("Latest", "From API", "Proposal is available for editorial board review.")
+                new(
+                    versionLabel,
+                    submittedFromEditor,
+                    $"Proposal {versionLabel.ToLowerInvariant()} is available for editorial board review.")
             },
-            Attachments = new List<string>
-            {
-                "Proposal file",
-                "Markup file if available"
-            }
+            Attachments = attachments
         };
     }
 
@@ -424,7 +670,7 @@
         ConfirmedOpenPollDeadline = null;
         OpenPollMessage = null;
         OpenPollSucceeded = false;
-        EditorialNote = string.Empty;
+        OpenPollConflictType = null;
         PollReason = $"Board poll opened for {proposal.Title}.";
     }
 
@@ -433,10 +679,16 @@
         SelectedProposal = null;
         OpenPollMessage = null;
         OpenPollSucceeded = false;
+        OpenPollConflictType = null;
     }
 
     private void StartDeadlinePicker()
     {
+        if (HasCurrentPollTypeConflict)
+        {
+            return;
+        }
+
         ShowDeadlinePicker = true;
         OpenPollDeadlineDraftText = ConfirmedOpenPollDeadline?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
             ?? DateTime.Today.AddDays(7).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
@@ -473,6 +725,13 @@
             return;
         }
 
+        if (HasCurrentPollTypeConflict)
+        {
+            OpenPollSucceeded = false;
+            OpenPollMessage = CurrentOpenPollConflictMessage;
+            return;
+        }
+
         if (SelectedProposal.ProposalId == Guid.Empty)
         {
             OpenPollSucceeded = false;
@@ -487,8 +746,8 @@
             return;
         }
 
-        if (PollType == "START_SERIALIZATION" &&
-            string.IsNullOrWhiteSpace(PublicationFrequencyCode))
+        if (PollType == "START_SERIALIZATION"
+            && string.IsNullOrWhiteSpace(PublicationFrequencyCode))
         {
             OpenPollSucceeded = false;
             OpenPollMessage = "Publication frequency is required for START_SERIALIZATION.";
@@ -527,7 +786,12 @@
         catch (Exception ex)
         {
             OpenPollSucceeded = false;
-            OpenPollMessage = ex.Message;
+            OpenPollMessage = ToOpenPollFriendlyMessage(ex.Message);
+
+            if (IsDuplicateOpenPollMessage(ex.Message))
+            {
+                OpenPollConflictType = PollType;
+            }
         }
         finally
         {
@@ -541,6 +805,166 @@
             ? "No deadline"
             : date.Value.ToString("MMM dd, yyyy", CultureInfo.InvariantCulture);
     }
+
+    private static string GetAssignedEditorOrDefault(EditorialProposalReviewRowDto proposal)
+    {
+        var assignedEditor = GetOptionalString(
+            proposal,
+            "AssignedEditor",
+            "AssignedEditorName",
+            "EditorName",
+            "ReviewedByEditorName",
+            "ReviewedByName");
+
+        return string.IsNullOrWhiteSpace(assignedEditor)
+            ? "Editorial Team"
+            : assignedEditor;
+    }
+
+    private static string ToOpenPollFriendlyMessage(string message)
+    {
+        if (IsDuplicateOpenPollMessage(message))
+        {
+            return DuplicateOpenPollMessage;
+        }
+
+        return message;
+    }
+
+    private static bool IsDuplicateOpenPollMessage(string message)
+    {
+        return message.Contains("ux_series_board_poll_open_type", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("Cannot insert duplicate key", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("already has an open board poll", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("already exists for this series", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetOptionalString(object source, params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            var property = source.GetType().GetProperty(propertyName);
+
+            if (property is null)
+            {
+                continue;
+            }
+
+            var value = property.GetValue(source);
+
+            if (value is string stringValue && !string.IsNullOrWhiteSpace(stringValue))
+            {
+                return stringValue;
+            }
+
+            if (value is not null && value is not string)
+            {
+                return value.ToString() ?? string.Empty;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static int GetOptionalInt(object source, params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            var property = source.GetType().GetProperty(propertyName);
+
+            if (property is null)
+            {
+                continue;
+            }
+
+            var value = property.GetValue(source);
+
+            if (value is int intValue)
+            {
+                return intValue;
+            }
+
+            if (value is long longValue)
+            {
+                return Convert.ToInt32(longValue);
+            }
+
+            if (value is string stringValue
+                && int.TryParse(stringValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+            {
+                return parsed;
+            }
+        }
+
+        return 0;
+    }
+
+    private static bool GetOptionalBool(object source, params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            var property = source.GetType().GetProperty(propertyName);
+
+            if (property is null)
+            {
+                continue;
+            }
+
+            var value = property.GetValue(source);
+
+            if (value is bool boolValue)
+            {
+                return boolValue;
+            }
+
+            if (value is string stringValue
+                && bool.TryParse(stringValue, out var parsed))
+            {
+                return parsed;
+            }
+        }
+
+        return false;
+    }
+
+    private static IReadOnlyList<string> GetOptionalStringList(object source, params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            var property = source.GetType().GetProperty(propertyName);
+
+            if (property is null)
+            {
+                continue;
+            }
+
+            var value = property.GetValue(source);
+
+            if (value is IReadOnlyList<string> readOnlyList)
+            {
+                return readOnlyList
+                    .Where(tag => !string.IsNullOrWhiteSpace(tag))
+                    .ToList();
+            }
+
+            if (value is IEnumerable<string> enumerable)
+            {
+                return enumerable
+                    .Where(tag => !string.IsNullOrWhiteSpace(tag))
+                    .ToList();
+            }
+
+            if (value is string stringValue && !string.IsNullOrWhiteSpace(stringValue))
+            {
+                return stringValue
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .ToList();
+            }
+        }
+
+        return Array.Empty<string>();
+    }
+
     private sealed class ProposalItem
     {
         public Guid ProposalId { get; init; }
@@ -549,16 +973,32 @@
         public string Title { get; init; } = string.Empty;
         public string Author { get; init; } = string.Empty;
         public string Genre { get; init; } = string.Empty;
-        public string Version { get; init; } = string.Empty;
-        public string Submitted { get; init; } = string.Empty;
+        public IReadOnlyList<string> Tags { get; init; } = Array.Empty<string>();
+        public int VersionNumber { get; init; }
+        public string VersionLabel { get; init; } = string.Empty;
+        public string SubmittedFromEditor { get; init; } = string.Empty;
         public string Status { get; init; } = string.Empty;
         public string AssignedEditor { get; init; } = string.Empty;
         public string TargetAudience { get; init; } = string.Empty;
-        public string EstimatedLength { get; init; } = string.Empty;
         public string Synopsis { get; init; } = string.Empty;
+        public bool HasStartSerializationOpenPoll { get; init; }
+        public bool HasCancelSerializationOpenPoll { get; init; }
+        public bool HasGenericOpenPollConflict { get; init; }
+        public string EquivalentOpenPollMessage { get; init; } = string.Empty;
         public IReadOnlyList<HistoryItem> History { get; init; } = Array.Empty<HistoryItem>();
-        public IReadOnlyList<string> Attachments { get; init; } = Array.Empty<string>();
+        public IReadOnlyList<AttachmentItem> Attachments { get; init; } = Array.Empty<AttachmentItem>();
     }
 
-    private sealed record HistoryItem(string Version, string Date, string Description);
+    private sealed record HistoryItem(
+        string Version,
+        string Date,
+        string Description);
+
+    private sealed record AttachmentItem(
+        string Label,
+        string DisplayName,
+        string? Url)
+    {
+        public bool HasUrl => !string.IsNullOrWhiteSpace(Url);
+    }
 }
