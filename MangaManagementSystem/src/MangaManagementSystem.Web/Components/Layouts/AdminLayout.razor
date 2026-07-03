@@ -1,4 +1,4 @@
-﻿@namespace MangaManagementSystem.Web.Components.Layouts
+@namespace MangaManagementSystem.Web.Components.Layouts
 
 <RoleSidebarLayout SidebarCssClass="mf-admin-sidebar"
                    NavTitle="Main Navigation"
@@ -8,7 +8,19 @@
         <NavLink href="/admin/users"
                  class="mf-nav-link"
                  Match="NavLinkMatch.Prefix">
-            User Accounts
+            User Management
+        </NavLink>
+
+        <NavLink href="/admin/audit-logs"
+                 class="mf-nav-link"
+                 Match="NavLinkMatch.Prefix">
+            Audit Logs
+        </NavLink>
+
+        <NavLink href="/admin/files"
+                 class="mf-nav-link"
+                 Match="NavLinkMatch.Prefix">
+            File Management
         </NavLink>
 
         <AuthorizeView Roles="Admin">

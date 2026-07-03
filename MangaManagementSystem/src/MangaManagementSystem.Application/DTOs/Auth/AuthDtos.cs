@@ -23,6 +23,7 @@ namespace MangaManagementSystem.Application.DTOs.Auth
         bool Succeeded,
         UserDto? User,
         string? RoleName,
-        string? ErrorMessage
+        string? ErrorMessage,
+        string? ErrorCode = null
     );
 }

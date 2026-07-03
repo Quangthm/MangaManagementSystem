@@ -1,4 +1,4 @@
-﻿using MangaManagementSystem.Application.Features.EditorialBoard.Dtos;
+using MangaManagementSystem.Application.Features.EditorialBoard.Dtos;
 using MangaManagementSystem.Application.Features.EditorialBoard.Repositories;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
@@ -1505,4 +1505,6 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             _ => resultCode
         };
     }
+
+
 }

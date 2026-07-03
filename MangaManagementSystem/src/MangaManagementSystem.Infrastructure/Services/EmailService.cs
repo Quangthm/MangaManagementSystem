@@ -13,60 +13,139 @@ namespace MangaManagementSystem.Infrastructure.Services
         private readonly SmtpSettings _settings;
         private readonly ILogger<EmailService> _logger;
 
-        public EmailService(IOptions<SmtpSettings> settings, ILogger<EmailService> logger)
+        public EmailService(
+            IOptions<SmtpSettings> settings,
+            ILogger<EmailService> logger)
         {
             _settings = settings.Value;
             _logger = logger;
         }
 
-        public async Task SendOtpEmailAsync(string toEmail, string otpCode, CancellationToken cancellationToken = default)
+        public Task SendOtpEmailAsync(
+            string toEmail,
+            string otpCode,
+            CancellationToken cancellationToken = default)
         {
-            var subject = "Your MangaFlow verification code";
-            var body = $"""
-                Hello,
+            var subject =
+                "Your MangaFlow verification code";
 
-                Your MangaFlow verification code is: {otpCode}
+            var body = string.Join(
+                Environment.NewLine,
+                "Hello,",
+                string.Empty,
+                $"Your MangaFlow verification code is: {otpCode}",
+                string.Empty,
+                "This code expires in 5 minutes.",
+                string.Empty,
+                "If you did not request this code, you can ignore this email.",
+                string.Empty,
+                "- MangaFlow");
 
-                This code expires in 5 minutes.
+            return SendEmailAsync(
+                toEmail,
+                subject,
+                body,
+                mockDetail: $"OTP: {otpCode}",
+                cancellationToken);
+        }
 
-                If you did not request this code, you can ignore this email.
+        public Task SendPasswordResetEmailAsync(
+            string toEmail,
+            string resetLink,
+            CancellationToken cancellationToken = default)
+        {
+            var subject =
+                "Reset your MangaFlow password";
 
-                — MangaFlow
-                """;
+            var body = string.Join(
+                Environment.NewLine,
+                "Hello,",
+                string.Empty,
+                "A password reset was requested for your MangaFlow account.",
+                string.Empty,
+                "Open this one-time link to choose a new password:",
+                resetLink,
+                string.Empty,
+                "This link expires in 30 minutes and can be used only once.",
+                string.Empty,
+                "If you did not request this reset, you can ignore this email.",
+                string.Empty,
+                "- MangaFlow");
 
+            return SendEmailAsync(
+                toEmail,
+                subject,
+                body,
+                mockDetail: $"Reset link: {resetLink}",
+                cancellationToken);
+        }
+
+        private async Task SendEmailAsync(
+            string toEmail,
+            string subject,
+            string body,
+            string mockDetail,
+            CancellationToken cancellationToken)
+        {
             if (_settings.UseMock)
             {
                 _logger.LogInformation(
-                    "Mock SMTP email to {Email}. Subject: {Subject}. OTP: {Otp}",
+                    "Mock SMTP email to {Email}. Subject: {Subject}. {MockDetail}",
                     toEmail,
                     subject,
-                    otpCode);
+                    mockDetail);
+
                 return;
             }
 
             var message = new MimeMessage();
-            message.From.Add(new MailboxAddress(_settings.FromName, _settings.FromEmail));
-            message.To.Add(MailboxAddress.Parse(toEmail));
+
+            message.From.Add(
+                new MailboxAddress(
+                    _settings.FromName,
+                    _settings.FromEmail));
+
+            message.To.Add(
+                MailboxAddress.Parse(toEmail));
+
             message.Subject = subject;
-            message.Body = new TextPart("plain") { Text = body };
+            message.Body =
+                new TextPart("plain")
+                {
+                    Text = body
+                };
 
             using var client = new SmtpClient();
 
             await client.ConnectAsync(
                 _settings.Host,
                 _settings.Port,
-                _settings.UseSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.Auto,
+                _settings.UseSsl
+                    ? SecureSocketOptions.StartTls
+                    : SecureSocketOptions.Auto,
                 cancellationToken);
 
-            if (!string.IsNullOrWhiteSpace(_settings.Username))
+            if (!string.IsNullOrWhiteSpace(
+                    _settings.Username))
             {
-                await client.AuthenticateAsync(_settings.Username, _settings.Password, cancellationToken);
+                await client.AuthenticateAsync(
+                    _settings.Username,
+                    _settings.Password,
+                    cancellationToken);
             }
 
-            await client.SendAsync(message, cancellationToken);
-            await client.DisconnectAsync(true, cancellationToken);
+            await client.SendAsync(
+                message,
+                cancellationToken);
 
-            _logger.LogInformation("SMTP email sent to {Email}. Subject: {Subject}", toEmail, subject);
+            await client.DisconnectAsync(
+                true,
+                cancellationToken);
+
+            _logger.LogInformation(
+                "SMTP email sent to {Email}. Subject: {Subject}",
+                toEmail,
+                subject);
         }
     }
 }

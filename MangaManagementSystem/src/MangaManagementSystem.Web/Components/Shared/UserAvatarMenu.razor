@@ -1,15 +1,13 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components.Routing
-@using MangaManagementSystem.Application.Interfaces
+@using MangaManagementSystem.Web.Services.Api
 
 @implements IDisposable
 
 @inject AuthenticationStateProvider AuthStateProvider
-@inject IUserService UserService
-@inject IFileResourceService FileResourceService
+@inject IProfileApiClient ProfileApiClient
 @inject NavigationManager NavigationManager
-@inject ISnackbar Snackbar
 
 <AuthorizeView>
     <Authorized>
@@ -57,7 +55,7 @@
 
                         <span class="mf-user-profile-chevron"
                               aria-hidden="true">
-                            ⌄
+                            &#8964;
                         </span>
                     </button>
                 </ActivatorContent>
@@ -65,7 +63,7 @@
                 <ChildContent>
                     <MudMenuItem OnClick="OpenProfileSettings">
                         <div class="mf-account-menu-item">
-                            <span class="mf-account-menu-icon">⚙</span>
+                            <span class="mf-account-menu-icon">&#9881;</span>
 
                             <span class="mf-account-menu-copy">
                                 <strong>Profile Settings</strong>
@@ -100,7 +98,7 @@
 
             <span class="mf-user-profile-chevron"
                   aria-hidden="true">
-                ›
+                &#8250;
             </span>
         </button>
     </NotAuthorized>
@@ -110,54 +108,6 @@
     private bool _loading = true;
     private bool _profileLoadInProgress;
     private bool _disposed;
-    private Guid _userId;
-
-	protected override async Task OnInitializedAsync()
-	{
-		try
-		{
-			var auth = await AuthStateProvider.GetAuthenticationStateAsync();
-			var user = auth.User;
-			if (user?.Identity?.IsAuthenticated == true)
-			{
-				var idClaim = user.FindFirst(ClaimTypes.NameIdentifier);
-				if (Guid.TryParse(idClaim?.Value, out var uid))
-				{
-					_userId = uid;
-					var dto = await UserService.GetUserByIdAsync(uid);
-					if (dto != null)
-					{
-						_initial = string.IsNullOrWhiteSpace(dto.DisplayName) ? dto.Username?.Substring(0,1).ToUpper() : dto.DisplayName?.Substring(0,1).ToUpper();
-						if (dto.AvatarFileId.HasValue)
-						{
-							var file = await FileResourceService.GetFileResourceByIdAsync(dto.AvatarFileId.Value);
-							if (file != null && !string.IsNullOrWhiteSpace(file.CloudinarySecureUrl))
-							{
-								_avatarUrl = file.CloudinarySecureUrl;
-							}
-						}
-					}
-				}
-			}
-		}
-		catch (Exception)
-		{
-			// Non-fatal; show placeholder avatar
-			Snackbar.Add("Failed to load profile info.", Severity.Warning);
-		}
-		finally
-		{
-			_loading = false;
-		}
-	}
-
-	private void OpenProfile()
-	{
-		// Show a simple modal with profile info. For now this is a placeholder that
-		// shows read-only username/email/role/status and informs what update actions are available.
-		var content = "Profile editing, avatar upload, and password change are temporarily unavailable in the current build.";
-		Snackbar.Add(content, Severity.Info);
-	}
     private string? _avatarUrl;
     private string _initial = "U";
     private string _displayName = "User";
@@ -223,12 +173,7 @@
             }
 
             var currentUser =
-                await UserService.GetUserByIdAsync(userId);
-
-            if (currentUser == null)
-            {
-                return;
-            }
+                await ProfileApiClient.GetProfileAsync(userId);
 
             _displayName = FirstNonEmpty(
                 currentUser.DisplayName,
@@ -254,7 +199,7 @@
             }
 
             var avatarFile =
-                await FileResourceService.GetFileResourceByIdAsync(
+                await ProfileApiClient.GetFileAsync(
                     currentUser.AvatarFileId.Value);
 
             if (avatarFile == null ||

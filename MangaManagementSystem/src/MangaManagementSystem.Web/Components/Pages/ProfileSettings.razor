@@ -361,14 +361,20 @@
                                 <MudTextField T="string"
                                               @bind-Value="_newPassword"
                                               Label="New Password"
-                                              InputType="InputType.Password"
+                                              InputType="@ProfileNewPasswordInputType"
+                                              Adornment="Adornment.End"
+                                              AdornmentIcon="@ProfileNewPasswordIcon"
+                                              OnAdornmentClick="ToggleProfileNewPasswordVisibility"
                                               Variant="Variant.Outlined"
                                               Disabled="@_isBusy" />
 
                                 <MudTextField T="string"
                                               @bind-Value="_confirmPassword"
                                               Label="Confirm New Password"
-                                              InputType="InputType.Password"
+                                              InputType="@ProfileConfirmPasswordInputType"
+                                              Adornment="Adornment.End"
+                                              AdornmentIcon="@ProfileConfirmPasswordIcon"
+                                              OnAdornmentClick="ToggleProfileConfirmPasswordVisibility"
                                               Variant="Variant.Outlined"
                                               Disabled="@_isBusy"
                                               Class="mt-3" />
@@ -555,7 +561,7 @@
             @if (_isImagePreview)
             {
                 <div class="d-flex justify-center my-2">
-                    <MudImage Src="@_currentPortfolio.CloudinarySecureUrl"
+                    <MudImage Src="@($"/api/portfolio/{_currentPortfolio.FileResourceId}")"
                               Alt="Portfolio Image"
                               Fluid="true"
                               Class="rounded"
@@ -649,7 +655,41 @@
 
     private string _newPassword = string.Empty;
     private string _confirmPassword = string.Empty;
+    private bool _showProfileNewPassword;
+    private bool _showProfileConfirmPassword;
     private bool _otpSentForPassword;
+
+    private InputType ProfileNewPasswordInputType =>
+        _showProfileNewPassword
+            ? InputType.Text
+            : InputType.Password;
+
+    private InputType ProfileConfirmPasswordInputType =>
+        _showProfileConfirmPassword
+            ? InputType.Text
+            : InputType.Password;
+
+    private string ProfileNewPasswordIcon =>
+        _showProfileNewPassword
+            ? Icons.Material.Filled.VisibilityOff
+            : Icons.Material.Filled.Visibility;
+
+    private string ProfileConfirmPasswordIcon =>
+        _showProfileConfirmPassword
+            ? Icons.Material.Filled.VisibilityOff
+            : Icons.Material.Filled.Visibility;
+
+    private void ToggleProfileNewPasswordVisibility()
+    {
+        _showProfileNewPassword =
+            !_showProfileNewPassword;
+    }
+
+    private void ToggleProfileConfirmPasswordVisibility()
+    {
+        _showProfileConfirmPassword =
+            !_showProfileConfirmPassword;
+    }
     private string _otpCodePassword = string.Empty;
 
     private ProfileSettingsSection _activeSection =
@@ -873,9 +913,7 @@
                     portfolioFile.CloudinarySecureUrl))
             {
                 _portfolioUrl =
-                    BuildVersionedUrl(
-                        portfolioFile.CloudinarySecureUrl,
-                        portfolioFile.FileResourceId);
+                    $"/api/portfolio/{portfolioFile.FileResourceId:D}";
 
                 _portfolioFileName =
                     portfolioFile.OriginalFileName;
@@ -1446,9 +1484,7 @@
             _currentUser = updated;
 
             _portfolioUrl =
-                BuildVersionedUrl(
-                    portfolioFile.CloudinarySecureUrl,
-                    newPortfolioFileId);
+                $"/api/portfolio/{newPortfolioFileId:D}";
 
             _portfolioFileName =
                 portfolioFile.OriginalFileName;
@@ -1543,6 +1579,8 @@
 
             _newPassword = string.Empty;
             _confirmPassword = string.Empty;
+            _showProfileNewPassword = false;
+            _showProfileConfirmPassword = false;
             _otpSentForPassword = false;
             _otpCodePassword = string.Empty;
 

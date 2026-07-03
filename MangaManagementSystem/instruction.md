@@ -357,4 +357,3 @@ git add src/MangaManagementSystem.API/Dockerfile
 git add src/MangaManagementSystem.Web/Dockerfile
 git commit -m "Add Docker and SonarQube local setup"
 ```
-

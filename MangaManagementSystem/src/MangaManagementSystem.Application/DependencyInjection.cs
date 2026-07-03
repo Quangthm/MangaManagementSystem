@@ -1,4 +1,4 @@
-using MangaManagementSystem.Application.Interfaces;
+﻿using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Application.Services;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -6,13 +6,14 @@ namespace MangaManagementSystem.Application
 {
     public static class DependencyInjection
     {
-        public static IServiceCollection AddApplicationServices(this IServiceCollection services)
+        public static IServiceCollection AddApplicationServices(
+            this IServiceCollection services)
         {
-            // MediatR — registers all IRequestHandler<,> implementations in this assembly.
-            // New CQRS workflows (e.g. SubmitSeriesProposalCommand) are picked up automatically.
-            services.AddMediatR(cfg =>
-                cfg.RegisterServicesFromAssembly(typeof(DependencyInjection).Assembly));
-
+            // Register all MediatR command and query handlers
+            // contained in the Application assembly.
+            services.AddMediatR(configuration =>
+                configuration.RegisterServicesFromAssembly(
+                    typeof(DependencyInjection).Assembly));
 
             services.AddScoped<ISeriesService, SeriesService>();
             services.AddScoped<IChapterService, ChapterService>();

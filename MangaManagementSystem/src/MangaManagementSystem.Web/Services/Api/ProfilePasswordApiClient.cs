@@ -1,5 +1,4 @@
 using System.Net.Http.Json;
-using System.Text.Json;
 
 namespace MangaManagementSystem.Web.Services.Api
 {
@@ -7,7 +6,8 @@ namespace MangaManagementSystem.Web.Services.Api
         : IProfilePasswordApiClient
     {
         private readonly HttpClient _httpClient;
-        private readonly ILogger<ProfilePasswordApiClient> _logger;
+        private readonly ILogger<ProfilePasswordApiClient>
+            _logger;
 
         public ProfilePasswordApiClient(
             HttpClient httpClient,
@@ -17,9 +17,10 @@ namespace MangaManagementSystem.Web.Services.Api
             _logger = logger;
         }
 
-        public async Task SendOtpAsync(Guid userId)
+        public async Task SendOtpAsync(
+            Guid userId)
         {
-            var response =
+            using var response =
                 await _httpClient.PostAsJsonAsync(
                     "api/profile/password/otp",
                     new
@@ -27,22 +28,9 @@ namespace MangaManagementSystem.Web.Services.Api
                         UserId = userId
                     });
 
-            if (response.IsSuccessStatusCode)
-            {
-                return;
-            }
-
-            var message =
-                await ExtractErrorMessageAsync(
-                    response,
-                    "Unable to send OTP.");
-
-            _logger.LogWarning(
-                "Password OTP API failed: {StatusCode} {ReasonPhrase}",
-                (int)response.StatusCode,
-                response.ReasonPhrase);
-
-            throw new InvalidOperationException(message);
+            await EnsureSuccessAsync(
+                response,
+                "Password OTP");
         }
 
         public async Task ResetPasswordAsync(
@@ -50,7 +38,7 @@ namespace MangaManagementSystem.Web.Services.Api
             string otpCode,
             string newPassword)
         {
-            var response =
+            using var response =
                 await _httpClient.PostAsJsonAsync(
                     "api/profile/password/reset",
                     new
@@ -60,95 +48,29 @@ namespace MangaManagementSystem.Web.Services.Api
                         NewPassword = newPassword
                     });
 
+            await EnsureSuccessAsync(
+                response,
+                "Password reset");
+        }
+
+        private async Task EnsureSuccessAsync(
+            HttpResponseMessage response,
+            string operation)
+        {
             if (response.IsSuccessStatusCode)
             {
                 return;
             }
 
-            var message =
-                await ExtractErrorMessageAsync(
-                    response,
-                    "Unable to reset password.");
-
             _logger.LogWarning(
-                "Password reset API failed: {StatusCode} {ReasonPhrase}",
+                "{Operation} API failed: {StatusCode} {ReasonPhrase}",
+                operation,
                 (int)response.StatusCode,
                 response.ReasonPhrase);
 
-            throw new InvalidOperationException(message);
-        }
-
-        private static async Task<string>
-            ExtractErrorMessageAsync(
-                HttpResponseMessage response,
-                string defaultMessage)
-        {
-            try
-            {
-                var body =
-                    await response.Content.ReadAsStringAsync();
-
-                if (string.IsNullOrWhiteSpace(body))
-                {
-                    return defaultMessage;
-                }
-
-                using var document =
-                    JsonDocument.Parse(body);
-
-                var root = document.RootElement;
-
-                if (root.TryGetProperty(
-                        "message",
-                        out var messageProperty) &&
-                    messageProperty.ValueKind ==
-                        JsonValueKind.String)
-                {
-                    var message =
-                        messageProperty.GetString();
-
-                    if (!string.IsNullOrWhiteSpace(message))
-                    {
-                        return message;
-                    }
-                }
-
-                if (root.TryGetProperty(
-                        "detail",
-                        out var detailProperty) &&
-                    detailProperty.ValueKind ==
-                        JsonValueKind.String)
-                {
-                    var detail =
-                        detailProperty.GetString();
-
-                    if (!string.IsNullOrWhiteSpace(detail))
-                    {
-                        return detail;
-                    }
-                }
-
-                if (root.TryGetProperty(
-                        "title",
-                        out var titleProperty) &&
-                    titleProperty.ValueKind ==
-                        JsonValueKind.String)
-                {
-                    var title =
-                        titleProperty.GetString();
-
-                    if (!string.IsNullOrWhiteSpace(title))
-                    {
-                        return title;
-                    }
-                }
-            }
-            catch (JsonException)
-            {
-                // Use the safe fallback message below.
-            }
-
-            return defaultMessage;
+            throw await ApiResponseReader
+                .CreateExceptionAsync(
+                    response);
         }
     }
 }
