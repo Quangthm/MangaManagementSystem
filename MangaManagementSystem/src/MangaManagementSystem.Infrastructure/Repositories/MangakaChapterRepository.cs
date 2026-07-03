@@ -20,7 +20,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
     /// procedure exists yet. Future hardening may move these transitions into SPs if the team
     /// wants SP-owned workflow control.
     /// </summary>
-    public sealed class MangakaChapterRepository : IMangakaChapterRepository
+    public sealed partial class MangakaChapterRepository : IMangakaChapterRepository
     {
         private const string MangakaRoleName = "Mangaka";
         private const string ActiveUserStatus = "ACTIVE";

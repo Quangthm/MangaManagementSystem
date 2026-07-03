@@ -54,4 +54,10 @@ namespace MangaManagementSystem.Application.DTOs.Manga
     /// </summary>
     public sealed record ScheduleApprovedChapterRequest(
         DateTime PlannedReleaseDate);
+
+    /// <summary>
+    /// Request to set a planned release date on a plannable chapter.
+    /// </summary>
+    public sealed record SetPlannedReleaseDateRequest(
+        DateTime PlannedReleaseDate);
 }

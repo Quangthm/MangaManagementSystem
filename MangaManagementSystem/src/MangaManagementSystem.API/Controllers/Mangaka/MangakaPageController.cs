@@ -20,17 +20,20 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         private readonly IChapterPageService _pageService;
         private readonly IChapterPageVersionService _versionService;
         private readonly IFileResourceService _fileResourceService;
+        private readonly IChapterService _chapterService;
         private readonly ILogger<MangakaPageController> _logger;
 
         public MangakaPageController(
             IChapterPageService pageService,
             IChapterPageVersionService versionService,
             IFileResourceService fileResourceService,
+            IChapterService chapterService,
             ILogger<MangakaPageController> logger)
         {
             _pageService = pageService;
             _versionService = versionService;
             _fileResourceService = fileResourceService;
+            _chapterService = chapterService;
             _logger = logger;
         }
 
@@ -159,6 +162,10 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 
             try
             {
+                var page = await _pageService.GetChapterPageByIdAsync(pageId);
+                if (page == null) return NotFound();
+                await _chapterService.EnsureChapterAllowsContentMutationsAsync(page.ChapterId);
+
                 var ok = await _pageService.DeleteChapterPageAsync(pageId, actorUserId);
                 return ok
                     ? Ok(new { pageId })
@@ -186,8 +193,13 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 
             try
             {
+                await _chapterService.EnsureChapterAllowsContentMutationsAsync(request.ChapterId);
                 var result = await _versionService.CreatePageWithVersionAndFileAsync(request);
                 return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -239,6 +251,10 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 
             try
             {
+                var page = await _pageService.GetChapterPageByIdAsync(request.ChapterPageId);
+                if (page == null) return NotFound();
+                await _chapterService.EnsureChapterAllowsContentMutationsAsync(page.ChapterId);
+
                 var result = await _versionService.CreateVersionWithFileAndRegionsAsync(
                     request.ChapterPageId,
                     request.VersionNo,
@@ -247,6 +263,10 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                     request.Regions ?? new List<CreatePageRegionDto>(),
                     request.SetAsCurrent);
                 return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -283,8 +303,16 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 
             try
             {
+                var page = await _pageService.GetChapterPageByIdAsync(pageId);
+                if (page == null) return NotFound();
+                await _chapterService.EnsureChapterAllowsContentMutationsAsync(page.ChapterId);
+
                 var ok = await _versionService.SetCurrentVersionAsync(pageId, request.ChapterPageVersionId);
                 return ok ? Ok() : BadRequest("Could not set current version.");
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
             }
             catch (Exception ex)
             {

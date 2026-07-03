@@ -31,4 +31,10 @@ namespace MangaManagementSystem.API.Contracts
         [Required]
         public DateTime PlannedReleaseDate { get; set; }
     }
+
+    public sealed class SetPlannedReleaseDateApiRequest
+    {
+        [Required]
+        public DateTime PlannedReleaseDate { get; set; }
+    }
 }

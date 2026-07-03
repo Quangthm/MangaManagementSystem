@@ -23,6 +23,7 @@ namespace MangaManagementSystem.API.Controllers.Assistant
         private readonly CloudinaryFileStorageFormAdapter _formAdapter;
         private readonly IChapterPageTaskService _chapterPageTaskService;
         private readonly IChapterPageAnnotationService _annotationService;
+        private readonly IChapterService _chapterService;
         private readonly ILogger<AssistantTaskController> _logger;
 
         public AssistantTaskController(
@@ -30,6 +31,7 @@ namespace MangaManagementSystem.API.Controllers.Assistant
             IFileStorageService fileStorageService,
             IChapterPageTaskService chapterPageTaskService,
             IChapterPageAnnotationService annotationService,
+            IChapterService chapterService,
             ILogger<AssistantTaskController> logger)
         {
             _submissionService = submissionService ?? throw new ArgumentNullException(nameof(submissionService));
@@ -37,6 +39,7 @@ namespace MangaManagementSystem.API.Controllers.Assistant
             _formAdapter = new CloudinaryFileStorageFormAdapter(fileStorageService);
             _chapterPageTaskService = chapterPageTaskService ?? throw new ArgumentNullException(nameof(chapterPageTaskService));
             _annotationService = annotationService ?? throw new ArgumentNullException(nameof(annotationService));
+            _chapterService = chapterService ?? throw new ArgumentNullException(nameof(chapterService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -144,6 +147,7 @@ namespace MangaManagementSystem.API.Controllers.Assistant
             FileUploadResultDto uploadResult;
             try
             {
+                await EnsureChapterAllowsTaskMutationsAsync(taskId, actorUserId);
                 uploadResult = await _formAdapter.UploadFormFileAsync(file, "CHAPTER_PAGE_VERSION", null);
             }
             catch (InvalidOperationException ex)
@@ -267,6 +271,15 @@ namespace MangaManagementSystem.API.Controllers.Assistant
             }
 
             return false;
+        }
+
+        private async Task EnsureChapterAllowsTaskMutationsAsync(Guid taskId, Guid actorUserId)
+        {
+            var task = await _chapterPageTaskService.GetAssignedTaskDetailForAssistantAsync(actorUserId, taskId);
+            if (task?.ChapterId == null)
+                throw new InvalidOperationException("Task or chapter context not found.");
+
+            await _chapterService.EnsureChapterAllowsContentMutationsAsync(task.ChapterId.Value);
         }
     }
 }

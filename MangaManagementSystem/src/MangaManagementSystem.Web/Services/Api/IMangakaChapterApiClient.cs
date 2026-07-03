@@ -52,5 +52,11 @@ namespace MangaManagementSystem.Web.Services.Api
             Guid chapterId,
             ScheduleApprovedChapterRequest request,
             CancellationToken cancellationToken = default);
+
+        Task<SetChapterPlannedReleaseDateResponse> SetPlannedReleaseDateAsync(
+            Guid actorUserId,
+            Guid chapterId,
+            SetPlannedReleaseDateRequest request,
+            CancellationToken cancellationToken = default);
     }
 }
