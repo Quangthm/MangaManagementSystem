@@ -13,6 +13,13 @@
 </head>
 
 <body>
+    <form id="global-logout-form"
+          action="/api/auth/logout"
+          method="post"
+          data-enhance="false"
+          style="display: none;">
+        <AntiforgeryToken />
+    </form>
     <MudThemeProvider @rendermode="InteractiveServer" />
     <MudPopoverProvider @rendermode="InteractiveServer" />
     <MudDialogProvider @rendermode="InteractiveServer" />
@@ -21,6 +28,7 @@
     <Routes @rendermode="InteractiveServer" />
     <script src="js/recaptcha.js"></script>
     <script src="js/portfolio-viewer.js"></script>
+    <script src="js/admin-file-content.js?v=phase6-preview-v3-20260621"></script>
     <script src="/js/profile-settings-crop.js"></script>
     <script src="/js/image-crop.js"></script>
     <script src="_framework/blazor.web.js"></script>
