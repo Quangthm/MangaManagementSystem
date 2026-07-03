@@ -12,10 +12,12 @@ namespace MangaManagementSystem.Application.Services
     public class PageRegionService : IPageRegionService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IImageMetadataProvider _imageMetadataProvider;
 
-        public PageRegionService(IUnitOfWork unitOfWork)
+        public PageRegionService(IUnitOfWork unitOfWork, IImageMetadataProvider imageMetadataProvider)
         {
             _unitOfWork = unitOfWork;
+            _imageMetadataProvider = imageMetadataProvider;
         }
 
         public async Task<PageRegionDto> CreatePageRegionAsync(CreatePageRegionDto dto)
@@ -101,9 +103,108 @@ namespace MangaManagementSystem.Application.Services
                 return false;
             }
 
+            // BR-ANN-017 / BR-PGTASK: a region still referenced by an annotation or a page task must
+            // NOT be deleted — doing so would orphan open feedback / assigned work (and hit the
+            // no-cascade FKs). Enforce this at the Application layer, not only in the UI.
+            var linked = await GetLinkedRegionIdsAsync(entity.ChapterPageVersionId, new List<Guid> { id });
+            if (linked.Contains(id))
+            {
+                throw new InvalidOperationException(
+                    "This region cannot be deleted because it is already used by a task or annotation.");
+            }
+
             _unitOfWork.PageRegions.Delete(entity);
             await _unitOfWork.SaveChangesAsync();
             return true;
+        }
+
+        /// <summary>
+        /// Returns, for the given candidate region ids on a version, the subset still referenced by an
+        /// annotation or a page task (BR-ANN-017 / BR-PGTASK). Shared by single-delete and bulk-replace.
+        /// </summary>
+        private async Task<HashSet<Guid>> GetLinkedRegionIdsAsync(Guid chapterPageVersionId, IReadOnlyCollection<Guid> candidateIds)
+        {
+            var protectedIds = new HashSet<Guid>();
+            if (candidateIds.Count == 0)
+            {
+                return protectedIds;
+            }
+
+            var candidateList = candidateIds.ToList();
+
+            var linkedAnnotations = await _unitOfWork.ChapterPageAnnotations.GetByPageRegionIdsAsync(candidateList);
+            foreach (var annotationRegionId in linkedAnnotations
+                         .SelectMany(a => a.PageRegions.Select(pr => pr.PageRegionId)))
+            {
+                if (candidateIds.Contains(annotationRegionId))
+                {
+                    protectedIds.Add(annotationRegionId);
+                }
+            }
+
+            var version = await _unitOfWork.ChapterPageVersions.GetByIdAsync(chapterPageVersionId);
+            if (version != null)
+            {
+                var tasks = await _unitOfWork.ChapterPageTasks.GetByChapterPageIdWithRegionsAsync(version.ChapterPageId);
+                foreach (var taskRegionId in tasks.SelectMany(t => t.PageRegions.Select(pr => pr.PageRegionId)))
+                {
+                    if (candidateIds.Contains(taskRegionId))
+                    {
+                        protectedIds.Add(taskRegionId);
+                    }
+                }
+            }
+
+            return protectedIds;
+        }
+
+        /// <summary>
+        /// BR-REG-031 / #8 full-page default: returns the existing FULL_PAGE region for the version, or
+        /// creates one covering the whole page. Image dimensions are resolved from Cloudinary metadata
+        /// (BR-REG-032) — no DB transaction is held during the lookup. Used when a task/annotation is
+        /// created without an explicit region selection.
+        /// </summary>
+        public async Task<PageRegionDto> EnsureFullPageRegionAsync(
+            Guid chapterPageVersionId,
+            Guid actorUserId,
+            CancellationToken cancellationToken = default)
+        {
+            // 1. Reuse an existing whole-page region if one already exists for this version.
+            var existing = await _unitOfWork.PageRegions.FindAsync(
+                r => r.ChapterPageVersionId == chapterPageVersionId && r.TypeCode == "FULL_PAGE");
+            var reuse = existing.FirstOrDefault();
+            if (reuse != null)
+            {
+                return MapToDto(reuse);
+            }
+
+            // 2. Resolve the page image dimensions from Cloudinary (FileResource stores no width/height).
+            var version = await _unitOfWork.ChapterPageVersions.GetByIdAsync(chapterPageVersionId)
+                ?? throw new InvalidOperationException("The page version could not be found.");
+            var file = await _unitOfWork.FileResources.GetByIdAsync(version.PageFileId)
+                ?? throw new InvalidOperationException("The page image could not be found.");
+
+            var bounds = await _imageMetadataProvider.GetImageBoundsAsync(file.CloudinaryPublicId, cancellationToken)
+                ?? throw new InvalidOperationException("Could not resolve the page image dimensions for a full-page region.");
+
+            // 3. Create the FULL_PAGE region (x=0, y=0, full width/height — ck_page_region_full_page_shape).
+            var region = new PageRegion
+            {
+                ChapterPageVersionId = chapterPageVersionId,
+                TypeCode = "FULL_PAGE",
+                RegionLabel = "Full page",
+                X = 0,
+                Y = 0,
+                Width = bounds.Width,
+                Height = bounds.Height,
+                ConfidenceScore = null,
+                SourceType = "MANUAL",
+                CreatedAtUtc = DateTime.UtcNow,
+                CreatedByUserId = actorUserId
+            };
+            await _unitOfWork.PageRegions.AddAsync(region);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            return MapToDto(region);
         }
 
         public async Task<bool> BulkReplacePageRegionsAsync(Guid chapterPageVersionId, IEnumerable<CreatePageRegionDto> dtos)

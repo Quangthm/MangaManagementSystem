@@ -39,13 +39,18 @@ namespace MangaManagementSystem.Application.Interfaces
             string? versionNote,
             IEnumerable<CreatePageRegionDto> regionDtos,
             bool setAsCurrent,
+            Guid actorUserId,
+            string? actorRoleName,
             CancellationToken cancellationToken = default);
         /// <summary>
         /// Atomically creates a FileResource, a new ChapterPage, and ChapterPageVersion (version 1)
-        /// in a single database transaction.
+        /// in a single database transaction. The uploader and audit actor are taken from the trusted
+        /// signed-in actor, not from the client-supplied file DTO.
         /// </summary>
         Task<CreatePageWithVersionResponseDto> CreatePageWithVersionAndFileAsync(
             CreatePageWithVersionRequestDto request,
+            Guid actorUserId,
+            string? actorRoleName,
             CancellationToken cancellationToken = default);
     }
 }

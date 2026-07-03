@@ -1,5 +1,55 @@
 # Handoff — Mangaka Workspace: manual-save + full API migration (2026-07-01)
 
+> ### ⚠️ FILE MOVE 2026-07-03 — workspace code sang thư mục Workspace
+> `CreatorWorkspace.razor` + `WorkspaceChapterSidebar.razor` đã `git mv` từ
+> `Components/Pages/Mangaka/` → **`Components/Pages/Workspace/`** (cạnh `TaskWorkspaceRedirect.razor`).
+> Namespace cả hai giờ là `...Components.Pages.Workspace` (CreatorWorkspace folder-derived; sidebar đổi `@namespace` từ Mangaka→Workspace). Route `@page` KHÔNG đổi. Chỉ 2 file này tham chiếu lẫn nhau nên move an toàn, build 0 errors.
+> **→ Mọi đường dẫn `Mangaka/CreatorWorkspace.razor` / `Mangaka/WorkspaceChapterSidebar.razor` bên dưới trong handoff giờ đọc là `Workspace/...`.**
+
+
+> ### UPDATE 2026-07-03 — leader PR review fixes (đang làm theo batch)
+> Leader review PR workspace (feature/workspace-v3 → main) requested-changes, 11 issue + deadline. Đây là **tập KHÁC** với review version/file bên dưới. Tiến độ:
+> - **Batch 1 — ĐÃ TEST OK (user xác nhận):**
+>   - **Deadline task:** thêm `DueAtUtc` vào `CreateMangakaTaskRequest` → controller truyền xuống; UI thêm MudDatePicker "Deadline". SP `usp_ChapterPageTask_Create` vốn nhận `@due_at_utc`.
+>   - **#8 FULL_PAGE default:** không chọn panel/pin → task & annotation tự anchor FULL_PAGE region (`PageRegionService.EnsureFullPageRegionAsync` — reuse BR-REG-031, dims từ Cloudinary `IImageMetadataProvider` BR-REG-032, tái dùng pattern QuickSelect). +controller/client endpoint `regions/version/{id}/ensure-full-page`.
+>   - **#11 delete region guard:** `DeletePageRegionAsync` chặn xóa region đã link task/annotation (throw); UI `DeleteSelectedRegions` chặn + message của leader.
+> - **Batch 2 — BUILD OK, CHƯA user-test:**
+>   - **#1 discard chapter chưa lưu:** `DeleteChapter` cho `ChapterId==Guid.Empty` → **remove khỏi UI** (không gọi backend, không mark CANCELLED), đổi selection; sidebar menu hiện **"Discard"** thay "Cancel" khi `IsPending`.
+>   - **#7 discard page nhân đôi:** root cause = `SelectChapter` load loop **append** vào `chapter.Pages` không clear → reload (Discard reset `IsPagesLoaded`) nhân đôi. Fix: `chapter.Pages.Clear()` trước loop.
+>   - **#2 card chapter đè chữ:** khối trái thêm `flex:1 1 auto; overflow:hidden` + gap → title dài ellipsis, không đè status.
+> - **Batch 3 (#9) — clamp hardening, CHỜ user confirm:** box vẽ tràn mép → region tọa độ âm/vượt biên (invalid). Fix: clamp box về trong ảnh (`mangaAiCanvas.js` mouseup). **KHÔNG chắc fix hết "freeze"** — nếu vẫn treo cần console error (render loop). JS-only → chỉ hard-refresh.
+> - **Batch 4 (#10) — region editing, BUILD OK chưa test:** nút "Edit Region" (enable khi chọn đúng 1 region) → dialog sửa **type + label**. JS `setRegionMeta(id,type,label)` update canvas + syncToBlazor (mark dirty). Persist qua **Save bình thường → BulkReplace** (match theo `PageRegionId`, giữ nguyên id → link task/annotation an toàn; set `updated_by_user_id`). **KHÔNG cần** endpoint mới, **KHÔNG** đụng `UpdatePageRegionAsync` (bug `updated_by` của nó vẫn dormant — chưa dùng ở workspace).
+> - **Batch 5 (#3) — save/submit consistency, BUILD OK chưa test:** `SaveAllChangesAsync` giờ đếm `failedCount`; chỉ báo "saved successfully" + set `Saved` khi **không có lỗi VÀ không còn gì pending** — ngược lại **giữ Dirty** + message trung thực ("X failed, Y saved, try again"). `EnsureSavedBeforeAsync` trả `false` nếu save còn dở → **chặn Submit khi save fail** (hết cảnh submit chapter thiếu page). Thêm progress "Uploading pages… (x/y)" ở header. False unsaved-count tự hết vì state giờ nhất quán.
+>   - **CHƯA giải quyết trong #3:** (a) "save quá chậm" = do các call mạng tuần tự (upload Cloudinary + create từng page) — progress chỉ đỡ UX, chưa tăng tốc; (b) idempotency khi backend đã lưu nhưng client timeout — giữ Dirty là trung thực, nhưng retry ở ca hiếm đó CÓ THỂ tạo page trùng (cần dedupe backend — follow-up).
+> - **Batch 6 (#4 + #5) — BUILD OK chưa test:**
+>   - **#4 (GIỮ dialog thumbnail confirm — user muốn):** quy trình: upload → **dialog review thumbnail + Add/Cancel** → Add (page/version vào buffer "unsaved") → lật pager xem từng trang → OK thì **Save** mới upload Cloudinary + ghi DB. 3 bug đã fix:
+>     - (a) nhúng base64 gốc to → **thumbnail** (≤240px jpeg 0.6, hàm `window.mmsMakeThumbnails`).
+>     - (b) hàm thumbnail để trong ES module canvas có thể chưa load → **chuyển sang script global `js/upload-preview.js`** (khai báo ở `App.razor`, luôn tải sẵn) → không bao giờ trống ảnh.
+>     - (c) **inline `MudDialog @bind-Visible` để lại dialog "ma" thứ 2 không ảnh sau khi Add** → thay bằng **overlay div tự dựng (`@if`)** → đúng 1 dialog, bấm Add/Cancel biến mất sạch, không ghost.
+>     - KHÔNG ép crop (docs không bắt cho page đơn).
+>   - **#5 (defer version upload):** "Upload Version" giờ **buffer thành pending version** (PendingBytes, ChapterPageVersionId=Guid.Empty) + mark dirty, KHÔNG upload ngay. `SaveAllChangesAsync` thêm nhánh: page mới → `CreatePageWithVersion`; **page đã tồn tại + pending version → `CreateVersionWithFileAndRegions`** (helper `BuildRegionDtosForSave`) — tránh bug tạo page trùng. Set-current + cleanup Cloudinary khi fail đã có sẵn trong flush.
+> - **UI polish (user yêu cầu thêm, BUILD OK):**
+>   - **Toolbar gọn + hết che Versions panel:** 2 Versions panel (left+split) hạ xuống `top:64px` (dưới toolbar) → không còn bị toolbar đè nút upload-version; toolbar nén lại (UPLOAD PAGES → icon button, gap 1px, divider mx-1).
+>   - **Bỏ Cancel Submission (cả header + sidebar menu) → thay bằng confirm khi Submit:** `SubmitChapterForReview` giờ hỏi `DialogService.ShowMessageBox` (English) trước khi submit. ⚠️ Tradeoff: submit rồi thì Mangaka không tự huỷ được nữa (chờ editor review / request revision). `CancelSubmission` handler + `OnCancelSubmission` param còn lại dạng dead (harmless) nếu cần khôi phục.
+>   - **Versions panel dời lên `top:20px`** (ngang toolbar, cả 2 pane) — trước hạ 64px giờ toolbar đã nén nên không đè nữa.
+>   - **Chapters sidebar collapse/expand** (giống Task Panel): `_isLeftPanelOpen` + `ToggleLeftPanel` + wrap sidebar bằng div width-transition + nút chevron ở mép trái `<main>`. Nút "New Chapter" dời lên (`mt-6→mt-2`, aside `py-4→pt-2 pb-4`).
+> - **HOÀN TẤT toàn bộ list leader** (#1,#2,#3,#7,#8,#9,#10,#11 + deadline + #4,#5). Follow-up còn lại (không thuộc list leader): idempotency save khi client timeout; tăng tốc save (parallel upload); DB reset theo main (ranking/reader — cần pull main); auth hardening; migrate AiService; `UpdatePageRegionAsync` set `updated_by` (dormant); tách MangakaPageVersionController.
+> - **DB main:** branch local đang SAU main (ranking/reader input update chưa pull). Reset DB "theo bản mới" cần pull/merge main trước — **chưa làm** (phá hủy + có thể conflict).
+>
+> ### UPDATE 2026-07-02 — review version/file + fix #1–#8 (build API 0 / Web 0 errors, chưa smoke-test)
+> Đã review commit `4044f88` và sửa 8 điểm (chi tiết trong review session):
+> - **#1** Luồng tạo page (`FlushPendingAsync`, `CreatorWorkspace.razor`) giờ **best-effort cleanup Cloudinary** khi DB create fail (giống 2 luồng version) — hết rò rỉ orphan file.
+> - **#3** Thêm audit `PAGE_CREATED` / `VERSION_CREATED` trong `ChapterPageVersionService` (trước đây chỉ delete mới ghi audit).
+> - **#4** `FileResource.UploadedByUserId` giờ lấy từ **actor header tin cậy** (controller truyền `actorUserId` + role "Mangaka" xuống service), không tin `FileDto.UploadedByUserId` do client khai.
+> - **#5** `version_no` **tính server-side** (max+1) trong `CreateVersionWithFileAndRegionsAsync` thay vì tin client (BR-CP-009/010/011). *(page_no vẫn client-side — soft-delete subtlety, để sau.)*
+> - **#6** `SetCurrentVersionAsync` (bản standalone) giờ **bọc transaction** — không để page mất current version giữa 2 pass.
+> - **#7** Gỡ dead `@inject ISeriesContributorService ContributorService` (đã migrate sang `IMangakaSeriesContributorApiClient`, không dùng nữa).
+> - **#2 (KHÔNG làm — cần quyết định):** 2 method create vẫn là EF-transaction trong Application service (không phải `usp_*` SP như §3.4 khuyến nghị, không qua MediatR như §3.1). **Cố ý không đổi** vì chuyển sang SP = tạo mới DB object (trái §4.1). Đã bù phần "audit" (#3). Tech-debt: cân nhắc gói `usp_ChapterPage_CreateWithVersion` / `usp_ChapterPageVersion_CreateWithFileAndRegions` nếu muốn đúng chuẩn.
+> - **#8 (giữ nguyên):** `IFileStorageService` inject trong Web là ngoại lệ có chủ đích (§3.6 "Web upload Cloudinary trước"). `IAiService` advisory — migrate optional.
+> - Files đổi: `ChapterPageVersionService.cs`, `IChapterPageVersionService.cs`, `MangakaPageController.cs`, `CreatorWorkspace.razor`.
+> - **CHƯA smoke-test runtime** — cần rebuild + restart API(5234)/Web(5244) + hard-refresh; test lại: tạo page (fail→cleanup), Save-as-new-version, set-current, audit ghi đúng.
+
+
 > Branch: `feature/workspace-v3` (local). Working tree sạch. File chính:
 > `src/MangaManagementSystem.Web/Components/Pages/Mangaka/CreatorWorkspace.razor` + `wwwroot/js/mangaAiCanvas.js`.
 > Build: **API 0 / Web 0 errors** — build ra `-o D:/...` vì **ổ C: temp đầy 100%**.
