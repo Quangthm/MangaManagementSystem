@@ -10,7 +10,7 @@ namespace MangaManagementSystem.Domain.Interfaces
     /// Repository for the Tantou Editor Chapter Review Queue. Read queries use EF
     /// <c>AsNoTracking</c>. Write operations use EF transactions.
     /// </summary>
-    public interface IEditorChapterReviewRepository
+    public partial interface IEditorChapterReviewRepository
     {
         /// <summary>
         /// Returns KPI counts and a filtered chapter list for the review queue page.

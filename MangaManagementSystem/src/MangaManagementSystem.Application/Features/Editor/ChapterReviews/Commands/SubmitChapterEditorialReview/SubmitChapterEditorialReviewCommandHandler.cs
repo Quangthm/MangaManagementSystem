@@ -84,7 +84,7 @@ namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Comma
                         markup.Sha256Hash)
                     : null;
 
-                var result = await _repository.SubmitChapterEditorialReviewAsync(
+                var result = await _repository.SubmitChapterEditorialReviewWithSchedulingAsync(
                     request.ActorUserId,
                     request.ChapterId,
                     request.DecisionCode,

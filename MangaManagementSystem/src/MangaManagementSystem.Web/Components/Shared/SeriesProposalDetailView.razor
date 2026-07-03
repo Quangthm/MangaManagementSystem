@@ -25,7 +25,7 @@
             <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Class="mb-4">
                 <div>
                     <MudText Typo="Typo.h5" Class="font-weight-bold">@Proposal.ProposalTitle</MudText>
-                    <MudText Class="mf-muted">@Proposal.SeriesTitle · Proposal v@Proposal.ProposalVersionNo</MudText>
+                    <MudText Class="mf-muted">@Proposal.SeriesTitle · Proposal v@(Proposal.ProposalVersionNo)</MudText>
                 </div>
                 <div class="d-flex flex-column align-end gap-1">
                     <MudChip T="string" Color="@GetStatusColor(Proposal.StatusCode)">

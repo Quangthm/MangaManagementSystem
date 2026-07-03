@@ -4,6 +4,8 @@
 > **Source of truth:** This context is aligned with the latest `business-rules.md`, `functional-requirements.md`, and `user-stories.md` files.  
 > **Important warning:** This is **not** a payroll, salary, public reader, e-commerce, or full drawing application. Do **not** add modules such as salary calculation, payment processing, public reader accounts, monetization, or full professional drawing tools unless the team leader explicitly changes the scope.
 
+> **Latest scheduling alignment — 2026-07-02:** Publication scheduling is chapter-level. `SCHEDULED` applies to `Chapter.status_code`, not `Series.status_code`; approved chapters with valid planned release dates become `SCHEDULED`; scheduled/on-hold chapters lock Mangaka and page/content mutation workflows; Tantou Editors may reschedule within allowed publication-period rules or place scheduled chapters `ON_HOLD` with a required reason.
+
 ---
 
 ## 1. Project Summary
@@ -34,7 +36,7 @@ The MVP should stay focused and avoid unnecessary tables unless a table represen
 | Series contributors | Manage team membership through `SeriesContributor`, not a direct lead Mangaka column on `Series`. |
 | Series proposals | Store formal submitted proposal versions in `SeriesProposal`; revisions create new proposal rows. |
 | Board workflow | Use `SeriesBoardPoll` and `SeriesBoardVote`; Editorial Board Chief opens, closes, and cancels board polls, specifies publication frequency when opening `START_SERIALIZATION` polls, may also vote, and board results are computed from votes. Do **not** use a separate `SeriesBoardDecision` table. |
-| Chapters and pages | Use `Chapter`, `ChapterPage`, and `ChapterPageVersion`. `ChapterPage` is a logical page slot; `ChapterPageVersion` stores uploaded/revised files. |
+| Chapters and pages | Use `Chapter`, `ChapterPage`, and `ChapterPageVersion`. `ChapterPage` is a logical page slot that may be soft-deleted from active drafts; `ChapterPageVersion` stores explicitly saved uploaded/revised files and cannot be deleted by normal users in the current MVP. |
 | Chapter submission | Submit a chapter by changing `Chapter.status_code` to `UNDER_REVIEW`; do **not** create a `ChapterSubmission` table. |
 | Page regions | Store accepted AI/manual regions directly as `PageRegion` records linked to `ChapterPageVersion`. |
 | Page annotations | Store annotation headers in `ChapterPageAnnotation` and link them to one or more `PageRegion` records through `ChapterPageAnnotationRegion`; do not store direct annotation coordinates. |
@@ -112,7 +114,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 ## 4.2 Page Region and AI Detection
 
 - Each `PageRegion` belongs to exactly one `ChapterPageVersion`.
-- Valid region types are `PANEL`, `SPEECH_BUBBLE`, `CHARACTER`, `SFX_TEXT`, `BACKGROUND`, and `OTHER`.
+- Valid region types are `PANEL`, `SPEECH_BUBBLE`, `CHARACTER`, `SFX_TEXT`, `BACKGROUND`, `FULL_PAGE`, and `OTHER`.
 - Regions are rectangular bounding boxes using `x`, `y`, `width`, and `height`.
 - Width and height must be positive.
 - Region source must be `AI` or `MANUAL`.
@@ -132,6 +134,8 @@ The project uses **permission-based actor grouping** for shared features and rol
 - Newly detected AI regions can be temporary suggestions until the user chooses what to save.
 - Duplicate or substantially overlapping regions of the same type should be prevented or warned against.
 - Saved regions may be adjusted by authorized users, and updates should record `updated_at_utc` and `updated_by_user_id`.
+- A `PageRegion` may be hard-deleted only when it is not connected to any task, annotation, or other workflow record that depends on the region.
+- Task-linked and annotation-linked regions must be preserved for traceability; normal deletion should be blocked for those regions.
 
 ## 4.3 File Resource and Cloudinary
 
@@ -305,9 +309,12 @@ The project uses **permission-based actor grouping** for shared features and rol
 - `Chapter.status_code` stores the current workflow status only.
 - Chapter statuses include `DRAFT`, `UNDER_REVIEW`, `REVISION_REQUESTED`, `APPROVED`, `SCHEDULED`, `RELEASED`, `ON_HOLD`, and `CANCELLED`.
 - `planned_release_date` is optional until scheduling.
+- Scheduling is chapter-level. `SCHEDULED` is a chapter status and must not be applied to `Series.status_code`.
 - A chapter can be `SCHEDULED` only if it has a planned release date.
+- If an `APPROVED` chapter receives a valid planned release date, it becomes `SCHEDULED`.
 - A chapter can be `RELEASED` only if it has `released_at_utc`.
-- Editors may place a chapter `ON_HOLD` with a valid operational/editorial reason.
+- Editors may place a `SCHEDULED` chapter `ON_HOLD` with a valid operational/editorial reason.
+- `ON_HOLD` recovery is intentionally deferred to a later workflow.
 - `created_by_user_id` identifies the creator.
 - `updated_at_utc` is for operational display, not full transition history.
 
@@ -323,11 +330,16 @@ The project uses **permission-based actor grouping** for shared features and rol
 - Version numbers are positive and unique per logical page.
 - Higher version number means newer uploaded version.
 - Only one version should be current at a time.
+- Selecting or uploading a page file in the UI does not create a `ChapterPageVersion` until the user explicitly saves or confirms it as an official version.
+- When a newly saved page version becomes current, the previous current version is unset but remains preserved.
 - Old versions remain preserved.
+- In the current MVP, saved `ChapterPageVersion` records cannot be deleted by normal users.
+- Future versions may add an Admin/system purge workflow for old or unused page versions after chapter release, but this is outside MVP and must preserve referenced workflow history.
 - Replacing/revising a page creates a new `ChapterPageVersion`, not a new `ChapterPage`.
 - A `ChapterPage` may be soft-deleted from active drafts without deleting historical versions.
 - Page task output should reference the produced `ChapterPageVersion`.
 - Page annotations remain linked to page versions through one or more linked `PageRegion` records.
+- Page creation, page deletion, page-version upload, assistant task output submission that creates or changes page content, and other saved page/content mutations are blocked while a chapter is `UNDER_REVIEW`, `APPROVED`, `SCHEDULED`, `ON_HOLD`, `RELEASED`, or `CANCELLED`.
 
 ## 4.9 Chapter Page Annotation
 
@@ -385,7 +397,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 
 - MVP chapter submission is represented by changing `Chapter.status_code` to `UNDER_REVIEW`.
 - A submitted chapter consists of current active page versions of non-deleted chapter pages.
-- Page creation, deletion, and version upload are blocked while chapter is `UNDER_REVIEW`, `APPROVED`, `SCHEDULED`, `RELEASED`, or `CANCELLED`.
+- Page creation, deletion, page-version upload, assistant task output submission that creates or changes page content, and other saved page/content mutation workflows are blocked while the chapter is `UNDER_REVIEW`, `APPROVED`, `SCHEDULED`, `ON_HOLD`, `RELEASED`, or `CANCELLED`.
 - When revision is requested, the chapter becomes editable again.
 - Chapter content is stored as page-level assets through `ChapterPageVersion`.
 - Chapter-level submission file/PDF is future enhancement.
@@ -401,6 +413,8 @@ The project uses **permission-based actor grouping** for shared features and rol
 - Markup files are optional and reference `FileResource` when provided.
 - Page annotations support review; `ChapterEditorialReview` stores final chapter-level decision.
 - Creating a review updates chapter status according to decision and should be audit-logged.
+- If an editor approves a chapter that has no planned release date, the chapter becomes `APPROVED`.
+- If an editor approves a chapter that already has a valid planned release date, the chapter becomes `SCHEDULED`.
 
 ### Cancellation
 
@@ -414,10 +428,10 @@ The project uses **permission-based actor grouping** for shared features and rol
 - The MVP does not require a `replacement_of_chapter_id` relationship; the cancelled chapter remains read-only historical reference and redo work belongs to the new chapter.
 - Admin cancellation without editorial review is not allowed in MVP.
 
-
 ## 4.12 Publication Planning
 
 - Detailed publication planning is chapter-level through `Chapter.planned_release_date` and `Chapter.status_code`.
+- `SCHEDULED` is a chapter status, not a series status.
 - Series-level publication frequency is only the current high-level label stored as `Series.publication_frequency_code`.
 - Frequency values may be `WEEKLY`, `MONTHLY`, `IRREGULAR`, or `NULL`.
 - `IRREGULAR` means chapters are released when ready and do not follow a fixed weekly or monthly schedule.
@@ -439,11 +453,19 @@ The project uses **permission-based actor grouping** for shared features and rol
 - For scheduled chapters, the publication business date is usually `Chapter.planned_release_date`.
 - For released chapters, the release business date is derived by converting `Chapter.released_at_utc` to Vietnam publication time (UTC+7) and taking the date part.
 - Ranking and publication-period reports must not use `CAST(released_at_utc AS DATE)` in UTC as the business period date.
-- For `WEEKLY` series, the next chapter planned release date must fall inside the next weekly `PublicationPeriod` after the previous planned chapter's weekly period.
-- For `MONTHLY` series, the next chapter planned release date must fall inside the next monthly `PublicationPeriod` after the previous planned chapter's monthly period.
+- Scheduling validation finds the latest non-cancelled chapter in the same series with a planned release date, excluding the current chapter.
+- If a previous planned non-cancelled chapter exists, a `WEEKLY` series must schedule the current chapter inside the next weekly `PublicationPeriod` after the previous chapter's weekly period.
+- If a previous planned non-cancelled chapter exists, a `MONTHLY` series must schedule the current chapter inside the next monthly `PublicationPeriod` after the previous chapter's monthly period.
+- If no previous planned non-cancelled chapter exists, the current chapter is treated as the first planned chapter.
+- For the first planned chapter of a `WEEKLY` series, the planned release date may be inside the current weekly `PublicationPeriod` or the next weekly `PublicationPeriod`.
+- For the first planned chapter of a `MONTHLY` series, the planned release date must be inside the current monthly `PublicationPeriod`.
+- `IRREGULAR` series do not enforce next-week or next-month planned release boundaries.
+- If official frequency is `NULL`, the system may allow scheduling without strict weekly/monthly validation unless a later workflow defines a stricter rule.
 - Weekly default scheduling may use previous planned release date + 7 days, while monthly default scheduling may use the same day number in the next month or the last day of that month when needed.
 - Late actual release timestamps do not automatically shift future planned schedule periods unless an authorized user reschedules the chapter.
-
+- When a chapter is `SCHEDULED`, Mangaka and page/content mutation workflows are locked.
+- Tantou Editors may reschedule a `SCHEDULED` chapter within the allowed period rule or place it `ON_HOLD` with a required reason.
+- Recovery from `ON_HOLD`, release automation, and public release visibility are deferred to later tasks.
 
 ## 4.13 Ranking and Series Vote Input
 
@@ -774,15 +796,17 @@ Recommended file-related fields/concepts:
 `ChapterPage` and `ChapterPageVersion` are both required concepts:
 
 - `ChapterPage` = logical slot, such as chapter 3 page 7
-- `ChapterPageVersion` = actual uploaded file/version for that slot
+- `ChapterPageVersion` = explicitly saved uploaded file/version for that slot
 
 Only one page version should be current for a logical page at a time.
+
+Selecting or uploading a page file in the UI does not automatically create a `ChapterPageVersion`. The user must explicitly save or confirm the file before it becomes official page-version history. When a newly saved version becomes current, the previous current version is unset but remains available for traceability. In the current MVP, saved page versions cannot be deleted by normal users. A future Admin/system retention workflow may purge old or unused page versions after chapter release only when referenced workflow history is preserved.
 
 ### 10.3 Page Region
 
 `PageRegion` should link to `ChapterPageVersion`, not just `ChapterPage`.
 
-This keeps region and annotation feedback accurate even after newer page versions are uploaded.
+This keeps region and annotation feedback accurate even after newer page versions are uploaded. A `PageRegion` may be hard-deleted only when it is not linked to any task, annotation, or other workflow record. Regions linked to tasks or annotations must be preserved for traceability.
 
 ### 10.4 Annotation
 

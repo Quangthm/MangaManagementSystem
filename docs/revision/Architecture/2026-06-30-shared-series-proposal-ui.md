@@ -238,3 +238,36 @@ dotnet build MangaManagementSystem\MangaManagementSystem.slnx --no-incremental
 - [ ] Open `/mangaka/proposals/{id}`.
 - [ ] Confirm cover image loads when available.
 - [ ] Confirm no Editor-only actions appear.
+
+## Follow-up Fix — Proposal Version Literal Razor Text
+
+### Problem
+The shared proposal table and shared proposal detail page displayed literal Razor text instead of the actual proposal version number:
+- Table Version column: `v@p.ProposalVersionNo`
+- Detail subtitle: `v@Proposal.ProposalVersionNo`
+
+This affected both Editor and Mangaka because both roles use the shared proposal components.
+
+### Root cause
+Razor markup placed `@` immediately after literal text without explicit expression boundaries (`@(...)`), so the UI rendered the C# property expression as plain text.
+
+### Fix
+- `SeriesProposalTable.razor`: changed `v@p.ProposalVersionNo` → `v@(p.ProposalVersionNo)`
+- `SeriesProposalDetailView.razor`: changed `v@Proposal.ProposalVersionNo` → `v@(Proposal.ProposalVersionNo)`
+- Verified no remaining bad literal patterns exist in the shared proposal components.
+
+### Files changed
+- `Web/Components/Shared/SeriesProposalTable.razor`
+- `Web/Components/Shared/SeriesProposalDetailView.razor`
+
+### Build Result
+```
+dotnet build MangaManagementSystem\MangaManagementSystem.slnx --no-incremental
+Build succeeded. 0 errors.
+```
+
+### Manual Test Checklist
+- [ ] Open `/editor/proposals` — Version column displays v1, v2, v3, etc.
+- [ ] Open `/editor/proposals/{id}` — Detail subtitle displays "Proposal v1", "Proposal v2", etc.
+- [ ] Open `/mangaka/proposals` — Version column displays v1, v2, v3, etc.
+- [ ] Open `/mangaka/proposals/{id}` — Detail subtitle displays "Proposal v1", "Proposal v2", etc.
