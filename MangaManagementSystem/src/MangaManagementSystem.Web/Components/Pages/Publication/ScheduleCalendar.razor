@@ -1,0 +1,282 @@
+@page "/publication/schedule"
+@using Microsoft.AspNetCore.Authorization
+@using MangaManagementSystem.Application.Features.Publication.Schedule.Queries.GetPublicationScheduleCalendar
+@using MangaManagementSystem.Domain.Interfaces
+@using MangaManagementSystem.Web.Services.Api
+@attribute [Authorize]
+@inject IPublicationScheduleApiClient ScheduleApiClient
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<style>
+    .mf-schedule-page { min-height: 100vh; background: #f8fafc; padding: 32px 32px 64px; }
+    .mf-schedule-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
+    .mf-schedule-title { font-size: 1.75rem; font-weight: 700; color: #0f172a; }
+    .mf-schedule-subtitle { color: #64748b; margin-top: 4px; }
+    .mf-week-nav { display: flex; align-items: center; gap: 12px; }
+    .mf-week-label { font-weight: 600; color: #334155; min-width: 200px; text-align: center; }
+    .mf-filters-bar { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; align-items: center; }
+    .mf-search { min-width: 300px; }
+    .mf-filter-item { min-width: 160px; }
+    .mf-days-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; }
+    @@media (max-width: 1200px) { .mf-days-grid { grid-template-columns: repeat(4, 1fr); } }
+    @@media (max-width: 768px) { .mf-days-grid { grid-template-columns: repeat(2, 1fr); } }
+    @@media (max-width: 480px) { .mf-days-grid { grid-template-columns: 1fr; } }
+    .mf-day-column { background: #fff; border-radius: 12px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); min-height: 100px; }
+    .mf-day-column.today { border: 2px solid #3b82f6; }
+    .mf-day-header { font-weight: 700; font-size: 0.85rem; color: #475569; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0; }
+    .mf-day-header.today { color: #3b82f6; }
+    .mf-day-empty { color: #94a3b8; font-size: 0.8rem; text-align: center; padding: 16px 0; }
+    .mf-schedule-card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; margin-bottom: 8px; display: flex; gap: 8px; align-items: flex-start; background: #fff; transition: box-shadow 0.15s; }
+    .mf-schedule-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .mf-card-cover { width: 44px; height: 64px; border-radius: 4px; object-fit: cover; background: #e2e8f0; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 0.6rem; text-align: center; overflow: hidden; }
+    .mf-card-cover img { width: 100%; height: 100%; object-fit: cover; }
+    .mf-card-info { flex: 1; min-width: 0; }
+    .mf-card-series { font-size: 0.78rem; font-weight: 600; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
+    .mf-card-chapter { font-size: 0.72rem; color: #64748b; margin-top: 1px; }
+    .mf-card-badge { margin-top: 3px; }
+    .mf-no-results { text-align: center; padding: 64px 24px; color: #94a3b8; }
+    .mf-selected-series { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+</style>
+
+<div class="mf-schedule-page">
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" Class="mb-4" />
+    }
+
+    @if (_error != null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-4">
+            @_error
+            <MudButton Variant="Variant.Text" Color="Color.Inherit" Class="ml-3" OnClick="LoadSchedule" StartIcon="@Icons.Material.Filled.Refresh">Retry</MudButton>
+        </MudAlert>
+    }
+
+    <div class="mf-schedule-header">
+        <div>
+            <div class="mf-schedule-title">Publication Release Calendar</div>
+            <div class="mf-schedule-subtitle">Browse planned and released chapter updates</div>
+        </div>
+        <div class="mf-week-nav">
+            <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft"
+                           OnClick="GoToPreviousWeek"
+                           Disabled="_loading" />
+            <div class="mf-week-label">@FormatWeekLabel()</div>
+            <MudIconButton Icon="@Icons.Material.Filled.ChevronRight"
+                           OnClick="GoToNextWeek"
+                           Disabled="_loading" />
+            <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                        OnClick="GoToCurrentWeek" Disabled="_loading"
+                        StartIcon="@Icons.Material.Filled.Today">
+                Today
+            </MudButton>
+        </div>
+    </div>
+
+    <div class="mf-filters-bar">
+        <MudAutocomplete T="PublicationScheduleSeriesSuggestion"
+                         Value="_selectedSuggestion"
+                         ValueChanged="OnSeriesSelected"
+                         SearchFunc="@SearchSeriesAsync"
+                         ToStringFunc="@(s => s?.SeriesTitle ?? string.Empty)"
+                         Label="Search series..."
+                         Variant="Variant.Outlined" Clearable="true"
+                         ResetValueOnEmptyText="false" CoerceValue="false"
+                         Class="mf-search"
+                         Adornment="Adornment.Start"
+                         AdornmentIcon="@Icons.Material.Filled.Search" />
+
+        <MudSelect T="string?" Value="_selectedFrequency" ValueChanged="OnFrequencyFilterChanged"
+                   Variant="Variant.Outlined" Label="Frequency" Clearable="true"
+                   Class="mf-filter-item">
+            <MudSelectItem T="string?" Value="@((string?)null)">All Frequencies</MudSelectItem>
+            <MudSelectItem T="string?" Value="@("WEEKLY")">Weekly</MudSelectItem>
+            <MudSelectItem T="string?" Value="@("MONTHLY")">Monthly</MudSelectItem>
+            <MudSelectItem T="string?" Value="@("IRREGULAR")">Irregular</MudSelectItem>
+        </MudSelect>
+    </div>
+
+    @if (_calendar != null)
+    {
+        @if (_calendar.Days.All(d => d.Items.Count == 0))
+        {
+            <MudPaper Class="pa-12 mf-no-results" Elevation="0">
+                <MudIcon Icon="@Icons.Material.Filled.EventBusy" Size="Size.Large" Color="Color.Default" Class="mb-3" />
+                <MudText Typo="Typo.h6" Class="mb-1">No releases found</MudText>
+                <MudText Class="mf-muted">
+                    @if (_selectedSeriesId.HasValue || !string.IsNullOrWhiteSpace(_selectedFrequency))
+                    {
+                        <span>No matching releases for this week with the current filters. Try adjusting your filters.</span>
+                    }
+                    else
+                    {
+                        <span>No serialized chapters are scheduled or released during this week.</span>
+                    }
+                </MudText>
+            </MudPaper>
+        }
+        else
+        {
+            <div class="mf-days-grid">
+                @foreach (var day in _calendar.Days)
+                {
+                    <div class="mf-day-column @(day.IsToday ? "today" : "")">
+                        <div class="mf-day-header @(day.IsToday ? "today" : "")">
+                            <span>@day.DayLabel</span>
+                            @if (day.IsToday)
+                            {
+                                <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="ml-2">Today</MudChip>
+                            }
+                        </div>
+
+                        @if (day.Items.Count == 0)
+                        {
+                            <div class="mf-day-empty">No releases</div>
+                        }
+                        else
+                        {
+                            @foreach (var item in day.Items)
+                            {
+                                <div class="mf-schedule-card">
+                                    <div class="mf-card-cover">
+                                        @if (!string.IsNullOrWhiteSpace(item.SeriesCoverUrl))
+                                        {
+                                            <img src="@item.SeriesCoverUrl" alt="@item.SeriesTitle cover" loading="lazy" />
+                                        }
+                                        else
+                                        {
+                                            <span>No Cover</span>
+                                        }
+                                    </div>
+                                    <div class="mf-card-info">
+                                        <div class="mf-card-series" title="@item.SeriesTitle">@item.SeriesTitle</div>
+                                        <div class="mf-card-chapter">@item.ChapterNumberLabel</div>
+                                        <div class="mf-card-badge">
+                                            <MudChip T="string" Color="@GetBadgeColor(item.StatusCode)" Size="Size.Small">
+                                                @item.StatusBadgeLabel
+                                            </MudChip>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+
+    private DateTime _anchorDate = DateTime.UtcNow.Date;
+
+    private PublicationScheduleSeriesSuggestion? _selectedSuggestion;
+    private Guid? _selectedSeriesId;
+    private string? _selectedFrequency;
+
+    private PublicationScheduleCalendarDto? _calendar;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var uri = new Uri(Nav.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+
+        if (DateTime.TryParse(query["anchorDate"], out var parsed))
+            _anchorDate = parsed.Date;
+
+        if (query["seriesId"] is { Length: > 0 } sid && Guid.TryParse(sid, out var guid))
+            _selectedSeriesId = guid;
+
+        await LoadSchedule();
+    }
+
+    private async Task<IEnumerable<PublicationScheduleSeriesSuggestion>> SearchSeriesAsync(string searchText, CancellationToken ct)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(searchText) || searchText.Length < 2)
+                return Array.Empty<PublicationScheduleSeriesSuggestion>();
+
+            return await ScheduleApiClient.GetSeriesSuggestionsAsync(searchText.Trim(), ct);
+        }
+        catch
+        {
+            return Array.Empty<PublicationScheduleSeriesSuggestion>();
+        }
+    }
+
+    private async void OnSeriesSelected(PublicationScheduleSeriesSuggestion? suggestion)
+    {
+        _selectedSuggestion = suggestion;
+        _selectedSeriesId = suggestion?.SeriesId;
+        await LoadSchedule();
+    }
+
+    private async Task LoadSchedule()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _calendar = await ScheduleApiClient.GetScheduleAsync(
+                _anchorDate, _selectedSeriesId, _selectedFrequency);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load schedule: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async void GoToPreviousWeek()
+    {
+        _anchorDate = _anchorDate.AddDays(-7);
+        await LoadSchedule();
+    }
+
+    private async void GoToNextWeek()
+    {
+        _anchorDate = _anchorDate.AddDays(7);
+        await LoadSchedule();
+    }
+
+    private async void GoToCurrentWeek()
+    {
+        _anchorDate = DateTime.UtcNow.Date;
+        await LoadSchedule();
+    }
+
+    private async void OnFrequencyFilterChanged(string? value)
+    {
+        _selectedFrequency = value;
+        await LoadSchedule();
+    }
+
+    private string FormatWeekLabel()
+    {
+        if (_calendar is null)
+        {
+            var dow = (int)_anchorDate.DayOfWeek;
+            dow = dow == 0 ? 7 : dow;
+            var ws = _anchorDate.AddDays(1 - dow);
+            return $"{ws:MMM d} — {ws.AddDays(6):MMM d, yyyy}";
+        }
+        return $"{_calendar.WeekStartDate:MMM d} — {_calendar.WeekEndDate:MMM d, yyyy}";
+    }
+
+    private static Color GetBadgeColor(string statusCode) => statusCode switch
+    {
+        "RELEASED" => Color.Success,
+        "SCHEDULED" => Color.Info,
+        "APPROVED" => Color.Info,
+        "ON_HOLD" => Color.Warning,
+        _ => Color.Default
+    };
+}

@@ -202,6 +202,12 @@ namespace MangaManagementSystem.Web
                 client.BaseAddress = new Uri(settings.Value.BaseUrl);
             });
 
+            builder.Services.AddHttpClient<Services.Api.IPublicationScheduleApiClient, Services.Api.PublicationScheduleApiClient>((sp, client) =>
+            {
+                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                client.BaseAddress = new Uri(settings.Value.BaseUrl);
+            });
+
             var app = builder.Build();
 
             if (!app.Environment.IsDevelopment())
