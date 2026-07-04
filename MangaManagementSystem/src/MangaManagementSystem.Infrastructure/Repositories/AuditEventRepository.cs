@@ -221,23 +221,20 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .ToListAsync(
                     cancellationToken);
         }
-
-        public async Task<IReadOnlyList<string>>
-    GetDistinctEntityTypesAsync(
-        CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyList<string>> GetDistinctEntityTypesAsync(
+            CancellationToken cancellationToken = default)
         {
             return await _context.AuditEvents
                 .AsNoTracking()
                 .Select(item => item.EntityType)
                 .Distinct()
                 .OrderBy(item => item)
-                .ToListAsync(
-                    cancellationToken);
+                .ToListAsync(cancellationToken);
         }
 
         public async Task AddAsync(
-    AuditEvent auditEvent,
-    CancellationToken cancellationToken = default)
+            AuditEvent auditEvent,
+            CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(auditEvent);
 

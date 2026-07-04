@@ -42,7 +42,7 @@ namespace MangaManagementSystem.Domain.Interfaces
             GetDistinctEntityTypesAsync(
                 CancellationToken cancellationToken = default);
         Task AddAsync(
-             AuditEvent auditEvent,
-                CancellationToken cancellationToken = default);
+            AuditEvent auditEvent,
+            CancellationToken cancellationToken = default);
     }
 }
