@@ -83,6 +83,7 @@
                          Label="Search series..."
                          Variant="Variant.Outlined" Clearable="true"
                          ResetValueOnEmptyText="false" CoerceValue="false"
+                         DebounceInterval="300"
                          Class="mf-search"
                          Adornment="Adornment.Start"
                          AdornmentIcon="@Icons.Material.Filled.Search" />
@@ -169,6 +170,7 @@
 </div>
 
 @code {
+    private bool _isInitialized;
     private bool _loading = true;
     private string? _error;
 
@@ -191,17 +193,22 @@
         if (query["seriesId"] is { Length: > 0 } sid && Guid.TryParse(sid, out var guid))
             _selectedSeriesId = guid;
 
+        _isInitialized = true;
         await LoadSchedule();
     }
 
     private async Task<IEnumerable<PublicationScheduleSeriesSuggestion>> SearchSeriesAsync(string searchText, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(searchText) || searchText.Trim().Length < 2)
+            return Array.Empty<PublicationScheduleSeriesSuggestion>();
+
         try
         {
-            if (string.IsNullOrWhiteSpace(searchText) || searchText.Length < 2)
-                return Array.Empty<PublicationScheduleSeriesSuggestion>();
-
             return await ScheduleApiClient.GetSeriesSuggestionsAsync(searchText.Trim(), ct);
+        }
+        catch (OperationCanceledException)
+        {
+            return Array.Empty<PublicationScheduleSeriesSuggestion>();
         }
         catch
         {
@@ -213,13 +220,15 @@
     {
         _selectedSuggestion = suggestion;
         _selectedSeriesId = suggestion?.SeriesId;
-        await LoadSchedule();
+        if (_isInitialized)
+            await LoadSchedule();
     }
 
     private async Task LoadSchedule()
     {
         _loading = true;
         _error = null;
+        StateHasChanged();
         try
         {
             _calendar = await ScheduleApiClient.GetScheduleAsync(
@@ -232,29 +241,34 @@
         finally
         {
             _loading = false;
+            StateHasChanged();
         }
     }
 
     private async void GoToPreviousWeek()
     {
+        if (_loading) return;
         _anchorDate = _anchorDate.AddDays(-7);
         await LoadSchedule();
     }
 
     private async void GoToNextWeek()
     {
+        if (_loading) return;
         _anchorDate = _anchorDate.AddDays(7);
         await LoadSchedule();
     }
 
     private async void GoToCurrentWeek()
     {
+        if (_loading) return;
         _anchorDate = DateTime.UtcNow.Date;
         await LoadSchedule();
     }
 
     private async void OnFrequencyFilterChanged(string? value)
     {
+        if (!_isInitialized) return;
         _selectedFrequency = value;
         await LoadSchedule();
     }

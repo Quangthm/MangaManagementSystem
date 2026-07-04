@@ -42,6 +42,10 @@ namespace MangaManagementSystem.API.Controllers.Publication
                     cancellationToken);
                 return Ok(result);
             }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(StatusCodes.Status499ClientClosedRequest);
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Unexpected error loading publication schedule.");
@@ -66,6 +70,10 @@ namespace MangaManagementSystem.API.Controllers.Publication
                 var result = await _scheduleRepository.GetSeriesSuggestionsAsync(
                     searchText, maxResults: 10, ct: cancellationToken);
                 return Ok(result);
+            }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(StatusCodes.Status499ClientClosedRequest);
             }
             catch (Exception ex)
             {

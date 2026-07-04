@@ -214,6 +214,38 @@ Status dropdown removed entirely. Calendar now shows schedule-relevant chapters 
 
 ---
 
+## Fix (2026-07-04) — Prevent Repeated API Calls & Spurious Cancellation Errors
+
+### Problems
+1. `MudAutocomplete` fired `ValueChanged(null)` during initial component render, triggering `OnSeriesSelected(null)` which called `LoadSchedule()` before `OnInitializedAsync` completed — causing duplicate calendar loads
+2. No debounce on autocomplete — API calls on every keystroke
+3. Controller logged `OperationCanceledException` (cancelled autocomplete requests) as unexpected errors
+4. Week navigation buttons could trigger double-loads if clicked rapidly while loading
+
+### Fixes
+
+#### ScheduleCalendar.razor
+- Added `_isInitialized` flag set `true` after `OnInitializedAsync` parses query params
+- `OnSeriesSelected` only triggers `LoadSchedule()` when `_isInitialized` is true
+- `OnFrequencyFilterChanged` only triggers when `_isInitialized` is true
+- Added `DebounceInterval="300"` to `MudAutocomplete` — waits 300ms after typing before calling `SearchFunc`
+- `SearchSeriesAsync` explicitly catches `OperationCanceledException` (returns empty list, no error)
+- `SearchSeriesAsync` requires trimmed text length >= 2 before API call
+- Week navigation handlers (`GoToPreviousWeek`, `GoToNextWeek`, `GoToCurrentWeek`) return early if `_loading` is true
+- `LoadSchedule` calls `StateHasChanged()` after setting `_loading=true` and in `finally` to ensure UI updates
+
+#### PublicationScheduleController.cs
+- Both endpoints now catch `OperationCanceledException` separately and return HTTP 499 (client closed request) without logging
+
+### Build Result
+**SUCCESS** — 0 errors
+
+### Files Changed
+- `Web/Components/Pages/Publication/ScheduleCalendar.razor` — guard flags, debounce, cancellation handling, duplicate-prevention
+- `API/Controllers/Publication/PublicationScheduleController.cs` — cancellation exception handling
+
+---
+
 ## Fix (2026-07-04) — MudSelect Type Mismatch Crash
 
 ### Problem
