@@ -93,6 +93,9 @@ namespace MangaManagementSystem.Domain.Interfaces
         int PageCount,
         DateTime CreatedAtUtc,
         string? SubmittedByDisplayName,
+        DateTime? PlannedReleaseDate,
+        DateTime? ReleasedAtUtc,
+        DateTime? UpdatedAtUtc,
         IReadOnlyList<EditorChapterReviewDetailPage> Pages,
         IReadOnlyList<EditorChapterReviewDetailAnnotation> OpenAnnotations,
         IReadOnlyList<EditorChapterReviewHistoryItem> EditorialReviewHistory);
