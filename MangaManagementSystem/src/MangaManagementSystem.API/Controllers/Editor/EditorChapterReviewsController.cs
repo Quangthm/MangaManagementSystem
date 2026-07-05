@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using MangaManagementSystem.API.Contracts;
 using MangaManagementSystem.Application.DTOs.Editor;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.PutScheduledChapterOnHold;
+using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.ReleaseChapter;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.RescheduleChapter;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.SetChapterPlannedReleaseDate;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.SubmitChapterEditorialReview;
@@ -328,6 +329,36 @@ namespace MangaManagementSystem.API.Controllers.Editor
                 _logger.LogError(ex, "Unexpected error putting chapter {ChapterId} on hold.", chapterId);
                 return Problem(
                     detail: "We could not put the chapter on hold right now. Please try again later.",
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
+        }
+
+        [HttpPost("{chapterId:guid}/release")]
+        public async Task<IActionResult> ReleaseChapterAsync(
+            Guid chapterId,
+            [FromBody] EditorReleaseChapterRequest request,
+            CancellationToken cancellationToken)
+        {
+            if (!TryResolveActorUserId(out Guid actorUserId))
+                return BadRequest(new ApiErrorResponse(
+                    "Could not identify the requesting user. Please sign in again."));
+
+            try
+            {
+                var result = await _mediator.Send(
+                    new ReleaseChapterCommand(actorUserId, chapterId, request.ConfirmRelease),
+                    cancellationToken);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new ApiErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error releasing chapter {ChapterId}.", chapterId);
+                return Problem(
+                    detail: "We could not release the chapter right now. Please try again later.",
                     statusCode: StatusCodes.Status500InternalServerError);
             }
         }
