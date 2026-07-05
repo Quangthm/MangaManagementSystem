@@ -112,13 +112,12 @@ namespace MangaManagementSystem.Application.Services
                 return;
             }
 
-            foreach (var pageRegionId in pageRegionIds.Distinct())
+            var distinctIds = pageRegionIds.Distinct().ToList();
+            var regions = await _unitOfWork.PageRegions
+                .FindTrackedAsync(r => distinctIds.Contains(r.PageRegionId));
+            foreach (var region in regions)
             {
-                var region = await _unitOfWork.PageRegions.GetByIdAsync(pageRegionId);
-                if (region != null)
-                {
-                    entity.PageRegions.Add(region);
-                }
+                entity.PageRegions.Add(region);
             }
         }
 

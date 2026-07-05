@@ -44,14 +44,9 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Quer
             if (request.ActorUserId != Guid.Empty && proposals.Count > 0)
             {
                 var distinctSeriesIds = proposals.Select(p => p.SeriesId).Distinct().ToList();
-                foreach (var seriesId in distinctSeriesIds)
-                {
-                    if (await _seriesProposalRepository.IsActiveTantouEditorContributorAsync(
-                        seriesId, request.ActorUserId, cancellationToken))
-                    {
-                        activeContributorSeriesIds.Add(seriesId);
-                    }
-                }
+                var activeSeriesIds = await _seriesProposalRepository
+                    .GetActiveTantouEditorContributorSeriesIdsAsync(distinctSeriesIds, request.ActorUserId, cancellationToken);
+                activeContributorSeriesIds = new HashSet<Guid>(activeSeriesIds);
             }
 
             return proposals.Select(p => MapToDto(p, activeContributorSeriesIds.Contains(p.SeriesId))).ToList();

@@ -1,0 +1,438 @@
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@using MangaManagementSystem.Web.Services.Api
+
+@implements IDisposable
+
+@inject AuthenticationStateProvider AuthStateProvider
+@inject INotificationApiClient NotificationClient
+@inject NavigationManager Nav
+
+<div class="mf-notif-bell-container">
+    <button type="button"
+            class="mf-notif-bell-btn"
+            @onclick="ToggleDropdown"
+            @onclick:stopPropagation="true"
+            title="Notifications"
+            aria-label="Notifications">
+        <svg class="mf-notif-bell-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        </svg>
+        @if (_unreadCount > 0)
+        {
+            <span class="mf-notif-badge">@(_unreadCount > 99 ? "99+" : _unreadCount.ToString())</span>
+        }
+    </button>
+
+    @if (_showDropdown)
+    {
+        <div class="mf-notif-dropdown" @onclick:stopPropagation="true">
+            <div class="mf-notif-dropdown-header">
+                <span class="mf-notif-dropdown-title">Notifications</span>
+                @if (_unreadCount > 0)
+                {
+                    <button class="mf-notif-mark-all-btn" @onclick="MarkAllAsRead" title="Mark all as read">
+                        Mark all read
+                    </button>
+                }
+            </div>
+
+            <div class="mf-notif-list">
+                @if (_notifications.Count == 0)
+                {
+                    <div class="mf-notif-empty">
+                        <svg class="mf-notif-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                        </svg>
+                        <span>No notifications</span>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var notif in _notifications.Take(20))
+                    {
+                        <button type="button"
+                                class="mf-notif-item @(notif.ReadAtUtc == null ? "mf-notif-unread" : "")"
+                                @onclick="() => HandleNotificationClick(notif)">
+                            <div class="mf-notif-item-dot">
+                                @if (notif.ReadAtUtc == null)
+                                {
+                                    <span class="mf-notif-dot-active"></span>
+                                }
+                            </div>
+                            <div class="mf-notif-item-content">
+                                <div class="mf-notif-item-title">@(notif.Title ?? GetDefaultTitle(notif.NotificationTypeCode))</div>
+                                <div class="mf-notif-item-msg">@notif.Message</div>
+                                <div class="mf-notif-item-time">@FormatTime(notif.CreatedAtUtc)</div>
+                            </div>
+                        </button>
+                    }
+                }
+            </div>
+
+            <div class="mf-notif-dropdown-footer">
+                <a href="/assistant/tasks" class="mf-notif-footer-link" @onclick="CloseDropdown">View all tasks</a>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private readonly TimeSpan _pollInterval = TimeSpan.FromSeconds(30);
+    private readonly HashSet<Guid> _readQueue = new();
+
+    private Guid _currentUserId;
+    private bool _showDropdown;
+    private bool _disposed;
+    private List<NotificationDto> _notifications = new();
+    private int _unreadCount;
+
+    private PeriodicTimer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (Guid.TryParse(idClaim, out var userId))
+            {
+                _currentUserId = userId;
+            }
+        }
+
+        Nav.LocationChanged += HandleLocationChanged;
+
+        await LoadNotificationsAsync();
+
+        _timer = new PeriodicTimer(_pollInterval);
+        _ = PollNotificationsAsync();
+    }
+
+    private async Task PollNotificationsAsync()
+    {
+        while (!_disposed && _timer is not null)
+        {
+            try
+            {
+                await _timer.WaitForNextTickAsync();
+                if (!_disposed)
+                {
+                    await LoadNotificationsAsync();
+                    if (!_disposed)
+                    {
+                        await InvokeAsync(StateHasChanged);
+                    }
+                }
+            }
+            catch
+            {
+                break;
+            }
+        }
+    }
+
+    private async Task LoadNotificationsAsync()
+    {
+        try
+        {
+            if (_currentUserId == Guid.Empty) return;
+
+            var all = await NotificationClient.GetNotificationsAsync(_currentUserId);
+            _notifications = all.OrderByDescending(n => n.CreatedAtUtc).ToList();
+            _unreadCount = _notifications.Count(n => n.ReadAtUtc == null);
+        }
+        catch
+        {
+            // Silently fail — not critical
+        }
+    }
+
+    private void ToggleDropdown()
+    {
+        _showDropdown = !_showDropdown;
+    }
+
+    private void CloseDropdown()
+    {
+        _showDropdown = false;
+    }
+
+    private async Task HandleNotificationClick(NotificationDto notif)
+    {
+        if (notif.ReadAtUtc == null && !_readQueue.Contains(notif.NotificationId))
+        {
+            _readQueue.Add(notif.NotificationId);
+            try
+            {
+                await NotificationClient.MarkAsReadAsync(_currentUserId, notif.NotificationId);
+                _unreadCount = Math.Max(0, _unreadCount - 1);
+            }
+            catch
+            {
+                // Silently fail
+            }
+        }
+
+        _showDropdown = false;
+
+        if (string.Equals(notif.RelatedEntityType, "ChapterPageTask", StringComparison.OrdinalIgnoreCase)
+            && notif.RelatedEntityId.HasValue)
+        {
+            Nav.NavigateTo($"/assistant/task/{notif.RelatedEntityId.Value}");
+        }
+    }
+
+    private async Task MarkAllAsRead()
+    {
+        var unread = _notifications.Where(n => n.ReadAtUtc == null).ToList();
+        foreach (var notif in unread)
+        {
+            if (_readQueue.Contains(notif.NotificationId)) continue;
+            _readQueue.Add(notif.NotificationId);
+            try
+            {
+                await NotificationClient.MarkAsReadAsync(_currentUserId, notif.NotificationId);
+            }
+            catch { }
+        }
+        _unreadCount = 0;
+        await LoadNotificationsAsync();
+    }
+
+    private void HandleLocationChanged(object? sender, LocationChangedEventArgs args)
+    {
+        _showDropdown = false;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private static string GetDefaultTitle(string typeCode) => typeCode switch
+    {
+        "TASK_ASSIGNED" => "New Task Assigned",
+        "TASK_COMPLETED" => "Task Approved",
+        "TASK_RETURNED_FOR_REWORK" => "Task Returned",
+        "TASK_CANCELLED" => "Task Cancelled",
+        _ => "Notification"
+    };
+
+    private static string FormatTime(DateTime dt)
+    {
+        var now = DateTime.UtcNow;
+        var diff = now - dt;
+
+        if (diff.TotalMinutes < 1) return "Just now";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalDays < 7) return $"{(int)diff.TotalDays}d ago";
+        return dt.ToLocalTime().ToString("MMM dd");
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        _timer?.Dispose();
+        Nav.LocationChanged -= HandleLocationChanged;
+    }
+}
+
+<style>
+    .mf-notif-bell-container {
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    .mf-notif-bell-btn {
+        position: relative;
+        width: 40px;
+        height: 40px;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        background: #fff;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.15s, border-color 0.15s;
+    }
+
+    .mf-notif-bell-btn:hover {
+        background: #f1f5f9;
+        border-color: #cbd5e1;
+    }
+
+    .mf-notif-bell-icon {
+        width: 20px;
+        height: 20px;
+        color: #64748b;
+    }
+
+    .mf-notif-badge {
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        border-radius: 9px;
+        background: #ef4444;
+        color: #fff;
+        font-size: 10px;
+        font-weight: 800;
+        line-height: 18px;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+    }
+
+    .mf-notif-dropdown {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        width: 360px;
+        max-height: 480px;
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        box-shadow: 0 10px 40px rgba(15, 23, 42, 0.12);
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .mf-notif-dropdown-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 16px 12px;
+        border-bottom: 1px solid #f1f5f9;
+        flex-shrink: 0;
+    }
+
+    .mf-notif-dropdown-title {
+        font-weight: 700;
+        font-size: 0.9rem;
+        color: #111827;
+    }
+
+    .mf-notif-mark-all-btn {
+        background: none;
+        border: none;
+        color: #4f46e5;
+        font-size: 0.78rem;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 2px 6px;
+        border-radius: 6px;
+    }
+
+    .mf-notif-mark-all-btn:hover {
+        background: #eef2ff;
+    }
+
+    .mf-notif-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 4px 0;
+    }
+
+    .mf-notif-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 32px 16px;
+        color: #94a3b8;
+        font-size: 0.85rem;
+    }
+
+    .mf-notif-empty-icon {
+        width: 32px;
+        height: 32px;
+        opacity: 0.4;
+    }
+
+    .mf-notif-item {
+        width: 100%;
+        display: flex;
+        gap: 10px;
+        padding: 12px 16px;
+        border: none;
+        background: none;
+        text-align: left;
+        cursor: pointer;
+        transition: background 0.12s;
+    }
+
+    .mf-notif-item:hover {
+        background: #f8fafc;
+    }
+
+    .mf-notif-unread {
+        background: #f0f4ff;
+    }
+
+    .mf-notif-unread:hover {
+        background: #e8edff;
+    }
+
+    .mf-notif-item-dot {
+        width: 8px;
+        flex-shrink: 0;
+        padding-top: 4px;
+    }
+
+    .mf-notif-dot-active {
+        display: block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #4f46e5;
+    }
+
+    .mf-notif-item-content {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .mf-notif-item-title {
+        font-weight: 700;
+        font-size: 0.82rem;
+        color: #111827;
+        margin-bottom: 2px;
+    }
+
+    .mf-notif-item-msg {
+        font-size: 0.78rem;
+        color: #64748b;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        margin-bottom: 2px;
+    }
+
+    .mf-notif-item-time {
+        font-size: 0.72rem;
+        color: #94a3b8;
+    }
+
+    .mf-notif-dropdown-footer {
+        padding: 10px 16px;
+        border-top: 1px solid #f1f5f9;
+        text-align: center;
+        flex-shrink: 0;
+    }
+
+    .mf-notif-footer-link {
+        color: #4f46e5;
+        font-size: 0.82rem;
+        font-weight: 600;
+        text-decoration: none;
+    }
+
+    .mf-notif-footer-link:hover {
+        text-decoration: underline;
+    }
+</style>

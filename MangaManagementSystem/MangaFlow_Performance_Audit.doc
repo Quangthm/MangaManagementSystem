@@ -1,0 +1,256 @@
+<html xmlns:o='urn:schemas-microsoft-com:office:office' 
+      xmlns:w='urn:schemas-microsoft-com:office:word' 
+      xmlns='http://www.w3.org/TR/REC-html40'>
+<head>
+<meta charset="utf-8">
+<title>MangaFlow - Performance Audit &amp; Fix Tracking</title>
+<!--[if gte mso 9]>
+<xml>
+<w:WordDocument>
+<w:View>Print</w:View>
+</w:WordDocument>
+</xml>
+<![endif]-->
+<style>
+body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; margin: 30px; }
+h1 { color: #1a237e; font-size: 20pt; border-bottom: 2px solid #1a237e; padding-bottom: 8px; }
+.subtitle { color: #666; font-size: 10pt; margin-bottom: 20px; }
+table { border-collapse: collapse; width: 100%; font-size: 8.5pt; }
+th { background: #e0e0e0; border: 1px solid #999; padding: 6px 4px; text-align: left; font-weight: bold; }
+td { border: 1px solid #999; padding: 4px 4px; vertical-align: top; }
+.col-id { width: 40px; }
+.col-sev { width: 55px; }
+.col-desc { width: 200px; }
+.col-file { width: 120px; }
+.col-line { width: 55px; }
+.col-fix { width: 250px; }
+.col-status { width: 70px; }
+.sev-critical { color: #c62828; font-weight: bold; }
+.sev-high { color: #e65100; font-weight: bold; }
+.sev-medium { color: #1565c0; font-weight: bold; }
+.sev-low { color: #2e7d32; }
+.phase { background: #e8eaf6; font-weight: bold; font-size: 9pt; }
+.status { color: #999; font-style: italic; }
+</style>
+</head>
+<body>
+
+<h1>MangaFlow - Performance Audit &amp; Fix Tracking</h1>
+<div class="subtitle">Generated: Friday, July 3, 2026 16:00 &nbsp;|&nbsp; Trạng thái: Chưa bắt đầu fix</div>
+
+<table>
+<tr>
+  <th class="col-id">ID</th>
+  <th class="col-sev">Mức độ</th>
+  <th class="col-desc">Mô tả lỗi</th>
+  <th class="col-file">File</th>
+  <th class="col-line">Dòng</th>
+  <th class="col-fix">Cách fix</th>
+  <th class="col-status">Trạng thái</th>
+</tr>
+
+<tr><td colspan="7" class="phase">PHASE 1 — Crash Prevention</td></tr>
+
+<tr>
+  <td>P1.1</td>
+  <td class="sev-critical">CRITICAL</td>
+  <td>DisposeAsync crash khi circuit ngắt — gọi SaveProgress() mà không bắt JSDisconnectedException</td>
+  <td>CreatorWorkspace.razor</td>
+  <td>2342-2345</td>
+  <td>try-catch JSDisconnectedException / OperationCanceledException trong DisposeAsync</td>
+  <td class="status">⬜ Chưa fix</td>
+</tr>
+
+<tr>
+  <td>P1.2</td>
+  <td class="sev-critical">CRITICAL</td>
+  <td>UnitOfWork tự dispose DbContext do DI quản lý — gây ObjectDisposedException</td>
+  <td>UnitOfWork.cs</td>
+  <td>128-133</td>
+  <td>Bỏ _context.Dispose() khỏi UnitOfWork.Dispose(), chỉ dispose transaction</td>
+  <td class="status">⬜ Chưa fix</td>
+</tr>
+
+<tr>
+  <td>P1.3</td>
+  <td class="sev-critical">CRITICAL</td>
+  <td>Upload 100 files × 20MB = 2GB RAM cùng lúc — OutOfMemory crash</td>
+  <td>CreatorWorkspace.razor</td>
+  <td>2432-2445</td>
+  <td>Giới hạn GetMultipleFiles(20) + Stream upload (không byte[]) + sửa interface IFileStorageService nhận Stream</td>
+  <td class="status">⬜ Chưa fix</td>
+</tr>
+
+<tr>
+  <td>P1.4</td>
+  <td class="sev-high">HIGH</td>
+  <td>Avatar Base64 13MB gửi qua SignalR — circuit nghẽn, chết kết nối</td>
+  <td>ProfileSettings.razor</td>
+  <td>1033-1035</td>
+  <td>Resize ảnh xuống 300×300 trước khi gửi, hoặc upload Cloudinary rồi chỉ gửi URL</td>
+  <td class="status">⬜ Chưa fix</td>
+</tr>
+
+<tr><td colspan="7" class="phase">PHASE 2 — Performance (High Priority)</td></tr>
+
+<tr>
+  <td>P2.1</td>
+  <td class="sev-high">HIGH</td>
+  <td>N+1: mỗi contributor gọi 1 GetUserByIdAsync — C contributors = C+1 queries</td>
+  <td>CreatorWorkspace.razor</td>
+  <td>1634-1643</td>
+  <td>Thêm method GetUsersByIdsAsync(List&lt;Guid&gt;) — 1 query cho tất cả</td>
+  <td class="status">⬜ Chưa fix</td>
+</tr>
+
+<tr>
+  <td>P2.2</td>
+  <td class="sev-high">HIGH</td>
+  <td>N+1: mỗi chapter query riêng editorial review — 50 chapters = 51 queries</td>
+  <td>MangakaChapterRepository.cs</td>
+  <td>52-56, 73-77, 335-343</td>
+  <td>.Include(c => c.EditorialReviews) ngay trong query chapters chính</td>
+  <td class="status">⬜ Chưa fix</td>
+</tr>
+
+<tr>
+  <td>P2.3</td>
+  <td class="sev-high">HIGH</td>
+  <td>N+1: mỗi series gọi IsActiveTantouEditorContributorAsync riêng</td>
+  <td>GetEditorialProposalQueueQueryHandler.cs</td>
+  <td>46-54</td>
+  <td>Batch query WHERE SeriesId IN (...) AND UserId = @userId</td>
+  <td class="status">⬜ Chưa fix</td>
+</tr>
+
+<tr>
+  <td>P2.4</td>
+  <td class="sev-medium">MEDIUM</td>
+  <td>N+1: mỗi pageRegionId gọi 1 GetByIdAsync</td>
+  <td>ChapterPageAnnotationService.cs</td>
+  <td>115-122</td>
+  <td>Dùng .FindAsync(r =&gt; pageRegionIds.Contains(r.PageRegionId)) — 1 query</td>
+  <td class="status">⬜ Chưa fix</td>
+</tr>
+
+<tr>
+  <td>P2.5</td>
+  <td class="sev-high">HIGH</td>
+  <td>GenericRepository.GetAllAsync() + FindAsync() thiếu AsNoTracking — EF track mọi entity</td>
+  <td>GenericRepository.cs</td>
+  <td>35-39</td>
+  <td>Thêm .AsNoTracking() mặc định vào GetAllAsync() và FindAsync()</td>
+  <td class="status">⬜ Chưa fix</td>
+</tr>
+
+<tr>
+  <td>P2.6</td>
+  <td class="sev-high">HIGH</td>
+  <td>Thiếu @key trên 68+ @foreach loops — Blazor render lại toàn bộ mỗi lần thay đổi</td>
+  <td>Tất cả .razor files</td>
+  <td>ALL</td>
+  <td>Thêm @key="@item.Id" (hoặc @key="@item.GetHashCode()") trên mọi @foreach</td>
+  <td class="status">⬜ Chưa fix</td>
+</tr>
+
+<tr>
+  <td>P2.7</td>
+  <td class="sev-high">HIGH</td>
+  <td>File upload double MemoryStream allocation — tốn RAM, không streaming</td>
+  <td>CloudinaryFileStorage*.cs</td>
+  <td>88-93, 195-239</td>
+  <td>Đổi byte[] thành Stream trong upload pipeline</td>
+  <td class="status">⬜ Chưa fix</td>
+</tr>
+
+<tr>
+  <td>P2.8</td>
+  <td class="sev-medium">MEDIUM</td>
+  <td>SignalR MaximumReceiveMessageSize = 50MB quá lớn</td>
+  <td>Program.cs</td>
+  <td>140</td>
+  <td>Giảm xuống 5-10MB</td>
+  <td class="status">⬜ Chưa fix</td>
+</tr>
+
+<tr>
+  <td>P2.9</td>
+  <td class="sev-high">HIGH</td>
+  <td>CreatorWorkspace 3612 dòng + MangakaDashboard 1997 dòng — Blazor diff chậm</td>
+  <td>CreatorWorkspace.razor, MangakaDashboard.razor</td>
+  <td>ALL</td>
+  <td>(Defer) Tách thành sub-components nhỏ hơn</td>
+  <td class="status">⏸ Defer</td>
+</tr>
+
+<tr><td colspan="7" class="phase">PHASE 3 — Optimization (Medium)</td></tr>
+
+<tr>
+  <td>P3.1</td>
+  <td class="sev-medium">MEDIUM</td>
+  <td>Thiếu ConfigureAwait(false) trên 99% await trong library code — nguy cơ deadlock</td>
+  <td>Application + Infrastructure</td>
+  <td>Nhiều</td>
+  <td>Thêm .ConfigureAwait(false) cho tất cả await trong library code</td>
+  <td class="status">⬜ Chưa fix</td>
+</tr>
+
+<tr>
+  <td>P3.2</td>
+  <td class="sev-medium">MEDIUM</td>
+  <td>7+ API call tuần tự trong OnInitializedAsync — chậm load</td>
+  <td>CreatorWorkspace.razor</td>
+  <td>1589-1760</td>
+  <td>Task.WhenAll cho các call không phụ thuộc nhau</td>
+  <td class="status">⬜ Chưa fix</td>
+</tr>
+
+<tr>
+  <td>P3.3</td>
+  <td class="sev-medium">MEDIUM</td>
+  <td>Thiếu ShouldRender override — component render lại trên mọi state change</td>
+  <td>CreatorWorkspace.razor, MangakaDashboard.razor</td>
+  <td>N/A</td>
+  <td>Thêm ShouldRender() chỉ render khi state thực sự thay đổi</td>
+  <td class="status">⬜ Chưa fix</td>
+</tr>
+
+<tr>
+  <td>P3.4</td>
+  <td class="sev-low">LOW</td>
+  <td>Không có CircuitHandler — không log/recover khi circuit ngắt</td>
+  <td>Project Web (class mới)</td>
+  <td>N/A</td>
+  <td>Implement CircuitHandler để log và cleanup</td>
+  <td class="status">⬜ Chưa fix</td>
+</tr>
+
+<tr>
+  <td>P3.5</td>
+  <td class="sev-low">LOW</td>
+  <td>new HttpClient() không qua IHttpClientFactory — socket exhaustion</td>
+  <td>Program.cs</td>
+  <td>410, 426, 450, 491</td>
+  <td>Inject IHttpClientFactory thay vì new HttpClient()</td>
+  <td class="status">⬜ Chưa fix</td>
+</tr>
+
+<tr>
+  <td>P3.6</td>
+  <td class="sev-low">LOW</td>
+  <td>GetEditorProposalDetail gọi contributor check từng series riêng</td>
+  <td>GetEditorProposalDetailQueryHandler.cs</td>
+  <td>49</td>
+  <td>Thêm GetActiveTantouEditorSeriesIdsAsync(userId, seriesIds[]) trả về 1 lần</td>
+  <td class="status">⬜ Chưa fix</td>
+</tr>
+
+</table>
+
+<br/>
+<div style="color:#999; font-size:9pt; border-top:1px solid #ccc; padding-top:8px;">
+  MangaManagementSystem — Performance Audit &amp; Fix Tracking — Created by OpenCode
+</div>
+
+</body>
+</html>

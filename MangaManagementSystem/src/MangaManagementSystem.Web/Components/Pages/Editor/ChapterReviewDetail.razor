@@ -157,7 +157,7 @@
                                     <MudSelectItem Value="@((int?)null)">All pages</MudSelectItem>
                                     @foreach (var pageNum in _detail?.Pages.Select(p => p.PageNumber).Distinct().OrderBy(p => p) ?? Enumerable.Empty<int>())
                                     {
-                                        <MudSelectItem Value="@((int?)pageNum)">Page @pageNum</MudSelectItem>
+                                        <MudSelectItem @key="pageNum" Value="@((int?)pageNum)">Page @pageNum</MudSelectItem>
                                     }
                                 </MudSelect>
                             }
@@ -194,7 +194,7 @@
                                         ? $"Page {group.Key.PageNumber}" + (group.Key.CurrentVersionNo.HasValue ? $" · Version v{group.Key.CurrentVersionNo}" : "")
                                         : "Unknown Page";
 
-                                    <div class="mb-4">
+                                    <div @key="@($"{group.Key.PageNumber}-{group.Key.CurrentVersionId}")" class="mb-4">
                                         <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2">
                                             @groupHeader
                                             @if (group.Key.CurrentVersionId.HasValue && group.Key.PageNumber.HasValue)
@@ -210,8 +210,8 @@
 
                                         @foreach (var ann in group)
                                         {
-                                            <MudPaper Class="pa-3 mb-2" Elevation="1" Style="cursor: pointer;"
-                                                      OnClick="@(() => OpenWorkspaceForAnnotation(ann))">
+                                            <MudPaper @key="ann.AnnotationId" Class="pa-3 mb-2" Elevation="1" Style="cursor: pointer;"
+                                                       OnClick="@(() => OpenWorkspaceForAnnotation(ann))">
                                                 <div class="d-flex justify-space-between align-center mb-1">
                                                     <MudChip T="string" Color="Color.Secondary" Size="Size.Small">@ann.IssueTypeCode.Replace("_", " ")</MudChip>
                                                     <MudText Typo="Typo.caption" Class="mf-muted">

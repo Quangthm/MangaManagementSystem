@@ -33,9 +33,12 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         }
 
         public virtual async Task<IReadOnlyList<T>> GetAllAsync()
-            => await _dbSet.ToListAsync();
+            => await _dbSet.AsNoTracking().ToListAsync();
 
         public virtual async Task<IReadOnlyList<T>> FindAsync(Expression<Func<T, bool>> predicate)
+            => await _dbSet.AsNoTracking().Where(predicate).ToListAsync();
+
+        public virtual async Task<IReadOnlyList<T>> FindTrackedAsync(Expression<Func<T, bool>> predicate)
             => await _dbSet.Where(predicate).ToListAsync();
 
         public virtual async Task AddAsync(T entity)

@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components.Server.Circuits;
 using Microsoft.AspNetCore.Mvc;
 using MudBlazor.Services;
 using System.Security.Claims;
@@ -60,32 +61,40 @@ namespace MangaManagementSystem.Web
                     client.BaseAddress = new Uri(settings.Value.BaseUrl);
                 })
                 .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
-            builder.Services.AddHttpClient<IMangakaSeriesContributorApiClient, MangakaSeriesContributorApiClient>((sp, client) =>
-            {
-                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
-                client.BaseAddress = new Uri(settings.Value.BaseUrl);
-            });
-            builder.Services.AddHttpClient<IProfilePasswordApiClient, ProfilePasswordApiClient>((sp, client) =>
-            {
-                var settings =
-                    sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+            builder.Services
+                .AddHttpClient<IMangakaSeriesContributorApiClient, MangakaSeriesContributorApiClient>((sp, client) =>
+                {
+                    var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                    client.BaseAddress = new Uri(settings.Value.BaseUrl);
+                })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
+            builder.Services
+                .AddHttpClient<IProfilePasswordApiClient, ProfilePasswordApiClient>((sp, client) =>
+                {
+                    var settings =
+                        sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
 
-                client.BaseAddress =
-                    new Uri(settings.Value.BaseUrl);
-            });
-            builder.Services.AddHttpClient<IProfileApiClient, ProfileApiClient>((sp, client) =>
-            {
-                var settings =
-                    sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                    client.BaseAddress =
+                        new Uri(settings.Value.BaseUrl);
+                })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
+            builder.Services
+                .AddHttpClient<IProfileApiClient, ProfileApiClient>((sp, client) =>
+                {
+                    var settings =
+                        sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
 
-                client.BaseAddress =
-                    new Uri(settings.Value.BaseUrl);
-            });
-            builder.Services.AddHttpClient<IReferenceDataApiClient, ReferenceDataApiClient>((sp, client) =>
-            {
-                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
-                client.BaseAddress = new Uri(settings.Value.BaseUrl);
-            });
+                    client.BaseAddress =
+                        new Uri(settings.Value.BaseUrl);
+                })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
+            builder.Services
+                .AddHttpClient<IReferenceDataApiClient, ReferenceDataApiClient>((sp, client) =>
+                {
+                    var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                    client.BaseAddress = new Uri(settings.Value.BaseUrl);
+                })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddAntiforgery();
             builder.Services.AddScoped<ApiAuthorizationMessageHandler>();
@@ -133,59 +142,86 @@ namespace MangaManagementSystem.Web
             builder.Services.AddMudServices();
             builder.Services.AddScoped<ToastService>();
 
+            builder.Services.AddScoped<CircuitHandler, CircuitHandlerService>();
+
             builder.Services.AddRazorComponents()
                 .AddInteractiveServerComponents()
                 .AddHubOptions(options =>
                 {
-                    options.MaximumReceiveMessageSize = 50 * 1024 * 1024; // 50MB
+                    options.MaximumReceiveMessageSize = 5 * 1024 * 1024; // 5MB
                 });
 
             // Register typed API clients
-            builder.Services.AddHttpClient<Services.Api.IAssistantTaskApiClient, Services.Api.AssistantTaskApiClient>((sp, client) =>
-            {
-                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
-                client.BaseAddress = new Uri(settings.Value.BaseUrl);
-            });
-            builder.Services.AddHttpClient<Services.Api.ISeriesApiClient, Services.Api.SeriesApiClient>((sp, client) =>
-            {
-                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
-                client.BaseAddress = new Uri(settings.Value.BaseUrl);
-            });
-            builder.Services.AddHttpClient<Services.Api.IEditorProposalApiClient, Services.Api.EditorProposalApiClient>((sp, client) =>
-            {
-                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
-                client.BaseAddress = new Uri(settings.Value.BaseUrl);
-            });
-            builder.Services.AddHttpClient<Services.Api.IMangakaTaskApiClient, Services.Api.MangakaTaskApiClient>((sp, client) =>
-            {
-                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
-                client.BaseAddress = new Uri(settings.Value.BaseUrl);
-            });
-            builder.Services.AddHttpClient<Services.Api.IEditorDashboardApiClient, Services.Api.EditorDashboardApiClient>((sp, client) =>
-            {
-                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
-                client.BaseAddress = new Uri(settings.Value.BaseUrl);
-            });
-            builder.Services.AddHttpClient<Services.Api.IEditorChapterReviewApiClient, Services.Api.EditorChapterReviewApiClient>((sp, client) =>
-            {
-                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
-                client.BaseAddress = new Uri(settings.Value.BaseUrl);
-            });
-            builder.Services.AddHttpClient<Services.Api.IEditorAnnotationApiClient, Services.Api.EditorAnnotationApiClient>((sp, client) =>
-            {
-                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
-                client.BaseAddress = new Uri(settings.Value.BaseUrl);
-            });
-            builder.Services.AddHttpClient<Services.Api.IEditorSeriesApiClient, Services.Api.EditorSeriesApiClient>((sp, client) =>
-            {
-                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
-                client.BaseAddress = new Uri(settings.Value.BaseUrl);
-            });
-            builder.Services.AddHttpClient<Services.Api.IMangakaChapterApiClient, Services.Api.MangakaChapterApiClient>((sp, client) =>
-            {
-                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
-                client.BaseAddress = new Uri(settings.Value.BaseUrl);
-            });
+            builder.Services
+                .AddHttpClient<Services.Api.IAssistantTaskApiClient, Services.Api.AssistantTaskApiClient>((sp, client) =>
+                {
+                    var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                    client.BaseAddress = new Uri(settings.Value.BaseUrl);
+                })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
+            builder.Services
+                .AddHttpClient<Services.Api.ISeriesApiClient, Services.Api.SeriesApiClient>((sp, client) =>
+                {
+                    var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                    client.BaseAddress = new Uri(settings.Value.BaseUrl);
+                })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
+            builder.Services
+                .AddHttpClient<Services.Api.IEditorProposalApiClient, Services.Api.EditorProposalApiClient>((sp, client) =>
+                {
+                    var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                    client.BaseAddress = new Uri(settings.Value.BaseUrl);
+                })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
+            builder.Services
+                .AddHttpClient<Services.Api.IMangakaTaskApiClient, Services.Api.MangakaTaskApiClient>((sp, client) =>
+                {
+                    var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                    client.BaseAddress = new Uri(settings.Value.BaseUrl);
+                })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
+            builder.Services
+                .AddHttpClient<Services.Api.IEditorDashboardApiClient, Services.Api.EditorDashboardApiClient>((sp, client) =>
+                {
+                    var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                    client.BaseAddress = new Uri(settings.Value.BaseUrl);
+                })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
+            builder.Services
+                .AddHttpClient<Services.Api.IEditorChapterReviewApiClient, Services.Api.EditorChapterReviewApiClient>((sp, client) =>
+                {
+                    var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                    client.BaseAddress = new Uri(settings.Value.BaseUrl);
+                })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
+            builder.Services
+                .AddHttpClient<Services.Api.IEditorAnnotationApiClient, Services.Api.EditorAnnotationApiClient>((sp, client) =>
+                {
+                    var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                    client.BaseAddress = new Uri(settings.Value.BaseUrl);
+                })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
+            builder.Services
+                .AddHttpClient<Services.Api.IEditorSeriesApiClient, Services.Api.EditorSeriesApiClient>((sp, client) =>
+                {
+                    var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                    client.BaseAddress = new Uri(settings.Value.BaseUrl);
+                })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
+            builder.Services
+                .AddHttpClient<Services.Api.IMangakaChapterApiClient, Services.Api.MangakaChapterApiClient>((sp, client) =>
+                {
+                    var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                    client.BaseAddress = new Uri(settings.Value.BaseUrl);
+                })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
+            builder.Services
+                .AddHttpClient<Services.Api.INotificationApiClient, Services.Api.NotificationApiClient>((sp, client) =>
+                {
+                    var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                    client.BaseAddress = new Uri(settings.Value.BaseUrl);
+                })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
 
             var app = builder.Build();
 
@@ -382,6 +418,7 @@ app.MapGet("/signout", async (CustomAuthenticationStateProvider authStateProvide
                 Guid id,
                 IFileResourceService fileResourceService,
                 CloudinaryDotNet.Cloudinary cloudinary,
+                IHttpClientFactory clientFactory,
                 ILogger<Program> logger) =>
             {
                 var lines = new System.Collections.Generic.List<string>();
@@ -407,7 +444,7 @@ app.MapGet("/signout", async (CustomAuthenticationStateProvider authStateProvide
 
                     // === Strategy A: CDN URL with browser-like headers ===
                     lines.Add("=== Strategy A: CDN URL + Browser Headers ===");
-                    using (var httpClient = new System.Net.Http.HttpClient())
+                    using (var httpClient = clientFactory.CreateClient())
                     {
                         httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
                         httpClient.DefaultRequestHeaders.Add("Accept", "*/*");
@@ -423,7 +460,7 @@ app.MapGet("/signout", async (CustomAuthenticationStateProvider authStateProvide
 
                     // === Strategy B: Admin API with Basic Auth ===
                     lines.Add("=== Strategy B: Admin API (Basic Auth) ===");
-                    using (var httpClient = new System.Net.Http.HttpClient())
+                    using (var httpClient = clientFactory.CreateClient())
                     {
                         var basicAuth = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($"{account.ApiKey}:{account.ApiSecret}"));
                         httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", basicAuth);
@@ -447,7 +484,7 @@ app.MapGet("/signout", async (CustomAuthenticationStateProvider authStateProvide
 
                     // === Strategy C: CDN URL with Basic Auth ===
                     lines.Add("=== Strategy C: CDN URL + Basic Auth ===");
-                    using (var httpClient = new System.Net.Http.HttpClient())
+                    using (var httpClient = clientFactory.CreateClient())
                     {
                         var basicAuth = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($"{account.ApiKey}:{account.ApiSecret}"));
                         httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", basicAuth);
@@ -473,6 +510,7 @@ app.MapGet("/signout", async (CustomAuthenticationStateProvider authStateProvide
             app.MapGet("/api/portfolio/{id:guid}", async (
                 Guid id,
                 IFileResourceService fileResourceService,
+                IHttpClientFactory clientFactory,
                 ILogger<Program> logger) =>
             {
                 try
@@ -488,7 +526,7 @@ app.MapGet("/signout", async (CustomAuthenticationStateProvider authStateProvide
 
                     // Cloudinary CDN rejects requests without a User-Agent header (bot detection → 401).
                     // Adding a browser-like User-Agent resolves this.
-                    using var httpClient = new System.Net.Http.HttpClient();
+                    using var httpClient = clientFactory.CreateClient();
                     httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
                     httpClient.DefaultRequestHeaders.Add("Accept", "*/*");
 

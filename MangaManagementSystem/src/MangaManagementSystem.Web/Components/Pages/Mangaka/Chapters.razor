@@ -46,7 +46,7 @@
                             <MudSelectItem T="Guid?" Value="@(null)">All Series</MudSelectItem>
                             @foreach (var series in _seriesList)
                             {
-                                <MudSelectItem T="Guid?" Value="@series.SeriesId">@series.Title</MudSelectItem>
+                                <MudSelectItem @key="series.SeriesId" T="Guid?" Value="@series.SeriesId">@series.Title</MudSelectItem>
                             }
                         </MudSelect>
                     </MudItem>
@@ -89,7 +89,7 @@
                 <MudGrid>
                     @foreach (var chapter in GetPagedChapters())
                     {
-                        <MudItem xs="12" md="6">
+                        <MudItem @key="chapter.ChapterId" xs="12" md="6">
                             <MudPaper Class="pa-5 mf-card" Elevation="0">
                                 <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
                                     <MudText Typo="Typo.h6" Class="font-weight-bold">
@@ -215,7 +215,7 @@
                 <MudSelect T="Guid" Label="Series" @bind-Value="_createSeriesId" Variant="Variant.Outlined" Required="true" Class="mb-3">
                     @foreach (var series in _seriesList)
                     {
-                        <MudSelectItem T="Guid" Value="@series.SeriesId">@series.Title</MudSelectItem>
+                        <MudSelectItem @key="series.SeriesId" T="Guid" Value="@series.SeriesId">@series.Title</MudSelectItem>
                     }
                 </MudSelect>
                 <MudTextField @bind-Value="_createChapterNumberLabel" Label="Chapter Number Label"

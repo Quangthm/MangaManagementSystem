@@ -384,7 +384,16 @@
 
         if (_jsModule != null)
         {
-            await _jsModule.DisposeAsync();
+            try
+            {
+                await _jsModule.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+            catch (OperationCanceledException)
+            {
+            }
         }
     }
 }

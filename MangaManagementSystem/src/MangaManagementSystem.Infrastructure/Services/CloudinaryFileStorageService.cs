@@ -177,6 +177,71 @@ namespace MangaManagementSystem.Infrastructure.Services
             );
         }
 
+        public async Task<FileUploadResultDto> UploadFileAsync(
+            Stream fileStream,
+            string originalFileName,
+            string contentType,
+            string filePurposeCode,
+            int? uploadedByUserId = null)
+        {
+            if (fileStream == null)
+                throw new ArgumentNullException(nameof(fileStream));
+
+            var normalizedContentType = contentType?.ToLowerInvariant() ?? string.Empty;
+            var isImage = AllowedImageContentTypes.Contains(normalizedContentType);
+            var isRaw = AllowedRawContentTypes.Contains(normalizedContentType);
+
+            ValidateFileTypeForPurpose(filePurposeCode, isImage, isRaw);
+
+            var sha256Hash = await ComputeSha256HashAsync(fileStream);
+            fileStream.Position = 0;
+
+            var safeOriginalFileName = Path.GetFileName(originalFileName);
+            var folder = BuildFolderForPurpose(filePurposeCode);
+
+            UploadResult uploadResult;
+            if (isImage)
+            {
+                var uploadParams = new ImageUploadParams
+                {
+                    File = new FileDescription(safeOriginalFileName, fileStream),
+                    Folder = folder,
+                    UseFilename = true,
+                    UniqueFilename = true,
+                    Overwrite = false
+                };
+                uploadResult = await _cloudinary.UploadAsync(uploadParams);
+            }
+            else
+            {
+                var uploadParams = new RawUploadParams
+                {
+                    File = new FileDescription(safeOriginalFileName, fileStream),
+                    Folder = folder,
+                    UseFilename = true,
+                    UniqueFilename = true,
+                    Overwrite = false
+                };
+                var rawResult = await _cloudinary.UploadAsync(uploadParams);
+                uploadResult = rawResult as UploadResult;
+            }
+
+            if (uploadResult == null || uploadResult.StatusCode != System.Net.HttpStatusCode.OK)
+            {
+                var errMsg = uploadResult?.Error?.Message ?? uploadResult?.StatusCode.ToString() ?? "Unknown";
+                throw new InvalidOperationException($"Cloudinary upload failed: {errMsg}");
+            }
+
+            return new FileUploadResultDto(
+                uploadResult.PublicId ?? string.Empty,
+                uploadResult.SecureUrl?.ToString() ?? uploadResult.Url?.ToString() ?? string.Empty,
+                normalizedContentType,
+                fileStream.Length,
+                safeOriginalFileName,
+                sha256Hash
+            );
+        }
+
         public async Task DeleteFileAsync(string publicId, string resourceType)
         {
             if (string.IsNullOrWhiteSpace(publicId))
@@ -199,13 +264,14 @@ namespace MangaManagementSystem.Infrastructure.Services
             string folder,
             bool isImage)
         {
+            using var ms = new MemoryStream(fileBytes);
             UploadResult? uploadResult;
 
             if (isImage)
             {
                 var uploadParams = new ImageUploadParams
                 {
-                    File = new FileDescription(originalFileName, new MemoryStream(fileBytes)),
+                    File = new FileDescription(originalFileName, ms),
                     Folder = folder,
                     UseFilename = true,
                     UniqueFilename = true,
@@ -218,7 +284,7 @@ namespace MangaManagementSystem.Infrastructure.Services
             {
                 var uploadParams = new RawUploadParams
                 {
-                    File = new FileDescription(originalFileName, new MemoryStream(fileBytes)),
+                    File = new FileDescription(originalFileName, ms),
                     Folder = folder,
                     UseFilename = true,
                     UniqueFilename = true,
@@ -276,6 +342,13 @@ namespace MangaManagementSystem.Infrastructure.Services
             "EDITORIAL_ATTACHMENT" => "editorial/attachments",
             _ => "misc"
         };
+
+        private static async Task<string> ComputeSha256HashAsync(Stream stream)
+        {
+            using var sha = SHA256.Create();
+            var hash = await sha.ComputeHashAsync(stream);
+            return BitConverter.ToString(hash).Replace("-", string.Empty).ToLowerInvariant();
+        }
 
         private static string ComputeSha256Hash(byte[] fileBytes)
         {

@@ -74,7 +74,7 @@
                             <MudSelectItem Value="@("all")">All Series</MudSelectItem>
                             @foreach (var s in _data.SeriesFilters)
                             {
-                                <MudSelectItem Value="@(s.SeriesId.ToString())">@s.SeriesTitle</MudSelectItem>
+                                <MudSelectItem @key="s.SeriesId" Value="@(s.SeriesId.ToString())">@s.SeriesTitle</MudSelectItem>
                             }
                         </MudSelect>
 
@@ -82,7 +82,7 @@
                             <MudSelectItem Value="@("all")">All Issues</MudSelectItem>
                             @foreach (var t in _data.IssueTypeFilters)
                             {
-                                <MudSelectItem Value="@t">@t</MudSelectItem>
+                                <MudSelectItem @key="t" Value="@t">@t</MudSelectItem>
                             }
                         </MudSelect>
 
@@ -109,7 +109,7 @@
                     <MudExpansionPanels MultiExpansion="true" Class="mf-expansion-groups">
                         @foreach (var group in _data.SeriesGroups)
                         {
-                            <MudExpansionPanel Class="mb-2">
+                            <MudExpansionPanel @key="group.SeriesId" Class="mb-2">
                                 <TitleContent>
                                     <MudText Typo="Typo.subtitle1" Class="font-weight-bold">
                                         @group.SeriesTitle
@@ -168,7 +168,7 @@
                                                     <MudStack Row="true" Spacing="1">
                                                         @foreach (var region in context.Regions.Take(3))
                                                         {
-                                                            <MudTooltip Text="@($"{region.RegionTypeCode} ({region.X:0},{region.Y:0})")">
+                                                            <MudTooltip @key="region.PageRegionId" Text="@($"{region.RegionTypeCode} ({region.X:0},{region.Y:0})")">
                                                                 <MudChip T="string" Size="Size.Small" Color="Color.Tertiary">@region.RegionTypeCode</MudChip>
                                                             </MudTooltip>
                                                         }

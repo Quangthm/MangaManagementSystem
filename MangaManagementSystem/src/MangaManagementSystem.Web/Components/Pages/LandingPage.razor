@@ -32,22 +32,22 @@
                 </MudStack>
             </MudStack>
 
-            @* Hero body *@
-            <MudGrid Class="py-12 py-md-16 mf-fade-up">
-                <MudItem xs="12" md="6" Class="d-flex flex-column justify-center">
-                    <MudText Typo="Typo.h2" Class="font-weight-bold mb-4 mf-shimmer-text" Style="line-height:1.15;">
-                        Manage Manga Production<br />from Draft to Publication
-                    </MudText>
-                    <MudText Typo="Typo.body1" Class="mf-muted mb-6" Style="font-size:1.1rem;line-height:1.7;max-width:520px;">
-                        Coordinate chapters, pages, assistant tasks, editorial reviews, board approvals, and publishing progress in one role-based platform.
-                    </MudText>
-                    <MudStack Row="true" Spacing="2">
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Href="/register">Create Account</MudButton>
-                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large" Href="/login">Login</MudButton>
-                    </MudStack>
-                </MudItem>
 
-            </MudGrid>
+            @* Hero body — full-width centered *@
+            <div class="text-center py-12 py-md-16 mf-fade-up">
+                <MudText Typo="Typo.h2" Class="font-weight-bold mb-4 mf-shimmer-text"
+                         Style="line-height:1.15;max-width:720px;margin:0 auto;">
+                    Manage Manga Production<br />from Draft to Publication
+                </MudText>
+                <MudText Typo="Typo.body1" Class="mf-muted mb-6"
+                         Style="font-size:1.1rem;line-height:1.7;max-width:520px;margin:0 auto;">
+                    Coordinate chapters, pages, assistant tasks, editorial reviews, board approvals, and publishing progress in one role-based platform.
+                </MudText>
+                <MudStack Row="true" Justify="Justify.Center" Spacing="2">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Href="/register">Create Account</MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large" Href="/login">Login</MudButton>
+                </MudStack>
+            </div>
         </MudContainer>
     </div>
 

@@ -7,7 +7,9 @@
 
 @using System.Security.Claims
 @using MangaManagementSystem.Web.Services.Api
+@using System.Threading
 @attribute [Authorize(Roles = "Assistant")]
+@implements IDisposable
 @inject NavigationManager Nav
 @inject IAssistantTaskApiClient AssistantTaskClient
 @inject AuthenticationStateProvider AuthStateProvider
@@ -497,6 +499,10 @@
         _showOutputPreview = false;
     }
 
+    private readonly TimeSpan _refreshInterval = TimeSpan.FromSeconds(30);
+    private bool _disposed;
+    private PeriodicTimer? _timer;
+
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
@@ -511,6 +517,32 @@
         }
 
         await LoadTaskAsync();
+
+        _timer = new PeriodicTimer(_refreshInterval);
+        _ = PollForUpdatesAsync();
+    }
+
+    private async Task PollForUpdatesAsync()
+    {
+        while (!_disposed && _timer is not null)
+        {
+            try
+            {
+                await _timer.WaitForNextTickAsync();
+                if (!_disposed)
+                {
+                    await LoadTaskAsync();
+                    if (!_disposed)
+                    {
+                        await InvokeAsync(StateHasChanged);
+                    }
+                }
+            }
+            catch
+            {
+                break;
+            }
+        }
     }
 
     private async Task LoadTaskAsync()
@@ -535,5 +567,11 @@
         {
             _loading = false;
         }
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        _timer?.Dispose();
     }
 }

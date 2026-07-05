@@ -80,6 +80,15 @@ namespace MangaManagementSystem.Application.Services
             return entity is null ? null : entity.ToDto();
         }
 
+        public async Task<List<UserDto>> GetUsersByIdsAsync(List<Guid> ids)
+        {
+            if (ids == null || ids.Count == 0)
+                return new List<UserDto>();
+
+            var entities = await _unitOfWork.Users.FindAsync(u => ids.Contains(u.UserId));
+            return entities.Select(e => e.ToDto()).ToList();
+        }
+
         public async Task<UserDto?> GetUserByEmailAsync(string email)
         {
             var normalizedEmail = email.Trim().ToLowerInvariant();

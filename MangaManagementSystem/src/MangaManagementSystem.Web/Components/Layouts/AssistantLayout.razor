@@ -4,7 +4,20 @@
                    NavTitle="Main Menu"
                    OverviewHref="/dashboard"
                    NavItems="_navItems">
-    @ChildContent
+    <div class="mf-assistant-main">
+        <div class="mf-assistant-topbar">
+            <div class="mf-assistant-topbar-left">
+                <MudIcon Icon="@Icons.Material.Filled.Assistant" Size="Size.Small" Class="mf-assistant-topbar-icon" />
+                <span class="mf-assistant-topbar-title">Assistant Workspace</span>
+            </div>
+            <div class="mf-assistant-topbar-right">
+                <NotificationBell />
+            </div>
+        </div>
+        <div class="mf-assistant-content">
+            @ChildContent
+        </div>
+    </div>
 </RoleSidebarLayout>
 
 @code {
@@ -17,3 +30,49 @@
         new("/assistant/completed-work", "Completed Work"),
     ];
 }
+
+<style>
+    .mf-assistant-main {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        background: #f8fafc;
+    }
+
+    .mf-assistant-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 24px;
+        border-bottom: 1px solid #e2e8f0;
+        background: #fff;
+        flex-shrink: 0;
+    }
+
+    .mf-assistant-topbar-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .mf-assistant-topbar-icon {
+        color: #4f46e5;
+    }
+
+    .mf-assistant-topbar-title {
+        font-weight: 700;
+        font-size: 0.9rem;
+        color: #111827;
+    }
+
+    .mf-assistant-topbar-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .mf-assistant-content {
+        flex: 1;
+        overflow: auto;
+    }
+</style>

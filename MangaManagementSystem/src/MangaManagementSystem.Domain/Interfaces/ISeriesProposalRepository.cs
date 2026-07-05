@@ -44,6 +44,8 @@ namespace MangaManagementSystem.Domain.Interfaces
         /// </summary>
         Task<bool> IsActiveTantouEditorContributorAsync(Guid seriesId, Guid userId, CancellationToken ct = default);
 
+        Task<List<Guid>> GetActiveTantouEditorContributorSeriesIdsAsync(List<Guid> seriesIds, Guid userId, CancellationToken ct = default);
+
         /// <summary>
         /// Returns all active Tantou Editor contributors for the given series.
         /// Active = SeriesContributor.EndDate IS NULL, User ACTIVE, Role 'Tantou Editor'.

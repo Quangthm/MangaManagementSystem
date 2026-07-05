@@ -89,7 +89,7 @@
                                             var isOverdue = IsOverdue(t);
                                             var isDueSoon = IsDueSoon(t);
                                             var rowColor = isOverdue ? "#fef2f2" : (isDueSoon ? "#fffbeb" : "transparent");
-                                            <tr style="border-bottom: 1px solid #f1f5f9; background: @rowColor; cursor: pointer;" @onclick="@(() => OpenTask(t.ChapterPageTaskId))">
+                                            <tr @key="t.ChapterPageTaskId" style="border-bottom: 1px solid #f1f5f9; background: @rowColor; cursor: pointer;" @onclick="@(() => OpenTask(t.ChapterPageTaskId))">
                                                 <td style="padding: 12px 16px; font-weight: 600; color: @(isOverdue ? "#dc2626" : "#111827");">@t.TypeCode</td>
                                                 <td style="padding: 12px 16px; color: @(isOverdue ? "#dc2626" : "#374151");">
                                                     @(t.SeriesTitle ?? "—") @(t.ChapterNumberLabel != null ? $"• {t.ChapterNumberLabel}" : "")
@@ -141,7 +141,7 @@
                                 <div style="display: flex; flex-direction: column;">
                                     @foreach (var t in _dueSoon.Take(5))
                                     {
-                                        <div @onclick="@(() => OpenTask(t.ChapterPageTaskId))" style="padding: 8px 0; border-bottom: 1px solid #f1f5f9; cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
+                                        <div @key="t.ChapterPageTaskId" @onclick="@(() => OpenTask(t.ChapterPageTaskId))" style="padding: 8px 0; border-bottom: 1px solid #f1f5f9; cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
                                             <div>
                                                 <div style="font-weight: 600; font-size: 0.85rem; color: #111827;">@t.TypeCode</div>
                                                 <div style="color: #94a3b8; font-size: 0.75rem;">@(t.SeriesTitle ?? "—") @(t.ChapterNumberLabel != null ? $"• {t.ChapterNumberLabel}" : "")</div>
@@ -171,7 +171,7 @@
                                 <div style="display: flex; flex-direction: column;">
                                     @foreach (var t in _overdueTasks.Take(3))
                                     {
-                                        <div @onclick="@(() => OpenTask(t.ChapterPageTaskId))" style="padding: 8px 0; border-bottom: 1px solid #fef2f2; cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
+                                        <div @key="t.ChapterPageTaskId" @onclick="@(() => OpenTask(t.ChapterPageTaskId))" style="padding: 8px 0; border-bottom: 1px solid #fef2f2; cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
                                             <div>
                                                 <div style="font-weight: 600; font-size: 0.85rem; color: #dc2626;">@t.TypeCode</div>
                                                 <div style="color: #94a3b8; font-size: 0.75rem;">@(t.SeriesTitle ?? "—") @(t.ChapterNumberLabel != null ? $"• {t.ChapterNumberLabel}" : "")</div>

@@ -12,6 +12,8 @@ namespace MangaManagementSystem.Application.Interfaces
 
         Task<UserDto?> GetUserByIdAsync(Guid id);
 
+        Task<List<UserDto>> GetUsersByIdsAsync(List<Guid> ids);
+
         Task<UserDto?> GetUserByEmailAsync(string email);
 
         Task<IEnumerable<UserDto>> GetUsersByStatusAsync(string status);

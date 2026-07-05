@@ -41,7 +41,7 @@
                         {
                             var count = FilterCount(statuses);
                             var isActive = _selectedFilter == label;
-                            <button @onclick="@(() => { _selectedFilter = label; ResetDashboardPage(); })"
+                            <button @key="label" @onclick="@(() => { _selectedFilter = label; ResetDashboardPage(); })"
                                     style="padding: 6px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: @(isActive ? 600 : 500); cursor: pointer; white-space: nowrap;
                                            background: @(isActive ? "#4f46e5" : "#f1f5f9"); color: @(isActive ? "#fff" : "#475569");
                                            border: 1px solid @(isActive ? "#4f46e5" : "#e2e8f0"); transition: all 0.15s ease;">
@@ -108,7 +108,7 @@
                                 var g = _availableGenres.FirstOrDefault(gg => gg.GenreId == gid);
                                 if (g != null)
                                 {
-                                    <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #eef2ff; color: #4f46e5; border-radius: 10px; font-size: 0.68rem; font-weight: 500; white-space: nowrap;">
+                                    <span @key="gid" style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #eef2ff; color: #4f46e5; border-radius: 10px; font-size: 0.68rem; font-weight: 500; white-space: nowrap;">
                                         @g.GenreName
                                         <span @onclick="@(() => { _filterGenreIds.Remove(gid); ResetDashboardPage(); })" style="cursor: pointer; font-size: 14px; line-height: 1; color: #818cf8;">&times;</span>
                                     </span>
@@ -124,7 +124,7 @@
                                 var t = _availableTags.FirstOrDefault(tt => tt.TagId == tid);
                                 if (t != null)
                                 {
-                                    <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #f0fdf4; color: #059669; border-radius: 10px; font-size: 0.68rem; font-weight: 500; white-space: nowrap;">
+                                    <span @key="tid" style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #f0fdf4; color: #059669; border-radius: 10px; font-size: 0.68rem; font-weight: 500; white-space: nowrap;">
                                         @t.TagName
                                         <span @onclick="@(() => { _filterTagIds.Remove(tid); ResetDashboardPage(); })" style="cursor: pointer; font-size: 14px; line-height: 1; color: #6ee7b7;">&times;</span>
                                     </span>
@@ -164,7 +164,7 @@
                     @foreach (var series in PagedSeriesData)
                     {
                         @* â”€â”€ Series Card (left-side portrait cover layout) â”€â”€ *@
-                        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); position: relative; overflow: hidden; cursor: pointer; display: flex; gap: 0; min-height: 210px;"
+                        <div @key="series.Id" style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); position: relative; overflow: hidden; cursor: pointer; display: flex; gap: 0; min-height: 210px;"
                              @onclick="() => OpenSeriesCard(series)">
 
                             @* Kebab menu â€” top-right over card *@
@@ -226,7 +226,7 @@
                                     }
                                     @foreach (var g in visibleGenres)
                                     {
-                                        <span style="background: #eef2ff; color: #4f46e5; font-size: 0.62rem; padding: 2px 6px; border-radius: 10px; font-weight: 500; white-space: nowrap; height: 20px; display: flex; align-items: center;">@g.GenreName</span>
+                                        <span @key="g.GenreId" style="background: #eef2ff; color: #4f46e5; font-size: 0.62rem; padding: 2px 6px; border-radius: 10px; font-weight: 500; white-space: nowrap; height: 20px; display: flex; align-items: center;">@g.GenreName</span>
                                     }
                                     @if (genreOverflowCount > 0)
                                     {
@@ -246,7 +246,7 @@
                                     <div style="display: flex; gap: 5px; flex-wrap: wrap; align-items: center;">
                                         @foreach (var t in visibleTags)
                                         {
-                                            <span style="background: #f0fdf4; color: #166534; font-size: 0.62rem; padding: 2px 6px; border-radius: 10px; font-weight: 500; white-space: nowrap; height: 20px; display: flex; align-items: center;">@t.TagName</span>
+                                            <span @key="t.TagId" style="background: #f0fdf4; color: #166534; font-size: 0.62rem; padding: 2px 6px; border-radius: 10px; font-weight: 500; white-space: nowrap; height: 20px; display: flex; align-items: center;">@t.TagName</span>
                                         }
                                         @if (tagOverflowCount > 0)
                                         {
@@ -458,7 +458,7 @@
                                         @foreach (var g in PagedPickerGenres)
                                         {
                                             var sel = _genrePickerSelection.Contains(g.GenreId);
-                                            <div @onclick="@(() => TogglePickerGenre(g.GenreId))"
+                                            <div @key="g.GenreId" @onclick="@(() => TogglePickerGenre(g.GenreId))"
                                                  style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; background: @(sel ? "#eef2ff" : "transparent");">
                                                 <div>
                                                     <div style="font-size: 0.8rem; font-weight: 500; color: #111827;">@g.GenreName</div>
@@ -499,7 +499,7 @@
                                     var genre = _availableGenres.FirstOrDefault(g => g.GenreId == gid);
                                     if (genre != null)
                                     {
-                                        <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #eef2ff; color: #4f46e5; border-radius: 12px; font-size: 0.72rem; font-weight: 500;">
+                                        <span @key="gid" style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #eef2ff; color: #4f46e5; border-radius: 12px; font-size: 0.72rem; font-weight: 500;">
                                             @genre.GenreName
                                             <span @onclick="@(() => RemoveNewDraftGenre(genre.GenreId))" style="cursor: pointer; font-size: 14px; line-height: 1; margin-left: 1px; color: #818cf8;">&times;</span>
                                         </span>
@@ -537,7 +537,7 @@
                                         @foreach (var t in PagedPickerTags)
                                         {
                                             var sel = _tagPickerSelection.Contains(t.TagId);
-                                            <div @onclick="@(() => TogglePickerTag(t.TagId))"
+                                            <div @key="t.TagId" @onclick="@(() => TogglePickerTag(t.TagId))"
                                                  style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; background: @(sel ? "#f0fdf4" : "transparent");">
                                                 <div>
                                                     <div style="font-size: 0.8rem; font-weight: 500; color: #111827;">@t.TagName</div>
@@ -572,7 +572,7 @@
                                     var tag = _availableTags.FirstOrDefault(t => t.TagId == tid);
                                     if (tag != null)
                                     {
-                                        <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #f0fdf4; color: #059669; border-radius: 12px; font-size: 0.72rem; font-weight: 500;">
+                                        <span @key="tid" style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #f0fdf4; color: #059669; border-radius: 12px; font-size: 0.72rem; font-weight: 500;">
                                             @tag.TagName
                                             <span @onclick="@(() => RemoveNewDraftTag(tag.TagId))" style="cursor: pointer; font-size: 14px; line-height: 1; margin-left: 1px; color: #6ee7b7;">&times;</span>
                                         </span>
@@ -591,7 +591,7 @@
                                Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true">
                         @foreach (var lang in _languages)
                         {
-                            <MudSelectItem Value="@lang.Code">@lang.Label</MudSelectItem>
+                            <MudSelectItem @key="lang.Code" Value="@lang.Code">@lang.Label</MudSelectItem>
                         }
                     </MudSelect>
 
@@ -764,7 +764,7 @@
                                     @foreach (var g in PagedPickerGenres)
                                     {
                                         var sel = _genrePickerSelection.Contains(g.GenreId);
-                                        <div @onclick="@(() => TogglePickerGenre(g.GenreId))"
+                                        <div @key="g.GenreId" @onclick="@(() => TogglePickerGenre(g.GenreId))"
                                              style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; background: @(sel ? "#eef2ff" : "transparent");">
                                             <div>
                                                 <div style="font-size: 0.8rem; font-weight: 500; color: #111827;">@g.GenreName</div>
@@ -805,7 +805,7 @@
                                 var genre = _availableGenres.FirstOrDefault(g => g.GenreId == gid);
                                 if (genre != null)
                                 {
-                                    <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #eef2ff; color: #4f46e5; border-radius: 12px; font-size: 0.72rem; font-weight: 500;">
+                                    <span @key="gid" style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #eef2ff; color: #4f46e5; border-radius: 12px; font-size: 0.72rem; font-weight: 500;">
                                         @genre.GenreName
                                         <span @onclick="@(() => RemoveEditGenre(genre.GenreId))" style="cursor: pointer; font-size: 14px; line-height: 1; margin-left: 1px; color: #818cf8;">&times;</span>
                                     </span>
@@ -843,7 +843,7 @@
                                     @foreach (var t in PagedPickerTags)
                                     {
                                         var sel = _tagPickerSelection.Contains(t.TagId);
-                                        <div @onclick="@(() => TogglePickerTag(t.TagId))"
+                                        <div @key="t.TagId" @onclick="@(() => TogglePickerTag(t.TagId))"
                                              style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; background: @(sel ? "#f0fdf4" : "transparent");">
                                             <div>
                                                 <div style="font-size: 0.8rem; font-weight: 500; color: #111827;">@t.TagName</div>
@@ -878,7 +878,7 @@
                                 var tag = _availableTags.FirstOrDefault(t => t.TagId == tid);
                                 if (tag != null)
                                 {
-                                    <span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #f0fdf4; color: #059669; border-radius: 12px; font-size: 0.72rem; font-weight: 500;">
+                                    <span @key="tid" style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px 2px 8px; background: #f0fdf4; color: #059669; border-radius: 12px; font-size: 0.72rem; font-weight: 500;">
                                         @tag.TagName
                                         <span @onclick="@(() => RemoveEditTag(tag.TagId))" style="cursor: pointer; font-size: 14px; line-height: 1; margin-left: 1px; color: #6ee7b7;">&times;</span>
                                     </span>
@@ -897,7 +897,7 @@
                            Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true">
                     @foreach (var lang in _languages)
                     {
-                        <MudSelectItem Value="@lang.Code">@lang.Label</MudSelectItem>
+                        <MudSelectItem @key="lang.Code" Value="@lang.Code">@lang.Label</MudSelectItem>
                     }
                 </MudSelect>
 

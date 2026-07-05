@@ -8,7 +8,9 @@
 
 @using System.Security.Claims
 @using MangaManagementSystem.Web.Services.Api
+@using System.Threading
 @attribute [Authorize(Roles = "Assistant")]
+@implements IDisposable
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IAssistantTaskApiClient AssistantTaskClient
@@ -20,7 +22,10 @@
                 <div style="font-weight: 800; font-size: 1.6rem; color: #111827; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 4px;">
                     Assigned Tasks
                 </div>
-                <div style="color: #64748b; font-size: 0.85rem;">Tasks assigned to you</div>
+                <div style="color: #64748b; font-size: 0.85rem;">
+                    Tasks assigned to you
+                    <span style="color: #94a3b8; font-size: 0.72rem; margin-left: 8px;">auto-refreshes every 30s</span>
+                </div>
             </div>
         </div>
 
@@ -102,7 +107,7 @@
                             var isDueSoon = IsDueSoon(t);
                             var borderStyle = isOverdue ? "border-left: 4px solid #dc2626;" : isDueSoon ? "border-left: 4px solid #d97706;" : "";
 
-                            <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); padding: 20px; @borderStyle">
+                            <div @key="t.ChapterPageTaskId" style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); padding: 20px; @borderStyle">
                                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
                                     <div style="display: flex; align-items: center; gap: 8px;">
                                         <div style="font-weight: 700; font-size: 0.95rem; color: @(isOverdue ? "#dc2626" : "#111827");">@t.TypeCode</div>
@@ -238,6 +243,11 @@
 
     private int _totalPages => Math.Max(1, (int)Math.Ceiling((double)_filteredTasks.Count / PageSize));
 
+    private readonly TimeSpan _refreshInterval = TimeSpan.FromSeconds(30);
+    private bool _disposed;
+    private PeriodicTimer? _timer;
+    private DateTime _lastRefresh = DateTime.MinValue;
+
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
@@ -252,6 +262,34 @@
         }
 
         await LoadTasksAsync();
+        _lastRefresh = DateTime.UtcNow;
+
+        _timer = new PeriodicTimer(_refreshInterval);
+        _ = PollForUpdatesAsync();
+    }
+
+    private async Task PollForUpdatesAsync()
+    {
+        while (!_disposed && _timer is not null)
+        {
+            try
+            {
+                await _timer.WaitForNextTickAsync();
+                if (!_disposed)
+                {
+                    await LoadTasksAsync();
+                    _lastRefresh = DateTime.UtcNow;
+                    if (!_disposed)
+                    {
+                        await InvokeAsync(StateHasChanged);
+                    }
+                }
+            }
+            catch
+            {
+                break;
+            }
+        }
     }
 
     private async Task LoadTasksAsync()
@@ -315,4 +353,10 @@
         "CANCELLED" => "#64748b",
         _ => "#64748b"
     };
+
+    public void Dispose()
+    {
+        _disposed = true;
+        _timer?.Dispose();
+    }
 }

@@ -14,6 +14,8 @@ namespace MangaManagementSystem.Domain.Interfaces
         void Update(T entity);
         void Delete(T entity);
 
+        Task<IReadOnlyList<T>> FindTrackedAsync(Expression<Func<T, bool>> predicate);
+
         /// <summary>
         /// Grouped COUNT executed in the database (one query). Lets callers learn row
         /// counts per key without materializing the rows.

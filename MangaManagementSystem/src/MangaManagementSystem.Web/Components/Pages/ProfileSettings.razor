@@ -1,5 +1,6 @@
 @using System.Globalization
 @using Microsoft.JSInterop
+@using SixLabors.ImageSharp.Processing
 @page "/profile/settings"
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
@@ -1029,10 +1030,13 @@
             _pendingAvatarOriginalFileName =
                 Path.GetFileName(file.Name);
 
+            // Resize to max 512px to avoid sending large base64 over SignalR
+            var resizedBytes = await ResizeImageForPreviewAsync(bytes, normalizedContentType);
+
             _avatarCropSourceDataUrl =
                 BuildDataUrl(
                     normalizedContentType,
-                    bytes);
+                    resizedBytes);
 
             _selectedAvatarBytes = null;
             _selectedAvatarFileName = null;
@@ -1748,6 +1752,35 @@
         };
     }
 
+    private static async Task<byte[]> ResizeImageForPreviewAsync(
+        byte[] sourceBytes,
+        string contentType)
+    {
+        try
+        {
+            using var image = SixLabors.ImageSharp.Image.Load(sourceBytes);
+
+            if (image.Width <= 512 && image.Height <= 512)
+            {
+                return sourceBytes;
+            }
+
+            image.Mutate(x => x.Resize(new SixLabors.ImageSharp.Processing.ResizeOptions
+            {
+                Mode = SixLabors.ImageSharp.Processing.ResizeMode.Max,
+                Size = new SixLabors.ImageSharp.Size(512, 512)
+            }));
+
+            using var ms = new MemoryStream();
+            image.Save(ms, new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder());
+            return ms.ToArray();
+        }
+        catch
+        {
+            return sourceBytes;
+        }
+    }
+
     private static string BuildDataUrl(
         string contentType,
         byte[] bytes)
@@ -1883,6 +1916,10 @@
         catch (JSDisconnectedException)
         {
             // Browser connection already closed.
+        }
+        catch (OperationCanceledException)
+        {
+            // Circuit disconnected during dispose.
         }
     }
 
