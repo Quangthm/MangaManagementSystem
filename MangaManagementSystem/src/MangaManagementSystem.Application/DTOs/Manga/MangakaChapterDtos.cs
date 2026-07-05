@@ -18,6 +18,7 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         DateTime? ReleasedAtUtc,
         DateTime CreatedAtUtc,
         DateTime? UpdatedAtUtc,
+        string? SeriesCoverUrl,
         ChapterEditorialReviewSummaryDto? LatestReview,
         IReadOnlyList<EditorChapterReviewHistoryDto> EditorialReviewHistory);
 

@@ -1,12 +1,16 @@
 @page "/publication/schedule"
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
 @using MangaManagementSystem.Application.Features.Publication.Schedule.Queries.GetPublicationScheduleCalendar
 @using MangaManagementSystem.Domain.Interfaces
 @using MangaManagementSystem.Web.Services.Api
+@using MangaManagementSystem.Web.Components.Pages.Publication
+@using System.Security.Claims
 @attribute [Authorize]
 @inject IPublicationScheduleApiClient ScheduleApiClient
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthStateProvider
 
 <style>
     .mf-schedule-page { min-height: 100vh; background: #f8fafc; padding: 32px 32px 64px; }
@@ -36,138 +40,158 @@
     .mf-card-chapter { font-size: 0.72rem; color: #64748b; margin-top: 1px; }
     .mf-card-badge { margin-top: 3px; }
     .mf-no-results { text-align: center; padding: 64px 24px; color: #94a3b8; }
-    .mf-selected-series { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+    .mf-drawer-content { width: 400px; max-width: 90vw; }
 </style>
 
-<div class="mf-schedule-page">
-    @if (_loading)
-    {
-        <MudProgressLinear Indeterminate="true" Class="mb-4" />
-    }
+<MudLayout>
+    <MudDrawer @bind-Open="_drawerOpen" Anchor="Anchor.Right" Variant="DrawerVariant.Temporary"
+               ClipMode="DrawerClipMode.Always" Width="400px" Class="mf-drawer-content">
+        <PublicationScheduleActionDrawer @bind-IsOpen="_drawerOpen"
+                                          SelectedSeriesId="_selectedSeriesId"
+                                          SelectedSeriesTitle="@(_selectedSuggestion?.SeriesTitle)"
+                                          OnActionCompleted="RefreshAfterAction" />
+    </MudDrawer>
 
-    @if (_error != null)
-    {
-        <MudAlert Severity="Severity.Error" Class="mb-4">
-            @_error
-            <MudButton Variant="Variant.Text" Color="Color.Inherit" Class="ml-3" OnClick="LoadSchedule" StartIcon="@Icons.Material.Filled.Refresh">Retry</MudButton>
-        </MudAlert>
-    }
+    <MudMainContent>
+        <div class="mf-schedule-page">
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" Class="mb-4" />
+            }
 
-    <div class="mf-schedule-header">
-        <div>
-            <div class="mf-schedule-title">Publication Release Calendar</div>
-            <div class="mf-schedule-subtitle">Browse planned and released chapter updates</div>
-        </div>
-        <div class="mf-week-nav">
-            <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft"
-                           OnClick="GoToPreviousWeek"
-                           Disabled="_loading" />
-            <div class="mf-week-label">@FormatWeekLabel()</div>
-            <MudIconButton Icon="@Icons.Material.Filled.ChevronRight"
-                           OnClick="GoToNextWeek"
-                           Disabled="_loading" />
-            <MudButton Variant="Variant.Outlined" Size="Size.Small"
-                        OnClick="GoToCurrentWeek" Disabled="_loading"
-                        StartIcon="@Icons.Material.Filled.Today">
-                Today
-            </MudButton>
-        </div>
-    </div>
+            @if (_error != null)
+            {
+                <MudAlert Severity="Severity.Error" Class="mb-4">
+                    @_error
+                    <MudButton Variant="Variant.Text" Color="Color.Inherit" Class="ml-3" OnClick="LoadSchedule" StartIcon="@Icons.Material.Filled.Refresh">Retry</MudButton>
+                </MudAlert>
+            }
 
-    <div class="mf-filters-bar">
-        <MudAutocomplete T="PublicationScheduleSeriesSuggestion"
-                         Value="_selectedSuggestion"
-                         ValueChanged="OnSeriesSelected"
-                         SearchFunc="@SearchSeriesAsync"
-                         ToStringFunc="@(s => s?.SeriesTitle ?? string.Empty)"
-                         Label="Search series..."
-                         Variant="Variant.Outlined" Clearable="true"
-                         ResetValueOnEmptyText="false" CoerceValue="false"
-                         DebounceInterval="300"
-                         Class="mf-search"
-                         Adornment="Adornment.Start"
-                         AdornmentIcon="@Icons.Material.Filled.Search" />
-
-        <MudSelect T="string?" Value="_selectedFrequency" ValueChanged="OnFrequencyFilterChanged"
-                   Variant="Variant.Outlined" Label="Frequency" Clearable="true"
-                   Class="mf-filter-item">
-            <MudSelectItem T="string?" Value="@((string?)null)">All Frequencies</MudSelectItem>
-            <MudSelectItem T="string?" Value="@("WEEKLY")">Weekly</MudSelectItem>
-            <MudSelectItem T="string?" Value="@("MONTHLY")">Monthly</MudSelectItem>
-            <MudSelectItem T="string?" Value="@("IRREGULAR")">Irregular</MudSelectItem>
-        </MudSelect>
-    </div>
-
-    @if (_calendar != null)
-    {
-        @if (_calendar.Days.All(d => d.Items.Count == 0))
-        {
-            <MudPaper Class="pa-12 mf-no-results" Elevation="0">
-                <MudIcon Icon="@Icons.Material.Filled.EventBusy" Size="Size.Large" Color="Color.Default" Class="mb-3" />
-                <MudText Typo="Typo.h6" Class="mb-1">No releases found</MudText>
-                <MudText Class="mf-muted">
-                    @if (_selectedSeriesId.HasValue || !string.IsNullOrWhiteSpace(_selectedFrequency))
+            <div class="mf-schedule-header">
+                <div>
+                    <div class="mf-schedule-title">Publication Release Calendar</div>
+                    <div class="mf-schedule-subtitle">Browse planned and released chapter updates</div>
+                </div>
+                <div class="mf-week-nav">
+                    <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft"
+                                   OnClick="GoToPreviousWeek"
+                                   Disabled="_loading" />
+                    <div class="mf-week-label">@FormatWeekLabel()</div>
+                    <MudIconButton Icon="@Icons.Material.Filled.ChevronRight"
+                                   OnClick="GoToNextWeek"
+                                   Disabled="_loading" />
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                               OnClick="GoToCurrentWeek" Disabled="_loading"
+                               StartIcon="@Icons.Material.Filled.Today">
+                        Today
+                    </MudButton>
+                    @if (_isMangaka || _isEditor)
                     {
-                        <span>No matching releases for this week with the current filters. Try adjusting your filters.</span>
+                        <MudButton Variant="Variant.Filled" Size="Size.Small" Color="Color.Primary"
+                                   OnClick="OpenDrawer"
+                                   StartIcon="@Icons.Material.Filled.EditCalendar">
+                            Manage Schedule
+                        </MudButton>
                     }
-                    else
-                    {
-                        <span>No serialized chapters are scheduled or released during this week.</span>
-                    }
-                </MudText>
-            </MudPaper>
-        }
-        else
-        {
-            <div class="mf-days-grid">
-                @foreach (var day in _calendar.Days)
+                </div>
+            </div>
+
+            <div class="mf-filters-bar">
+    <MudAutocomplete T="PublicationScheduleSeriesSuggestion"
+                     Value="_selectedSuggestion"
+                     ValueChanged="OnSeriesSelected"
+                     SearchFunc="@SearchSeriesAsync"
+                     ToStringFunc="@(s => s?.SeriesTitle ?? string.Empty)"
+                     Label="Search series..."
+                     Variant="Variant.Outlined" Clearable="true"
+                     ResetValueOnEmptyText="false" CoerceValue="false"
+                     DebounceInterval="300"
+                     Class="mf-search"
+                     Adornment="Adornment.Start"
+                     AdornmentIcon="@Icons.Material.Filled.Search" />
+
+                <MudSelect T="string?" Value="_selectedFrequency" ValueChanged="OnFrequencyFilterChanged"
+                           Variant="Variant.Outlined" Label="Frequency" Clearable="true"
+                           Class="mf-filter-item">
+                    <MudSelectItem T="string?" Value="@((string?)null)">All Frequencies</MudSelectItem>
+                    <MudSelectItem T="string?" Value="@("WEEKLY")">Weekly</MudSelectItem>
+                    <MudSelectItem T="string?" Value="@("MONTHLY")">Monthly</MudSelectItem>
+                    <MudSelectItem T="string?" Value="@("IRREGULAR")">Irregular</MudSelectItem>
+                </MudSelect>
+            </div>
+
+            @if (_calendar != null)
+            {
+                @if (_calendar.Days.All(d => d.Items.Count == 0))
                 {
-                    <div class="mf-day-column @(day.IsToday ? "today" : "")">
-                        <div class="mf-day-header @(day.IsToday ? "today" : "")">
-                            <span>@day.DayLabel</span>
-                            @if (day.IsToday)
+                    <MudPaper Class="pa-12 mf-no-results" Elevation="0">
+                        <MudIcon Icon="@Icons.Material.Filled.EventBusy" Size="Size.Large" Color="Color.Default" Class="mb-3" />
+                        <MudText Typo="Typo.h6" Class="mb-1">No releases found</MudText>
+                        <MudText Class="mf-muted">
+                            @if (_selectedSeriesId.HasValue || !string.IsNullOrWhiteSpace(_selectedFrequency))
                             {
-                                <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="ml-2">Today</MudChip>
+                                <span>No matching releases for this week with the current filters. Try adjusting your filters.</span>
                             }
-                        </div>
-
-                        @if (day.Items.Count == 0)
-                        {
-                            <div class="mf-day-empty">No releases</div>
-                        }
-                        else
-                        {
-                            @foreach (var item in day.Items)
+                            else
                             {
-                                <div class="mf-schedule-card">
-                                    <div class="mf-card-cover">
-                                        @if (!string.IsNullOrWhiteSpace(item.SeriesCoverUrl))
-                                        {
-                                            <img src="@item.SeriesCoverUrl" alt="@item.SeriesTitle cover" loading="lazy" />
-                                        }
-                                        else
-                                        {
-                                            <span>No Cover</span>
-                                        }
-                                    </div>
-                                    <div class="mf-card-info">
-                                        <div class="mf-card-series" title="@item.SeriesTitle">@item.SeriesTitle</div>
-                                        <div class="mf-card-chapter">@item.ChapterNumberLabel</div>
-                                        <div class="mf-card-badge">
-                                            <MudChip T="string" Color="@GetBadgeColor(item.StatusCode)" Size="Size.Small">
-                                                @item.StatusBadgeLabel
-                                            </MudChip>
-                                        </div>
-                                    </div>
+                                <span>No serialized chapters are scheduled or released during this week.</span>
+                            }
+                        </MudText>
+                    </MudPaper>
+                }
+                else
+                {
+                    <div class="mf-days-grid">
+                        @foreach (var day in _calendar.Days)
+                        {
+                            <div class="mf-day-column @(day.IsToday ? "today" : "")">
+                                <div class="mf-day-header @(day.IsToday ? "today" : "")">
+                                    <span>@day.DayLabel</span>
+                                    @if (day.IsToday)
+                                    {
+                                        <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="ml-2">Today</MudChip>
+                                    }
                                 </div>
-                            }
+
+                                @if (day.Items.Count == 0)
+                                {
+                                    <div class="mf-day-empty">No releases</div>
+                                }
+                                else
+                                {
+                                    @foreach (var item in day.Items)
+                                    {
+                                        <div class="mf-schedule-card">
+                                            <div class="mf-card-cover">
+                                                @if (!string.IsNullOrWhiteSpace(item.SeriesCoverUrl))
+                                                {
+                                                    <img src="@item.SeriesCoverUrl" alt="@item.SeriesTitle cover" loading="lazy" />
+                                                }
+                                                else
+                                                {
+                                                    <span>No Cover</span>
+                                                }
+                                            </div>
+                                            <div class="mf-card-info">
+                                                <div class="mf-card-series" title="@item.SeriesTitle">@item.SeriesTitle</div>
+                                                <div class="mf-card-chapter">@item.ChapterNumberLabel</div>
+                                                <div class="mf-card-badge">
+                                                    <MudChip T="string" Color="@GetBadgeColor(item.StatusCode)" Size="Size.Small">
+                                                        @item.StatusBadgeLabel
+                                                    </MudChip>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                            </div>
                         }
                     </div>
                 }
-            </div>
-        }
-    }
-</div>
+            }
+        </div>
+    </MudMainContent>
+</MudLayout>
 
 @code {
     private bool _isInitialized;
@@ -179,11 +203,22 @@
     private PublicationScheduleSeriesSuggestion? _selectedSuggestion;
     private Guid? _selectedSeriesId;
     private string? _selectedFrequency;
+    private bool _drawerOpen;
+    private bool _isMangaka;
+    private bool _isEditor;
 
     private PublicationScheduleCalendarDto? _calendar;
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            _isMangaka = user.IsInRole("Mangaka");
+            _isEditor = user.IsInRole("Tantou Editor");
+        }
+
         var uri = new Uri(Nav.Uri);
         var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
 
@@ -194,6 +229,17 @@
             _selectedSeriesId = guid;
 
         _isInitialized = true;
+        await LoadSchedule();
+    }
+
+    private void OpenDrawer()
+    {
+        _drawerOpen = true;
+        StateHasChanged();
+    }
+
+    private async Task RefreshAfterAction()
+    {
         await LoadSchedule();
     }
 

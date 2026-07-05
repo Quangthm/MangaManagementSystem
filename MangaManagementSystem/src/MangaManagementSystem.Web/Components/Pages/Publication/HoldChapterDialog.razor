@@ -1,0 +1,67 @@
+@using MangaManagementSystem.Web.Components.Pages.Publication
+@using MudBlazor
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Put Chapter on Hold</MudText>
+    </TitleContent>
+    <DialogContent>
+        <div class="mb-4">
+            <MudText Typo="Typo.body2" Class="mb-2">
+                <strong>@_chapter.SeriesTitle</strong> — @_chapter.ChapterNumberLabel
+            </MudText>
+            @if (!string.IsNullOrWhiteSpace(_chapter.ChapterTitle))
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@_chapter.ChapterTitle</MudText>
+            }
+            <MudText Typo="Typo.caption" Class="mt-2">
+                Planned release date: @(_chapter.PlannedReleaseDate?.ToString("MMM d, yyyy") ?? "Not set")
+            </MudText>
+        </div>
+
+        <MudTextField T="string"
+                      Label="Reason"
+                      @bind-Value="_reason"
+                      Lines="3"
+                      Variant="Variant.Outlined"
+                      Required="true"
+                      MaxLength="1000" />
+
+        <MudAlert Severity="Severity.Warning" Class="mt-3" Dense="true">
+            The chapter will be marked ON_HOLD. The planned release date (@(_chapter.PlannedReleaseDate?.ToString("MMM d, yyyy") ?? "Not set")) will be preserved and can be used as a suggestion when you schedule it again.
+        </MudAlert>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Color="Color.Default">Cancel</MudButton>
+        <MudButton OnClick="Submit"
+                   Color="Color.Warning"
+                   Variant="Variant.Filled"
+                   Disabled="@(string.IsNullOrWhiteSpace(_reason))">
+            Put on Hold
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public ActionableChapterItem Chapter { get; set; } = null!;
+
+    private ActionableChapterItem _chapter = null!;
+    private string _reason = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        _chapter = Chapter;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Submit()
+    {
+        if (!string.IsNullOrWhiteSpace(_reason))
+        {
+            MudDialog.Close(DialogResult.Ok(new HoldChapterDialogResult(_reason)));
+        }
+    }
+}

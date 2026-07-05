@@ -1,0 +1,101 @@
+@using MangaManagementSystem.Application.DTOs.Manga
+@using Microsoft.AspNetCore.Components.Forms
+@using MangaManagementSystem.Web.Components.Pages.Publication
+@using MudBlazor
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            @(IsRescheduling ? "Reschedule Chapter" : IsOnHoldRecovery ? "Return to Schedule" : "Schedule Chapter")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <div class="mb-4">
+            <MudText Typo="Typo.body2" Class="mb-2">
+                <strong>@_chapter.SeriesTitle</strong> — @_chapter.ChapterNumberLabel
+            </MudText>
+            @if (!string.IsNullOrWhiteSpace(_chapter.ChapterTitle))
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@_chapter.ChapterTitle</MudText>
+            }
+            <div class="mt-2">
+                <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(_chapter.StatusCode)">@_chapter.StatusCode</MudChip>
+            </div>
+            @if (_chapter.PlannedReleaseDate.HasValue)
+            {
+                <MudText Typo="Typo.caption" Class="mt-2">
+                    Current planned date: @_chapter.PlannedReleaseDate.Value.ToString("MMM d, yyyy")
+                </MudText>
+            }
+        </div>
+
+        <MudDatePicker Label="New Planned Release Date"
+                       @bind-Date="_newDate"
+                       DateFormat="yyyy-MM-dd"
+                       MinDate="@DateTime.UtcNow.Date"
+                       DisableToolbar="false" />
+
+        @if (IsOnHoldRecovery)
+        {
+            <MudAlert Severity="Severity.Info" Class="mt-3" Dense="true">
+                This chapter is currently ON_HOLD. Setting a new planned release date will return it to SCHEDULED.
+            </MudAlert>
+        }
+        else if (IsRescheduling)
+        {
+            <MudAlert Severity="Severity.Info" Class="mt-3" Dense="true">
+                The planned release date will be updated and the chapter will remain SCHEDULED.
+            </MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Color="Color.Default">Cancel</MudButton>
+        <MudButton OnClick="Submit"
+                   Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   Disabled="!_newDate.HasValue || _newDate.Value.Date < DateTime.UtcNow.Date">
+            Confirm
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public ActionableChapterItem Chapter { get; set; } = null!;
+
+    private ActionableChapterItem _chapter = null!;
+    private DateTime? _newDate;
+
+    private bool IsRescheduling => _chapter.StatusCode == "SCHEDULED";
+    private bool IsOnHoldRecovery => _chapter.StatusCode == "ON_HOLD";
+
+    protected override void OnInitialized()
+    {
+        _chapter = Chapter;
+        _newDate = _chapter.PlannedReleaseDate < DateTime.UtcNow.Date
+            ? DateTime.UtcNow.Date.AddDays(1)
+            : _chapter.PlannedReleaseDate ?? DateTime.UtcNow.Date.AddDays(1);
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Submit()
+    {
+        if (_newDate.HasValue && _newDate.Value.Date >= DateTime.UtcNow.Date)
+        {
+            MudDialog.Close(DialogResult.Ok(new ScheduleChapterDialogResult(_newDate.Value)));
+        }
+    }
+
+    private static Color GetStatusColor(string status) => status switch
+    {
+        "SCHEDULED" => Color.Info,
+        "APPROVED" => Color.Info,
+        "ON_HOLD" => Color.Warning,
+        "DRAFT" => Color.Default,
+        "UNDER_REVIEW" => Color.Secondary,
+        "REVISION_REQUESTED" => Color.Secondary,
+        _ => Color.Default
+    };
+}

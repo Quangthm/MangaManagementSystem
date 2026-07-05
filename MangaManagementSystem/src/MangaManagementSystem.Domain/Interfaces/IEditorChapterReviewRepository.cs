@@ -51,7 +51,29 @@ namespace MangaManagementSystem.Domain.Interfaces
             string? comments,
             UploadedFileMetadata? markup,
             CancellationToken ct = default);
+
+        Task<IReadOnlyList<EditorActionableChapterData>> GetActionableChaptersAsync(
+            Guid actorUserId,
+            Guid? seriesId,
+            string? searchText,
+            string? statusCode,
+            int maxResults,
+            CancellationToken ct = default);
     }
+
+    public sealed record EditorActionableChapterData(
+        Guid ChapterId,
+        Guid SeriesId,
+        string SeriesTitle,
+        string? SeriesSlug,
+        string? SeriesCoverUrl,
+        string ChapterNumberLabel,
+        string? ChapterTitle,
+        string StatusCode,
+        DateTime? PlannedReleaseDate,
+        DateTime? ReleasedAtUtc,
+        string? PublicationFrequencyCode,
+        DateTime? UpdatedAtUtc);
 
     /// <summary>
     /// Aggregated chapter review queue read result.
