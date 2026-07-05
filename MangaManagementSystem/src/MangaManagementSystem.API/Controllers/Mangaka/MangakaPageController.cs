@@ -189,12 +189,12 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         public async Task<IActionResult> CreatePageWithVersionAsync([FromBody] CreatePageWithVersionRequestDto? request)
         {
             if (request == null) return BadRequest("Request body is required.");
-            if (!TryResolveActorUserId(out _)) return BadRequest("Could not identify the requesting user. Please sign in again.");
+            if (!TryResolveActorUserId(out Guid actorUserId)) return BadRequest("Could not identify the requesting user. Please sign in again.");
 
             try
             {
                 await _chapterService.EnsureChapterAllowsContentMutationsAsync(request.ChapterId);
-                var result = await _versionService.CreatePageWithVersionAndFileAsync(request);
+                var result = await _versionService.CreatePageWithVersionAndFileAsync(request, actorUserId, "Mangaka");
                 return Ok(result);
             }
             catch (InvalidOperationException ex)
@@ -247,7 +247,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         public async Task<IActionResult> CreateVersionWithFileAndRegionsAsync([FromBody] CreateVersionWithFileAndRegionsRequestDto? request)
         {
             if (request == null) return BadRequest("Request body is required.");
-            if (!TryResolveActorUserId(out _)) return BadRequest("Could not identify the requesting user. Please sign in again.");
+            if (!TryResolveActorUserId(out Guid actorUserId)) return BadRequest("Could not identify the requesting user. Please sign in again.");
 
             try
             {
@@ -261,7 +261,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                     request.FileDto,
                     request.VersionNote,
                     request.Regions ?? new List<CreatePageRegionDto>(),
-                    request.SetAsCurrent);
+                    request.SetAsCurrent,
+                    actorUserId,
+                    "Mangaka");
                 return Ok(result);
             }
             catch (InvalidOperationException ex)

@@ -14,5 +14,12 @@ namespace MangaManagementSystem.Application.Interfaces
         Task<PageRegionDto?> UpdatePageRegionAsync(UpdatePageRegionDto dto);
         Task<bool> DeletePageRegionAsync(Guid id);
         Task<bool> BulkReplacePageRegionsAsync(Guid chapterPageVersionId, IEnumerable<CreatePageRegionDto> dtos);
+
+        /// <summary>
+        /// Returns the existing whole-page (FULL_PAGE) region for the version, or creates one covering
+        /// the whole page (BR-REG-031/032). Used as the default anchor when a task or annotation is
+        /// created without an explicit region selection.
+        /// </summary>
+        Task<PageRegionDto> EnsureFullPageRegionAsync(Guid chapterPageVersionId, Guid actorUserId, CancellationToken cancellationToken = default);
     }
 }
