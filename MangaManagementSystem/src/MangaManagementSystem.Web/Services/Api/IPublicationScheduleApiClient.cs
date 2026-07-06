@@ -18,5 +18,13 @@ namespace MangaManagementSystem.Web.Services.Api
         Task<IReadOnlyList<PublicationScheduleSeriesSuggestion>> GetSeriesSuggestionsAsync(
             string searchText,
             CancellationToken cancellationToken = default);
+
+        Task<PublicationScheduleSeriesSuggestion?> GetSeriesSuggestionBySlugAsync(
+            string slug,
+            CancellationToken cancellationToken = default);
+
+        Task<PublicationScheduleSeriesSuggestion?> GetSeriesSuggestionByIdAsync(
+            Guid seriesId,
+            CancellationToken cancellationToken = default);
     }
 }

@@ -464,6 +464,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 chapter.ChapterId,
                 chapter.SeriesId,
                 chapter.Series?.Title ?? string.Empty,
+                chapter.Series?.Slug,
                 chapter.ChapterNumberLabel,
                 chapter.ChapterTitle,
                 chapter.StatusCode,

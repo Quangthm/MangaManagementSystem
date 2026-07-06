@@ -11,6 +11,7 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         Guid ChapterId,
         Guid SeriesId,
         string SeriesTitle,
+        string? SeriesSlug,
         string ChapterNumberLabel,
         string? ChapterTitle,
         string StatusCode,

@@ -1,10 +1,30 @@
-# _CURRENT_SESSION — Advisory Scheduling Backend Update
+# _CURRENT_SESSION — Fix Publication Schedule Filter UI Bugs
 
-**Started:** 2026-07-05
+**Started:** 2026-07-06T08:00:00Z
 **Agent:** OpenCode
 **Branch:** feature/Mangaka
-**Goal:** Backend-only update: remove strict PublicationPeriod enforcement, make scheduling advisory, add release function, allow Mangaka+Editor reschedule, revise ON_HOLD behavior.
-**Status:** IN_PROGRESS
+**Goal:** Fix 4 UI bugs + implement slug-based URL for Publication Schedule
+**Status:** DONE (both fixes)
+
+---
+
+## 5. Slug URL + follow-up fixes (2026-07-06)
+
+**Changes:** 13 files across Domain/Infrastructure/API/Web layers
+**Build result:** 0 errors, 66 pre-existing warnings
+**Handoff:** `docs/revision/PublicationScheduling/2026-07-06-schedule-slug-filter-state-fixes.md`
+
+Backend additions:
+- `PublicationScheduleSeriesSuggestion.SeriesSlug` added
+- 2 lightweight EF resolution methods in `IPublicationScheduleRepository`
+- 2 new API endpoints: `by-slug/{slug}` and `by-id/{id}`
+- `MangakaChapterListItemDto.SeriesSlug` added
+
+Web fixes:
+- URL now uses `?series={slug}` (user-facing), internal filtering still uses `seriesId`
+- Legacy `?seriesId={guid}` supported with slug upgrade
+- All 4 bugs fixed (autocomplete label, drawer clear, chapter search scoping, stale chapter state)
+- Source navigation links updated
 
 ---
 
@@ -13,52 +33,63 @@
 - [x] `docs/agents/AGENTS.md`
 - [x] `docs/agents/AI_AGENT_SKILLS_GUIDE.md`
 - [x] `docs/agents/SESSION_RULE.md`
+- [x] `docs/agents/RESUME_PACK.md`
 - [x] `docs/context.md`
-- [x] `docs/business-rules.md`
-- [x] `docs/business-flows-use-cases.md`
-- [x] `docs/functional-requirements.md`
-- [x] `docs/ui-spec.md`
-- [x] `docs/user-stories.md`
-- [x] `docs/revision/PublicationScheduling/2026-07-03-chapter-scheduling-and-hold.md`
-- [x] `docs/revision/PublicationScheduling/2026-07-04-editor-review-scheduling-placeholder.md`
-- [x] `docs/revision/PublicationScheduling/2026-07-04-shared-release-calendar-view.md`
-
-Notes:
-- Latest user instruction (advisory scheduling) supersedes older PublicationPeriod enforcement.
-- Previous `_CURRENT_SESSION.md` was DONE from calendar redesign task.
+- [x] `docs/revision/PublicationScheduling/2026-07-05-action-drawer-editor-endpoint-integration.md`
+- [x] `docs/revision/PublicationScheduling/2026-07-05-action-drawer-series-filter-and-mangaka-cover-polish.md`
+- [x] `docs/revision/PublicationScheduling/2026-07-05-advisory-scheduling-backend-update.md`
 
 ---
 
 ## 1. Verified state at start
 
-Current branch: `feature/Mangaka`
-Clean working tree.
+```text
+## feature/Mangaka...origin/feature/Mangaka
+```
+No dirty files.
 
 ---
 
 ## 2. Task scope
 
 ### In scope
-- Refactor ChapterSchedulingValidator to advisory-only
-- Update response DTO with suggested date + warning fields
-- Update Mangaka set-planned-date to allow SCHEDULED/ON_HOLD (reschedule)
-- Update Editor set-planned-date to allow SCHEDULED/ON_HOLD (reschedule)
-- Revise ON_HOLD (already preserves planned_release_date, minor audit tweak)
-- Add ReleaseChapter command/handler/repository/endpoint
-- Audit events: CHAPTER_RELEASED
-- Register new DI services
-- Build verification
+- Fix Bug 1: Initial series filter stuck in "Loading..."
+- Fix Bug 2: Clearing and reselecting same series does not apply filtering
+- Fix Bug 3: Editor clear series filter does not work like Mangaka
+- Fix Bug 4: Clearing chapter search does not unfilter chapter list
+- Refactor for maintainability (computed properties, separated methods)
 
 ### Out of scope
-- Frontend/UI implementation
-- Auto-hold
-- Background jobs
-- Stored procedures
-- DB schema changes
-- Public reader visibility
+- API/Application/Infrastructure/Database changes
+- Scheduling business rule changes
+- New API endpoints
 
 ### Architecture flow
-```
-API Controller -> IMediator.Send(command) -> Application handler -> Infrastructure EF Core repo -> SQL Server
-```
+Web-only UI state/filter fix. No backend changes.
 
+---
+
+## 3. Plan
+
+1. Add `OnClearSeriesRequested` EventCallback to drawer, wire in parent
+2. Add computed properties: `SeriesChipLabel`, `HasSeriesFilter`, `HasChapterFilter`
+3. Add `_resolvedSeriesTitle` field, `ResolveSeriesDisplayTitle()`, `ResetResolvedSeriesLabel()`
+4. Separate `LoadChaptersAsync` into `LoadMangakaChaptersAsync()` / `LoadEditorChaptersAsync()`
+5. Refactor `ClearSeriesFilter()` → `ClearSelectedSeriesAsync()` — invokes parent callback, resets local state
+6. Add `ClearChapterSearch()` method
+7. Rename `ApplyFilters()` → `ApplyChapterFilters()` at all call sites
+8. Fix Bug 4: `ResetValueOnEmptyText="true"` on chapter autocomplete
+9. Build and verify
+
+---
+
+## 4. Build result
+
+```
+dotnet build .\MangaManagementSystem\MangaManagementSystem.slnx --no-incremental
+```
+Result: SUCCESS — 0 errors, 66 pre-existing warnings (none from changed files)
+
+## 5. Handoff
+
+`docs/revision/PublicationScheduling/2026-07-06-schedule-filter-clear-fixes.md`

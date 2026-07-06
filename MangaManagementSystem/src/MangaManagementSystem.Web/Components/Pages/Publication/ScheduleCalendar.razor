@@ -48,9 +48,10 @@
     <MudDrawer @bind-Open="_drawerOpen" Anchor="Anchor.Right" Variant="DrawerVariant.Temporary"
                ClipMode="DrawerClipMode.Always" Width="400px" Class="mf-drawer-content">
         <PublicationScheduleActionDrawer @bind-IsOpen="_drawerOpen"
-                                          SelectedSeriesId="_selectedSeriesId"
-                                          SelectedSeriesTitle="@(_selectedSuggestion?.SeriesTitle)"
-                                          OnActionCompleted="RefreshAfterAction" />
+                                           SelectedSeriesId="_selectedSeriesId"
+                                           SelectedSeriesTitle="@(_selectedSuggestion?.SeriesTitle)"
+                                           OnClearSeriesRequested="ClearSeriesFilterAsync"
+                                           OnActionCompleted="RefreshAfterAction" />
     </MudDrawer>
 
     <MudMainContent>
@@ -215,6 +216,7 @@
 
     private PublicationScheduleSeriesSuggestion? _selectedSuggestion;
     private Guid? _selectedSeriesId;
+    private string? _selectedSeriesSlug;
     private string? _selectedFrequency;
     private bool _drawerOpen;
     private bool _isMangaka;
@@ -238,8 +240,14 @@
         if (DateTime.TryParse(query["anchorDate"], out var parsed))
             _anchorDate = parsed.Date;
 
-        if (query["seriesId"] is { Length: > 0 } sid && Guid.TryParse(sid, out var guid))
-            _selectedSeriesId = guid;
+        if (query["series"] is { Length: > 0 } seriesSlug)
+        {
+            await ResolveSelectedSeriesBySlugAsync(seriesSlug);
+        }
+        else if (query["seriesId"] is { Length: > 0 } sid && Guid.TryParse(sid, out var guid))
+        {
+            await ResolveLegacySelectedSeriesByIdAsync(guid);
+        }
 
         _isInitialized = true;
         await LoadSchedule();
@@ -254,6 +262,64 @@
     private async Task RefreshAfterAction()
     {
         await LoadSchedule();
+    }
+
+    private async Task ResolveSelectedSeriesBySlugAsync(string slug)
+    {
+        try
+        {
+            var suggestion = await ScheduleApiClient.GetSeriesSuggestionBySlugAsync(slug);
+            if (suggestion != null)
+            {
+                ApplySelectedSeriesSuggestion(suggestion);
+            }
+            else
+            {
+                ClearSelectedSeriesState();
+                Snackbar.Add("Selected series was not found or is not available for scheduling.", Severity.Warning);
+            }
+        }
+        catch
+        {
+            ClearSelectedSeriesState();
+            Snackbar.Add("Selected series was not found or is not available for scheduling.", Severity.Warning);
+        }
+    }
+
+    private async Task ResolveLegacySelectedSeriesByIdAsync(Guid seriesId)
+    {
+        try
+        {
+            var suggestion = await ScheduleApiClient.GetSeriesSuggestionByIdAsync(seriesId);
+            if (suggestion != null)
+            {
+                ApplySelectedSeriesSuggestion(suggestion);
+            }
+            else
+            {
+                ClearSelectedSeriesState();
+                Snackbar.Add("Selected series was not found or is not available for scheduling.", Severity.Warning);
+            }
+        }
+        catch
+        {
+            ClearSelectedSeriesState();
+            Snackbar.Add("Selected series was not found or is not available for scheduling.", Severity.Warning);
+        }
+    }
+
+    private void ClearSelectedSeriesState()
+    {
+        _selectedSuggestion = null;
+        _selectedSeriesId = null;
+        _selectedSeriesSlug = null;
+    }
+
+    private void ApplySelectedSeriesSuggestion(PublicationScheduleSeriesSuggestion suggestion)
+    {
+        _selectedSuggestion = suggestion;
+        _selectedSeriesId = suggestion.SeriesId;
+        _selectedSeriesSlug = suggestion.SeriesSlug;
     }
 
     private async Task<IEnumerable<PublicationScheduleSeriesSuggestion>> SearchSeriesAsync(string searchText, CancellationToken ct)
@@ -279,6 +345,7 @@
     {
         _selectedSuggestion = suggestion;
         _selectedSeriesId = suggestion?.SeriesId;
+        _selectedSeriesSlug = suggestion?.SeriesSlug;
         if (_isInitialized)
         {
             UpdateUrl();
@@ -290,6 +357,7 @@
     {
         _selectedSuggestion = null;
         _selectedSeriesId = null;
+        _selectedSeriesSlug = null;
         UpdateUrl();
         if (_isInitialized)
             await LoadSchedule();
@@ -297,7 +365,7 @@
 
     private void UpdateUrl()
     {
-        var url = PublicationScheduleNavigation.BuildUrl(_selectedSeriesId, _anchorDate);
+        var url = PublicationScheduleNavigation.BuildUrl(_selectedSeriesId, _selectedSeriesSlug, _anchorDate);
         Nav.NavigateTo(url, replace: true);
     }
 

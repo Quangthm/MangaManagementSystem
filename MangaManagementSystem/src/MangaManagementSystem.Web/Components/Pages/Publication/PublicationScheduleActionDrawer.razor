@@ -30,11 +30,11 @@
 </div>
 
 <div class="mf-drawer-filters">
-    @if (_selectedSeriesId.HasValue)
+    @if (HasSeriesFilter)
     {
         <div class="mf-drawer-filtered-by">
-            <MudChip T="string" Size="Size.Small" Color="Color.Default" OnClose="ClearSeriesFilter">
-                Series: @(SelectedSeriesTitle ?? "Loading...")
+            <MudChip T="string" Size="Size.Small" Color="Color.Default" OnClose="ClearSelectedSeriesAsync">
+                Series: @SeriesChipLabel
             </MudChip>
         </div>
     }
@@ -43,9 +43,9 @@
                      ValueChanged="OnChapterFilterChanged"
                      SearchFunc="@SearchChaptersAsync"
                      ToStringFunc="@(c => c == null ? string.Empty : $"{c.ChapterNumberLabel} {(string.IsNullOrEmpty(c.ChapterTitle) ? "" : "- " + c.ChapterTitle)}")"
-                     Label="Search chapters..."
-                     Variant="Variant.Outlined" Clearable="true"
-                     ResetValueOnEmptyText="false" CoerceValue="false"
+                 Label="Search chapters..."
+                      Variant="Variant.Outlined" Clearable="true"
+                      ResetValueOnEmptyText="true"
                      DebounceInterval="200"
                      Adornment="Adornment.Start"
                      AdornmentIcon="@Icons.Material.Filled.Search" />
@@ -72,7 +72,7 @@
             <MudText Typo="Typo.body2">
                 @GetEmptyStateMessage()
             </MudText>
-            @if (_allChapters.Count == 0 && _selectedSeriesId.HasValue)
+            @if (_allChapters.Count == 0 && HasSeriesFilter)
             {
                 <MudText Typo="Typo.caption">Try clearing the series filter.</MudText>
             }
@@ -157,6 +157,7 @@
     [Parameter] public EventCallback OnActionCompleted { get; set; }
     [Parameter] public Guid? SelectedSeriesId { get; set; }
     [Parameter] public string? SelectedSeriesTitle { get; set; }
+    [Parameter] public EventCallback OnClearSeriesRequested { get; set; }
 
     private Guid _currentUserId;
     private bool _isMangaka;
@@ -170,6 +171,11 @@
     private ActionableChapterItem? _selectedChapter;
     private Guid? _selectedSeriesId;
     private Guid? _lastLoadedSeriesId;
+    private string? _resolvedSeriesTitle;
+
+    private string SeriesChipLabel => SelectedSeriesTitle ?? _resolvedSeriesTitle ?? "Selected series";
+    private bool HasSeriesFilter => _selectedSeriesId.HasValue;
+    private bool HasChapterFilter => _selectedChapter != null;
 
     private static readonly HashSet<string> ScheduleActionStatuses = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -199,38 +205,37 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        if (!IsOpen || _currentUserId == Guid.Empty) return;
+
         var currentSeriesId = SelectedSeriesId;
-        if (IsOpen && _currentUserId != Guid.Empty)
+
+        if (_allChapters.Count == 0)
         {
-            if (_allChapters.Count == 0)
+            _selectedSeriesId = currentSeriesId;
+            _lastLoadedSeriesId = currentSeriesId;
+            await LoadChaptersAsync();
+        }
+        else if (ShouldReloadChaptersForSeriesChange(currentSeriesId))
+        {
+            _selectedSeriesId = currentSeriesId;
+            _lastLoadedSeriesId = currentSeriesId;
+            if (_isEditor)
             {
-                _selectedSeriesId = currentSeriesId;
-                _lastLoadedSeriesId = currentSeriesId;
+                _allChapters.Clear();
+                _filteredChapters.Clear();
                 await LoadChaptersAsync();
             }
-            else if (currentSeriesId != _lastLoadedSeriesId)
+            else
             {
-                _selectedSeriesId = currentSeriesId;
-                _lastLoadedSeriesId = currentSeriesId;
-                if (_isEditor)
-                {
-                    _allChapters.Clear();
-                    _filteredChapters.Clear();
-                    await LoadChaptersAsync();
-                }
-                else
-                {
-                    if (_selectedChapter != null && currentSeriesId.HasValue
-                        && _selectedChapter.SeriesId != currentSeriesId.Value)
-                    {
-                        _selectedChapter = null;
-                    }
-                    ApplyFilters();
-                    StateHasChanged();
-                }
+                ClearChapterSearch();
+                ApplyChapterFilters();
+                StateHasChanged();
             }
         }
     }
+
+    private bool ShouldReloadChaptersForSeriesChange(Guid? currentSeriesId)
+        => currentSeriesId != _lastLoadedSeriesId;
 
     private async Task LoadChaptersAsync()
     {
@@ -240,35 +245,12 @@
 
         try
         {
-            List<ActionableChapterItem> items = new();
+            _allChapters = _isMangaka
+                ? await LoadMangakaChaptersAsync()
+                : await LoadEditorChaptersAsync();
 
-            if (_isMangaka)
-            {
-                var chapters = await MangakaApi.GetMyChaptersAsync(_currentUserId);
-                items = chapters
-                    .Where(c => !ExcludedStatuses.Contains(c.StatusCode))
-                    .Select(c => new ActionableChapterItem(
-                        c.ChapterId, c.SeriesId, c.SeriesTitle,
-                        c.ChapterNumberLabel, c.ChapterTitle,
-                        c.StatusCode, c.PlannedReleaseDate,
-                        c.ReleasedAtUtc, c.SeriesCoverUrl))
-                    .ToList();
-            }
-            else if (_isEditor)
-            {
-                var chapters = await EditorApi.GetActionableChaptersAsync(
-                    _currentUserId, SelectedSeriesId);
-                items = chapters
-                    .Select(c => new ActionableChapterItem(
-                        c.ChapterId, c.SeriesId, c.SeriesTitle,
-                        c.ChapterNumberLabel, c.ChapterTitle,
-                        c.StatusCode, c.PlannedReleaseDate,
-                        c.ReleasedAtUtc, c.SeriesCoverUrl))
-                    .ToList();
-            }
-
-            _allChapters = items;
-            ApplyFilters();
+            ResolveSeriesDisplayTitle();
+            ApplyChapterFilters();
         }
         catch (Exception ex)
         {
@@ -281,7 +263,49 @@
         }
     }
 
-    private void ApplyFilters()
+    private async Task<List<ActionableChapterItem>> LoadMangakaChaptersAsync()
+    {
+        var chapters = await MangakaApi.GetMyChaptersAsync(_currentUserId);
+        return chapters
+            .Where(c => !ExcludedStatuses.Contains(c.StatusCode))
+            .Select(c => new ActionableChapterItem(
+                c.ChapterId, c.SeriesId, c.SeriesTitle,
+                c.ChapterNumberLabel, c.ChapterTitle,
+                c.StatusCode, c.PlannedReleaseDate,
+                c.ReleasedAtUtc, c.SeriesCoverUrl))
+            .ToList();
+    }
+
+    private async Task<List<ActionableChapterItem>> LoadEditorChaptersAsync()
+    {
+        var chapters = await EditorApi.GetActionableChaptersAsync(
+            _currentUserId, SelectedSeriesId);
+        return chapters
+            .Select(c => new ActionableChapterItem(
+                c.ChapterId, c.SeriesId, c.SeriesTitle,
+                c.ChapterNumberLabel, c.ChapterTitle,
+                c.StatusCode, c.PlannedReleaseDate,
+                c.ReleasedAtUtc, c.SeriesCoverUrl))
+            .ToList();
+    }
+
+    private void ResolveSeriesDisplayTitle()
+    {
+        if (string.IsNullOrWhiteSpace(SelectedSeriesTitle)
+            && _selectedSeriesId.HasValue
+            && _allChapters.Count > 0
+            && _allChapters[0].SeriesId == _selectedSeriesId.Value)
+        {
+            _resolvedSeriesTitle = _allChapters[0].SeriesTitle;
+        }
+    }
+
+    private void ResetResolvedSeriesLabel()
+    {
+        _resolvedSeriesTitle = null;
+    }
+
+    private void ApplyChapterFilters()
     {
         var filtered = _allChapters.AsEnumerable();
 
@@ -300,7 +324,7 @@
             return Task.FromResult<IEnumerable<ActionableChapterItem>>(Array.Empty<ActionableChapterItem>());
 
         var lower = searchText.Trim().ToLowerInvariant();
-        var results = _allChapters
+        var results = GetSeriesScopedChapters()
             .Where(c =>
                 c.ChapterNumberLabel.ToLowerInvariant().Contains(lower) ||
                 (c.ChapterTitle?.ToLowerInvariant().Contains(lower) ?? false) ||
@@ -310,17 +334,30 @@
         return Task.FromResult<IEnumerable<ActionableChapterItem>>(results);
     }
 
+    private IEnumerable<ActionableChapterItem> GetSeriesScopedChapters()
+        => HasSeriesFilter
+            ? _allChapters.Where(c => c.SeriesId == _selectedSeriesId!.Value)
+            : _allChapters;
+
     private async void OnChapterFilterChanged(ActionableChapterItem? chapter)
     {
         _selectedChapter = chapter;
-        ApplyFilters();
+        ApplyChapterFilters();
         StateHasChanged();
     }
 
-    private async Task ClearSeriesFilter()
+    private async Task ClearSelectedSeriesAsync()
     {
         _selectedSeriesId = null;
-        ApplyFilters();
+        ResetResolvedSeriesLabel();
+        await OnClearSeriesRequested.InvokeAsync();
+    }
+
+    private void ClearChapterSearch()
+    {
+        _selectedChapter = null;
+        ApplyChapterFilters();
+        StateHasChanged();
     }
 
     private async void OpenScheduleDialog(ActionableChapterItem chapter)
@@ -427,9 +464,9 @@
 
     private string GetEmptyStateMessage()
     {
-        if (_selectedChapter != null)
+        if (HasChapterFilter)
             return "This chapter is not available here.";
-        if (_selectedSeriesId.HasValue)
+        if (HasSeriesFilter)
             return "No actionable chapters found for this series.";
         if (_allChapters.Count == 0)
             return "No actionable chapters found.";

@@ -5,6 +5,7 @@
 @using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Application.DTOs.Editor
 @using MangaManagementSystem.Web.Services.Api
+@using MangaManagementSystem.Web.Helpers
 @attribute [Authorize(Roles = "Mangaka")]
 @inject IMangakaChapterApiClient ChapterClient
 @inject IMangakaSeriesApiClient SeriesClient
@@ -549,7 +550,9 @@
     {
         var anchorDate = chapter.PlannedReleaseDate?.ToString("yyyy-MM-dd")
             ?? DateTime.UtcNow.ToString("yyyy-MM-dd");
-        Nav.NavigateTo(
-            $"/publication/schedule?seriesId={chapter.SeriesId}&anchorDate={anchorDate}");
+        var url = PublicationScheduleNavigation.BuildUrl(
+            chapter.SeriesId, chapter.SeriesSlug,
+            chapter.PlannedReleaseDate ?? DateTime.UtcNow.Date);
+        Nav.NavigateTo(url);
     }
 }
