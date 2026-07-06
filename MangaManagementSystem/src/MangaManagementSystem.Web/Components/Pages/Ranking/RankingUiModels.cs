@@ -1,9 +1,17 @@
 using System.Globalization;
+using MangaManagementSystem.Application.Features.Ranking.Dtos;
 using MudBlazor;
 
 namespace MangaManagementSystem.Web.Components.Pages.Ranking;
 
 public sealed record SortOption(string Value, string Label);
+
+public sealed record PublicationPeriodOption(
+    Guid PublicationPeriodId,
+    string PeriodName,
+    string Label,
+    DateTime PeriodStartDate,
+    DateTime PeriodEndDate);
 
 public sealed record CatalogEntry(Guid SeriesId, string Title, string CoverUrl);
 
@@ -11,6 +19,8 @@ public sealed record RankingStatItem(string Label, string Value, string Icon, Co
 
 public sealed class SeriesInputRow
 {
+    public Guid SeriesVoteInputId { get; init; }
+    public Guid PublicationPeriodId { get; init; }
     public Guid SeriesId { get; init; }
     public string Title { get; init; } = string.Empty;
     public string CoverUrl { get; init; } = string.Empty;
@@ -25,14 +35,14 @@ public sealed class SeriesInputRow
 public sealed class RankingRow
 {
     public Guid SeriesId { get; init; }
-    public int Rank { get; set; }
-    public int PreviousRank { get; set; }
+    public int Rank { get; init; }
+    public int PreviousRank { get; init; }
     public string Title { get; init; } = string.Empty;
     public string CoverUrl { get; init; } = string.Empty;
     public int ReadingCount { get; init; }
     public int RatingCount { get; init; }
     public decimal AverageRating { get; init; }
-    public double Score { get; init; }
+    public decimal Score { get; init; }
 }
 
 public sealed class EditRowState
@@ -45,7 +55,7 @@ public sealed class EditRowState
 
 public sealed class InsertFormState
 {
-    public string PublicationWeek { get; set; } = string.Empty;
+    public Guid PublicationPeriodId { get; set; }
     public CatalogEntry? Series { get; set; }
     public int? ReadingCount { get; set; }
     public int? RatingCount { get; set; }
@@ -53,80 +63,69 @@ public sealed class InsertFormState
     public string DataSourceNote { get; set; } = string.Empty;
 }
 
+public sealed record SeriesVoteInputUpdateRequestUi(
+    Guid SeriesVoteInputId,
+    int ReadingCount,
+    int RatingCount,
+    decimal AverageRating,
+    string DataSourceNote);
+
 public static class RankingUiHelper
 {
-    public static double CalculateScore(decimal averageRating, int ratingCount, int readingCount)
+    public const string PlaceholderCoverUrl = "/images/placeholder-cover.png";
+
+    public static PublicationPeriodOption ToOption(PublicationPeriodDto dto)
     {
-        return (double)averageRating * Math.Log10(1 + ratingCount) + readingCount * 0.001;
+        var label = FormatPeriodLabel(dto);
+
+        return new PublicationPeriodOption(
+            dto.PublicationPeriodId,
+            dto.PeriodName,
+            label,
+            dto.PeriodStartDate,
+            dto.PeriodEndDate);
     }
 
-    public static IReadOnlyList<RankingRow> BuildRankingRows(IEnumerable<SeriesInputRow> inputRows)
+    public static SeriesInputRow ToInputRow(SeriesVoteInputDto dto)
     {
-        return inputRows
-            .Select(row => new RankingRow
-            {
-                SeriesId = row.SeriesId,
-                Title = row.Title,
-                CoverUrl = row.CoverUrl,
-                ReadingCount = row.ReadingCount,
-                RatingCount = row.RatingCount,
-                AverageRating = row.AverageRating,
-                Score = CalculateScore(row.AverageRating, row.RatingCount, row.ReadingCount),
-                PreviousRank = 0
-            })
-            .OrderByDescending(row => row.Score)
-            .Select((row, index) =>
-            {
-                row.Rank = index + 1;
-                row.PreviousRank = row.Rank + ((row.Rank % 3) - 1);
-                return row;
-            })
-            .ToList();
-    }
-
-    public static IEnumerable<SeriesInputRow> SortInputRows(IEnumerable<SeriesInputRow> rows, string sort)
-    {
-        return sort switch
+        return new SeriesInputRow
         {
-            "rank_asc" => rows.OrderByDescending(row => CalculateScore(row.AverageRating, row.RatingCount, row.ReadingCount)),
-            "rank_desc" => rows.OrderBy(row => CalculateScore(row.AverageRating, row.RatingCount, row.ReadingCount)),
-            "title_asc" => rows.OrderBy(row => row.Title),
-            "title_desc" => rows.OrderByDescending(row => row.Title),
-            "score_desc" => rows.OrderByDescending(row => CalculateScore(row.AverageRating, row.RatingCount, row.ReadingCount)),
-            "score_asc" => rows.OrderBy(row => CalculateScore(row.AverageRating, row.RatingCount, row.ReadingCount)),
-            "average_rating_desc" => rows.OrderByDescending(row => row.AverageRating),
-            "average_rating_asc" => rows.OrderBy(row => row.AverageRating),
-            "reading_count_desc" => rows.OrderByDescending(row => row.ReadingCount),
-            "reading_count_asc" => rows.OrderBy(row => row.ReadingCount),
-            "rating_count_desc" => rows.OrderByDescending(row => row.RatingCount),
-            "rating_count_asc" => rows.OrderBy(row => row.RatingCount),
-            _ => rows.OrderByDescending(row => CalculateScore(row.AverageRating, row.RatingCount, row.ReadingCount))
+            SeriesVoteInputId = dto.SeriesVoteInputId,
+            PublicationPeriodId = dto.PublicationPeriodId,
+            SeriesId = dto.SeriesId,
+            Title = dto.SeriesTitle,
+            CoverUrl = ResolveCover(dto.CoverUrl),
+            ReadingCount = dto.ReadingCount,
+            RatingCount = dto.RatingCount,
+            AverageRating = dto.AverageRating,
+            DataSourceNote = dto.DataSourceNote ?? string.Empty,
+            CreatedAt = dto.EnteredAtUtc,
+            UpdatedAt = dto.UpdatedAtUtc ?? dto.EnteredAtUtc
         };
     }
 
-    public static IEnumerable<RankingRow> SortRankingRows(IEnumerable<RankingRow> rows, string sort)
+    public static RankingRow ToRankingRow(SeriesRankingRowDto dto)
     {
-        return sort switch
+        return new RankingRow
         {
-            "rank_asc" => rows.OrderBy(row => row.Rank),
-            "rank_desc" => rows.OrderByDescending(row => row.Rank),
-            "title_asc" => rows.OrderBy(row => row.Title),
-            "title_desc" => rows.OrderByDescending(row => row.Title),
-            "score_desc" => rows.OrderByDescending(row => row.Score),
-            "score_asc" => rows.OrderBy(row => row.Score),
-            "average_rating_desc" => rows.OrderByDescending(row => row.AverageRating),
-            "average_rating_asc" => rows.OrderBy(row => row.AverageRating),
-            "reading_count_desc" => rows.OrderByDescending(row => row.ReadingCount),
-            "reading_count_asc" => rows.OrderBy(row => row.ReadingCount),
-            "rating_count_desc" => rows.OrderByDescending(row => row.RatingCount),
-            "rating_count_asc" => rows.OrderBy(row => row.RatingCount),
-            _ => rows.OrderBy(row => row.Rank)
+            SeriesId = dto.SeriesId,
+            Rank = dto.RankPosition,
+            PreviousRank = dto.RankPosition,
+            Title = dto.SeriesTitle,
+            CoverUrl = ResolveCover(dto.CoverUrl),
+            ReadingCount = dto.ReadingCount,
+            RatingCount = dto.RatingCount,
+            AverageRating = dto.AverageRating,
+            Score = dto.RankingScore
         };
     }
 
-    public static bool Matches(string title, string query)
+    public static CatalogEntry ToCatalogEntry(RankableSeriesDto dto)
     {
-        return string.IsNullOrWhiteSpace(query) || title.Contains(query.Trim(), StringComparison.OrdinalIgnoreCase);
+        return new CatalogEntry(
+            dto.SeriesId,
+            dto.Title,
+            ResolveCover(dto.CoverUrl));
     }
 
     public static string FormatNumber(int value)
@@ -184,5 +183,22 @@ public static class RankingUiHelper
             < 0 => $"▼ {Math.Abs(delta)}",
             _ => "—"
         };
+    }
+
+    private static string FormatPeriodLabel(PublicationPeriodDto dto)
+    {
+        if (dto.PeriodTypeCode == "WEEKLY")
+        {
+            return $"{dto.PeriodName} ({dto.PeriodStartDate:MMM d} – {dto.PeriodEndDate:MMM d})";
+        }
+
+        return $"{dto.PeriodName} ({dto.PeriodStartDate:yyyy-MM-dd} – {dto.PeriodEndDate:yyyy-MM-dd})";
+    }
+
+    private static string ResolveCover(string? coverUrl)
+    {
+        return string.IsNullOrWhiteSpace(coverUrl)
+            ? PlaceholderCoverUrl
+            : coverUrl;
     }
 }

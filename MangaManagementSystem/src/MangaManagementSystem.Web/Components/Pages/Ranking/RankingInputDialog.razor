@@ -16,18 +16,18 @@
             <MudDivider />
 
             <MudStack Spacing="3" Class="pa-4">
-                <MudSelect T="string"
+                <MudSelect T="Guid"
                            Label="Publication Week"
                            Required="true"
                            Variant="Variant.Outlined"
                            Margin="Margin.Dense"
-                           Value="_form.PublicationWeek"
-                           ValueChanged="OnPublicationWeekChanged"
-                           Error="@HasError(nameof(InsertFormState.PublicationWeek))"
-                           ErrorText="@GetError(nameof(InsertFormState.PublicationWeek))">
-                    @foreach (var week in PublicationWeeks)
+                           Value="_form.PublicationPeriodId"
+                           ValueChanged="OnPublicationPeriodChanged"
+                           Error="@HasError(nameof(InsertFormState.PublicationPeriodId))"
+                           ErrorText="@GetError(nameof(InsertFormState.PublicationPeriodId))">
+                    @foreach (var period in PublicationPeriods)
                     {
-                        <MudSelectItem T="string" Value="@week">@week</MudSelectItem>
+                        <MudSelectItem T="Guid" Value="@period.PublicationPeriodId">@period.Label</MudSelectItem>
                     }
                 </MudSelect>
 
@@ -94,7 +94,7 @@
 
                 <MudTextField T="string"
                               Label="Data Source Note"
-                              Placeholder="e.g. Editorial Board — Week 23"
+                              Placeholder="e.g. Editorial Board report / spreadsheet source"
                               Lines="2"
                               Variant="Variant.Outlined"
                               Margin="Margin.Dense"
@@ -105,8 +105,10 @@
             <MudDivider />
 
             <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2" Class="pa-4 dialog-footer">
-                <MudButton Variant="Variant.Outlined" OnClick="CloseAsync">Cancel</MudButton>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync">Save</MudButton>
+                <MudButton Variant="Variant.Outlined" OnClick="CloseAsync" Disabled="Saving">Cancel</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync" Disabled="Saving">
+                    @(Saving ? "Saving..." : "Save")
+                </MudButton>
             </MudStack>
         </MudPaper>
     </MudOverlay>
@@ -126,19 +128,20 @@
     public EventCallback<bool> OpenChanged { get; set; }
 
     [Parameter]
-    public string SelectedPublicationWeek { get; set; } = string.Empty;
+    public Guid SelectedPublicationPeriodId { get; set; }
 
     [Parameter]
-    public IReadOnlyList<string> PublicationWeeks { get; set; } = [];
+    public IReadOnlyList<PublicationPeriodOption> PublicationPeriods { get; set; } = [];
 
     [Parameter]
-    public IReadOnlyList<CatalogEntry> Catalog { get; set; } = [];
+    public Func<string?, CancellationToken, Task<IEnumerable<CatalogEntry>>> SearchSeriesAsync { get; set; }
+        = (_, _) => Task.FromResult(Enumerable.Empty<CatalogEntry>());
 
     [Parameter]
-    public IReadOnlyList<SeriesInputRow> ExistingRows { get; set; } = [];
+    public EventCallback<InsertFormState> Saved { get; set; }
 
     [Parameter]
-    public EventCallback<SeriesInputRow> Saved { get; set; }
+    public bool Saving { get; set; }
 
     protected override void OnParametersSet()
     {
@@ -147,7 +150,7 @@
             _errors = [];
             _form = new InsertFormState
             {
-                PublicationWeek = SelectedPublicationWeek
+                PublicationPeriodId = SelectedPublicationPeriodId
             };
         }
 
@@ -159,10 +162,11 @@
         await OpenChanged.InvokeAsync(false);
     }
 
-    private void OnPublicationWeekChanged(string value)
+    private void OnPublicationPeriodChanged(Guid value)
     {
-        _form.PublicationWeek = value;
-        ClearError(nameof(InsertFormState.PublicationWeek));
+        _form.PublicationPeriodId = value;
+        _form.Series = null;
+        ClearError(nameof(InsertFormState.PublicationPeriodId));
     }
 
     private void OnSeriesChanged(CatalogEntry? value)
@@ -194,17 +198,16 @@
         _form.DataSourceNote = value ?? string.Empty;
     }
 
-    private Task<IEnumerable<CatalogEntry>> SearchAvailableSeriesAsync(string? value, CancellationToken cancellationToken)
+    private Task<IEnumerable<CatalogEntry>> SearchAvailableSeriesAsync(
+        string? value,
+        CancellationToken cancellationToken)
     {
-        var usedSeriesIds = ExistingRows.Select(row => row.SeriesId).ToHashSet();
-        var query = (value ?? string.Empty).Trim();
+        if (_form.PublicationPeriodId == Guid.Empty)
+        {
+            return Task.FromResult(Enumerable.Empty<CatalogEntry>());
+        }
 
-        IEnumerable<CatalogEntry> result = Catalog
-            .Where(series => !usedSeriesIds.Contains(series.SeriesId))
-            .Where(series => string.IsNullOrWhiteSpace(query) || series.Title.Contains(query, StringComparison.OrdinalIgnoreCase))
-            .OrderBy(series => series.Title);
-
-        return Task.FromResult(result);
+        return SearchSeriesAsync(value, cancellationToken);
     }
 
     private async Task SaveAsync()
@@ -217,64 +220,43 @@
             return;
         }
 
-        var series = _form.Series!;
-        var now = DateTime.UtcNow;
-
-        var row = new SeriesInputRow
-        {
-            SeriesId = series.SeriesId,
-            Title = series.Title,
-            CoverUrl = series.CoverUrl,
-            ReadingCount = _form.ReadingCount!.Value,
-            RatingCount = _form.RatingCount!.Value,
-            AverageRating = _form.AverageRating!.Value,
-            DataSourceNote = _form.DataSourceNote.Trim(),
-            CreatedAt = now,
-            UpdatedAt = now
-        };
-
-        await Saved.InvokeAsync(row);
-        await OpenChanged.InvokeAsync(false);
+        await Saved.InvokeAsync(_form);
     }
 
     private Dictionary<string, string> ValidateForm()
     {
         var errors = new Dictionary<string, string>();
 
-        if (string.IsNullOrWhiteSpace(_form.PublicationWeek))
+        if (_form.PublicationPeriodId == Guid.Empty)
         {
-            errors[nameof(InsertFormState.PublicationWeek)] = "Please select a publication week.";
+            errors[nameof(InsertFormState.PublicationPeriodId)] = "Publication week is required.";
         }
 
         if (_form.Series is null)
         {
-            errors[nameof(InsertFormState.Series)] = "Please select a series.";
-        }
-        else if (ExistingRows.Any(row => row.SeriesId == _form.Series.SeriesId))
-        {
-            errors[nameof(InsertFormState.Series)] = "This series already has input for the selected week.";
+            errors[nameof(InsertFormState.Series)] = "Series is required.";
         }
 
-        if (_form.ReadingCount is null or <= 0)
+        if (!_form.ReadingCount.HasValue || _form.ReadingCount.Value <= 0)
         {
-            errors[nameof(InsertFormState.ReadingCount)] = "Must be a positive integer.";
+            errors[nameof(InsertFormState.ReadingCount)] = "Reading count must be greater than 0.";
         }
 
-        if (_form.RatingCount is null or <= 0)
+        if (!_form.RatingCount.HasValue || _form.RatingCount.Value <= 0)
         {
-            errors[nameof(InsertFormState.RatingCount)] = "Must be a positive integer.";
+            errors[nameof(InsertFormState.RatingCount)] = "Rating count must be greater than 0.";
         }
 
-        if (_form.AverageRating is null or < 0 or > 10)
+        if (_form.ReadingCount.HasValue
+            && _form.RatingCount.HasValue
+            && _form.RatingCount.Value > _form.ReadingCount.Value)
         {
-            errors[nameof(InsertFormState.AverageRating)] = "Must be between 0 and 10.";
+            errors[nameof(InsertFormState.RatingCount)] = "Rating count cannot exceed reading count.";
         }
 
-        if (_form.RatingCount.HasValue &&
-            _form.ReadingCount.HasValue &&
-            _form.RatingCount.Value > _form.ReadingCount.Value)
+        if (!_form.AverageRating.HasValue || _form.AverageRating.Value < 0 || _form.AverageRating.Value > 10)
         {
-            errors[nameof(InsertFormState.RatingCount)] = "Cannot exceed Reading Count.";
+            errors[nameof(InsertFormState.AverageRating)] = "Average rating must be between 0 and 10.";
         }
 
         return errors;
@@ -287,14 +269,13 @@
 
     private string GetError(string fieldName)
     {
-        return _errors.TryGetValue(fieldName, out var message) ? message : string.Empty;
+        return _errors.TryGetValue(fieldName, out var error)
+            ? error
+            : string.Empty;
     }
 
     private void ClearError(string fieldName)
     {
-        if (_errors.Remove(fieldName))
-        {
-            _errors = new Dictionary<string, string>(_errors);
-        }
+        _errors.Remove(fieldName);
     }
 }

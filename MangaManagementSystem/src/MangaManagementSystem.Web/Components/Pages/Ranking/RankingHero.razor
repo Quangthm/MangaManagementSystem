@@ -8,7 +8,7 @@
                 <div>
                     <MudText Typo="Typo.h5" Class="fw-800">Series Ranking Management</MudText>
                     <MudText Typo="Typo.body2" Color="Color.Secondary">
-                        Weekly editorial ranking input and live calculated results
+                        Weekly editorial ranking input and live database-calculated results
                     </MudText>
                 </div>
             </MudStack>
@@ -16,19 +16,20 @@
 
         <MudItem xs="12" md="5">
             <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2">
-                <MudSelect T="string"
+                <MudSelect T="Guid"
                            Label="Publication Week"
                            Variant="Variant.Outlined"
                            Dense="true"
                            Margin="Margin.Dense"
-                           Value="SelectedPublicationWeek"
-                           ValueChanged="OnSelectedPublicationWeekChanged"
+                           Value="SelectedPublicationPeriodId"
+                           ValueChanged="OnSelectedPublicationPeriodChanged"
+                           Disabled="PublicationPeriods.Count == 0 || Loading"
                            Adornment="Adornment.Start"
                            AdornmentIcon="@Icons.Material.Filled.CalendarMonth"
                            Class="ranking-period-select">
-                    @foreach (var week in PublicationWeeks)
+                    @foreach (var period in PublicationPeriods)
                     {
-                        <MudSelectItem T="string" Value="@week">@week</MudSelectItem>
+                        <MudSelectItem T="Guid" Value="@period.PublicationPeriodId">@period.Label</MudSelectItem>
                     }
                 </MudSelect>
             </MudStack>
@@ -38,16 +39,19 @@
 
 @code {
     [Parameter]
-    public IReadOnlyList<string> PublicationWeeks { get; set; } = [];
+    public IReadOnlyList<PublicationPeriodOption> PublicationPeriods { get; set; } = [];
 
     [Parameter]
-    public string SelectedPublicationWeek { get; set; } = string.Empty;
+    public Guid SelectedPublicationPeriodId { get; set; }
 
     [Parameter]
-    public EventCallback<string> SelectedPublicationWeekChanged { get; set; }
+    public EventCallback<Guid> SelectedPublicationPeriodIdChanged { get; set; }
 
-    private Task OnSelectedPublicationWeekChanged(string value)
+    [Parameter]
+    public bool Loading { get; set; }
+
+    private Task OnSelectedPublicationPeriodChanged(Guid value)
     {
-        return SelectedPublicationWeekChanged.InvokeAsync(value);
+        return SelectedPublicationPeriodIdChanged.InvokeAsync(value);
     }
 }
