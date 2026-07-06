@@ -26,6 +26,16 @@ Web fixes:
 - All 4 bugs fixed (autocomplete label, drawer clear, chapter search scoping, stale chapter state)
 - Source navigation links updated
 
+## 6. Phase 2 — Drag/Drop Scheduling UX (2026-07-06)
+
+**Changes:** 2 files (Web-only)
+**Build result:** 0 errors, 66 pre-existing warnings
+**Handoff:** `docs/revision/PublicationScheduling/2026-07-06-schedule-drag-drop-ux.md`
+
+Added drag-and-drop scheduling: drawer chapter cards → calendar day cells.
+Uses existing `SetPlannedReleaseDateAsync` APIs. No backend changes.
+Calendar items not draggable (no-unschedule guarantee preserved).
+
 ---
 
 ## 0. Context loaded

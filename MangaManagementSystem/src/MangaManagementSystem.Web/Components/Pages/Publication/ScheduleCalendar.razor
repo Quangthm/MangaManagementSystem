@@ -1,6 +1,7 @@
 @page "/publication/schedule"
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
+@using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Application.Features.Publication.Schedule.Queries.GetPublicationScheduleCalendar
 @using MangaManagementSystem.Domain.Interfaces
 @using MangaManagementSystem.Web.Services.Api
@@ -9,6 +10,8 @@
 @using System.Security.Claims
 @attribute [Authorize]
 @inject IPublicationScheduleApiClient ScheduleApiClient
+@inject IMangakaChapterApiClient MangakaChapterApi
+@inject IEditorChapterReviewApiClient EditorChapterReviewApi
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthStateProvider
@@ -27,7 +30,8 @@
     @@media (max-width: 1200px) { .mf-days-grid { grid-template-columns: repeat(4, 1fr); } }
     @@media (max-width: 768px) { .mf-days-grid { grid-template-columns: repeat(2, 1fr); } }
     @@media (max-width: 480px) { .mf-days-grid { grid-template-columns: 1fr; } }
-    .mf-day-column { background: #fff; border-radius: 12px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); min-height: 100px; }
+    .mf-day-column { background: #fff; border-radius: 12px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); min-height: 100px; transition: box-shadow 0.2s, border-color 0.2s; }
+    .mf-day-column.mf-drag-over { box-shadow: 0 0 0 2px #3b82f6, 0 4px 12px rgba(59,130,246,0.25); }
     .mf-day-column.today { border: 2px solid #3b82f6; }
     .mf-day-header { font-weight: 700; font-size: 0.85rem; color: #475569; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0; }
     .mf-day-header.today { color: #3b82f6; }
@@ -51,7 +55,10 @@
                                            SelectedSeriesId="_selectedSeriesId"
                                            SelectedSeriesTitle="@(_selectedSuggestion?.SeriesTitle)"
                                            OnClearSeriesRequested="ClearSeriesFilterAsync"
-                                           OnActionCompleted="RefreshAfterAction" />
+                                           OnActionCompleted="RefreshAfterAction"
+                                           OnChapterDragStarted="HandleChapterDragStarted"
+                                           OnChapterDragEnded="HandleChapterDragEnded"
+                                           DrawerReloadVersion="_drawerReloadVersion" />
     </MudDrawer>
 
     <MudMainContent>
@@ -157,7 +164,10 @@
                     <div class="mf-days-grid">
                         @foreach (var day in _calendar.Days)
                         {
-                            <div class="mf-day-column @(day.IsToday ? "today" : "")">
+                            <div class="mf-day-column @(day.IsToday ? "today" : "") @(_isDragging ? "mf-drag-over" : "")"
+                                 @ondragover="e => OnDragOverDate(e, day.Date)"
+                                 @ondragover:preventDefault
+                                 @ondrop="e => OnDropOnDate(e, day.Date)">
                                 <div class="mf-day-header @(day.IsToday ? "today" : "")">
                                     <span>@day.DayLabel</span>
                                     @if (day.IsToday)
@@ -221,6 +231,14 @@
     private bool _drawerOpen;
     private bool _isMangaka;
     private bool _isEditor;
+    private Guid _currentUserId;
+    private int _drawerReloadVersion;
+    private ActionableChapterItem? _draggedChapter;
+    private ActionableChapterItem? _pendingDragChapter;
+    private Dictionary<Guid, ActionableChapterItem> _authorizedDragPayloadByChapterId = new();
+    private CancellationTokenSource? _hoverNavCts;
+    private bool _isDragging => _draggedChapter != null;
+    private bool IsPendingPlacement => _pendingDragChapter != null;
 
     private PublicationScheduleCalendarDto? _calendar;
 
@@ -232,6 +250,9 @@
         {
             _isMangaka = user.IsInRole("Mangaka");
             _isEditor = user.IsInRole("Tantou Editor");
+            var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (Guid.TryParse(idClaim, out var uid))
+                _currentUserId = uid;
         }
 
         var uri = new Uri(Nav.Uri);
@@ -250,6 +271,7 @@
         }
 
         _isInitialized = true;
+        await LoadAuthorizedActionDataAsync();
         await LoadSchedule();
     }
 
@@ -262,6 +284,169 @@
     private async Task RefreshAfterAction()
     {
         await LoadSchedule();
+    }
+
+    private async Task LoadAuthorizedActionDataAsync()
+    {
+        List<ActionableChapterItem> items;
+        try
+        {
+            if (_isMangaka)
+            {
+                var chapters = await MangakaChapterApi.GetMyChaptersAsync(_currentUserId);
+                items = chapters
+                    .Where(c => c.StatusCode is not "RELEASED" and not "CANCELLED")
+                    .Select(MapDraftToActionableChapterItem)
+                    .ToList();
+            }
+            else if (_isEditor)
+            {
+                var chapters = await EditorChapterReviewApi.GetActionableChaptersAsync(_currentUserId);
+                items = chapters
+                    .Select(MapDraftToActionableChapterItem)
+                    .ToList();
+            }
+            else return;
+        }
+        catch { return; }
+
+        _authorizedDragPayloadByChapterId = items
+            .Where(c => CanDragPayloadForSchedule(c))
+            .ToDictionary(c => c.ChapterId);
+    }
+
+    private static ActionableChapterItem MapDraftToActionableChapterItem(MangakaChapterListItemDto dto) =>
+        new(dto.ChapterId, dto.SeriesId, dto.SeriesTitle,
+            dto.ChapterNumberLabel, dto.ChapterTitle,
+            dto.StatusCode, dto.PlannedReleaseDate,
+            dto.ReleasedAtUtc, dto.SeriesCoverUrl);
+
+    private static ActionableChapterItem MapDraftToActionableChapterItem(EditorActionableChapterDto dto) =>
+        new(dto.ChapterId, dto.SeriesId, dto.SeriesTitle,
+            dto.ChapterNumberLabel, dto.ChapterTitle,
+            dto.StatusCode, dto.PlannedReleaseDate,
+            dto.ReleasedAtUtc, dto.SeriesCoverUrl);
+
+    private static bool CanDragPayloadForSchedule(ActionableChapterItem payload)
+    {
+        if (payload.StatusCode is "RELEASED" or "CANCELLED") return false;
+        return true;
+    }
+
+    private bool CanStartDragFromCalendar(PublicationScheduleItemDto item)
+    {
+        if (!_isMangaka && !_isEditor) return false;
+        if (item.StatusCode is "RELEASED" or "CANCELLED") return false;
+        return _authorizedDragPayloadByChapterId.TryGetValue(item.ChapterId, out _);
+    }
+
+    private ActionableChapterItem GetAuthorizedPayload(PublicationScheduleItemDto item)
+        => _authorizedDragPayloadByChapterId[item.ChapterId];
+
+    private void HandleChapterDragStarted(ActionableChapterItem chapter)
+    {
+        _draggedChapter = chapter;
+        EnterPendingPlacement(chapter);
+    }
+
+    private void HandleChapterDragEnded()
+    {
+        _draggedChapter = null;
+        StateHasChanged();
+    }
+
+    private void ClearDragState()
+    {
+        _draggedChapter = null;
+        StateHasChanged();
+    }
+
+    private void EnterPendingPlacement(ActionableChapterItem chapter)
+    {
+        _pendingDragChapter = chapter;
+        StateHasChanged();
+    }
+
+    private void CancelPendingPlacement()
+    {
+        _pendingDragChapter = null;
+        _draggedChapter = null;
+        CancelHoverNavigation();
+        StateHasChanged();
+    }
+
+    private void OnDragOverDate(DragEventArgs e, DateTime date)
+    {
+        // preventDefault set via directive
+    }
+
+    private async Task OnDropOnDate(DragEventArgs e, DateTime date)
+    {
+        var chapter = _draggedChapter ?? _pendingDragChapter;
+        if (chapter == null) return;
+
+        _draggedChapter = null;
+        _pendingDragChapter = null;
+        CancelHoverNavigation();
+
+        if (!CanDragPayloadForSchedule(chapter))
+        {
+            Snackbar.Add("This chapter cannot be scheduled.", Severity.Warning);
+            StateHasChanged();
+            return;
+        }
+
+        if (!IsDateDropTargetEnabled(date))
+        {
+            Snackbar.Add("Cannot schedule on a past date.", Severity.Warning);
+            StateHasChanged();
+            return;
+        }
+
+        await ScheduleChapterFromDropAsync(chapter, date);
+    }
+
+    private async Task PlaceChapterOnDate(DateTime date)
+    {
+        if (_pendingDragChapter == null) return;
+        await OnDropOnDate(null!, date);
+    }
+
+    private static bool IsDateDropTargetEnabled(DateTime date)
+        => date.Date >= DateTime.UtcNow.Date;
+
+    private async Task ScheduleChapterFromDropAsync(ActionableChapterItem chapter, DateTime targetDate)
+    {
+        try
+        {
+            var request = new SetPlannedReleaseDateRequest(targetDate);
+            SetChapterPlannedReleaseDateResponse response;
+
+            if (_isMangaka)
+                response = await MangakaChapterApi.SetPlannedReleaseDateAsync(
+                    _currentUserId, chapter.ChapterId, request);
+            else if (_isEditor)
+                response = await EditorChapterReviewApi.SetPlannedReleaseDateAsync(
+                    _currentUserId, chapter.ChapterId, request);
+            else
+                return;
+
+            Snackbar.Add(
+                response.ValidationMessage ?? "Planned release date updated.",
+                Severity.Success);
+
+            if (!string.IsNullOrWhiteSpace(response.WarningMessage))
+                Snackbar.Add(response.WarningMessage, Severity.Warning);
+
+            await LoadSchedule();
+            await LoadAuthorizedActionDataAsync();
+            _drawerReloadVersion++;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
     }
 
     private async Task ResolveSelectedSeriesBySlugAsync(string slug)

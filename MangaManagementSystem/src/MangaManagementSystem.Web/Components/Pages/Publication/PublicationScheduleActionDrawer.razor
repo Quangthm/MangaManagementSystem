@@ -82,7 +82,10 @@
     {
         @foreach (var chapter in _filteredChapters)
         {
-            <div class="mf-drawer-card">
+            <div class="mf-drawer-card"
+                 draggable="@GetDraggableAttribute(chapter)"
+                 @ondragstart="e => HandleChapterDragStart(e, chapter)"
+                 @ondragend="HandleChapterDragEnd">
                 <div class="mf-drawer-card-cover">
                     @if (!string.IsNullOrWhiteSpace(chapter.SeriesCoverUrl))
                     {
@@ -158,6 +161,9 @@
     [Parameter] public Guid? SelectedSeriesId { get; set; }
     [Parameter] public string? SelectedSeriesTitle { get; set; }
     [Parameter] public EventCallback OnClearSeriesRequested { get; set; }
+    [Parameter] public EventCallback<ActionableChapterItem> OnChapterDragStarted { get; set; }
+    [Parameter] public EventCallback OnChapterDragEnded { get; set; }
+    [Parameter] public int DrawerReloadVersion { get; set; }
 
     private Guid _currentUserId;
     private bool _isMangaka;
@@ -165,6 +171,7 @@
     private string _roleLabel = "";
     private bool _drawerLoading;
     private string? _error;
+    private int _lastDrawerReloadVersion;
 
     private List<ActionableChapterItem> _allChapters = new();
     private List<ActionableChapterItem> _filteredChapters = new();
@@ -231,6 +238,14 @@
                 ApplyChapterFilters();
                 StateHasChanged();
             }
+        }
+
+        if (_allChapters.Count > 0 && _lastDrawerReloadVersion != DrawerReloadVersion)
+        {
+            _lastDrawerReloadVersion = DrawerReloadVersion;
+            _allChapters.Clear();
+            _filteredChapters.Clear();
+            await LoadChaptersAsync();
         }
     }
 
@@ -451,6 +466,21 @@
     private async Task CloseDrawer()
     {
         await IsOpenChanged.InvokeAsync(false);
+    }
+
+    private bool CanDragChapter(ActionableChapterItem chapter) => CanSchedule(chapter);
+
+    private string? GetDraggableAttribute(ActionableChapterItem chapter)
+        => CanDragChapter(chapter) ? "true" : null;
+
+    private async Task HandleChapterDragStart(DragEventArgs e, ActionableChapterItem chapter)
+    {
+        await OnChapterDragStarted.InvokeAsync(chapter);
+    }
+
+    private async Task HandleChapterDragEnd()
+    {
+        await OnChapterDragEnded.InvokeAsync();
     }
 
     private bool CanSchedule(ActionableChapterItem chapter)
