@@ -359,10 +359,21 @@ function setupEvents() {
             const startCanvasY = (drawStart.y - rect.top - panY) / scale;
             const endCanvasPos = getMousePos(e);
             
-            const x = Math.min(startCanvasX, endCanvasPos.x);
-            const y = Math.min(startCanvasY, endCanvasPos.y);
-            const w = Math.abs(endCanvasPos.x - startCanvasX);
-            const h = Math.abs(endCanvasPos.y - startCanvasY);
+            let x = Math.min(startCanvasX, endCanvasPos.x);
+            let y = Math.min(startCanvasY, endCanvasPos.y);
+            let w = Math.abs(endCanvasPos.x - startCanvasX);
+            let h = Math.abs(endCanvasPos.y - startCanvasY);
+
+            // #9: clamp the drawn box to the image bounds. A full-page/edge drag that spills into the
+            // gray margin would otherwise create a region with negative coordinates or one extending
+            // past the page — an invalid state (the DB also requires x,y >= 0 and a FULL_PAGE box to sit
+            // exactly at 0,0). Clamping keeps the box valid and inside the page.
+            const imgW = originalImg ? originalImg.width : null;
+            const imgH = originalImg ? originalImg.height : null;
+            if (x < 0) { w += x; x = 0; }
+            if (y < 0) { h += y; y = 0; }
+            if (imgW != null && x + w > imgW) w = imgW - x;
+            if (imgH != null && y + h > imgH) h = imgH - y;
 
             if (w > 10 && h > 10) { // Min size
                 regions.push({
@@ -576,6 +587,19 @@ function updateRegionData(id, data) {
         saveState();
         redraw();
     }
+}
+
+// #10 region editing: update a region's type and/or label, then sync back to Blazor so the change
+// marks the version dirty and persists (BulkReplace matches by db id / label on Save). Unlike
+// updateRegionData this echoes to Blazor because the edit originates from the Blazor edit dialog.
+function setRegionMeta(id, type, label) {
+    const index = regions.findIndex(r => r.id === id);
+    if (index === -1) return;
+    if (type != null && type !== '') regions[index].type = type;
+    regions[index].label = label;
+    saveState();
+    syncToBlazor();
+    redraw();
 }
 
 function loadRegions(savedRegionsStr, silent) {
@@ -1251,6 +1275,7 @@ function downloadRenderedImage(filename) {
         resetZoom,
         setTypography,
         updateRegionData,
+        setRegionMeta,
         loadRegions,
         selectRegion,
         selectRegionsByDbIds,

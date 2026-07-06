@@ -1,4 +1,4 @@
-@namespace MangaManagementSystem.Web.Components.Pages.Mangaka
+@namespace MangaManagementSystem.Web.Components.Pages.Workspace
 @using Microsoft.AspNetCore.Components.Web
 @using MudBlazor
 
@@ -9,9 +9,9 @@
     when the visible chapter data actually changes (see BuildSignature).
 *@
 
-<aside class="mf-workspace-sidebar py-4 d-flex flex-column border-r-1 mud-border-lines-default" style="width: 250px; flex-shrink: 0; background-color: white; height: 100%; overflow: hidden;">
+<aside class="mf-workspace-sidebar pt-2 pb-4 d-flex flex-column border-r-1 mud-border-lines-default" style="width: 250px; flex-shrink: 0; background-color: white; height: 100%; overflow: hidden;">
     <MudNavMenu Class="mud-width-full flex-grow-1" Style="overflow-y: auto;">
-        <div class="px-4 mt-6 mb-2">
+        <div class="px-4 mt-2 mb-2">
             <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" StartIcon="@Icons.Material.Filled.Add" Class="rounded-lg" OnClick="OnAddChapter" Disabled="@IsAddingChapter">
                 @if (IsAddingChapter) { <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/> } else { <span>New Chapter</span> }
             </MudButton>
@@ -39,8 +39,8 @@
                     }
                     else
                     {
-                        <div class="d-flex justify-space-between align-center w-100">
-                            <div class="d-flex align-center" style="min-width: 0;">
+                        <div class="d-flex justify-space-between align-center w-100" style="gap: 8px;">
+                            <div class="d-flex align-center" style="min-width: 0; flex: 1 1 auto; overflow: hidden;">
                                 <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Small" Class="mr-3 mf-muted flex-shrink-0" />
                                 <div style="min-width: 0; display: flex; flex-direction: column; align-items: flex-start;">
                                     <MudText Typo="Typo.body2" Class="font-weight-bold" Color="@textColor" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Chapter @chapter.Id</MudText>
@@ -92,17 +92,16 @@
                                                 </MudMenuItem>
                                                 <MudMenuItem OnClick="@(() => OnDeleteChapter.InvokeAsync(chapter.Id))">
                                                     <div class="d-flex align-center">
-                                                        <MudIcon Icon="@Icons.Material.Filled.Cancel" Size="Size.Small" Color="Color.Warning" Class="mr-2" />
-                                                        <MudText Typo="Typo.body2" Color="Color.Warning">Cancel</MudText>
-                                                    </div>
-                                                </MudMenuItem>
-                                            }
-                                            else if (chapter.StatusCode == "UNDER_REVIEW")
-                                            {
-                                                <MudMenuItem OnClick="@(() => OnCancelSubmission.InvokeAsync(chapter.ChapterId))">
-                                                    <div class="d-flex align-center">
-                                                        <MudIcon Icon="@Icons.Material.Filled.Undo" Size="Size.Small" Color="Color.Warning" Class="mr-2" />
-                                                        <MudText Typo="Typo.body2">Cancel Submission</MudText>
+                                                        @if (chapter.IsPending)
+                                                        {
+                                                            <MudIcon Icon="@Icons.Material.Filled.DeleteOutline" Size="Size.Small" Color="Color.Warning" Class="mr-2" />
+                                                            <MudText Typo="Typo.body2" Color="Color.Warning">Discard</MudText>
+                                                        }
+                                                        else
+                                                        {
+                                                            <MudIcon Icon="@Icons.Material.Filled.Cancel" Size="Size.Small" Color="Color.Warning" Class="mr-2" />
+                                                            <MudText Typo="Typo.body2" Color="Color.Warning">Cancel</MudText>
+                                                        }
                                                     </div>
                                                 </MudMenuItem>
                                             }

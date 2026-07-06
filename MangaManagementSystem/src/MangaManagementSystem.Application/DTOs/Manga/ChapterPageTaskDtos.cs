@@ -62,7 +62,8 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         string TaskDescription,
         int PriorityLevel,
         decimal? CompensationAmount,
-        IReadOnlyList<Guid> PageRegionIds
+        IReadOnlyList<Guid> PageRegionIds,
+        DateTime? DueAtUtc = null
     );
 
     public record UpdateChapterPageTaskDto(

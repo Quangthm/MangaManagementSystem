@@ -164,12 +164,15 @@ namespace MangaManagementSystem.Application.Services
             string? versionNote,
             IEnumerable<CreatePageRegionDto> regionDtos,
             bool setAsCurrent,
+            Guid actorUserId,
+            string? actorRoleName,
             CancellationToken cancellationToken = default)
         {
             await _unitOfWork.BeginTransactionAsync(cancellationToken);
             try
             {
-                // 1. FileResource (metadata for the already-uploaded Cloudinary file).
+                // 1. FileResource (metadata for the already-uploaded Cloudinary file). The uploader is
+                //    taken from the trusted signed-in actor (BR-CP-008), not the client-supplied value.
                 var file = new FileResource
                 {
                     FilePurposeCode = fileDto.FilePurposeCode,
@@ -179,17 +182,20 @@ namespace MangaManagementSystem.Application.Services
                     ContentType = fileDto.ContentType,
                     FileSizeBytes = fileDto.FileSizeBytes,
                     Sha256Hash = fileDto.Sha256Hash,
-                    UploadedByUserId = fileDto.UploadedByUserId,
+                    UploadedByUserId = actorUserId,
                     UploadedAtUtc = DateTime.UtcNow
                 };
                 await _unitOfWork.FileResources.AddAsync(file);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                // 2. The version row.
+                // 2. The version row. The version number is computed server-side as max(existing) + 1
+                //    (BR-CP-009/010/011) so a stale client value cannot create a duplicate or gap.
+                var existing = await _unitOfWork.ChapterPageVersions.FindAsync(v => v.ChapterPageId == chapterPageId);
+                var nextVersionNo = (short)(existing.Select(v => (int)v.VersionNo).DefaultIfEmpty(0).Max() + 1);
                 var version = new ChapterPageVersion
                 {
                     ChapterPageId = chapterPageId,
-                    VersionNo = versionNo,
+                    VersionNo = nextVersionNo,
                     PageFileId = file.FileResourceId,
                     VersionNote = versionNote,
                     IsCurrentVersion = false
@@ -236,6 +242,25 @@ namespace MangaManagementSystem.Application.Services
                     await _unitOfWork.SaveChangesAsync(cancellationToken);
                 }
 
+                // 5. Audit (Command = write + audit): record the new version creation.
+                await _unitOfWork.AuditEvents.AddAsync(new AuditEvent
+                {
+                    OccurredAtUtc = DateTime.UtcNow,
+                    ActorUserId = actorUserId,
+                    ActorRoleName = actorRoleName,
+                    ActionCode = "VERSION_CREATED",
+                    EntityType = "ChapterPageVersion",
+                    EntityId = version.ChapterPageVersionId.ToString(),
+                    DetailJson = System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        chapter_page_id = chapterPageId,
+                        version_no = version.VersionNo,
+                        file_resource_id = file.FileResourceId,
+                        set_as_current = setAsCurrent
+                    })
+                });
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
                 await _unitOfWork.CommitTransactionAsync(cancellationToken);
                 return MapToDto(version);
             }
@@ -251,33 +276,52 @@ namespace MangaManagementSystem.Application.Services
             var versions = await _unitOfWork.ChapterPageVersions.FindAsync(v => v.ChapterPageId == chapterPageId);
             var allVersions = versions.ToList();
 
-            // First pass: unset the current version to clear the unique constraint
-            foreach (var version in allVersions.Where(v => v.IsCurrentVersion && v.ChapterPageVersionId != chapterPageVersionId))
-            {
-                version.IsCurrentVersion = false;
-                _unitOfWork.ChapterPageVersions.Update(version);
-            }
-            await _unitOfWork.SaveChangesAsync();
-
-            // Second pass: set the new current version
             var newCurrent = allVersions.FirstOrDefault(v => v.ChapterPageVersionId == chapterPageVersionId);
-            if (newCurrent != null)
+            if (newCurrent == null)
             {
+                return false;
+            }
+
+            // Both passes run in one transaction so the page is never left without a current version
+            // (BR-CP-012) if the second write fails. The two passes are still needed to satisfy the
+            // filtered unique index ux_chapter_page_version_current.
+            await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                // First pass: unset the previous current version to clear the unique constraint.
+                foreach (var version in allVersions.Where(v => v.IsCurrentVersion && v.ChapterPageVersionId != chapterPageVersionId))
+                {
+                    version.IsCurrentVersion = false;
+                    _unitOfWork.ChapterPageVersions.Update(version);
+                }
+                await _unitOfWork.SaveChangesAsync();
+
+                // Second pass: set the new current version.
                 newCurrent.IsCurrentVersion = true;
                 _unitOfWork.ChapterPageVersions.Update(newCurrent);
                 await _unitOfWork.SaveChangesAsync();
-            }
 
-            return true;
+                await _unitOfWork.CommitTransactionAsync();
+                return true;
+            }
+            catch
+            {
+                await _unitOfWork.RollbackTransactionAsync();
+                throw;
+            }
         }
 
         public async Task<CreatePageWithVersionResponseDto> CreatePageWithVersionAndFileAsync(
             CreatePageWithVersionRequestDto request,
+            Guid actorUserId,
+            string? actorRoleName,
             CancellationToken cancellationToken = default)
         {
             await _unitOfWork.BeginTransactionAsync(cancellationToken);
             try
             {
+                // The uploader is taken from the trusted signed-in actor (BR-CP-008), not the
+                // client-supplied file DTO value.
                 var file = new FileResource
                 {
                     FilePurposeCode = request.FileDto.FilePurposeCode,
@@ -287,7 +331,7 @@ namespace MangaManagementSystem.Application.Services
                     ContentType = request.FileDto.ContentType,
                     FileSizeBytes = request.FileDto.FileSizeBytes,
                     Sha256Hash = request.FileDto.Sha256Hash,
-                    UploadedByUserId = request.FileDto.UploadedByUserId,
+                    UploadedByUserId = actorUserId,
                     UploadedAtUtc = DateTime.UtcNow
                 };
                 await _unitOfWork.FileResources.AddAsync(file);
@@ -311,6 +355,25 @@ namespace MangaManagementSystem.Application.Services
                     IsCurrentVersion = true
                 };
                 await _unitOfWork.ChapterPageVersions.AddAsync(version);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                // Audit (Command = write + audit): record the new page + its first version.
+                await _unitOfWork.AuditEvents.AddAsync(new AuditEvent
+                {
+                    OccurredAtUtc = DateTime.UtcNow,
+                    ActorUserId = actorUserId,
+                    ActorRoleName = actorRoleName,
+                    ActionCode = "PAGE_CREATED",
+                    EntityType = "ChapterPage",
+                    EntityId = page.ChapterPageId.ToString(),
+                    DetailJson = System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        chapter_id = page.ChapterId,
+                        page_no = page.PageNo,
+                        chapter_page_version_id = version.ChapterPageVersionId,
+                        file_resource_id = file.FileResourceId
+                    })
+                });
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 await _unitOfWork.CommitTransactionAsync(cancellationToken);

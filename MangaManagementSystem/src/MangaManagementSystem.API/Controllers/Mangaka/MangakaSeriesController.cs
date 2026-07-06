@@ -17,7 +17,7 @@ using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
-namespace MangaManagementSystem.API.Controllers
+namespace MangaManagementSystem.API.Controllers.Mangaka
 {
     /// <summary>
     /// Thin HTTP boundary for Mangaka series workflows. Controllers only read the request,
