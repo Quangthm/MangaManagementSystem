@@ -5,6 +5,7 @@
 @using MangaManagementSystem.Domain.Interfaces
 @using MangaManagementSystem.Web.Services.Api
 @using MangaManagementSystem.Web.Components.Pages.Publication
+@using MangaManagementSystem.Web.Helpers
 @using System.Security.Claims
 @attribute [Authorize]
 @inject IPublicationScheduleApiClient ScheduleApiClient
@@ -97,18 +98,29 @@
             </div>
 
             <div class="mf-filters-bar">
-    <MudAutocomplete T="PublicationScheduleSeriesSuggestion"
-                     Value="_selectedSuggestion"
-                     ValueChanged="OnSeriesSelected"
-                     SearchFunc="@SearchSeriesAsync"
-                     ToStringFunc="@(s => s?.SeriesTitle ?? string.Empty)"
-                     Label="Search series..."
-                     Variant="Variant.Outlined" Clearable="true"
-                     ResetValueOnEmptyText="false" CoerceValue="false"
-                     DebounceInterval="300"
-                     Class="mf-search"
-                     Adornment="Adornment.Start"
-                     AdornmentIcon="@Icons.Material.Filled.Search" />
+    <div style="display:flex; gap:4px; align-items:center; min-width: 300px;" class="mf-search">
+        <MudAutocomplete T="PublicationScheduleSeriesSuggestion"
+                         @ref="_seriesAutocomplete"
+                         Value="_selectedSuggestion"
+                         ValueChanged="OnSeriesSelected"
+                         SearchFunc="@SearchSeriesAsync"
+                         ToStringFunc="@(s => s?.SeriesTitle ?? string.Empty)"
+                         Label="Search series..."
+                         Variant="Variant.Outlined" Clearable="true"
+                         ResetValueOnEmptyText="true" CoerceValue="true"
+                         DebounceInterval="300"
+                         Style="flex:1;"
+                         Adornment="Adornment.Start"
+                         AdornmentIcon="@Icons.Material.Filled.Search" />
+        @if (_selectedSeriesId.HasValue)
+        {
+            <MudIconButton Icon="@Icons.Material.Filled.FilterAltOff"
+                           Size="Size.Small"
+                           Color="Color.Default"
+                           OnClick="ClearSeriesFilterAsync"
+                           Title="Clear series filter" />
+        }
+    </div>
 
                 <MudSelect T="string?" Value="_selectedFrequency" ValueChanged="OnFrequencyFilterChanged"
                            Variant="Variant.Outlined" Label="Frequency" Clearable="true"
@@ -194,6 +206,7 @@
 </MudLayout>
 
 @code {
+    private MudAutocomplete<PublicationScheduleSeriesSuggestion>? _seriesAutocomplete;
     private bool _isInitialized;
     private bool _loading = true;
     private string? _error;
@@ -267,7 +280,25 @@
         _selectedSuggestion = suggestion;
         _selectedSeriesId = suggestion?.SeriesId;
         if (_isInitialized)
+        {
+            UpdateUrl();
             await LoadSchedule();
+        }
+    }
+
+    private async Task ClearSeriesFilterAsync()
+    {
+        _selectedSuggestion = null;
+        _selectedSeriesId = null;
+        UpdateUrl();
+        if (_isInitialized)
+            await LoadSchedule();
+    }
+
+    private void UpdateUrl()
+    {
+        var url = PublicationScheduleNavigation.BuildUrl(_selectedSeriesId, _anchorDate);
+        Nav.NavigateTo(url, replace: true);
     }
 
     private async Task LoadSchedule()

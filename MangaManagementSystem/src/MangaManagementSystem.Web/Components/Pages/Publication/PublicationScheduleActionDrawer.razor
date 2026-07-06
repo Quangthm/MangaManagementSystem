@@ -204,19 +204,27 @@
         {
             if (_allChapters.Count == 0)
             {
+                _selectedSeriesId = currentSeriesId;
                 _lastLoadedSeriesId = currentSeriesId;
                 await LoadChaptersAsync();
             }
             else if (currentSeriesId != _lastLoadedSeriesId)
             {
+                _selectedSeriesId = currentSeriesId;
                 _lastLoadedSeriesId = currentSeriesId;
                 if (_isEditor)
                 {
+                    _allChapters.Clear();
+                    _filteredChapters.Clear();
                     await LoadChaptersAsync();
                 }
                 else
                 {
-                    _selectedSeriesId = currentSeriesId;
+                    if (_selectedChapter != null && currentSeriesId.HasValue
+                        && _selectedChapter.SeriesId != currentSeriesId.Value)
+                    {
+                        _selectedChapter = null;
+                    }
                     ApplyFilters();
                     StateHasChanged();
                 }
