@@ -7,7 +7,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace MangaManagementSystem.API.Controllers
+namespace MangaManagementSystem.API.Controllers.Admin
 {
     [ApiController]
     [Authorize(Roles = "Admin")]
