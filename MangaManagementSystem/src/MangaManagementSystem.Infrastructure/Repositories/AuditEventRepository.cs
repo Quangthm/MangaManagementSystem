@@ -70,11 +70,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     0);
             }
 
-            var userIdD =
+            var normalizedUserId =
                 userId.ToString("D");
-
-            var userIdN =
-                userId.ToString("N");
 
             var query =
                 _context.AuditEvents
@@ -82,10 +79,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     .Include(item => item.ActorUser)
                     .Where(
                         item =>
-                            (item.EntityType == "Users"
-                                || item.EntityType == "USER")
-                            && (item.EntityId == userIdD
-                                || item.EntityId == userIdN));
+                            item.EntityType == "Users"
+                            && item.EntityId == normalizedUserId);
 
             var totalCount =
                 await query.CountAsync(

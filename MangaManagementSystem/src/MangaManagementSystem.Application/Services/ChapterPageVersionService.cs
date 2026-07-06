@@ -145,7 +145,7 @@ namespace MangaManagementSystem.Application.Services
                 ActorRoleName = actorRoleName,
                 ActionCode = "VERSION_IMAGE_DELETED",
                 EntityType = "ChapterPageVersion",
-                EntityId = versionId.ToString(),
+                EntityId = versionId.ToString("D"),
                 DetailJson = System.Text.Json.JsonSerializer.Serialize(new
                 {
                     version_no = version.VersionNo,

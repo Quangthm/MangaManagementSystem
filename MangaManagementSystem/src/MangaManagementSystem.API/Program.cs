@@ -1,4 +1,5 @@
-﻿using System.Text;
+using System.Text;
+using MangaManagementSystem.API.Services;
 using MangaManagementSystem.Application;
 using MangaManagementSystem.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -17,6 +18,7 @@ namespace MangaManagementSystem.API
             // business logic or SQL details.
             builder.Services.AddApplicationServices();
             builder.Services.AddInfrastructure(builder.Configuration);
+            builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 
             builder.Services.AddControllers();
             builder.Services.AddEndpointsApiExplorer();

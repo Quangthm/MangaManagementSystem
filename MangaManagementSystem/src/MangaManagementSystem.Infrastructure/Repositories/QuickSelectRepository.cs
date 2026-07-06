@@ -177,7 +177,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                             ActorRoleName = null,
                             ActionCode = "CHAPTER_PAGE_TASK_CREATED",
                             EntityType = "ChapterPageTask",
-                            EntityId = item.ChapterPageTaskId.ToString(),
+                            EntityId = item.ChapterPageTaskId.ToString("D"),
                             DetailJson = auditDetail
                         });
                     }

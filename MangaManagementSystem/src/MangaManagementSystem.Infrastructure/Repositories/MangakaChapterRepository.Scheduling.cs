@@ -111,7 +111,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                         ? "CHAPTER_PLANNED_RELEASE_DATE_SET"
                         : "CHAPTER_PLANNED_RELEASE_DATE_SET",
                     EntityType = "Chapter",
-                    EntityId = chapterId.ToString(),
+                    EntityId = chapterId.ToString("D"),
                     DetailJson = detailJson
                 });
 

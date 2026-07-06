@@ -1,8 +1,10 @@
 using System.Security.Claims;
 using MangaManagementSystem.Application.DTOs.Auth;
+using MangaManagementSystem.Web.Options;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.Extensions.Options;
 
 namespace MangaManagementSystem.Web.Services
 {
@@ -11,12 +13,17 @@ namespace MangaManagementSystem.Web.Services
     {
         private readonly IHttpContextAccessor
             _httpContextAccessor;
+        private readonly AuthenticationSessionOptions
+            _sessionOptions;
 
         public CustomAuthenticationStateProvider(
-            IHttpContextAccessor httpContextAccessor)
+            IHttpContextAccessor httpContextAccessor,
+            IOptions<AuthenticationSessionOptions> sessionOptions)
         {
             _httpContextAccessor =
                 httpContextAccessor;
+            _sessionOptions =
+                sessionOptions.Value;
         }
 
         public override Task<AuthenticationState>
@@ -86,8 +93,7 @@ namespace MangaManagementSystem.Web.Services
                 {
                     IsPersistent = true,
                     ExpiresUtc =
-                        DateTimeOffset.UtcNow
-                            .AddDays(14)
+                        ResolveCookieExpiresAt()
                 });
 
             NotifyAuthenticationStateChanged(
@@ -95,5 +101,16 @@ namespace MangaManagementSystem.Web.Services
                     new AuthenticationState(
                         principal)));
         }
-    }
+
+        private DateTimeOffset ResolveCookieExpiresAt()
+        {
+            if (_sessionOptions.CookieExpireMinutes <= 0)
+            {
+                throw new InvalidOperationException(
+                    "AuthenticationSession:CookieExpireMinutes must be greater than zero.");
+            }
+
+            return DateTimeOffset.UtcNow.AddMinutes(
+                _sessionOptions.CookieExpireMinutes);
+        }    }
 }

@@ -1,15 +1,11 @@
-﻿using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
 using MangaManagementSystem.API.Contracts;
+using MangaManagementSystem.API.Services;
 using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.Features.Auth.Queries;
 using MangaManagementSystem.Application.Features.Auth.Registration;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.Tokens;
-
 namespace MangaManagementSystem.API.Controllers
 {
     [ApiController]
@@ -19,17 +15,17 @@ namespace MangaManagementSystem.API.Controllers
     {
         private readonly ISender _sender;
         private readonly ILogger<AuthController> _logger;
-        private readonly IConfiguration
-            _configuration;
+        private readonly IJwtTokenService
+            _jwtTokenService;
 
         public AuthController(
             ISender sender,
             ILogger<AuthController> logger,
-            IConfiguration configuration)
+            IJwtTokenService jwtTokenService)
         {
             _sender = sender;
             _logger = logger;
-            _configuration = configuration;
+            _jwtTokenService = jwtTokenService;
         }
 
         [AllowAnonymous]
@@ -213,93 +209,22 @@ namespace MangaManagementSystem.API.Controllers
                         "We could not process Google sign-up right now. Please try again later."));
             }
         }
-
         private LoginResponse CreateLoginResponse(
             UserDto user,
             string roleName)
         {
-            var expiresAtUtc =
-                DateTime.UtcNow.AddDays(14);
-
-            var accessToken =
-                GenerateJwtToken(
+            var token =
+                _jwtTokenService.IssueToken(
                     user,
-                    roleName,
-                    expiresAtUtc);
+                    roleName);
 
             return new LoginResponse(
                 user,
                 roleName,
-                accessToken,
-                expiresAtUtc);
+                token.AccessToken,
+                token.ExpiresAtUtc);
         }
-
-        private string GenerateJwtToken(
-            UserDto user,
-            string roleName,
-            DateTime expiresAtUtc)
-        {
-            var jwtKey =
-                _configuration["Jwt:Key"]
-                ?? throw new InvalidOperationException(
-                    "Jwt:Key is missing.");
-
-            var jwtIssuer =
-                _configuration["Jwt:Issuer"]
-                ?? throw new InvalidOperationException(
-                    "Jwt:Issuer is missing.");
-
-            var jwtAudience =
-                _configuration["Jwt:Audience"]
-                ?? throw new InvalidOperationException(
-                    "Jwt:Audience is missing.");
-
-            var claims =
-                new List<Claim>
-                {
-                    new(
-                        JwtRegisteredClaimNames.Sub,
-                        user.UserId.ToString()),
-                    new(
-                        ClaimTypes.NameIdentifier,
-                        user.UserId.ToString()),
-                    new(
-                        ClaimTypes.Name,
-                        user.Username),
-                    new(
-                        ClaimTypes.Email,
-                        user.Email),
-                    new(
-                        ClaimTypes.Role,
-                        roleName),
-                    new(
-                        "user_id",
-                        user.UserId.ToString())
-                };
-
-            var signingKey =
-                new SymmetricSecurityKey(
-                    Encoding.UTF8.GetBytes(
-                        jwtKey));
-
-            var credentials =
-                new SigningCredentials(
-                    signingKey,
-                    SecurityAlgorithms.HmacSha256);
-
-            var token =
-                new JwtSecurityToken(
-                    issuer: jwtIssuer,
-                    audience: jwtAudience,
-                    claims: claims,
-                    expires: expiresAtUtc,
-                    signingCredentials: credentials);
-
-            return new JwtSecurityTokenHandler()
-                .WriteToken(token);
-        }
-
-        private static int
+private static int
             ResolveAuthenticationFailureStatus(
                 string? errorCode)
         {

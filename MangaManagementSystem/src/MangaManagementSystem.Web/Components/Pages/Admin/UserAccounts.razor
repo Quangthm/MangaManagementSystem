@@ -1,5 +1,6 @@
 @page "/admin/users"
 @using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Web
 @using MangaManagementSystem.Application.DTOs.Admin
 @using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Admin")]
@@ -44,7 +45,8 @@
                                   @bind-Value="_search"
                                   Label="Search username, email, or display name"
                                   Variant="Variant.Outlined"
-                                  Immediate="true" />
+                                  Immediate="true"
+                                  OnKeyDown="HandleSearchKeyDownAsync" />
                 </MudItem>
                 <MudItem xs="12" sm="6" md="3">
                     <MudSelect T="string"
@@ -376,6 +378,16 @@
 
     private bool IsCurrentUser(Guid userId) =>
         _currentUserId == userId;
+
+    private async Task HandleSearchKeyDownAsync(
+        KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter"
+            && !_isLoading)
+        {
+            await ApplyFiltersAsync();
+        }
+    }
 
     private async Task ApplyFiltersAsync()
     {

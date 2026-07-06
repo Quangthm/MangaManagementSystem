@@ -75,7 +75,7 @@ namespace MangaManagementSystem.Application.Services
                     ActorRoleName = actorRoleName,
                     ActionCode = "CHAPTER_DELETED",
                     EntityType = "Chapter",
-                    EntityId = id.ToString(),
+                    EntityId = id.ToString("D"),
                     DetailJson = System.Text.Json.JsonSerializer.Serialize(new
                     {
                         chapter_number_label = entity.ChapterNumberLabel,
@@ -110,7 +110,7 @@ namespace MangaManagementSystem.Application.Services
                     ActorRoleName = actorRoleName,
                     ActionCode = "CHAPTER_CANCELLED",
                     EntityType = "Chapter",
-                    EntityId = id.ToString(),
+                    EntityId = id.ToString("D"),
                     DetailJson = System.Text.Json.JsonSerializer.Serialize(new
                     {
                         chapter_number_label = entity.ChapterNumberLabel

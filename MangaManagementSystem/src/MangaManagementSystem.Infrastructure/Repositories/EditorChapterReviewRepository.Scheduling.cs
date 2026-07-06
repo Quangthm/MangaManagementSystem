@@ -162,7 +162,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     ActorRoleName = actorRoleName,
                     ActionCode = actionCode,
                     EntityType = "Chapter",
-                    EntityId = chapterId.ToString(),
+                    EntityId = chapterId.ToString("D"),
                     DetailJson = detailJson
                 };
 
@@ -248,7 +248,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     ActorRoleName = actorRoleName,
                     ActionCode = "CHAPTER_RESCHEDULED",
                     EntityType = "Chapter",
-                    EntityId = chapterId.ToString(),
+                    EntityId = chapterId.ToString("D"),
                     DetailJson = detailJson
                 });
 
@@ -349,7 +349,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     ActorRoleName = actorRoleName,
                     ActionCode = "CHAPTER_PLANNED_RELEASE_DATE_SET",
                     EntityType = "Chapter",
-                    EntityId = chapterId.ToString(),
+                    EntityId = chapterId.ToString("D"),
                     DetailJson = detailJson
                 });
 

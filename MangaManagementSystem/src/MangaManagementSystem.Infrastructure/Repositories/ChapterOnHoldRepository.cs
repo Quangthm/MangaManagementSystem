@@ -89,7 +89,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     ActorRoleName = actorRoleName,
                     ActionCode = "CHAPTER_PUT_ON_HOLD",
                     EntityType = "Chapter",
-                    EntityId = chapterId.ToString(),
+                    EntityId = chapterId.ToString("D"),
                     DetailJson = detailJson
                 });
 

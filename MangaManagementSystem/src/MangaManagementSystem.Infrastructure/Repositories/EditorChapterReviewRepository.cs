@@ -373,7 +373,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     ActorRoleName = actorRoleName,
                     ActionCode = "CHAPTER_EDITORIAL_REVIEW_RECORDED",
                     EntityType = "Chapter",
-                    EntityId = chapterId.ToString(),
+                    EntityId = chapterId.ToString("D"),
                     DetailJson = detailJson
                 };
 

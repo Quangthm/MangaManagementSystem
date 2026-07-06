@@ -202,7 +202,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     ActorRoleName = MangakaRoleName,
                     ActionCode = "CHAPTER_SUBMITTED_FOR_EDITORIAL_REVIEW",
                     EntityType = "Chapter",
-                    EntityId = chapterId.ToString(),
+                    EntityId = chapterId.ToString("D"),
                     DetailJson = detailJson
                 };
 
@@ -287,7 +287,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     ActorRoleName = "Mangaka",
                     ActionCode = "CHAPTER_CANCELLED",
                     EntityType = "Chapter",
-                    EntityId = chapterId.ToString(),
+                    EntityId = chapterId.ToString("D"),
                     DetailJson = System.Text.Json.JsonSerializer.Serialize(new
                     {
                         chapter_number_label = chapter.ChapterNumberLabel
