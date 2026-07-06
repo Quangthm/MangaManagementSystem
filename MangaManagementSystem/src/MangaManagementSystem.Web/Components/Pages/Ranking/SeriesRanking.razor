@@ -37,17 +37,20 @@
 
             <RankingStatsGrid Items="@Stats" />
 
-            <SeriesVoteInputSection Rows="@_inputRows"
-                                    SortOptions="@_sortOptions"
-                                    SelectedPublicationWeek="@SelectedPublicationPeriodLabel"
-                                    Search="@_inputSearch"
-                                    SearchChanged="OnInputSearchChangedAsync"
-                                    Sort="@_inputSort"
-                                    SortChanged="OnInputSortChangedAsync"
-                                    CanManageRankingInput="@_canManageRankingInput"
-                                    Loading="@_loadingRows"
-                                    AddInputClicked="OpenInsertDialog"
-                                    RowSaveRequested="OnUpdateVoteInputAsync" />
+            @if (_canManageRankingInput)
+            {
+                <SeriesVoteInputSection Rows="@_inputRows"
+                                        SortOptions="@_sortOptions"
+                                        SelectedPublicationWeek="@SelectedPublicationPeriodLabel"
+                                        Search="@_inputSearch"
+                                        SearchChanged="OnInputSearchChangedAsync"
+                                        Sort="@_inputSort"
+                                        SortChanged="OnInputSortChangedAsync"
+                                        CanManageRankingInput="@_canManageRankingInput"
+                                        Loading="@_loadingRows"
+                                        AddInputClicked="OpenInsertDialog"
+                                        RowSaveRequested="OnUpdateVoteInputAsync" />
+            }
 
             <RankingResultsSection Rows="@_rankingRows"
                                    SortOptions="@_sortOptions"
@@ -61,13 +64,16 @@
                                     SelectedPublicationWeek="@SelectedPublicationPeriodLabel" />
         </MudStack>
 
-        <RankingInputDialog Open="@_insertDialogOpen"
-                            OpenChanged="OnInsertDialogOpenChanged"
-                            SelectedPublicationPeriodId="@_selectedPublicationPeriodId"
-                            PublicationPeriods="@_publicationPeriods"
-                            SearchSeriesAsync="SearchSeriesAsync"
-                            Saved="OnCreateVoteInputAsync"
-                            Saving="@_savingInput" />
+        @if (_canManageRankingInput)
+        {
+            <RankingInputDialog Open="@_insertDialogOpen"
+                                OpenChanged="OnInsertDialogOpenChanged"
+                                SelectedPublicationPeriodId="@_selectedPublicationPeriodId"
+                                PublicationPeriods="@_publicationPeriods"
+                                SearchSeriesAsync="SearchSeriesAsync"
+                                Saved="OnCreateVoteInputAsync"
+                                Saving="@_savingInput" />
+        }
     </div>
 </RankingLayout>
 
@@ -126,7 +132,9 @@
 
         _canManageRankingInput =
             user.IsInRole("Editorial Board Member")
-            || user.IsInRole("Editorial Board Chief");
+            || user.IsInRole("Editorial Board Chief")
+            || user.IsInRole("Board Member")
+            || user.IsInRole("Board Chief");
 
         await LoadPeriodsAsync();
     }
@@ -274,6 +282,11 @@
 
     private void OpenInsertDialog()
     {
+        if (!_canManageRankingInput)
+        {
+            return;
+        }
+
         _insertDialogOpen = true;
     }
 
@@ -307,6 +320,12 @@
 
     private async Task OnCreateVoteInputAsync(InsertFormState form)
     {
+        if (!_canManageRankingInput)
+        {
+            Snackbar.Add("Only Editorial Board Member and Editorial Board Chief can manage ranking input.", Severity.Error);
+            return;
+        }
+
         if (form.Series is null
             || !form.ReadingCount.HasValue
             || !form.RatingCount.HasValue
@@ -351,6 +370,12 @@
 
     private async Task OnUpdateVoteInputAsync(SeriesVoteInputUpdateRequestUi request)
     {
+        if (!_canManageRankingInput)
+        {
+            Snackbar.Add("Only Editorial Board Member and Editorial Board Chief can manage ranking input.", Severity.Error);
+            return;
+        }
+
         if (_usingSampleData)
         {
             UpdateSampleVoteInput(request);

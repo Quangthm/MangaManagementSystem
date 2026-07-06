@@ -1,39 +1,20 @@
 ﻿@namespace MangaManagementSystem.Web.Components.Layouts
 
 <RoleSidebarLayout SidebarCssClass="mf-ranking-sidebar"
-                   NavTitle="Editorial Board"
+                   NavTitle="Ranking"
                    OverviewHref="/dashboard"
                    NavItems="_navItems">
-    <ExtraNavContent>
-        <div class="mf-nav-title mt-3">Not Available</div>
-
-        <div class="mf-nav-link disabled">
-            Series Rankings (Not available)
-        </div>
-
-        <div class="mf-nav-link disabled">
-            Performance Tracking (Not available)
-        </div>
-
-        <div class="mf-nav-link disabled">
-            Cancellation Risk (Not available)
-        </div>
-
-        <div class="mf-nav-link disabled">
-            Board Decisions (Not available)
-        </div>
-    </ExtraNavContent>
     <ChildContent>
         @ChildContent
     </ChildContent>
 </RoleSidebarLayout>
 
 @code {
-    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
 
     private static readonly IReadOnlyList<RoleSidebarLayout.RoleSidebarNavItem> _navItems =
     [
-        new("/ranking", "Dashboard", "", true),
-        new("/board-decision", "Board Decision Workspace"),
+        new("/ranking", "Ranking", "", true),
     ];
 }
