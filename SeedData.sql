@@ -101,3 +101,38 @@ VALUES
 (N'Tragic Past', N'The story includes a character with a painful or traumatic backstory.'),
 (N'Moral Ambiguity', N'The story includes difficult choices, gray morality, or unclear right and wrong.');
 GO
+INSERT INTO manga.PublicationPeriod (
+    period_name,
+    period_type_code,
+    period_start_date,
+    period_end_date
+)
+VALUES
+-- Yearly period
+(N'2026_YEAR', N'YEARLY', '2026-01-01', '2026-12-31'),
+
+-- Monthly periods
+(N'2026_JUNE', N'MONTHLY', '2026-06-01', '2026-06-30'),
+(N'2026_JULY', N'MONTHLY', '2026-07-01', '2026-07-31'),
+(N'2026_AUGUST', N'MONTHLY', '2026-08-01', '2026-08-31'),
+
+-- June weekly periods
+(N'2026_JUNE_WEEK1', N'WEEKLY', '2026-06-01', '2026-06-07'),
+(N'2026_JUNE_WEEK2', N'WEEKLY', '2026-06-08', '2026-06-14'),
+(N'2026_JUNE_WEEK3', N'WEEKLY', '2026-06-15', '2026-06-21'),
+(N'2026_JUNE_WEEK4', N'WEEKLY', '2026-06-22', '2026-06-28'),
+
+-- July weekly periods
+-- 2026-06-29 to 2026-07-05 has 5 days in July, so it belongs to July.
+(N'2026_JULY_WEEK1', N'WEEKLY', '2026-06-29', '2026-07-05'),
+(N'2026_JULY_WEEK2', N'WEEKLY', '2026-07-06', '2026-07-12'),
+(N'2026_JULY_WEEK3', N'WEEKLY', '2026-07-13', '2026-07-19'),
+(N'2026_JULY_WEEK4', N'WEEKLY', '2026-07-20', '2026-07-26'),
+-- 2026-07-27 to 2026-08-02 has 5 days in July, so it belongs to July.
+(N'2026_JULY_WEEK5', N'WEEKLY', '2026-07-27', '2026-08-02'),
+
+-- August weekly periods
+(N'2026_AUGUST_WEEK1', N'WEEKLY', '2026-08-03', '2026-08-09'),
+(N'2026_AUGUST_WEEK2', N'WEEKLY', '2026-08-10', '2026-08-16'),
+(N'2026_AUGUST_WEEK3', N'WEEKLY', '2026-08-17', '2026-08-23'),
+(N'2026_AUGUST_WEEK4', N'WEEKLY', '2026-08-24', '2026-08-30');

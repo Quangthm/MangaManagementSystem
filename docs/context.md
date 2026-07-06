@@ -4,7 +4,7 @@
 > **Source of truth:** This context is aligned with the latest `business-rules.md`, `functional-requirements.md`, and `user-stories.md` files.  
 > **Important warning:** This is **not** a payroll, salary, public reader, e-commerce, or full drawing application. Do **not** add modules such as salary calculation, payment processing, public reader accounts, monetization, or full professional drawing tools unless the team leader explicitly changes the scope.
 
-> **Latest scheduling alignment — 2026-07-02:** Publication scheduling is chapter-level. `SCHEDULED` applies to `Chapter.status_code`, not `Series.status_code`; approved chapters with valid planned release dates become `SCHEDULED`; scheduled/on-hold chapters lock Mangaka and page/content mutation workflows; Tantou Editors may reschedule within allowed publication-period rules or place scheduled chapters `ON_HOLD` with a required reason.
+> **Latest scheduling alignment — 2026-07-04:** Publication scheduling is chapter-level and advisory. `SCHEDULED` applies to `Chapter.status_code`, not `Series.status_code`; `Series.publication_frequency_code` suggests defaults and warnings but no longer hard-blocks scheduling. Mangaka and Tantou Editors may schedule/reschedule future planned release dates when status/permissions allow; Editors remain the final release enforcer, on-hold recovery requires a new planned date, and automatic hold for overdue chapters is deferred.
 
 ---
 
@@ -310,11 +310,11 @@ The project uses **permission-based actor grouping** for shared features and rol
 - Chapter statuses include `DRAFT`, `UNDER_REVIEW`, `REVISION_REQUESTED`, `APPROVED`, `SCHEDULED`, `RELEASED`, `ON_HOLD`, and `CANCELLED`.
 - `planned_release_date` is optional until scheduling.
 - Scheduling is chapter-level. `SCHEDULED` is a chapter status and must not be applied to `Series.status_code`.
-- A chapter can be `SCHEDULED` only if it has a planned release date.
-- If an `APPROVED` chapter receives a valid planned release date, it becomes `SCHEDULED`.
+- A chapter can be `SCHEDULED` only if it has a planned release date that is not in the past.
+- If an `APPROVED` chapter receives a future planned release date, it becomes `SCHEDULED`.
 - A chapter can be `RELEASED` only if it has `released_at_utc`.
 - Editors may place a `SCHEDULED` chapter `ON_HOLD` with a valid operational/editorial reason.
-- `ON_HOLD` recovery is intentionally deferred to a later workflow.
+- Returning an `ON_HOLD` chapter to `SCHEDULED` requires a new future planned release date.
 - `created_by_user_id` identifies the creator.
 - `updated_at_utc` is for operational display, not full transition history.
 
@@ -414,7 +414,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 - Page annotations support review; `ChapterEditorialReview` stores final chapter-level decision.
 - Creating a review updates chapter status according to decision and should be audit-logged.
 - If an editor approves a chapter that has no planned release date, the chapter becomes `APPROVED`.
-- If an editor approves a chapter that already has a valid planned release date, the chapter becomes `SCHEDULED`.
+- If an editor approves a chapter that already has a future planned release date, the chapter becomes `SCHEDULED`.
 
 ### Cancellation
 
@@ -430,7 +430,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 
 ## 4.12 Publication Planning
 
-- Detailed publication planning is chapter-level through `Chapter.planned_release_date` and `Chapter.status_code`.
+- Detailed publication planning is chapter-level through `Chapter.planned_release_date`, `Chapter.released_at_utc`, and `Chapter.status_code`.
 - `SCHEDULED` is a chapter status, not a series status.
 - Series-level publication frequency is only the current high-level label stored as `Series.publication_frequency_code`.
 - Frequency values may be `WEEKLY`, `MONTHLY`, `IRREGULAR`, or `NULL`.
@@ -443,8 +443,16 @@ The project uses **permission-based actor grouping** for shared features and rol
 - After a board decision has set the official frequency, Mangaka may request a publication frequency change by sending an in-app notification to the Editorial Board Chief; MVP does not require a separate official frequency-change request table.
 - Editorial Board Chief may directly change `Series.publication_frequency_code` only after providing a required reason that must be written to the audit log.
 - The MVP does not store publication frequency history.
-- Delayed chapters can be derived from planned release date rather than a separate delay status.
-- `PublicationPeriod` stores business calendar periods for weekly, monthly, and yearly scheduling/ranking buckets.
+- `Series.publication_frequency_code` is advisory for default date suggestions, calendar context, and warnings. It must not hard-block normal chapter scheduling.
+- Mangaka and Tantou Editors may set or reschedule chapter planned release dates when chapter status and permissions allow it.
+- Planned release dates must not be in the past.
+- The system may warn when a selected date does not match the advisory frequency pattern, but authorized users may continue because release timing is ultimately coordinated by the team.
+- Multiple chapters may share the same planned release date to support bulk releases, catch-up releases, campaigns, breaks, vacations, and other editorial exceptions.
+- Chapter schedule coordination between Mangaka and Editor is treated as an out-of-system team process in MVP. The system provides audit visibility and may show active contributor emails/contact details to authorized series contributors, but it does not resolve scheduling disputes.
+- Weekly default suggestions may use the same weekday in the next week.
+- Monthly default suggestions may use the same day number in the next month, or the last valid day of the next month.
+- `IRREGULAR` and `NULL` frequency do not require strict default dates.
+- `PublicationPeriod` stores business calendar periods for weekly, monthly, and yearly ranking/reporting buckets and advisory schedule display.
 - Weekly publication periods start on Monday and end on Sunday.
 - A weekly publication period belongs to the month that contains at least four days of that Monday-Sunday week, so a week may start in the previous month while still being named as the next month's week.
 - Monthly periods follow first-day-to-last-day calendar month boundaries.
@@ -453,19 +461,11 @@ The project uses **permission-based actor grouping** for shared features and rol
 - For scheduled chapters, the publication business date is usually `Chapter.planned_release_date`.
 - For released chapters, the release business date is derived by converting `Chapter.released_at_utc` to Vietnam publication time (UTC+7) and taking the date part.
 - Ranking and publication-period reports must not use `CAST(released_at_utc AS DATE)` in UTC as the business period date.
-- Scheduling validation finds the latest non-cancelled chapter in the same series with a planned release date, excluding the current chapter.
-- If a previous planned non-cancelled chapter exists, a `WEEKLY` series must schedule the current chapter inside the next weekly `PublicationPeriod` after the previous chapter's weekly period.
-- If a previous planned non-cancelled chapter exists, a `MONTHLY` series must schedule the current chapter inside the next monthly `PublicationPeriod` after the previous chapter's monthly period.
-- If no previous planned non-cancelled chapter exists, the current chapter is treated as the first planned chapter.
-- For the first planned chapter of a `WEEKLY` series, the planned release date may be inside the current weekly `PublicationPeriod` or the next weekly `PublicationPeriod`.
-- For the first planned chapter of a `MONTHLY` series, the planned release date must be inside the current monthly `PublicationPeriod`.
-- `IRREGULAR` series do not enforce next-week or next-month planned release boundaries.
-- If official frequency is `NULL`, the system may allow scheduling without strict weekly/monthly validation unless a later workflow defines a stricter rule.
-- Weekly default scheduling may use previous planned release date + 7 days, while monthly default scheduling may use the same day number in the next month or the last day of that month when needed.
-- Late actual release timestamps do not automatically shift future planned schedule periods unless an authorized user reschedules the chapter.
 - When a chapter is `SCHEDULED`, Mangaka and page/content mutation workflows are locked.
-- Tantou Editors may reschedule a `SCHEDULED` chapter within the allowed period rule or place it `ON_HOLD` with a required reason.
-- Recovery from `ON_HOLD`, release automation, and public release visibility are deferred to later tasks.
+- `ON_HOLD` means the previous active release plan is suspended. Returning from `ON_HOLD` to `SCHEDULED` requires setting a new future planned release date.
+- Tantou Editors may put a scheduled chapter `ON_HOLD` with a required reason and may release eligible chapters as the final publication enforcement action.
+- Releasing a chapter sets `released_at_utc` to the current UTC timestamp. If `planned_release_date` is missing, the system sets it to the current publication business date; if it already exists, it is preserved for planned-versus-actual comparison.
+- Auto-hold for overdue scheduled chapters, release automation, and public release visibility are deferred to later tasks.
 
 ## 4.13 Ranking and Series Vote Input
 

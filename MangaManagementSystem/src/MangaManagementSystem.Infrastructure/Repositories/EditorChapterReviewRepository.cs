@@ -240,6 +240,9 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 pageCount,
                 chapter.CreatedAtUtc,
                 chapter.CreatedByUser?.DisplayName,
+                chapter.PlannedReleaseDate,
+                chapter.ReleasedAtUtc,
+                chapter.UpdatedAtUtc,
                 pageDetails,
                 annotations,
                 reviewHistory);

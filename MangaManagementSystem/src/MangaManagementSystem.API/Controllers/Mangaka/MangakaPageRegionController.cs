@@ -54,6 +54,38 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             }
         }
 
+        /// <summary>POST /api/mangaka/regions/version/{versionId}/ensure-full-page — find or create the whole-page region.</summary>
+        [HttpPost("version/{versionId:guid}/ensure-full-page")]
+        public async Task<IActionResult> EnsureFullPageRegionAsync(Guid versionId)
+        {
+            if (versionId == Guid.Empty)
+            {
+                return BadRequest("Invalid version ID.");
+            }
+
+            if (!TryResolveActorUserId(out Guid actorUserId))
+            {
+                return BadRequest("Could not identify the requesting user. Please sign in again.");
+            }
+
+            try
+            {
+                var region = await _regionService.EnsureFullPageRegionAsync(versionId, actorUserId, HttpContext.RequestAborted);
+                return Ok(region);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error ensuring full-page region on version {VersionId}.", versionId);
+                return Problem(
+                    detail: "Could not create a full-page region right now. Please try again later.",
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
+        }
+
         /// <summary>PUT /api/mangaka/regions/version/{versionId}/bulk-replace — replace all regions of a version.</summary>
         [HttpPut("version/{versionId:guid}/bulk-replace")]
         public async Task<IActionResult> BulkReplaceAsync(Guid versionId, [FromBody] BulkReplaceRegionsRequest? request)
