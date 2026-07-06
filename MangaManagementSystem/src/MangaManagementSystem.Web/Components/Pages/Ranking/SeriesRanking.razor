@@ -1,45 +1,226 @@
 @page "/ranking"
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
 @attribute [Authorize(Roles = "Mangaka,Tantou Editor,Editorial Board Member,Editorial Board Chief,Admin")]
-@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Series Ranking Management</PageTitle>
 
 <RankingLayout>
+    <RankingStyles />
+
     <div class="mf-page">
-        <div class="mf-page-header">
-            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Series Ranking & Performance Dashboard</MudText>
-            <MudText Typo="Typo.body1" Class="mf-muted">Decision support tool for Editorial Board and Tantou Editors</MudText>
-        </div>
+        <MudStack Spacing="4" Class="ranking-page">
+            <RankingHero PublicationWeeks="_publicationWeeks"
+                         SelectedPublicationWeek="_selectedPublicationWeek"
+                         SelectedPublicationWeekChanged="OnPublicationWeekChanged" />
 
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-6">Decision Support Alert: low-performing series may require board review.</MudAlert>
-        <MudGrid Class="mb-6"><MudItem xs="12" md="3"><StatCard Label="Total Serialized" Value="24" /></MudItem><MudItem xs="12" md="3"><StatCard Label="Series at Risk" Value="3" /></MudItem><MudItem xs="12" md="3"><StatCard Label="Avg Performance" Value="87.2%" /></MudItem><MudItem xs="12" md="3"><StatCard Label="Total Poll Votes" Value="156.2K" /></MudItem></MudGrid>
-        <MudPaper Class="pa-5 mf-card" Elevation="0">
-            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4"><div><MudText Typo="Typo.h6">Weekly reader poll results and status tracking</MudText><MudText class="mf-muted">@SelectedWeek</MudText></div><MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ShowUpdate = true)">Update Weekly Poll Results</MudButton></MudStack>
-            <MudTable Items="SeriesData" Hover="true"><HeaderContent><MudTh>#</MudTh><MudTh>Series</MudTh><MudTh>Total Votes</MudTh><MudTh>Performance</MudTh><MudTh>Risk</MudTh><MudTh>Action</MudTh></HeaderContent><RowTemplate><MudTd>@context.Rank</MudTd><MudTd>@context.Series</MudTd><MudTd>@context.Votes</MudTd><MudTd>@context.Performance%</MudTd><MudTd><MudChip T="string" Color="@context.Color" Size="Size.Small">@context.Risk</MudChip></MudTd><MudTd>@if(context.Risk=="Danger Zone"){<MudButton Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled" Href="/board-decision">Prepare Board Review</MudButton>}</MudTd></RowTemplate></MudTable>
-        </MudPaper>
-        @if (ShowUpdate)
-        {
-            <MudPaper Class="pa-5 mf-card mt-6" Elevation="0"><MudText Typo="Typo.h6" Class="font-weight-bold mb-3">Update Weekly Poll Results</MudText><MudGrid><MudItem xs="12" md="6"><MudTextField Label="Week" @bind-Value="PollWeek" Variant="Variant.Outlined" /></MudItem><MudItem xs="12" md="6"><MudTextField Label="Series" @bind-Value="PollSeries" Variant="Variant.Outlined" /></MudItem><MudItem xs="12" md="6"><MudTextField Label="Total Votes" @bind-Value="PollVotes" Variant="Variant.Outlined" /></MudItem><MudItem xs="12" md="6"><MudTextField Label="Rank" @bind-Value="PollRank" Variant="Variant.Outlined" /></MudItem><MudItem xs="12"><MudTextField Label="Notes" @bind-Value="PollNotes" Variant="Variant.Outlined" Lines="3" /></MudItem></MudGrid><MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="@(() => ShowUpdate = false)">Save Update</MudButton></MudPaper>
-        }
+            <RankingStatsGrid Items="Stats" />
 
+            <SeriesVoteInputSection Rows="FilteredInputRows"
+                                    SortOptions="_sortOptions"
+                                    SelectedPublicationWeek="_selectedPublicationWeek"
+                                    Search="_inputSearch"
+                                    SearchChanged="OnInputSearchChanged"
+                                    Sort="_inputSort"
+                                    SortChanged="OnInputSortChanged"
+                                    CanManageRankingInput="_canManageRankingInput"
+                                    AddInputClicked="OpenInsertDialog"
+                                    RowChanged="RefreshAfterRowChanged" />
+
+            <RankingResultsSection Rows="FilteredRankingRows"
+                                   SortOptions="_sortOptions"
+                                   SelectedPublicationWeek="_selectedPublicationWeek"
+                                   Search="_rankingSearch"
+                                   SearchChanged="OnRankingSearchChanged"
+                                   Sort="_rankingSort"
+                                   SortChanged="OnRankingSortChanged" />
+
+            <TopRankedSeriesSection Rows="RankingRows"
+                                    SelectedPublicationWeek="_selectedPublicationWeek" />
+        </MudStack>
+
+        <RankingInputDialog Open="_insertDialogOpen"
+                            OpenChanged="OnInsertDialogOpenChanged"
+                            SelectedPublicationWeek="_selectedPublicationWeek"
+                            PublicationWeeks="_publicationWeeks"
+                            Catalog="_catalog"
+                            ExistingRows="_inputRows"
+                            Saved="OnInsertSaved" />
     </div>
 </RankingLayout>
 
 @code {
+    private readonly List<string> _publicationWeeks =
+    [
+        "Week 20 2026",
+        "Week 21 2026",
+        "Week 22 2026",
+        "Week 23 2026",
+        "Week 24 2026"
+    ];
 
-    private string SelectedWeek { get; set; } = "Week 21 - May 2026";
-    private bool ShowUpdate { get; set; }
-    private string PollWeek { get; set; } = "Week 21 - May 2026";
-    private string PollSeries { get; set; } = string.Empty;
-    private string PollVotes { get; set; } = string.Empty;
-    private string PollRank { get; set; } = string.Empty;
-    private string PollNotes { get; set; } = string.Empty;
-    private readonly List<RankingRow> SeriesData = new()
+    private readonly List<SortOption> _sortOptions =
+    [
+        new("rank_asc", "Rank (Ascending)"),
+        new("rank_desc", "Rank (Descending)"),
+        new("title_asc", "Series Title (A–Z)"),
+        new("title_desc", "Series Title (Z–A)"),
+        new("score_desc", "Ranking Score (Highest First)"),
+        new("score_asc", "Ranking Score (Lowest First)"),
+        new("average_rating_desc", "Average Rating (Highest First)"),
+        new("average_rating_asc", "Average Rating (Lowest First)"),
+        new("reading_count_desc", "Reading Count (Highest First)"),
+        new("reading_count_asc", "Reading Count (Lowest First)"),
+        new("rating_count_desc", "Rating Count (Highest First)"),
+        new("rating_count_asc", "Rating Count (Lowest First)")
+    ];
+
+    private readonly List<CatalogEntry> _catalog =
+    [
+        new(Guid.Parse("11111111-1111-1111-1111-111111111111"), "Steel Horizon", "https://images.unsplash.com/photo-1612178537253-bccd437b730e?w=240&h=320&fit=crop&auto=format"),
+        new(Guid.Parse("22222222-2222-2222-2222-222222222222"), "Void Chronicles", "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=240&h=320&fit=crop&auto=format"),
+        new(Guid.Parse("33333333-3333-3333-3333-333333333333"), "Phantom Academy", "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=240&h=320&fit=crop&auto=format"),
+        new(Guid.Parse("44444444-4444-4444-4444-444444444444"), "Neon Wanderer", "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=240&h=320&fit=crop&auto=format"),
+        new(Guid.Parse("55555555-5555-5555-5555-555555555555"), "Crimson Tide Rising", "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=240&h=320&fit=crop&auto=format"),
+        new(Guid.Parse("66666666-6666-6666-6666-666666666666"), "The Last Archive", "https://images.unsplash.com/photo-1545569341-9eb8b30979d9?w=240&h=320&fit=crop&auto=format"),
+        new(Guid.Parse("77777777-7777-7777-7777-777777777777"), "Shadow Protocol", "https://images.unsplash.com/photo-1596727147705-61a532a659bd?w=240&h=320&fit=crop&auto=format"),
+        new(Guid.Parse("88888888-8888-8888-8888-888888888888"), "Sacred Bloom", "https://images.unsplash.com/photo-1553481187-be93c21490a9?w=240&h=320&fit=crop&auto=format"),
+        new(Guid.Parse("99999999-9999-9999-9999-999999999999"), "Iron Petal", "https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=240&h=320&fit=crop&auto=format"),
+        new(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), "Lunar Ascent", "https://images.unsplash.com/photo-1446941611757-91d2c3bd3d45?w=240&h=320&fit=crop&auto=format")
+    ];
+
+    private List<SeriesInputRow> _inputRows = [];
+    private string _selectedPublicationWeek = "Week 23 2026";
+    private string _inputSearch = string.Empty;
+    private string _rankingSearch = string.Empty;
+    private string _inputSort = "rank_asc";
+    private string _rankingSort = "rank_asc";
+    private bool _insertDialogOpen;
+    private bool _canManageRankingInput;
+
+    protected override async Task OnInitializedAsync()
     {
-        new(1, "Crimson Moon Academy", "23,450", 98, "Stable", Color.Success),
-        new(2, "Neon Samurai Path", "21,900", 94, "Stable", Color.Success),
-        new(9, "Shadow Garden Tales", "4,123", 42, "Danger Zone", Color.Error),
-        new(10, "Phoenix Rising Team", "3,867", 39, "Danger Zone", Color.Error)
-    };
-    private record RankingRow(int Rank, string Series, string Votes, int Performance, string Risk, Color Color);
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
 
+        _canManageRankingInput = user.IsInRole("Editorial Board Member") || user.IsInRole("Editorial Board Chief");
+
+        SeedRows();
+    }
+
+    private IReadOnlyList<SeriesInputRow> FilteredInputRows => RankingUiHelper.SortInputRows(
+            _inputRows.Where(row => RankingUiHelper.Matches(row.Title, _inputSearch)),
+            _inputSort)
+        .ToList();
+
+    private IReadOnlyList<RankingRow> RankingRows => RankingUiHelper.BuildRankingRows(_inputRows);
+
+    private IReadOnlyList<RankingRow> FilteredRankingRows => RankingUiHelper.SortRankingRows(
+            RankingRows.Where(row => RankingUiHelper.Matches(row.Title, _rankingSearch)),
+            _rankingSort)
+        .ToList();
+
+    private IReadOnlyList<RankingStatItem> Stats =>
+    [
+        new("Total ranked series", _inputRows.Count.ToString(CultureInfo.InvariantCulture), Icons.Material.Filled.BarChart, Color.Primary),
+        new("Average rating", AverageRatingText, Icons.Material.Filled.Star, Color.Warning),
+        new("Highest score", HighestScoreText, Icons.Material.Filled.EmojiEvents, Color.Secondary),
+        new("Most read series", MostReadSeriesTitle, Icons.Material.Filled.MenuBook, Color.Success, "text-truncate")
+    ];
+
+    private string AverageRatingText => _inputRows.Count == 0
+        ? "0.00"
+        : _inputRows.Average(row => row.AverageRating).ToString("0.00", CultureInfo.InvariantCulture);
+
+    private string HighestScoreText => RankingRows.Count == 0
+        ? "0.0"
+        : RankingRows.Max(row => row.Score).ToString("0.0", CultureInfo.InvariantCulture);
+
+    private string MostReadSeriesTitle => _inputRows.Count == 0
+        ? "—"
+        : _inputRows.MaxBy(row => row.ReadingCount)?.Title ?? "—";
+
+    private void SeedRows()
+    {
+        var now = DateTime.UtcNow;
+        _inputRows =
+        [
+            CreateSeedRow(0, 48200, 12840, 9.1M, "Editorial Board — Week 23", now.AddHours(-7), now.AddHours(-2)),
+            CreateSeedRow(1, 61050, 18990, 8.7M, "Editorial Board — Week 23", now.AddHours(-6), now.AddHours(-2.1)),
+            CreateSeedRow(2, 29400, 6210, 7.4M, "Editorial Board — Week 23", now.AddHours(-5.5), now.AddHours(-2.4)),
+            CreateSeedRow(3, 55700, 15480, 8.9M, "Editorial Board — Week 23", now.AddHours(-5), now.AddHours(-2.6)),
+            CreateSeedRow(4, 21300, 5480, 6.8M, "Editorial Board — Week 23", now.AddHours(-4.6), now.AddHours(-3)),
+            CreateSeedRow(5, 14800, 3120, 5.9M, "Editorial Board — Week 23", now.AddHours(-4), now.AddHours(-3.3)),
+            CreateSeedRow(6, 38900, 9870, 8.2M, "Editorial Board — Week 23", now.AddHours(-3.4), now.AddHours(-3.7)),
+            CreateSeedRow(7, 17600, 4350, 7.1M, "Editorial Board — Week 23", now.AddHours(-3), now.AddHours(-3.9))
+        ];
+    }
+
+    private SeriesInputRow CreateSeedRow(int catalogIndex, int readingCount, int ratingCount, decimal averageRating, string note, DateTime createdAt, DateTime updatedAt)
+    {
+        var series = _catalog[catalogIndex];
+
+        return new SeriesInputRow
+        {
+            SeriesId = series.SeriesId,
+            Title = series.Title,
+            CoverUrl = series.CoverUrl,
+            ReadingCount = readingCount,
+            RatingCount = ratingCount,
+            AverageRating = averageRating,
+            DataSourceNote = note,
+            CreatedAt = createdAt,
+            UpdatedAt = updatedAt
+        };
+    }
+
+    private void OnPublicationWeekChanged(string value)
+    {
+        _selectedPublicationWeek = value;
+        Snackbar.Add($"Switched to {value}.", Severity.Info);
+    }
+
+    private void OnInputSearchChanged(string value)
+    {
+        _inputSearch = value ?? string.Empty;
+    }
+
+    private void OnRankingSearchChanged(string value)
+    {
+        _rankingSearch = value ?? string.Empty;
+    }
+
+    private void OnInputSortChanged(string value)
+    {
+        _inputSort = value;
+    }
+
+    private void OnRankingSortChanged(string value)
+    {
+        _rankingSort = value;
+    }
+
+    private void OpenInsertDialog()
+    {
+        _insertDialogOpen = true;
+    }
+
+    private void OnInsertDialogOpenChanged(bool value)
+    {
+        _insertDialogOpen = value;
+    }
+
+    private void OnInsertSaved(SeriesInputRow row)
+    {
+        _inputRows.Add(row);
+        Snackbar.Add($"{row.Title} ranking input created for {_selectedPublicationWeek}.", Severity.Success);
+    }
+
+    private Task RefreshAfterRowChanged()
+    {
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
 }

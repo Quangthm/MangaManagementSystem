@@ -1,0 +1,132 @@
+@using System.Globalization
+
+<MudPaper Class="section-card" Elevation="0">
+    <MudStack Row="true" Class="pa-4 pb-2" Spacing="2">
+        <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Color="Color.Primary" />
+        <div>
+            <MudText Typo="Typo.h6" Class="fw-800">Ranking Result</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                Auto-calculated from saved vote input · @SelectedPublicationWeek
+            </MudText>
+        </div>
+        <MudSpacer />
+        <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Filled" Icon="@Icons.Material.Filled.Bolt">
+            Live ranking
+        </MudChip>
+    </MudStack>
+
+    <MudDivider />
+
+    <MudGrid Class="pa-4">
+        <MudItem xs="12" md="8">
+            <MudTextField T="string"
+                          Value="@Search"
+                          ValueChanged="OnSearchChangedAsync"
+                          Placeholder="Search by series title..."
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Immediate="true"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" />
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudSelect T="string"
+                       Value="@Sort"
+                       ValueChanged="OnSortChangedAsync"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Dense="true">
+                @foreach (var option in SortOptions)
+                {
+                    <MudSelectItem T="string" Value="@option.Value">@option.Label</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+    </MudGrid>
+
+    <MudTable Items="@Rows"
+              Hover="true"
+              Dense="true"
+              RowsPerPage="5"
+              Breakpoint="Breakpoint.Sm"
+              Class="ranking-table">
+        <HeaderContent>
+            <MudTh Class="text-center">Rank</MudTh>
+            <MudTh>Series</MudTh>
+            <MudTh Class="text-end">Ranking Score</MudTh>
+            <MudTh Class="text-end">Average Rating</MudTh>
+            <MudTh Class="text-end">Rating Count</MudTh>
+            <MudTh Class="text-end">Reading Count</MudTh>
+            <MudTh Class="text-center">Trend</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Rank" Class="text-center">
+                <MudText Typo="Typo.subtitle1" Class="@GetRankTextClass(context.Rank)">@RankingUiHelper.GetRankLabel(context.Rank)</MudText>
+            </MudTd>
+            <MudTd DataLabel="Series">
+                <MudStack Row="true" Spacing="2">
+                    <MudAvatar Image="@context.CoverUrl" Rounded="true" Class="cover-avatar" />
+                    <MudText Typo="Typo.body2" Class="fw-700">@context.Title</MudText>
+                </MudStack>
+            </MudTd>
+            <MudTd DataLabel="Ranking Score" Class="text-end">
+                <MudText Color="Color.Primary" Class="fw-800 mono">@context.Score.ToString("0.00", CultureInfo.InvariantCulture)</MudText>
+            </MudTd>
+            <MudTd DataLabel="Average Rating" Class="text-end">
+                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text" Icon="@Icons.Material.Filled.Star">
+                    @context.AverageRating.ToString("0.0", CultureInfo.InvariantCulture)
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Rating Count" Class="text-end"><span class="mono">@RankingUiHelper.FormatNumber(context.RatingCount)</span></MudTd>
+            <MudTd DataLabel="Reading Count" Class="text-end"><span class="mono">@RankingUiHelper.FormatNumber(context.ReadingCount)</span></MudTd>
+            <MudTd DataLabel="Trend" Class="text-center">@RankingUiHelper.GetTrendLabel(context.PreviousRank, context.Rank)</MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudStack Justify="Justify.Center" Class="pa-8">
+                <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" Color="Color.Secondary" />
+                <MudText Color="Color.Secondary">No matching ranked series found.</MudText>
+            </MudStack>
+        </NoRecordsContent>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="@(new[] { 5, 10, 20 })" />
+        </PagerContent>
+    </MudTable>
+</MudPaper>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<RankingRow> Rows { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyList<SortOption> SortOptions { get; set; } = [];
+
+    [Parameter]
+    public string SelectedPublicationWeek { get; set; } = string.Empty;
+
+    [Parameter]
+    public string Search { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> SearchChanged { get; set; }
+
+    [Parameter]
+    public string Sort { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> SortChanged { get; set; }
+
+    private Task OnSearchChangedAsync(string value)
+    {
+        return SearchChanged.InvokeAsync(value ?? string.Empty);
+    }
+
+    private Task OnSortChangedAsync(string value)
+    {
+        return SortChanged.InvokeAsync(value ?? string.Empty);
+    }
+
+    private static string GetRankTextClass(int rank)
+    {
+        return $"fw-900 {RankingUiHelper.GetRankClass(rank)}";
+    }
+}

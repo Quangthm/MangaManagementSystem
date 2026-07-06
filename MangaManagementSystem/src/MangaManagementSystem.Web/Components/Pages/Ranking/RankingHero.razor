@@ -1,0 +1,53 @@
+<MudPaper Class="ranking-hero pa-5" Elevation="0">
+    <MudGrid>
+        <MudItem xs="12" md="7">
+            <MudStack Row="true" Spacing="2">
+                <MudAvatar Color="Color.Primary" Variant="Variant.Filled" Rounded="true">
+                    <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" />
+                </MudAvatar>
+                <div>
+                    <MudText Typo="Typo.h5" Class="fw-800">Series Ranking Management</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Weekly editorial ranking input and live calculated results
+                    </MudText>
+                </div>
+            </MudStack>
+        </MudItem>
+
+        <MudItem xs="12" md="5">
+            <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2">
+                <MudSelect T="string"
+                           Label="Publication Week"
+                           Variant="Variant.Outlined"
+                           Dense="true"
+                           Margin="Margin.Dense"
+                           Value="SelectedPublicationWeek"
+                           ValueChanged="OnSelectedPublicationWeekChanged"
+                           Adornment="Adornment.Start"
+                           AdornmentIcon="@Icons.Material.Filled.CalendarMonth"
+                           Class="ranking-period-select">
+                    @foreach (var week in PublicationWeeks)
+                    {
+                        <MudSelectItem T="string" Value="@week">@week</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudStack>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<string> PublicationWeeks { get; set; } = [];
+
+    [Parameter]
+    public string SelectedPublicationWeek { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> SelectedPublicationWeekChanged { get; set; }
+
+    private Task OnSelectedPublicationWeekChanged(string value)
+    {
+        return SelectedPublicationWeekChanged.InvokeAsync(value);
+    }
+}

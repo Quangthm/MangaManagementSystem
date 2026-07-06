@@ -1,0 +1,50 @@
+@using System.Globalization
+
+<div>
+    <MudStack Row="true" Spacing="2" Class="mb-3">
+        <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Color="Color.Warning" />
+        <MudText Typo="Typo.h6" Class="fw-800">Top Ranked Series</MudText>
+        <MudText Typo="Typo.caption" Color="Color.Secondary">· @SelectedPublicationWeek</MudText>
+    </MudStack>
+
+    <MudGrid>
+        @foreach (var item in Rows.Take(5))
+        {
+            <MudItem xs="12" sm="6" md="4" lg="2">
+                <MudCard Class="top-card" Elevation="0">
+                    <div class="top-cover-wrap">
+                        <MudChip T="string" Class="top-rank-chip" Color="@RankingUiHelper.GetRankChipColor(item.Rank)" Variant="Variant.Filled" Size="Size.Small">
+                            #@item.Rank
+                        </MudChip>
+                        <img src="@item.CoverUrl" alt="@item.Title" class="top-cover" />
+                    </div>
+                    <MudCardContent Class="pa-3">
+                        <MudText Typo="Typo.body2" Class="fw-800 top-title">@item.Title</MudText>
+                        <MudStack Spacing="1" Class="mt-2">
+                            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Score</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Primary" Class="fw-800 mono">@item.Score.ToString("0.0", CultureInfo.InvariantCulture)</MudText>
+                            </MudStack>
+                            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Rating</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Warning" Class="fw-700">★ @item.AverageRating.ToString("0.0", CultureInfo.InvariantCulture)</MudText>
+                            </MudStack>
+                            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Reads</MudText>
+                                <MudText Typo="Typo.caption" Class="fw-700 mono">@RankingUiHelper.FormatShortNumber(item.ReadingCount)</MudText>
+                            </MudStack>
+                        </MudStack>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+</div>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<RankingRow> Rows { get; set; } = [];
+
+    [Parameter]
+    public string SelectedPublicationWeek { get; set; } = string.Empty;
+}

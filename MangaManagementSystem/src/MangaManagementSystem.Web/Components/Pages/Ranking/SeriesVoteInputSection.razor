@@ -1,0 +1,362 @@
+@using System.Globalization
+@inject ISnackbar Snackbar
+
+<MudPaper Class="section-card" Elevation="0">
+    <MudStack Row="true" Class="pa-4 pb-2" Spacing="2">
+        <MudIcon Icon="@Icons.Material.Filled.EditNote" Color="Color.Primary" />
+        <div>
+            <MudText Typo="Typo.h6" Class="fw-800">Series Vote Input</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                Enter reading and rating data per series. Ranking recalculates after save.
+            </MudText>
+        </div>
+        <MudSpacer />
+        @if (CanManageRankingInput)
+        {
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="OnAddInputClickedAsync">
+                Add Input
+            </MudButton>
+        }
+    </MudStack>
+
+    <MudDivider />
+
+    <MudGrid Class="pa-4">
+        <MudItem xs="12" md="8">
+            <MudTextField T="string"
+                          Value="@Search"
+                          ValueChanged="OnSearchChangedAsync"
+                          Placeholder="Search by series title..."
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Immediate="true"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" />
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudSelect T="string"
+                       Value="@Sort"
+                       ValueChanged="OnSortChangedAsync"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Dense="true">
+                @foreach (var option in SortOptions)
+                {
+                    <MudSelectItem T="string" Value="@option.Value">@option.Label</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+    </MudGrid>
+
+    <MudTable Items="@Rows"
+              Hover="true"
+              Dense="true"
+              Bordered="false"
+              Breakpoint="Breakpoint.Sm"
+              RowsPerPage="5"
+              Class="ranking-table">
+        <HeaderContent>
+            <MudTh>Series</MudTh>
+            <MudTh Class="text-end">Reading Count</MudTh>
+            <MudTh Class="text-end">Rating Count</MudTh>
+            <MudTh Class="text-end">Average Rating</MudTh>
+            <MudTh>Data Source</MudTh>
+            <MudTh>Inserted At</MudTh>
+            <MudTh>Last Updated</MudTh>
+            @if (CanManageRankingInput)
+            {
+                <MudTh Class="text-center">Actions</MudTh>
+            }
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Series">
+                <MudStack Row="true" Spacing="2">
+                    <MudAvatar Image="@context.CoverUrl" Rounded="true" Class="cover-avatar" />
+                    <div>
+                        <MudText Typo="Typo.body2" Class="fw-700">@context.Title</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@SelectedPublicationWeek</MudText>
+                    </div>
+                </MudStack>
+            </MudTd>
+
+            <MudTd DataLabel="Reading Count" Class="text-end">
+                @if (IsEditing(context.SeriesId))
+                {
+                    <MudNumericField T="int?"
+                                     Value="@GetEditState(context.SeriesId).ReadingCount"
+                                     ValueChanged="@((int? value) => UpdateEditReadingCount(context.SeriesId, value))"
+                                     Min="1"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     HideSpinButtons="true"
+                                     Error="@HasEditError(context.SeriesId, nameof(EditRowState.ReadingCount))"
+                                     ErrorText="@GetEditError(context.SeriesId, nameof(EditRowState.ReadingCount))"
+                                     Class="inline-number" />
+                }
+                else
+                {
+                    <span class="mono">@RankingUiHelper.FormatNumber(context.ReadingCount)</span>
+                }
+            </MudTd>
+
+            <MudTd DataLabel="Rating Count" Class="text-end">
+                @if (IsEditing(context.SeriesId))
+                {
+                    <MudNumericField T="int?"
+                                     Value="@GetEditState(context.SeriesId).RatingCount"
+                                     ValueChanged="@((int? value) => UpdateEditRatingCount(context.SeriesId, value))"
+                                     Min="1"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     HideSpinButtons="true"
+                                     Error="@HasEditError(context.SeriesId, nameof(EditRowState.RatingCount))"
+                                     ErrorText="@GetEditError(context.SeriesId, nameof(EditRowState.RatingCount))"
+                                     Class="inline-number" />
+                }
+                else
+                {
+                    <span class="mono">@RankingUiHelper.FormatNumber(context.RatingCount)</span>
+                }
+            </MudTd>
+
+            <MudTd DataLabel="Average Rating" Class="text-end">
+                @if (IsEditing(context.SeriesId))
+                {
+                    <MudNumericField T="decimal?"
+                                     Value="@GetEditState(context.SeriesId).AverageRating"
+                                     ValueChanged="@((decimal? value) => UpdateEditAverageRating(context.SeriesId, value))"
+                                     Min="0"
+                                     Max="10"
+                                     Step="@DecimalStep"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     HideSpinButtons="true"
+                                     Error="@HasEditError(context.SeriesId, nameof(EditRowState.AverageRating))"
+                                     ErrorText="@GetEditError(context.SeriesId, nameof(EditRowState.AverageRating))"
+                                     Class="inline-number" />
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text" Icon="@Icons.Material.Filled.Star">
+                        @context.AverageRating.ToString("0.0", CultureInfo.InvariantCulture)
+                    </MudChip>
+                }
+            </MudTd>
+
+            <MudTd DataLabel="Data Source">
+                <MudText Typo="Typo.caption">@(string.IsNullOrWhiteSpace(context.DataSourceNote) ? "—" : context.DataSourceNote)</MudText>
+            </MudTd>
+            <MudTd DataLabel="Inserted At">
+                <MudText Typo="Typo.caption" Class="mono">@context.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</MudText>
+            </MudTd>
+            <MudTd DataLabel="Last Updated">
+                <MudText Typo="Typo.caption" Class="mono">@context.UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</MudText>
+            </MudTd>
+
+            @if (CanManageRankingInput)
+            {
+                <MudTd DataLabel="Actions" Class="text-center">
+                    @if (IsEditing(context.SeriesId))
+                    {
+                        <MudButtonGroup Size="Size.Small" Variant="Variant.Outlined">
+                            <MudButton Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="@(() => SaveInlineEdit(context.SeriesId))">Save</MudButton>
+                            <MudButton Color="Color.Default" StartIcon="@Icons.Material.Filled.Close" OnClick="@(() => CancelInlineEdit(context.SeriesId))">Cancel</MudButton>
+                        </MudButtonGroup>
+                    }
+                    else
+                    {
+                        <MudButton Size="Size.Small"
+                                   Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Edit"
+                                   OnClick="@(() => StartInlineEdit(context))">
+                            Edit
+                        </MudButton>
+                    }
+                </MudTd>
+            }
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudStack Justify="Justify.Center" Class="pa-8">
+                <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Large" Color="Color.Secondary" />
+                <MudText Color="Color.Secondary">No series vote input found.</MudText>
+            </MudStack>
+        </NoRecordsContent>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="@(new[] { 5, 10, 20 })" />
+        </PagerContent>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private const decimal DecimalStep = 0.1m;
+
+    private readonly Dictionary<Guid, EditRowState> _editRows = [];
+
+    [Parameter]
+    public IReadOnlyList<SeriesInputRow> Rows { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyList<SortOption> SortOptions { get; set; } = [];
+
+    [Parameter]
+    public string SelectedPublicationWeek { get; set; } = string.Empty;
+
+    [Parameter]
+    public string Search { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> SearchChanged { get; set; }
+
+    [Parameter]
+    public string Sort { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> SortChanged { get; set; }
+
+    [Parameter]
+    public bool CanManageRankingInput { get; set; }
+
+    [Parameter]
+    public EventCallback AddInputClicked { get; set; }
+
+    [Parameter]
+    public EventCallback RowChanged { get; set; }
+
+
+    private Task OnAddInputClickedAsync()
+    {
+        return AddInputClicked.InvokeAsync();
+    }
+
+    private Task OnSearchChangedAsync(string value)
+    {
+        return SearchChanged.InvokeAsync(value ?? string.Empty);
+    }
+
+    private Task OnSortChangedAsync(string value)
+    {
+        return SortChanged.InvokeAsync(value ?? string.Empty);
+    }
+
+    private void StartInlineEdit(SeriesInputRow row)
+    {
+        _editRows[row.SeriesId] = new EditRowState
+        {
+            ReadingCount = row.ReadingCount,
+            RatingCount = row.RatingCount,
+            AverageRating = row.AverageRating
+        };
+    }
+
+    private void CancelInlineEdit(Guid seriesId)
+    {
+        _editRows.Remove(seriesId);
+    }
+
+    private bool IsEditing(Guid seriesId)
+    {
+        return _editRows.ContainsKey(seriesId);
+    }
+
+    private EditRowState GetEditState(Guid seriesId)
+    {
+        return _editRows[seriesId];
+    }
+
+    private void UpdateEditReadingCount(Guid seriesId, int? value)
+    {
+        _editRows[seriesId].ReadingCount = value;
+        ClearEditError(seriesId, nameof(EditRowState.ReadingCount));
+    }
+
+    private void UpdateEditRatingCount(Guid seriesId, int? value)
+    {
+        _editRows[seriesId].RatingCount = value;
+        ClearEditError(seriesId, nameof(EditRowState.RatingCount));
+    }
+
+    private void UpdateEditAverageRating(Guid seriesId, decimal? value)
+    {
+        _editRows[seriesId].AverageRating = value;
+        ClearEditError(seriesId, nameof(EditRowState.AverageRating));
+    }
+
+    private async Task SaveInlineEdit(Guid seriesId)
+    {
+        if (!_editRows.TryGetValue(seriesId, out var editState))
+        {
+            return;
+        }
+
+        editState.Errors = ValidateEditState(editState);
+
+        if (editState.Errors.Count > 0)
+        {
+            Snackbar.Add("Validation failed. Please fix the highlighted fields.", Severity.Error);
+            return;
+        }
+
+        var row = Rows.First(row => row.SeriesId == seriesId);
+        row.ReadingCount = editState.ReadingCount!.Value;
+        row.RatingCount = editState.RatingCount!.Value;
+        row.AverageRating = editState.AverageRating!.Value;
+        row.UpdatedAt = DateTime.UtcNow;
+
+        _editRows.Remove(seriesId);
+        Snackbar.Add("Vote input saved. Ranking recalculated.", Severity.Success);
+        await RowChanged.InvokeAsync();
+    }
+
+    private static Dictionary<string, string> ValidateEditState(EditRowState editState)
+    {
+        var errors = new Dictionary<string, string>();
+
+        if (editState.ReadingCount is null or <= 0)
+        {
+            errors[nameof(EditRowState.ReadingCount)] = "Must be a positive integer.";
+        }
+
+        if (editState.RatingCount is null or <= 0)
+        {
+            errors[nameof(EditRowState.RatingCount)] = "Must be a positive integer.";
+        }
+
+        if (editState.AverageRating is null or < 0 or > 10)
+        {
+            errors[nameof(EditRowState.AverageRating)] = "Must be between 0 and 10.";
+        }
+
+        if (editState.RatingCount.HasValue &&
+            editState.ReadingCount.HasValue &&
+            editState.RatingCount.Value > editState.ReadingCount.Value)
+        {
+            errors[nameof(EditRowState.RatingCount)] = "Cannot exceed Reading Count.";
+        }
+
+        return errors;
+    }
+
+    private bool HasEditError(Guid seriesId, string fieldName)
+    {
+        return _editRows.TryGetValue(seriesId, out var state) && state.Errors.ContainsKey(fieldName);
+    }
+
+    private string GetEditError(Guid seriesId, string fieldName)
+    {
+        return _editRows.TryGetValue(seriesId, out var state) && state.Errors.TryGetValue(fieldName, out var message)
+            ? message
+            : string.Empty;
+    }
+
+    private void ClearEditError(Guid seriesId, string fieldName)
+    {
+        if (_editRows.TryGetValue(seriesId, out var state) && state.Errors.Remove(fieldName))
+        {
+            state.Errors = new Dictionary<string, string>(state.Errors);
+        }
+    }
+}

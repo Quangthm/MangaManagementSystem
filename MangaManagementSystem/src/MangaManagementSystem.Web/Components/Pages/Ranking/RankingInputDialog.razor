@@ -1,0 +1,300 @@
+@inject ISnackbar Snackbar
+
+@if (Open)
+{
+    <MudOverlay Visible="true" DarkBackground="true" ZIndex="1300" Class="dialog-overlay">
+        <MudPaper Class="insert-dialog pa-0" Elevation="12">
+            <MudStack Row="true" Spacing="2" Class="pa-4">
+                <MudAvatar Color="Color.Primary" Variant="Variant.Text" Rounded="true">
+                    <MudIcon Icon="@Icons.Material.Filled.Add" />
+                </MudAvatar>
+                <MudText Typo="Typo.h6" Class="fw-800">Create Ranking Input</MudText>
+                <MudSpacer />
+                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseAsync" />
+            </MudStack>
+
+            <MudDivider />
+
+            <MudStack Spacing="3" Class="pa-4">
+                <MudSelect T="string"
+                           Label="Publication Week"
+                           Required="true"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Value="_form.PublicationWeek"
+                           ValueChanged="OnPublicationWeekChanged"
+                           Error="@HasError(nameof(InsertFormState.PublicationWeek))"
+                           ErrorText="@GetError(nameof(InsertFormState.PublicationWeek))">
+                    @foreach (var week in PublicationWeeks)
+                    {
+                        <MudSelectItem T="string" Value="@week">@week</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudAutocomplete T="CatalogEntry"
+                                 Label="Series"
+                                 Required="true"
+                                 Value="_form.Series"
+                                 ValueChanged="OnSeriesChanged"
+                                 SearchFunc="SearchAvailableSeriesAsync"
+                                 ToStringFunc="@(series => series?.Title ?? string.Empty)"
+                                 ResetValueOnEmptyText="true"
+                                 CoerceText="false"
+                                 CoerceValue="false"
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 AdornmentIcon="@Icons.Material.Filled.Search"
+                                 Adornment="Adornment.Start"
+                                 Error="@HasError(nameof(InsertFormState.Series))"
+                                 ErrorText="@GetError(nameof(InsertFormState.Series))" />
+
+                <MudGrid>
+                    <MudItem xs="12" md="6">
+                        <MudNumericField T="int?"
+                                         Label="Reading Count"
+                                         Required="true"
+                                         Min="1"
+                                         HideSpinButtons="true"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Value="_form.ReadingCount"
+                                         ValueChanged="OnReadingCountChanged"
+                                         Error="@HasError(nameof(InsertFormState.ReadingCount))"
+                                         ErrorText="@GetError(nameof(InsertFormState.ReadingCount))" />
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudNumericField T="int?"
+                                         Label="Rating Count"
+                                         Required="true"
+                                         Min="1"
+                                         HideSpinButtons="true"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Value="_form.RatingCount"
+                                         ValueChanged="OnRatingCountChanged"
+                                         Error="@HasError(nameof(InsertFormState.RatingCount))"
+                                         ErrorText="@GetError(nameof(InsertFormState.RatingCount))" />
+                    </MudItem>
+                </MudGrid>
+
+                <MudNumericField T="decimal?"
+                                 Label="Average Rating"
+                                 HelperText="0 – 10"
+                                 Required="true"
+                                 Min="0"
+                                 Max="10"
+                                 Step="@DecimalStep"
+                                 HideSpinButtons="true"
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 Value="_form.AverageRating"
+                                 ValueChanged="OnAverageRatingChanged"
+                                 Error="@HasError(nameof(InsertFormState.AverageRating))"
+                                 ErrorText="@GetError(nameof(InsertFormState.AverageRating))" />
+
+                <MudTextField T="string"
+                              Label="Data Source Note"
+                              Placeholder="e.g. Editorial Board — Week 23"
+                              Lines="2"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Value="_form.DataSourceNote"
+                              ValueChanged="OnDataSourceChanged" />
+            </MudStack>
+
+            <MudDivider />
+
+            <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2" Class="pa-4 dialog-footer">
+                <MudButton Variant="Variant.Outlined" OnClick="CloseAsync">Cancel</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync">Save</MudButton>
+            </MudStack>
+        </MudPaper>
+    </MudOverlay>
+}
+
+@code {
+    private const decimal DecimalStep = 0.1m;
+
+    private InsertFormState _form = new();
+    private Dictionary<string, string> _errors = [];
+    private bool _wasOpen;
+
+    [Parameter]
+    public bool Open { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> OpenChanged { get; set; }
+
+    [Parameter]
+    public string SelectedPublicationWeek { get; set; } = string.Empty;
+
+    [Parameter]
+    public IReadOnlyList<string> PublicationWeeks { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyList<CatalogEntry> Catalog { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyList<SeriesInputRow> ExistingRows { get; set; } = [];
+
+    [Parameter]
+    public EventCallback<SeriesInputRow> Saved { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (Open && !_wasOpen)
+        {
+            _errors = [];
+            _form = new InsertFormState
+            {
+                PublicationWeek = SelectedPublicationWeek
+            };
+        }
+
+        _wasOpen = Open;
+    }
+
+    private async Task CloseAsync()
+    {
+        await OpenChanged.InvokeAsync(false);
+    }
+
+    private void OnPublicationWeekChanged(string value)
+    {
+        _form.PublicationWeek = value;
+        ClearError(nameof(InsertFormState.PublicationWeek));
+    }
+
+    private void OnSeriesChanged(CatalogEntry? value)
+    {
+        _form.Series = value;
+        ClearError(nameof(InsertFormState.Series));
+    }
+
+    private void OnReadingCountChanged(int? value)
+    {
+        _form.ReadingCount = value;
+        ClearError(nameof(InsertFormState.ReadingCount));
+    }
+
+    private void OnRatingCountChanged(int? value)
+    {
+        _form.RatingCount = value;
+        ClearError(nameof(InsertFormState.RatingCount));
+    }
+
+    private void OnAverageRatingChanged(decimal? value)
+    {
+        _form.AverageRating = value;
+        ClearError(nameof(InsertFormState.AverageRating));
+    }
+
+    private void OnDataSourceChanged(string value)
+    {
+        _form.DataSourceNote = value ?? string.Empty;
+    }
+
+    private Task<IEnumerable<CatalogEntry>> SearchAvailableSeriesAsync(string? value, CancellationToken cancellationToken)
+    {
+        var usedSeriesIds = ExistingRows.Select(row => row.SeriesId).ToHashSet();
+        var query = (value ?? string.Empty).Trim();
+
+        IEnumerable<CatalogEntry> result = Catalog
+            .Where(series => !usedSeriesIds.Contains(series.SeriesId))
+            .Where(series => string.IsNullOrWhiteSpace(query) || series.Title.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(series => series.Title);
+
+        return Task.FromResult(result);
+    }
+
+    private async Task SaveAsync()
+    {
+        _errors = ValidateForm();
+
+        if (_errors.Count > 0)
+        {
+            Snackbar.Add("Validation failed. Please fix the highlighted fields.", Severity.Error);
+            return;
+        }
+
+        var series = _form.Series!;
+        var now = DateTime.UtcNow;
+
+        var row = new SeriesInputRow
+        {
+            SeriesId = series.SeriesId,
+            Title = series.Title,
+            CoverUrl = series.CoverUrl,
+            ReadingCount = _form.ReadingCount!.Value,
+            RatingCount = _form.RatingCount!.Value,
+            AverageRating = _form.AverageRating!.Value,
+            DataSourceNote = _form.DataSourceNote.Trim(),
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+
+        await Saved.InvokeAsync(row);
+        await OpenChanged.InvokeAsync(false);
+    }
+
+    private Dictionary<string, string> ValidateForm()
+    {
+        var errors = new Dictionary<string, string>();
+
+        if (string.IsNullOrWhiteSpace(_form.PublicationWeek))
+        {
+            errors[nameof(InsertFormState.PublicationWeek)] = "Please select a publication week.";
+        }
+
+        if (_form.Series is null)
+        {
+            errors[nameof(InsertFormState.Series)] = "Please select a series.";
+        }
+        else if (ExistingRows.Any(row => row.SeriesId == _form.Series.SeriesId))
+        {
+            errors[nameof(InsertFormState.Series)] = "This series already has input for the selected week.";
+        }
+
+        if (_form.ReadingCount is null or <= 0)
+        {
+            errors[nameof(InsertFormState.ReadingCount)] = "Must be a positive integer.";
+        }
+
+        if (_form.RatingCount is null or <= 0)
+        {
+            errors[nameof(InsertFormState.RatingCount)] = "Must be a positive integer.";
+        }
+
+        if (_form.AverageRating is null or < 0 or > 10)
+        {
+            errors[nameof(InsertFormState.AverageRating)] = "Must be between 0 and 10.";
+        }
+
+        if (_form.RatingCount.HasValue &&
+            _form.ReadingCount.HasValue &&
+            _form.RatingCount.Value > _form.ReadingCount.Value)
+        {
+            errors[nameof(InsertFormState.RatingCount)] = "Cannot exceed Reading Count.";
+        }
+
+        return errors;
+    }
+
+    private bool HasError(string fieldName)
+    {
+        return _errors.ContainsKey(fieldName);
+    }
+
+    private string GetError(string fieldName)
+    {
+        return _errors.TryGetValue(fieldName, out var message) ? message : string.Empty;
+    }
+
+    private void ClearError(string fieldName)
+    {
+        if (_errors.Remove(fieldName))
+        {
+            _errors = new Dictionary<string, string>(_errors);
+        }
+    }
+}
