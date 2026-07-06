@@ -88,6 +88,25 @@ namespace MangaManagementSystem.Application.Services
             return entity is null ? null : entity.ToDto();
         }
 
+        public async Task<UserDto?>
+            GetUserByPortfolioFileIdAsync(
+                Guid portfolioFileId)
+        {
+            if (portfolioFileId == Guid.Empty)
+            {
+                return null;
+            }
+
+            var entity =
+                await _unitOfWork.Users
+                    .GetByPortfolioFileIdAsync(
+                        portfolioFileId);
+
+            return entity is null
+                ? null
+                : entity.ToDto();
+        }
+
         public async Task<IEnumerable<UserDto>> GetUsersByStatusAsync(string status)
         {
             var entities = await _unitOfWork.Users.GetByStatusAsync(status);
@@ -102,13 +121,37 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<UserDto> ApproveUserAsync(Guid adminUserId, Guid userId)
         {
-            await RequirePendingUserAsync(userId);
+            var user = await GetRequiredUserByIdAsync(userId);
+
+            var canApprove =
+                string.Equals(
+                    user.StatusCode,
+                    StatusPendingApproval,
+                    StringComparison.OrdinalIgnoreCase)
+                || string.Equals(
+                    user.StatusCode,
+                    StatusRejected,
+                    StringComparison.OrdinalIgnoreCase);
+
+            if (!canApprove)
+            {
+                throw new InvalidOperationException(
+                    $"User {userId} cannot be approved because their status is '{user.StatusCode}'. Only PENDING_APPROVAL or REJECTED accounts can be approved.");
+            }
+
+            var reason =
+                string.Equals(
+                    user.StatusCode,
+                    StatusRejected,
+                    StringComparison.OrdinalIgnoreCase)
+                    ? "Rejected user registration approved again."
+                    : "User registration approved.";
 
             await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
                 adminUserId,
                 userId,
                 StatusActive,
-                "User registration approved.");
+                reason);
 
             var updated = await GetRequiredUserByIdForDtoAsync(userId);
             return updated.ToDto();
@@ -118,24 +161,36 @@ namespace MangaManagementSystem.Application.Services
         {
             await RequirePendingUserAsync(userId);
 
+            var normalizedReason =
+                NormalizeRequiredReason(
+                    reason,
+                    "Reject reason");
+
             await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
                 adminUserId,
                 userId,
                 StatusRejected,
-                string.IsNullOrWhiteSpace(reason)
-                    ? "User registration rejected."
-                    : reason.Trim());
+                normalizedReason);
         }
 
         public async Task<UserDto> ActivateUserAsync(Guid adminUserId, Guid userId)
         {
-            await GetRequiredUserByIdAsync(userId);
+            var user = await GetRequiredUserByIdAsync(userId);
+
+            if (!string.Equals(
+                    user.StatusCode,
+                    StatusDisabled,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"User {userId} cannot be activated because their status is '{user.StatusCode}', not '{StatusDisabled}'.");
+            }
 
             await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
                 adminUserId,
                 userId,
                 StatusActive,
-                "User account activated.");
+                "Disabled user account activated.");
 
             var updated = await GetRequiredUserByIdForDtoAsync(userId);
             return updated.ToDto();
@@ -145,16 +200,43 @@ namespace MangaManagementSystem.Application.Services
         {
             await GetRequiredUserByIdAsync(userId);
 
+            var normalizedReason =
+                NormalizeRequiredReason(
+                    reason,
+                    "Disable reason");
+
             await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
                 adminUserId,
                 userId,
                 StatusDisabled,
-                string.IsNullOrWhiteSpace(reason)
-                    ? "User account disabled."
-                    : reason.Trim());
+                normalizedReason);
 
             var updated = await GetRequiredUserByIdForDtoAsync(userId);
             return updated.ToDto();
+        }
+
+        private static string NormalizeRequiredReason(
+            string? reason,
+            string fieldName)
+        {
+            var normalized =
+                string.IsNullOrWhiteSpace(reason)
+                    ? null
+                    : reason.Trim();
+
+            if (normalized is null)
+            {
+                throw new InvalidOperationException(
+                    $"{fieldName} is required.");
+            }
+
+            if (normalized.Length > 500)
+            {
+                throw new InvalidOperationException(
+                    $"{fieldName} cannot exceed 500 characters.");
+            }
+
+            return normalized;
         }
 
         private async Task<User> RequirePendingUserAsync(Guid userId)
@@ -170,39 +252,29 @@ namespace MangaManagementSystem.Application.Services
             return user;
         }
 
-        private async Task<User> GetRequiredUserByIdAsync(Guid userId)
+        private async Task<User> GetRequiredUserByIdAsync(
+            Guid userId)
         {
-            var user = await _unitOfWork.Users.GetByIdAsync(userId);
+            var user =
+                await _unitOfWork.Users
+                    .GetByIdWithRoleAsync(
+                        userId);
 
             if (user is null)
             {
-                throw new InvalidOperationException($"User {userId} was not found.");
+                throw new InvalidOperationException(
+                    $"User {userId} was not found.");
             }
 
             return user;
         }
 
-        private async Task<User?> GetUserByIdForDtoAsync(Guid userId)
+        private Task<User?> GetUserByIdForDtoAsync(
+            Guid userId)
         {
-            var user = await _unitOfWork.Users.GetByIdAsync(userId);
-
-            if (user is null)
-            {
-                return null;
-            }
-
-            if (user.Role is not null)
-            {
-                return user;
-            }
-
-            /*
-                Generic GetByIdAsync usually does not Include Role.
-                Current UserRepository.GetByEmailAsync does Include Role, so we reload through email
-                before mapping to UserDto.
-            */
-            var userWithRole = await _unitOfWork.Users.GetByEmailAsync(user.Email);
-            return userWithRole ?? user;
+            return _unitOfWork.Users
+                .GetByIdWithRoleAsync(
+                    userId);
         }
 
         private async Task<User> GetRequiredUserByIdForDtoAsync(Guid userId)
@@ -449,53 +521,14 @@ namespace MangaManagementSystem.Application.Services
                     otpCode.Trim());
         }
 
-        public async Task RecordProfileAuditAsync(
-            Guid actorUserId,
-            string actionCode,
-            string detailJson)
-        {
-            var user =
-                await RequireExistingUserAsync(actorUserId);
-
-            if (string.IsNullOrWhiteSpace(actionCode))
-            {
-                throw new InvalidOperationException(
-                    "Audit action code is required.");
-            }
-
-            var role =
-                await _unitOfWork.Roles
-                    .GetByIdAsync(user.RoleId);
-
-            var actorRoleName =
-                role?.RoleName
-                ?? user.Role?.RoleName;
-
-            var entity =
-                new AuditEvent
-                {
-                    OccurredAtUtc = DateTime.UtcNow,
-                    ActorUserId = actorUserId,
-                    ActorRoleName = actorRoleName,
-                    ActionCode =
-                        actionCode.Trim().ToUpperInvariant(),
-                    EntityType = "USER",
-                    EntityId = actorUserId.ToString(),
-                    DetailJson =
-                        string.IsNullOrWhiteSpace(detailJson)
-                            ? null
-                            : detailJson
-                };
-
-            await _unitOfWork.AuditEvents.AddAsync(entity);
-            await _unitOfWork.SaveChangesAsync();
-        }
 
         private async Task<User> RequireExistingUserAsync(
             Guid userId)
         {
             var user =
-                await _unitOfWork.Users.GetByIdAsync(userId);
+                await _unitOfWork.Users
+                    .GetByIdWithRoleAsync(
+                        userId);
 
             if (user == null)
             {

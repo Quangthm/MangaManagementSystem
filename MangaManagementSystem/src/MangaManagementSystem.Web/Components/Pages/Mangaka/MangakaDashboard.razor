@@ -1,4 +1,4 @@
-﻿@page "/mangaka"
+@page "/mangaka"
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Globalization
@@ -14,8 +14,9 @@
 
 <MangakaLayout>
 
-    @* â”€â”€ Top Header â”€â”€ *@
+@* â”€â”€ Top Header â”€â”€ *@
     <div style="padding: 24px 32px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e2e8f0; background: #f8fafc; z-index: 10;">
+
             <div>
                 <div style="font-weight: 800; font-size: 1.6rem; color: #111827; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 4px;">
                     Current Series
@@ -167,7 +168,7 @@
                         <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); position: relative; overflow: hidden; cursor: pointer; display: flex; gap: 0; min-height: 210px;"
                              @onclick="() => OpenSeriesCard(series)">
 
-                            @* Kebab menu â€” top-right over card *@
+                            @* Kebab menu — top-right over card *@
                             @if (!IsAnyDashboardModalOpen)
                             {
                             <div style="position: absolute; top: 8px; right: 8px; z-index: 10;" @onclick:stopPropagation>
@@ -654,7 +655,7 @@
     </MudCard>
 </MudOverlay>
 
-@* â”€â”€ Edit Draft Modal (BF-SERIES-002 â€” Edit Series Draft Profile) â”€â”€ *@
+@* â”€â”€ Edit Draft Modal (BF-SERIES-002 — Edit Series Draft Profile) â”€â”€ *@
 @* Cover editing only allowed for PROPOSAL_DRAFT; status guard enforced by stored procedure. *@
 <MudOverlay Visible="@_draftDetailsOpen" OnClick="@(() => _draftDetailsOpen = false)"
             Style="display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 24px 0;">
@@ -672,7 +673,7 @@
 
             <div style="padding: 24px; display: flex; flex-direction: column; gap: 16px;">
 
-                @* Cover section â€” inline layout: preview beside upload zone *@
+                @* Cover section — inline layout: preview beside upload zone *@
                 <div>
                     <div style="font-size: 0.78rem; font-weight: 600; color: #374151; margin-bottom: 8px;">Series Cover</div>
 
@@ -925,7 +926,7 @@
 
                 <MudDivider />
 
-                @* Submit Proposal â€” secondary action inside edit modal *@
+                @* Submit Proposal — secondary action inside edit modal *@
                 <MudButton Variant="Variant.Outlined" Color="Color.Success" FullWidth="true"
                            StartIcon="@Icons.Material.Filled.Send"
                            Disabled="@_draftSavingEdit"
@@ -937,7 +938,7 @@
     </MudCard>
 </MudOverlay>
 
-@* â”€â”€ Review Status Modal (read-only â€” UNDER_EDITORIAL_REVIEW / UNDER_BOARD_REVIEW / etc.) â”€â”€ *@
+@* â”€â”€ Review Status Modal (read-only — UNDER_EDITORIAL_REVIEW / UNDER_BOARD_REVIEW / etc.) â”€â”€ *@
 <MudOverlay Visible="@_reviewStatusOpen" OnClick="@(() => _reviewStatusOpen = false)">
     <MudCard Style="width: 440px; max-width: 92vw; margin: 8% auto 0; border-radius: 14px;" @onclick:stopPropagation>
         <MudCardContent Style="padding: 0;">
@@ -1128,7 +1129,7 @@
     private bool _draftDetailsOpen;
     private SeriesCardData? _detailSeries;
 
-    // Editable form fields â€” populated when the modal opens
+    // Editable form fields — populated when the modal opens
     private string _editTitle = "";
     private string _editSynopsis = "";
     private HashSet<Guid> _editGenreIds = new();
@@ -1439,10 +1440,10 @@
     // â”€â”€ Navigation dispatcher â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     /// <summary>
     /// Routes card clicks to the correct behaviour based on status.
-    /// PROPOSAL_DRAFT â†’ Draft Details modal (not workspace).
-    /// UNDER_EDITORIAL_REVIEW / UNDER_BOARD_REVIEW â†’ Review Status modal.
-    /// SERIALIZED â†’ navigate to /series/{slug}.
-    /// HIATUS / CANCELLED / COMPLETED â†’ Review Status modal (read-only).
+    /// PROPOSAL_DRAFT → Draft Details modal (not workspace).
+    /// UNDER_EDITORIAL_REVIEW / UNDER_BOARD_REVIEW → Review Status modal.
+    /// SERIALIZED → navigate to /series/{slug}.
+    /// HIATUS / CANCELLED / COMPLETED → Review Status modal (read-only).
     /// </summary>
     private void OpenSeriesCard(SeriesCardData series)
     {
@@ -1509,7 +1510,7 @@
     /// Pre-read IBrowserFile bytes immediately for cover replacement.
     /// Validates image type (PNG/JPG/WEBP) and size (max 5 MB).
     /// Generates a data: URI preview so the user can verify the selection before saving.
-    /// Does NOT call IFileStorageService â€” that happens in UpdateSeriesDraftCommandHandler via API.
+    /// Does NOT call IFileStorageService — that happens in UpdateSeriesDraftCommandHandler via API.
     /// </summary>
     private async Task OnEditCoverChanged(IBrowserFile file)
     {
@@ -1690,7 +1691,7 @@
                 coverContentType: _editCoverContentType,
                 cancellationToken: default);
 
-            // Update succeeded â€” now refresh this single card from the API.
+            // Update succeeded — now refresh this single card from the API.
             var idx = _seriesData.FindIndex(s => s.Id == _detailSeries.Id);
             if (idx >= 0)
             {
@@ -1722,7 +1723,7 @@
                     }
                     else
                     {
-                        // Server returned 404 â€” this series is no longer available to this user.
+                        // Server returned 404 — this series is no longer available to this user.
                         // Do NOT fabricate a fake card from command result + local selections.
                         _seriesData.RemoveAt(idx);
                         _detailSeries = null;
@@ -1734,7 +1735,7 @@
                 catch (Exception)
                 {
                     // Targeted card refresh failed (network/server error), but the update did succeed.
-                    // Keep the existing card unchanged â€” it may be stale but is safer than fabricating data.
+                    // Keep the existing card unchanged — it may be stale but is safer than fabricating data.
                     Snackbar.Add(
                         "The draft was saved, but the card could not be refreshed. Please reload the page.",
                         Severity.Warning);
@@ -1785,7 +1786,7 @@
     }
 
     /// <summary>
-    /// Pre-read IBrowserFile bytes immediately â€” do not hold IBrowserFile across re-renders.
+    /// Pre-read IBrowserFile bytes immediately — do not hold IBrowserFile across re-renders.
     /// Validates extension, content type, and size before storing in component state.
     /// </summary>
     private async Task OnProposalFileChanged(IBrowserFile file)
@@ -1929,14 +1930,14 @@
                     s.Title.Contains(term, StringComparison.OrdinalIgnoreCase));
             }
 
-            // Genre filter â€” show series that contain ALL selected genres
+            // Genre filter — show series that contain ALL selected genres
             if (_filterGenreIds.Count > 0)
             {
                 result = result.Where(s =>
                     _filterGenreIds.All(fgId => s.Genres.Any(g => g.GenreId == fgId)));
             }
 
-            // Tag filter â€” show series that contain ALL selected tags
+            // Tag filter — show series that contain ALL selected tags
             if (_filterTagIds.Count > 0)
             {
                 result = result.Where(s =>
@@ -1977,7 +1978,7 @@
 
     /// <summary>
     /// Produces a client-side slug preview using the same SlugGenerator logic the backend
-    /// uses. This is display-only â€” the server always generates the authoritative slug.
+    /// uses. This is display-only — the server always generates the authoritative slug.
     /// </summary>
     private static string BuildSlugPreview(string? title)
     {

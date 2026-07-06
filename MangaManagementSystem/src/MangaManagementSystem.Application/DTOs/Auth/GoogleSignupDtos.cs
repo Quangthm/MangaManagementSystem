@@ -2,10 +2,10 @@ namespace MangaManagementSystem.Application.DTOs.Auth
 {
     public enum GoogleSignupFlow
     {
-        NewUserVerifyOtp,
-        PendingApprovalVerifyOtp,
+        PendingApproval,
         ActiveUserLogin,
-        Rejected
+        Rejected,
+        Disabled
     }
 
     public record GoogleSignupCallbackResult(
@@ -13,6 +13,7 @@ namespace MangaManagementSystem.Application.DTOs.Auth
         string Email,
         UserDto? User = null,
         string? RoleName = null,
-        string? ErrorMessage = null
+        string? ErrorMessage = null,
+        string? ErrorCode = null
     );
 }

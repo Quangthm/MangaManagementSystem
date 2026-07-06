@@ -1,0 +1,54 @@
+﻿@page "/access-denied"
+
+<PageTitle>Access Denied - MangaFlow</PageTitle>
+
+<div class="mf-gradient-bg d-flex align-center justify-center pa-4">
+    <MudContainer MaxWidth="MaxWidth.Small">
+        <MudPaper Class="pa-8 mf-card text-center"
+                  Elevation="8">
+            <MudIcon Icon="@Icons.Material.Filled.Block"
+                     Color="Color.Error"
+                     Size="Size.Large"
+                     Class="mb-4" />
+
+            <MudText Typo="Typo.h4"
+                     Class="font-weight-bold mb-2">
+                Access Denied
+            </MudText>
+
+            <MudText Typo="Typo.h6"
+                     Color="Color.Error"
+                     Class="mb-4">
+                You do not have permission to access this page
+            </MudText>
+
+            <MudText Class="mf-muted mb-6">
+                Your account is signed in, but its current role is not
+                authorized to use the requested function.
+            </MudText>
+
+            <MudAlert Severity="Severity.Warning"
+                      Variant="Variant.Outlined"
+                      Class="mb-6">
+                Return to your dashboard or contact an administrator if
+                you believe your account should have access.
+            </MudAlert>
+
+            <MudStack Row="true"
+                      Justify="Justify.Center"
+                      Spacing="2">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Href="/">
+                    Back to Home
+                </MudButton>
+
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Secondary"
+                           Href="/profile/settings">
+                    Profile Settings
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    </MudContainer>
+</div>

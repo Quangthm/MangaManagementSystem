@@ -45,8 +45,8 @@
 
 ## BF-AUTH-001 — Register Account Without Portfolio
 
-**Status:** Agreed  
-**Primary actor:** New User  
+**Status:** Agreed
+**Primary actor:** New User
 **Goal:** Create a pending account without uploading a portfolio file.
 
 ### Main Flow
@@ -90,8 +90,8 @@ auth.usp_User_Create
 
 ## BF-AUTH-002 — Register Account With Optional Portfolio
 
-**Status:** Agreed  
-**Primary actor:** New User  
+**Status:** Agreed
+**Primary actor:** New User
 **Goal:** Create a pending account and attach an optional portfolio file for admin review.
 
 ### Recommended Main Flow
@@ -148,8 +148,8 @@ COMMIT
 
 ## BF-AUTH-003 — Google Signup Callback
 
-**Status:** Agreed  
-**Primary actor:** New User  
+**Status:** Agreed
+**Primary actor:** New User
 **Goal:** Create a pending account using Google identity information.
 
 ### Main Flow
@@ -185,8 +185,8 @@ User signs in with Google
 
 ## BF-AUTH-004 — Admin Changes User Status
 
-**Status:** Agreed  
-**Primary actor:** Admin  
+**Status:** Agreed
+**Primary actor:** Admin
 **Goal:** Allow Admin to activate, reject, or disable a user account.
 
 ### Main Flow
@@ -224,8 +224,8 @@ Admin opens account management screen
 
 ## BF-AUTH-005 — User Updates Display Name
 
-**Status:** Agreed  
-**Primary actor:** General System User  
+**Status:** Agreed
+**Primary actor:** General System User
 **Goal:** Allow an authenticated user to update their visible display name without changing login identity.
 
 ### Main Flow
@@ -259,8 +259,8 @@ User opens profile settings
 
 ## BF-AUTH-006 — User Password Reset / Password Change
 
-**Status:** Agreed  
-**Primary actor:** General System User / Admin / Token-based reset flow  
+**Status:** Agreed
+**Primary actor:** General System User / Admin / Token-based reset flow
 **Goal:** Update password hash without changing account approval/status state.
 
 ### Main Flow
@@ -304,8 +304,8 @@ User/Admin/token flow requests password reset/change
 
 ## BF-FILE-001 — Create File Resource Metadata
 
-**Status:** Agreed  
-**Primary actor:** Backend workflow / business workflow caller  
+**Status:** Agreed
+**Primary actor:** Backend workflow / business workflow caller
 **Goal:** Store Cloudinary file metadata in SQL Server and return a `file_resource_id` for the business record that owns the file.
 
 ### Main Flow
@@ -373,8 +373,8 @@ manga.usp_FileResource_Create
 
 ## BF-FILE-002 — Soft Delete File Resource
 
-**Status:** Agreed  
-**Primary actor:** Admin or authorized file-management actor  
+**Status:** Agreed
+**Primary actor:** Admin or authorized file-management actor
 **Goal:** Mark a file resource as deleted without physically removing its database row.
 
 ### Main Flow
@@ -405,8 +405,8 @@ Authorized user requests file deletion
 
 ## BF-FILE-003 — Optional Duplicate File Warning by SHA-256
 
-**Status:** Agreed, optional MVP usability behavior  
-**Primary actor:** General System User / Backend workflow  
+**Status:** Agreed, optional MVP usability behavior
+**Primary actor:** General System User / Backend workflow
 **Goal:** Detect when a newly selected file appears identical to an existing active file and optionally warn the user before saving another copy.
 
 ### Main Flow
@@ -458,8 +458,8 @@ User selects/uploads a file
 
 ## BF-SERIES-001 — Create Series Draft
 
-**Status:** Agreed  
-**Primary actor:** Mangaka  
+**Status:** Agreed
+**Primary actor:** Mangaka
 **Goal:** Create a new draft series profile and immediately register the creating Mangaka as an active contributor.
 
 ### Main Flow
@@ -522,8 +522,8 @@ audit.usp_AuditEvent_Append
 
 ## BF-SERIES-002 — Update Series Draft Profile
 
-**Status:** Agreed  
-**Primary actor:** Mangaka  
+**Status:** Agreed
+**Primary actor:** Mangaka
 **Goal:** Allow an active Mangaka contributor to update draft series profile information while the series is still in `PROPOSAL_DRAFT`.
 
 ### Main Flow
@@ -581,8 +581,8 @@ audit.usp_AuditEvent_Append
 
 ## BF-SERIES-003 — Submit Series Proposal for Editorial Review
 
-**Status:** Agreed  
-**Primary actor:** Mangaka  
+**Status:** Agreed
+**Primary actor:** Mangaka
 **Goal:** Formally submit a draft series proposal with a required proposal file so active Tantou Editors can review it from the editorial queue.
 
 ### Main Flow
@@ -1088,8 +1088,8 @@ User opens a page that links to /series/{slug} or workspace
 
 ## BF-BOARD-001 — Open START_SERIALIZATION Poll
 
-**Status:** Agreed  
-**Primary actor:** Editorial Board Chief  
+**Status:** Agreed
+**Primary actor:** Editorial Board Chief
 **Goal:** Start board voting for serialization and specify the official publication frequency if approved.
 
 ### Main Flow
@@ -1113,7 +1113,7 @@ Editorial Board Chief opens board review queue
 - `START_SERIALIZATION` poll must include board-selected publication frequency.
 - The poll stores the frequency being voted on.
 - If approved, this frequency becomes `Series.publication_frequency_code`.
-- Mangaka’s preferred frequency is not stored as a separate official column in MVP.
+- Mangakaâ€™s preferred frequency is not stored as a separate official column in MVP.
 - Mangaka may later request a change through notification, not through a formal request table.
 
 ### System Should Try To
@@ -1126,8 +1126,8 @@ Editorial Board Chief opens board review queue
 
 ## BF-BOARD-002 — Apply START_SERIALIZATION Poll Result
 
-**Status:** Agreed  
-**Primary actor:** Editorial Board Chief or system workflow  
+**Status:** Agreed
+**Primary actor:** Editorial Board Chief or system workflow
 **Goal:** Apply the computed board vote result after poll closure.
 
 ### Main Flow
@@ -1164,8 +1164,8 @@ Poll is closed
 
 ## BF-BOARD-003 — Mangaka Requests Publication Frequency Change After Board Decision
 
-**Status:** Agreed  
-**Primary actor:** Mangaka  
+**Status:** Agreed
+**Primary actor:** Mangaka
 **Goal:** Let Mangaka communicate schedule concerns after the board has already decided the official frequency.
 
 ### Main Flow
@@ -1197,8 +1197,8 @@ Mangaka views serialized series publication frequency
 
 ## BF-PAGE-001 — Temporary Page Modification Download
 
-**Status:** Draft  
-**Primary actor:** Mangaka / Authorized Page Workspace User  
+**Status:** Draft
+**Primary actor:** Mangaka / Authorized Page Workspace User
 **Goal:** Let a user generate or edit a modified page output with system tools and download it for external editing without replacing the current page version.
 
 ### Example System Tools
@@ -1251,8 +1251,8 @@ User opens page workspace for an existing ChapterPageVersion
 
 ## BF-PAGE-002 — Save Modified Page Output as New Page Version
 
-**Status:** Draft  
-**Primary actor:** Mangaka / Authorized Page Workspace User  
+**Status:** Draft
+**Primary actor:** Mangaka / Authorized Page Workspace User
 **Goal:** Save an accepted modified page output as an official tracked `ChapterPageVersion`.
 
 ### Example Modified Outputs
@@ -1319,8 +1319,8 @@ manga.usp_ChapterPageVersion_Create or equivalent page-version workflow procedur
 
 ## BF-PAGE-003 — Create Page Regions for a Page Version
 
-**Status:** Agreed  
-**Primary actor:** Authorized Page Workspace User  
+**Status:** Agreed
+**Primary actor:** Authorized Page Workspace User
 **Goal:** Save one or more manual or AI-suggested page regions for a specific `ChapterPageVersion`.
 
 ### Main Flow
@@ -1383,7 +1383,7 @@ Batch region input is also allowed:
     "height": 90.00,
     "confidence_score": 0.8750,
     "source_type": "AI",
-    "original_text": "こんにちは"
+    "original_text": "ă“ă‚“ă«ă¡ă¯"
   }
 ]
 ```
@@ -1455,8 +1455,8 @@ User opens the chapter/page workspace
 
 ## BF-PAGE-004 — Create Page Annotation Linked to Existing or Newly Created Page Regions
 
-**Status:** Agreed  
-**Primary actor:** Mangaka / Tantou Editor  
+**Status:** Agreed
+**Primary actor:** Mangaka / Tantou Editor
 **Goal:** Create a page annotation/comment and link it to one or more `PageRegion` records.
 
 ### Main Flow
@@ -1547,8 +1547,8 @@ manga.ChapterPageVersion
 
 ## BF-PAGE-005 — Resolve Page Annotation
 
-**Status:** Agreed  
-**Primary actor:** Mangaka / Tantou Editor with permission  
+**Status:** Agreed
+**Primary actor:** Mangaka / Tantou Editor with permission
 **Goal:** Mark an annotation as handled without deleting the original feedback record.
 
 ### Main Flow
@@ -1608,8 +1608,8 @@ audit.usp_AuditEvent_Append
 
 ## BF-PAGE-005A — Update Page Annotation Text
 
-**Status:** Agreed  
-**Primary actor:** Mangaka / Tantou Editor with permission  
+**Status:** Agreed
+**Primary actor:** Mangaka / Tantou Editor with permission
 **Goal:** Correct or clarify unresolved annotation text without changing linked regions or deleting feedback history.
 
 ### Main Flow
@@ -1695,8 +1695,8 @@ User opens an editable chapter in the chapter/page workspace
 
 ## BF-PAGE-006 — Create Chapter Page Task Linked to Page Regions
 
-**Status:** Agreed  
-**Primary actor:** Mangaka / authorized task creator  
+**Status:** Agreed
+**Primary actor:** Mangaka / authorized task creator
 **Goal:** Create a page task for an Assistant or contributor and link the task to one or more `PageRegion` records.
 
 ### Main Flow
@@ -1784,8 +1784,8 @@ manga.ChapterPageVersion
 
 ## BF-TASK-007 — Quick Select Batch Task Assignment
 
-**Status:** Agreed  
-**Primary actor:** Mangaka  
+**Status:** Agreed
+**Primary actor:** Mangaka
 **Goal:** Create multiple assigned tasks at once by selecting pages with their current versions, an assistant, task type, and common task defaults. Each task links to one whole-page `PageRegion`.
 
 ### Main Flow
@@ -1857,8 +1857,8 @@ audit.AuditEvent
 
 ## BF-CH-001 — Chapter Editorial Review Decision
 
-**Status:** Agreed  
-**Primary actor:** Tantou Editor  
+**Status:** Agreed
+**Primary actor:** Tantou Editor
 **Goal:** Record the final chapter-level editorial decision while preserving page-level annotations and review history.
 
 ### Main Flow
@@ -1909,8 +1909,8 @@ Tantou Editor opens the submitted chapter review queue
 
 ## BF-CH-002 — Create Replacement Chapter After Cancellation
 
-**Status:** Agreed  
-**Primary actor:** Mangaka  
+**Status:** Agreed
+**Primary actor:** Mangaka
 **Goal:** Allow a Mangaka to redo a cancelled chapter as a new chapter draft using the same chapter number label, while preserving the cancelled attempt as history.
 
 ### Main Flow
@@ -2193,8 +2193,8 @@ Use this template when adding new flows.
 ```md
 ## BF-AREA-XXX — Flow Name
 
-**Status:** Draft / Agreed / Future  
-**Primary actor:** Actor Name  
+**Status:** Draft / Agreed / Future
+**Primary actor:** Actor Name
 **Goal:** Short goal sentence.
 
 ### Main Flow

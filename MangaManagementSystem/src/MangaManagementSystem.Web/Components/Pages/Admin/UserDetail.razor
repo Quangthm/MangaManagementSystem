@@ -1,0 +1,574 @@
+@page "/admin/users/{UserId:guid}"
+@using System.Security.Claims
+@using MangaManagementSystem.Application.DTOs.Admin
+@using MangaManagementSystem.Web.Services.Api
+@attribute [Authorize(Roles = "Admin")]
+@inject IAdminUserApiClient AdminUserApiClient
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<PageTitle>User Detail - MangaFlow</PageTitle>
+
+<AdminLayout>
+    <div class="mf-page">
+        <MudButton Variant="Variant.Text"
+                   Href="/admin/users"
+                   Class="mb-3">
+            Back to User Accounts
+        </MudButton>
+
+        @if (_isLoading)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (!string.IsNullOrWhiteSpace(_loadError))
+        {
+            <MudAlert Severity="Severity.Error">@_loadError</MudAlert>
+        }
+        else if (_user is null)
+        {
+            <MudAlert Severity="Severity.Warning">User not found.</MudAlert>
+        }
+        else
+        {
+            <div class="mf-page-header">
+                <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">
+                    @(_user.DisplayName ?? _user.Username)
+                </MudText>
+                <MudText Typo="Typo.body1" Class="mf-muted">
+                    Account detail, lifecycle actions, password recovery, and audit history.
+                </MudText>
+            </div>
+
+            <MudGrid>
+                <MudItem xs="12" md="7">
+                    <MudPaper Class="pa-5 mf-card" Elevation="0">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-4">Account Information</MudText>
+
+                        <MudGrid>
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.caption" Class="mf-muted">Username</MudText>
+                                <MudText>@_user.Username</MudText>
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.caption" Class="mf-muted">Email</MudText>
+                                <MudText>@_user.Email</MudText>
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.caption" Class="mf-muted">Role</MudText>
+                                <MudText>@(_user.RoleName ?? "-")</MudText>
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.caption" Class="mf-muted">Status</MudText>
+                                @switch (_user.StatusCode)
+                                {
+                                    case "PENDING_APPROVAL":
+                                        <MudChip T="string" Color="Color.Info" Size="Size.Small">PENDING_APPROVAL</MudChip>
+                                        break;
+                                    case "ACTIVE":
+                                        <MudChip T="string" Color="Color.Success" Size="Size.Small">ACTIVE</MudChip>
+                                        break;
+                                    case "REJECTED":
+                                        <MudChip T="string" Color="Color.Warning" Size="Size.Small">REJECTED</MudChip>
+                                        break;
+                                    case "DISABLED":
+                                        <MudChip T="string" Color="Color.Error" Size="Size.Small">DISABLED</MudChip>
+                                        break;
+                                }
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.caption" Class="mf-muted">Created</MudText>
+                                <MudText>@_user.CreatedAtUtc.ToLocalTime().ToString("F")</MudText>
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.caption" Class="mf-muted">User ID</MudText>
+                                <MudText Typo="Typo.body2">@_user.UserId</MudText>
+                            </MudItem>
+                            <MudItem xs="12">
+                                <MudText Typo="Typo.caption" Class="mf-muted">Portfolio</MudText>
+                                @if (_user.PortfolioFileId.HasValue)
+                                {
+                                    <MudLink Href="@($"/api/portfolio/{_user.PortfolioFileId.Value:D}")"
+                                             Target="_blank">
+                                        Open portfolio
+                                    </MudLink>
+                                }
+                                else
+                                {
+                                    <MudText>No portfolio</MudText>
+                                }
+                            </MudItem>
+                        </MudGrid>
+                    </MudPaper>
+                </MudItem>
+
+                <MudItem xs="12" md="5">
+                    <MudPaper Class="pa-5 mf-card" Elevation="0">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-4">Account Actions</MudText>
+
+                        <MudStack Spacing="2">
+                            @if (_user.StatusCode == "PENDING_APPROVAL")
+                            {
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Success"
+                                           Disabled="@_isActionBusy"
+                                           OnClick="ApproveAsync">
+                                    Approve
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined"
+                                           Color="Color.Error"
+                                           Disabled="@_isActionBusy"
+                                           OnClick="@(() => OpenReasonDialog(ReasonAction.Reject))">
+                                    Reject
+                                </MudButton>
+                            }
+                            else if (_user.StatusCode == "REJECTED")
+                            {
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Success"
+                                           Disabled="@_isActionBusy"
+                                           OnClick="ApproveAsync">
+                                    Approve Again
+                                </MudButton>
+                            }
+                            else if (_user.StatusCode == "DISABLED")
+                            {
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Success"
+                                           Disabled="@_isActionBusy"
+                                           OnClick="ActivateAsync">
+                                    Activate
+                                </MudButton>
+                            }
+                            else if (_user.StatusCode == "ACTIVE")
+                            {
+                                <MudButton Variant="Variant.Outlined"
+                                           Color="Color.Error"
+                                           Disabled="@(_isActionBusy || IsCurrentUser)"
+                                           OnClick="@(() => OpenReasonDialog(ReasonAction.Disable))">
+                                    Disable
+                                </MudButton>
+                            }
+
+                            <MudDivider />
+
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       Disabled="@_isActionBusy"
+                                       OnClick="SendPasswordResetAsync">
+                                Send Password Reset Link
+                            </MudButton>
+
+                            <MudText Typo="Typo.caption" Class="mf-muted">
+                                A one-time link is sent to the user's email. The administrator never sees or sets the new password.
+                            </MudText>
+                        </MudStack>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+
+            <MudPaper Class="pa-5 mf-card mt-4" Elevation="0">
+                <MudStack Row="true"
+                          AlignItems="AlignItems.Center"
+                          Justify="Justify.SpaceBetween"
+                          Class="mb-4">
+                    <div>
+                        <MudText Typo="Typo.h6" Class="font-weight-bold">User Audit History</MudText>
+                        <MudText Typo="Typo.body2" Class="mf-muted">
+                            Status changes, reset-link requests, and other events linked to this user.
+                        </MudText>
+                    </div>
+                    <MudButton Variant="Variant.Outlined"
+                               Disabled="@_isAuditLoading"
+                               OnClick="ReloadAuditAsync">
+                        Refresh
+                    </MudButton>
+                </MudStack>
+
+                @if (_isAuditLoading)
+                {
+                    <MudProgressLinear Indeterminate="true" Class="mb-4" />
+                }
+                else if (!string.IsNullOrWhiteSpace(_auditError))
+                {
+                    <MudAlert Severity="Severity.Error">@_auditError</MudAlert>
+                }
+                else if (_auditItems.Count == 0)
+                {
+                    <MudText>No audit events were found for this user.</MudText>
+                }
+                else
+                {
+                    <MudTable Items="_auditItems"
+                              Hover="true"
+                              Dense="true"
+                              Breakpoint="Breakpoint.Sm">
+                        <HeaderContent>
+                            <MudTh>Time</MudTh>
+                            <MudTh>Action</MudTh>
+                            <MudTh>Actor</MudTh>
+                            <MudTh>Details</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Time">
+                                @context.OccurredAtUtc.ToLocalTime().ToString("g")
+                            </MudTd>
+                            <MudTd DataLabel="Action">
+                                <MudChip T="string" Size="Size.Small">@context.ActionCode</MudChip>
+                            </MudTd>
+                            <MudTd DataLabel="Actor">
+                                @(context.ActorRoleName ?? "System")
+                                @if (context.ActorUserId.HasValue)
+                                {
+                                    <div class="mf-muted">@context.ActorUserId</div>
+                                }
+                            </MudTd>
+                            <MudTd DataLabel="Details">
+                                @if (string.IsNullOrWhiteSpace(context.DetailJson))
+                                {
+                                    <span>-</span>
+                                }
+                                else
+                                {
+                                    <pre style="white-space:pre-wrap; margin:0; max-width:520px;">@context.DetailJson</pre>
+                                }
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+
+                    <MudStack Row="true"
+                              AlignItems="AlignItems.Center"
+                              Justify="Justify.Center"
+                              Spacing="2"
+                              Class="mt-4">
+                        <MudButton Variant="Variant.Outlined"
+                                   Disabled="@(_auditPageNumber <= 1)"
+                                   OnClick="PreviousAuditPageAsync">
+                            Previous
+                        </MudButton>
+                        <MudText>
+                            Page @_auditPageNumber of @Math.Max(_auditTotalPages, 1)
+                        </MudText>
+                        <MudButton Variant="Variant.Outlined"
+                                   Disabled="@(_auditTotalPages == 0 || _auditPageNumber >= _auditTotalPages)"
+                                   OnClick="NextAuditPageAsync">
+                            Next
+                        </MudButton>
+                    </MudStack>
+                }
+            </MudPaper>
+
+            @if (_showReasonDialog)
+            {
+                <MudDialog @bind-Visible="_showReasonDialog">
+                    <DialogContent>
+                        <MudText Typo="Typo.h6" Class="font-weight-bold">
+                            @(_reasonAction == ReasonAction.Reject
+                                ? "Reject Account"
+                                : "Disable Account")
+                        </MudText>
+                        <MudTextField T="string"
+                                      @bind-Value="_reason"
+                                      Label="@(_reasonAction == ReasonAction.Reject ? "Reject reason" : "Disable reason")"
+                                      Variant="Variant.Outlined"
+                                      Lines="4"
+                                      MaxLength="500"
+                                      Counter="500"
+                                      Required="true"
+                                      Class="mt-4" />
+                        <MudAlert Severity="Severity.Warning" Class="mt-3">
+                            The reason is required and will appear in the audit history.
+                        </MudAlert>
+                    </DialogContent>
+                    <DialogActions>
+                        <MudButton Variant="Variant.Text" OnClick="CloseReasonDialog">Cancel</MudButton>
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Error"
+                                   Disabled="@string.IsNullOrWhiteSpace(_reason)"
+                                   OnClick="SubmitReasonActionAsync">
+                            Confirm
+                        </MudButton>
+                    </DialogActions>
+                </MudDialog>
+            }
+        }
+    </div>
+</AdminLayout>
+
+@code {
+    [Parameter]
+    public Guid UserId { get; set; }
+
+    private AdminUserDetailDto? _user;
+    private IReadOnlyList<AdminUserAuditEventDto> _auditItems =
+        Array.Empty<AdminUserAuditEventDto>();
+
+    private bool _isLoading;
+    private bool _isActionBusy;
+    private bool _isAuditLoading;
+    private string? _loadError;
+    private string? _auditError;
+    private Guid? _currentUserId;
+
+    private int _auditPageNumber = 1;
+    private const int AuditPageSize = 20;
+    private int _auditTotalPages;
+
+    private bool _showReasonDialog;
+    private ReasonAction _reasonAction;
+    private string? _reason;
+
+    private bool IsCurrentUser =>
+        _currentUserId == UserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState =
+            await AuthStateProvider.GetAuthenticationStateAsync();
+
+        var currentUserIdValue =
+            authState.User.FindFirst(
+                ClaimTypes.NameIdentifier)?.Value;
+
+        if (Guid.TryParse(
+                currentUserIdValue,
+                out var currentUserId))
+        {
+            _currentUserId = currentUserId;
+        }
+
+        await LoadUserAsync();
+        await LoadAuditAsync();
+    }
+
+    private async Task LoadUserAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        try
+        {
+            _user =
+                await AdminUserApiClient.GetUserAsync(
+                    UserId);
+
+            if (_user is null)
+            {
+                _loadError =
+                    "The requested user was not found.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _loadError = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task LoadAuditAsync()
+    {
+        _isAuditLoading = true;
+        _auditError = null;
+
+        try
+        {
+            var page =
+                await AdminUserApiClient.GetUserAuditAsync(
+                    UserId,
+                    _auditPageNumber,
+                    AuditPageSize);
+
+            _auditItems = page.Items;
+            _auditTotalPages = page.TotalPages;
+        }
+        catch (Exception ex)
+        {
+            _auditError = ex.Message;
+            _auditItems =
+                Array.Empty<AdminUserAuditEventDto>();
+            _auditTotalPages = 0;
+        }
+        finally
+        {
+            _isAuditLoading = false;
+        }
+    }
+
+    private Task ReloadAuditAsync() =>
+        LoadAuditAsync();
+
+    private async Task PreviousAuditPageAsync()
+    {
+        if (_auditPageNumber <= 1)
+        {
+            return;
+        }
+
+        _auditPageNumber--;
+        await LoadAuditAsync();
+    }
+
+    private async Task NextAuditPageAsync()
+    {
+        if (_auditTotalPages == 0
+            || _auditPageNumber >= _auditTotalPages)
+        {
+            return;
+        }
+
+        _auditPageNumber++;
+        await LoadAuditAsync();
+    }
+
+    private async Task ApproveAsync()
+    {
+        await RunActionAsync(
+            async () =>
+                await AdminUserApiClient
+                    .ApproveUserAsync(UserId),
+            _user?.StatusCode == "REJECTED"
+                ? "Account approved again."
+                : "Account approved.");
+    }
+
+    private async Task ActivateAsync()
+    {
+        await RunActionAsync(
+            async () =>
+                await AdminUserApiClient
+                    .ActivateUserAsync(UserId),
+            "Account activated.");
+    }
+
+    private void OpenReasonDialog(
+        ReasonAction action)
+    {
+        _reasonAction = action;
+        _reason = null;
+        _showReasonDialog = true;
+    }
+
+    private void CloseReasonDialog()
+    {
+        _showReasonDialog = false;
+        _reason = null;
+    }
+
+    private async Task SubmitReasonActionAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_reason))
+        {
+            Snackbar.Add(
+                "A reason is required.",
+                Severity.Error);
+
+            return;
+        }
+
+        var reason = _reason.Trim();
+        var action = _reasonAction;
+
+        CloseReasonDialog();
+
+        if (action == ReasonAction.Reject)
+        {
+            await RunActionAsync(
+                async () =>
+                    await AdminUserApiClient
+                        .RejectUserAsync(
+                            UserId,
+                            reason),
+                "Account rejected.");
+        }
+        else
+        {
+            await RunActionAsync(
+                async () =>
+                    await AdminUserApiClient
+                        .DisableUserAsync(
+                            UserId,
+                            reason),
+                "Account disabled.");
+        }
+    }
+
+    private async Task SendPasswordResetAsync()
+    {
+        _isActionBusy = true;
+
+        try
+        {
+            var resetPageUrl =
+                NavigationManager
+                    .ToAbsoluteUri(
+                        "/reset-password")
+                    .ToString();
+
+            await AdminUserApiClient
+                .SendPasswordResetAsync(
+                    UserId,
+                    resetPageUrl);
+
+            Snackbar.Add(
+                "Password reset link sent.",
+                Severity.Success);
+
+            _auditPageNumber = 1;
+            await LoadAuditAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(
+                ex.Message,
+                Severity.Error);
+        }
+        finally
+        {
+            _isActionBusy = false;
+        }
+    }
+
+    private async Task RunActionAsync(
+        Func<Task> action,
+        string successMessage)
+    {
+        if (_isActionBusy)
+        {
+            return;
+        }
+
+        _isActionBusy = true;
+
+        try
+        {
+            await action();
+            Snackbar.Add(
+                successMessage,
+                Severity.Success);
+
+            await LoadUserAsync();
+            _auditPageNumber = 1;
+            await LoadAuditAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(
+                ex.Message,
+                Severity.Error);
+        }
+        finally
+        {
+            _isActionBusy = false;
+        }
+    }
+
+    private enum ReasonAction
+    {
+        Reject,
+        Disable
+    }
+}

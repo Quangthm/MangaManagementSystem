@@ -148,7 +148,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                     TaskTitle: request.TaskTitle,
                     TaskDescription: request.TaskDescription,
                     PriorityLevel: request.PriorityLevel,
-                    DueAtUtc: null,
+                    DueAtUtc: request.DueAtUtc,
                     CompensationAmount: request.CompensationAmount,
                     CompletedPageVersionId: null,
                     PageRegionIds: request.PageRegionIds ?? new List<Guid>());

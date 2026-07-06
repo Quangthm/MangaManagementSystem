@@ -1,9 +1,13 @@
+﻿using System.Security.Claims;
 using MangaManagementSystem.API.Contracts;
+using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MangaManagementSystem.API.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/profile")]
     public sealed class ProfileController : ControllerBase
@@ -13,6 +17,9 @@ namespace MangaManagementSystem.API.Controllers
 
         private const string PortfolioPurposeCode =
             "REGISTRATION_PORTFOLIO";
+
+        private const string ActiveStatusCode =
+            "ACTIVE";
 
         private readonly IUserService _userService;
         private readonly IFileStorageService _fileStorageService;
@@ -42,8 +49,22 @@ namespace MangaManagementSystem.API.Controllers
                         "User id is required."));
             }
 
+            var authorization =
+                await ResolveAuthorizedActorAsync();
+
+            if (authorization.Error is not null)
+            {
+                return authorization.Error;
+            }
+
+            if (authorization.Actor!.UserId != userId)
+            {
+                return ProfileAccessDenied();
+            }
+
             var user =
-                await _userService.GetUserByIdAsync(userId);
+                await _userService.GetUserByIdAsync(
+                    userId);
 
             if (user == null)
             {
@@ -66,13 +87,41 @@ namespace MangaManagementSystem.API.Controllers
                         "File resource id is required."));
             }
 
+            var authorization =
+                await ResolveAuthorizedActorAsync();
+
+            if (authorization.Error is not null)
+            {
+                return authorization.Error;
+            }
+
+            var actor =
+                authorization.Actor!;
+
+            var isOwnedProfileFile =
+                actor.AvatarFileId == fileResourceId
+                || actor.PortfolioFileId == fileResourceId;
+
+            if (!isOwnedProfileFile)
+            {
+                _logger.LogWarning(
+                    "User {ActorUserId} attempted to access profile file {FileResourceId} owned by another account.",
+                    actor.UserId,
+                    fileResourceId);
+
+                return StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    new ProfileMessageResponse(
+                        "You do not have permission to access this file."));
+            }
+
             var file =
                 await _fileResourceService
                     .GetFileResourceByIdAsync(
                         fileResourceId);
 
-            if (file == null ||
-                file.DeletedAtUtc != null)
+            if (file == null
+                || file.DeletedAtUtc != null)
             {
                 return NotFound(
                     new ProfileMessageResponse(
@@ -94,6 +143,19 @@ namespace MangaManagementSystem.API.Controllers
                 return BadRequest(
                     new ProfileMessageResponse(
                         "User id is required."));
+            }
+
+            var authorization =
+                await ResolveAuthorizedActorAsync();
+
+            if (authorization.Error is not null)
+            {
+                return authorization.Error;
+            }
+
+            if (authorization.Actor!.UserId != userId)
+            {
+                return ProfileAccessDenied();
             }
 
             if (string.IsNullOrWhiteSpace(
@@ -141,6 +203,19 @@ namespace MangaManagementSystem.API.Controllers
                 Guid userId,
                 IFormFile file)
         {
+            var authorization =
+                await ResolveAuthorizedActorAsync();
+
+            if (authorization.Error is not null)
+            {
+                return authorization.Error;
+            }
+
+            if (authorization.Actor!.UserId != userId)
+            {
+                return ProfileAccessDenied();
+            }
+
             return await UpdateFileAsync(
                 userId,
                 file,
@@ -154,6 +229,19 @@ namespace MangaManagementSystem.API.Controllers
                 Guid userId,
                 IFormFile file)
         {
+            var authorization =
+                await ResolveAuthorizedActorAsync();
+
+            if (authorization.Error is not null)
+            {
+                return authorization.Error;
+            }
+
+            if (authorization.Actor!.UserId != userId)
+            {
+                return ProfileAccessDenied();
+            }
+
             return await UpdateFileAsync(
                 userId,
                 file,
@@ -174,8 +262,8 @@ namespace MangaManagementSystem.API.Controllers
                         "User id is required."));
             }
 
-            if (file == null ||
-                file.Length <= 0)
+            if (file == null
+                || file.Length <= 0)
             {
                 return BadRequest(
                     new ProfileMessageResponse(
@@ -190,7 +278,8 @@ namespace MangaManagementSystem.API.Controllers
                 await file.CopyToAsync(stream);
 
                 var originalFileName =
-                    Path.GetFileName(file.FileName);
+                    Path.GetFileName(
+                        file.FileName);
 
                 var contentType =
                     string.IsNullOrWhiteSpace(
@@ -249,6 +338,114 @@ namespace MangaManagementSystem.API.Controllers
                     statusCode:
                         StatusCodes.Status500InternalServerError);
             }
+        }
+
+        private async Task<(
+            UserDto? Actor,
+            IActionResult? Error)>
+            ResolveAuthorizedActorAsync()
+        {
+            if (User.Identity?.IsAuthenticated != true)
+            {
+                _logger.LogWarning(
+                    "Rejected unauthenticated profile request.");
+
+                return (
+                    null,
+                    Unauthorized(
+                        new ProfileMessageResponse(
+                            "Authentication is required.")));
+            }
+
+            var actorUserIdValue =
+                User.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? User.FindFirstValue("sub")
+                ?? User.FindFirstValue("user_id")
+                ?? User.FindFirstValue("UserId");
+
+            if (!Guid.TryParse(
+                    actorUserIdValue,
+                    out var actorUserId)
+                || actorUserId == Guid.Empty)
+            {
+                return (
+                    null,
+                    Unauthorized(
+                        new ProfileMessageResponse(
+                            "Authenticated actor information is invalid.")));
+            }
+
+            var actorRole =
+                User.FindFirstValue(ClaimTypes.Role)
+                ?? User.FindFirstValue("role");
+
+            if (string.IsNullOrWhiteSpace(actorRole))
+            {
+                return (
+                    null,
+                    Unauthorized(
+                        new ProfileMessageResponse(
+                            "Authenticated actor role is unavailable.")));
+            }
+
+            var actor =
+                await _userService.GetUserByIdAsync(
+                    actorUserId);
+
+            if (actor is null)
+            {
+                return (
+                    null,
+                    Unauthorized(
+                        new ProfileMessageResponse(
+                            "Authenticated actor was not found.")));
+            }
+
+            if (!string.Equals(
+                    actor.StatusCode,
+                    ActiveStatusCode,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return (
+                    null,
+                    StatusCode(
+                        StatusCodes.Status403Forbidden,
+                        new ProfileMessageResponse(
+                            "The account is not active.")));
+            }
+
+            if (!string.Equals(
+                    actor.RoleName,
+                    actorRole,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning(
+                    "Rejected profile request because JWT role {SuppliedRole} did not match stored role {StoredRole} for user {ActorUserId}.",
+                    actorRole,
+                    actor.RoleName,
+                    actor.UserId);
+
+                return (
+                    null,
+                    Unauthorized(
+                        new ProfileMessageResponse(
+                            "Authenticated actor information is invalid.")));
+            }
+
+            return (
+                actor,
+                null);
+        }
+
+        private IActionResult ProfileAccessDenied()
+        {
+            _logger.LogWarning(
+                "User attempted to access or modify another account's profile.");
+
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new ProfileMessageResponse(
+                    "You may only manage your own profile."));
         }
     }
 }
