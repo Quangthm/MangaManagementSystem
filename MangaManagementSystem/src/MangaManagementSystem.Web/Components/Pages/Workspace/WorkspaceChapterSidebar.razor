@@ -23,7 +23,7 @@
             @foreach (var chapter in Chapters)
             {
                 var isCurrent = (chapter.Id == SelectedChapter);
-                var bgClass = isCurrent ? "background-color: #f3f4f6;" : "";
+                var bgClass = isCurrent ? "background-color: #eef2ff; border-left: 3px solid #4f46e5;" : "";
                 var textColor = isCurrent ? Color.Primary : Color.Default;
 
                 <MudListItem Class="rounded-lg" Style="@bgClass" OnClick="@(() => OnSelectChapter.InvokeAsync(chapter.Id))">
@@ -56,15 +56,7 @@
                                 </div>
                             </div>
                             <div class="d-flex align-center flex-shrink-0">
-                                @if (isCurrent)
-                                {
-                                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Class="mr-2">Active</MudChip>
-                                }
-                                else
-                                {
-                                    var statusLabel = chapter.StatusCode == "UNDER_REVIEW" ? "Review" : (chapter.StatusCode == "APPROVED" ? "Approved" : (chapter.StatusCode == "REVISION_REQUESTED" ? "Revision" : "Draft"));
-                                    <MudText Typo="Typo.caption" Class="mf-muted mr-2">@statusLabel</MudText>
-                                }
+                                <MudText Typo="Typo.caption" Class="@(isCurrent ? "mr-2 font-weight-bold" : "mf-muted mr-2")" Color="@(isCurrent ? Color.Primary : Color.Default)">@StatusLabel(chapter.StatusCode)</MudText>
 
                                 <div @onclick:stopPropagation="true">
                                     @if (chapter.StatusCode == "APPROVED" || chapter.StatusCode == "PUBLISHED" || chapter.StatusCode == "RELEASED" || chapter.StatusCode == "SCHEDULED")
@@ -132,6 +124,20 @@
     [Parameter] public EventCallback<Guid> OnCancelSubmission { get; set; }
 
     private string _lastSignature = "";
+
+    // Chapter status_code -> short UI label. Includes the publication-scheduling statuses
+    // (SCHEDULED/PUBLISHED/RELEASED) that arrived when main merged; unknown -> Draft.
+    private static string StatusLabel(string? code) => code switch
+    {
+        "UNDER_REVIEW" => "Review",
+        "APPROVED" => "Approved",
+        "REVISION_REQUESTED" => "Revision",
+        "SCHEDULED" => "Scheduled",
+        "PUBLISHED" => "Published",
+        "RELEASED" => "Released",
+        "CANCELLED" => "Cancelled",
+        _ => "Draft"
+    };
 
     private async Task HandleRenameKeyDown(KeyboardEventArgs e, ChapterModel chapter)
     {

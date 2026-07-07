@@ -25,10 +25,28 @@
 > - **CHƯA full build** (chỉ compile-check qua CLI vì C: đầy làm bước copy fail — không phải lỗi code).
 > - **CHƯA commit** toàn bộ đợt này (VN fix + refactor + gom using). Merge `origin/main` trước đó ĐÃ push lên `feature/workspace-v3`; mọi thứ sau merge còn local uncommitted.
 >
-> **Bước tiếp theo:**
-> 1. Mở **Visual Studio 2022** → build đầy đủ + **chạy Web**, smoke test luồng workspace (đặc biệt Save/Versions/Pages vì vừa tách partial).
-> 2. Nếu OK → commit (gộp: refactor Step 1+2 + gom using + VN fix) rồi push `feature/workspace-v3`.
-> 3. Dọn ổ C: (temp/cache) để build ổn định.
+> **CẬP NHẬT 2026-07-07 (cùng ngày, muộn hơn) — đã commit + merge main + dọn C::**
+> - Refactor đã **commit local** `bb322b1` (chưa push).
+> - **Merge `origin/main` vào `feature/workspace-v3`** → merge commit `fc91f30`, **SẠCH, 0 xung đột** (main +59 commit: auth/admin, publication scheduling, security hardening, file cleanup, legacy delete... KHÔNG đụng file `Workspace/` nào). Branch giờ ahead 61 origin/feature/workspace-v3, **CHƯA push**.
+> - **Compile-verify lại SAU merge:** Web + API **0 lỗi CS/RZ/NU** → `GlobalUsings.cs` không đụng độ `using` với code mới của main.
+> - **Dọn ổ C::** NuGet cache 1.4GB đã dời C:→`D:\NugetPackages`; set env **`NUGET_PACKAGES=D:\NugetPackages`** cấp User (vĩnh viễn, reversible). C: từ 985MB → ~4.8GB trống. ⚠️ **VS/terminal đang mở phải khởi động lại** mới nhận env mới (tiến trình cũ vẫn ghi cache về C:).
+>
+> **Bước tiếp theo (vẫn còn):**
+> 1. **Khởi động lại Visual Studio 2022** (để nhận `NUGET_PACKAGES` mới) → build đầy đủ + **chạy Web**, smoke test luồng workspace (đặc biệt Save/Versions/Pages vì vừa tách partial) + kiểm tính năng mới từ main không vỡ.
+> 2. Nếu OK → **push `feature/workspace-v3`** (hiện đang giữ local, ahead 61).
+
+> ### UPDATE 2026-07-07 (tiếp) — workspace bugfix batch (leader feedback). CHƯA COMMIT
+> **Đã sửa (build sạch Web/API, local uncommitted):**
+> - **#1** sidebar status label thiếu status mới → thêm SCHEDULED/PUBLISHED/RELEASED/CANCELLED trong `WorkspaceChapterSidebar.razor` (method `StatusLabel()`).
+> - **#4** bỏ chip "Active"; chapter đang chọn: nền `#eef2ff` + `border-left 3px #4f46e5` + label bold primary (luôn hiện status thật).
+> - **#2** save timeout ("HttpClient.Timeout 100s"): nguyên nhân Cloudinary SDK dùng HttpClient default 100s. Fix trong `CloudinaryFileStorageService` ctor: `_cloudinary.Api.Timeout = 300000` (5', ms). ⚠️ file Infrastructure dùng chung — chỉ nâng timeout.
+> - **#5a** task panel gọn: `CompactTarget()` (2 panel + "…(+N)") + tooltip full — `CreatorWorkspace.razor.cs` + `.razor`.
+> - **#5b** deadline mỗi task: `ProductionTask.DueAtUtc` + map từ `t.DueAtUtc`/`dbTask.DueAtUtc` (client `GetTasksByPageAsync`/`CreateTaskAsync` trả `ChapterPageTaskDto` vốn CÓ sẵn `DueAtUtc`) + hiển thị "Due MMM d" (đỏ + "(overdue)" nếu quá hạn). KHÔNG đụng API/DTO.
+> - **#8** user CHỐT **giữ soft-delete** → không đổi code.
+>
+> **Còn lại (đã chẩn đoán, CHƯA làm):**
+> - **#3** editor vào workspace trống — **GỐC RỄ XÁC ĐỊNH:** `MangakaChapterRepository.QueryAccessibleChapters(actorUserId)` (Infrastructure ~350-362) lọc chapter về **chỉ series mà actor là contributor role "Mangaka"** → editor trả RỖNG. Controller `MangakaChaptersController` không có `[Authorize]` (dùng header `X-Actor-User-Id`); handler chỉ delegate; gate nằm ở repo query. Các read khác (page counts/pages/versions/tasks/annotations) nhiều khả năng cùng cổng Mangaka-only. **KHÔNG phải fix nhanh:** cần "authorized workspace reader = active contributor bất kỳ (Mangaka/Editor/Assistant)" áp NHẤT QUÁN cho MỌI read của workspace — mỗi cái ở repo/query riêng. Ghi/đổi trạng thái VẪN gated Mangaka-only qua `EnsureActiveMangakaContributorAsync` nên nới READ an toàn cho quyền ghi. "Render tùy role" (user) ⇒ đọc business-rules để biết mỗi role thấy gì (vd assistant chỉ task của mình?). → **đụng shared/merged Mangaka code — làm task riêng có scope rõ, KHÔNG rush.**
+> - **#6** "Panel Target (Hold Shift to select multiple)" không chạy + **#7** edit nhiều region cùng lúc (nút Edit Region ở `CreatorWorkspace.razor:174` đang `Disabled` khi `SelectedRegions.Count != 1`) → việc **canvas/JS**, CHƯA đọc JS interop chọn region.
 
 > ### ⚠️ FILE MOVE 2026-07-03 — workspace code sang thư mục Workspace
 > `CreatorWorkspace.razor` + `WorkspaceChapterSidebar.razor` đã `git mv` từ

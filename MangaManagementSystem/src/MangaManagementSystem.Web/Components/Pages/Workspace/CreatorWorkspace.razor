@@ -566,10 +566,19 @@ else
                                   <div class="d-flex">
                                       <MudIcon Icon="@icon" Size="Size.Small" Color="@iconColor" Class="mr-2 mt-1" />
                                       <div>
-                                          <MudText Typo="Typo.body2" Class="@(isTerminal ? "font-weight-bold text-decoration-line-through" : "font-weight-bold")">@task.Type &bull; @task.Target</MudText>
+                                          <MudTooltip Text="@task.Target">
+                                              <MudText Typo="Typo.body2" Class="@(isTerminal ? "font-weight-bold text-decoration-line-through" : "font-weight-bold")">@task.Type &bull; @CompactTarget(task.Target)</MudText>
+                                          </MudTooltip>
                                           <MudText Typo="Typo.caption" Class="mf-muted d-flex align-center mt-1">
                                               <MudAvatar Size="Size.Small" Color="Color.Primary" Class="mr-1" Style="width:16px; height:16px; font-size:8px;">@initials</MudAvatar> @task.Assistant
                                           </MudText>
+                                          @if (task.DueAtUtc.HasValue)
+                                          {
+                                              var overdue = task.DueAtUtc.Value < DateTime.UtcNow && !isTerminal;
+                                              <MudText Typo="Typo.caption" Class="d-flex align-center mt-1" Color="@(overdue ? Color.Error : Color.Default)">
+                                                  <MudIcon Icon="@Icons.Material.Filled.Event" Class="mr-1" Style="width:14px; height:14px; font-size:14px;" /> Due @task.DueAtUtc.Value.ToLocalTime().ToString("MMM d")@(overdue ? " (overdue)" : "")
+                                              </MudText>
+                                          }
                                       </div>
                                   </div>
                                   <div class="d-flex align-center" @onclick:stopPropagation="true">

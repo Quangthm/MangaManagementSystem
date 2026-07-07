@@ -90,6 +90,16 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     // Task logic
     private List<ProductionTask> ActiveTasks = new();
 
+    // Task Panel: keep the target label compact — show the first couple of panels, then a "…(+N)"
+    // tail. The full list stays visible via the tooltip on hover.
+    private static string CompactTarget(string? target, int max = 2)
+    {
+        if (string.IsNullOrWhiteSpace(target)) return "";
+        var parts = target.Split(", ", StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length <= max) return target;
+        return string.Join(", ", parts.Take(max)) + $" …(+{parts.Length - max})";
+    }
+
     // --- Version-scoped task/annotation display (Option B) -------------------------------
     // Tasks and annotations belong to the specific version of their regions (BR-CP-015/016),
     // so the Task Panel and canvas pins show only items of the currently active version.
@@ -263,6 +273,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             { 
                 Id = newId, 
                 DbId = dbTask.ChapterPageTaskId,
+                DueAtUtc = dbTask.DueAtUtc,
                 Type = TaskType,
                 Assistant = assistantName,
                 Target = target,
