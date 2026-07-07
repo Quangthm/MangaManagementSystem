@@ -45,8 +45,8 @@
 
 ## BF-AUTH-001 — Register Account Without Portfolio
 
-**Status:** Agreed  
-**Primary actor:** New User  
+**Status:** Agreed
+**Primary actor:** New User
 **Goal:** Create a pending account without uploading a portfolio file.
 
 ### Main Flow
@@ -90,8 +90,8 @@ auth.usp_User_Create
 
 ## BF-AUTH-002 — Register Account With Optional Portfolio
 
-**Status:** Agreed  
-**Primary actor:** New User  
+**Status:** Agreed
+**Primary actor:** New User
 **Goal:** Create a pending account and attach an optional portfolio file for admin review.
 
 ### Recommended Main Flow
@@ -148,8 +148,8 @@ COMMIT
 
 ## BF-AUTH-003 — Google Signup Callback
 
-**Status:** Agreed  
-**Primary actor:** New User  
+**Status:** Agreed
+**Primary actor:** New User
 **Goal:** Create a pending account using Google identity information.
 
 ### Main Flow
@@ -185,8 +185,8 @@ User signs in with Google
 
 ## BF-AUTH-004 — Admin Changes User Status
 
-**Status:** Agreed  
-**Primary actor:** Admin  
+**Status:** Agreed
+**Primary actor:** Admin
 **Goal:** Allow Admin to activate, reject, or disable a user account.
 
 ### Main Flow
@@ -224,8 +224,8 @@ Admin opens account management screen
 
 ## BF-AUTH-005 — User Updates Display Name
 
-**Status:** Agreed  
-**Primary actor:** General System User  
+**Status:** Agreed
+**Primary actor:** General System User
 **Goal:** Allow an authenticated user to update their visible display name without changing login identity.
 
 ### Main Flow
@@ -259,8 +259,8 @@ User opens profile settings
 
 ## BF-AUTH-006 — User Password Reset / Password Change
 
-**Status:** Agreed  
-**Primary actor:** General System User / Admin / Token-based reset flow  
+**Status:** Agreed
+**Primary actor:** General System User / Admin / Token-based reset flow
 **Goal:** Update password hash without changing account approval/status state.
 
 ### Main Flow
@@ -304,8 +304,8 @@ User/Admin/token flow requests password reset/change
 
 ## BF-FILE-001 — Create File Resource Metadata
 
-**Status:** Agreed  
-**Primary actor:** Backend workflow / business workflow caller  
+**Status:** Agreed
+**Primary actor:** Backend workflow / business workflow caller
 **Goal:** Store Cloudinary file metadata in SQL Server and return a `file_resource_id` for the business record that owns the file.
 
 ### Main Flow
@@ -373,8 +373,8 @@ manga.usp_FileResource_Create
 
 ## BF-FILE-002 — Soft Delete File Resource
 
-**Status:** Agreed  
-**Primary actor:** Admin or authorized file-management actor  
+**Status:** Agreed
+**Primary actor:** Admin or authorized file-management actor
 **Goal:** Mark a file resource as deleted without physically removing its database row.
 
 ### Main Flow
@@ -405,8 +405,8 @@ Authorized user requests file deletion
 
 ## BF-FILE-003 — Optional Duplicate File Warning by SHA-256
 
-**Status:** Agreed, optional MVP usability behavior  
-**Primary actor:** General System User / Backend workflow  
+**Status:** Agreed, optional MVP usability behavior
+**Primary actor:** General System User / Backend workflow
 **Goal:** Detect when a newly selected file appears identical to an existing active file and optionally warn the user before saving another copy.
 
 ### Main Flow
@@ -458,8 +458,8 @@ User selects/uploads a file
 
 ## BF-SERIES-001 — Create Series Draft
 
-**Status:** Agreed  
-**Primary actor:** Mangaka  
+**Status:** Agreed
+**Primary actor:** Mangaka
 **Goal:** Create a new draft series profile and immediately register the creating Mangaka as an active contributor.
 
 ### Main Flow
@@ -522,8 +522,8 @@ audit.usp_AuditEvent_Append
 
 ## BF-SERIES-002 — Update Series Draft Profile
 
-**Status:** Agreed  
-**Primary actor:** Mangaka  
+**Status:** Agreed
+**Primary actor:** Mangaka
 **Goal:** Allow an active Mangaka contributor to update draft series profile information while the series is still in `PROPOSAL_DRAFT`.
 
 ### Main Flow
@@ -581,8 +581,8 @@ audit.usp_AuditEvent_Append
 
 ## BF-SERIES-003 — Submit Series Proposal for Editorial Review
 
-**Status:** Agreed  
-**Primary actor:** Mangaka  
+**Status:** Agreed
+**Primary actor:** Mangaka
 **Goal:** Formally submit a draft series proposal with a required proposal file so active Tantou Editors can review it from the editorial queue.
 
 ### Main Flow
@@ -1088,8 +1088,8 @@ User opens a page that links to /series/{slug} or workspace
 
 ## BF-BOARD-001 — Open START_SERIALIZATION Poll
 
-**Status:** Agreed  
-**Primary actor:** Editorial Board Chief  
+**Status:** Agreed
+**Primary actor:** Editorial Board Chief
 **Goal:** Start board voting for serialization and specify the official publication frequency if approved.
 
 ### Main Flow
@@ -1113,7 +1113,7 @@ Editorial Board Chief opens board review queue
 - `START_SERIALIZATION` poll must include board-selected publication frequency.
 - The poll stores the frequency being voted on.
 - If approved, this frequency becomes `Series.publication_frequency_code`.
-- Mangaka’s preferred frequency is not stored as a separate official column in MVP.
+- Mangakaâ€™s preferred frequency is not stored as a separate official column in MVP.
 - Mangaka may later request a change through notification, not through a formal request table.
 
 ### System Should Try To
@@ -1126,8 +1126,8 @@ Editorial Board Chief opens board review queue
 
 ## BF-BOARD-002 — Apply START_SERIALIZATION Poll Result
 
-**Status:** Agreed  
-**Primary actor:** Editorial Board Chief or system workflow  
+**Status:** Agreed
+**Primary actor:** Editorial Board Chief or system workflow
 **Goal:** Apply the computed board vote result after poll closure.
 
 ### Main Flow
@@ -1164,8 +1164,8 @@ Poll is closed
 
 ## BF-BOARD-003 — Mangaka Requests Publication Frequency Change After Board Decision
 
-**Status:** Agreed  
-**Primary actor:** Mangaka  
+**Status:** Agreed
+**Primary actor:** Mangaka
 **Goal:** Let Mangaka communicate schedule concerns after the board has already decided the official frequency.
 
 ### Main Flow
@@ -1197,8 +1197,8 @@ Mangaka views serialized series publication frequency
 
 ## BF-PAGE-001 — Temporary Page Modification Download
 
-**Status:** Draft  
-**Primary actor:** Mangaka / Authorized Page Workspace User  
+**Status:** Draft
+**Primary actor:** Mangaka / Authorized Page Workspace User
 **Goal:** Let a user generate or edit a modified page output with system tools and download it for external editing without replacing the current page version.
 
 ### Example System Tools
@@ -1251,8 +1251,8 @@ User opens page workspace for an existing ChapterPageVersion
 
 ## BF-PAGE-002 — Save Modified Page Output as New Page Version
 
-**Status:** Draft  
-**Primary actor:** Mangaka / Authorized Page Workspace User  
+**Status:** Draft
+**Primary actor:** Mangaka / Authorized Page Workspace User
 **Goal:** Save an accepted modified page output as an official tracked `ChapterPageVersion`.
 
 ### Example Modified Outputs
@@ -1319,8 +1319,8 @@ manga.usp_ChapterPageVersion_Create or equivalent page-version workflow procedur
 
 ## BF-PAGE-003 — Create Page Regions for a Page Version
 
-**Status:** Agreed  
-**Primary actor:** Authorized Page Workspace User  
+**Status:** Agreed
+**Primary actor:** Authorized Page Workspace User
 **Goal:** Save one or more manual or AI-suggested page regions for a specific `ChapterPageVersion`.
 
 ### Main Flow
@@ -1383,7 +1383,7 @@ Batch region input is also allowed:
     "height": 90.00,
     "confidence_score": 0.8750,
     "source_type": "AI",
-    "original_text": "こんにちは"
+    "original_text": "ă“ă‚“ă«ă¡ă¯"
   }
 ]
 ```
@@ -1455,8 +1455,8 @@ User opens the chapter/page workspace
 
 ## BF-PAGE-004 — Create Page Annotation Linked to Existing or Newly Created Page Regions
 
-**Status:** Agreed  
-**Primary actor:** Mangaka / Tantou Editor  
+**Status:** Agreed
+**Primary actor:** Mangaka / Tantou Editor
 **Goal:** Create a page annotation/comment and link it to one or more `PageRegion` records.
 
 ### Main Flow
@@ -1547,8 +1547,8 @@ manga.ChapterPageVersion
 
 ## BF-PAGE-005 — Resolve Page Annotation
 
-**Status:** Agreed  
-**Primary actor:** Mangaka / Tantou Editor with permission  
+**Status:** Agreed
+**Primary actor:** Mangaka / Tantou Editor with permission
 **Goal:** Mark an annotation as handled without deleting the original feedback record.
 
 ### Main Flow
@@ -1608,8 +1608,8 @@ audit.usp_AuditEvent_Append
 
 ## BF-PAGE-005A — Update Page Annotation Text
 
-**Status:** Agreed  
-**Primary actor:** Mangaka / Tantou Editor with permission  
+**Status:** Agreed
+**Primary actor:** Mangaka / Tantou Editor with permission
 **Goal:** Correct or clarify unresolved annotation text without changing linked regions or deleting feedback history.
 
 ### Main Flow
@@ -1695,8 +1695,8 @@ User opens an editable chapter in the chapter/page workspace
 
 ## BF-PAGE-006 — Create Chapter Page Task Linked to Page Regions
 
-**Status:** Agreed  
-**Primary actor:** Mangaka / authorized task creator  
+**Status:** Agreed
+**Primary actor:** Mangaka / authorized task creator
 **Goal:** Create a page task for an Assistant or contributor and link the task to one or more `PageRegion` records.
 
 ### Main Flow
@@ -1784,8 +1784,8 @@ manga.ChapterPageVersion
 
 ## BF-TASK-007 — Quick Select Batch Task Assignment
 
-**Status:** Agreed  
-**Primary actor:** Mangaka  
+**Status:** Agreed
+**Primary actor:** Mangaka
 **Goal:** Create multiple assigned tasks at once by selecting pages with their current versions, an assistant, task type, and common task defaults. Each task links to one whole-page `PageRegion`.
 
 ### Main Flow
@@ -1857,8 +1857,8 @@ audit.AuditEvent
 
 ## BF-CH-001 — Chapter Editorial Review Decision
 
-**Status:** Agreed  
-**Primary actor:** Tantou Editor  
+**Status:** Agreed
+**Primary actor:** Tantou Editor
 **Goal:** Record the final chapter-level editorial decision while preserving page-level annotations and review history.
 
 ### Main Flow
@@ -1870,11 +1870,11 @@ Tantou Editor opens the submitted chapter review queue
 → Editor chooses one decision: APPROVED / REVISION_REQUESTED / CANCELLED
 → If decision is REVISION_REQUESTED or CANCELLED, editor enters non-blank comments
 → Editor may optionally attach an EDITORIAL_ATTACHMENT markup file
-→ Backend validates actor permission, chapter status, required comments, optional markup file, and scheduling rules when needed
+→ Backend validates actor permission, chapter status, required comments, optional markup file, and planned release date rules when needed
 → Backend creates manga.ChapterEditorialReview
 → Backend updates manga.Chapter.status_code according to the decision
 → If APPROVED and Chapter.planned_release_date is empty, Chapter.status_code becomes APPROVED
-→ If APPROVED and Chapter.planned_release_date already exists and is valid, Chapter.status_code becomes SCHEDULED
+→ If APPROVED and Chapter.planned_release_date already exists and is not in the past, Chapter.status_code becomes SCHEDULED
 → Backend writes the chapter review audit event and the scheduling audit detail when approval moves the chapter to SCHEDULED
 → UI refreshes the chapter status and review history
 ```
@@ -1884,7 +1884,7 @@ Tantou Editor opens the submitted chapter review queue
 | Decision | Chapter status after review | Meaning |
 |---|---|---|
 | `APPROVED` with no planned release date | `APPROVED` | The chapter is accepted but not yet scheduled. |
-| `APPROVED` with a valid planned release date | `SCHEDULED` | The chapter is accepted and locked for planned release. |
+| `APPROVED` with a future planned release date | `SCHEDULED` | The chapter is accepted and locked for planned release. |
 | `REVISION_REQUESTED` | `REVISION_REQUESTED` | The same chapter attempt can be edited and resubmitted with new page versions. |
 | `CANCELLED` | `CANCELLED` | The current chapter attempt is a hard stop and becomes read-only historical reference. |
 
@@ -1896,6 +1896,7 @@ Tantou Editor opens the submitted chapter review queue
 - `CANCELLED` is not a normal fix-and-resubmit outcome. Use `REVISION_REQUESTED` when the chapter can still be fixed.
 - Scheduling is chapter-level; this flow must never set `Series.status_code = SCHEDULED`.
 - If approval moves a chapter to `SCHEDULED`, Mangaka/page content mutation workflows become locked.
+- Publication frequency provides suggestions and warnings, not hard scheduling enforcement.
 
 ### System Should Try To
 
@@ -1908,8 +1909,8 @@ Tantou Editor opens the submitted chapter review queue
 
 ## BF-CH-002 — Create Replacement Chapter After Cancellation
 
-**Status:** Agreed  
-**Primary actor:** Mangaka  
+**Status:** Agreed
+**Primary actor:** Mangaka
 **Goal:** Allow a Mangaka to redo a cancelled chapter as a new chapter draft using the same chapter number label, while preserving the cancelled attempt as history.
 
 ### Main Flow
@@ -1949,91 +1950,73 @@ unique among non-cancelled chapters only
 
 ---
 
-## BF-PUB-001 — Plan Chapter Release Date by Publication Frequency
+## BF-PUB-001 — Plan or Reschedule Chapter Release Date
 
 **Status:** Agreed  
 **Primary actor:** Mangaka / Tantou Editor  
-**Goal:** Set and validate a chapter planned release date according to the series' official publication frequency and the relevant `PublicationPeriod`.
+**Goal:** Set or update a chapter planned release date while treating publication frequency as an advisory suggestion rather than a hard scheduling constraint.
 
 ### Main Flow
 
 ```text
-User opens chapter planning/create/edit screen for a serialized or publication-planned series
-→ UI shows the current Series.publication_frequency_code
-→ Backend finds the latest non-cancelled chapter with planned_release_date for the same series, excluding the current chapter
-→ If a previous planned chapter exists, backend resolves the PublicationPeriod containing the previous planned_release_date
-→ If no previous planned chapter exists, backend treats the current chapter as the first planned chapter
-→ Backend resolves the allowed PublicationPeriod range according to the frequency and first/non-first rule
-→ Backend may propose a default planned_release_date
-→ User may keep the default or choose another date
-→ Backend validates the chosen planned_release_date is inside the allowed PublicationPeriod range
+User opens a chapter planning/review/schedule screen
+→ UI shows the chapter status, current planned_release_date, released_at_utc if available, and Series.publication_frequency_code
+→ UI may suggest a default date from the series frequency
+→ User chooses a planned release date
+→ UI asks for confirmation before changing the schedule
+→ Backend validates actor permission and chapter status
+→ Backend validates the planned release date is not in the past
+→ Backend may produce a warning if the date does not match the advisory frequency pattern
 → Backend saves Chapter.planned_release_date
 → If the chapter was APPROVED, backend changes Chapter.status_code to SCHEDULED
 → If the chapter is still DRAFT or REVISION_REQUESTED, backend keeps the current editable/plannable status
-→ Backend writes an audit event for planned date set or status change when applicable
+→ Backend writes an audit event for planned date set/rescheduled and status change when applicable
 → UI refreshes the schedule display
 ```
 
-### Allowed Period Rules
+### Advisory Default Date Rules
 
-| Case | Frequency | Allowed planned release date |
-|---|---|---|
-| Previous planned non-cancelled chapter exists | `WEEKLY` | Inside the next weekly `PublicationPeriod` after the previous chapter's weekly period. |
-| Previous planned non-cancelled chapter exists | `MONTHLY` | Inside the next monthly `PublicationPeriod` after the previous chapter's monthly period. |
-| No previous planned non-cancelled chapter exists | `WEEKLY` | Inside the current weekly `PublicationPeriod` or the next weekly `PublicationPeriod`. |
-| No previous planned non-cancelled chapter exists | `MONTHLY` | Inside the current monthly `PublicationPeriod`. |
-| Any case | `IRREGULAR` | No weekly/monthly boundary enforcement. |
-| Any case | `NULL` | Scheduling may be allowed without strict weekly/monthly validation unless a later workflow defines stricter behavior. |
-
-### Default Date Rules
-
-| Frequency | Default |
+| Frequency | Suggested default |
 |---|---|
-| `WEEKLY` with previous planned chapter | Previous planned release date + 7 days. |
-| `WEEKLY` first planned chapter | A date inside the current or next weekly publication period. |
-| `MONTHLY` with previous planned chapter | Same day number in the next month when possible; otherwise the last day of the next month. |
-| `MONTHLY` first planned chapter | A date inside the current monthly publication period. |
-| `IRREGULAR` | No next-period default is required. |
+| `WEEKLY` | Same weekday in the next week when a useful reference date exists. |
+| `MONTHLY` | Same day number in the next month when possible; otherwise the last valid day of the next month. |
+| `IRREGULAR` | No strict default is required; UI may suggest a convenient future date. |
+| `NULL` | No strict default is required; UI may show that the official release approach is not decided. |
+
+### Hard Validation Rules
+
+| Rule | Behavior |
+|---|---|
+| Planned release date is in the past | Block. |
+| Chapter is `CANCELLED` or `RELEASED` | Block schedule/reschedule. |
+| Actor lacks permission | Block. |
+| Date does not match `Series.publication_frequency_code` suggestion | Warn only; allow authorized user to continue. |
+| Multiple chapters share the same planned release date | Allow, because bulk/catch-up releases may be intentional. |
 
 ### Important Notes
 
-- Weekly `PublicationPeriod` records start on Monday and end on Sunday.
-- A weekly period belongs to the month that contains at least four days of that week.
+- Scheduling is chapter-level and must not change `Series.status_code`.
+- `Series.publication_frequency_code` is an advisory planning label. It may drive suggestions and warnings, but it must not hard-block normal scheduling.
+- Mangaka and Tantou Editors may both schedule/reschedule chapters when the chapter status and permissions allow it.
+- This MVP assumes Mangaka and Editor coordinate release dates outside the system. The system provides visibility, audit trail, and contributor contact visibility where authorized, but it does not resolve scheduling disputes.
 - For scheduled chapters, the business publication date is usually `Chapter.planned_release_date`.
 - For released chapters, the release business date is derived from `released_at_utc` converted to Vietnam publication time (UTC+7), then taking the date part.
-- Frequency enforcement uses planned release dates. A late actual release does not automatically shift the next chapter schedule unless an authorized user reschedules it.
-- Scheduling is chapter-level and must not change `Series.status_code`.
-- When an approved chapter receives a valid planned release date, it becomes `SCHEDULED`.
+- Frequency mismatch warnings should explain the suggested pattern without preventing the user from saving.
 
 ### System Should Try To
 
-- Keep scheduling predictable while allowing date adjustment inside the allowed period.
-- Avoid classifying chapters by raw UTC date when the business date is required.
-- Explain the valid date range to the user when a chosen date is outside the allowed period.
-- Clearly distinguish first planned chapter behavior from next planned chapter behavior.
+- Keep scheduling flexible enough for bulk releases, catch-up releases, vacations, breaks, and campaign-driven release plans.
+- Give helpful defaults without turning frequency into a hard rule.
+- Preserve schedule changes in audit so users can see who changed what and when.
+- Keep terminal chapter states protected.
 
 ---
 
-
-## BF-PUB-002 — Reschedule or Hold a Scheduled Chapter
+## BF-PUB-002 — Put a Scheduled Chapter On Hold or Return It to Schedule
 
 **Status:** Agreed  
 **Primary actor:** Tantou Editor  
-**Goal:** Allow an editor to manage a scheduled chapter without reopening Mangaka page/content mutation workflows.
-
-### Reschedule Flow
-
-```text
-Tantou Editor opens a chapter with status SCHEDULED
-→ UI shows current planned_release_date and publication frequency
-→ Editor chooses a new planned release date and provides a reason when required by implementation
-→ Backend validates actor permission and Chapter.status_code = SCHEDULED
-→ Backend validates the new date against the same PublicationPeriod rules used for scheduling
-→ Backend updates Chapter.planned_release_date
-→ Chapter.status_code remains SCHEDULED
-→ Backend writes CHAPTER_RESCHEDULED audit detail with old/new planned date and actor
-→ UI refreshes the schedule display
-```
+**Goal:** Allow an editor to pause a scheduled chapter and later return it to a new schedule date without reopening page/content mutation workflows.
 
 ### Put On Hold Flow
 
@@ -2041,26 +2024,80 @@ Tantou Editor opens a chapter with status SCHEDULED
 Tantou Editor opens a chapter with status SCHEDULED
 → Editor chooses Put On Hold
 → UI requires a non-blank operational/editorial reason
+→ UI asks for confirmation
 → Backend validates actor permission, Chapter.status_code = SCHEDULED, and non-blank reason
 → Backend changes Chapter.status_code to ON_HOLD
-→ Backend preserves planned_release_date unless a later workflow decides otherwise
-→ Backend writes CHAPTER_PUT_ON_HOLD audit detail with reason and old/new status
+→ Backend suspends the active release plan and requires a new future planned_release_date before the chapter can return to SCHEDULED
+→ Backend preserves the old planned date in audit details
+→ Backend writes CHAPTER_PUT_ON_HOLD audit detail with reason and old/new status/date values
 → UI refreshes the chapter as read-only/on-hold
+```
+
+### Return to Schedule Flow
+
+```text
+Tantou Editor opens a chapter with status ON_HOLD
+→ Editor chooses Return to Schedule / Schedule Again
+→ Editor selects a new planned release date that is not in the past
+→ UI asks for confirmation
+→ Backend validates actor permission, Chapter.status_code = ON_HOLD, and future planned release date
+→ Backend sets Chapter.planned_release_date to the new date
+→ Backend changes Chapter.status_code to SCHEDULED
+→ Backend writes audit detail with old/new status and date values
+→ UI refreshes the chapter as scheduled
 ```
 
 ### Important Notes
 
-- Mangaka users cannot reschedule a `SCHEDULED` chapter.
+- `ON_HOLD` means the previous release plan is suspended.
+- A chapter returning from `ON_HOLD` to `SCHEDULED` must receive a new future planned release date.
 - Mangaka users cannot edit chapter content or perform page/content mutation workflows while the chapter is `SCHEDULED` or `ON_HOLD`.
 - Blocked workflows include page creation, page deletion, page-version upload, assistant task output submission that creates or changes page content, and other saved page/content mutations.
-- `ON_HOLD` recovery is intentionally not defined in this flow.
-- Release automation and public release visibility are outside this flow.
+- Automatic movement of overdue scheduled chapters to `ON_HOLD` is deferred. The MVP may show an overdue warning, but it should not auto-hold chapters unless a later workflow explicitly implements it.
 
 ### System Should Try To
 
-- Keep scheduled chapters stable for release planning.
-- Give editors controlled schedule management without reopening Mangaka editing.
-- Keep hold reasons traceable and visible enough for later workflow decisions.
+- Keep hold reasons traceable.
+- Make it clear that on-hold chapters are paused, not cancelled.
+- Avoid using normal read-only pages as hidden write triggers.
+- Require an explicit new date before returning a held chapter to schedule.
+
+---
+
+## BF-PUB-003 — Release a Chapter
+
+**Status:** Agreed  
+**Primary actor:** Tantou Editor  
+**Goal:** Mark a chapter as released using the editor as the final publication enforcer.
+
+### Main Flow
+
+```text
+Tantou Editor opens a publication schedule or chapter review screen
+→ Editor chooses Release Chapter / Release Now
+→ UI shows a confirmation dialog explaining the status and timestamp changes
+→ Backend validates actor permission and chapter eligibility
+→ If Chapter.planned_release_date is empty, backend sets it to the current publication business date
+→ If Chapter.planned_release_date already exists, backend preserves it for planned-vs-actual comparison
+→ Backend sets Chapter.released_at_utc to the current UTC timestamp
+→ Backend sets Chapter.status_code to RELEASED
+→ Backend writes CHAPTER_RELEASED audit detail
+→ UI refreshes the release calendar and chapter status
+```
+
+### Important Notes
+
+- Releasing a chapter is an explicit editor action. The MVP does not automatically release chapters when the planned date arrives.
+- Releasing should ask for confirmation.
+- Preserving an existing planned date helps compare planned release timing against actual release time.
+- Release action should be blocked for `CANCELLED` and already `RELEASED` chapters.
+- Bulk release may be supported later; when implemented, it should ask for confirmation and audit each affected chapter.
+
+### System Should Try To
+
+- Make the release action deliberate and traceable.
+- Keep planned-vs-actual release information useful.
+- Avoid automatic release behavior without explicit team approval.
 
 ---
 
@@ -2156,8 +2193,8 @@ Use this template when adding new flows.
 ```md
 ## BF-AREA-XXX — Flow Name
 
-**Status:** Draft / Agreed / Future  
-**Primary actor:** Actor Name  
+**Status:** Draft / Agreed / Future
+**Primary actor:** Actor Name
 **Goal:** Short goal sentence.
 
 ### Main Flow

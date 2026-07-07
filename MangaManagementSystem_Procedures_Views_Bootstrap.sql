@@ -1,4 +1,4 @@
-USE MangaManagementDB;
+﻿USE MangaManagementDB;
 GO
 CREATE OR ALTER PROCEDURE audit.usp_AuditEvent_Append
     @actor_user_id      UNIQUEIDENTIFIER = NULL,
@@ -265,20 +265,60 @@ BEGIN
     DECLARE @lock_resource NVARCHAR(255);
 
     DECLARE @old_status_code NVARCHAR(30);
-    DECLARE @normalized_new_status_code NVARCHAR(30) = UPPER(LTRIM(RTRIM(@new_status_code)));
-    DECLARE @normalized_reason NVARCHAR(500) = NULLIF(LTRIM(RTRIM(@reason)), N'');
+    DECLARE @normalized_new_status_code NVARCHAR(30) =
+        UPPER(LTRIM(RTRIM(@new_status_code)));
+    DECLARE @normalized_reason NVARCHAR(500) =
+        NULLIF(LTRIM(RTRIM(@reason)), N'');
 
     DECLARE @audit_entity_id NVARCHAR(100);
     DECLARE @detail_json NVARCHAR(MAX);
 
     BEGIN TRY
+        IF @admin_user_id IS NULL
+        BEGIN
+            ;THROW 53100, 'Admin user id is required.', 1;
+        END;
+
+        IF @target_user_id IS NULL
+        BEGIN
+            ;THROW 53104, 'Target user id is required.', 1;
+        END;
+
+        IF @normalized_new_status_code NOT IN
+        (
+            N'PENDING_APPROVAL',
+            N'ACTIVE',
+            N'REJECTED',
+            N'DISABLED'
+        )
+        BEGIN
+            ;THROW 53105, 'Unsupported target user status.', 1;
+        END;
+
+        IF @normalized_new_status_code IN
+        (
+            N'REJECTED',
+            N'DISABLED'
+        )
+        AND @normalized_reason IS NULL
+        BEGIN
+            ;THROW 53106, 'A reason is required when rejecting or disabling an account.', 1;
+        END;
+
+        IF LEN(@normalized_reason) > 500
+        BEGIN
+            ;THROW 53107, 'Reason cannot exceed 500 characters.', 1;
+        END;
+
         IF @@TRANCOUNT = 0
         BEGIN
             SET @started_tran = 1;
             BEGIN TRAN;
         END;
 
-        SET @lock_resource = N'auth_user_status_change_' + CONVERT(NVARCHAR(36), @target_user_id);
+        SET @lock_resource =
+            N'auth_user_status_change_'
+            + CONVERT(NVARCHAR(36), @target_user_id);
 
         EXEC @lock_result = sys.sp_getapplock
             @Resource = @lock_resource,
@@ -294,18 +334,12 @@ BEGIN
         IF NOT EXISTS
         (
             SELECT 1
-            FROM
-            (
-                SELECT
-                    u.user_id,
-                    u.role_id
-                FROM auth.Users u
-                WHERE u.user_id = @admin_user_id
-                  AND u.status_code = N'ACTIVE'
-            ) AS active_admin
+            FROM auth.Users u
             INNER JOIN auth.Roles r
-                ON r.role_id = active_admin.role_id
-            WHERE r.role_name = N'Admin'
+                ON r.role_id = u.role_id
+            WHERE u.user_id = @admin_user_id
+              AND u.status_code = N'ACTIVE'
+              AND r.role_name = N'Admin'
         )
         BEGIN
             ;THROW 53102, 'Admin user is not active or does not have permission.', 1;
@@ -321,6 +355,12 @@ BEGIN
             ;THROW 53103, 'Target user does not exist.', 1;
         END;
 
+        IF @admin_user_id = @target_user_id
+           AND @normalized_new_status_code <> N'ACTIVE'
+        BEGIN
+            ;THROW 53108, 'An administrator cannot reject or disable their own account.', 1;
+        END;
+
         IF @old_status_code = @normalized_new_status_code
         BEGIN
             IF @started_tran = 1
@@ -329,6 +369,25 @@ BEGIN
             END;
 
             RETURN;
+        END;
+
+        IF NOT
+        (
+            (@old_status_code = N'PENDING_APPROVAL'
+                AND @normalized_new_status_code IN
+                    (N'ACTIVE', N'REJECTED', N'DISABLED'))
+            OR
+            (@old_status_code = N'REJECTED'
+                AND @normalized_new_status_code = N'ACTIVE')
+            OR
+            (@old_status_code = N'DISABLED'
+                AND @normalized_new_status_code = N'ACTIVE')
+            OR
+            (@old_status_code = N'ACTIVE'
+                AND @normalized_new_status_code = N'DISABLED')
+        )
+        BEGIN
+            ;THROW 53109, 'The requested account status transition is not allowed.', 1;
         END;
 
         UPDATE auth.Users
@@ -346,14 +405,15 @@ BEGIN
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
         );
 
-       SET @audit_entity_id = CONVERT(NVARCHAR(36), @target_user_id);
+        SET @audit_entity_id =
+            CONVERT(NVARCHAR(36), @target_user_id);
 
-EXEC audit.usp_AuditEvent_Append
-    @actor_user_id = @admin_user_id,
-    @action_code = N'USER_STATUS_CHANGED',
-    @entity_type = N'Users',
-    @entity_id = @audit_entity_id,
-    @detail_json = @detail_json;
+        EXEC audit.usp_AuditEvent_Append
+            @actor_user_id = @admin_user_id,
+            @action_code = N'USER_STATUS_CHANGED',
+            @entity_type = N'Users',
+            @entity_id = @audit_entity_id,
+            @detail_json = @detail_json;
 
         IF @started_tran = 1
         BEGIN
@@ -361,7 +421,8 @@ EXEC audit.usp_AuditEvent_Append
         END;
     END TRY
     BEGIN CATCH
-        IF @started_tran = 1 AND XACT_STATE() <> 0
+        IF @started_tran = 1
+           AND XACT_STATE() <> 0
         BEGIN
             ROLLBACK;
         END;
@@ -392,7 +453,7 @@ BEGIN
         NULLIF(LTRIM(RTRIM(@display_name)), N'');
 
     BEGIN TRY
-     
+
 
         IF @@TRANCOUNT = 0
         BEGIN
@@ -782,6 +843,82 @@ BEGIN
     END CATCH
 END;
 GO
+CREATE OR ALTER PROCEDURE manga.usp_Admin_FileResource_SoftDelete
+    @actor_user_id UNIQUEIDENTIFIER,
+    @file_resource_id UNIQUEIDENTIFIER,
+    @delete_reason NVARCHAR(500) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @started_tran BIT = 0;
+
+    BEGIN TRY
+        IF @actor_user_id IS NULL
+        BEGIN
+            ;THROW 54030, 'Actor user id is required.', 1;
+        END;
+
+        IF @file_resource_id IS NULL
+        BEGIN
+            ;THROW 54031, 'File resource id is required.', 1;
+        END;
+
+        DECLARE @normalized_delete_reason NVARCHAR(500) =
+            NULLIF(LTRIM(RTRIM(@delete_reason)), N'');
+
+        IF @normalized_delete_reason IS NULL
+        BEGIN
+            ;THROW 54032, 'Delete reason is required.', 1;
+        END;
+
+        IF LEN(@normalized_delete_reason) > 500
+        BEGIN
+            ;THROW 54034, 'Delete reason cannot exceed 500 characters.', 1;
+        END;
+
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @started_tran = 1;
+            BEGIN TRAN;
+        END;
+
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM auth.Users u
+            INNER JOIN auth.Roles r
+                ON r.role_id = u.role_id
+            WHERE u.user_id = @actor_user_id
+              AND u.status_code = N'ACTIVE'
+              AND r.role_name = N'Admin'
+        )
+        BEGIN
+            ;THROW 54033, 'Actor is not an active administrator.', 1;
+        END;
+
+        EXEC manga.usp_FileResource_SoftDelete
+            @file_resource_id = @file_resource_id,
+            @deleted_by_user_id = @actor_user_id,
+            @delete_reason = @normalized_delete_reason;
+
+        IF @started_tran = 1
+        BEGIN
+            COMMIT;
+        END;
+    END TRY
+    BEGIN CATCH
+        IF @started_tran = 1
+           AND XACT_STATE() <> 0
+        BEGIN
+            ROLLBACK;
+        END;
+
+        ;THROW;
+    END CATCH
+END;
+GO
 CREATE OR ALTER PROCEDURE manga.usp_FileResource_FindActiveDuplicates
     @sha256_hash         CHAR(64),
     @file_size_bytes     BIGINT = NULL,
@@ -882,7 +1019,7 @@ BEGIN
             @uploaded_by_user_id = @user_id,
             @file_resource_id = @new_portfolio_file_id OUTPUT;
 
-       
+
 
         UPDATE auth.Users
         SET portfolio_file_id = @new_portfolio_file_id
@@ -1738,183 +1875,6 @@ BEGIN
     END CATCH;
 END;
 GO
-CREATE OR ALTER PROCEDURE manga.usp_SeriesContributor_EndAssistant
-    @actor_user_id UNIQUEIDENTIFIER,
-    @series_id UNIQUEIDENTIFIER,
-    @assistant_user_id UNIQUEIDENTIFIER,
-    @reason NVARCHAR(500)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-
-    DECLARE @started_tran BIT = 0;
-
-    BEGIN TRY
-        IF @@TRANCOUNT = 0
-        BEGIN
-            SET @started_tran = 1;
-            BEGIN TRAN;
-        END;
-
-        --------------------------------------------------------------------
-        -- 1. Lock contributor changes for this series
-        --------------------------------------------------------------------
-        DECLARE @lock_resource NVARCHAR(200) =
-            N'manga_series_contributor_end_assistant_' + CONVERT(NVARCHAR(36), @series_id);
-
-        DECLARE @lock_result INT;
-
-        EXEC @lock_result = sys.sp_getapplock
-            @Resource = @lock_resource,
-            @LockMode = 'Exclusive',
-            @LockOwner = 'Transaction',
-            @LockTimeout = 10000;
-
-        IF @lock_result < 0
-        BEGIN
-            ;THROW 58601, 'Could not acquire series contributor lock.', 1;
-        END;
-
-        --------------------------------------------------------------------
-        -- 2. Validate required reason
-        --------------------------------------------------------------------
-        IF @reason IS NULL OR LTRIM(RTRIM(@reason)) = N''
-        BEGIN
-            ;THROW 58602, 'A reason is required when ending an assistant contributor.', 1;
-        END;
-
-        --------------------------------------------------------------------
-        -- 3. Actor must be active Mangaka contributor of target series
-        --------------------------------------------------------------------
-        IF NOT EXISTS
-        (
-            SELECT 1
-            FROM manga.vw_ActiveSeriesContributor ascx
-            WHERE ascx.series_id = @series_id
-              AND ascx.user_id = @actor_user_id
-              AND ascx.role_name = N'Mangaka'
-              AND ascx.user_status_code = N'ACTIVE'
-        )
-        BEGIN
-            ;THROW 58603, 'Only an active Mangaka contributor can end assistant contributors for this series.', 1;
-        END;
-
-        --------------------------------------------------------------------
-        -- 4. Target must be active Assistant contributor of target series
-        --------------------------------------------------------------------
-        IF NOT EXISTS
-        (
-            SELECT 1
-            FROM manga.vw_ActiveSeriesContributor ascx
-            WHERE ascx.series_id = @series_id
-              AND ascx.user_id = @assistant_user_id
-              AND ascx.role_name = N'Assistant'
-              AND ascx.user_status_code = N'ACTIVE'
-        )
-        BEGIN
-            ;THROW 58604, 'Target user is not an active Assistant contributor of this series.', 1;
-        END;
-
-        --------------------------------------------------------------------
-        -- 5. Explicitly reject Mangaka / Tantou Editor contributor rows
-        --------------------------------------------------------------------
-        IF EXISTS
-        (
-            SELECT 1
-            FROM manga.vw_ActiveSeriesContributor ascx
-            WHERE ascx.series_id = @series_id
-              AND ascx.user_id = @assistant_user_id
-              AND ascx.role_name IN (N'Mangaka', N'Tantou Editor')
-              AND ascx.user_status_code = N'ACTIVE'
-        )
-        BEGIN
-            ;THROW 58605, 'Mangaka and Tantou Editor contributors cannot be ended by this workflow.', 1;
-        END;
-
-        --------------------------------------------------------------------
-        -- 6. Block ending when assistant has ASSIGNED or UNDER_REVIEW tasks
-        --    for this same series.
-        --    Relationship: Task -> Region -> PageVersion -> Page -> Chapter -> Series
-        --------------------------------------------------------------------
-        IF EXISTS
-        (
-            SELECT 1
-            FROM manga.ChapterPageTask t
-            INNER JOIN manga.ChapterPageTaskRegion tpr
-                ON tpr.chapter_page_task_id = t.chapter_page_task_id
-            INNER JOIN manga.PageRegion pr
-                ON pr.page_region_id = tpr.page_region_id
-            INNER JOIN manga.ChapterPageVersion cpv
-                ON cpv.chapter_page_version_id = pr.chapter_page_version_id
-            INNER JOIN manga.ChapterPage cp
-                ON cp.chapter_page_id = cpv.chapter_page_id
-            INNER JOIN manga.Chapter ch
-                ON ch.chapter_id = cp.chapter_id
-            WHERE t.assigned_to_user_id = @assistant_user_id
-              AND t.status_code IN (N'ASSIGNED', N'UNDER_REVIEW')
-              AND ch.series_id = @series_id
-        )
-        BEGIN
-            ;THROW 58606, 'This assistant has active tasks. Reassign or cancel their tasks before removing them from the series.', 1;
-        END;
-
-        --------------------------------------------------------------------
-        -- 7. End the active contributor row by setting end_date only.
-        --    Preserve history; never delete.
-        --------------------------------------------------------------------
-        UPDATE manga.SeriesContributor
-        SET end_date = CONVERT(DATE, SYSUTCDATETIME()),
-            notes = CASE
-                WHEN notes IS NULL OR notes = N'' THEN @reason
-                ELSE CONCAT(notes, N' | End reason: ', @reason)
-            END
-        WHERE series_id = @series_id
-          AND user_id = @assistant_user_id
-          AND end_date IS NULL;
-
-        IF @@ROWCOUNT = 0
-        BEGIN
-            ;THROW 58607, 'No active Assistant contributor row could be ended for this series.', 1;
-        END;
-
-        --------------------------------------------------------------------
-        -- 8. Audit
-        --------------------------------------------------------------------
-        DECLARE @audit_entity_id NVARCHAR(100) = CONVERT(NVARCHAR(36), @assistant_user_id);
-
-        DECLARE @detail_json NVARCHAR(MAX) =
-        (
-            SELECT
-                @series_id AS series_id,
-                @assistant_user_id AS assistant_user_id,
-                @reason AS reason,
-                CONVERT(DATE, SYSUTCDATETIME()) AS end_date
-            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
-        );
-
-        EXEC audit.usp_AuditEvent_Append
-            @actor_user_id = @actor_user_id,
-            @action_code = N'SERIES_CONTRIBUTOR_ASSISTANT_ENDED',
-            @entity_type = N'SeriesContributor',
-            @entity_id = @audit_entity_id,
-            @detail_json = @detail_json;
-
-        IF @started_tran = 1
-        BEGIN
-            COMMIT;
-        END;
-    END TRY
-    BEGIN CATCH
-        IF @started_tran = 1 AND XACT_STATE() <> 0
-        BEGIN
-            ROLLBACK;
-        END;
-
-        ;THROW;
-    END CATCH;
-END;
-GO
 CREATE OR ALTER PROCEDURE manga.usp_Series_Create
     @actor_user_id UNIQUEIDENTIFIER,
 
@@ -2275,29 +2235,6 @@ BEGIN
     END CATCH;
 END;
 GO
--- ============================================================
--- manga.usp_Series_UpdateProfile
--- BF-SERIES-002 � Edit Series Draft Profile
---
--- Allows an active Mangaka contributor to update a PROPOSAL_DRAFT
--- series profile: title, slug, synopsis, genre, content language,
--- publication frequency, and optionally the cover image.
---
--- Cover update is all-or-nothing: pass all six cover metadata params
--- or none. When a new cover is supplied, the old FileResource is
--- soft-deleted inside the transaction and a new one is created.
---
--- Status guard: only PROPOSAL_DRAFT series can be updated here.
--- Once a proposal has been submitted (UNDER_EDITORIAL_REVIEW or later),
--- this procedure rejects the update.
---
--- Custom error numbers (57401�57410):
---   57401  Could not acquire series profile update lock.
---   57402  Series does not exist.
---   57403  Only a PROPOSAL_DRAFT series can have its profile updated here.
---   57404  Only an active Mangaka contributor can update this series profile.
---   57405  Cover file metadata is incomplete � pass all six cover fields or none.
--- ============================================================
 CREATE OR ALTER PROCEDURE manga.usp_Series_UpdateProfile
     @actor_user_id                  UNIQUEIDENTIFIER,
     @series_id                      UNIQUEIDENTIFIER,
@@ -2985,7 +2922,7 @@ BEGIN
             BEGIN TRAN;
         END;
 
-       IF ISJSON(@page_region_ids_json) <> 1 OR LTRIM(@page_region_ids_json) NOT LIKE '[[]%'
+       IF ISJSON(@page_region_ids_json, ARRAY) <> 1
 BEGIN
     ;THROW 57901, 'page_region_ids_json must be a valid JSON array of page region IDs.', 1;
 END;
@@ -3354,7 +3291,7 @@ BEGIN
     BEGIN TRY
         SET @trimmed_new_annotation_text = LTRIM(RTRIM(@new_annotation_text));
 
-        
+
         IF @@TRANCOUNT = 0
         BEGIN
             SET @started_tran = 1;
@@ -3580,7 +3517,7 @@ BEGIN
         --------------------------------------------------------------------
 -- 1. Validate JSON array and parse region IDs.
 --------------------------------------------------------------------
-IF ISJSON(@page_region_ids_json) <> 1 OR LTRIM(@page_region_ids_json) NOT LIKE '[[]%'
+IF ISJSON(@page_region_ids_json, ARRAY) <> 1
 BEGIN
     ;THROW 57901, 'page_region_ids_json must be a valid JSON array of page region IDs.', 1;
 END;
@@ -4470,7 +4407,7 @@ BEGIN
         BEGIN
             ;THROW 58403, 'Only tasks under review can be returned for rework.', 1;
         END;
-           
+
         --------------------------------------------------------------------
         -- 5. Actor must be active Mangaka contributor
         --------------------------------------------------------------------
@@ -4836,7 +4773,7 @@ END;
 BEGIN
     ;THROW 57406, 'Only the active Tantou Editor contributor for this series can request revision.', 1;
 END;
-     
+
         --------------------------------------------------------------------
         -- 5. Optional markup FileResource
         --
@@ -5304,4 +5241,3 @@ END;
     END CATCH;
 END;
 GO
-

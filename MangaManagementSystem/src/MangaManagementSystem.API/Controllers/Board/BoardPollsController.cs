@@ -2,7 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace MangaManagementSystem.API.Controllers;
+namespace MangaManagementSystem.API.Controllers.Board;
 
 [ApiController]
 [Route("api/board-polls")]

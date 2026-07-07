@@ -259,7 +259,37 @@
                         <MudText><strong>Pages:</strong> @_detail.PageCount</MudText>
                         <MudText><strong>Created:</strong> @_detail.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</MudText>
                         <MudText><strong>Creator:</strong> @(_detail.SubmittedByDisplayName ?? "—")</MudText>
+                        <MudDivider Class="my-3" />
+                        <MudText><strong>Planned Release Date:</strong> @FormatDateOrPlaceholder(_detail.PlannedReleaseDate, "Not scheduled")</MudText>
+                        <MudText><strong>Released At:</strong> @FormatDateTimeOrPlaceholder(_detail.ReleasedAtUtc, "Not released")</MudText>
+                        <MudText><strong>Last Updated:</strong> @FormatDateTimeOrPlaceholder(_detail.UpdatedAtUtc, "—")</MudText>
                     </MudPaper>
+
+                    @if (CanShowSchedulingOption())
+                    {
+                        <MudPaper Class="pa-5 mf-card mb-5" Elevation="0">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">Publication Schedule</MudText>
+                            @if (_detail.PlannedReleaseDate.HasValue)
+                            {
+                                <MudText Class="mb-2">
+                                    Planned release: <strong>@_detail.PlannedReleaseDate.Value.ToLocalTime().ToString("MMM d, yyyy")</strong>
+                                </MudText>
+                            }
+                            else
+                            {
+                                <MudText Class="mb-2 mf-muted">No planned release date has been set.</MudText>
+                            }
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                                       StartIcon="@Icons.Material.Filled.CalendarMonth"
+                                       OnClick="NavigateToSchedule"
+                                       Class="mt-1">
+                                Schedule Release
+                            </MudButton>
+                            <MudText Typo="Typo.caption" Class="mf-muted mt-2">
+                                Open the publication calendar to set or manage release dates.
+                            </MudText>
+                        </MudPaper>
+                    }
 
                     @if (_detail.CanOpenWorkspace && !string.IsNullOrWhiteSpace(_detail.WorkspaceUrl))
                     {
@@ -630,4 +660,25 @@
         "CANCELLED" => "Cancel Chapter",
         _ => "Review Decision"
     };
+
+    private bool CanShowSchedulingOption()
+    {
+        if (_detail is null) return false;
+        var blockedStatuses = new[] { "CANCELLED", "RELEASED" };
+        return !blockedStatuses.Contains(_detail.StatusCode, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string FormatDateOrPlaceholder(DateTime? dt, string placeholder)
+        => dt.HasValue ? dt.Value.ToLocalTime().ToString("MMM d, yyyy") : placeholder;
+
+    private static string FormatDateTimeOrPlaceholder(DateTime? dt, string placeholder)
+        => dt.HasValue ? dt.Value.ToLocalTime().ToString("MMM d, yyyy HH:mm") : placeholder;
+
+    private void NavigateToSchedule()
+    {
+        if (_detail is null) return;
+        var anchorDate = _detail.PlannedReleaseDate?.ToString("yyyy-MM-dd") ?? DateTime.UtcNow.ToString("yyyy-MM-dd");
+        Nav.NavigateTo(
+            $"/publication/schedule?seriesId={_detail.SeriesId}&anchorDate={anchorDate}");
+    }
 }

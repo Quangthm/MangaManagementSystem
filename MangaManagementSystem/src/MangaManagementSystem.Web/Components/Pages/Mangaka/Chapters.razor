@@ -164,6 +164,15 @@
                                             Schedule Release
                                         </MudButton>
                                     }
+                                    @if (chapter.StatusCode is not ("CANCELLED" or "RELEASED"))
+                                    {
+                                        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small"
+                                                   StartIcon="@Icons.Material.Filled.CalendarMonth"
+                                                   OnClick="@(() => NavigateToCalendar(chapter))"
+                                        >
+                                            View Calendar
+                                        </MudButton>
+                                    }
                                     @if (chapter.EditorialReviewHistory != null && chapter.EditorialReviewHistory.Count > 0)
                                     {
                                         <MudButton Variant="Variant.Text" Size="Size.Small"
@@ -606,5 +615,13 @@
     private void ResetChapterCardsPage()
     {
         _chapterCardsPage = 1;
+    }
+
+    private void NavigateToCalendar(MangakaChapterListItemDto chapter)
+    {
+        var anchorDate = chapter.PlannedReleaseDate?.ToString("yyyy-MM-dd")
+            ?? DateTime.UtcNow.ToString("yyyy-MM-dd");
+        Nav.NavigateTo(
+            $"/publication/schedule?seriesId={chapter.SeriesId}&anchorDate={anchorDate}");
     }
 }

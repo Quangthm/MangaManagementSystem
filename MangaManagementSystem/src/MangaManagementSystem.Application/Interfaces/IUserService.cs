@@ -1,23 +1,28 @@
 using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.DTOs.Manga;
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace MangaManagementSystem.Application.Interfaces
 {
     public interface IUserService
     {
-        Task<UserDto> CreateUserAsync(CreateUserDto dto);
+        Task<UserDto> CreateUserAsync(
+            CreateUserDto dto);
 
-        Task<UserDto?> GetUserByIdAsync(Guid id);
+        Task<UserDto?> GetUserByIdAsync(
+            Guid id);
 
-        Task<UserDto?> GetUserByEmailAsync(string email);
+        Task<UserDto?> GetUserByEmailAsync(
+            string email);
 
-        Task<IEnumerable<UserDto>> GetUsersByStatusAsync(string status);
+        Task<UserDto?> GetUserByPortfolioFileIdAsync(
+            Guid portfolioFileId);
+
+        Task<IEnumerable<UserDto>> GetUsersByStatusAsync(
+            string status);
 
         Task<IEnumerable<UserDto>> GetUsersByRoleAsync(
             string roleName);
+
         Task<UserDto> ApproveUserAsync(
             Guid adminUserId,
             Guid userId);
@@ -61,9 +66,5 @@ namespace MangaManagementSystem.Application.Interfaces
             string actionCode,
             string otpCode);
 
-        Task RecordProfileAuditAsync(
-            Guid actorUserId,
-            string actionCode,
-            string detailJson);
     }
 }

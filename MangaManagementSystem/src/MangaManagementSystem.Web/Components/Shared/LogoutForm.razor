@@ -1,31 +1,32 @@
 <AuthorizeView>
     <Authorized>
-        <form action="/api/auth/logout" method="post" data-enhance="false" class="logout-form">
-            <button type="submit" class="logout-form__button">Logout</button>
-        </form>
+        <button type="submit"
+                form="global-logout-form"
+                class="logout-form__button">
+            Logout
+        </button>
     </Authorized>
 </AuthorizeView>
 
 <style>
-    .logout-form {
-        width: 100%;
-    }
-
     .logout-form__button {
         width: 100%;
+        min-height: 40px;
         padding: 10px 16px;
-        border: 1px solid rgba(255, 255, 255, 0.35);
-        border-radius: 4px;
+        border: 0;
+        border-radius: 8px;
         background: transparent;
-        color: #e2e8f0;
+        color: #dc2626;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
         font-size: 0.875rem;
-        font-weight: 500;
+        font-weight: 600;
         cursor: pointer;
-        text-transform: none;
+        text-align: left;
     }
 
-    .logout-form__button:hover {
-        background: rgba(255, 255, 255, 0.08);
-        border-color: rgba(255, 255, 255, 0.55);
-    }
+        .logout-form__button:hover {
+            background: #fef2f2;
+        }
 </style>

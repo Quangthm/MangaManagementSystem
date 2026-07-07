@@ -88,7 +88,7 @@ Build succeeded.
 - [ ] Open `/mangaka` — confirm sidebar appears with consistent layout
 - [ ] Confirm dashboard shows "Current Series" and "Series Proposals" tabs
 - [ ] Click "Chapter Submissions" in sidebar → opens `/mangaka/chapters`
-- [ ] Click "Assistant Review" in sidebar → opens `/mangaka/review-submissions`  
+- [ ] Click "Assistant Review" in sidebar → opens `/mangaka/review-submissions`
 - [ ] Click "Manage Contributors" → opens `/mangaka/contributors`
 - [ ] Submit a chapter and confirm status becomes UNDER_REVIEW
 - [ ] Navigate back to Mangaka dashboard from any page

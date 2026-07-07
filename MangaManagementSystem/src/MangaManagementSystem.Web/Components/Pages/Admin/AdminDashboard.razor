@@ -1,16 +1,28 @@
 @page "/admin"
 @using Microsoft.AspNetCore.Authorization
+@using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Admin")]
 @inject NavigationManager Nav
-@inject IUserService UserService
+@inject IAdminUserApiClient AdminUserApiClient
 
 <AdminLayout>
     <div class="mf-page">
         <div class="mf-page-header">
-            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">System Administration Dashboard</MudText>
-            <MudText Typo="Typo.body1" Class="mf-muted">Monitor and manage MangaFlow platform operations</MudText>
+            <MudText Typo="Typo.h3"
+                     Class="font-weight-bold mb-1">
+                System Administration Dashboard
+            </MudText>
+            <MudText Typo="Typo.body1"
+                     Class="mf-muted">
+                Monitor and manage MangaFlow platform operations
+            </MudText>
         </div>
-        <MudText Typo="Typo.overline" Class="mf-muted">Account Management</MudText>
+
+        <MudText Typo="Typo.overline"
+                 Class="mf-muted">
+            Account Management
+        </MudText>
+
         <MudPaper Class="pa-4 mf-card mb-4">
             @if (_isLoading)
             {
@@ -18,68 +30,139 @@
             }
             else if (_loadError != null)
             {
-                <MudAlert Severity="Severity.Error">Failed to load admin stats: @_loadError</MudAlert>
+                <MudAlert Severity="Severity.Error">
+                    Failed to load admin stats: @_loadError
+                </MudAlert>
             }
             else
             {
                 <MudGrid Class="mb-3">
                     <MudItem xs="12" sm="6" md="3">
-                        <StatCard Label="Pending Approvals" Value="@_pendingCount.ToString()" />
-                        <MudButton Variant="Variant.Text" Size="Size.Small" Href="/admin/user-approval">Manage</MudButton>
+                        <StatCard Label="Pending Approvals"
+                                  Value="@_pendingCount.ToString()" />
+                        <MudButton Variant="Variant.Text"
+                                   Size="Size.Small"
+                                   Href="/admin/user-approval">
+                            Manage
+                        </MudButton>
                     </MudItem>
+
                     <MudItem xs="12" sm="6" md="3">
-                        <StatCard Label="Active Users" Value="@_activeCount.ToString()" />
-                        <MudButton Variant="Variant.Text" Size="Size.Small" Href="/admin/users">Manage</MudButton>
+                        <StatCard Label="Active Users"
+                                  Value="@_activeCount.ToString()" />
+                        <MudButton Variant="Variant.Text"
+                                   Size="Size.Small"
+                                   Href="/admin/users">
+                            Manage
+                        </MudButton>
                     </MudItem>
+
                     <MudItem xs="12" sm="6" md="3">
-                        <StatCard Label="Disabled Users" Value="@_disabledCount.ToString()" />
-                        <MudButton Variant="Variant.Text" Size="Size.Small" Href="/admin/users">Manage</MudButton>
+                        <StatCard Label="Disabled Users"
+                                  Value="@_disabledCount.ToString()" />
+                        <MudButton Variant="Variant.Text"
+                                   Size="Size.Small"
+                                   Href="/admin/users">
+                            Manage
+                        </MudButton>
                     </MudItem>
+
                     <MudItem xs="12" sm="6" md="3">
-                        <StatCard Label="Rejected Users" Value="@_rejectedCount.ToString()" />
-                        <MudButton Variant="Variant.Text" Size="Size.Small" Href="/admin/users">Manage</MudButton>
+                        <StatCard Label="Rejected Users"
+                                  Value="@_rejectedCount.ToString()" />
+                        <MudButton Variant="Variant.Text"
+                                   Size="Size.Small"
+                                   Href="/admin/users">
+                            Manage
+                        </MudButton>
                     </MudItem>
                 </MudGrid>
             }
         </MudPaper>
 
-        <MudText Typo="Typo.overline" Class="mf-muted">Review &amp; Traceability</MudText>
+        <MudText Typo="Typo.overline"
+                 Class="mf-muted">
+            Review &amp; Traceability
+        </MudText>
+
         <MudGrid Class="mb-4">
             <MudItem xs="12" md="4">
-                <WorkspaceCard Title="Manage User Approvals" Description="Review and approve pending account requests." Href="/admin/user-approval" />
+                <WorkspaceCard Title="Manage User Approvals"
+                               Description="Review and approve pending account requests."
+                               Href="/admin/user-approval" />
             </MudItem>
+
             <MudItem xs="12" md="4">
-                <WorkspaceCard Title="Manage User Accounts" Description="Lock, unlock, disable, and manage user access." Href="/admin/users" />
+                <WorkspaceCard Title="Manage User Accounts"
+                               Description="Lock, unlock, disable, and manage user access."
+                               Href="/admin/users" />
             </MudItem>
+
             <MudItem xs="12" md="4">
-                <WorkspaceCard Title="Audit Logs" Description="Review system actions and workflow decisions." Href="/admin/audit-logs" />
+                <WorkspaceCard Title="Audit Logs"
+                               Description="Review and filter system audit events by action, entity type, and date."
+                               Href="/admin/audit-logs" />
             </MudItem>
         </MudGrid>
 
         <MudGrid Class="mb-4">
-            <!-- Audit Logs UI removed per MVP scope -->
             <MudItem xs="12" md="4">
                 @if (_hasFileManagement)
                 {
-                    <WorkspaceCard Title="File Management" Description="Manage system file resources." Href="/admin/files" />
+                    <WorkspaceCard Title="File Management"
+                                   Description="Manage system file resources."
+                                   Href="/admin/files" />
                 }
                 else
                 {
-                    <WorkspaceCard Title="File Management" Description="Not available yet." />
+                    <WorkspaceCard Title="File Management"
+                                   Description="Not available yet." />
                 }
             </MudItem>
+
             <MudItem xs="12" md="4">
-                <WorkspaceCard Title="System Settings" Description="Configure platform-wide settings and preferences." Href="/admin/settings" />
+</MudItem>
+        </MudGrid>
+
+        <MudText Typo="Typo.overline"
+                 Class="mf-muted">
+            System Shortcuts
+        </MudText>
+
+        <MudGrid>
+            <MudItem xs="12" md="3">
+                <MudPaper Class="pa-3 mf-card text-center">
+                    <MudText Typo="Typo.subtitle2">
+                        Accounts
+                    </MudText>
+                    <MudText Class="mf-muted">
+                        User lifecycle &amp; access
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="3">
+                <MudPaper Class="pa-3 mf-card text-center">
+                    <MudText Typo="Typo.subtitle2">
+                        Portfolios
+                    </MudText>
+                    <MudText Class="mf-muted">
+                        Pending portfolio approvals
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="3">
+                <MudPaper Class="pa-3 mf-card text-center">
+                    <MudText Typo="Typo.subtitle2">
+                        Files
+                    </MudText>
+                    <MudText Class="mf-muted">
+                        Storage &amp; CDN
+                    </MudText>
+                </MudPaper>
             </MudItem>
         </MudGrid>
-
-        <MudText Typo="Typo.overline" Class="mf-muted">System Shortcuts</MudText>
-        <MudGrid>
-            <MudItem xs="12" md="3"><MudPaper Class="pa-3 mf-card text-center"><MudText Typo="Typo.subtitle2">Accounts</MudText><MudText class="mf-muted">User lifecycle &amp; access</MudText></MudPaper></MudItem>
-            <MudItem xs="12" md="3"><MudPaper Class="pa-3 mf-card text-center"><MudText Typo="Typo.subtitle2">Portfolios</MudText><MudText class="mf-muted">Pending portfolio approvals</MudText></MudPaper></MudItem>
-            <MudItem xs="12" md="3"><MudPaper Class="pa-3 mf-card text-center"><MudText Typo="Typo.subtitle2">Files</MudText><MudText class="mf-muted">Storage &amp; CDN</MudText></MudPaper></MudItem>
-        </MudGrid>
-
     </div>
 </AdminLayout>
 
@@ -90,14 +173,11 @@
     private int _rejectedCount;
     private bool _isLoading;
     private string? _loadError;
-    private bool _hasFileManagement = false;
+    private bool _hasFileManagement;
 
     protected override async Task OnInitializedAsync()
     {
-        // Audit Logs UI removed per MVP scope
-        // File management page is not implemented in this build
-        _hasFileManagement = false;
-
+        _hasFileManagement = true;
         await LoadStatsAsync();
     }
 
@@ -105,17 +185,24 @@
     {
         _isLoading = true;
         _loadError = null;
+
         try
         {
-            var pending = (await UserService.GetUsersByStatusAsync("PENDING_APPROVAL")).ToList();
-            var active = (await UserService.GetUsersByStatusAsync("ACTIVE")).ToList();
-            var disabled = (await UserService.GetUsersByStatusAsync("DISABLED")).ToList();
-            var rejected = (await UserService.GetUsersByStatusAsync("REJECTED")).ToList();
+            var counts =
+                await AdminUserApiClient
+                    .GetStatusCountsAsync();
 
-            _pendingCount = pending.Count;
-            _activeCount = active.Count;
-            _disabledCount = disabled.Count;
-            _rejectedCount = rejected.Count;
+            _pendingCount =
+                counts.PendingApproval;
+
+            _activeCount =
+                counts.Active;
+
+            _disabledCount =
+                counts.Disabled;
+
+            _rejectedCount =
+                counts.Rejected;
         }
         catch (Exception ex)
         {
