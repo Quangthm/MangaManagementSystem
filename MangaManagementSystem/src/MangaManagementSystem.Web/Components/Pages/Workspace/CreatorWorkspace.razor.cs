@@ -1808,19 +1808,25 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
     // #10 region editing: edit the selected region's type + label. Persistence rides the normal Save
     // flow — BulkReplace matches by db id and updates type_code / region_label (preserving the region
-    // id so linked tasks/annotations stay intact). Only enabled when exactly one region is selected.
+    // id so linked tasks/annotations stay intact). Supports batch type-edit: with several regions
+    // selected the dialog sets the chosen type on all of them and keeps each region's own label.
     private bool _showEditRegionDialog;
     private string _editRegionType = "PANEL";
     private string? _editRegionLabel;
     private int _editRegionId;
+    private int _editRegionCount;
 
     private void OpenEditRegionDialog()
     {
-        if (SelectedRegions.Count != 1) return;
-        var r = SelectedRegions[0];
-        _editRegionId = r.Id;
-        _editRegionType = NormalizeRegionType(r.Type);
-        _editRegionLabel = r.Label;
+        if (SelectedRegions.Count < 1) return;
+        _editRegionCount = SelectedRegions.Count;
+        var first = SelectedRegions[0];
+        _editRegionId = first.Id;
+        // Prefill the type with the shared value when every selected region already matches; else PANEL.
+        var firstType = NormalizeRegionType(first.Type);
+        _editRegionType = SelectedRegions.All(r => NormalizeRegionType(r.Type) == firstType) ? firstType : "PANEL";
+        // Label is only editable for a single region — a batch keeps each region's existing label.
+        _editRegionLabel = _editRegionCount == 1 ? first.Label : null;
         _showEditRegionDialog = true;
     }
 
@@ -1829,8 +1835,23 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         _showEditRegionDialog = false;
         var canvas = GetActiveCanvas();
         if (canvas == null) return;
-        await canvas.InvokeVoidAsync("setRegionMeta", _editRegionId, _editRegionType, _editRegionLabel);
-        Snackbar.Add("Region updated. Click Save to persist the change.", Severity.Info);
+        var targets = SelectedRegions.ToList();
+        if (targets.Count <= 1)
+        {
+            await canvas.InvokeVoidAsync("setRegionMeta", _editRegionId, _editRegionType, _editRegionLabel);
+        }
+        else
+        {
+            // Batch: apply the chosen type to every selected region, preserving each region's own label
+            // (setRegionMeta overwrites the label, so pass the region's current one straight back).
+            foreach (var r in targets)
+            {
+                await canvas.InvokeVoidAsync("setRegionMeta", r.Id, _editRegionType, r.Label);
+            }
+        }
+        Snackbar.Add(targets.Count > 1
+            ? $"Type applied to {targets.Count} regions. Click Save to persist the change."
+            : "Region updated. Click Save to persist the change.", Severity.Info);
     }
 
     // Selects every region on the active pane (e.g. to translate or assign the whole page at once).

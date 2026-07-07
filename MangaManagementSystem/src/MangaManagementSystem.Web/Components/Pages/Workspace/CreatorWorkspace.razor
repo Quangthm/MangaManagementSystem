@@ -171,7 +171,7 @@ else
                             <MudMenuItem Icon="@Icons.Material.Filled.Translate" OnClick='@(() => RunTranslateAI("en"))'>English (EN)</MudMenuItem>
                         </MudMenu>
                     </MudTooltip>
-                    <MudTooltip Text="Edit Region (label / type)"><MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Default" OnClick="OpenEditRegionDialog" Size="Size.Small" Disabled="@(IsChapterLocked || SelectedRegions.Count != 1)" /></MudTooltip>
+                    <MudTooltip Text="Edit region type (label editable when one is selected)"><MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Default" OnClick="OpenEditRegionDialog" Size="Size.Small" Disabled="@(IsChapterLocked || SelectedRegions.Count < 1)" /></MudTooltip>
                     <MudTooltip Text="Delete Selected"><MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" OnClick="DeleteSelectedRegions" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
                     <MudTooltip Text="Select All"><MudIconButton Icon="@Icons.Material.Filled.SelectAll" OnClick="SelectAllRegions" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
                     <MudTooltip Text="Deselect All"><MudIconButton Icon="@Icons.Material.Filled.HighlightOff" OnClick="DeselectAllRegions" Size="Size.Small" /></MudTooltip>
@@ -815,7 +815,7 @@ else
     }
 
     <MudDialog @bind-Visible="_showEditRegionDialog" Options="new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true }">
-        <TitleContent><MudText Typo="Typo.h6">Edit Region</MudText></TitleContent>
+        <TitleContent><MudText Typo="Typo.h6">@(_editRegionCount > 1 ? $"Edit {_editRegionCount} Regions" : "Edit Region")</MudText></TitleContent>
         <DialogContent>
             <MudSelect T="string" Label="Type" @bind-Value="_editRegionType" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3">
                 <MudSelectItem Value="@("PANEL")">Panel</MudSelectItem>
@@ -825,7 +825,14 @@ else
                 <MudSelectItem Value="@("BACKGROUND")">Background</MudSelectItem>
                 <MudSelectItem Value="@("OTHER")">Other</MudSelectItem>
             </MudSelect>
-            <MudTextField T="string" @bind-Value="_editRegionLabel" Label="Label" Variant="Variant.Outlined" Margin="Margin.Dense" Placeholder="Optional label" MaxLength="100" />
+            @if (_editRegionCount == 1)
+            {
+                <MudTextField T="string" @bind-Value="_editRegionLabel" Label="Label" Variant="Variant.Outlined" Margin="Margin.Dense" Placeholder="Optional label" MaxLength="100" />
+            }
+            else
+            {
+                <MudText Typo="Typo.caption" Class="mf-muted">Setting type for @_editRegionCount selected regions — each region keeps its own label.</MudText>
+            }
         </DialogContent>
         <DialogActions>
             <MudButton OnClick="@(() => _showEditRegionDialog = false)">Cancel</MudButton>

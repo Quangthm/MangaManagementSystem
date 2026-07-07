@@ -43,10 +43,12 @@
 > - **#5a** task panel gọn: `CompactTarget()` (2 panel + "…(+N)") + tooltip full — `CreatorWorkspace.razor.cs` + `.razor`.
 > - **#5b** deadline mỗi task: `ProductionTask.DueAtUtc` + map từ `t.DueAtUtc`/`dbTask.DueAtUtc` (client `GetTasksByPageAsync`/`CreateTaskAsync` trả `ChapterPageTaskDto` vốn CÓ sẵn `DueAtUtc`) + hiển thị "Due MMM d" (đỏ + "(overdue)" nếu quá hạn). KHÔNG đụng API/DTO.
 > - **#8** user CHỐT **giữ soft-delete** → không đổi code.
+> - **#6** shift/ctrl+click chọn nhiều region: thêm nhánh `e.shiftKey||e.ctrlKey` trong mousedown của `mangaAiCanvas.js` (toggle `hit.selected` + `syncToBlazor`). Trước chỉ double-click mới toggle → label "Hold Shift" bị lệch, nay đúng.
+> - **#7** edit nhiều region cùng lúc: nút Edit Region bật khi `SelectedRegions.Count >= 1`; `OpenEditRegionDialog`/`ApplyEditRegion` xử lý batch — set TYPE cho mọi region đã chọn, GIỮ label từng cái (loop `setRegionMeta(r.Id, type, r.Label)` vì JS dòng 606 luôn ghi đè label); ô Label chỉ hiện khi chọn đúng 1.
 >
 > **Còn lại (đã chẩn đoán, CHƯA làm):**
 > - **#3** editor vào workspace trống — **GỐC RỄ XÁC ĐỊNH:** `MangakaChapterRepository.QueryAccessibleChapters(actorUserId)` (Infrastructure ~350-362) lọc chapter về **chỉ series mà actor là contributor role "Mangaka"** → editor trả RỖNG. Controller `MangakaChaptersController` không có `[Authorize]` (dùng header `X-Actor-User-Id`); handler chỉ delegate; gate nằm ở repo query. Các read khác (page counts/pages/versions/tasks/annotations) nhiều khả năng cùng cổng Mangaka-only. **KHÔNG phải fix nhanh:** cần "authorized workspace reader = active contributor bất kỳ (Mangaka/Editor/Assistant)" áp NHẤT QUÁN cho MỌI read của workspace — mỗi cái ở repo/query riêng. Ghi/đổi trạng thái VẪN gated Mangaka-only qua `EnsureActiveMangakaContributorAsync` nên nới READ an toàn cho quyền ghi. "Render tùy role" (user) ⇒ đọc business-rules để biết mỗi role thấy gì (vd assistant chỉ task của mình?). → **đụng shared/merged Mangaka code — làm task riêng có scope rõ, KHÔNG rush.**
-> - **#6** "Panel Target (Hold Shift to select multiple)" không chạy + **#7** edit nhiều region cùng lúc (nút Edit Region ở `CreatorWorkspace.razor:174` đang `Disabled` khi `SelectedRegions.Count != 1`) → việc **canvas/JS**, CHƯA đọc JS interop chọn region.
+> - **#6/#7 ĐÃ XONG** (xem mục "Đã sửa"). → **Chỉ còn #3** là việc lớn duy nhất chưa làm.
 
 > ### ⚠️ FILE MOVE 2026-07-03 — workspace code sang thư mục Workspace
 > `CreatorWorkspace.razor` + `WorkspaceChapterSidebar.razor` đã `git mv` từ
