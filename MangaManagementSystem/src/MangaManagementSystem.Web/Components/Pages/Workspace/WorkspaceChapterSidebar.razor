@@ -118,22 +118,22 @@
 </aside>
 
 @code {
-    [Parameter] public List<CreatorWorkspace.ChapterModel> Chapters { get; set; } = new();
+    [Parameter] public List<ChapterModel> Chapters { get; set; } = new();
     [Parameter] public int SelectedChapter { get; set; }
     [Parameter] public bool IsAddingChapter { get; set; }
 
     [Parameter] public EventCallback OnAddChapter { get; set; }
     [Parameter] public EventCallback<int> OnSelectChapter { get; set; }
     [Parameter] public EventCallback<Guid> OnSubmitChapter { get; set; }
-    [Parameter] public EventCallback<CreatorWorkspace.ChapterModel> OnPromptRename { get; set; }
-    [Parameter] public EventCallback<CreatorWorkspace.ChapterModel> OnSaveRename { get; set; }
-    [Parameter] public EventCallback<CreatorWorkspace.ChapterModel> OnCancelRename { get; set; }
+    [Parameter] public EventCallback<ChapterModel> OnPromptRename { get; set; }
+    [Parameter] public EventCallback<ChapterModel> OnSaveRename { get; set; }
+    [Parameter] public EventCallback<ChapterModel> OnCancelRename { get; set; }
     [Parameter] public EventCallback<int> OnDeleteChapter { get; set; }
     [Parameter] public EventCallback<Guid> OnCancelSubmission { get; set; }
 
     private string _lastSignature = "";
 
-    private async Task HandleRenameKeyDown(KeyboardEventArgs e, CreatorWorkspace.ChapterModel chapter)
+    private async Task HandleRenameKeyDown(KeyboardEventArgs e, ChapterModel chapter)
     {
         if (e.Key == "Enter")
         {

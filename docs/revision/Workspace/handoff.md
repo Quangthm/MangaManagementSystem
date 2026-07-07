@@ -1,5 +1,35 @@
 # Handoff — Mangaka Workspace: manual-save + full API migration (2026-07-01)
 
+> ### UPDATE 2026-07-07 — refactor CreatorWorkspace (partial split) + gom using. ⚠️ CHƯA COMMIT, CHƯA CHẠY RUNTIME
+>
+> **Vấn đề đang làm:** `CreatorWorkspace.razor` quá lớn/khó bảo trì → tách nhỏ (code-behind + topical partials), rút view-model/helper ra file riêng, và **gom using trùng lặp**. Đây là refactor CẤU TRÚC (không đổi hành vi).
+>
+> **Nguyên nhân / phát hiện quan trọng:**
+> - Lúc build kiểm tra `GlobalUsings.cs`, CLI báo **"246 errors"** → ban đầu tôi tưởng `GlobalUsings` gây **ambiguity** nên định bỏ. **CHẨN ĐOÁN SAI.** Thực chất **ổ C: đầy 100%** (scratchpad của tôi phình 348MB) làm bước copy DLL fail (`MSB3021 not enough space`), **KHÔNG có lỗi CS nào**. Sau khi dọn cache + build lại và **chỉ grep lỗi `CS`/`RZ`** → xác nhận `GlobalUsings` compile SẠCH, an toàn. → **Bài học: build tới scratch trên C: không đáng tin khi C: gần đầy; verify bằng cách grep `error CS`/`error RZ`, bỏ qua lỗi MSB copy/lock.**
+> - **C: hiện chỉ còn ~318MB trống** (đã dọn 338MB cache build của tôi). Ảnh hưởng cả build trong Visual Studio — user nên dọn C:.
+>
+> **Files ĐÃ THAY ĐỔI (đều nằm trong `Components/Pages/Workspace/`, đều LOCAL chưa commit):**
+> - `CreatorWorkspace.razor` — tách markup, phần logic chuyển sang các partial dưới.
+> - `CreatorWorkspace.razor.cs` (mới) — code-behind chính; using rút còn 1 dòng `using static ...WorkspaceHelpers;`.
+> - `CreatorWorkspace.Save.cs`, `CreatorWorkspace.Versions.cs`, `CreatorWorkspace.Pages.cs` (mới) — partial theo chủ đề; mỗi file chỉ còn `using static ...WorkspaceHelpers;`.
+> - `WorkspaceHelpers.cs` (mới) — hàm pure (BuildRegionDtosForSave, StripSelected, OptimizedImageUrl, NormalizeRegionType); không cần using nào.
+> - `Models/WorkspaceViewModels.cs` (mới) — view-model UI (ProductionTask, AnnotationModel, ChapterModel, PageModel, PageVersionModel, RegionModel); không cần using nào.
+> - `GlobalUsings.cs` (mới, **cấp project Web**) — mirror `_Imports.razor` cho file `.cs` (Components, MudBlazor, JSInterop, DTOs.Auth/Manga, Interfaces, Services...). `ImplicitUsings` đã lo `System.*`/`Linq`/`Net.Http`.
+> - 1 comment mồ côi ở seam Pages đã sửa (quét toàn bộ: chỉ có 1 cái).
+> - Ngoài ra 1 message VN→EN đã sửa trước đó (cùng đợt local).
+>
+> **ĐÃ verify:** `dotnet build` Web **và** API → **0 lỗi `CS`/`RZ`** (compile sạch cả hai). Comment mồ côi: đã quét, sạch.
+>
+> **CHƯA kiểm tra (QUAN TRỌNG):**
+> - **CHƯA chạy runtime** — chưa mở Visual Studio build đầy đủ (link+copy) và chưa smoke test workspace thật (upload page, save version, tạo task/annotation, submit chapter...). Refactor cấu trúc lớn → **BẮT BUỘC smoke test trước khi push.**
+> - **CHƯA full build** (chỉ compile-check qua CLI vì C: đầy làm bước copy fail — không phải lỗi code).
+> - **CHƯA commit** toàn bộ đợt này (VN fix + refactor + gom using). Merge `origin/main` trước đó ĐÃ push lên `feature/workspace-v3`; mọi thứ sau merge còn local uncommitted.
+>
+> **Bước tiếp theo:**
+> 1. Mở **Visual Studio 2022** → build đầy đủ + **chạy Web**, smoke test luồng workspace (đặc biệt Save/Versions/Pages vì vừa tách partial).
+> 2. Nếu OK → commit (gộp: refactor Step 1+2 + gom using + VN fix) rồi push `feature/workspace-v3`.
+> 3. Dọn ổ C: (temp/cache) để build ổn định.
+
 > ### ⚠️ FILE MOVE 2026-07-03 — workspace code sang thư mục Workspace
 > `CreatorWorkspace.razor` + `WorkspaceChapterSidebar.razor` đã `git mv` từ
 > `Components/Pages/Mangaka/` → **`Components/Pages/Workspace/`** (cạnh `TaskWorkspaceRedirect.razor`).
