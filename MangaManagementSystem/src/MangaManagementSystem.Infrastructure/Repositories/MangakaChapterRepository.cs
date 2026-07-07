@@ -66,7 +66,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             if (actorUserId == Guid.Empty || seriesId == Guid.Empty)
                 return Array.Empty<MangakaChapterListItemDto>();
 
-            var chapters = await QueryAccessibleChapters(actorUserId)
+            var chapters = await QueryWorkspaceChapters(actorUserId)
                 .Where(c => c.SeriesId == seriesId)
                 .OrderBy(c => c.CreatedAtUtc)
                 .ToListAsync(cancellationToken);
@@ -360,6 +360,28 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     sc.User.StatusCode == ActiveUserStatus &&
                     sc.User.Role != null &&
                     sc.User.Role.RoleName == MangakaRoleName));
+        }
+
+        // Workspace READ access (#3): an Authorized Page Workspace User is any ACTIVE contributor whose
+        // role is a workspace role (Mangaka / Tantou Editor / Assistant) — BR-WORKSPACE-006/008. Used only
+        // for the SHARED workspace chapter LIST so editors/assistants see the same chapters as the Mangaka.
+        // Writes / status changes stay Mangaka-only via EnsureActiveMangakaContributorAsync, and the
+        // Mangaka dashboard ("my chapters") + post-write reloads keep using QueryAccessibleChapters.
+        private static readonly string[] WorkspaceRoles = { "Mangaka", "Tantou Editor", "Assistant" };
+
+        private IQueryable<Chapter> QueryWorkspaceChapters(Guid actorUserId)
+        {
+            return _context.Chapters
+                .AsNoTracking()
+                .Include(c => c.Series)
+                .Where(c => _context.SeriesContributors.Any(sc =>
+                    sc.SeriesId == c.SeriesId &&
+                    sc.UserId == actorUserId &&
+                    sc.EndDate == null &&
+                    sc.User != null &&
+                    sc.User.StatusCode == ActiveUserStatus &&
+                    sc.User.Role != null &&
+                    WorkspaceRoles.Contains(sc.User.Role.RoleName)));
         }
 
         private async Task<MangakaChapterListItemDto> GetChapterByIdForActorAsync(
