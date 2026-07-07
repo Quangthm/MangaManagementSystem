@@ -6,19 +6,99 @@
 @using MudBlazor
 
 <style>
-    .mf-drawer-header { padding: 16px 20px 12px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; }
-    .mf-drawer-filters { padding: 12px 20px; border-bottom: 1px solid #e2e8f0; }
-    .mf-drawer-list { padding: 8px 16px 16px; overflow-y: auto; }
-    .mf-drawer-card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; display: flex; gap: 8px; align-items: flex-start; background: #fff; }
-    .mf-drawer-card-cover { width: 36px; height: 52px; border-radius: 4px; object-fit: cover; background: #e2e8f0; flex-shrink: 0; }
-    .mf-drawer-card-cover img { width: 100%; height: 100%; object-fit: cover; }
-    .mf-drawer-card-info { flex: 1; min-width: 0; }
-    .mf-drawer-card-series { font-size: 0.78rem; font-weight: 600; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .mf-drawer-card-chapter { font-size: 0.72rem; color: #64748b; }
-    .mf-drawer-card-actions { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
-    .mf-drawer-empty { text-align: center; padding: 32px 16px; color: #94a3b8; }
-    .mf-drawer-loading { display: flex; justify-content: center; padding: 32px; }
-    .mf-drawer-filtered-by { margin-bottom: 4px; }
+    .mf-drawer-header {
+        padding: 16px 20px 12px;
+        border-bottom: 1px solid #e2e8f0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .mf-drawer-filters {
+        padding: 12px 20px;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .mf-drawer-list {
+        padding: 8px 16px 16px;
+        overflow-y: auto;
+    }
+
+    .mf-drawer-card {
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin-bottom: 8px;
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        background: #fff;
+    }
+
+    .mf-drawer-card-cover {
+        width: 36px;
+        height: 52px;
+        border-radius: 4px;
+        object-fit: cover;
+        background: #e2e8f0;
+        flex-shrink: 0;
+    }
+
+        .mf-drawer-card-cover img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+    .mf-drawer-card-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .mf-drawer-card-series {
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #1e293b;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .mf-drawer-card-chapter {
+        font-size: 0.72rem;
+        color: #64748b;
+    }
+
+    .mf-drawer-card-actions {
+        display: flex;
+        gap: 4px;
+        margin-top: 4px;
+        flex-wrap: wrap;
+    }
+
+    .mf-drawer-empty {
+        text-align: center;
+        padding: 32px 16px;
+        color: #94a3b8;
+    }
+
+    .mf-drawer-loading {
+        display: flex;
+        justify-content: center;
+        padding: 32px;
+    }
+
+    .mf-drawer-filtered-by {
+        margin-bottom: 4px;
+    }
+
+    .mf-drawer-card[draggable="true"] {
+        cursor: grab;
+    }
+
+        .mf-drawer-card[draggable="true"]:active {
+            cursor: grabbing;
+        }
 </style>
 
 <div class="mf-drawer-header">
@@ -43,9 +123,9 @@
                      ValueChanged="OnChapterFilterChanged"
                      SearchFunc="@SearchChaptersAsync"
                      ToStringFunc="@(c => c == null ? string.Empty : $"{c.ChapterNumberLabel} {(string.IsNullOrEmpty(c.ChapterTitle) ? "" : "- " + c.ChapterTitle)}")"
-                 Label="Search chapters..."
-                      Variant="Variant.Outlined" Clearable="true"
-                      ResetValueOnEmptyText="true"
+                     Label="Search chapters..."
+                     Variant="Variant.Outlined" Clearable="true"
+                     ResetValueOnEmptyText="true"
                      DebounceInterval="200"
                      Adornment="Adornment.Start"
                      AdornmentIcon="@Icons.Material.Filled.Search" />
