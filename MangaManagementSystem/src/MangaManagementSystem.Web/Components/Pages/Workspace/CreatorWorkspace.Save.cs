@@ -214,7 +214,16 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 if (page.Versions.Any())
                 {
                     var currentVersion = page.Versions[page.ActiveVersionIndex];
-                    if (!currentVersion.IsDirty || currentVersion.ChapterPageVersionId == Guid.Empty) continue;
+                    if (!currentVersion.IsDirty) continue;
+                    if (currentVersion.ChapterPageVersionId == Guid.Empty)
+                    {
+                        // Region edits attach to a SAVED version. If the active version has no DB id yet and
+                        // no pending image to upload (e.g. a system FULL_PAGE anchor got nudged, or a stale
+                        // placeholder), its region change can never be persisted on its own — clear the
+                        // spurious dirty flag so the manual Save is not blocked forever ("0 saved" loop).
+                        if (currentVersion.PendingBytes == null) currentVersion.IsDirty = false;
+                        continue;
+                    }
                     if (!string.IsNullOrEmpty(currentVersion.Regions))
                     {
                         try

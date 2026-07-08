@@ -1260,7 +1260,13 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         await canvas.InvokeVoidAsync("selectRegionsByDbIds", new object[] { dbIds });
     }
 
-    private Task SelectTaskPanels(ProductionTask task) => SelectPanelsByRegions(task.Regions);
+    private Task SelectTaskPanels(ProductionTask task)
+    {
+        // Highlight the clicked task (reuses the isTargetTask border/background styling, mirroring the
+        // selected-chapter highlight in the sidebar) and select its panels on the canvas.
+        _taskFilterId = task.DbId?.ToString();
+        return SelectPanelsByRegions(task.Regions);
+    }
     private Task SelectAnnotationPanels(AnnotationModel ann) => SelectPanelsByRegions(ann.Regions);
 
     public class CanvasInterop

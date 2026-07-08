@@ -190,9 +190,12 @@ function setupEvents() {
                 return;
             }
 
-            // Check if clicking inside a region
-            const hit = regions.slice().reverse().find(r => 
-                pos.x >= r.x && pos.x <= r.x + r.width && 
+            // Check if clicking inside a region. FULL_PAGE regions are system-managed page anchors that
+            // cover the whole page, so exclude them here — otherwise they intercept every click/drag and
+            // the panel regions underneath become unreachable (and get nudged by accident).
+            const hit = regions.slice().reverse().find(r =>
+                (r.type || '').toUpperCase() !== 'FULL_PAGE' &&
+                pos.x >= r.x && pos.x <= r.x + r.width &&
                 pos.y >= r.y && pos.y <= r.y + r.height);
             
             if (hit) {
@@ -401,8 +404,9 @@ function setupEvents() {
     container.addEventListener('dblclick', (e) => {
         if (currentTool !== 'select') return;
         const pos = getMousePos(e);
-        const hit = regions.slice().reverse().find(r => 
-            pos.x >= r.x && pos.x <= r.x + r.width && 
+        const hit = regions.slice().reverse().find(r =>
+            (r.type || '').toUpperCase() !== 'FULL_PAGE' &&   // don't select the system full-page anchor
+            pos.x >= r.x && pos.x <= r.x + r.width &&
             pos.y >= r.y && pos.y <= r.y + r.height);
         
         if (hit) {
