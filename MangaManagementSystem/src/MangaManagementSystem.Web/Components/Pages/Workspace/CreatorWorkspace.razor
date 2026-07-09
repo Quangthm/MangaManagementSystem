@@ -798,12 +798,10 @@ else
     {
         <ImageCropDialog @key="@($"staged-{_cropIdx}")"
                          SourceDataUrl="@_addPagesStaged[_cropIdx].DataUrl"
-                         AspectRatio="@(2.0 / 3.0)"
-                         OutputWidth="1240"
-                         OutputHeight="1860"
+                         AllowFreeResize="true"
                          OutputContentType="image/png"
                          CropDescription="Crop / resize page"
-                         HelperText="Position and zoom the image inside the 2:3 page frame, then confirm. The page is uploaded exactly as cropped when you click Save."
+                         HelperText="Drag the crop box edges or corners to resize it to any width/height, or drag inside to move it. The page is uploaded exactly as cropped when you click Save."
                          OutputFileNamePrefix="page"
                          OnConfirm="@OnStagedCropConfirmed"
                          OnCancel="@CancelStagedCrop" />

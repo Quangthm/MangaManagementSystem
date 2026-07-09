@@ -104,6 +104,8 @@ function drawGrid(context, cropX, cropY, cropWidth, cropHeight) {
 }
 
 function drawCropper(state) {
+    if (state.freeResize) { drawFreeCropper(state); return; }
+
     const canvas = state.canvas;
     const context = state.context;
     const image = state.image;
@@ -207,6 +209,8 @@ function drawCropper(state) {
 }
 
 function handlePointerDown(state, event) {
+    if (state.freeResize) { handleFreePointerDown(state, event); return; }
+
     event.preventDefault();
 
     state.dragging = true;
@@ -223,6 +227,8 @@ function handlePointerDown(state, event) {
 }
 
 function handlePointerMove(state, event) {
+    if (state.freeResize) { handleFreePointerMove(state, event); return; }
+
     if (!state.dragging) {
         return;
     }
@@ -257,6 +263,8 @@ function handlePointerMove(state, event) {
 }
 
 function handlePointerEnd(state, event) {
+    if (state.freeResize) { handleFreePointerEnd(state, event); return; }
+
     state.dragging = false;
 
     state.canvas.classList.remove(
@@ -345,7 +353,8 @@ function detachEvents(state) {
 export async function initialize(
     canvasId,
     dataUrl,
-    aspectRatio = 2 / 3
+    aspectRatio = 2 / 3,
+    freeResize = false
 ) {
     dispose(canvasId);
 
@@ -409,19 +418,43 @@ export async function initialize(
         }
     }
 
-    // Image must completely cover the crop area.
+    // Image must completely cover the crop area (fixed-frame mode).
     const baseScale = Math.max(
         cropWidth / image.naturalWidth,
         cropHeight / image.naturalHeight
     );
 
+    // Free-resize mode fits the whole image inside the canvas and lets the user drag the crop
+    // rectangle's edges/corners to resize it freely (independent width & height) + drag to move.
+    const fitScale = Math.min(
+        (canvas.width - padding) / image.naturalWidth,
+        (canvas.height - padding) / image.naturalHeight
+    );
+    const fitW = image.naturalWidth * fitScale;
+    const fitH = image.naturalHeight * fitScale;
+    const fitX = (canvas.width - fitW) / 2;
+    const fitY = (canvas.height - fitH) / 2;
+
     const state = {
         canvas,
         context,
         image,
-        cropWidth,
-        cropHeight,
+        cropWidth: freeResize ? fitW : cropWidth,
+        cropHeight: freeResize ? fitH : cropHeight,
+        cropX: freeResize ? fitX : (canvas.width - cropWidth) / 2,
+        cropY: freeResize ? fitY : (canvas.height - cropHeight) / 2,
         baseScale,
+
+        freeResize,
+        fitScale,
+        fitX,
+        fitY,
+        fitW,
+        fitH,
+        activeHandle: null,
+        startCrop: null,
+        startPointerX: 0,
+        startPointerY: 0,
 
         zoom: 1,
         offsetX: 0,
@@ -443,7 +476,7 @@ export async function initialize(
     );
 
     attachEvents(state);
-    clampOffsets(state);
+    if (!freeResize) clampOffsets(state);
     drawCropper(state);
 }
 
@@ -453,6 +486,8 @@ export function setZoom(
 ) {
     const state =
         getState(canvasId);
+
+    if (state.freeResize) return;
 
     state.zoom = clamp(
         Number(zoomValue) || 1,
@@ -467,6 +502,15 @@ export function setZoom(
 export function reset(canvasId) {
     const state =
         getState(canvasId);
+
+    if (state.freeResize) {
+        state.cropX = state.fitX;
+        state.cropY = state.fitY;
+        state.cropWidth = state.fitW;
+        state.cropHeight = state.fitH;
+        drawCropper(state);
+        return;
+    }
 
     state.zoom = 1;
     state.offsetX = 0;
@@ -495,6 +539,10 @@ export async function exportCroppedImageStream(
 ) {
     const state =
         getState(canvasId);
+
+    if (state.freeResize) {
+        return exportFreeCrop(state);
+    }
 
     const scale =
         state.baseScale * state.zoom;
@@ -596,6 +644,188 @@ export async function exportCroppedImageStream(
     const arrayBuffer =
         await blob.arrayBuffer();
 
+    return new Uint8Array(arrayBuffer);
+}
+
+// ---- Free-resize mode: a movable + resizable crop rectangle over a fit-to-canvas image ----
+const FREE_HANDLE_SIZE = 14;
+const FREE_MIN_CROP = 30;
+
+function freeHandlePoints(state) {
+    const x = state.cropX, y = state.cropY, w = state.cropWidth, h = state.cropHeight;
+    return [
+        { name: "nw", x: x,         y: y },
+        { name: "n",  x: x + w / 2, y: y },
+        { name: "ne", x: x + w,     y: y },
+        { name: "e",  x: x + w,     y: y + h / 2 },
+        { name: "se", x: x + w,     y: y + h },
+        { name: "s",  x: x + w / 2, y: y + h },
+        { name: "sw", x: x,         y: y + h },
+        { name: "w",  x: x,         y: y + h / 2 }
+    ];
+}
+
+function freeHandleAt(state, px, py) {
+    for (const point of freeHandlePoints(state)) {
+        if (Math.abs(px - point.x) <= FREE_HANDLE_SIZE && Math.abs(py - point.y) <= FREE_HANDLE_SIZE) {
+            return point.name;
+        }
+    }
+    if (px >= state.cropX && px <= state.cropX + state.cropWidth &&
+        py >= state.cropY && py <= state.cropY + state.cropHeight) {
+        return "move";
+    }
+    return null;
+}
+
+function freeCursor(handle) {
+    switch (handle) {
+        case "nw": case "se": return "nwse-resize";
+        case "ne": case "sw": return "nesw-resize";
+        case "n": case "s": return "ns-resize";
+        case "e": case "w": return "ew-resize";
+        case "move": return "move";
+        default: return "default";
+    }
+}
+
+function freeToCanvas(state, event) {
+    const rect = state.canvas.getBoundingClientRect();
+    return {
+        x: (event.clientX - rect.left) * (state.canvas.width / rect.width),
+        y: (event.clientY - rect.top) * (state.canvas.height / rect.height)
+    };
+}
+
+function drawFreeCropper(state) {
+    const { canvas, context, image } = state;
+
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = "#0f172a";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, state.fitX, state.fitY, state.fitW, state.fitH);
+
+    context.save();
+    context.fillStyle = "rgba(2, 6, 23, 0.68)";
+    context.beginPath();
+    context.rect(0, 0, canvas.width, canvas.height);
+    context.rect(state.cropX, state.cropY, state.cropWidth, state.cropHeight);
+    context.fill("evenodd");
+    context.restore();
+
+    drawGrid(context, state.cropX, state.cropY, state.cropWidth, state.cropHeight);
+
+    context.save();
+    context.strokeStyle = "#ffffff";
+    context.lineWidth = 3;
+    context.strokeRect(state.cropX, state.cropY, state.cropWidth, state.cropHeight);
+    context.fillStyle = "#ffffff";
+    for (const point of freeHandlePoints(state)) {
+        context.fillRect(
+            point.x - FREE_HANDLE_SIZE / 2,
+            point.y - FREE_HANDLE_SIZE / 2,
+            FREE_HANDLE_SIZE,
+            FREE_HANDLE_SIZE
+        );
+    }
+    context.restore();
+}
+
+function handleFreePointerDown(state, event) {
+    const p = freeToCanvas(state, event);
+    const handle = freeHandleAt(state, p.x, p.y);
+    if (!handle) return;
+
+    event.preventDefault();
+    state.activeHandle = handle;
+    state.startCrop = { x: state.cropX, y: state.cropY, w: state.cropWidth, h: state.cropHeight };
+    state.startPointerX = p.x;
+    state.startPointerY = p.y;
+    state.canvas.setPointerCapture(event.pointerId);
+    state.canvas.classList.add("is-dragging");
+}
+
+function handleFreePointerMove(state, event) {
+    const p = freeToCanvas(state, event);
+
+    if (!state.activeHandle) {
+        state.canvas.style.cursor = freeCursor(freeHandleAt(state, p.x, p.y));
+        return;
+    }
+
+    event.preventDefault();
+
+    const s = state.startCrop;
+    const dx = p.x - state.startPointerX;
+    const dy = p.y - state.startPointerY;
+
+    const minX = state.fitX;
+    const minY = state.fitY;
+    const maxX = state.fitX + state.fitW;
+    const maxY = state.fitY + state.fitH;
+
+    if (state.activeHandle === "move") {
+        state.cropX = clamp(s.x + dx, minX, maxX - s.w);
+        state.cropY = clamp(s.y + dy, minY, maxY - s.h);
+        drawCropper(state);
+        return;
+    }
+
+    let left = s.x;
+    let top = s.y;
+    let right = s.x + s.w;
+    let bottom = s.y + s.h;
+
+    const h = state.activeHandle;
+    if (h.indexOf("w") !== -1) left = clamp(s.x + dx, minX, right - FREE_MIN_CROP);
+    if (h.indexOf("e") !== -1) right = clamp(s.x + s.w + dx, left + FREE_MIN_CROP, maxX);
+    if (h.indexOf("n") !== -1) top = clamp(s.y + dy, minY, bottom - FREE_MIN_CROP);
+    if (h.indexOf("s") !== -1) bottom = clamp(s.y + s.h + dy, top + FREE_MIN_CROP, maxY);
+
+    state.cropX = left;
+    state.cropY = top;
+    state.cropWidth = right - left;
+    state.cropHeight = bottom - top;
+    drawCropper(state);
+}
+
+function handleFreePointerEnd(state, event) {
+    state.activeHandle = null;
+    state.startCrop = null;
+    state.canvas.classList.remove("is-dragging");
+    if (state.canvas.hasPointerCapture(event.pointerId)) {
+        state.canvas.releasePointerCapture(event.pointerId);
+    }
+}
+
+async function exportFreeCrop(state) {
+    const sourceX = (state.cropX - state.fitX) / state.fitScale;
+    const sourceY = (state.cropY - state.fitY) / state.fitScale;
+    const sourceWidth = state.cropWidth / state.fitScale;
+    const sourceHeight = state.cropHeight / state.fitScale;
+
+    const outW = Math.max(1, Math.round(sourceWidth));
+    const outH = Math.max(1, Math.round(sourceHeight));
+
+    const outputCanvas = document.createElement("canvas");
+    outputCanvas.width = outW;
+    outputCanvas.height = outH;
+
+    const ctx = outputCanvas.getContext("2d");
+    if (!ctx) throw new Error("Unable to create the cropped image.");
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(state.image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, outW, outH);
+
+    const blob = await new Promise((resolve, reject) => {
+        outputCanvas.toBlob(
+            result => result ? resolve(result) : reject(new Error("Unable to encode the cropped image.")),
+            "image/png"
+        );
+    });
+
+    const arrayBuffer = await blob.arrayBuffer();
     return new Uint8Array(arrayBuffer);
 }
 
