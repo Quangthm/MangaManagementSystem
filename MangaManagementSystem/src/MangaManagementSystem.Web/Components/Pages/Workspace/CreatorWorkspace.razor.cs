@@ -1127,33 +1127,34 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         StateHasChanged();
     }
 
+    // Backup of the title captured when an inline rename starts, so Cancel/Escape can revert (the rename
+    // is buffered — nothing is persisted until the user clicks Save).
+    private string? _renameBackupTitle;
+
     private void PromptRenameChapter(ChapterModel chapter)
     {
+        _renameBackupTitle = chapter.Title;
         chapter.IsRenaming = true;
     }
 
-    private async Task SaveChapterName(ChapterModel chapter)
+    // Commit the inline rename into the in-memory buffer ONLY. For an existing chapter whose title
+    // actually changed, flag TitleDirty + mark the workspace dirty; the DB update is deferred to the
+    // manual Save (SaveAllChangesAsync), consistent with the rest of the workspace. New (unsaved)
+    // chapters already carry their title into the create-on-Save, so they need no flag.
+    private Task SaveChapterName(ChapterModel chapter)
     {
-        if (chapter.ChapterId != Guid.Empty && _currentUserId.HasValue)
-        {
-            try
-            {
-                // Architecture: update the draft (title) via the typed API client. The request carries
-                // the current number label (unchanged) + the new title.
-                await MangakaChapterApi.UpdateChapterDraftAsync(
-                    _currentUserId.Value,
-                    chapter.ChapterId,
-                    new UpdateChapterDraftRequest(
-                        chapter.Id.ToString(),
-                        string.IsNullOrWhiteSpace(chapter.Title) ? null : chapter.Title));
-                Snackbar.Add("Chapter renamed successfully.", Severity.Success);
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add($"Error renaming chapter: {ex.Message}", Severity.Error);
-            }
-        }
         chapter.IsRenaming = false;
+        var newTitle = (chapter.Title ?? "").Trim();
+        chapter.Title = newTitle;
+
+        if (chapter.ChapterId != Guid.Empty && newTitle != (_renameBackupTitle ?? "").Trim())
+        {
+            chapter.TitleDirty = true;
+            _saveState = SaveStatus.Dirty;
+            _ = JS.InvokeVoidAsync("setUnsavedFlag", true);
+        }
+        _renameBackupTitle = null;
+        return Task.CompletedTask;
     }
 
     private async Task HandleRenameKeyDown(KeyboardEventArgs e, ChapterModel chapter)
@@ -1170,8 +1171,9 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
     private void CancelRenameChapter(ChapterModel chapter)
     {
-        // Revert title? We don't have the old title saved unless we fetch it.
-        // It's fine to just close it for now.
+        // Buffered rename: revert to the title captured when the edit started, then close the field.
+        if (_renameBackupTitle != null) chapter.Title = _renameBackupTitle;
+        _renameBackupTitle = null;
         chapter.IsRenaming = false;
     }
 

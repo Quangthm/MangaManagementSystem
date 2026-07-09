@@ -104,6 +104,29 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 }
             }
 
+            // Persist buffered chapter renames: existing chapters whose title changed since load. Like the
+            // rest of the workspace this is deferred to the manual Save, not written on Enter.
+            foreach (var chap in Chapters.Where(c => c.ChapterId != Guid.Empty && c.TitleDirty).ToList())
+            {
+                try
+                {
+                    await MangakaChapterApi.UpdateChapterDraftAsync(
+                        _currentUserId!.Value,
+                        chap.ChapterId,
+                        new UpdateChapterDraftRequest(
+                            chap.Id.ToString(),
+                            string.IsNullOrWhiteSpace(chap.Title) ? null : chap.Title));
+                    chap.TitleDirty = false;
+                    savedCount++;
+                }
+                catch (Exception ex)
+                {
+                    failedCount++;
+                    Console.WriteLine($"Error renaming chapter {chap.Id}: {ex.Message}");
+                    Snackbar.Add($"Failed to rename Chapter {chap.Id}: {ex.Message}", Severity.Error);
+                }
+            }
+
             foreach (var chap in Chapters)
             {
                 if (chap.ChapterId == Guid.Empty || chap.Pages == null) continue;
@@ -278,6 +301,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             // wrongly lets Submit proceed.
             bool anyRemainingUnsaved =
                 Chapters.Any(c => c.ChapterId == Guid.Empty) ||
+                Chapters.Any(c => c.TitleDirty) ||
                 Chapters.Any(c => c.Pages != null && c.Pages.Any(p =>
                     p.ChapterPageId == Guid.Empty ||
                     (p.Versions.Any() && p.Versions[p.ActiveVersionIndex].PendingBytes != null) ||

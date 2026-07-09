@@ -49,6 +49,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         public string StatusCode { get; set; } = "DRAFT";
         public string Title { get; set; } = "";
         public bool IsRenaming { get; set; } = false;
+        public bool TitleDirty { get; set; } = false;   // buffered rename: title changed but not yet saved to DB
         public List<PageModel> Pages { get; set; } = new();
         public bool IsPagesLoaded { get; set; } = false;
         public bool IsPending => ChapterId == Guid.Empty;       // created in buffer, not yet in the DB
