@@ -41,6 +41,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
     private Guid? _taskTargetVersionId;
     private string? _taskFilterId;
+    private int? _selectedAnnotationId;   // highlight the clicked annotation in the Page Issues list
     private bool _isRightPanelOpen = true;
     private bool _isLeftPanelOpen = true;   // Chapters sidebar collapse (mirror of the task panel)
 
@@ -1269,7 +1270,12 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         _taskFilterId = task.DbId?.ToString();
         return SelectPanelsByRegions(task.Regions);
     }
-    private Task SelectAnnotationPanels(AnnotationModel ann) => SelectPanelsByRegions(ann.Regions);
+    private Task SelectAnnotationPanels(AnnotationModel ann)
+    {
+        // Highlight the clicked annotation (reuses the selected-task/chapter styling) and select its panels.
+        _selectedAnnotationId = ann.Id;
+        return SelectPanelsByRegions(ann.Regions);
+    }
 
     public class CanvasInterop
     {
@@ -1513,6 +1519,40 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         chap.Pages.Add(newPage);
     }
 
+    // --- Add-pages review + per-image crop (reuses ImageCropDialog, like the double-page split) --------
+    private sealed class StagedImage
+    {
+        public byte[] Bytes { get; set; } = Array.Empty<byte>();
+        public string Name { get; set; } = "page.png";
+        public string ContentType { get; set; } = "image/png";
+        public string DataUrl { get; set; } = "";   // full-resolution data URL (preview + crop source)
+    }
+
+    private List<StagedImage> _addPagesStaged = new();
+    private int? _cropStagedIndex;   // which staged image the crop dialog is currently editing
+
+    private void OpenStagedCrop(int index)
+    {
+        if (index >= 0 && index < _addPagesStaged.Count) _cropStagedIndex = index;
+    }
+
+    // Crop confirmed for one staged image: replace its bytes + preview with the cropped result, so the
+    // buffered page uploaded on Save matches exactly what was cropped here.
+    private void OnStagedCropConfirmed((byte[] Bytes, string FileName, string ContentType) result)
+    {
+        if (_cropStagedIndex is int i && i >= 0 && i < _addPagesStaged.Count && result.Bytes.Length > 0)
+        {
+            var s = _addPagesStaged[i];
+            s.Bytes = result.Bytes;
+            s.ContentType = result.ContentType;
+            s.DataUrl = $"data:{result.ContentType};base64,{Convert.ToBase64String(result.Bytes)}";
+        }
+        _cropStagedIndex = null;
+        StateHasChanged();
+    }
+
+    private void CancelStagedCrop() => _cropStagedIndex = null;
+
     private async Task HandleFileUpload(InputFileChangeEventArgs e)
     {
         if (IsChapterLocked) return;
@@ -1544,7 +1584,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 // #4: read every selected image into memory, build small preview thumbnails, then let
                 // the user REVIEW + confirm before buffering. On Add the images are held in the
                 // in-memory buffer (manual-save) — nothing hits Cloudinary/DB until the user clicks Save.
-                var staged = new List<(byte[] Bytes, string Name, string ContentType, string DataUrl)>();
+                var staged = new List<StagedImage>();
                 foreach (var file in files)
                 {
                     using var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 20);
@@ -1552,27 +1592,38 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                     await stream.CopyToAsync(memoryStream);
                     var bytes = memoryStream.ToArray();
                     var contentType = string.IsNullOrWhiteSpace(file.ContentType) ? "image/png" : file.ContentType;
-                    staged.Add((bytes, file.Name, contentType, $"data:{contentType};base64,{Convert.ToBase64String(bytes)}"));
+                    staged.Add(new StagedImage
+                    {
+                        Bytes = bytes,
+                        Name = file.Name,
+                        ContentType = contentType,
+                        DataUrl = $"data:{contentType};base64,{Convert.ToBase64String(bytes)}"
+                    });
                 }
 
-                var thumbs = await BuildPreviewThumbnailsAsync(staged.Select(s => s.DataUrl));
+                // Hold the staged images in a field so each one can be individually cropped/resized from the
+                // review dialog before Add. The crop reuses ImageCropDialog (same as the double-page split);
+                // the preview grid renders _addPagesStaged directly (with click-to-crop), so no thumbnails.
+                _addPagesStaged = staged;
                 ShowUploadConfirm(
                     staged.Count == 1 ? "Add page" : $"Add {staged.Count} pages",
-                    thumbs,
+                    new List<string>(),
                     async () =>
                     {
                         int firstNewIndex = activeChap.Pages.Count;
-                        foreach (var s in staged)
+                        foreach (var s in _addPagesStaged)
                         {
                             AddPendingPage(activeChap, s.Bytes, s.Name, s.ContentType);
                         }
+                        int addedCount = _addPagesStaged.Count;
+                        _addPagesStaged = new();
                         activeChap.PageCount = activeChap.Pages.Count;
                         _saveState = SaveStatus.Dirty;
                         _ = JS.InvokeVoidAsync("setUnsavedFlag", true);
                         StateHasChanged();
                         await Task.Delay(1); // Yield to allow the pagination DOM to render if it was empty
                         await LoadPage(firstNewIndex);
-                        Snackbar.Add($"Added {staged.Count} page(s) (unsaved). Click Save to upload & persist.", Severity.Info);
+                        Snackbar.Add($"Added {addedCount} page(s) (unsaved). Click Save to upload & persist.", Severity.Info);
                     });
             }
         }

@@ -670,8 +670,9 @@ else
                             @foreach (var ann in ActiveAnnotations.Where(a => a.PageNumber == SelectedPage && MatchesActiveVersion(a.VersionId)))
                             {
                                 var annColor = ann.IsResolved ? Color.Success : Color.Error;
+                                var isSelectedAnn = _selectedAnnotationId == ann.Id;
                                 <MudPaper Elevation="0" Class="pa-3 border-1 mud-border-lines-default rounded-lg"
-                                          Style="cursor: pointer;" @onclick="@(() => SelectAnnotationPanels(ann))">
+                                          Style="@($"cursor: pointer; {(isSelectedAnn ? "border-left: 3px solid #4f46e5; background: #eef2ff;" : "")}")" @onclick="@(() => SelectAnnotationPanels(ann))">
                                     <div class="d-flex justify-space-between align-start">
                                         <div class="d-flex flex-column">
                                             <div class="d-flex align-center mb-1">
@@ -791,19 +792,50 @@ else
                          OnCancel="@OnDoublePageCropCancelled" />
     }
 
+    @* Per-page crop from the Add-pages review dialog. Same ImageCropDialog as the double-page split;
+       the cropped result replaces the staged image so Save uploads exactly the cropped page. *@
+    @if (_cropStagedIndex is int _cropIdx && _cropIdx >= 0 && _cropIdx < _addPagesStaged.Count)
+    {
+        <ImageCropDialog @key="@($"staged-{_cropIdx}")"
+                         SourceDataUrl="@_addPagesStaged[_cropIdx].DataUrl"
+                         AspectRatio="@(2.0 / 3.0)"
+                         OutputWidth="1240"
+                         OutputHeight="1860"
+                         OutputContentType="image/png"
+                         CropDescription="Crop / resize page"
+                         HelperText="Position and zoom the image inside the 2:3 page frame, then confirm. The page is uploaded exactly as cropped when you click Save."
+                         OutputFileNamePrefix="page"
+                         OnConfirm="@OnStagedCropConfirmed"
+                         OnCancel="@CancelStagedCrop" />
+    }
+
     @* #4 upload review: a plain conditional overlay (NOT MudDialog). The inline MudDialog @bind-Visible
        pattern left a second, image-less "ghost" dialog after Add in Blazor Server; a simple @if overlay
        renders exactly one dialog tied to _showUploadConfirm and vanishes cleanly on Add/Cancel. *@
-    @if (_showUploadConfirm)
+    @if (_showUploadConfirm && !_cropStagedIndex.HasValue)
     {
         <div style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: flex; align-items: center; justify-content: center;" @onclick="CancelUploadConfirm">
             <div style="background: var(--mud-palette-surface); color: var(--mud-palette-text-primary); border-radius: 8px; width: 90%; max-width: 600px; max-height: 82vh; overflow-y: auto; padding: 24px; box-shadow: 0 8px 32px rgba(0,0,0,0.35);" @onclick:stopPropagation="true">
                 <MudText Typo="Typo.h6" Class="mb-2">@_uploadConfirmTitle</MudText>
-                <MudText Typo="Typo.body2" Class="mb-3 mf-muted">Review the image(s) below, then confirm to add. Nothing is uploaded until you click Save.</MudText>
+                <MudText Typo="Typo.body2" Class="mb-3 mf-muted">Review the image(s) below — click any image to crop / resize it — then confirm to add. Nothing is uploaded until you click Save.</MudText>
                 <div class="d-flex flex-wrap gap-2" style="max-height: 340px; overflow-y: auto;">
-                    @foreach (var src in _uploadConfirmPreviews)
+                    @if (_addPagesStaged.Any())
                     {
-                        <img src="@src" style="max-width: 130px; max-height: 190px; object-fit: contain; border: 1px solid var(--mud-palette-lines-default); border-radius: 4px;" />
+                        @for (int i = 0; i < _addPagesStaged.Count; i++)
+                        {
+                            var idx = i;
+                            <div style="position: relative; cursor: pointer;" @onclick="@(() => OpenStagedCrop(idx))" title="Click to crop / resize this page">
+                                <img src="@_addPagesStaged[idx].DataUrl" style="max-width: 130px; max-height: 190px; object-fit: contain; border: 1px solid var(--mud-palette-lines-default); border-radius: 4px;" />
+                                <div style="position: absolute; top: 3px; right: 3px; background: #4f46e5; color: #fff; border-radius: 4px; padding: 1px 6px; font-size: 11px;">✎ Crop</div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        @foreach (var src in _uploadConfirmPreviews)
+                        {
+                            <img src="@src" style="max-width: 130px; max-height: 190px; object-fit: contain; border: 1px solid var(--mud-palette-lines-default); border-radius: 4px;" />
+                        }
                     }
                 </div>
                 <div class="d-flex justify-end gap-2 mt-4">

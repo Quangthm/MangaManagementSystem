@@ -302,6 +302,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         _showUploadConfirm = false;
         _uploadConfirmPreviews = new();
         _uploadConfirmOnConfirm = null;
+        _addPagesStaged = new();
     }
 
     private async Task ConfirmUpload()
