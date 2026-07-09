@@ -262,7 +262,7 @@
 </style>
 <div class="@(IsPendingPlacement ? "mf-pending-placement" : null)">
     <MudLayout>
-        <MudDrawer @bind-Open="_drawerOpen" Anchor="Anchor.Right" Variant="DrawerVariant.Temporary"
+        <MudDrawer @bind-Open="_drawerOpen" Anchor="Anchor.Right" Variant="DrawerVariant.Persistent"
                    ClipMode="DrawerClipMode.Always" Width="400px" Class="mf-drawer-content">
             <PublicationScheduleActionDrawer @bind-IsOpen="_drawerOpen"
                                              SelectedSeriesId="_selectedSeriesId"
@@ -378,8 +378,7 @@
                             </MudText>
                         </MudPaper>
                     }
-                    else
-                    {
+                  
                         <div class="mf-days-grid">
                             @foreach (var day in _calendar.Days)
                             {
@@ -434,7 +433,7 @@
                                 </div>
                             }
                         </div>
-                    }
+                    
                 }
                 @if (_pendingDragChapter != null)
                 {

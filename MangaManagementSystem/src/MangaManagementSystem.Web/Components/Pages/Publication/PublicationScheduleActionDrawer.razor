@@ -1,8 +1,8 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
 @using MangaManagementSystem.Application.DTOs.Manga
-@using MangaManagementSystem.Application.DTOs.Editor
 @using MangaManagementSystem.Web.Services.Api
+@inject IJSRuntime JS
 @using MudBlazor
 
 <style>
@@ -99,6 +99,77 @@
         .mf-drawer-card[draggable="true"]:active {
             cursor: grabbing;
         }
+
+    .mf-drag-preview-card {
+        position: fixed;
+        top: -1000px;
+        left: -1000px;
+        width: 300px;
+        min-height: 74px;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid #dbeafe;
+        border-radius: 12px;
+        background: #ffffff;
+        box-shadow: 0 10px 28px rgba(15, 23, 42, 0.24);
+        z-index: 999999;
+        pointer-events: none;
+        opacity: 1;
+    }
+
+    .mf-drag-preview-cover {
+        width: 44px;
+        height: 64px;
+        border-radius: 6px;
+        background: #e2e8f0;
+        color: #94a3b8;
+        font-size: 0.55rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        overflow: hidden;
+        flex-shrink: 0;
+    }
+
+        .mf-drag-preview-cover img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+    .mf-drag-preview-info {
+        min-width: 0;
+        flex: 1;
+    }
+
+    .mf-drag-preview-title {
+        font-size: 0.88rem;
+        font-weight: 700;
+        color: #0f172a;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .mf-drag-preview-chapter {
+        margin-top: 3px;
+        font-size: 0.78rem;
+        color: #64748b;
+    }
+
+    .mf-drag-preview-status {
+        display: inline-block;
+        margin-top: 8px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        background: #e0f2fe;
+        color: #0369a1;
+        font-size: 0.72rem;
+        font-weight: 700;
+    }
 </style>
 
 <div class="mf-drawer-header">
@@ -164,6 +235,11 @@
         {
             <div class="mf-drawer-card"
                  draggable="@GetDraggableAttribute(chapter)"
+                 data-schedule-drag-card="@(CanDragChapter(chapter) ? "true" : null)"
+                 data-drag-title="@chapter.SeriesTitle"
+                 data-drag-chapter="@chapter.ChapterNumberLabel"
+                 data-drag-status="@chapter.StatusCode"
+                 data-drag-cover="@chapter.SeriesCoverUrl"
                  @ondragstart="e => HandleChapterDragStart(e, chapter)"
                  @ondragend="HandleChapterDragEnd">
                 <div class="mf-drawer-card-cover">
@@ -263,6 +339,7 @@
     private string SeriesChipLabel => SelectedSeriesTitle ?? _resolvedSeriesTitle ?? "Selected series";
     private bool HasSeriesFilter => _selectedSeriesId.HasValue;
     private bool HasChapterFilter => _selectedChapter != null;
+    private bool _dragImageInitialized;
 
     private static readonly HashSet<string> ScheduleActionStatuses = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -289,7 +366,14 @@
         }
         _roleLabel = _isMangaka ? "Mangaka" : _isEditor ? "Editor" : "";
     }
-
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_dragImageInitialized)
+        {
+            _dragImageInitialized = true;
+            await JS.InvokeVoidAsync("scheduleDrag.enableCustomDrawerDragImage");
+        }
+    }
     protected override async Task OnParametersSetAsync()
     {
         if (!IsOpen || _currentUserId == Guid.Empty) return;
@@ -314,7 +398,7 @@
             }
             else
             {
-                ClearChapterSearch();
+                _selectedChapter = null;
                 ApplyChapterFilters();
                 StateHasChanged();
             }
@@ -434,7 +518,7 @@
             ? _allChapters.Where(c => c.SeriesId == _selectedSeriesId!.Value)
             : _allChapters;
 
-    private async void OnChapterFilterChanged(ActionableChapterItem? chapter)
+    private void OnChapterFilterChanged(ActionableChapterItem? chapter)
     {
         _selectedChapter = chapter;
         ApplyChapterFilters();
