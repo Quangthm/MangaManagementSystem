@@ -31,6 +31,7 @@ namespace MangaManagementSystem.Infrastructure.Persistence
         public DbSet<Notification> Notifications => Set<Notification>();
         public DbSet<Genre> Genres => Set<Genre>();
         public DbSet<Tag> Tags => Set<Tag>();
+        public DbSet<PublicationPeriod> PublicationPeriods => Set<PublicationPeriod>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -88,6 +89,7 @@ namespace MangaManagementSystem.Infrastructure.Persistence
         DbSet<Notification> Notifications { get; }
         DbSet<Genre> Genres { get; }
         DbSet<Tag> Tags { get; }
+        DbSet<PublicationPeriod> PublicationPeriods { get; }
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     }
 }

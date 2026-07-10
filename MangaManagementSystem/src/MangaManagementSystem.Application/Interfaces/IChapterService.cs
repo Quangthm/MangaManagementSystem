@@ -9,8 +9,10 @@ namespace MangaManagementSystem.Application.Interfaces
         Task<ChapterDto> CreateChapterAsync(CreateChapterDto dto);
         Task<ChapterDto?> GetChapterByIdAsync(Guid id);
         Task<IEnumerable<ChapterDto>> GetChaptersBySeriesIdAsync(Guid seriesId);
-        Task DeleteChapterAsync(Guid id);
+        Task DeleteChapterAsync(Guid id, Guid? actorUserId = null, string? actorRoleName = null);
+        Task CancelChapterAsync(Guid id, Guid? actorUserId = null, string? actorRoleName = null);
         Task UpdateChapterStatusAsync(Guid id, string statusCode);
         Task UpdateChapterTitleAsync(Guid id, string newTitle);
+        Task EnsureChapterAllowsContentMutationsAsync(Guid chapterId);
     }
 }

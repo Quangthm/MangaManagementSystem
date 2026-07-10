@@ -17,7 +17,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
     /// the detail are scoped to series where the actor is an active Tantou Editor contributor,
     /// so an editor cannot see chapters from series they do not work on.
     /// </summary>
-    public class EditorChapterReviewRepository : IEditorChapterReviewRepository
+    public partial class EditorChapterReviewRepository : IEditorChapterReviewRepository
     {
         private const string StatusUnderReview = "UNDER_REVIEW";
         private const string StatusApproved = "APPROVED";
@@ -240,6 +240,9 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 pageCount,
                 chapter.CreatedAtUtc,
                 chapter.CreatedByUser?.DisplayName,
+                chapter.PlannedReleaseDate,
+                chapter.ReleasedAtUtc,
+                chapter.UpdatedAtUtc,
                 pageDetails,
                 annotations,
                 reviewHistory);

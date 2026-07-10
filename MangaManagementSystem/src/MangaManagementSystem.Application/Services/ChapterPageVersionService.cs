@@ -73,12 +73,23 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(entity);
         }
 
-        public async Task<bool> DeleteChapterPageVersionAsync(Guid id)
+        public Task<bool> DeleteChapterPageVersionAsync(Guid id) =>
+            // BR-CP-013 / BR-CP-020 / BR-REG-012: page versions and their regions are kept for
+            // traceability and must never be hard-deleted. Removing a version row (and its regions)
+            // would also orphan any linked tasks/annotations. Use DeleteVersionImageAsync to remove
+            // only the image while preserving the version as a history placeholder.
+            throw new InvalidOperationException(
+                "Page versions cannot be deleted. Delete the version image instead (DeleteVersionImageAsync).");
+
+        public async Task<DeleteVersionImageResultDto> DeleteVersionImageAsync(
+            Guid versionId,
+            Guid actorUserId,
+            string? actorRoleName,
+            CancellationToken cancellationToken = default)
         {
-            var entity = await _unitOfWork.ChapterPageVersions.GetByIdAsync(id);
-            if (entity == null)
+            if (actorUserId == Guid.Empty)
             {
-                return false;
+                return new DeleteVersionImageResultDto(false, "A valid signed-in user is required to delete the image.", null);
             }
 
             // FK fk_page_region_version has no cascade, so a version with regions could not
@@ -100,6 +111,69 @@ namespace MangaManagementSystem.Application.Services
                 await _unitOfWork.RollbackTransactionAsync();
                 throw;
             }
+            var version = await _unitOfWork.ChapterPageVersions.GetByIdAsync(versionId);
+            if (version == null)
+            {
+                return new DeleteVersionImageResultDto(false, "Version not found.", null);
+            }
+
+            // Guard (BR-ANN-017 / BR-PGTASK / BR-FILE-003): tasks and annotations are version-scoped
+            // (attached to THIS version's regions), so block deleting the image only when THIS version
+            // has an unresolved annotation or an active task on its own regions. This matches the
+            // version-scoped Task Panel: what you see on the version is exactly what protects it.
+            var regions = await _unitOfWork.PageRegions.FindAsync(r => r.ChapterPageVersionId == versionId);
+            var regionIds = regions.Select(r => r.PageRegionId).ToHashSet();
+            if (regionIds.Count > 0)
+            {
+                var annotations = await _unitOfWork.ChapterPageAnnotations.GetByPageRegionIdsAsync(regionIds.ToList());
+                if (annotations.Any(a => a.ResolvedAtUtc == null))
+                {
+                    return new DeleteVersionImageResultDto(false,
+                        "This version has unresolved annotations. Resolve them before deleting its image.", null);
+                }
+
+                var tasks = await _unitOfWork.ChapterPageTasks.GetByChapterPageIdWithRegionsAsync(version.ChapterPageId);
+                var hasActiveTask = tasks.Any(t =>
+                    (t.StatusCode == "ASSIGNED" || t.StatusCode == "UNDER_REVIEW") &&
+                    t.PageRegions.Any(r => regionIds.Contains(r.PageRegionId)));
+                if (hasActiveTask)
+                {
+                    return new DeleteVersionImageResultDto(false,
+                        "This version is referenced by an active assistant task. Complete or cancel it before deleting its image.", null);
+                }
+            }
+
+            // Soft-delete only the FileResource (keep the version row + regions as a history
+            // placeholder per BR-CP-013/020 and BR-FILE-008). Setting both deleted_at_utc and
+            // deleted_by_user_id satisfies ck_file_resource_deleted_pair. Uploading again creates
+            // the next version number rather than reviving this one.
+            string? publicId = null;
+            var file = await _unitOfWork.FileResources.GetByIdAsync(version.PageFileId);
+            if (file != null && file.DeletedAtUtc == null)
+            {
+                file.DeletedAtUtc = DateTime.UtcNow;
+                file.DeletedByUserId = actorUserId;
+                _unitOfWork.FileResources.Update(file);
+                publicId = file.CloudinaryPublicId;
+            }
+
+            await _unitOfWork.AuditEvents.AddAsync(new AuditEvent
+            {
+                OccurredAtUtc = DateTime.UtcNow,
+                ActorUserId = actorUserId,
+                ActorRoleName = actorRoleName,
+                ActionCode = "VERSION_IMAGE_DELETED",
+                EntityType = "ChapterPageVersion",
+                EntityId = versionId.ToString(),
+                DetailJson = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    version_no = version.VersionNo,
+                    file_resource_id = version.PageFileId
+                })
+            });
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            return new DeleteVersionImageResultDto(true, null, publicId);
         }
 
         public async Task<ChapterPageVersionDto> CreateVersionWithFileAndRegionsAsync(
@@ -216,6 +290,75 @@ namespace MangaManagementSystem.Application.Services
             return true;
         }
 
+        public async Task<CreatePageWithVersionResponseDto> CreatePageWithVersionAndFileAsync(
+            CreatePageWithVersionRequestDto request,
+            CancellationToken cancellationToken = default)
+        {
+            await _unitOfWork.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                var file = new FileResource
+                {
+                    FilePurposeCode = request.FileDto.FilePurposeCode,
+                    OriginalFileName = request.FileDto.OriginalFileName,
+                    CloudinaryPublicId = request.FileDto.CloudinaryPublicId,
+                    CloudinarySecureUrl = request.FileDto.CloudinarySecureUrl,
+                    ContentType = request.FileDto.ContentType,
+                    FileSizeBytes = request.FileDto.FileSizeBytes,
+                    Sha256Hash = request.FileDto.Sha256Hash,
+                    UploadedByUserId = request.FileDto.UploadedByUserId,
+                    UploadedAtUtc = DateTime.UtcNow
+                };
+                await _unitOfWork.FileResources.AddAsync(file);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                var page = new ChapterPage
+                {
+                    ChapterId = request.ChapterId,
+                    PageNo = request.PageNo,
+                    PageNotes = request.PageNotes
+                };
+                await _unitOfWork.ChapterPages.AddAsync(page);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                var version = new ChapterPageVersion
+                {
+                    ChapterPageId = page.ChapterPageId,
+                    VersionNo = 1,
+                    PageFileId = file.FileResourceId,
+                    VersionNote = request.VersionNote,
+                    IsCurrentVersion = true
+                };
+                await _unitOfWork.ChapterPageVersions.AddAsync(version);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+                return new CreatePageWithVersionResponseDto(
+                    new ChapterPageDto(page.ChapterPageId, page.ChapterId, page.PageNo, page.PageNotes, null, null),
+                    MapToDto(version),
+                    new FileResourceDto(
+                        file.FileResourceId,
+                        file.FilePurposeCode,
+                        file.OriginalFileName,
+                        file.CloudinaryPublicId,
+                        file.CloudinarySecureUrl,
+                        file.ContentType,
+                        file.FileSizeBytes,
+                        file.Sha256Hash,
+                        file.UploadedByUserId,
+                        file.UploadedAtUtc,
+                        file.DeletedAtUtc,
+                        file.DeletedByUserId)
+                );
+            }
+            catch
+            {
+                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                throw;
+            }
+        }
+
         private static ChapterPageVersionDto MapToDto(ChapterPageVersion v) => new(
             v.ChapterPageVersionId,
             v.ChapterPageId,
@@ -226,3 +369,4 @@ namespace MangaManagementSystem.Application.Services
         );
     }
 }
+

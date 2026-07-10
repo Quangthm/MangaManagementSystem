@@ -2,7 +2,7 @@
 
 **Project:** Manga Creation Workflow and Publishing Management System  
 **Target UI:** Blazor Server / MudBlazor MVP  
-**Last updated:** 2026-06-09  
+**Last updated:** 2026-07-04  
 **Purpose:** Define the UI behavior for Mangaka-owned series drafting, slug usage, stable series URLs, and the centralized chapter-level workspace.
 
 ---
@@ -822,6 +822,8 @@ Selected Series
 - Allow authorized navigation between chapters in the selected series.
 - Allow navigation between pages in a selected chapter.
 - Allow viewing historical page versions when permitted.
+- Hide soft-deleted `ChapterPage` records from normal active page navigation by default, while allowing historical/admin views to include them when needed.
+- Do not provide a normal user action to delete a saved `ChapterPageVersion` in the current MVP.
 
 ---
 
@@ -839,6 +841,8 @@ Display selected content.
 - Allow zoom/pan if feasible for MVP.
 - Show empty state if the selected page has no version yet.
 - Show read-only state when user lacks edit permission.
+- Show page-region delete/remove action only for regions that are not linked to annotations, tasks, or other workflow records.
+- If a selected region is linked to an annotation or task, explain that it cannot be deleted because it is part of workflow history.
 
 ---
 
@@ -856,20 +860,47 @@ Display selected content.
 
 | Role | Actions |
 |---|---|
-| Mangaka | Save/adjust regions when permitted, create production-tracking annotations, update/resolve Mangaka-created annotations, assign selected page regions as tasks to Assistants, review task output, upload new page versions, submit chapter for review. Mangaka cannot update or resolve Tantou Editor-created annotations. Task page context is derived from selected regions, not from a direct task `chapter_page_id`. |
+| Mangaka | Save/adjust regions when permitted, delete only unused regions that are not linked to tasks or annotations, create production-tracking annotations, update/resolve Mangaka-created annotations, assign selected page regions as tasks to Assistants, review task output, explicitly save new page versions, soft-delete chapter pages when permitted, and submit chapters for review. Mangaka cannot delete saved page versions in the current MVP and cannot update or resolve Tantou Editor-created annotations. Task page context is derived from selected regions, not from a direct task `chapter_page_id`. |
 | Assistant | View assigned regions/tasks, upload task output as a page version for the same logical page derived from the linked task regions when allowed, mark work ready for review. |
 | Tantou Editor | Add editorial-review annotations linked to one or more page regions, update unresolved annotation text when permitted, resolve Mangaka-created or Tantou Editor-created annotations, review regions/page context, approve chapters, request revision with required comments, or cancel chapters with required comments and optional markup through the chapter review workflow. |
 | Editorial Board Member | No workspace access by default. |
 | Editorial Board Chief | No workspace access by default unless future permission grants it. |
 | Admin | No manga production actions. |
 
+### Page, version, and region retention UI behavior
+
+| UI action | MVP behavior |
+|---|---|
+| Select/upload page file | Preview only until the user explicitly clicks Save/Confirm; it must not create a `ChapterPageVersion` automatically. |
+| Save page version | Creates a new `ChapterPageVersion`, marks it current when appropriate, and keeps previous versions in history. |
+| Delete saved page version | Not available to normal users in the current MVP. Users should save a newer version instead. |
+| Delete page region | Available only when the region is not linked to any task, annotation, or other workflow record. |
+| Delete linked page region | Blocked; show an explanation that linked regions are preserved for workflow traceability. |
+| Soft-delete chapter page | Allowed only when chapter/page workflow rules permit; hides the logical page from active draft navigation but preserves page-version history. |
+| Admin/system purge of old page versions | Future scope after chapter release; not part of normal MVP workspace actions. |
+
 ### Chapter editorial decision UI
 
 | Decision action | Required input | Result | UI meaning |
 |---|---|---|---|
-| Approve Chapter | None required | `Chapter.status_code = APPROVED` | Chapter may proceed toward scheduling/release. |
+| Approve Chapter with no planned release date | None required | `Chapter.status_code = APPROVED` | Chapter is accepted but still needs a planned release date before it becomes scheduled or released. |
+| Approve Chapter with an existing future planned release date | None required | `Chapter.status_code = SCHEDULED` | Chapter is accepted, scheduled, and locked from Mangaka/page content mutation workflows. |
 | Request Revision | Non-blank comments; optional markup file | `Chapter.status_code = REVISION_REQUESTED` | Same chapter becomes editable again and can receive new page versions. |
 | Cancel Chapter | Non-blank comments; optional markup file | `Chapter.status_code = CANCELLED` | Current chapter attempt is terminal/read-only and cannot be edited or resubmitted. |
+
+### Scheduled and on-hold chapter UI behavior
+
+| Actor / status | UI behavior |
+|---|---|
+| Mangaka viewing `SCHEDULED` chapter | Show read-only state and message: `This chapter is scheduled. Content changes are locked. Schedule changes are audit-visible.` |
+| Mangaka viewing `ON_HOLD` chapter | Show read-only/on-hold state and hold reason when available. Explain that returning to schedule requires a new planned release date. |
+| Mangaka scheduling/rescheduling an allowed chapter | Allow selecting any future planned release date; show frequency-based suggestions/warnings but do not hard-block mismatches. Require confirmation. |
+| Tantou Editor viewing `SCHEDULED` chapter | Show planned release date, advisory frequency information, Reschedule action, Put On Hold action, and Release action when eligible. |
+| Tantou Editor scheduling/rescheduling an allowed chapter | Allow selecting any future planned release date; show frequency-based suggestions/warnings but do not hard-block mismatches. Require confirmation. |
+| Tantou Editor putting `SCHEDULED` chapter on hold | Require a non-blank operational/editorial reason and confirmation. |
+| Tantou Editor returning `ON_HOLD` chapter to schedule | Require a new future planned release date and confirmation. |
+| Tantou Editor releasing a chapter | Require confirmation; set `released_at_utc` to the current UTC time and preserve existing `planned_release_date` unless it is missing. |
+| Any user viewing `SCHEDULED` or `ON_HOLD` workspace | Keep read-only viewing available where authorized, but hide/disable page/content mutation actions. |
 
 ### Cancelled chapter UI behavior
 
@@ -990,31 +1021,85 @@ For MVP, symbolic `returnContext` is safer and easier to avoid open-redirect mis
 
 ### Purpose
 
-Support chapter planned release date selection according to the official `Series.publication_frequency_code` and the relevant `PublicationPeriod`.
+Support flexible chapter planned release date selection, schedule visibility, hold handling, and editor-driven release actions.
 
-### Scheduling behavior
+Scheduling is chapter-level. The UI must use `Chapter.planned_release_date`, `Chapter.released_at_utc`, and `Chapter.status_code`; it must not present `SCHEDULED` as a series status.
 
-| Frequency | UI behavior |
+`Series.publication_frequency_code` is advisory. It may provide suggested default dates and warning messages, but it must not hard-block authorized users from choosing a different future date.
+
+### Actor behavior
+
+| Actor | Allowed behavior |
 |---|---|
-| `WEEKLY` | Suggest previous planned release date + 7 days and require the final chosen date to stay inside the next weekly `PublicationPeriod`. |
-| `MONTHLY` | Suggest the same day number in the next month when possible, otherwise the last day of the next month, and require the final chosen date to stay inside the next monthly `PublicationPeriod`. |
-| `IRREGULAR` | Do not enforce next-week or next-month period boundaries. |
-| `NULL` | Show that the official release approach has not been decided yet. |
+| Mangaka | May set or reschedule a planned release date when the chapter is in a status that allows scheduling, subject to permission and future-date validation. |
+| Mangaka | May view schedule context, contributor contact information where authorized, and audit-visible changes for chapters they work on. |
+| Mangaka | Cannot edit pages, page versions, or content when the chapter is `SCHEDULED` or `ON_HOLD`. |
+| Tantou Editor | May set or reschedule a planned release date when the chapter is in a status that allows scheduling. |
+| Tantou Editor | May put a `SCHEDULED` chapter `ON_HOLD` with a required reason. |
+| Tantou Editor | May return an `ON_HOLD` chapter to `SCHEDULED` only by setting a new future planned release date. |
+| Tantou Editor | May release an eligible approved or scheduled chapter with confirmation. |
+| Editorial Board Chief | Controls official series publication frequency through board/frequency workflows, not chapter-level content scheduling. |
 
-### PublicationPeriod display
+### Advisory scheduling behavior
 
-- Weekly publication periods should display their `period_name`, `period_start_date`, and `period_end_date`.
-- Weekly periods start Monday and end Sunday.
-- A weekly period is named after the month containing at least four days of that week.
-- Monthly and yearly periods follow their calendar start/end dates.
+| Frequency | UI suggestion behavior |
+|---|---|
+| `WEEKLY` | Suggest the same weekday in the next week when a useful reference date exists. |
+| `MONTHLY` | Suggest the same day number in the next month when possible, otherwise the last valid day of the next month. |
+| `IRREGULAR` | Do not require a strict default; user chooses a future date. |
+| `NULL` | Show that the official release approach has not been decided; user chooses a future date. |
 
-### Validation feedback
+### Hard validation behavior
 
-When a user selects an invalid planned release date, the UI should explain the valid date range, for example:
+| Case | UI/backend behavior |
+|---|---|
+| User chooses a past planned release date | Block with a clear error. |
+| User chooses a date that does not match frequency suggestion | Show a warning, then allow the authorized user to continue. |
+| Multiple chapters use the same planned release date | Allow; bulk/catch-up release plans may be intentional. |
+| Chapter is `CANCELLED` or `RELEASED` | Hide or disable schedule/reschedule/hold/release actions that are no longer valid. |
+| Actor lacks permission | Hide action where possible and rely on backend permission checks. |
 
-```text
-This weekly series must schedule the next chapter inside 2026_JULY_WEEK2: 2026-07-06 to 2026-07-12.
-```
+### Status behavior
+
+| Current chapter state/action | Result |
+|---|---|
+| `DRAFT` or `REVISION_REQUESTED` + future planned date set | Planned date is saved; chapter remains editable/plannable in its current status. |
+| `UNDER_REVIEW` + editor approves + no planned date | Chapter becomes `APPROVED`. |
+| `UNDER_REVIEW` + editor approves + future planned date exists | Chapter becomes `SCHEDULED`. |
+| `APPROVED` + future planned date set | Chapter becomes `SCHEDULED`. |
+| `SCHEDULED` + Mangaka/Editor reschedules | Chapter remains `SCHEDULED`; planned date is updated. |
+| `SCHEDULED` + Editor puts on hold | Chapter becomes `ON_HOLD`; the previous release plan is suspended and audit details preserve the old date/reason. |
+| `ON_HOLD` + Editor returns to schedule | Requires a new future planned release date; chapter becomes `SCHEDULED`. |
+| `APPROVED` or `SCHEDULED` + Editor releases | Chapter becomes `RELEASED`; `released_at_utc` is set to the current UTC time. |
+| `RELEASED` or `CANCELLED` + schedule/reschedule/release action | Blocked. |
+
+### Publication calendar behavior
+
+- The shared publication calendar should show serialized series only.
+- The calendar should place a chapter card on the date where it is planned or released.
+- If `released_at_utc` exists, use the release business date for placement.
+- Otherwise use `planned_release_date`.
+- Chapter cards should prioritize series cover, series title, and chapter number label.
+- Search should use series-title typeahead/autocomplete, not chapter-title search.
+- Missing covers should use a safe placeholder.
+- The calendar may show frequency filters or badges, but frequency must remain advisory.
+
+### Confirmation behavior
+
+The UI should ask for confirmation before:
+
+- setting or changing a planned release date,
+- putting a chapter on hold,
+- returning a held chapter to schedule,
+- releasing a chapter,
+- bulk scheduling, bulk holding, or bulk releasing chapters when those workflows are implemented.
+
+### Release behavior
+
+- Releasing a chapter sets `released_at_utc` to the current UTC timestamp.
+- If `planned_release_date` is missing, the UI/backend sets it to the current publication business date.
+- If `planned_release_date` already exists, preserve it for planned-versus-actual comparison.
+- Release automation is not part of MVP unless explicitly implemented later.
 
 ### Business date note
 
@@ -1022,7 +1107,13 @@ This weekly series must schedule the next chapter inside 2026_JULY_WEEK2: 2026-0
 - Released chapter period reports use `released_at_utc` converted to Vietnam publication time (UTC+7), then the date part.
 - The UI must not show raw UTC date as the publication business date when period membership matters.
 
----
+### Scheduled and on-hold lock display
+
+- A `SCHEDULED` chapter should show a clear locked state for Mangaka users.
+- An `ON_HOLD` chapter should show a clear paused/on-hold state with reason when available.
+- The workspace may remain viewable if the user is authorized, but saved page/content mutation controls should be hidden or disabled.
+- On-hold recovery requires a new future planned release date.
+- Automatic overdue-to-on-hold behavior is deferred. The UI may show overdue warnings, but it should not trigger writes from read-only page loading.
 
 ## 10. Series Ranking UI
 
@@ -1054,4 +1145,3 @@ Display dynamic series rankings from `manga.vw_SeriesRanking` for a selected `Pu
 - Input fields are `rating_count`, `average_rating`, `reading_count`, and optional `data_source_note`.
 - Validation should reject non-positive counts, `average_rating` outside 0 to 10, and `rating_count > reading_count`.
 - The vote input screen should explain that weekly input is period-only and must not include earlier weeks.
-

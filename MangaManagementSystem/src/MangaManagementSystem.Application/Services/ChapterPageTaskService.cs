@@ -81,20 +81,8 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(entity);
         }
 
-        public async Task<bool> DeleteChapterPageTaskAsync(Guid id)
-        {
-            var entity = await _unitOfWork.ChapterPageTasks.GetByIdWithRegionsAsync(id);
-            if (entity == null)
-            {
-                return false;
-            }
-
-            entity.PageRegions.Clear();
-            _unitOfWork.ChapterPageTasks.Delete(entity);
-            await _unitOfWork.SaveChangesAsync();
-
-            return true;
-        }
+        // Hard-delete intentionally removed: BR-PGTASK-027/029 require a task to be preserved for
+        // traceability. Use CancelTaskAsync (status -> CANCELLED + audit) instead.
 
         public async Task<ChapterPageTaskDto?> GetChapterPageTaskByIdWithRegionsAsync(Guid id)
         {
