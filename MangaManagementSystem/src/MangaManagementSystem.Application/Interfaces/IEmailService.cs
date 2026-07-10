@@ -11,5 +11,10 @@ namespace MangaManagementSystem.Application.Interfaces
             string toEmail,
             string resetLink,
             CancellationToken cancellationToken = default);
+
+        Task SendAccountApprovedEmailAsync(
+            string toEmail,
+            string displayName,
+            CancellationToken cancellationToken = default);
     }
 }
