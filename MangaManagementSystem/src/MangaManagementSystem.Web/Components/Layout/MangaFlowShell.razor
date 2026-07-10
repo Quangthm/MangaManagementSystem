@@ -3,10 +3,8 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Authorization
-@using Microsoft.JSInterop
 
 @inject NavigationManager NavigationManager
-@inject IJSRuntime JSRuntime
 
 <div class="mf-app-shell mf-board-shell">
     <aside class="mf-sidebar mf-board-editor-sidebar">
@@ -57,9 +55,9 @@
 
                         <div class="mf-board-profile-dropdown-divider"></div>
 
-                        <button type="button"
-                                class="mf-board-profile-dropdown-item logout"
-                                @onclick="LogoutAsync">
+                        <button type="submit"
+                                form="global-logout-form"
+                                class="mf-board-profile-dropdown-item logout">
                             Logout
                         </button>
                     </div>
@@ -110,7 +108,7 @@
                 Board Polls
             </a>
 
-            <AuthorizeView Roles="Editorial Board Chief">
+            <AuthorizeView Roles="Editorial Board Chief,Board Chief">
                 <Authorized>
                     <a class="@MenuClass("decisions")" href="/demo/mangaflow/decisions">
                         Decision Center
@@ -122,7 +120,7 @@
                 Ranking
             </div>
 
-            <a class="mf-board-nav-link" href="ranking">
+            <a class="@MenuClass("ranking")" href="/ranking">
                 Ranking
             </a>
         </nav>
@@ -177,41 +175,29 @@
 </div>
 
 @code {
-    [Parameter] public string Title { get; set; } = string.Empty;
-    [Parameter] public string Subtitle { get; set; } = string.Empty;
-    [Parameter] public string ActiveMenu { get; set; } = string.Empty;
-    [Parameter] public bool ShowLiveBadge { get; set; }
-    [Parameter] public RenderFragment? Actions { get; set; }
-    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter]
+    public string Subtitle { get; set; } = string.Empty;
+
+    [Parameter]
+    public string ActiveMenu { get; set; } = string.Empty;
+
+    [Parameter]
+    public bool ShowLiveBadge { get; set; }
+
+    [Parameter]
+    public RenderFragment? Actions { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
 
     private string MenuClass(string key)
     {
         return ActiveMenu.Equals(key, StringComparison.OrdinalIgnoreCase)
             ? "mf-board-nav-link active"
             : "mf-board-nav-link";
-    }
-
-    private async Task LogoutAsync()
-    {
-        var keys = new[]
-        {
-            "authToken",
-            "token",
-            "jwt",
-            "accessToken",
-            "currentUser",
-            "user",
-            "role",
-            "roleName"
-        };
-
-        foreach (var key in keys)
-        {
-            await JSRuntime.InvokeVoidAsync("localStorage.removeItem", key);
-            await JSRuntime.InvokeVoidAsync("sessionStorage.removeItem", key);
-        }
-
-        NavigationManager.NavigateTo("/signout", forceLoad: true);
     }
 
     private static string GetDisplayName(ClaimsPrincipal user)

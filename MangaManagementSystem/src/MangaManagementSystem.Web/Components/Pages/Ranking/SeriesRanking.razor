@@ -1,16 +1,17 @@
 @page "/ranking"
 @page "/demo/mangaflow/ranking"
 @using System.Globalization
+@using System.Security.Claims
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
-@attribute [Authorize(Roles = "Mangaka,Tantou Editor,Editorial Board Member,Editorial Board Chief,Admin")]
+@attribute [Authorize(Roles = "Mangaka,Assistant,Tantou Editor,Editorial Board Member,Editorial Board Chief,EditorialBoardMember,EditorialBoardChief,Board Member,Board Chief,Admin")]
 @inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject MangaManagementSystem.Web.Services.Api.ISeriesRankingApiClient RankingApiClient
 
 <PageTitle>Series Ranking Management</PageTitle>
 
-<RankingLayout>
+<RankingPageFrame>
     <RankingStyles />
 
     <div class="mf-page">
@@ -20,18 +21,26 @@
                          SelectedPublicationPeriodIdChanged="OnPublicationPeriodChangedAsync"
                          Loading="@_loadingPeriods" />
 
-            @if (_usingSampleData)
-            {
-                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
-                    Preview mode is using sample ranking data because database ranking data is not available yet.
-                    When real weekly publication periods and vote inputs exist, this page will use database data automatically.
-                </MudAlert>
-            }
-
-            @if (!string.IsNullOrWhiteSpace(_loadError) && !_usingSampleData)
+            @if (!string.IsNullOrWhiteSpace(_loadError))
             {
                 <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
                     @_loadError
+                </MudAlert>
+            }
+
+            @if (!_loadingPeriods && _publicationPeriods.Count == 0)
+            {
+                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">
+                    No weekly publication periods were found in the database.
+                    Please seed <code>manga.PublicationPeriod</code> first.
+                </MudAlert>
+            }
+
+            @if (!_loadingRows && HasSelectedPublicationPeriod && _rankingRows.Count == 0)
+            {
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                    No ranking data exists for this publication week yet.
+                    Board Chief or Board Member users can add series vote input to generate ranking results.
                 </MudAlert>
             }
 
@@ -47,7 +56,7 @@
                                         Sort="@_inputSort"
                                         SortChanged="OnInputSortChangedAsync"
                                         CanManageRankingInput="@_canManageRankingInput"
-                                        Loading="@_loadingRows"
+                                        Loading="@(_loadingRows || _loadingPeriods)"
                                         AddInputClicked="OpenInsertDialog"
                                         RowSaveRequested="OnUpdateVoteInputAsync" />
             }
@@ -75,11 +84,9 @@
                                 Saving="@_savingInput" />
         }
     </div>
-</RankingLayout>
+</RankingPageFrame>
 
 @code {
-    private static readonly Guid SamplePeriodId = Guid.Parse("11111111-1111-1111-1111-111111111111");
-
     private readonly List<SortOption> _sortOptions =
     [
         new("rank_asc", "Rank (Ascending)"),
@@ -98,43 +105,32 @@
         new("updated_asc", "Last Updated (Oldest First)")
     ];
 
-    private readonly List<CatalogEntry> _sampleCatalog =
-    [
-        new(Guid.Parse("22222222-2222-2222-2222-222222222221"), "Moonlit Blade", "/images/placeholder-cover.png"),
-        new(Guid.Parse("22222222-2222-2222-2222-222222222222"), "Crimson School Days", "/images/placeholder-cover.png"),
-        new(Guid.Parse("22222222-2222-2222-2222-222222222223"), "Neon Yokai Files", "/images/placeholder-cover.png"),
-        new(Guid.Parse("22222222-2222-2222-2222-222222222224"), "Garden of Ashes", "/images/placeholder-cover.png"),
-        new(Guid.Parse("22222222-2222-2222-2222-222222222225"), "Starlight Courier", "/images/placeholder-cover.png"),
-        new(Guid.Parse("22222222-2222-2222-2222-222222222226"), "Silent Dragon Café", "/images/placeholder-cover.png")
-    ];
-
     private List<PublicationPeriodOption> _publicationPeriods = [];
-    private List<SeriesInputRow> _allSampleInputRows = [];
     private List<SeriesInputRow> _inputRows = [];
     private List<RankingRow> _rankingRows = [];
+
     private Guid _selectedPublicationPeriodId;
     private string _inputSearch = string.Empty;
     private string _rankingSearch = string.Empty;
     private string _inputSort = "updated_desc";
     private string _rankingSort = "rank_asc";
+
     private bool _insertDialogOpen;
     private bool _canManageRankingInput;
     private bool _loadingPeriods;
     private bool _loadingRows;
     private bool _savingInput;
-    private bool _usingSampleData;
+
     private string? _loadError;
+
+    private bool HasSelectedPublicationPeriod => _selectedPublicationPeriodId != Guid.Empty;
 
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
 
-        _canManageRankingInput =
-            user.IsInRole("Editorial Board Member")
-            || user.IsInRole("Editorial Board Chief")
-            || user.IsInRole("Board Member")
-            || user.IsInRole("Board Chief");
+        _canManageRankingInput = IsRankingInputRole(user);
 
         await LoadPeriodsAsync();
     }
@@ -145,10 +141,30 @@
 
     private IReadOnlyList<RankingStatItem> Stats =>
     [
-        new("Total ranked series", _rankingRows.Count.ToString(CultureInfo.InvariantCulture), Icons.Material.Filled.BarChart, Color.Primary),
-        new("Average rating", AverageRatingText, Icons.Material.Filled.Star, Color.Warning),
-        new("Highest score", HighestScoreText, Icons.Material.Filled.EmojiEvents, Color.Secondary),
-        new("Most read series", MostReadSeriesTitle, Icons.Material.Filled.MenuBook, Color.Success, "text-truncate")
+        new(
+            "Total ranked series",
+            _rankingRows.Count.ToString(CultureInfo.InvariantCulture),
+            Icons.Material.Filled.BarChart,
+            Color.Primary),
+
+        new(
+            "Average rating",
+            AverageRatingText,
+            Icons.Material.Filled.Star,
+            Color.Warning),
+
+        new(
+            "Highest score",
+            HighestScoreText,
+            Icons.Material.Filled.EmojiEvents,
+            Color.Secondary),
+
+        new(
+            "Most read series",
+            MostReadSeriesTitle,
+            Icons.Material.Filled.MenuBook,
+            Color.Success,
+            "text-truncate")
     ];
 
     private string AverageRatingText => _rankingRows.Count == 0
@@ -171,24 +187,30 @@
         try
         {
             var periods = await RankingApiClient.GetWeeklyPeriodsAsync();
+
             _publicationPeriods = periods
                 .Select(RankingUiHelper.ToOption)
                 .ToList();
 
             if (_publicationPeriods.Count == 0)
             {
-                LoadSampleData();
+                _selectedPublicationPeriodId = Guid.Empty;
+                _inputRows = [];
+                _rankingRows = [];
                 return;
             }
 
-            _usingSampleData = false;
             _selectedPublicationPeriodId = _publicationPeriods.First().PublicationPeriodId;
+
             await LoadRowsAsync();
         }
         catch (Exception ex)
         {
-            _loadError = ex.Message;
-            LoadSampleData();
+            _loadError = $"The ranking page could not load weekly publication periods from the database. {ex.Message}";
+            _selectedPublicationPeriodId = Guid.Empty;
+            _publicationPeriods = [];
+            _inputRows = [];
+            _rankingRows = [];
         }
         finally
         {
@@ -198,13 +220,7 @@
 
     private async Task LoadRowsAsync()
     {
-        if (_usingSampleData)
-        {
-            RefreshSampleRankingRows();
-            return;
-        }
-
-        if (_selectedPublicationPeriodId == Guid.Empty)
+        if (!HasSelectedPublicationPeriod)
         {
             _inputRows = [];
             _rankingRows = [];
@@ -216,33 +232,36 @@
 
         try
         {
-            var inputRows = await RankingApiClient.GetVoteInputsAsync(
-                _selectedPublicationPeriodId,
-                _inputSearch,
-                _inputSort);
+            if (_canManageRankingInput)
+            {
+                var inputRows = await RankingApiClient.GetVoteInputsAsync(
+                    _selectedPublicationPeriodId,
+                    _inputSearch,
+                    _inputSort);
+
+                _inputRows = inputRows
+                    .Select(RankingUiHelper.ToInputRow)
+                    .ToList();
+            }
+            else
+            {
+                _inputRows = [];
+            }
 
             var rankingRows = await RankingApiClient.GetRankingAsync(
                 _selectedPublicationPeriodId,
                 _rankingSearch,
                 _rankingSort);
 
-            _inputRows = inputRows
-                .Select(RankingUiHelper.ToInputRow)
-                .ToList();
-
             _rankingRows = rankingRows
                 .Select(RankingUiHelper.ToRankingRow)
                 .ToList();
-
-            if (_inputRows.Count == 0 && _rankingRows.Count == 0)
-            {
-                LoadSampleData();
-            }
         }
         catch (Exception ex)
         {
-            _loadError = ex.Message;
-            LoadSampleData();
+            _loadError = $"The ranking data could not be loaded from the database. {ex.Message}";
+            _inputRows = [];
+            _rankingRows = [];
         }
         finally
         {
@@ -253,6 +272,9 @@
     private async Task OnPublicationPeriodChangedAsync(Guid value)
     {
         _selectedPublicationPeriodId = value;
+        _inputSearch = string.Empty;
+        _rankingSearch = string.Empty;
+
         await LoadRowsAsync();
     }
 
@@ -270,13 +292,19 @@
 
     private async Task OnInputSortChangedAsync(string value)
     {
-        _inputSort = string.IsNullOrWhiteSpace(value) ? "updated_desc" : value;
+        _inputSort = string.IsNullOrWhiteSpace(value)
+            ? "updated_desc"
+            : value;
+
         await LoadRowsAsync();
     }
 
     private async Task OnRankingSortChangedAsync(string value)
     {
-        _rankingSort = string.IsNullOrWhiteSpace(value) ? "rank_asc" : value;
+        _rankingSort = string.IsNullOrWhiteSpace(value)
+            ? "rank_asc"
+            : value;
+
         await LoadRowsAsync();
     }
 
@@ -284,6 +312,19 @@
     {
         if (!_canManageRankingInput)
         {
+            Snackbar.Add(
+                "Only Editorial Board Member and Editorial Board Chief can manage ranking input.",
+                Severity.Error);
+
+            return;
+        }
+
+        if (!HasSelectedPublicationPeriod)
+        {
+            Snackbar.Add(
+                "Please seed or select a weekly publication period before adding series vote input.",
+                Severity.Warning);
+
             return;
         }
 
@@ -299,12 +340,7 @@
         string? searchText,
         CancellationToken cancellationToken)
     {
-        if (_usingSampleData)
-        {
-            return SearchSampleCatalog(searchText);
-        }
-
-        if (_selectedPublicationPeriodId == Guid.Empty)
+        if (!_canManageRankingInput || !HasSelectedPublicationPeriod)
         {
             return [];
         }
@@ -322,7 +358,16 @@
     {
         if (!_canManageRankingInput)
         {
-            Snackbar.Add("Only Editorial Board Member and Editorial Board Chief can manage ranking input.", Severity.Error);
+            Snackbar.Add(
+                "Only Editorial Board Member and Editorial Board Chief can manage ranking input.",
+                Severity.Error);
+
+            return;
+        }
+
+        if (!HasSelectedPublicationPeriod)
+        {
+            Snackbar.Add("Please select a publication week first.", Severity.Error);
             return;
         }
 
@@ -331,14 +376,6 @@
             || !form.RatingCount.HasValue
             || !form.AverageRating.HasValue)
         {
-            return;
-        }
-
-        if (_usingSampleData)
-        {
-            CreateSampleVoteInput(form);
-            _insertDialogOpen = false;
-            Snackbar.Add($"{form.Series.Title} added to preview ranking.", Severity.Success);
             return;
         }
 
@@ -355,7 +392,11 @@
                 form.DataSourceNote);
 
             _insertDialogOpen = false;
-            Snackbar.Add($"{form.Series.Title} vote input saved to database.", Severity.Success);
+
+            Snackbar.Add(
+                $"{form.Series.Title} vote input saved to database.",
+                Severity.Success);
+
             await LoadRowsAsync();
         }
         catch (Exception ex)
@@ -372,14 +413,10 @@
     {
         if (!_canManageRankingInput)
         {
-            Snackbar.Add("Only Editorial Board Member and Editorial Board Chief can manage ranking input.", Severity.Error);
-            return;
-        }
+            Snackbar.Add(
+                "Only Editorial Board Member and Editorial Board Chief can manage ranking input.",
+                Severity.Error);
 
-        if (_usingSampleData)
-        {
-            UpdateSampleVoteInput(request);
-            Snackbar.Add("Preview vote input updated.", Severity.Success);
             return;
         }
 
@@ -392,7 +429,10 @@
                 request.ReadingCount,
                 request.DataSourceNote);
 
-            Snackbar.Add("Series vote input updated in database.", Severity.Success);
+            Snackbar.Add(
+                "Series vote input updated in database.",
+                Severity.Success);
+
             await LoadRowsAsync();
         }
         catch (Exception ex)
@@ -401,272 +441,40 @@
         }
     }
 
-    private void LoadSampleData()
+    private static bool IsRankingInputRole(ClaimsPrincipal user)
     {
-        _usingSampleData = true;
-        _loadError = null;
+        return HasAnyRole(
+            user,
+            "Editorial Board Member",
+            "EditorialBoardMember",
+            "Board Member",
+            "Editorial Board Chief",
+            "EditorialBoardChief",
+            "Board Chief");
+    }
 
-        var today = DateTime.Today;
-        var startOfWeek = today.AddDays(-(int)today.DayOfWeek + 1);
-        var endOfWeek = startOfWeek.AddDays(6);
-
-        _publicationPeriods =
-        [
-            new PublicationPeriodOption(
-                SamplePeriodId,
-                "Week 28 2026",
-                $"Week 28 2026 ({startOfWeek:MMM d} – {endOfWeek:MMM d})",
-                startOfWeek,
-                endOfWeek)
-        ];
-
-        _selectedPublicationPeriodId = SamplePeriodId;
-
-        var now = DateTime.UtcNow;
-
-        _allSampleInputRows =
-        [
-            new SeriesInputRow
+    private static bool HasAnyRole(ClaimsPrincipal user, params string[] roleNames)
+    {
+        foreach (var roleName in roleNames)
+        {
+            if (user.IsInRole(roleName))
             {
-                SeriesVoteInputId = Guid.Parse("33333333-3333-3333-3333-333333333331"),
-                PublicationPeriodId = SamplePeriodId,
-                SeriesId = _sampleCatalog[0].SeriesId,
-                Title = _sampleCatalog[0].Title,
-                CoverUrl = _sampleCatalog[0].CoverUrl,
-                ReadingCount = 24800,
-                RatingCount = 4200,
-                AverageRating = 9.2m,
-                DataSourceNote = "Preview data",
-                CreatedAt = now.AddHours(-10),
-                UpdatedAt = now.AddHours(-2)
-            },
-            new SeriesInputRow
-            {
-                SeriesVoteInputId = Guid.Parse("33333333-3333-3333-3333-333333333332"),
-                PublicationPeriodId = SamplePeriodId,
-                SeriesId = _sampleCatalog[1].SeriesId,
-                Title = _sampleCatalog[1].Title,
-                CoverUrl = _sampleCatalog[1].CoverUrl,
-                ReadingCount = 19200,
-                RatingCount = 3500,
-                AverageRating = 8.7m,
-                DataSourceNote = "Preview data",
-                CreatedAt = now.AddHours(-9),
-                UpdatedAt = now.AddHours(-3)
-            },
-            new SeriesInputRow
-            {
-                SeriesVoteInputId = Guid.Parse("33333333-3333-3333-3333-333333333333"),
-                PublicationPeriodId = SamplePeriodId,
-                SeriesId = _sampleCatalog[2].SeriesId,
-                Title = _sampleCatalog[2].Title,
-                CoverUrl = _sampleCatalog[2].CoverUrl,
-                ReadingCount = 17650,
-                RatingCount = 2800,
-                AverageRating = 8.9m,
-                DataSourceNote = "Preview data",
-                CreatedAt = now.AddHours(-8),
-                UpdatedAt = now.AddHours(-1)
-            },
-            new SeriesInputRow
-            {
-                SeriesVoteInputId = Guid.Parse("33333333-3333-3333-3333-333333333334"),
-                PublicationPeriodId = SamplePeriodId,
-                SeriesId = _sampleCatalog[3].SeriesId,
-                Title = _sampleCatalog[3].Title,
-                CoverUrl = _sampleCatalog[3].CoverUrl,
-                ReadingCount = 14300,
-                RatingCount = 2100,
-                AverageRating = 8.4m,
-                DataSourceNote = "Preview data",
-                CreatedAt = now.AddHours(-7),
-                UpdatedAt = now.AddHours(-5)
+                return true;
             }
-        ];
-
-        RefreshSampleRankingRows();
-    }
-
-    private IEnumerable<CatalogEntry> SearchSampleCatalog(string? searchText)
-    {
-        var existingSeriesIds = _allSampleInputRows
-            .Select(row => row.SeriesId)
-            .ToHashSet();
-
-        var query = _sampleCatalog
-            .Where(series => !existingSeriesIds.Contains(series.SeriesId));
-
-        if (!string.IsNullOrWhiteSpace(searchText))
-        {
-            query = query.Where(series =>
-                series.Title.Contains(searchText.Trim(), StringComparison.OrdinalIgnoreCase));
         }
 
-        return query
-            .OrderBy(series => series.Title)
-            .Take(10)
-            .ToList();
-    }
-
-    private void CreateSampleVoteInput(InsertFormState form)
-    {
-        if (form.Series is null
-            || !form.ReadingCount.HasValue
-            || !form.RatingCount.HasValue
-            || !form.AverageRating.HasValue)
-        {
-            return;
-        }
-
-        var now = DateTime.UtcNow;
-
-        _allSampleInputRows.Add(new SeriesInputRow
-        {
-            SeriesVoteInputId = Guid.NewGuid(),
-            PublicationPeriodId = SamplePeriodId,
-            SeriesId = form.Series.SeriesId,
-            Title = form.Series.Title,
-            CoverUrl = form.Series.CoverUrl,
-            ReadingCount = form.ReadingCount.Value,
-            RatingCount = form.RatingCount.Value,
-            AverageRating = form.AverageRating.Value,
-            DataSourceNote = form.DataSourceNote,
-            CreatedAt = now,
-            UpdatedAt = now
-        });
-
-        RefreshSampleRankingRows();
-    }
-
-    private void UpdateSampleVoteInput(SeriesVoteInputUpdateRequestUi request)
-    {
-        var index = _allSampleInputRows.FindIndex(row => row.SeriesVoteInputId == request.SeriesVoteInputId);
-
-        if (index < 0)
-        {
-            return;
-        }
-
-        var current = _allSampleInputRows[index];
-
-        _allSampleInputRows[index] = new SeriesInputRow
-        {
-            SeriesVoteInputId = current.SeriesVoteInputId,
-            PublicationPeriodId = current.PublicationPeriodId,
-            SeriesId = current.SeriesId,
-            Title = current.Title,
-            CoverUrl = current.CoverUrl,
-            ReadingCount = request.ReadingCount,
-            RatingCount = request.RatingCount,
-            AverageRating = request.AverageRating,
-            DataSourceNote = request.DataSourceNote,
-            CreatedAt = current.CreatedAt,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        RefreshSampleRankingRows();
-    }
-
-    private void RefreshSampleRankingRows()
-    {
-        var filteredInputRows = FilterSampleInputs(_allSampleInputRows);
-        _inputRows = SortSampleInputs(filteredInputRows).ToList();
-
-        var ranked = _allSampleInputRows
-            .Select(row => new
-            {
-                Row = row,
-                Score = CalculateScore(row)
-            })
-            .OrderByDescending(item => item.Score)
-            .ThenByDescending(item => item.Row.AverageRating)
-            .ThenByDescending(item => item.Row.RatingCount)
-            .ThenByDescending(item => item.Row.ReadingCount)
+        var roleClaimValues = user.Claims
+            .Where(claim =>
+                claim.Type == ClaimTypes.Role
+                || claim.Type == "role"
+                || claim.Type == "role_name"
+                || claim.Type == "Role"
+                || claim.Type == "RoleName")
+            .Select(claim => claim.Value)
             .ToList();
 
-        var rankingRows = new List<RankingRow>();
-
-        for (var index = 0; index < ranked.Count; index++)
-        {
-            rankingRows.Add(new RankingRow
-            {
-                SeriesId = ranked[index].Row.SeriesId,
-                Rank = index + 1,
-                PreviousRank = index + 1,
-                Title = ranked[index].Row.Title,
-                CoverUrl = ranked[index].Row.CoverUrl,
-                ReadingCount = ranked[index].Row.ReadingCount,
-                RatingCount = ranked[index].Row.RatingCount,
-                AverageRating = ranked[index].Row.AverageRating,
-                Score = ranked[index].Score
-            });
-        }
-
-        _rankingRows = SortSampleRankingRows(FilterSampleRankingRows(rankingRows)).ToList();
-    }
-
-    private IEnumerable<SeriesInputRow> FilterSampleInputs(IEnumerable<SeriesInputRow> rows)
-    {
-        if (string.IsNullOrWhiteSpace(_inputSearch))
-        {
-            return rows;
-        }
-
-        return rows.Where(row =>
-            row.Title.Contains(_inputSearch.Trim(), StringComparison.OrdinalIgnoreCase));
-    }
-
-    private IEnumerable<RankingRow> FilterSampleRankingRows(IEnumerable<RankingRow> rows)
-    {
-        if (string.IsNullOrWhiteSpace(_rankingSearch))
-        {
-            return rows;
-        }
-
-        return rows.Where(row =>
-            row.Title.Contains(_rankingSearch.Trim(), StringComparison.OrdinalIgnoreCase));
-    }
-
-    private IEnumerable<SeriesInputRow> SortSampleInputs(IEnumerable<SeriesInputRow> rows)
-    {
-        return _inputSort switch
-        {
-            "title_desc" => rows.OrderByDescending(row => row.Title),
-            "average_rating_desc" => rows.OrderByDescending(row => row.AverageRating),
-            "average_rating_asc" => rows.OrderBy(row => row.AverageRating),
-            "reading_count_desc" => rows.OrderByDescending(row => row.ReadingCount),
-            "reading_count_asc" => rows.OrderBy(row => row.ReadingCount),
-            "rating_count_desc" => rows.OrderByDescending(row => row.RatingCount),
-            "rating_count_asc" => rows.OrderBy(row => row.RatingCount),
-            "updated_asc" => rows.OrderBy(row => row.UpdatedAt),
-            _ => rows.OrderByDescending(row => row.UpdatedAt)
-        };
-    }
-
-    private IEnumerable<RankingRow> SortSampleRankingRows(IEnumerable<RankingRow> rows)
-    {
-        return _rankingSort switch
-        {
-            "rank_desc" => rows.OrderByDescending(row => row.Rank),
-            "title_asc" => rows.OrderBy(row => row.Title),
-            "title_desc" => rows.OrderByDescending(row => row.Title),
-            "score_desc" => rows.OrderByDescending(row => row.Score),
-            "score_asc" => rows.OrderBy(row => row.Score),
-            "average_rating_desc" => rows.OrderByDescending(row => row.AverageRating),
-            "average_rating_asc" => rows.OrderBy(row => row.AverageRating),
-            "reading_count_desc" => rows.OrderByDescending(row => row.ReadingCount),
-            "reading_count_asc" => rows.OrderBy(row => row.ReadingCount),
-            "rating_count_desc" => rows.OrderByDescending(row => row.RatingCount),
-            "rating_count_asc" => rows.OrderBy(row => row.RatingCount),
-            _ => rows.OrderBy(row => row.Rank)
-        };
-    }
-
-    private static decimal CalculateScore(SeriesInputRow row)
-    {
-        var weightedRating = row.AverageRating * (decimal)Math.Log10(1 + row.RatingCount);
-        var readingBoost = row.ReadingCount * 0.001m;
-
-        return Math.Round(weightedRating + readingBoost, 4);
+        return roleClaimValues.Any(value =>
+            roleNames.Any(roleName =>
+                string.Equals(value, roleName, StringComparison.OrdinalIgnoreCase)));
     }
 }
