@@ -1,6 +1,7 @@
 @page "/demo/mangaflow/proposals"
 
 @using System.Globalization
+@using System.Linq
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Authorization
 @using MangaManagementSystem.Web.Services.EditorialBoard
@@ -145,7 +146,7 @@
                                     <strong>@SelectedProposal.Genre</strong>
                                 </div>
 
-                                <div class="mf-info-tile">
+                                <div class="mf-info-tile mf-tags-tile">
                                     <span>Tags</span>
 
                                     @if (SelectedProposal.Tags.Count == 0)
@@ -154,12 +155,23 @@
                                     }
                                     else
                                     {
-                                        <div class="mf-tag-list">
-                                            @foreach (var tag in SelectedProposal.Tags)
+                                        <div class="mf-tag-list @(ShowAllTags ? "expanded" : "collapsed")">
+                                            @foreach (var tag in VisibleTags)
                                             {
                                                 <span class="mf-tag-pill">@tag</span>
                                             }
                                         </div>
+
+                                        @if (SelectedProposal.Tags.Count > MaxVisibleTags)
+                                        {
+                                            <button type="button"
+                                                    class="mf-tag-toggle"
+                                                    @onclick="ToggleTags">
+                                                @(ShowAllTags
+                                                    ? "Show less"
+                                                    : $"+{HiddenTagCount} more")
+                                            </button>
+                                        }
                                     }
                                 </div>
 
@@ -360,6 +372,8 @@
     private const string DuplicateOpenPollMessage =
         "This series already has an open board poll of this type. Close or cancel the existing poll before opening a new one.";
 
+    private const int MaxVisibleTags = 8;
+
     private string SearchText { get; set; } = string.Empty;
     private string? StatusFilter { get; set; }
     private ProposalItem? SelectedProposal { get; set; }
@@ -369,6 +383,7 @@
     private string PollReason { get; set; } = string.Empty;
 
     private bool ShowDeadlinePicker { get; set; }
+    private bool ShowAllTags { get; set; }
     private bool IsOpeningPoll { get; set; }
     private bool IsLoading { get; set; } = true;
 
@@ -382,6 +397,39 @@
     private string? ErrorMessage { get; set; }
 
     private IReadOnlyList<ProposalItem> Proposals { get; set; } = Array.Empty<ProposalItem>();
+
+    private IEnumerable<string> VisibleTags
+    {
+        get
+        {
+            if (SelectedProposal is null)
+            {
+                return Array.Empty<string>();
+            }
+
+            return ShowAllTags
+                ? SelectedProposal.Tags
+                : SelectedProposal.Tags.Take(MaxVisibleTags);
+        }
+    }
+
+    private int HiddenTagCount
+    {
+        get
+        {
+            if (SelectedProposal is null)
+            {
+                return 0;
+            }
+
+            return Math.Max(0, SelectedProposal.Tags.Count - MaxVisibleTags);
+        }
+    }
+
+    private void ToggleTags()
+    {
+        ShowAllTags = !ShowAllTags;
+    }
 
     private bool HasCurrentPollTypeConflict
     {
@@ -672,6 +720,7 @@
         PollType = "START_SERIALIZATION";
         PublicationFrequencyCode = "WEEKLY";
         ShowDeadlinePicker = false;
+        ShowAllTags = false;
         OpenPollDeadlineDraftText = string.Empty;
         ConfirmedOpenPollDeadline = null;
         OpenPollMessage = null;
@@ -686,6 +735,7 @@
         OpenPollMessage = null;
         OpenPollSucceeded = false;
         OpenPollConflictType = null;
+        ShowAllTags = false;
     }
 
     private void StartDeadlinePicker()
