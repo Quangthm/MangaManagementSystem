@@ -225,9 +225,11 @@
                                                href="@attachment.Url"
                                                target="_blank"
                                                rel="noopener noreferrer">
-                                                <span>
+                                                <span class="mf-attachment-main">
                                                     <strong>@attachment.Label</strong>
-                                                    <small>@attachment.DisplayName</small>
+                                                    <small title="@attachment.DisplayName">
+                                                        @attachment.DisplayName
+                                                    </small>
                                                 </span>
 
                                                 <span class="mf-open-file">Open</span>
@@ -236,9 +238,11 @@
                                         else
                                         {
                                             <div class="mf-attachment empty">
-                                                <span>
+                                                <span class="mf-attachment-main">
                                                     <strong>@attachment.Label</strong>
-                                                    <small>No file URL available.</small>
+                                                    <small title="@attachment.DisplayName">
+                                                        No file URL available.
+                                                    </small>
                                                 </span>
                                             </div>
                                         }
@@ -324,13 +328,15 @@
                                                     @CurrentOpenPollConflictMessage
                                                 </div>
                                             }
-
-                                            <button type="button"
-                                                    class="mf-btn mf-btn-primary full"
-                                                    disabled="@IsOpenPollDisabled"
-                                                    @onclick="ConfirmOpenPollAsync">
-                                                @OpenPollButtonText
-                                            </button>
+                                            else
+                                            {
+                                                <button type="button"
+                                                        class="mf-btn mf-btn-primary full"
+                                                        disabled="@IsOpenPollDisabled"
+                                                        @onclick="ConfirmOpenPollAsync">
+                                                    @OpenPollButtonText
+                                                </button>
+                                            }
 
                                             @if (!string.IsNullOrWhiteSpace(OpenPollMessage))
                                             {

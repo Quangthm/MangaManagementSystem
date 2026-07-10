@@ -3244,3 +3244,70 @@ a {
 .workspace-tabs .mud-tab.mud-tab-active {
     color: #ffffff !important;                       /* active tab = full white */
 }
+
+/* Attachment two-line layout with safe filename ellipsis */
+.mf-attachment {
+    position: relative;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 46px;
+    align-items: center;
+    gap: 8px;
+    min-height: 54px;
+    padding: 9px 10px;
+    overflow: hidden;
+}
+
+.mf-attachment-main {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    line-height: 1.2;
+}
+
+    .mf-attachment-main strong {
+        display: block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 12px;
+        font-weight: 900;
+    }
+
+    .mf-attachment-main small {
+        display: block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 11px;
+        color: #64748b;
+    }
+
+.mf-open-file {
+    justify-self: end;
+    width: 42px;
+    text-align: right;
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: 900;
+    color: #4f46e5;
+    opacity: 0;
+    transform: translateX(4px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.mf-attachment:hover .mf-open-file,
+.mf-attachment:focus-within .mf-open-file {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.mf-attachment.empty {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+    .mf-attachment.empty .mf-open-file {
+        display: none;
+    }

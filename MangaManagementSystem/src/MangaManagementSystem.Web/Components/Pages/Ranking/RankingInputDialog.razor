@@ -1,16 +1,24 @@
-@inject ISnackbar Snackbar
+@using System.Globalization
 
 @if (Open)
 {
-    <MudOverlay Visible="true" DarkBackground="true" ZIndex="1300" Class="dialog-overlay">
-        <MudPaper Class="insert-dialog pa-0" Elevation="12">
-            <MudStack Row="true" Spacing="2" Class="pa-4">
-                <MudAvatar Color="Color.Primary" Variant="Variant.Text" Rounded="true">
+    <div style="position:fixed; inset:0; z-index:1400; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center;">
+        <MudPaper Elevation="12" Class="pa-0" Style="width:460px; max-width:calc(100vw - 32px); border-radius:16px; overflow:hidden;">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="pa-4">
+                <MudAvatar Color="Color.Default" Rounded="true">
                     <MudIcon Icon="@Icons.Material.Filled.Add" />
                 </MudAvatar>
-                <MudText Typo="Typo.h6" Class="fw-800">Create Ranking Input</MudText>
+
+                <MudText Typo="Typo.h6" Class="fw-800">
+                    Create Ranking Input
+                </MudText>
+
                 <MudSpacer />
-                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseAsync" />
+
+                <MudIconButton Icon="@Icons.Material.Filled.Close"
+                               Size="Size.Small"
+                               Disabled="@Saving"
+                               OnClick="CloseAsync" />
             </MudStack>
 
             <MudDivider />
@@ -21,57 +29,89 @@
                            Required="true"
                            Variant="Variant.Outlined"
                            Margin="Margin.Dense"
-                           Value="_form.PublicationPeriodId"
-                           ValueChanged="OnPublicationPeriodChanged"
+                           Value="@_form.PublicationPeriodId"
+                           ValueChanged="OnPublicationPeriodChangedAsync"
                            Error="@HasError(nameof(InsertFormState.PublicationPeriodId))"
                            ErrorText="@GetError(nameof(InsertFormState.PublicationPeriodId))">
                     @foreach (var period in PublicationPeriods)
                     {
-                        <MudSelectItem T="Guid" Value="@period.PublicationPeriodId">@period.Label</MudSelectItem>
+                        <MudSelectItem T="Guid" Value="@period.PublicationPeriodId">
+                            @period.Label
+                        </MudSelectItem>
                     }
                 </MudSelect>
 
                 <MudAutocomplete T="CatalogEntry"
                                  Label="Series"
+                                 Placeholder="Search and select a series"
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
                                  Required="true"
-                                 Value="_form.Series"
-                                 ValueChanged="OnSeriesChanged"
-                                 SearchFunc="SearchAvailableSeriesAsync"
-                                 ToStringFunc="@(series => series?.Title ?? string.Empty)"
+                                 Clearable="true"
+                                 Dense="true"
                                  ResetValueOnEmptyText="true"
                                  CoerceText="false"
                                  CoerceValue="false"
-                                 Variant="Variant.Outlined"
-                                 Margin="Margin.Dense"
-                                 AdornmentIcon="@Icons.Material.Filled.Search"
+                                 MinCharacters="0"
+                                 MaxItems="20"
+                                 SearchFunc="SearchSeriesInternalAsync"
+                                 ToStringFunc="FormatSeries"
+                                 Value="@_form.Series"
+                                 ValueChanged="OnSeriesChangedAsync"
                                  Adornment="Adornment.Start"
+                                 AdornmentIcon="@Icons.Material.Filled.Search"
                                  Error="@HasError(nameof(InsertFormState.Series))"
-                                 ErrorText="@GetError(nameof(InsertFormState.Series))" />
+                                 ErrorText="@GetError(nameof(InsertFormState.Series))">
+                    <ItemTemplate>
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                            <MudAvatar Image="@context.CoverUrl"
+                                       Rounded="true"
+                                       Size="Size.Small" />
 
-                <MudGrid>
+                            <div>
+                                <MudText Typo="Typo.body2" Class="fw-700">
+                                    @context.Title
+                                </MudText>
+
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @context.SeriesId
+                                </MudText>
+                            </div>
+                        </MudStack>
+                    </ItemTemplate>
+
+                    <NoItemsTemplate>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="pa-2">
+                            No available series found in the database.
+                        </MudText>
+                    </NoItemsTemplate>
+                </MudAutocomplete>
+
+                <MudGrid Spacing="2">
                     <MudItem xs="12" md="6">
                         <MudNumericField T="int?"
                                          Label="Reading Count"
                                          Required="true"
                                          Min="1"
-                                         HideSpinButtons="true"
                                          Variant="Variant.Outlined"
                                          Margin="Margin.Dense"
-                                         Value="_form.ReadingCount"
-                                         ValueChanged="OnReadingCountChanged"
+                                         HideSpinButtons="true"
+                                         Value="@_form.ReadingCount"
+                                         ValueChanged="OnReadingCountChangedAsync"
                                          Error="@HasError(nameof(InsertFormState.ReadingCount))"
                                          ErrorText="@GetError(nameof(InsertFormState.ReadingCount))" />
                     </MudItem>
+
                     <MudItem xs="12" md="6">
                         <MudNumericField T="int?"
                                          Label="Rating Count"
                                          Required="true"
                                          Min="1"
-                                         HideSpinButtons="true"
                                          Variant="Variant.Outlined"
                                          Margin="Margin.Dense"
-                                         Value="_form.RatingCount"
-                                         ValueChanged="OnRatingCountChanged"
+                                         HideSpinButtons="true"
+                                         Value="@_form.RatingCount"
+                                         ValueChanged="OnRatingCountChangedAsync"
                                          Error="@HasError(nameof(InsertFormState.RatingCount))"
                                          ErrorText="@GetError(nameof(InsertFormState.RatingCount))" />
                     </MudItem>
@@ -84,11 +124,11 @@
                                  Min="0"
                                  Max="10"
                                  Step="@DecimalStep"
-                                 HideSpinButtons="true"
                                  Variant="Variant.Outlined"
                                  Margin="Margin.Dense"
-                                 Value="_form.AverageRating"
-                                 ValueChanged="OnAverageRatingChanged"
+                                 HideSpinButtons="true"
+                                 Value="@_form.AverageRating"
+                                 ValueChanged="OnAverageRatingChangedAsync"
                                  Error="@HasError(nameof(InsertFormState.AverageRating))"
                                  ErrorText="@GetError(nameof(InsertFormState.AverageRating))" />
 
@@ -98,27 +138,44 @@
                               Lines="2"
                               Variant="Variant.Outlined"
                               Margin="Margin.Dense"
-                              Value="_form.DataSourceNote"
-                              ValueChanged="OnDataSourceChanged" />
+                              Value="@_form.DataSourceNote"
+                              ValueChanged="OnDataSourceNoteChangedAsync" />
             </MudStack>
 
             <MudDivider />
 
-            <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2" Class="pa-4 dialog-footer">
-                <MudButton Variant="Variant.Outlined" OnClick="CloseAsync" Disabled="Saving">Cancel</MudButton>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync" Disabled="Saving">
-                    @(Saving ? "Saving..." : "Save")
+            <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2" Class="pa-4">
+                <MudButton Variant="Variant.Outlined"
+                           Disabled="@Saving"
+                           OnClick="CloseAsync">
+                    Cancel
+                </MudButton>
+
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Save"
+                           Disabled="@Saving"
+                           OnClick="SaveAsync">
+                    @if (Saving)
+                    {
+                        <MudProgressCircular Size="Size.Small"
+                                             Indeterminate="true"
+                                             Class="me-2" />
+                    }
+
+                    Save
                 </MudButton>
             </MudStack>
         </MudPaper>
-    </MudOverlay>
+    </div>
 }
 
 @code {
     private const decimal DecimalStep = 0.1m;
 
+    private readonly Dictionary<string, string> _errors = [];
+
     private InsertFormState _form = new();
-    private Dictionary<string, string> _errors = [];
     private bool _wasOpen;
 
     [Parameter]
@@ -134,8 +191,7 @@
     public IReadOnlyList<PublicationPeriodOption> PublicationPeriods { get; set; } = [];
 
     [Parameter]
-    public Func<string?, CancellationToken, Task<IEnumerable<CatalogEntry>>> SearchSeriesAsync { get; set; }
-        = (_, _) => Task.FromResult(Enumerable.Empty<CatalogEntry>());
+    public Func<string?, CancellationToken, Task<IEnumerable<CatalogEntry>>>? SearchSeriesAsync { get; set; }
 
     [Parameter]
     public EventCallback<InsertFormState> Saved { get; set; }
@@ -147,119 +203,161 @@
     {
         if (Open && !_wasOpen)
         {
-            _errors = [];
-            _form = new InsertFormState
-            {
-                PublicationPeriodId = SelectedPublicationPeriodId
-            };
+            ResetForm();
+        }
+
+        if (Open
+            && _form.PublicationPeriodId == Guid.Empty
+            && SelectedPublicationPeriodId != Guid.Empty)
+        {
+            _form.PublicationPeriodId = SelectedPublicationPeriodId;
         }
 
         _wasOpen = Open;
     }
 
+    private void ResetForm()
+    {
+        _errors.Clear();
+
+        _form = new InsertFormState
+        {
+            PublicationPeriodId = SelectedPublicationPeriodId
+        };
+    }
+
     private async Task CloseAsync()
     {
+        if (Saving)
+        {
+            return;
+        }
+
+        _errors.Clear();
         await OpenChanged.InvokeAsync(false);
     }
 
-    private void OnPublicationPeriodChanged(Guid value)
+    private Task OnPublicationPeriodChangedAsync(Guid value)
     {
         _form.PublicationPeriodId = value;
         _form.Series = null;
+
         ClearError(nameof(InsertFormState.PublicationPeriodId));
+        ClearError(nameof(InsertFormState.Series));
+
+        return Task.CompletedTask;
     }
 
-    private void OnSeriesChanged(CatalogEntry? value)
+    private Task OnSeriesChangedAsync(CatalogEntry? value)
     {
         _form.Series = value;
         ClearError(nameof(InsertFormState.Series));
+
+        return Task.CompletedTask;
     }
 
-    private void OnReadingCountChanged(int? value)
+    private Task OnReadingCountChangedAsync(int? value)
     {
         _form.ReadingCount = value;
         ClearError(nameof(InsertFormState.ReadingCount));
+        ClearError(nameof(InsertFormState.RatingCount));
+
+        return Task.CompletedTask;
     }
 
-    private void OnRatingCountChanged(int? value)
+    private Task OnRatingCountChangedAsync(int? value)
     {
         _form.RatingCount = value;
         ClearError(nameof(InsertFormState.RatingCount));
+
+        return Task.CompletedTask;
     }
 
-    private void OnAverageRatingChanged(decimal? value)
+    private Task OnAverageRatingChangedAsync(decimal? value)
     {
         _form.AverageRating = value;
         ClearError(nameof(InsertFormState.AverageRating));
+
+        return Task.CompletedTask;
     }
 
-    private void OnDataSourceChanged(string value)
+    private Task OnDataSourceNoteChangedAsync(string value)
     {
-        _form.DataSourceNote = value ?? string.Empty;
+        _form.DataSourceNote = value;
+        return Task.CompletedTask;
     }
 
-    private Task<IEnumerable<CatalogEntry>> SearchAvailableSeriesAsync(
+    private async Task<IEnumerable<CatalogEntry>> SearchSeriesInternalAsync(
         string? value,
         CancellationToken cancellationToken)
     {
-        if (_form.PublicationPeriodId == Guid.Empty)
+        if (SearchSeriesAsync is null || _form.PublicationPeriodId == Guid.Empty)
         {
-            return Task.FromResult(Enumerable.Empty<CatalogEntry>());
+            return [];
         }
 
-        return SearchSeriesAsync(value, cancellationToken);
+        var result = await SearchSeriesAsync.Invoke(value, cancellationToken);
+
+        return result
+            .OrderBy(series => series.Title)
+            .ToList();
     }
 
     private async Task SaveAsync()
     {
-        _errors = ValidateForm();
+        _errors.Clear();
+
+        Validate();
 
         if (_errors.Count > 0)
         {
-            Snackbar.Add("Validation failed. Please fix the highlighted fields.", Severity.Error);
             return;
         }
 
         await Saved.InvokeAsync(_form);
     }
 
-    private Dictionary<string, string> ValidateForm()
+    private void Validate()
     {
-        var errors = new Dictionary<string, string>();
-
         if (_form.PublicationPeriodId == Guid.Empty)
         {
-            errors[nameof(InsertFormState.PublicationPeriodId)] = "Publication week is required.";
+            _errors[nameof(InsertFormState.PublicationPeriodId)] =
+                "Publication week is required.";
         }
 
         if (_form.Series is null)
         {
-            errors[nameof(InsertFormState.Series)] = "Series is required.";
+            _errors[nameof(InsertFormState.Series)] =
+                "Series is required.";
         }
 
         if (!_form.ReadingCount.HasValue || _form.ReadingCount.Value <= 0)
         {
-            errors[nameof(InsertFormState.ReadingCount)] = "Reading count must be greater than 0.";
+            _errors[nameof(InsertFormState.ReadingCount)] =
+                "Reading count must be greater than 0.";
         }
 
         if (!_form.RatingCount.HasValue || _form.RatingCount.Value <= 0)
         {
-            errors[nameof(InsertFormState.RatingCount)] = "Rating count must be greater than 0.";
+            _errors[nameof(InsertFormState.RatingCount)] =
+                "Rating count must be greater than 0.";
         }
 
         if (_form.ReadingCount.HasValue
             && _form.RatingCount.HasValue
             && _form.RatingCount.Value > _form.ReadingCount.Value)
         {
-            errors[nameof(InsertFormState.RatingCount)] = "Rating count cannot exceed reading count.";
+            _errors[nameof(InsertFormState.RatingCount)] =
+                "Rating count cannot exceed reading count.";
         }
 
-        if (!_form.AverageRating.HasValue || _form.AverageRating.Value < 0 || _form.AverageRating.Value > 10)
+        if (!_form.AverageRating.HasValue
+            || _form.AverageRating.Value < 0
+            || _form.AverageRating.Value > 10)
         {
-            errors[nameof(InsertFormState.AverageRating)] = "Average rating must be between 0 and 10.";
+            _errors[nameof(InsertFormState.AverageRating)] =
+                "Average rating must be between 0 and 10.";
         }
-
-        return errors;
     }
 
     private bool HasError(string fieldName)
@@ -277,5 +375,10 @@
     private void ClearError(string fieldName)
     {
         _errors.Remove(fieldName);
+    }
+
+    private static string FormatSeries(CatalogEntry? series)
+    {
+        return series?.Title ?? string.Empty;
     }
 }
