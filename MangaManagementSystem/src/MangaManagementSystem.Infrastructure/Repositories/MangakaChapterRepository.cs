@@ -352,6 +352,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             return _context.Chapters
                 .AsNoTracking()
                 .Include(c => c.Series)
+                    .ThenInclude(s => s.CoverFile)
                 .Where(c => _context.SeriesContributors.Any(sc =>
                     sc.SeriesId == c.SeriesId &&
                     sc.UserId == actorUserId &&
@@ -463,6 +464,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 chapter.ChapterId,
                 chapter.SeriesId,
                 chapter.Series?.Title ?? string.Empty,
+                chapter.Series?.Slug,
                 chapter.ChapterNumberLabel,
                 chapter.ChapterTitle,
                 chapter.StatusCode,
@@ -470,6 +472,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 chapter.ReleasedAtUtc,
                 chapter.CreatedAtUtc,
                 chapter.UpdatedAtUtc,
+                chapter.Series?.CoverFile?.CloudinarySecureUrl,
                 latestReviewDto,
                 reviewHistory);
         }

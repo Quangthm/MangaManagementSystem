@@ -87,6 +87,7 @@ namespace MangaManagementSystem.Infrastructure
             services.AddScoped<IPublicationPeriodRepository, PublicationPeriodRepository>();
             services.AddScoped<IPublicationScheduleRepository, PublicationScheduleRepository>();
             services.AddScoped<IChapterOnHoldRepository, ChapterOnHoldRepository>();
+            services.AddScoped<IChapterReleaseRepository, ChapterReleaseRepository>();
 
             return services;
         }

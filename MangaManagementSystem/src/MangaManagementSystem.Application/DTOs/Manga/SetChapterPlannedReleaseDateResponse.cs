@@ -1,5 +1,4 @@
 using System;
-using MangaManagementSystem.Application.DTOs.Manga;
 
 namespace MangaManagementSystem.Application.DTOs.Manga
 {
@@ -10,5 +9,7 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         string? ValidationMessage,
         DateTime? AllowedPeriodStart,
         DateTime? AllowedPeriodEnd,
-        string? FrequencyCode);
+        string? FrequencyCode,
+        DateTime? SuggestedReleaseDate = null,
+        string? WarningMessage = null);
 }

@@ -1,4 +1,5 @@
 @page "/admin/files"
+@using Microsoft.AspNetCore.Components.Web
 @using MangaManagementSystem.Application.DTOs.Admin
 @using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Admin")]
@@ -85,7 +86,8 @@
                                   Label="Search file name, uploader, or hash"
                                   Variant="Variant.Outlined"
                                   Margin="Margin.Dense"
-                                  Immediate="true" />
+                                  Immediate="true"
+                                  OnKeyDown="HandleSearchKeyDownAsync" />
                 </MudItem>
 
                 <MudItem xs="12" sm="6" md="3">
@@ -781,6 +783,15 @@
         }
     }
 
+    private async Task HandleSearchKeyDownAsync(
+        KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter"
+            && !_isLoading)
+        {
+            await ApplyFiltersAsync();
+        }
+    }
     private async Task ApplyFiltersAsync()
     {
         _pageNumber = 1;

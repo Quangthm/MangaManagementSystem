@@ -18,11 +18,20 @@ namespace MangaManagementSystem.Domain.Interfaces
             string searchText,
             int maxResults = 10,
             CancellationToken ct = default);
+
+        Task<PublicationScheduleSeriesSuggestion?> GetSeriesSuggestionBySlugAsync(
+            string slug,
+            CancellationToken ct = default);
+
+        Task<PublicationScheduleSeriesSuggestion?> GetSeriesSuggestionByIdAsync(
+            Guid seriesId,
+            CancellationToken ct = default);
     }
 
     public sealed record PublicationScheduleSeriesSuggestion(
         Guid SeriesId,
         string SeriesTitle,
+        string? SeriesSlug,
         string? SeriesCoverUrl);
 
     public sealed record PublicationScheduleChapter(

@@ -87,10 +87,47 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .Select(s => new PublicationScheduleSeriesSuggestion(
                     s.SeriesId,
                     s.Title,
+                    s.Slug,
                     s.CoverFile != null ? s.CoverFile.CloudinarySecureUrl : null))
                 .ToListAsync(ct);
 
             return results.AsReadOnly();
+        }
+
+        public async Task<PublicationScheduleSeriesSuggestion?> GetSeriesSuggestionBySlugAsync(
+            string slug,
+            CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(slug))
+                return null;
+
+            return await _dbContext.Series
+                .AsNoTracking()
+                .Where(s => s.StatusCode == SeriesStatusSerialized && s.Slug == slug)
+                .Select(s => new PublicationScheduleSeriesSuggestion(
+                    s.SeriesId,
+                    s.Title,
+                    s.Slug,
+                    s.CoverFile != null ? s.CoverFile.CloudinarySecureUrl : null))
+                .FirstOrDefaultAsync(ct);
+        }
+
+        public async Task<PublicationScheduleSeriesSuggestion?> GetSeriesSuggestionByIdAsync(
+            Guid seriesId,
+            CancellationToken ct = default)
+        {
+            if (seriesId == Guid.Empty)
+                return null;
+
+            return await _dbContext.Series
+                .AsNoTracking()
+                .Where(s => s.StatusCode == SeriesStatusSerialized && s.SeriesId == seriesId)
+                .Select(s => new PublicationScheduleSeriesSuggestion(
+                    s.SeriesId,
+                    s.Title,
+                    s.Slug,
+                    s.CoverFile != null ? s.CoverFile.CloudinarySecureUrl : null))
+                .FirstOrDefaultAsync(ct);
         }
     }
 }

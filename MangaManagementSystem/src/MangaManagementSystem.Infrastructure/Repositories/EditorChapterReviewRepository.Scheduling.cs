@@ -215,25 +215,42 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     throw new InvalidOperationException(
                         "You are not authorized to reschedule this chapter.");
 
-                if (chapter.StatusCode != StatusScheduledFull)
+                if (chapter.StatusCode != StatusScheduledFull && chapter.StatusCode != StatusOnHold)
                     throw new InvalidOperationException(
-                        "Only SCHEDULED chapters can be rescheduled.");
+                        "Only SCHEDULED or ON_HOLD chapters can be rescheduled.");
 
                 var normalizedDate = newPlannedReleaseDate.Date;
                 if (normalizedDate < DateTime.UtcNow.Date)
                     throw new InvalidOperationException("Planned release date cannot be in the past.");
 
+                string oldStatusCode = chapter.StatusCode;
                 var previousPlannedDate = chapter.PlannedReleaseDate;
+
                 chapter.PlannedReleaseDate = normalizedDate;
+
+                string newStatusCode;
+                if (oldStatusCode == StatusOnHold)
+                {
+                    newStatusCode = StatusScheduledFull;
+                    chapter.StatusCode = StatusScheduledFull;
+                }
+                else
+                {
+                    newStatusCode = oldStatusCode;
+                }
+
                 chapter.UpdatedAtUtc = DateTime.UtcNow;
 
                 var detailJson = JsonSerializer.Serialize(new
                 {
                     chapter_id = chapterId,
                     series_id = chapter.SeriesId,
+                    old_status_code = oldStatusCode,
+                    new_status_code = newStatusCode,
                     old_planned_release_date = previousPlannedDate,
                     new_planned_release_date = normalizedDate,
-                    reason = reason
+                    reason = reason,
+                    actor_user_id = actorUserId
                 });
 
                 var actorRoleName = await _dbContext.ActiveSeriesContributors
@@ -257,9 +274,11 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
                 return new ChapterRescheduleResult(
                     chapter.ChapterId,
-                    chapter.StatusCode,
+                    newStatusCode,
                     normalizedDate,
-                    "Chapter rescheduled successfully.");
+                    newStatusCode == StatusScheduledFull && oldStatusCode == StatusOnHold
+                        ? "Chapter has been taken off hold and rescheduled."
+                        : "Chapter rescheduled successfully.");
             }
             catch
             {
@@ -285,10 +304,10 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 if (chapter == null)
                     throw new InvalidOperationException("Chapter does not exist.");
 
-                if (!IsPlannableChapter(chapter.StatusCode))
+                if (!IsPlannableOrReschedulableChapter(chapter.StatusCode))
                     throw new InvalidOperationException(
                         "This chapter's status does not allow setting a planned release date. " +
-                        "Only DRAFT, REVISION_REQUESTED, or APPROVED chapters can be scheduled.");
+                        "Chapters must be DRAFT, UNDER_REVIEW, REVISION_REQUESTED, APPROVED, SCHEDULED, or ON_HOLD.");
 
                 bool isAuthorized = await _dbContext.ActiveSeriesContributors
                     .AnyAsync(sc =>
@@ -311,7 +330,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 chapter.PlannedReleaseDate = normalizedDate;
 
                 string newStatusCode;
-                if (previousStatusCode == StatusApproved)
+                if (previousStatusCode == StatusApproved || previousStatusCode == StatusOnHold)
                 {
                     newStatusCode = StatusScheduledFull;
                     chapter.StatusCode = StatusScheduledFull;
@@ -324,6 +343,11 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 chapter.UpdatedAtUtc = DateTime.UtcNow;
 
                 var frequencyCode = chapter.Series?.PublicationFrequencyCode;
+
+                var actionCode = previousPlanned.HasValue &&
+                    (previousStatusCode == StatusScheduledFull || previousStatusCode == StatusOnHold)
+                    ? "CHAPTER_RESCHEDULED"
+                    : "CHAPTER_PLANNED_RELEASE_DATE_SET";
 
                 var detailJson = JsonSerializer.Serialize(new
                 {
@@ -347,7 +371,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     OccurredAtUtc = DateTime.UtcNow,
                     ActorUserId = actorUserId,
                     ActorRoleName = actorRoleName,
-                    ActionCode = "CHAPTER_PLANNED_RELEASE_DATE_SET",
+                    ActionCode = actionCode,
                     EntityType = "Chapter",
                     EntityId = chapterId.ToString(),
                     DetailJson = detailJson
@@ -374,28 +398,14 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             }
         }
 
-        private static bool IsPlannableChapter(string statusCode)
+        private static bool IsPlannableOrReschedulableChapter(string statusCode)
         {
             return statusCode == StatusDraft
+                || statusCode == StatusUnderReview
                 || statusCode == StatusRevisionRequested
-                || statusCode == StatusApproved;
-        }
-
-        private async Task<DateTime?> GetPreviousPlannedNonCancelledChapterDateAsync(
-            Guid seriesId,
-            Guid excludeChapterId,
-            CancellationToken ct)
-        {
-            var previousChapter = await _dbContext.Chapters
-                .AsNoTracking()
-                .Where(c => c.SeriesId == seriesId
-                         && c.ChapterId != excludeChapterId
-                         && c.StatusCode != StatusCancelled
-                         && c.PlannedReleaseDate != null)
-                .OrderByDescending(c => c.PlannedReleaseDate)
-                .FirstOrDefaultAsync(ct);
-
-            return previousChapter?.PlannedReleaseDate;
+                || statusCode == StatusApproved
+                || statusCode == StatusScheduledFull
+                || statusCode == StatusOnHold;
         }
     }
 }

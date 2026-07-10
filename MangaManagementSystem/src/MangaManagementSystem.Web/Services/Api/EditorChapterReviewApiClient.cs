@@ -1,11 +1,14 @@
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Editor;
 using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.ReleaseChapter;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.RescheduleChapter;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.PutScheduledChapterOnHold;
 using Microsoft.AspNetCore.Components.Forms;
@@ -284,6 +287,92 @@ namespace MangaManagementSystem.Web.Services.Api
 
             var message = await ExtractErrorMessageAsync(response);
             throw new InvalidOperationException(message);
+        }
+
+        public async Task<ReleaseChapterResponse> ReleaseChapterAsync(
+            Guid actorUserId,
+            Guid chapterId,
+            bool confirmRelease,
+            CancellationToken cancellationToken = default)
+        {
+            var request = new { confirmRelease };
+            using var requestMessage = new HttpRequestMessage(
+                HttpMethod.Post, $"api/editor/chapters/{chapterId}/release")
+            {
+                Content = JsonContent.Create(request)
+            };
+            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<ReleaseChapterResponse>(
+                    cancellationToken: cancellationToken);
+                if (result is null)
+                    throw new InvalidOperationException("No confirmation was returned. Please refresh and verify.");
+                return result;
+            }
+
+            var message = await ExtractErrorMessageAsync(response);
+            throw new InvalidOperationException(message);
+        }
+
+        public async Task<IReadOnlyList<EditorActionableChapterDto>> GetActionableChaptersAsync(
+            Guid actorUserId,
+            Guid? seriesId = null,
+            string? searchText = null,
+            string? statusCode = null,
+            int? maxResults = null,
+            CancellationToken cancellationToken = default)
+        {
+            var sb = new StringBuilder("api/editor/chapters/series-chapters?");
+            var hasParam = false;
+
+            if (seriesId.HasValue && seriesId.Value != Guid.Empty)
+            {
+                sb.Append($"seriesId={seriesId.Value}");
+                hasParam = true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(searchText))
+            {
+                if (hasParam) sb.Append('&');
+                sb.Append($"searchText={Uri.EscapeDataString(searchText)}");
+                hasParam = true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(statusCode))
+            {
+                if (hasParam) sb.Append('&');
+                sb.Append($"statusCode={Uri.EscapeDataString(statusCode)}");
+                hasParam = true;
+            }
+
+            if (maxResults.HasValue)
+            {
+                if (hasParam) sb.Append('&');
+                sb.Append($"maxResults={maxResults.Value}");
+                hasParam = true;
+            }
+
+            if (!hasParam)
+                sb.Length -= 1;
+
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Get, sb.ToString());
+            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<List<EditorActionableChapterDto>>(
+                    cancellationToken: cancellationToken);
+                return result?.AsReadOnly() ?? (IReadOnlyList<EditorActionableChapterDto>)Array.Empty<EditorActionableChapterDto>();
+            }
+
+            var errorMessage = await ExtractErrorMessageAsync(response);
+            throw new InvalidOperationException(errorMessage);
         }
 
         private static async Task<string> ExtractErrorMessageAsync(HttpResponseMessage response)
