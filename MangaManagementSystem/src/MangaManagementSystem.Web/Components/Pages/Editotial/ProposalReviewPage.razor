@@ -84,7 +84,34 @@
 
                                         <td class="mf-strong">@proposal.Title</td>
                                         <td>@proposal.Author</td>
-                                        <td>@proposal.Genre</td>
+
+                                        <td class="mf-genre-cell">
+                                            @if (proposal.GenreItems.Count == 0)
+                                            {
+                                                <span>Unknown Genre</span>
+                                            }
+                                            else
+                                            {
+                                                <div class="mf-genre-list table @(IsGenreRowExpanded(proposal) ? "expanded" : "collapsed")">
+                                                    @foreach (var genre in GetVisibleRowGenres(proposal))
+                                                    {
+                                                        <span class="mf-genre-pill">@genre</span>
+                                                    }
+                                                </div>
+
+                                                @if (proposal.GenreItems.Count > MaxTableVisibleGenres)
+                                                {
+                                                    <button type="button"
+                                                            class="mf-genre-toggle"
+                                                            @onclick="() => ToggleGenreRow(proposal)">
+                                                        @(IsGenreRowExpanded(proposal)
+                                                            ? "Show less"
+                                                            : $"+{proposal.GenreItems.Count - MaxTableVisibleGenres} more")
+                                                    </button>
+                                                }
+                                            }
+                                        </td>
+
                                         <td class="mf-mono">@proposal.VersionLabel</td>
                                         <td>@proposal.SubmittedFromEditor</td>
 
@@ -141,9 +168,33 @@
                                     <strong>@SelectedProposal.Author</strong>
                                 </div>
 
-                                <div class="mf-info-tile">
+                                <div class="mf-info-tile mf-genres-tile">
                                     <span>Genre</span>
-                                    <strong>@SelectedProposal.Genre</strong>
+
+                                    @if (SelectedProposal.GenreItems.Count == 0)
+                                    {
+                                        <strong>Unknown Genre</strong>
+                                    }
+                                    else
+                                    {
+                                        <div class="mf-genre-list @(ShowAllGenres ? "expanded" : "collapsed")">
+                                            @foreach (var genre in VisibleGenres)
+                                            {
+                                                <span class="mf-genre-pill">@genre</span>
+                                            }
+                                        </div>
+
+                                        @if (SelectedProposal.GenreItems.Count > MaxVisibleGenres)
+                                        {
+                                            <button type="button"
+                                                    class="mf-genre-toggle"
+                                                    @onclick="ToggleGenres">
+                                                @(ShowAllGenres
+                                                    ? "Show less"
+                                                    : $"+{HiddenGenreCount} more")
+                                            </button>
+                                        }
+                                    }
                                 </div>
 
                                 <div class="mf-info-tile mf-tags-tile">
@@ -373,6 +424,8 @@
         "This series already has an open board poll of this type. Close or cancel the existing poll before opening a new one.";
 
     private const int MaxVisibleTags = 8;
+    private const int MaxVisibleGenres = 4;
+    private const int MaxTableVisibleGenres = 3;
 
     private string SearchText { get; set; } = string.Empty;
     private string? StatusFilter { get; set; }
@@ -384,6 +437,7 @@
 
     private bool ShowDeadlinePicker { get; set; }
     private bool ShowAllTags { get; set; }
+    private bool ShowAllGenres { get; set; }
     private bool IsOpeningPoll { get; set; }
     private bool IsLoading { get; set; } = true;
 
@@ -397,6 +451,8 @@
     private string? ErrorMessage { get; set; }
 
     private IReadOnlyList<ProposalItem> Proposals { get; set; } = Array.Empty<ProposalItem>();
+
+    private HashSet<Guid> ExpandedGenreRows { get; } = new();
 
     private IEnumerable<string> VisibleTags
     {
@@ -426,9 +482,74 @@
         }
     }
 
+    private IEnumerable<string> VisibleGenres
+    {
+        get
+        {
+            if (SelectedProposal is null)
+            {
+                return Array.Empty<string>();
+            }
+
+            return ShowAllGenres
+                ? SelectedProposal.GenreItems
+                : SelectedProposal.GenreItems.Take(MaxVisibleGenres);
+        }
+    }
+
+    private int HiddenGenreCount
+    {
+        get
+        {
+            if (SelectedProposal is null)
+            {
+                return 0;
+            }
+
+            return Math.Max(0, SelectedProposal.GenreItems.Count - MaxVisibleGenres);
+        }
+    }
+
     private void ToggleTags()
     {
         ShowAllTags = !ShowAllTags;
+    }
+
+    private void ToggleGenres()
+    {
+        ShowAllGenres = !ShowAllGenres;
+    }
+
+    private IEnumerable<string> GetVisibleRowGenres(ProposalItem proposal)
+    {
+        return IsGenreRowExpanded(proposal)
+            ? proposal.GenreItems
+            : proposal.GenreItems.Take(MaxTableVisibleGenres);
+    }
+
+    private bool IsGenreRowExpanded(ProposalItem proposal)
+    {
+        return ExpandedGenreRows.Contains(GetProposalKey(proposal));
+    }
+
+    private void ToggleGenreRow(ProposalItem proposal)
+    {
+        var key = GetProposalKey(proposal);
+
+        if (!ExpandedGenreRows.Add(key))
+        {
+            ExpandedGenreRows.Remove(key);
+        }
+    }
+
+    private static Guid GetProposalKey(ProposalItem proposal)
+    {
+        if (proposal.ProposalId != Guid.Empty)
+        {
+            return proposal.ProposalId;
+        }
+
+        return proposal.SeriesId;
     }
 
     private bool HasCurrentPollTypeConflict
@@ -570,6 +691,8 @@
             "TagNames",
             "TagsDisplay");
 
+        var genreItems = SplitGenreDisplay(proposal.Genre);
+
         var proposalFileName = GetOptionalString(
             proposal,
             "ProposalFileName",
@@ -667,6 +790,7 @@
             Title = proposal.Title,
             Author = proposal.Author,
             Genre = proposal.Genre,
+            GenreItems = genreItems,
             Tags = tags,
             VersionNumber = versionNumber,
             VersionLabel = versionLabel,
@@ -721,6 +845,7 @@
         PublicationFrequencyCode = "WEEKLY";
         ShowDeadlinePicker = false;
         ShowAllTags = false;
+        ShowAllGenres = false;
         OpenPollDeadlineDraftText = string.Empty;
         ConfirmedOpenPollDeadline = null;
         OpenPollMessage = null;
@@ -736,6 +861,7 @@
         OpenPollSucceeded = false;
         OpenPollConflictType = null;
         ShowAllTags = false;
+        ShowAllGenres = false;
     }
 
     private void StartDeadlinePicker()
@@ -895,6 +1021,19 @@
             || message.Contains("already exists for this series", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static IReadOnlyList<string> SplitGenreDisplay(string? genreDisplay)
+    {
+        if (string.IsNullOrWhiteSpace(genreDisplay))
+        {
+            return Array.Empty<string>();
+        }
+
+        return genreDisplay
+            .Split(" / ", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(genre => !string.IsNullOrWhiteSpace(genre))
+            .ToList();
+    }
+
     private static string GetOptionalString(object source, params string[] propertyNames)
     {
         foreach (var propertyName in propertyNames)
@@ -1029,6 +1168,7 @@
         public string Title { get; init; } = string.Empty;
         public string Author { get; init; } = string.Empty;
         public string Genre { get; init; } = string.Empty;
+        public IReadOnlyList<string> GenreItems { get; init; } = Array.Empty<string>();
         public IReadOnlyList<string> Tags { get; init; } = Array.Empty<string>();
         public int VersionNumber { get; init; }
         public string VersionLabel { get; init; } = string.Empty;

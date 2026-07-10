@@ -5,6 +5,7 @@
                 <MudAvatar Color="Color.Primary" Variant="Variant.Filled" Rounded="true">
                     <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" />
                 </MudAvatar>
+
                 <div>
                     <MudText Typo="Typo.h5" Class="fw-800">Series Ranking Management</MudText>
                     <MudText Typo="Typo.body2" Color="Color.Secondary">
@@ -15,29 +16,31 @@
         </MudItem>
 
         <MudItem xs="12" md="5">
-            <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2">
-                <MudSelect T="Guid"
-                           Label="Publication Week"
-                           Variant="Variant.Outlined"
-                           Dense="true"
-                           Margin="Margin.Dense"
-                           Value="SelectedPublicationPeriodId"
-                           ValueChanged="OnSelectedPublicationPeriodChanged"
-                           Disabled="PublicationPeriods.Count == 0 || Loading"
-                           Adornment="Adornment.Start"
-                           AdornmentIcon="@Icons.Material.Filled.CalendarMonth"
-                           Class="ranking-period-select">
-                    @foreach (var period in PublicationPeriods)
-                    {
-                        <MudSelectItem T="Guid" Value="@period.PublicationPeriodId">@period.Label</MudSelectItem>
-                    }
-                </MudSelect>
+            <MudStack Spacing="1">
+                <MudDatePicker Label="Publication Date"
+                               Date="@SelectedPublicationDate"
+                               DateChanged="OnPublicationDateChangedAsync"
+                               DateFormat="yyyy-MM-dd"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Disabled="@(PublicationPeriods.Count == 0 || Loading)"
+                               Adornment="Adornment.Start"
+                               AdornmentIcon="@Icons.Material.Filled.CalendarMonth"
+                               Class="ranking-period-select"
+                               Error="@(!string.IsNullOrWhiteSpace(_dateError))"
+                               ErrorText="@_dateError" />
+
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    @SelectedPublicationPeriodLabel
+                </MudText>
             </MudStack>
         </MudItem>
     </MudGrid>
 </MudPaper>
 
 @code {
+    private string? _dateError;
+
     [Parameter]
     public IReadOnlyList<PublicationPeriodOption> PublicationPeriods { get; set; } = [];
 
@@ -50,8 +53,52 @@
     [Parameter]
     public bool Loading { get; set; }
 
-    private Task OnSelectedPublicationPeriodChanged(Guid value)
+    private DateTime? SelectedPublicationDate
     {
-        return SelectedPublicationPeriodIdChanged.InvokeAsync(value);
+        get
+        {
+            var selectedPeriod = PublicationPeriods.FirstOrDefault(period =>
+                period.PublicationPeriodId == SelectedPublicationPeriodId);
+
+            return selectedPeriod?.PeriodStartDate;
+        }
+    }
+
+    private string SelectedPublicationPeriodLabel
+    {
+        get
+        {
+            var selectedPeriod = PublicationPeriods.FirstOrDefault(period =>
+                period.PublicationPeriodId == SelectedPublicationPeriodId);
+
+            return selectedPeriod is null
+                ? "No publication week selected"
+                : selectedPeriod.Label;
+        }
+    }
+
+    private async Task OnPublicationDateChangedAsync(DateTime? value)
+    {
+        if (!value.HasValue)
+        {
+            return;
+        }
+
+        var selectedDate = value.Value.Date;
+
+        var matchedPeriod = PublicationPeriods.FirstOrDefault(period =>
+            selectedDate >= period.PeriodStartDate.Date
+            && selectedDate <= period.PeriodEndDate.Date);
+
+        if (matchedPeriod is null)
+        {
+            _dateError = "No weekly publication period contains this date.";
+            return;
+        }
+
+        _dateError = null;
+
+        await SelectedPublicationPeriodIdChanged.InvokeAsync(
+            matchedPeriod.PublicationPeriodId);
     }
 }

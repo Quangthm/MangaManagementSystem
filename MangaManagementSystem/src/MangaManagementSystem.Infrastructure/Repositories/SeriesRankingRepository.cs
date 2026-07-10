@@ -8,13 +8,6 @@ namespace MangaManagementSystem.Infrastructure.Repositories;
 
 public sealed class SeriesRankingRepository : ISeriesRankingRepository
 {
-    private static readonly string[] RankableSeriesStatuses =
-    [
-        "SERIALIZED",
-        "HIATUS",
-        "COMPLETED"
-    ];
-
     private readonly ApplicationDbContext _context;
 
     public SeriesRankingRepository(ApplicationDbContext context)
@@ -130,33 +123,35 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
         int maxResults,
         CancellationToken cancellationToken)
     {
-        var existingSeriesIds = _context.Set<SeriesVoteInput>()
-            .AsNoTracking()
-            .Where(input => input.PublicationPeriodId == publicationPeriodId)
-            .Select(input => input.SeriesId);
+        var normalizedSearch = NormalizeSearch(searchText);
+        var safeMaxResults = maxResults <= 0 ? 20 : maxResults;
 
-        IQueryable<RankableSeriesDto> query =
+        /*
+            Important:
+            This dropdown must show series from the real DB.
+            Do NOT restrict only to SERIALIZED / HIATUS / COMPLETED here,
+            because your test data may still be PROPOSAL_DRAFT,
+            UNDER_EDITORIAL_REVIEW, or UNDER_BOARD_REVIEW.
+
+            Duplicate vote input is still protected in CreateSeriesVoteInputAsync.
+        */
+        var query =
             from series in _context.Set<Series>().AsNoTracking()
             join cover in _context.Set<FileResource>().AsNoTracking()
                     .Where(file => file.DeletedAtUtc == null)
                 on series.CoverFileId equals cover.FileResourceId into coverGroup
             from cover in coverGroup.DefaultIfEmpty()
-            where RankableSeriesStatuses.Contains(series.StatusCode)
-                  && !existingSeriesIds.Contains(series.SeriesId)
+            where series.StatusCode != "CANCELLED"
             select new RankableSeriesDto(
                 series.SeriesId,
                 series.Title,
                 series.Slug,
                 cover == null ? null : cover.CloudinarySecureUrl);
 
-        var normalizedSearch = NormalizeSearch(searchText);
-
         if (normalizedSearch is not null)
         {
             query = query.Where(row => row.Title.Contains(normalizedSearch));
         }
-
-        var safeMaxResults = maxResults <= 0 ? 10 : maxResults;
 
         return await query
             .OrderBy(row => row.Title)
@@ -176,7 +171,11 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
                         && user.StatusCode == "ACTIVE"
                         && user.Role != null
                         && (user.Role.RoleName == "Editorial Board Member"
-                            || user.Role.RoleName == "Editorial Board Chief"),
+                            || user.Role.RoleName == "EditorialBoardMember"
+                            || user.Role.RoleName == "Board Member"
+                            || user.Role.RoleName == "Editorial Board Chief"
+                            || user.Role.RoleName == "EditorialBoardChief"
+                            || user.Role.RoleName == "Board Chief"),
                 cancellationToken);
     }
 
@@ -202,12 +201,13 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
 
         var seriesExists = await _context.Set<Series>()
             .AnyAsync(
-                series => series.SeriesId == seriesId,
+                series => series.SeriesId == seriesId
+                          && series.StatusCode != "CANCELLED",
                 cancellationToken);
 
         if (!seriesExists)
         {
-            throw new InvalidOperationException("Series was not found.");
+            throw new InvalidOperationException("Series was not found or cannot be ranked.");
         }
 
         var duplicateExists = await _context.Set<SeriesVoteInput>()
