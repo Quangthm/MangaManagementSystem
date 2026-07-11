@@ -6,6 +6,8 @@
 
 > **Latest alignment update — 2026-07-04:** This version replaces strict publication-period scheduling enforcement with the finalized advisory scheduling direction. Publication scheduling remains chapter-level: planned release dates belong to `Chapter`, `SCHEDULED` applies to `Chapter.status_code`, and page/content workflows remain locked for scheduled/on-hold chapters. `Series.publication_frequency_code` now drives default suggestions and warnings only; Mangaka and Tantou Editors may choose any future planned release date when permissions/status allow it. Editors remain the final release enforcer, on-hold recovery requires a new planned date, and auto-hold for overdue scheduled chapters is deferred.
 
+> **Latest series lifecycle alignment — 2026-07-11:** `HIATUS` is the schema term for a paused series. Active Mangaka or Tantou Editor contributors may move a `SERIALIZED` series to `HIATUS` and may resume it back to `SERIALIZED`. `HIATUS` blocks chapter release only; drafting, editing, review, scheduling, and rescheduling remain allowed when normal chapter rules allow them. Only active Mangaka contributors may mark a `SERIALIZED` or `HIATUS` series as `COMPLETED`. A completed series is final, immutable for normal business changes, cancels unreleased chapters after warning and confirmation, preserves released and historical records, and remains visible in rankings when ranking input exists.
+
 ---
 
 ## 1. AI-Assisted Translation
@@ -169,6 +171,24 @@
 | BR-SERIES-024 | After serialization, Mangaka production work continues through chapters, pages, page versions, regions, tasks, and the authorized chapter workspace rather than by editing the locked series profile. | Active draft |
 | BR-SERIES-025 | When a Mangaka creates a new series draft, the system must create the `Series` row and an active `SeriesContributor` row for that Mangaka in the same backend workflow or transaction, so that the creator is immediately recognized as an active Mangaka contributor for the draft. | Active draft |
 
+| BR-SERIES-026 | The approved MVP series lifecycle status list is `PROPOSAL_DRAFT`, `UNDER_EDITORIAL_REVIEW`, `UNDER_BOARD_REVIEW`, `SERIALIZED`, `HIATUS`, `COMPLETED`, and `CANCELLED`. | Active draft |
+| BR-SERIES-027 | `HIATUS` is the schema status for a paused series; do not add a separate `PAUSED` series status in MVP. | Active draft |
+| BR-SERIES-028 | Only active Mangaka contributors or active Tantou Editor contributors of the series may change `Series.status_code` from `SERIALIZED` to `HIATUS`. | Active draft |
+| BR-SERIES-029 | Only active Mangaka contributors or active Tantou Editor contributors of the series may change `Series.status_code` from `HIATUS` back to `SERIALIZED`. | Active draft |
+| BR-SERIES-030 | A `HIATUS` series blocks chapter release actions, but it does not block drafting, chapter creation, page work, review, scheduling, or rescheduling when the normal chapter status and role permissions allow those actions. | Active draft |
+| BR-SERIES-031 | Moving a series to `HIATUS` must not automatically change existing scheduled chapters to `ON_HOLD`; scheduled chapters keep their chapter-level status until a valid chapter workflow changes them. | Active draft |
+| BR-SERIES-032 | To release a chapter under a `HIATUS` series, an authorized active Mangaka or Tantou Editor contributor must first resume the series back to `SERIALIZED`. | Active draft |
+| BR-SERIES-033 | Only an active Mangaka contributor of the series may change `Series.status_code` from `SERIALIZED` or `HIATUS` to `COMPLETED`. | Active draft |
+| BR-SERIES-034 | `COMPLETED` means the author-side series has naturally ended; it is distinct from `CANCELLED`, which represents board/business cancellation. | Active draft |
+| BR-SERIES-035 | Marking a series as `COMPLETED` requires a clear warning and explicit confirmation because it is final and normally irreversible through normal workflow. | Active draft |
+| BR-SERIES-036 | When a series becomes `COMPLETED`, normal business mutations under the series must be blocked, including changes to series profile/status, new chapters, chapter content changes, page/page-version changes, region edits, task changes, review changes, scheduling, rescheduling, hold, and release actions. | Active draft |
+| BR-SERIES-037 | Completed-series immutability does not delete or hide existing records; released chapters, cancelled chapters, page versions, regions, annotations, tasks, review records, notifications, and audit logs remain preserved for viewing and traceability where authorized. | Active draft |
+| BR-SERIES-038 | When a Mangaka confirms series completion, already `RELEASED` chapters remain `RELEASED`. | Active draft |
+| BR-SERIES-039 | When a Mangaka confirms series completion, unreleased active chapters should be changed to `CANCELLED` with an explicit completion-related reason. | Active draft |
+| BR-SERIES-040 | Unreleased active chapters for completion cancellation include `DRAFT`, `REVISION_REQUESTED`, `UNDER_REVIEW`, `APPROVED`, `SCHEDULED`, and `ON_HOLD` chapters; already `RELEASED` chapters and already `CANCELLED` chapters must not be changed. | Active draft |
+| BR-SERIES-041 | Completion-cancelled chapters remain preserved as read-only historical records and must follow the normal terminal behavior of cancelled chapters. | Active draft |
+| BR-SERIES-042 | A `CANCEL_SERIALIZATION` board poll may target a `SERIALIZED` or `HIATUS` series, but not a `COMPLETED` series through normal MVP workflow. | Active draft |
+
 ### Future Information
 
 | Rule ID | Future Information | Review Status |
@@ -232,7 +252,7 @@
 | BR-BOARD-POLL-002 | A `START_SERIALIZATION` poll may only be opened for a series with `Series.status_code = UNDER_BOARD_REVIEW`. | Active draft |
 | BR-BOARD-POLL-003 | A `START_SERIALIZATION` poll may only be opened when the selected series has exactly one active proposal with `SeriesProposal.status_code = UNDER_BOARD_REVIEW`. | Active draft |
 | BR-BOARD-POLL-004 | A `START_SERIALIZATION` poll represents board voting on the active under-board-review proposal for the selected series, even though the poll stores only `series_id`. | Active draft |
-| BR-BOARD-POLL-005 | A `CANCEL_SERIALIZATION` poll may be opened for a serialized or paused series when the Editorial Board Chief provides a reason. | Active draft |
+| BR-BOARD-POLL-005 | A `CANCEL_SERIALIZATION` poll may be opened for a `SERIALIZED` or `HIATUS` series when the Editorial Board Chief provides a reason. | Active draft |
 | BR-BOARD-POLL-006 | Low ranking or high cancellation risk should be displayed as supporting evidence for cancellation polls when available, but it should not be the only allowed reason. | Active draft |
 | BR-BOARD-POLL-007 | A poll must have a non-empty reason explaining why the poll was opened. | Active draft |
 | BR-BOARD-POLL-008 | A poll may have a scheduled end time or may be closed manually by the Editorial Board Chief. | Active draft |
@@ -284,7 +304,7 @@
 | BR-BOARD-RESULT-011 | A `START_SERIALIZATION` poll with an applicable `APPROVED` result changes the series to `SERIALIZED`, changes the active under-board-review proposal to `APPROVED`, and applies the publication frequency specified by the Editorial Board Chief. | Active draft |
 | BR-BOARD-RESULT-012 | A `START_SERIALIZATION` poll with an applicable `REJECTED` result prevents the proposal from proceeding to serialization and should cancel the active proposal and series according to MVP workflow policy. | Active draft |
 | BR-BOARD-RESULT-013 | A `START_SERIALIZATION` poll with `NO_DECISION` leaves the series in `UNDER_BOARD_REVIEW` and the active proposal in `UNDER_BOARD_REVIEW`. | Active draft |
-| BR-BOARD-RESULT-014 | A `CANCEL_SERIALIZATION` poll with an applicable `APPROVED` result changes the series status to `CANCELLED`. | Active draft |
+| BR-BOARD-RESULT-014 | A `CANCEL_SERIALIZATION` poll with an applicable `APPROVED` result changes a `SERIALIZED` or `HIATUS` series status to `CANCELLED`. | Active draft |
 | BR-BOARD-RESULT-015 | A `CANCEL_SERIALIZATION` poll with `REJECTED` or `NO_DECISION` leaves the series status unchanged. | Active draft |
 | BR-BOARD-RESULT-016 | The system does not store a final board decision explanation in MVP; poll reason and individual rejection reasons are kept separately. | Active draft |
 | BR-BOARD-RESULT-017 | Applying a board poll result to proposal or series status must be recorded in the audit log. | Active draft |
@@ -313,6 +333,8 @@
 | BR-CH-016 | When a chapter is `SCHEDULED`, Mangaka users must not change chapter content or perform page/content mutation workflows for that chapter. | Active draft |
 | BR-CH-017 | When a chapter is `SCHEDULED`, authorized Mangaka and Tantou Editors may reschedule `planned_release_date` to a future date; the system may warn about frequency mismatch but must not hard-block it. | Active draft |
 | BR-CH-018 | When a chapter is `SCHEDULED`, a Tantou Editor may move the chapter to `ON_HOLD` with a required reason; returning from `ON_HOLD` to `SCHEDULED` requires setting a new future planned release date. | Active draft |
+| BR-CH-019 | A chapter cannot be released while its parent series is `HIATUS`, `COMPLETED`, or `CANCELLED`. | Active draft |
+| BR-CH-020 | If the parent series is `COMPLETED`, normal chapter creation and mutation workflows must be blocked for all chapters under that series. | Active draft |
 
 ---
 
@@ -568,6 +590,8 @@
 | BR-PUB-SCHEDULED-009 | Automatic movement of overdue `SCHEDULED` chapters to `ON_HOLD` is deferred; the MVP may show overdue warnings but should not perform automatic hold transitions unless a later task explicitly implements them. | Active draft |
 | BR-PUB-SCHEDULED-010 | Release automation and public reader visibility remain outside this workflow until explicitly added. | Active draft |
 | BR-PUB-SCHEDULED-011 | Bulk schedule, bulk hold, and bulk release workflows may be supported later; when implemented, they must require confirmation and write audit details for each affected chapter. | Active draft |
+| BR-PUB-SCHEDULED-012 | Chapter release must be blocked when the parent series is `HIATUS`, `COMPLETED`, or `CANCELLED`; a `HIATUS` series must return to `SERIALIZED` before chapter release is allowed. | Active draft |
+| BR-PUB-SCHEDULED-013 | While the parent series is `HIATUS`, authorized scheduling and rescheduling actions remain allowed when the chapter status and normal permissions allow them, because hiatus pauses release rather than production planning. | Active draft |
 
 ---
 
@@ -605,6 +629,7 @@
 | BR-RANK-006 | `ranking_score` and `rank_position` are derived values and should not be stored as normal duplicated columns unless later performance profiling proves caching is required. | Active draft |
 | BR-RANK-007 | Ranking results do not automatically cancel a series. | Active draft |
 | BR-RANK-008 | Ranking and cancellation-risk evidence may support board review, but any cancellation still requires the applicable board/editorial workflow decision. | Active draft |
+| BR-RANK-009 | Completed series remain visible in dynamic rankings when `SeriesVoteInput` exists for the selected publication period; ranking views must not hide a series only because `Series.status_code = COMPLETED`. | Active draft |
 
 
 ---

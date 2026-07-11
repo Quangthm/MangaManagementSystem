@@ -5,6 +5,8 @@ Basis: Verified MVP business rules, updated PageRegion segmentation rules, and p
 
 > **Latest alignment update — 2026-07-04:** This version updates publication scheduling stories to the advisory scheduling model. Publication frequency now provides suggestions and warnings, not hard date enforcement; Mangaka and Tantou Editors may schedule/reschedule future planned release dates when allowed; Editors enforce hold/release actions; on-hold chapters require a new planned date to return to schedule; and auto-hold/release automation remain deferred.
 
+> **Latest series lifecycle alignment — 2026-07-11:** `HIATUS` is the paused-series status. Active Mangaka and Tantou Editor contributors may pause/resume serialized series. Only active Mangaka contributors may mark a serialized or hiatus series as `COMPLETED`; completion cancels unreleased chapters after warning and confirmation, freezes future business mutations, preserves history, and keeps completed series visible in rankings.
+
 ## Actor Consolidation and Shared Actor Groups Applied
 
 | Previous Actor Group / Issue | Final Actor Group | Handling |
@@ -24,6 +26,13 @@ Basis: Verified MVP business rules, updated PageRegion segmentation rules, and p
 | General System User | Any approved authenticated user using common system features such as file display, status visibility, timestamps, and in-app notifications. |
 | Authorized Workflow Participant | A user who is allowed to view a specific workflow list, queue, or dashboard for their role, such as task lists, proposal queues, review queues, board poll lists, or admin queues. |
 | Authorized Page Workspace User | A user who is permitted to access the chapter-level workspace for page-level editing, review, annotation, AI segmentation, AI/OCR translation support, or page-version feedback. AI tools are available to all users in this actor group for workspaces they can access. This normally includes Mangaka and Tantou Editor, and may include Assistant only for assigned page/task work. Editorial Board Members are excluded unless explicitly granted page workspace permissions. |
+
+
+### Series Lifecycle Story Notes
+
+- Active Mangaka contributors and active Tantou Editor contributors may pause/resume a serialized series through `HIATUS`.
+- Only active Mangaka contributors may mark a `SERIALIZED` or `HIATUS` series as `COMPLETED`.
+- Completed series are immutable for normal business mutations, but remain visible in rankings when vote input exists.
 
 ---
 
@@ -117,13 +126,17 @@ Uploaded business files should follow the MVP file-purpose acceptance matrix in 
 | US-MANGAKA-019 | BR-CH-SUB-003, BR-CH-SUB-004, BR-CH-CANCEL-006, BR-CH-016, BR-PUB-SCHEDULED-001, BR-PUB-SCHEDULED-002 | As a Mangaka, I want chapter pages to lock during review, approved, scheduled, on-hold, released, and cancelled states, but become editable again when revision is requested, so that scheduled and terminal work stays stable while fixable work can be corrected. |
 | US-MANGAKA-020 | BR-CH-REV-003, BR-CH-REV-010, BR-CH-REV-011, BR-CH-REV-012, BR-CH-REV-013 | As a Mangaka, I want to view chapter review history and final decisions, so that I understand whether the chapter was approved, requires revision, or was cancelled. |
 | US-MANGAKA-021 | BR-CH-REV-007, BR-CH-CANCEL-003, BR-CH-CANCEL-004, BR-CH-CANCEL-006, BR-CH-CANCEL-007, BR-CH-CANCEL-008, BR-CH-CANCEL-009, BR-CH-CANCEL-010 | As a Mangaka, I want cancellation feedback and preserved chapter materials to remain available, and I want to create a new replacement draft with the same chapter number when a chapter is cancelled, so that previous work is not lost while redo work starts cleanly. |
-| US-MANGAKA-022 | BR-RANK-005, BR-RANK-008, BR-RANK-012, BR-NOTIF-007, BR-NOTIF-008 | As a Mangaka, I want to track ranking trends and receive cancellation-risk notifications, so that I can respond to series performance issues. |
+| US-MANGAKA-022 | BR-RANK-005, BR-RANK-008, BR-RANK-009, BR-NOTIF-007, BR-NOTIF-008 | As a Mangaka, I want to track ranking trends, including completed series when ranking input exists, and receive cancellation-risk notifications, so that I can respond to series performance issues while historical performance remains visible. |
 | US-MANGAKA-023 | BR-PUB-001, BR-PUB-006, BR-PUB-009, BR-PUB-DATE-001, BR-PUB-DATE-002, BR-PUB-DATE-003, BR-CH-013, BR-CH-015 | As a Mangaka, I want to view chapter-level release planning, scheduled status, publication business dates, and derived delays, so that I understand when my approved chapters are planned for release. |
 | US-MANGAKA-024 | BR-PUB-005, BR-PUB-011, BR-PUB-012, BR-PUB-013 | As a Mangaka, I want to provide or update `publication_frequency_code` while my series is still in `PROPOSAL_DRAFT`, so that the board can consider my proposed frequency before the board-approved frequency overrides it. |
 | US-MANGAKA-025 | BR-PUB-014, BR-NOTIF-012, BR-NOTIF-013 | As a Mangaka, I want to request a publication frequency change after the board decision by sending an in-app notification to the Editorial Board Chief, so that I can communicate scheduling concerns without requiring an official request table in MVP. |
 | US-MANGAKA-026 | BR-PUB-SCHEDULE-001, BR-PUB-SCHEDULE-002, BR-PUB-SCHEDULE-003, BR-PUB-SCHEDULE-004, BR-PUB-SCHEDULE-005, BR-PUB-SCHEDULE-006, BR-PUB-SCHEDULE-007, BR-PUB-SCHEDULE-010 | As a Mangaka, I want frequency-based suggested dates and warnings while still being allowed to choose any future planned release date, so that I can coordinate realistic release timing with my editor. |
 | US-MANGAKA-027 | BR-CH-016, BR-CH-017, BR-CH-018, BR-PUB-SCHEDULED-001, BR-PUB-SCHEDULED-002, BR-PUB-SCHEDULED-003, BR-PUB-SCHEDULED-005, BR-PUB-SCHEDULED-006 | As a Mangaka, I want scheduled and on-hold chapters to clearly show why editing is locked, how the current release plan changed, and that returning from hold requires a new planned date, so that I understand why page workflows are unavailable. |
 | US-MANGAKA-028 | BR-PUB-016, BR-PUB-017, BR-PUB-SCHEDULE-011 | As a Mangaka, I want to see authorized contributor contact information and audit-visible schedule changes, so that I can coordinate release dates with my editor outside the system workflow. |
+| US-MANGAKA-029 | BR-SERIES-027, BR-SERIES-028, BR-SERIES-029, BR-SERIES-030, BR-SERIES-031, BR-SERIES-032, BR-PUB-SCHEDULED-012, BR-PUB-SCHEDULED-013 | As a Mangaka contributor, I want to set my serialized series to `HIATUS` and later resume it to `SERIALIZED`, so that chapter release can pause without blocking drafting, review, scheduling, or rescheduling work. |
+| US-MANGAKA-030 | BR-SERIES-033, BR-SERIES-034, BR-SERIES-035, BR-SERIES-036, BR-SERIES-037, BR-SERIES-038, BR-SERIES-039, BR-SERIES-040, BR-SERIES-041, BR-RANK-009 | As a Mangaka contributor, I want to mark my serialized or hiatus series as `COMPLETED` only after seeing a warning and confirming unreleased chapter cancellation, so that I can end my own series while preserving released chapters, historical records, and ranking visibility. |
+
+
 ---
 
 ## 6. Assistant
@@ -162,7 +175,9 @@ Uploaded business files should follow the MVP file-purpose acceptance matrix in 
 | US-EDITOR-015 | BR-CH-014, BR-CH-015, BR-PUB-001, BR-PUB-SCHEDULED-007, BR-PUB-SCHEDULED-008 | As a Tantou Editor, I want to set planned release dates and release eligible chapters with confirmation, so that approved chapters can move to scheduled or released status while planned-versus-actual timing remains audit-visible. |
 | US-EDITOR-017 | BR-PUB-SCHEDULE-007, BR-PUB-SCHEDULE-010, BR-PUB-SCHEDULED-011 | As a Tantou Editor, I want future bulk schedule or bulk release actions to require confirmation and remain audit-visible, so that campaign and catch-up releases can be handled intentionally. |
 | US-EDITOR-013 | BR-PGTASK-020, BR-PGTASK-021, BR-PGTASK-022 | As a Tantou Editor, I want to review submitted task page versions when acting as an authorized reviewer, so that submitted page-version output is accepted before completion. |
-| US-EDITOR-016 | BR-RANK-001, BR-RANK-002, BR-RANK-007, BR-RANK-008 | As a Tantou Editor, I want to view dynamic ranking and cancellation-risk evidence, so that editorial decisions can consider series performance without automatic cancellation. |
+| US-EDITOR-016 | BR-RANK-001, BR-RANK-002, BR-RANK-007, BR-RANK-008, BR-RANK-009 | As a Tantou Editor, I want to view dynamic ranking and cancellation-risk evidence, including completed series when ranking input exists, so that editorial decisions and historical review can consider series performance without automatic cancellation. |
+| US-EDITOR-018 | BR-SERIES-027, BR-SERIES-028, BR-SERIES-029, BR-SERIES-030, BR-SERIES-031, BR-SERIES-032, BR-PUB-SCHEDULED-012, BR-PUB-SCHEDULED-013 | As a Tantou Editor contributor, I want to set a serialized series to `HIATUS` and resume it to `SERIALIZED`, so that release can be paused or restarted while normal drafting, review, scheduling, and rescheduling remain available when allowed. |
+
 
 ---
 
@@ -175,7 +190,7 @@ Uploaded business files should follow the MVP file-purpose acceptance matrix in 
 | US-BOARD-003 | BR-BOARD-VOTE-002, BR-BOARD-VOTE-003, BR-BOARD-VOTE-005 | As an Editorial Board Member, I want to vote APPROVE, REJECT, or ABSTAIN at most once per poll, so that the voting process is fair. |
 | US-BOARD-004 | BR-BOARD-VOTE-004 | As an Editorial Board Member, I want to provide a non-empty reason when voting REJECT, so that my objection is clear. |
 | US-BOARD-005 | BR-BOARD-VOTE-008, BR-BOARD-VOTE-009, BR-BOARD-VOTE-010, BR-BOARD-VOTE-011 | As an Editorial Board Member, I want my votes to remain visible after a poll is closed or cancelled, so that my participation is traceable but does not directly change status by itself. |
-| US-BOARD-006 | BR-BOARD-POLL-006, BR-RANK-001, BR-RANK-002, BR-RANK-007, BR-RANK-008 | As an Editorial Board Member, I want to view dynamic ranking and cancellation-risk evidence for relevant series, so that board decisions are supported by performance context. |
+| US-BOARD-006 | BR-BOARD-POLL-006, BR-RANK-001, BR-RANK-002, BR-RANK-007, BR-RANK-008, BR-RANK-009 | As an Editorial Board Member, I want to view dynamic ranking and cancellation-risk evidence for relevant series, including completed series when ranking input exists, so that board decisions and historical performance review are supported by performance context. |
 | US-BOARD-007 | BR-PUB-002, BR-PUB-003, BR-PUB-004, BR-PUB-006 | As an Editorial Board Member, I want to view the current publication frequency of serialized series, so that I understand the high-level release plan. |
 | US-BOARD-008 | BR-NOTIF-011 | As an Editorial Board Member, I want to receive an in-app notification when a new board poll opens, so that I can vote on time. |
 | US-BOARD-009 | BR-SERIES-VOTE-001, BR-SERIES-VOTE-002, BR-SERIES-VOTE-003, BR-SERIES-VOTE-004, BR-SERIES-VOTE-005, BR-SERIES-VOTE-006, BR-SERIES-VOTE-007, BR-SERIES-VOTE-008, BR-SERIES-VOTE-009, BR-SERIES-VOTE-010, BR-SERIES-VOTE-013, BR-SERIES-VOTE-014, BR-SERIES-VOTE-015 | As an Editorial Board Member, I want to enter one simulated or aggregated series vote input for a series and publication period with valid rating count, average rating, reading count, source note, timestamp, and entered-by user, so that ranking can be demonstrated without a public reader module. |
@@ -193,6 +208,8 @@ Uploaded business files should follow the MVP file-purpose acceptance matrix in 
 | US-BOARDCHIEF-005 | BR-BOARD-RESULT-011, BR-BOARD-RESULT-012, BR-BOARD-RESULT-013, BR-BOARD-RESULT-014, BR-BOARD-RESULT-015, BR-BOARD-RESULT-017 | As an Editorial Board Chief, I want applicable closed poll results to update proposal or series status according to the board rules, so that board decisions affect workflow only at the correct time. |
 | US-BOARDCHIEF-006 | BR-BOARD-POLL-013, BR-BOARD-POLL-015, BR-BOARD-POLL-017, BR-BOARD-RESULT-017 | As an Editorial Board Chief, I want board polls, cancelled polls, votes, and result applications to remain audit-visible, so that board-driven status changes are traceable. |
 | US-BOARDCHIEF-007 | BR-PUB-015 | As an Editorial Board Chief, I want to directly change a series publication frequency only with a required audit reason, so that frequency changes remain controlled and traceable. |
+| US-BOARDCHIEF-008 | BR-RANK-001, BR-RANK-002, BR-RANK-007, BR-RANK-008, BR-RANK-009 | As an Editorial Board Chief, I want to view dynamic ranking and cancellation-risk evidence, including completed series when ranking input exists, so that board oversight can use performance context without automatic cancellation. |
+
 
 ---
 
