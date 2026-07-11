@@ -11,6 +11,7 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         Guid ChapterId,
         Guid SeriesId,
         string SeriesTitle,
+        string? SeriesSlug,
         string ChapterNumberLabel,
         string? ChapterTitle,
         string StatusCode,
@@ -18,6 +19,7 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         DateTime? ReleasedAtUtc,
         DateTime CreatedAtUtc,
         DateTime? UpdatedAtUtc,
+        string? SeriesCoverUrl,
         ChapterEditorialReviewSummaryDto? LatestReview,
         IReadOnlyList<EditorChapterReviewHistoryDto> EditorialReviewHistory);
 

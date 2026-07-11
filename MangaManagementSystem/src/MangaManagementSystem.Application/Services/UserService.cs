@@ -31,6 +31,7 @@ namespace MangaManagementSystem.Application.Services
         private readonly IUnitOfWork _unitOfWork;
         private readonly IPasswordHasher _passwordHasher;
         private readonly IEmailService _emailService;
+        private readonly INotificationService _notificationService;
         private readonly IOtpCacheService _otpCacheService;
         private readonly IFileStorageService _fileStorageService;
         private readonly ILogger<UserService> _logger;
@@ -39,6 +40,7 @@ namespace MangaManagementSystem.Application.Services
             IUnitOfWork unitOfWork,
             IPasswordHasher passwordHasher,
             IEmailService emailService,
+            INotificationService notificationService,
             IOtpCacheService otpCacheService,
             IFileStorageService fileStorageService,
             ILogger<UserService> logger)
@@ -46,6 +48,7 @@ namespace MangaManagementSystem.Application.Services
             _unitOfWork = unitOfWork;
             _passwordHasher = passwordHasher;
             _emailService = emailService;
+            _notificationService = notificationService;
             _otpCacheService = otpCacheService;
             _fileStorageService = fileStorageService;
             _logger = logger;
@@ -154,6 +157,42 @@ namespace MangaManagementSystem.Application.Services
                 reason);
 
             var updated = await GetRequiredUserByIdForDtoAsync(userId);
+
+            const string notificationTitle =
+                "Account approved";
+
+            const string notificationMessage =
+                "Your MangaFlow account has been approved. You can now sign in and start using your account.";
+
+            await _notificationService.CreateNotificationAsync(
+                new CreateNotificationDto(
+                    RecipientUserId: userId,
+                    NotificationTypeCode: "SYSTEM_MESSAGE",
+                    Title: notificationTitle,
+                    Message: notificationMessage,
+                    RelatedEntityType: "User",
+                    RelatedEntityId: userId));
+
+            var displayName =
+                string.IsNullOrWhiteSpace(updated.DisplayName)
+                    ? updated.Email
+                    : updated.DisplayName;
+
+            try
+            {
+                await _emailService.SendAccountApprovedEmailAsync(
+                    updated.Email,
+                    displayName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to send account approval email to user {UserId} ({Email}).",
+                    userId,
+                    updated.Email);
+            }
+
             return updated.ToDto();
         }
 

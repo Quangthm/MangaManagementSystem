@@ -10,30 +10,28 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MangaManagementSystem.Infrastructure.Repositories
 {
-    public class ChapterOnHoldRepository : IChapterOnHoldRepository
+    public class ChapterReleaseRepository : IChapterReleaseRepository
     {
         private const string TantouEditorRole = "Tantou Editor";
         private const string StatusScheduled = "SCHEDULED";
-        private const string StatusOnHold = "ON_HOLD";
+        private const string StatusApproved = "APPROVED";
+        private const string StatusReleased = "RELEASED";
 
         private readonly ApplicationDbContext _dbContext;
 
-        public ChapterOnHoldRepository(ApplicationDbContext dbContext)
+        public ChapterReleaseRepository(ApplicationDbContext dbContext)
         {
             _dbContext = dbContext;
         }
 
-        public async Task<ChapterOnHoldResult> PutScheduledChapterOnHoldAsync(
+        public async Task<ChapterReleaseResult> ReleaseChapterAsync(
             Guid actorUserId,
             Guid chapterId,
-            string reason,
+            bool confirmRelease,
             CancellationToken ct = default)
         {
-            if (string.IsNullOrWhiteSpace(reason))
-                throw new InvalidOperationException("A reason is required to put a scheduled chapter on hold.");
-
-            if (reason.Length > 1000)
-                throw new InvalidOperationException("Reason must not exceed 1000 characters.");
+            if (!confirmRelease)
+                throw new InvalidOperationException("Release confirmation is required.");
 
             await using var transaction = await _dbContext.Database.BeginTransactionAsync(ct);
 
@@ -55,27 +53,42 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
                 if (!isAuthorized)
                     throw new InvalidOperationException(
-                        "You are not authorized to put this chapter on hold.");
+                        "You are not authorized to release this chapter.");
 
-                if (chapter.StatusCode != StatusScheduled)
+                if (chapter.StatusCode == StatusReleased)
+                    throw new InvalidOperationException("This chapter has already been released.");
+
+                if (chapter.StatusCode == "CANCELLED")
+                    throw new InvalidOperationException("A cancelled chapter cannot be released.");
+
+                if (chapter.StatusCode != StatusScheduled && chapter.StatusCode != StatusApproved)
                     throw new InvalidOperationException(
-                        "Only SCHEDULED chapters can be put on hold.");
+                        "Only SCHEDULED or APPROVED chapters can be released.");
 
                 string previousStatusCode = chapter.StatusCode;
                 var previousPlannedDate = chapter.PlannedReleaseDate;
+                var now = DateTime.UtcNow;
 
-                chapter.StatusCode = StatusOnHold;
-                chapter.UpdatedAtUtc = DateTime.UtcNow;
+                if (!chapter.PlannedReleaseDate.HasValue)
+                {
+                    chapter.PlannedReleaseDate = now.Date;
+                }
+
+                chapter.StatusCode = StatusReleased;
+                chapter.ReleasedAtUtc = now;
+                chapter.UpdatedAtUtc = now;
 
                 var detailJson = JsonSerializer.Serialize(new
                 {
                     chapter_id = chapterId,
                     series_id = chapter.SeriesId,
                     old_status_code = previousStatusCode,
-                    new_status_code = StatusOnHold,
+                    new_status_code = StatusReleased,
                     old_planned_release_date = previousPlannedDate,
+                    planned_release_date = chapter.PlannedReleaseDate,
+                    released_at_utc = now,
                     actor_user_id = actorUserId,
-                    reason = reason
+                    confirm_release = true
                 });
 
                 var actorRoleName = await _dbContext.ActiveSeriesContributors
@@ -85,10 +98,10 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
                 _dbContext.AuditEvents.Add(new AuditEvent
                 {
-                    OccurredAtUtc = DateTime.UtcNow,
+                    OccurredAtUtc = now,
                     ActorUserId = actorUserId,
                     ActorRoleName = actorRoleName,
-                    ActionCode = "CHAPTER_PUT_ON_HOLD",
+                    ActionCode = "CHAPTER_RELEASED",
                     EntityType = "Chapter",
                     EntityId = chapterId.ToString(),
                     DetailJson = detailJson
@@ -97,10 +110,12 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 await _dbContext.SaveChangesAsync(ct);
                 await transaction.CommitAsync(ct);
 
-                return new ChapterOnHoldResult(
+                return new ChapterReleaseResult(
                     chapter.ChapterId,
                     chapter.StatusCode,
-                    "Chapter has been put on hold.");
+                    now,
+                    chapter.PlannedReleaseDate,
+                    "Chapter has been released successfully.");
             }
             catch
             {

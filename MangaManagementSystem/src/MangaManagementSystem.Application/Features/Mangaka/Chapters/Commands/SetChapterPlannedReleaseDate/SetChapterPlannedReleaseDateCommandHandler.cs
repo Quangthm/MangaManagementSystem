@@ -3,7 +3,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Interfaces;
-using MangaManagementSystem.Application.Services;
 using MediatR;
 
 namespace MangaManagementSystem.Application.Features.Mangaka.Chapters.Commands.SetChapterPlannedReleaseDate
@@ -12,14 +11,11 @@ namespace MangaManagementSystem.Application.Features.Mangaka.Chapters.Commands.S
         : IRequestHandler<SetChapterPlannedReleaseDateCommand, SetChapterPlannedReleaseDateResponse>
     {
         private readonly IMangakaChapterRepository _repository;
-        private readonly ChapterSchedulingValidator _schedulingValidator;
 
         public SetChapterPlannedReleaseDateCommandHandler(
-            IMangakaChapterRepository repository,
-            ChapterSchedulingValidator schedulingValidator)
+            IMangakaChapterRepository repository)
         {
             _repository = repository;
-            _schedulingValidator = schedulingValidator;
         }
 
         public async Task<SetChapterPlannedReleaseDateResponse> Handle(
@@ -39,7 +35,6 @@ namespace MangaManagementSystem.Application.Features.Mangaka.Chapters.Commands.S
                 request.ActorUserId,
                 request.ChapterId,
                 request.PlannedReleaseDate,
-                _schedulingValidator,
                 cancellationToken);
         }
     }

@@ -80,6 +80,39 @@ namespace MangaManagementSystem.Infrastructure.Services
                 cancellationToken);
         }
 
+        public Task SendAccountApprovedEmailAsync(
+            string toEmail,
+            string displayName,
+            CancellationToken cancellationToken = default)
+        {
+            var normalizedDisplayName =
+                string.IsNullOrWhiteSpace(displayName)
+                    ? "there"
+                    : displayName.Trim();
+
+            var subject =
+                "Your MangaFlow account has been approved";
+
+            var body = string.Join(
+                Environment.NewLine,
+                $"Hello {normalizedDisplayName},",
+                string.Empty,
+                "Your MangaFlow account has been approved.",
+                string.Empty,
+                "You can now sign in and start using your account.",
+                string.Empty,
+                "If you did not request this account, you can ignore this email.",
+                string.Empty,
+                "- MangaFlow");
+
+            return SendEmailAsync(
+                toEmail,
+                subject,
+                body,
+                mockDetail: "Account approval notification",
+                cancellationToken);
+        }
+
         private async Task SendEmailAsync(
             string toEmail,
             string subject,

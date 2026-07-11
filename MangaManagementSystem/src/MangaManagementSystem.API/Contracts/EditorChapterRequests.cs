@@ -12,4 +12,9 @@ namespace MangaManagementSystem.API.Contracts
     {
         public string Reason { get; set; } = string.Empty;
     }
+
+    public sealed class EditorReleaseChapterRequest
+    {
+        public bool ConfirmRelease { get; set; }
+    }
 }

@@ -5,6 +5,7 @@
 @using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Application.DTOs.Editor
 @using MangaManagementSystem.Web.Services.Api
+@using MangaManagementSystem.Web.Helpers
 @attribute [Authorize(Roles = "Mangaka")]
 @inject IMangakaChapterApiClient ChapterClient
 @inject IMangakaSeriesApiClient SeriesClient
@@ -146,31 +147,26 @@
                                     {
                                         <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
                                                    OnClick="@(() => OpenEditDialog(chapter))"
->
+                                        >
                                             Edit
                                         </MudButton>
                                         <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
                                                    Disabled="@_actionInProgress"
                                                    OnClick="@(() => SubmitForReview(chapter.ChapterId))"
->
+                                        >
                                             Submit for Review
-                                        </MudButton>
-                                    }
-                                    else if (chapter.StatusCode == "APPROVED")
-                                    {
-                                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                                                   OnClick="@(() => OpenScheduleDialog(chapter))"
->
-                                            Schedule Release
                                         </MudButton>
                                     }
                                     @if (chapter.StatusCode is not ("CANCELLED" or "RELEASED"))
                                     {
-                                        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small"
+                                        var isSchedulingRelevant = chapter.StatusCode is "APPROVED" or "SCHEDULED" or "ON_HOLD";
+                                        <MudButton Variant="@(isSchedulingRelevant ? Variant.Filled : Variant.Outlined)"
+                                                   Color="@(isSchedulingRelevant ? Color.Primary : Color.Secondary)"
+                                                   Size="Size.Small"
                                                    StartIcon="@Icons.Material.Filled.CalendarMonth"
                                                    OnClick="@(() => NavigateToCalendar(chapter))"
                                         >
-                                            View Calendar
+                                            @(isSchedulingRelevant ? "Manage in Calendar" : "View Calendar")
                                         </MudButton>
                                     }
                                     @if (chapter.EditorialReviewHistory != null && chapter.EditorialReviewHistory.Count > 0)
@@ -269,37 +265,6 @@
             </DialogActions>
         </MudDialog>
 
-        @* Schedule Dialog *@
-        <MudDialog @bind-Visible="_showScheduleDialog" Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
-            <TitleContent>Schedule Release Date</TitleContent>
-            <DialogContent>
-                @if (_scheduleChapter != null)
-                {
-                    <MudText Typo="Typo.body2" Class="mb-2">
-                        <strong>@_scheduleChapter.ChapterNumberLabel</strong>
-                        @if (!string.IsNullOrWhiteSpace(_scheduleChapter.ChapterTitle))
-                        {
-                            <span>— @_scheduleChapter.ChapterTitle</span>
-                        }
-                    </MudText>
-                    <MudText Typo="Typo.caption" Class="mf-muted mb-3">
-                        Select a planned release date for this approved chapter.
-                    </MudText>
-                    <MudDatePicker @bind-Date="_scheduleDate" Label="Planned Release Date"
-                                   Variant="Variant.Outlined" Required="true"
-                                   MinDate="DateTime.Today"
-                                   HelperText="Must be today or later. Consider the series publication frequency." />
-                }
-            </DialogContent>
-            <DialogActions>
-                <MudButton OnClick="@(() => _showScheduleDialog = false)">Cancel</MudButton>
-                <MudButton Color="Color.Primary" Variant="Variant.Filled"
-                           Disabled="@(!_scheduleDate.HasValue || _actionInProgress)"
-                           OnClick="ScheduleChapter">
-                    Schedule
-                </MudButton>
-            </DialogActions>
-        </MudDialog>
     </div>
 </MangakaLayout>
 
@@ -326,11 +291,6 @@
     private MangakaChapterListItemDto? _editChapter;
     private string _editChapterNumberLabel = string.Empty;
     private string? _editChapterTitle;
-
-    // Schedule dialog state
-    private bool _showScheduleDialog;
-    private MangakaChapterListItemDto? _scheduleChapter;
-    private DateTime? _scheduleDate;
 
     private readonly HashSet<Guid> _expandedReviewHistoryChapterIds = new();
 
@@ -495,37 +455,6 @@
         }
     }
 
-    private void OpenScheduleDialog(MangakaChapterListItemDto chapter)
-    {
-        _scheduleChapter = chapter;
-        _scheduleDate = DateTime.Today.AddDays(7);
-        _showScheduleDialog = true;
-    }
-
-    private async Task ScheduleChapter()
-    {
-        if (_scheduleChapter == null || !_scheduleDate.HasValue)
-            return;
-
-        _actionInProgress = true;
-        try
-        {
-            var request = new ScheduleApprovedChapterRequest(_scheduleDate.Value);
-            await ChapterClient.ScheduleApprovedChapterAsync(_currentUserId, _scheduleChapter.ChapterId, request);
-            _showScheduleDialog = false;
-            Snackbar.Add("Chapter scheduled successfully.", Severity.Success);
-            await RefreshAfterMutation();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add(ex.Message, Severity.Error);
-        }
-        finally
-        {
-            _actionInProgress = false;
-        }
-    }
-
     private async Task RefreshAfterMutation()
     {
         try
@@ -621,7 +550,9 @@
     {
         var anchorDate = chapter.PlannedReleaseDate?.ToString("yyyy-MM-dd")
             ?? DateTime.UtcNow.ToString("yyyy-MM-dd");
-        Nav.NavigateTo(
-            $"/publication/schedule?seriesId={chapter.SeriesId}&anchorDate={anchorDate}");
+        var url = PublicationScheduleNavigation.BuildUrl(
+            chapter.SeriesId, chapter.SeriesSlug,
+            chapter.PlannedReleaseDate ?? DateTime.UtcNow.Date);
+        Nav.NavigateTo(url);
     }
 }

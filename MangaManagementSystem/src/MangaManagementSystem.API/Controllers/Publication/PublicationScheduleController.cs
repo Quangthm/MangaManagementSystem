@@ -83,5 +83,53 @@ namespace MangaManagementSystem.API.Controllers.Publication
                     statusCode: StatusCodes.Status500InternalServerError);
             }
         }
+
+        [HttpGet("series/by-slug/{slug}")]
+        public async Task<IActionResult> GetSeriesSuggestionBySlugAsync(
+            string slug,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                var result = await _scheduleRepository.GetSeriesSuggestionBySlugAsync(
+                    slug, cancellationToken);
+                return result is not null ? Ok(result) : NotFound();
+            }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(StatusCodes.Status499ClientClosedRequest);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error resolving series suggestion by slug.");
+                return Problem(
+                    detail: "We could not resolve this series right now.",
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
+        }
+
+        [HttpGet("series/by-id/{id:guid}")]
+        public async Task<IActionResult> GetSeriesSuggestionByIdAsync(
+            Guid id,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                var result = await _scheduleRepository.GetSeriesSuggestionByIdAsync(
+                    id, cancellationToken);
+                return result is not null ? Ok(result) : NotFound();
+            }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(StatusCodes.Status499ClientClosedRequest);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error resolving series suggestion by id.");
+                return Problem(
+                    detail: "We could not resolve this series right now.",
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
+        }
     }
 }

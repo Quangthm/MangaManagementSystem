@@ -2,7 +2,6 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Manga;
-using MangaManagementSystem.Application.Services;
 using MangaManagementSystem.Domain.Interfaces;
 using MediatR;
 
@@ -12,14 +11,11 @@ namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Comma
         : IRequestHandler<EditorSetChapterPlannedReleaseDateCommand, SetChapterPlannedReleaseDateResponse>
     {
         private readonly IEditorChapterReviewRepository _repository;
-        private readonly ChapterSchedulingValidator _schedulingValidator;
 
         public EditorSetChapterPlannedReleaseDateCommandHandler(
-            IEditorChapterReviewRepository repository,
-            ChapterSchedulingValidator schedulingValidator)
+            IEditorChapterReviewRepository repository)
         {
             _repository = repository;
-            _schedulingValidator = schedulingValidator;
         }
 
         public async Task<SetChapterPlannedReleaseDateResponse> Handle(
