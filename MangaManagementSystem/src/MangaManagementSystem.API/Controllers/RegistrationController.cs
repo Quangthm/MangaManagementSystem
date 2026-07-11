@@ -4,16 +4,11 @@ using MangaManagementSystem.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
-namespace MangaManagementSystem.API.Controllers
-{
-    /// <summary>
-    /// Thin HTTP boundary for the registration workflow. Controllers only:
-    /// receive the request, validate its shape, call the Application service,
-    /// and return a clean HTTP response. No business logic or SQL lives here.
-    /// </summary>
-    [ApiController]
-    [Route("api/registration")]
-    public class RegistrationController : ControllerBase
+namespace MangaManagementSystem.API.Controllers;
+
+[ApiController]
+[Route("api/registration")]
+public sealed class RegistrationController : ControllerBase
     {
         private readonly IAuthService _authService;
         private readonly ILogger<RegistrationController> _logger;
@@ -117,4 +112,3 @@ namespace MangaManagementSystem.API.Controllers
             }
         }
     }
-}

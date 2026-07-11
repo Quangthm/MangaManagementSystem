@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace MangaManagementSystem.Web.Services.Api
 {
     public sealed class ProfilePasswordApiClient
-        : IProfilePasswordApiClient
+        : BaseApiClient, IProfilePasswordApiClient
     {
         private readonly HttpClient _httpClient;
         private readonly ILogger<ProfilePasswordApiClient> _logger;
@@ -78,77 +78,6 @@ namespace MangaManagementSystem.Web.Services.Api
             throw new InvalidOperationException(message);
         }
 
-        private static async Task<string>
-            ExtractErrorMessageAsync(
-                HttpResponseMessage response,
-                string defaultMessage)
-        {
-            try
-            {
-                var body =
-                    await response.Content.ReadAsStringAsync();
 
-                if (string.IsNullOrWhiteSpace(body))
-                {
-                    return defaultMessage;
-                }
-
-                using var document =
-                    JsonDocument.Parse(body);
-
-                var root = document.RootElement;
-
-                if (root.TryGetProperty(
-                        "message",
-                        out var messageProperty) &&
-                    messageProperty.ValueKind ==
-                        JsonValueKind.String)
-                {
-                    var message =
-                        messageProperty.GetString();
-
-                    if (!string.IsNullOrWhiteSpace(message))
-                    {
-                        return message;
-                    }
-                }
-
-                if (root.TryGetProperty(
-                        "detail",
-                        out var detailProperty) &&
-                    detailProperty.ValueKind ==
-                        JsonValueKind.String)
-                {
-                    var detail =
-                        detailProperty.GetString();
-
-                    if (!string.IsNullOrWhiteSpace(detail))
-                    {
-                        return detail;
-                    }
-                }
-
-                if (root.TryGetProperty(
-                        "title",
-                        out var titleProperty) &&
-                    titleProperty.ValueKind ==
-                        JsonValueKind.String)
-                {
-                    var title =
-                        titleProperty.GetString();
-
-                    if (!string.IsNullOrWhiteSpace(title))
-                    {
-                        return title;
-                    }
-                }
-            }
-            catch (JsonException)
-            {
-                // Use the safe fallback message below.
-            }
-
-            return defaultMessage;
-        }
     }
 }

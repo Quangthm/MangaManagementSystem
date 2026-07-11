@@ -8,64 +8,44 @@ using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
-namespace MangaManagementSystem.API.Controllers.Editor
+namespace MangaManagementSystem.API.Controllers.Editor;
+
+[ApiController]
+[Authorize]
+[Route("api/editor/series")]
+public sealed class EditorSeriesController : BaseApiController
 {
-    [ApiController]
-    [Authorize]
-    [Route("api/editor/series")]
-    public class EditorSeriesController : ControllerBase
+
+    private readonly IMediator _mediator;
+    private readonly ILogger<EditorSeriesController> _logger;
+
+    public EditorSeriesController(
+        IMediator mediator,
+        ILogger<EditorSeriesController> logger)
     {
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
+        _mediator = mediator;
+        _logger = logger;
+    }
 
-        private readonly IMediator _mediator;
-        private readonly ILogger<EditorSeriesController> _logger;
+    [HttpGet]
+    public async Task<IActionResult> GetSeriesAsync(CancellationToken cancellationToken)
+    {
+        var actorUserId = ResolveActorUserId();
 
-        public EditorSeriesController(
-            IMediator mediator,
-            ILogger<EditorSeriesController> logger)
+        try
         {
-            _mediator = mediator;
-            _logger = logger;
+            EditorSeriesListDto result =
+                await _mediator.Send(new GetEditorSeriesQuery(actorUserId), cancellationToken);
+            return Ok(result);
         }
-
-        [HttpGet]
-        public async Task<IActionResult> GetSeriesAsync(CancellationToken cancellationToken)
+        catch (Exception ex)
         {
-            if (!TryResolveActorUserId(out var actorUserId))
-            {
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
-            }
-
-            try
-            {
-                EditorSeriesListDto result =
-                    await _mediator.Send(new GetEditorSeriesQuery(actorUserId), cancellationToken);
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unexpected error loading editor series library.");
-                return Problem(
-                    detail: "We could not load the series library right now. Please try again later.",
-                    statusCode: StatusCodes.Status500InternalServerError);
-            }
-        }
-
-        private bool TryResolveActorUserId(out Guid actorUserId)
-        {
-            actorUserId = Guid.Empty;
-
-            if (Request.Headers.TryGetValue(ActorUserIdHeader, out var headerValues))
-            {
-                string? raw = headerValues.ToString();
-                if (Guid.TryParse(raw, out actorUserId) && actorUserId != Guid.Empty)
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            _logger.LogError(ex, "Unexpected error loading editor series library.");
+            return Problem(
+                detail: "We could not load the series library right now. Please try again later.",
+                statusCode: StatusCodes.Status500InternalServerError);
         }
     }
+
 }
+

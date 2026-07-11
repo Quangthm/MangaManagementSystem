@@ -1,4 +1,4 @@
-using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.Domain.ReadModels;
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace MangaManagementSystem.Web.Services.Api
 {
-    public class MangakaSeriesContributorApiClient : IMangakaSeriesContributorApiClient
+    public sealed class MangakaSeriesContributorApiClient : BaseApiClient, IMangakaSeriesContributorApiClient
     {
         private const string ActorUserIdHeader = "X-Actor-User-Id";
 
@@ -29,7 +29,11 @@ namespace MangaManagementSystem.Web.Services.Api
             request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await ExtractErrorMessageAsync(response, "The request could not be completed.", cancellationToken);
+                throw new InvalidOperationException(errorContent);
+            }
 
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
             return JsonSerializer.Deserialize<List<SeriesContributorListItemDto>>(content, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<SeriesContributorListItemDto>();
@@ -51,7 +55,11 @@ namespace MangaManagementSystem.Web.Services.Api
             request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await ExtractErrorMessageAsync(response, "The request could not be completed.", cancellationToken);
+                throw new InvalidOperationException(errorContent);
+            }
 
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
             return JsonSerializer.Deserialize<List<EligibleAssistantContributorDto>>(content, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<EligibleAssistantContributorDto>();
@@ -68,7 +76,11 @@ namespace MangaManagementSystem.Web.Services.Api
             httpRequest.Content = JsonContent.Create(request);
 
             var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await ExtractErrorMessageAsync(response, "The request could not be completed.", cancellationToken);
+                throw new InvalidOperationException(errorContent);
+            }
         }
 
         public async Task EndAssistantAsync(
@@ -83,19 +95,13 @@ namespace MangaManagementSystem.Web.Services.Api
             httpRequest.Content = JsonContent.Create(request);
 
             var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
-        }
-
-        private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken ct)
-        {
             if (!response.IsSuccessStatusCode)
             {
-                var errorContent = await response.Content.ReadAsStringAsync(ct);
-                throw new HttpRequestException(
-                    $"API returned {(int)response.StatusCode}: {errorContent}",
-                    null,
-                    response.StatusCode);
+                var errorContent = await ExtractErrorMessageAsync(response, "The request could not be completed.", cancellationToken);
+                throw new InvalidOperationException(errorContent);
             }
         }
+
+
     }
 }

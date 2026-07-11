@@ -1,5 +1,5 @@
-using MangaManagementSystem.Application.DTOs.Manga;
-using MangaManagementSystem.Application.Interfaces;
+using MangaManagementSystem.Domain.Interfaces;
+using MangaManagementSystem.Domain.ReadModels;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;

@@ -1,4 +1,5 @@
 @page "/admin/board-polls"
+@layout AdminLayout
 @attribute [Authorize(Roles = "Admin")]
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
@@ -6,7 +7,6 @@
 
 <PageTitle>Board Poll Management - MangaFlow</PageTitle>
 
-<AdminLayout>
     <div class="mf-page">
         <div class="mf-page-header">
             <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Board Poll Management</MudText>
@@ -208,7 +208,6 @@
             </DialogActions>
         </MudDialog>
     </div>
-</AdminLayout>
 
 @code {
     private record BoardPollRow(Guid SeriesBoardPollId, string SeriesTitle, string PollTypeCode, string? BoardPublicationFrequencyCode, string PollStatusCode, string CreatedByName, DateTime? EndsAtUtc);

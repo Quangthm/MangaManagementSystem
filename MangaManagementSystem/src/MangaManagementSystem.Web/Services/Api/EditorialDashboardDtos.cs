@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace MangaManagementSystem.Web.Services.EditorialBoard;
+namespace MangaManagementSystem.Web.Services.Api;
 
 public sealed record EditorialDashboardDto(
     int ProposalReviewCount,

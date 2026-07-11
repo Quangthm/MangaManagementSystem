@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MangaManagementSystem.Web.Services.Api
 {
-    public class RegistrationApiClient : IRegistrationApiClient
+    public sealed class RegistrationApiClient : BaseApiClient, IRegistrationApiClient
     {
         private readonly HttpClient _httpClient;
         private readonly ILogger<RegistrationApiClient> _logger;
@@ -79,77 +79,6 @@ namespace MangaManagementSystem.Web.Services.Api
             throw new InvalidOperationException(message);
         }
 
-        private static async Task<string> ExtractErrorMessageAsync(HttpResponseMessage response)
-        {
-            try
-            {
-                var body = await response.Content.ReadAsStringAsync();
-                if (string.IsNullOrWhiteSpace(body))
-                {
-                    return "An unexpected error occurred. Please try again.";
-                }
 
-                using var doc = JsonDocument.Parse(body);
-                var root = doc.RootElement;
-
-                // ApiErrorResponse: { "message": "..." }
-                if (root.TryGetProperty("message", out var msgProp) && msgProp.ValueKind == JsonValueKind.String)
-                {
-                    var msg = msgProp.GetString();
-                    if (!string.IsNullOrWhiteSpace(msg))
-                    {
-                        return msg;
-                    }
-                }
-
-                // ProblemDetails / ValidationProblemDetails: { "detail": "...", "title": "...", "errors": { ... } }
-                if (root.TryGetProperty("detail", out var detailProp) && detailProp.ValueKind == JsonValueKind.String)
-                {
-                    var detail = detailProp.GetString();
-                    if (!string.IsNullOrWhiteSpace(detail))
-                    {
-                        return detail;
-                    }
-                }
-
-                // ValidationProblemDetails errors dictionary — return the first error message
-                if (root.TryGetProperty("errors", out var errorsProp) && errorsProp.ValueKind == JsonValueKind.Object)
-                {
-                    foreach (var error in errorsProp.EnumerateObject())
-                    {
-                        if (error.Value.ValueKind == JsonValueKind.Array)
-                        {
-                            foreach (var msg in error.Value.EnumerateArray())
-                            {
-                                if (msg.ValueKind == JsonValueKind.String)
-                                {
-                                    var errMsg = msg.GetString();
-                                    if (!string.IsNullOrWhiteSpace(errMsg))
-                                    {
-                                        return errMsg;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Fall back to title if nothing else found
-                if (root.TryGetProperty("title", out var titleProp) && titleProp.ValueKind == JsonValueKind.String)
-                {
-                    var title = titleProp.GetString();
-                    if (!string.IsNullOrWhiteSpace(title))
-                    {
-                        return title;
-                    }
-                }
-            }
-            catch (JsonException)
-            {
-                // Response body is not valid JSON — ignore and fall through.
-            }
-
-            return "An unexpected error occurred. Please try again.";
-        }
     }
 }

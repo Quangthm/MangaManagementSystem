@@ -1,8 +1,10 @@
 @page "/mangaka/review-submissions"
+@layout MangakaLayout
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
 @using MangaManagementSystem.Application.DTOs.Manga
+@using MangaManagementSystem.Domain.ReadModels
 @using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Mangaka")]
 @inject IMangakaTaskApiClient MangakaTaskClient
@@ -12,7 +14,6 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @using MangaManagementSystem.Web.Services
 
-<MangakaLayout>
     <div class="mf-page">
         <MudButton Variant="Variant.Text"
                    StartIcon="@Icons.Material.Filled.ArrowBack"
@@ -537,7 +538,6 @@
         </MudDialog>
 
     </div>
-</MangakaLayout>
 
 @code {
     private Guid _currentUserId;

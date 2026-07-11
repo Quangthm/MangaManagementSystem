@@ -1,11 +1,12 @@
 using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.Domain.ReadModels;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 
 namespace MangaManagementSystem.Web.Services.Api
 {
-    public class MangakaTaskApiClient : IMangakaTaskApiClient
+    public sealed class MangakaTaskApiClient : BaseApiClient, IMangakaTaskApiClient
     {
         private const string ActorUserIdHeader = "X-Actor-User-Id";
 
@@ -28,7 +29,11 @@ namespace MangaManagementSystem.Web.Services.Api
             request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await ExtractErrorMessageAsync(response, "The request could not be completed.", cancellationToken);
+                throw new InvalidOperationException(errorContent);
+            }
 
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
             return JsonSerializer.Deserialize<List<ChapterPageTaskDto>>(content, _jsonOptions) ?? new List<ChapterPageTaskDto>();
@@ -44,7 +49,11 @@ namespace MangaManagementSystem.Web.Services.Api
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
                 return null;
 
-            await EnsureSuccessAsync(response, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await ExtractErrorMessageAsync(response, "The request could not be completed.", cancellationToken);
+                throw new InvalidOperationException(errorContent);
+            }
 
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
             return JsonSerializer.Deserialize<ChapterPageTaskDto>(content, _jsonOptions);
@@ -59,7 +68,11 @@ namespace MangaManagementSystem.Web.Services.Api
                 Encoding.UTF8, "application/json");
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await ExtractErrorMessageAsync(response, "The request could not be completed.", cancellationToken);
+                throw new InvalidOperationException(errorContent);
+            }
         }
 
         public async Task ReturnTaskForReworkAsync(Guid actorUserId, Guid taskId, string reason, CancellationToken cancellationToken = default)
@@ -71,7 +84,11 @@ namespace MangaManagementSystem.Web.Services.Api
                 Encoding.UTF8, "application/json");
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await ExtractErrorMessageAsync(response, "The request could not be completed.", cancellationToken);
+                throw new InvalidOperationException(errorContent);
+            }
         }
 
         public async Task CancelTaskAsync(Guid actorUserId, Guid taskId, string reason, CancellationToken cancellationToken = default)
@@ -83,7 +100,11 @@ namespace MangaManagementSystem.Web.Services.Api
                 Encoding.UTF8, "application/json");
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await ExtractErrorMessageAsync(response, "The request could not be completed.", cancellationToken);
+                throw new InvalidOperationException(errorContent);
+            }
         }
 
         public async Task<ChapterPageTaskDto> CreateTaskAsync(Guid actorUserId, CreateMangakaTaskRequest request, CancellationToken cancellationToken = default)
@@ -95,7 +116,11 @@ namespace MangaManagementSystem.Web.Services.Api
                 Encoding.UTF8, "application/json");
 
             var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await ExtractErrorMessageAsync(response, "The request could not be completed.", cancellationToken);
+                throw new InvalidOperationException(errorContent);
+            }
 
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
             return JsonSerializer.Deserialize<ChapterPageTaskDto>(content, _jsonOptions)
@@ -109,7 +134,11 @@ namespace MangaManagementSystem.Web.Services.Api
             request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await ExtractErrorMessageAsync(response, "The request could not be completed.", cancellationToken);
+                throw new InvalidOperationException(errorContent);
+            }
 
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
             return JsonSerializer.Deserialize<List<ChapterPageTaskDto>>(content, _jsonOptions) ?? new List<ChapterPageTaskDto>();
@@ -121,7 +150,11 @@ namespace MangaManagementSystem.Web.Services.Api
             request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await ExtractErrorMessageAsync(response, "The request could not be completed.", cancellationToken);
+                throw new InvalidOperationException(errorContent);
+            }
 
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
             return JsonSerializer.Deserialize<List<EligibleAssistantDto>>(content, _jsonOptions) ?? new List<EligibleAssistantDto>();
@@ -141,24 +174,18 @@ namespace MangaManagementSystem.Web.Services.Api
                 Encoding.UTF8, "application/json");
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await ExtractErrorMessageAsync(response, "The request could not be completed.", cancellationToken);
+                throw new InvalidOperationException(errorContent);
+            }
 
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
             return JsonSerializer.Deserialize<ReassignChapterPageTaskResult>(content, _jsonOptions)
                 ?? throw new InvalidOperationException("Failed to parse reassignment result.");
         }
 
-        private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken ct)
-        {
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorContent = await response.Content.ReadAsStringAsync(ct);
-                throw new HttpRequestException(
-                    $"API returned {(int)response.StatusCode}: {errorContent}",
-                    null,
-                    response.StatusCode);
-            }
-        }
+
 
         // --- Quick Select ---
 
@@ -168,7 +195,11 @@ namespace MangaManagementSystem.Web.Services.Api
             request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await ExtractErrorMessageAsync(response, "The request could not be completed.", cancellationToken);
+                throw new InvalidOperationException(errorContent);
+            }
 
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
             return JsonSerializer.Deserialize<List<QuickSelectChapterDto>>(content, _jsonOptions) ?? new List<QuickSelectChapterDto>();
@@ -179,7 +210,11 @@ namespace MangaManagementSystem.Web.Services.Api
             using var request = new HttpRequestMessage(HttpMethod.Get, $"api/mangaka/chapters/{chapterId}/pages/quick-select");
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await ExtractErrorMessageAsync(response, "The request could not be completed.", cancellationToken);
+                throw new InvalidOperationException(errorContent);
+            }
 
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
             return JsonSerializer.Deserialize<List<QuickSelectPageDto>>(content, _jsonOptions) ?? new List<QuickSelectPageDto>();
@@ -191,7 +226,11 @@ namespace MangaManagementSystem.Web.Services.Api
             request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await ExtractErrorMessageAsync(response, "The request could not be completed.", cancellationToken);
+                throw new InvalidOperationException(errorContent);
+            }
 
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
             return JsonSerializer.Deserialize<List<QuickSelectAssistantDto>>(content, _jsonOptions) ?? new List<QuickSelectAssistantDto>();
@@ -206,7 +245,11 @@ namespace MangaManagementSystem.Web.Services.Api
                 Encoding.UTF8, "application/json");
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await ExtractErrorMessageAsync(response, "The request could not be completed.", cancellationToken);
+                throw new InvalidOperationException(errorContent);
+            }
 
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
             return JsonSerializer.Deserialize<QuickSelectTaskAssignmentResult>(content, _jsonOptions)

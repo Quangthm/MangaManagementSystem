@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace MangaManagementSystem.Web.Services.Api
 {
-    public class MangakaPageRegionApiClient : IMangakaPageRegionApiClient
+    public sealed class MangakaPageRegionApiClient : BaseApiClient, IMangakaPageRegionApiClient
     {
         private const string ActorUserIdHeader = "X-Actor-User-Id";
 
@@ -28,7 +28,11 @@ namespace MangaManagementSystem.Web.Services.Api
             request.Content = new StringContent(JsonSerializer.Serialize(dto, _jsonOptions), Encoding.UTF8, "application/json");
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await ExtractErrorMessageAsync(response, "The request could not be completed.", cancellationToken);
+                throw new InvalidOperationException(errorContent);
+            }
 
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
             return JsonSerializer.Deserialize<PageRegionDto>(content, _jsonOptions)
@@ -44,7 +48,11 @@ namespace MangaManagementSystem.Web.Services.Api
                 Encoding.UTF8, "application/json");
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await ExtractErrorMessageAsync(response, "The request could not be completed.", cancellationToken);
+                throw new InvalidOperationException(errorContent);
+            }
         }
 
         public async Task<IReadOnlyList<PageRegionDto>> GetByVersionsAsync(Guid actorUserId, IReadOnlyList<Guid> versionIds, CancellationToken cancellationToken = default)
@@ -56,7 +64,11 @@ namespace MangaManagementSystem.Web.Services.Api
                 Encoding.UTF8, "application/json");
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await ExtractErrorMessageAsync(response, "The request could not be completed.", cancellationToken);
+                throw new InvalidOperationException(errorContent);
+            }
 
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
             return JsonSerializer.Deserialize<List<PageRegionDto>>(content, _jsonOptions) ?? new List<PageRegionDto>();
@@ -71,25 +83,16 @@ namespace MangaManagementSystem.Web.Services.Api
                 Encoding.UTF8, "application/json");
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await ExtractErrorMessageAsync(response, "The request could not be completed.", cancellationToken);
+                throw new InvalidOperationException(errorContent);
+            }
 
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
             return JsonSerializer.Deserialize<Dictionary<Guid, int>>(content, _jsonOptions) ?? new Dictionary<Guid, int>();
         }
 
-        private async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken cancellationToken)
-        {
-            if (response.IsSuccessStatusCode) return;
 
-            string message = "The request could not be completed. Please try again.";
-            try
-            {
-                var body = await response.Content.ReadAsStringAsync(cancellationToken);
-                if (!string.IsNullOrWhiteSpace(body)) message = body.Trim('"');
-            }
-            catch { /* keep default */ }
-
-            throw new InvalidOperationException(message);
-        }
     }
 }

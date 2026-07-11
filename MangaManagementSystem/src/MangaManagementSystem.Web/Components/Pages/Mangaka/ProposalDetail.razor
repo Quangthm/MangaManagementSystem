@@ -1,9 +1,9 @@
 @page "/mangaka/proposals/{ProposalId:guid}"
+@layout MangakaLayout
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
 @using MangaManagementSystem.Application.DTOs.Manga
-@using MangaManagementSystem.Web.Components.Layouts
 @using MangaManagementSystem.Web.Services.Api
 @using MangaManagementSystem.Web.Components.Shared
 @attribute [Authorize(Roles = "Mangaka")]
@@ -12,7 +12,6 @@
 @inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthStateProvider
 
-<MangakaLayout>
     <div class="mf-page" style="padding: 24px;">
         <MudButton Variant="Variant.Text"
                    StartIcon="@Icons.Material.Filled.ArrowBack"
@@ -43,7 +42,6 @@
             <MudAlert Severity="Severity.Warning">Proposal not found or you do not have access.</MudAlert>
         }
     </div>
-</MangakaLayout>
 
 @code {
     [Parameter] public Guid ProposalId { get; set; }

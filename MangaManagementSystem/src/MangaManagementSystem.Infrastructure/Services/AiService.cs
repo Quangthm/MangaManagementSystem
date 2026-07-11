@@ -8,7 +8,6 @@ namespace MangaManagementSystem.Infrastructure.Services;
 public class AiService : IAiService
 {
     private readonly HttpClient _httpClient;
-    private readonly string _baseUrl = "http://127.0.0.1:8000/api/ai";
 
     public AiService(HttpClient httpClient)
     {
@@ -22,7 +21,7 @@ public class AiService : IAiService
         fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse(contentType);
         content.Add(fileContent, "file", fileName);
 
-        var response = await _httpClient.PostAsync($"{_baseUrl}/segment", content);
+        var response = await _httpClient.PostAsync("segment", content);
         if (response.IsSuccessStatusCode)
         {
             var json = await response.Content.ReadAsStringAsync();
@@ -36,7 +35,7 @@ public class AiService : IAiService
         var jsonContent = JsonSerializer.Serialize(request);
         var content = new StringContent(jsonContent, System.Text.Encoding.UTF8, "application/json");
 
-        var response = await _httpClient.PostAsync($"{_baseUrl}/translate-selected", content);
+        var response = await _httpClient.PostAsync("translate-selected", content);
         if (response.IsSuccessStatusCode)
         {
             var json = await response.Content.ReadAsStringAsync();

@@ -17,7 +17,7 @@ namespace MangaManagementSystem.Web.Services.Api
     /// HttpClient-backed implementation of <see cref="IEditorChapterReviewApiClient"/>. Sends
     /// the transitional X-Actor-User-Id header and parses safe error messages for UI display.
     /// </summary>
-    public class EditorChapterReviewApiClient : IEditorChapterReviewApiClient
+    public sealed class EditorChapterReviewApiClient : BaseApiClient, IEditorChapterReviewApiClient
     {
         private const string ActorUserIdHeader = "X-Actor-User-Id";
         private const long MaxMarkupFileSize = 10 * 1024 * 1024; // 10 MB
@@ -286,43 +286,6 @@ namespace MangaManagementSystem.Web.Services.Api
             throw new InvalidOperationException(message);
         }
 
-        private static async Task<string> ExtractErrorMessageAsync(HttpResponseMessage response)
-        {
-            try
-            {
-                var body = await response.Content.ReadAsStringAsync();
-                if (string.IsNullOrWhiteSpace(body))
-                {
-                    return "An unexpected error occurred. Please try again.";
-                }
 
-                using var doc = JsonDocument.Parse(body);
-                var root = doc.RootElement;
-
-                if (root.TryGetProperty("message", out var msgProp) && msgProp.ValueKind == JsonValueKind.String)
-                {
-                    var msg = msgProp.GetString();
-                    if (!string.IsNullOrWhiteSpace(msg)) return msg;
-                }
-
-                if (root.TryGetProperty("detail", out var detailProp) && detailProp.ValueKind == JsonValueKind.String)
-                {
-                    var detail = detailProp.GetString();
-                    if (!string.IsNullOrWhiteSpace(detail)) return detail;
-                }
-
-                if (root.TryGetProperty("title", out var titleProp) && titleProp.ValueKind == JsonValueKind.String)
-                {
-                    var title = titleProp.GetString();
-                    if (!string.IsNullOrWhiteSpace(title)) return title;
-                }
-            }
-            catch (JsonException)
-            {
-                // Not valid JSON — fall through.
-            }
-
-            return "An unexpected error occurred. Please try again.";
-        }
     }
 }

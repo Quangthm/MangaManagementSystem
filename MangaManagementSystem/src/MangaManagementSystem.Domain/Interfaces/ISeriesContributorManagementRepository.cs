@@ -1,10 +1,10 @@
-using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.Domain.ReadModels;
 using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace MangaManagementSystem.Application.Interfaces
+namespace MangaManagementSystem.Domain.Interfaces
 {
     /// <summary>
     /// Focused repository abstraction for Mangaka contributor-management workflows.

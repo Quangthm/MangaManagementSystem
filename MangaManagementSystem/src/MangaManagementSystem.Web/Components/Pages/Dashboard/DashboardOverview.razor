@@ -1,9 +1,9 @@
 @page "/dashboard"
+@layout DashboardLayout
 @using Microsoft.AspNetCore.Components.Authorization
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthStateProvider
 
-<DashboardLayout>
     <div class="mf-page">
         <div class="mf-page-header">
             <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Demo Workspace Overview</MudText>
@@ -53,7 +53,6 @@
     }
 
     </div>
-</DashboardLayout>
 
 @code {
     private bool _redirecting = true;

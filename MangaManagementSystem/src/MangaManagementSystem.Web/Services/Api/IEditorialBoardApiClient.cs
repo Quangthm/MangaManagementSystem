@@ -1,4 +1,4 @@
-﻿namespace MangaManagementSystem.Web.Services.EditorialBoard;
+namespace MangaManagementSystem.Web.Services.Api;
 
 public interface IEditorialBoardApiClient
 {

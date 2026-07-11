@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace MangaManagementSystem.Application.DTOs.Manga
+namespace MangaManagementSystem.Domain.ReadModels
 {
     public sealed record QuickSelectChapterDto(
         Guid ChapterId,

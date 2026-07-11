@@ -8,91 +8,90 @@ using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
 using MediatR;
 
-namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Queries.GetEditorialProposalQueue
+namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Queries.GetEditorialProposalQueue;
+
+/// <summary>
+/// Handles GetEditorialProposalQueueQuery by reading the editorial queue (filterable by
+/// status) and mapping each proposal to a read-only ProposalQueueItemDto.
+/// Also computes CurrentEditorIsActiveContributor per proposal using the actor's
+/// active Tantou Editor contributor memberships.
+/// </summary>
+public sealed class GetEditorialProposalQueueQueryHandler
+    : IRequestHandler<GetEditorialProposalQueueQuery, IReadOnlyList<ProposalQueueItemDto>>
 {
-    /// <summary>
-    /// Handles GetEditorialProposalQueueQuery by reading the editorial queue (filterable by
-    /// status) and mapping each proposal to a read-only ProposalQueueItemDto.
-    /// Also computes CurrentEditorIsActiveContributor per proposal using the actor's
-    /// active Tantou Editor contributor memberships.
-    /// </summary>
-    public sealed class GetEditorialProposalQueueQueryHandler
-        : IRequestHandler<GetEditorialProposalQueueQuery, IReadOnlyList<ProposalQueueItemDto>>
+    private readonly ISeriesProposalRepository _seriesProposalRepository;
+
+    public GetEditorialProposalQueueQueryHandler(ISeriesProposalRepository seriesProposalRepository)
     {
-        private readonly ISeriesProposalRepository _seriesProposalRepository;
+        _seriesProposalRepository = seriesProposalRepository;
+    }
 
-        public GetEditorialProposalQueueQueryHandler(ISeriesProposalRepository seriesProposalRepository)
+    public async Task<IReadOnlyList<ProposalQueueItemDto>> Handle(
+        GetEditorialProposalQueueQuery request,
+        CancellationToken cancellationToken)
+    {
+        var statusCode = string.IsNullOrWhiteSpace(request.StatusCode) ? null : request.StatusCode;
+
+        var proposals = await _seriesProposalRepository.GetEditorialQueueAsync(
+            statusCode,
+            seriesId: null,
+            submittedByUserId: null,
+            reviewedByUserId: null,
+            cancellationToken);
+
+        // Determine which series the current actor is an active Tantou Editor contributor for.
+        HashSet<Guid> activeContributorSeriesIds = new();
+        if (request.ActorUserId != Guid.Empty && proposals.Count > 0)
         {
-            _seriesProposalRepository = seriesProposalRepository;
+            var distinctSeriesIds = proposals.Select(p => p.SeriesId).Distinct().ToList();
+            var activeSeriesIds = await _seriesProposalRepository
+                .GetActiveTantouEditorContributorSeriesIdsAsync(distinctSeriesIds, request.ActorUserId, cancellationToken);
+            activeContributorSeriesIds = new HashSet<Guid>(activeSeriesIds);
         }
 
-        public async Task<IReadOnlyList<ProposalQueueItemDto>> Handle(
-            GetEditorialProposalQueueQuery request,
-            CancellationToken cancellationToken)
-        {
-            var statusCode = string.IsNullOrWhiteSpace(request.StatusCode) ? null : request.StatusCode;
+        return proposals.Select(p => MapToDto(p, activeContributorSeriesIds.Contains(p.SeriesId))).ToList();
+    }
 
-            var proposals = await _seriesProposalRepository.GetEditorialQueueAsync(
-                statusCode,
-                seriesId: null,
-                submittedByUserId: null,
-                reviewedByUserId: null,
-                cancellationToken);
+    private static ProposalQueueItemDto MapToDto(SeriesProposal p, bool isActiveContributor) => new(
+        p.SeriesProposalId,
+        p.SeriesId,
+        p.Series?.Title ?? string.Empty,
+        p.Series?.Slug ?? string.Empty,
+        p.ProposalVersionNo,
+        p.ProposalTitle,
+        p.SynopsisSnapshot,
+        MapGenres(p.Series?.Genres),
+        MapTags(p.Series?.Tags),
+        p.StatusCode,
+        p.SubmittedByUserId,
+        p.SubmittedByUser?.DisplayName ?? string.Empty,
+        p.SubmittedAtUtc,
+        p.ReviewedByUserId,
+        p.ReviewedByUser?.DisplayName,
+        p.ReviewedAtUtc,
+        p.Comments,
+        p.ProposalFileId,
+        p.ProposalFile?.CloudinarySecureUrl,
+        p.ProposalFile?.OriginalFileName,
+        p.MarkupFileId,
+        p.MarkupFile?.CloudinarySecureUrl,
+        CurrentEditorIsActiveContributor: isActiveContributor);
 
-            // Determine which series the current actor is an active Tantou Editor contributor for.
-            HashSet<Guid> activeContributorSeriesIds = new();
-            if (request.ActorUserId != Guid.Empty && proposals.Count > 0)
-            {
-                var distinctSeriesIds = proposals.Select(p => p.SeriesId).Distinct().ToList();
-                var activeSeriesIds = await _seriesProposalRepository
-                    .GetActiveTantouEditorContributorSeriesIdsAsync(distinctSeriesIds, request.ActorUserId, cancellationToken);
-                activeContributorSeriesIds = new HashSet<Guid>(activeSeriesIds);
-            }
+    private static IReadOnlyList<GenreDto> MapGenres(IEnumerable<Domain.Entities.Genre>? genres)
+    {
+        return genres?
+            .OrderBy(g => g.GenreName)
+            .Select(g => new GenreDto(g.GenreId, g.GenreName))
+            .ToList()
+            ?? new List<GenreDto>();
+    }
 
-            return proposals.Select(p => MapToDto(p, activeContributorSeriesIds.Contains(p.SeriesId))).ToList();
-        }
-
-        private static ProposalQueueItemDto MapToDto(SeriesProposal p, bool isActiveContributor) => new(
-            p.SeriesProposalId,
-            p.SeriesId,
-            p.Series?.Title ?? string.Empty,
-            p.Series?.Slug ?? string.Empty,
-            p.ProposalVersionNo,
-            p.ProposalTitle,
-            p.SynopsisSnapshot,
-            MapGenres(p.Series?.Genres),
-            MapTags(p.Series?.Tags),
-            p.StatusCode,
-            p.SubmittedByUserId,
-            p.SubmittedByUser?.DisplayName ?? string.Empty,
-            p.SubmittedAtUtc,
-            p.ReviewedByUserId,
-            p.ReviewedByUser?.DisplayName,
-            p.ReviewedAtUtc,
-            p.Comments,
-            p.ProposalFileId,
-            p.ProposalFile?.CloudinarySecureUrl,
-            p.ProposalFile?.OriginalFileName,
-            p.MarkupFileId,
-            p.MarkupFile?.CloudinarySecureUrl,
-            CurrentEditorIsActiveContributor: isActiveContributor);
-
-        private static IReadOnlyList<GenreDto> MapGenres(IEnumerable<Domain.Entities.Genre>? genres)
-        {
-            return genres?
-                .OrderBy(g => g.GenreName)
-                .Select(g => new GenreDto(g.GenreId, g.GenreName))
-                .ToList()
-                ?? new List<GenreDto>();
-        }
-
-        private static IReadOnlyList<TagDto> MapTags(IEnumerable<Domain.Entities.Tag>? tags)
-        {
-            return tags?
-                .OrderBy(t => t.TagName)
-                .Select(t => new TagDto(t.TagId, t.TagName))
-                .ToList()
-                ?? new List<TagDto>();
-        }
+    private static IReadOnlyList<TagDto> MapTags(IEnumerable<Domain.Entities.Tag>? tags)
+    {
+        return tags?
+            .OrderBy(t => t.TagName)
+            .Select(t => new TagDto(t.TagId, t.TagName))
+            .ToList()
+            ?? new List<TagDto>();
     }
 }

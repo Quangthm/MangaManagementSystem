@@ -5,22 +5,22 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using MangaManagementSystem.Application.Features.Publication.Schedule.Queries.GetPublicationScheduleCalendar;
+using MangaManagementSystem.Application.DTOs.Publication;
 using MangaManagementSystem.Domain.Interfaces;
 using Microsoft.Extensions.Logging;
 
-namespace MangaManagementSystem.Web.Services.Api
-{
-    public class PublicationScheduleApiClient : IPublicationScheduleApiClient
-    {
-        private readonly HttpClient _httpClient;
-        private readonly ILogger<PublicationScheduleApiClient> _logger;
+namespace MangaManagementSystem.Web.Services.Api;
 
-        public PublicationScheduleApiClient(HttpClient httpClient, ILogger<PublicationScheduleApiClient> logger)
-        {
-            _httpClient = httpClient;
-            _logger = logger;
-        }
+public sealed class PublicationScheduleApiClient : BaseApiClient, IPublicationScheduleApiClient
+{
+    private readonly HttpClient _httpClient;
+    private readonly ILogger<PublicationScheduleApiClient> _logger;
+
+    public PublicationScheduleApiClient(HttpClient httpClient, ILogger<PublicationScheduleApiClient> logger)
+    {
+        _httpClient = httpClient;
+        _logger = logger;
+    }
 
         public async Task<PublicationScheduleCalendarDto> GetScheduleAsync(
             DateTime? anchorDate = null,
@@ -92,4 +92,3 @@ namespace MangaManagementSystem.Web.Services.Api
             return Array.Empty<PublicationScheduleSeriesSuggestion>();
         }
     }
-}

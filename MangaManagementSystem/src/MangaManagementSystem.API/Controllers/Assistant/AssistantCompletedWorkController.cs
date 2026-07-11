@@ -9,67 +9,47 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
-namespace MangaManagementSystem.API.Controllers.Assistant
+namespace MangaManagementSystem.API.Controllers.Assistant;
+
+[ApiController]
+[Authorize]
+[Route("api/assistant/completed-work")]
+public sealed class AssistantCompletedWorkController : BaseApiController
 {
-    [ApiController]
-    [Authorize]
-    [Route("api/assistant/completed-work")]
-    public class AssistantCompletedWorkController : ControllerBase
+
+    private readonly IMediator _mediator;
+    private readonly ILogger<AssistantCompletedWorkController> _logger;
+
+    public AssistantCompletedWorkController(
+        IMediator mediator,
+        ILogger<AssistantCompletedWorkController> logger)
     {
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
+        _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
 
-        private readonly IMediator _mediator;
-        private readonly ILogger<AssistantCompletedWorkController> _logger;
+    [HttpGet]
+    public async Task<IActionResult> GetCompletedWorkAsync(CancellationToken cancellationToken)
+    {
+        var actorUserId = ResolveActorUserId();
 
-        public AssistantCompletedWorkController(
-            IMediator mediator,
-            ILogger<AssistantCompletedWorkController> logger)
+        try
         {
-            _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            AssistantCompletedWorkSummaryDto result =
+                await _mediator.Send(
+                    new GetAssistantCompletedWorkQuery(actorUserId), cancellationToken);
+            return Ok(result);
         }
-
-        [HttpGet]
-        public async Task<IActionResult> GetCompletedWorkAsync(CancellationToken cancellationToken)
+        catch (Exception ex)
         {
-            if (!TryResolveActorUserId(out var actorUserId))
-            {
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
-            }
-
-            try
-            {
-                AssistantCompletedWorkSummaryDto result =
-                    await _mediator.Send(
-                        new GetAssistantCompletedWorkQuery(actorUserId), cancellationToken);
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex,
-                    "Unexpected error loading completed work summary for user {ActorUserId}.",
-                    actorUserId);
-                return Problem(
-                    detail: "We could not load your completed work summary right now. Please try again later.",
-                    statusCode: StatusCodes.Status500InternalServerError);
-            }
-        }
-
-        private bool TryResolveActorUserId(out Guid actorUserId)
-        {
-            actorUserId = Guid.Empty;
-
-            if (Request.Headers.TryGetValue(ActorUserIdHeader, out var headerValues))
-            {
-                string? raw = headerValues.ToString();
-                if (Guid.TryParse(raw, out actorUserId) && actorUserId != Guid.Empty)
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            _logger.LogError(ex,
+                "Unexpected error loading completed work summary for user {ActorUserId}.",
+                actorUserId);
+            return Problem(
+                detail: "We could not load your completed work summary right now. Please try again later.",
+                statusCode: StatusCodes.Status500InternalServerError);
         }
     }
+
 }
+

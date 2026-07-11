@@ -8,7 +8,7 @@ using System.Text.Json;
 namespace MangaManagementSystem.Web.Services.Api
 {
     public sealed class ProfileApiClient
-        : IProfileApiClient
+        : BaseApiClient, IProfileApiClient
     {
         private static readonly JsonSerializerOptions JsonOptions =
             new(JsonSerializerDefaults.Web)
@@ -187,54 +187,6 @@ namespace MangaManagementSystem.Web.Services.Api
                     "The Profile API returned an empty response.");
         }
 
-        private static async Task<string>
-            ExtractErrorMessageAsync(
-                HttpResponseMessage response,
-                string defaultMessage)
-        {
-            try
-            {
-                var body =
-                    await response.Content
-                        .ReadAsStringAsync();
 
-                if (string.IsNullOrWhiteSpace(body))
-                {
-                    return defaultMessage;
-                }
-
-                using var document =
-                    JsonDocument.Parse(body);
-
-                var root =
-                    document.RootElement;
-
-                foreach (var propertyName in
-                    new[] { "message", "detail", "title" })
-                {
-                    if (root.TryGetProperty(
-                            propertyName,
-                            out var property) &&
-                        property.ValueKind ==
-                            JsonValueKind.String)
-                    {
-                        var value =
-                            property.GetString();
-
-                        if (!string.IsNullOrWhiteSpace(
-                                value))
-                        {
-                            return value;
-                        }
-                    }
-                }
-            }
-            catch (JsonException)
-            {
-                // Use the safe fallback message.
-            }
-
-            return defaultMessage;
-        }
     }
 }

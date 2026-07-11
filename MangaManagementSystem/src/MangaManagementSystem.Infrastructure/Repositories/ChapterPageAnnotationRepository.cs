@@ -33,7 +33,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@issue_type_code", System.Data.SqlDbType.NVarChar, 50) { Value = issueTypeCode });
             cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@annotation_text", System.Data.SqlDbType.NVarChar, 1000) { Value = annotationText });
             cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@page_region_ids_json", System.Data.SqlDbType.NVarChar, -1) { Value = System.Text.Json.JsonSerializer.Serialize(pageRegionIds) });
-            
+
             var newIdParam = new Microsoft.Data.SqlClient.SqlParameter("@new_chapter_page_annotation_id", System.Data.SqlDbType.UniqueIdentifier) { Direction = ParameterDirection.Output };
             cmd.Parameters.Add(newIdParam);
 
@@ -85,8 +85,9 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
             cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@actor_user_id", System.Data.SqlDbType.UniqueIdentifier) { Value = actorUserId });
             cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@chapter_page_annotation_id", System.Data.SqlDbType.UniqueIdentifier) { Value = annotationId });
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@resolution_note", System.Data.SqlDbType.NVarChar, 500) { 
-                Value = string.IsNullOrWhiteSpace(resolutionNote) ? System.DBNull.Value : (object)resolutionNote 
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@resolution_note", System.Data.SqlDbType.NVarChar, 500)
+            {
+                Value = string.IsNullOrWhiteSpace(resolutionNote) ? System.DBNull.Value : (object)resolutionNote
             });
 
             if (conn.State != ConnectionState.Open)

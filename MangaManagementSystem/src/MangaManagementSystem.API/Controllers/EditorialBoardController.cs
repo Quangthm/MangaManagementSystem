@@ -11,7 +11,7 @@ namespace MangaManagementSystem.API.Controllers;
 [ApiController]
 [Route("api/editorial-board")]
 [Authorize]
-public sealed class EditorialBoardController : ControllerBase
+public sealed class EditorialBoardController : BaseApiController
 {
     private readonly IMediator _mediator;
 
@@ -33,7 +33,7 @@ public sealed class EditorialBoardController : ControllerBase
     [HttpGet("polls/open")]
     public async Task<IActionResult> GetOpenPolls(CancellationToken cancellationToken)
     {
-        var currentUserId = GetCurrentUserId();
+        var currentUserId = ResolveActorUserId();
 
         var result = await _mediator.Send(
             new GetOpenBoardPollsQuery(currentUserId),
@@ -45,7 +45,7 @@ public sealed class EditorialBoardController : ControllerBase
     [HttpGet("polls/history")]
     public async Task<IActionResult> GetPollHistory(CancellationToken cancellationToken)
     {
-        var currentUserId = GetCurrentUserId();
+        var currentUserId = ResolveActorUserId();
 
         var result = await _mediator.Send(
             new GetBoardPollHistoryQuery(currentUserId),
@@ -63,7 +63,7 @@ public sealed class EditorialBoardController : ControllerBase
     {
         try
         {
-            var chiefUserId = GetCurrentUserId();
+            var chiefUserId = ResolveActorUserId();
 
             var commandRequest = new OpenSeriesBoardPollRequestDto(
                 ProposalId: proposalId,
@@ -95,7 +95,7 @@ public sealed class EditorialBoardController : ControllerBase
     {
         try
         {
-            var voterUserId = GetCurrentUserId();
+            var voterUserId = ResolveActorUserId();
 
             var commandRequest = new CastSeriesBoardVoteRequestDto(
                 PollId: pollId,
@@ -124,7 +124,7 @@ public sealed class EditorialBoardController : ControllerBase
     {
         try
         {
-            var chiefUserId = GetCurrentUserId();
+            var chiefUserId = ResolveActorUserId();
 
             var result = await _mediator.Send(
                 new FinalizeBoardPollApprovalCommand(
@@ -148,7 +148,7 @@ public sealed class EditorialBoardController : ControllerBase
     {
         try
         {
-            var chiefUserId = GetCurrentUserId();
+            var chiefUserId = ResolveActorUserId();
 
             var result = await _mediator.Send(
                 new CancelBoardPollCommand(
@@ -162,23 +162,6 @@ public sealed class EditorialBoardController : ControllerBase
         {
             return BadRequest(ex.Message);
         }
-    }
-
-    private Guid GetCurrentUserId()
-    {
-        var value =
-            User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub")
-            ?? User.FindFirstValue("user_id")
-            ?? User.FindFirstValue("UserId");
-
-        if (!Guid.TryParse(value, out var userId))
-        {
-            throw new UnauthorizedAccessException(
-                "Cannot resolve current user id from token.");
-        }
-
-        return userId;
     }
 
     public sealed record OpenPollApiRequest(

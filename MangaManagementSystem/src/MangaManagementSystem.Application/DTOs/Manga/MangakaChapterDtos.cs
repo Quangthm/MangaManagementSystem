@@ -2,62 +2,61 @@ using System;
 using System.Collections.Generic;
 using MangaManagementSystem.Application.DTOs.Editor;
 
-namespace MangaManagementSystem.Application.DTOs.Manga
-{
-    /// <summary>
-    /// Mangaka chapter list item with latest editorial review summary and full review history.
-    /// </summary>
-    public sealed record MangakaChapterListItemDto(
-        Guid ChapterId,
-        Guid SeriesId,
-        string SeriesTitle,
-        string ChapterNumberLabel,
-        string? ChapterTitle,
-        string StatusCode,
-        DateTime? PlannedReleaseDate,
-        DateTime? ReleasedAtUtc,
-        DateTime CreatedAtUtc,
-        DateTime? UpdatedAtUtc,
-        ChapterEditorialReviewSummaryDto? LatestReview,
-        IReadOnlyList<EditorChapterReviewHistoryDto> EditorialReviewHistory);
+namespace MangaManagementSystem.Application.DTOs.Manga;
 
-    /// <summary>
-    /// Summary of the latest chapter editorial review decision.
-    /// </summary>
-    public sealed record ChapterEditorialReviewSummaryDto(
-        Guid ChapterEditorialReviewId,
-        string ReviewerDisplayName,
-        string DecisionCode,
-        string? Comments,
-        Guid? MarkupFileId,
-        string? MarkupFileUrl,
-        string? MarkupFileName,
-        DateTime ReviewedAtUtc);
+/// <summary>
+/// Mangaka chapter list item with latest editorial review summary and full review history.
+/// </summary>
+public sealed record MangakaChapterListItemDto(
+    Guid ChapterId,
+    Guid SeriesId,
+    string SeriesTitle,
+    string ChapterNumberLabel,
+    string? ChapterTitle,
+    string StatusCode,
+    DateTime? PlannedReleaseDate,
+    DateTime? ReleasedAtUtc,
+    DateTime CreatedAtUtc,
+    DateTime? UpdatedAtUtc,
+    ChapterEditorialReviewSummaryDto? LatestReview,
+    IReadOnlyList<EditorChapterReviewHistoryDto> EditorialReviewHistory);
 
-    /// <summary>
-    /// Request to create a new chapter draft.
-    /// </summary>
-    public sealed record CreateChapterDraftRequest(
-        Guid SeriesId,
-        string ChapterNumberLabel,
-        string? ChapterTitle);
+/// <summary>
+/// Summary of the latest chapter editorial review decision.
+/// </summary>
+public sealed record ChapterEditorialReviewSummaryDto(
+    Guid ChapterEditorialReviewId,
+    string ReviewerDisplayName,
+    string DecisionCode,
+    string? Comments,
+    Guid? MarkupFileId,
+    string? MarkupFileUrl,
+    string? MarkupFileName,
+    DateTime ReviewedAtUtc);
 
-    /// <summary>
-    /// Request to update chapter draft metadata.
-    /// </summary>
-    public sealed record UpdateChapterDraftRequest(
-        string ChapterNumberLabel,
-        string? ChapterTitle);
+/// <summary>
+/// Request to create a new chapter draft.
+/// </summary>
+public sealed record CreateChapterDraftRequest(
+    Guid SeriesId,
+    string ChapterNumberLabel,
+    string? ChapterTitle);
 
-    /// <summary>
-    /// Request to schedule an approved chapter with a planned release date.
-    /// </summary>
-    public sealed record ScheduleApprovedChapterRequest(
-        DateTime PlannedReleaseDate);
+/// <summary>
+/// Request to update chapter draft metadata.
+/// </summary>
+public sealed record UpdateChapterDraftRequest(
+    string ChapterNumberLabel,
+    string? ChapterTitle);
 
-    /// <summary>
-    /// Request to set a planned release date on a plannable chapter.
-    /// </summary>
-    public sealed record SetPlannedReleaseDateRequest(
-        DateTime PlannedReleaseDate);
-}
+/// <summary>
+/// Request to schedule an approved chapter with a planned release date.
+/// </summary>
+public sealed record ScheduleApprovedChapterRequest(
+    DateTime PlannedReleaseDate);
+
+/// <summary>
+/// Request to set a planned release date on a plannable chapter.
+/// </summary>
+public sealed record SetPlannedReleaseDateRequest(
+    DateTime PlannedReleaseDate);

@@ -1,4 +1,5 @@
 @page "/editor"
+@layout EditorLayout
 @using Microsoft.AspNetCore.Authorization
 @using System.Security.Claims
 @using MangaManagementSystem.Application.DTOs.Editor
@@ -9,7 +10,6 @@
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
-<EditorLayout>
     <div class="mf-page">
         <div class="mf-page-header">
             <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Editor Dashboard</MudText>
@@ -169,7 +169,6 @@
             </MudPaper>
         }
     </div>
-</EditorLayout>
 
 @code {
     private EditorDashboardDto? _dashboard;

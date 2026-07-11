@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MangaManagementSystem.Web.Services.Api
 {
-    public class SeriesApiClient : ISeriesApiClient
+    public sealed class SeriesApiClient : BaseApiClient, ISeriesApiClient
     {
         // Transitional actor header forwarded to the API while API auth is not yet implemented.
         private const string ActorUserIdHeader = "X-Actor-User-Id";
@@ -78,37 +78,6 @@ namespace MangaManagementSystem.Web.Services.Api
             throw new InvalidOperationException(message);
         }
 
-        private static async Task<string> ExtractErrorMessageAsync(HttpResponseMessage response)
-        {
-            try
-            {
-                var body = await response.Content.ReadAsStringAsync();
-                if (string.IsNullOrWhiteSpace(body))
-                    return "An unexpected error occurred. Please try again.";
 
-                using var doc = JsonDocument.Parse(body);
-                var root = doc.RootElement;
-
-                if (root.TryGetProperty("message", out var msgProp) && msgProp.ValueKind == JsonValueKind.String)
-                {
-                    var msg = msgProp.GetString();
-                    if (!string.IsNullOrWhiteSpace(msg))
-                        return msg;
-                }
-
-                if (root.TryGetProperty("detail", out var detailProp) && detailProp.ValueKind == JsonValueKind.String)
-                {
-                    var detail = detailProp.GetString();
-                    if (!string.IsNullOrWhiteSpace(detail))
-                        return detail;
-                }
-            }
-            catch (JsonException)
-            {
-                // Ignore invalid JSON and fall through.
-            }
-
-            return "An unexpected error occurred. Please try again.";
-        }
     }
 }

@@ -1,8 +1,9 @@
-﻿using System.Net.Http.Json;
+using System.Net.Http.Json;
+using System.Text.Json;
 
-namespace MangaManagementSystem.Web.Services.EditorialBoard;
+namespace MangaManagementSystem.Web.Services.Api;
 
-public sealed class EditorialBoardApiClient : IEditorialBoardApiClient
+public sealed class EditorialBoardApiClient : BaseApiClient, IEditorialBoardApiClient
 {
     private readonly HttpClient _httpClient;
 
@@ -51,7 +52,7 @@ public sealed class EditorialBoardApiClient : IEditorialBoardApiClient
 
         if (!response.IsSuccessStatusCode)
         {
-            var message = await response.Content.ReadAsStringAsync(cancellationToken);
+            var message = await ExtractErrorMessageAsync(response, cancellationToken: cancellationToken);
             throw new InvalidOperationException(message);
         }
 
@@ -71,7 +72,7 @@ public sealed class EditorialBoardApiClient : IEditorialBoardApiClient
 
         if (!response.IsSuccessStatusCode)
         {
-            var message = await response.Content.ReadAsStringAsync(cancellationToken);
+            var message = await ExtractErrorMessageAsync(response, cancellationToken: cancellationToken);
             throw new InvalidOperationException(message);
         }
 
@@ -90,7 +91,7 @@ public sealed class EditorialBoardApiClient : IEditorialBoardApiClient
 
         if (!response.IsSuccessStatusCode)
         {
-            var message = await response.Content.ReadAsStringAsync(cancellationToken);
+            var message = await ExtractErrorMessageAsync(response, cancellationToken: cancellationToken);
             throw new InvalidOperationException(message);
         }
 
@@ -109,7 +110,7 @@ public sealed class EditorialBoardApiClient : IEditorialBoardApiClient
 
         if (!response.IsSuccessStatusCode)
         {
-            var message = await response.Content.ReadAsStringAsync(cancellationToken);
+            var message = await ExtractErrorMessageAsync(response, cancellationToken: cancellationToken);
             throw new InvalidOperationException(message);
         }
 

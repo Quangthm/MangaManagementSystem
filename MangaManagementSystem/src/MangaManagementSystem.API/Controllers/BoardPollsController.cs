@@ -6,7 +6,7 @@ namespace MangaManagementSystem.API.Controllers;
 
 [ApiController]
 [Route("api/board-polls")]
-public sealed class BoardPollsController : ControllerBase
+public sealed class BoardPollsController : BaseApiController
 {
     [HttpGet]
     [Authorize(Roles = "Editorial Board Member,Editorial Board Chief")]

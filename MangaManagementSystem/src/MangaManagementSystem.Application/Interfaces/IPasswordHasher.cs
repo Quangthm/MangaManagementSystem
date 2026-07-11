@@ -1,8 +1,7 @@
-namespace MangaManagementSystem.Application.Interfaces
+namespace MangaManagementSystem.Application.Interfaces;
+
+public interface IPasswordHasher
 {
-    public interface IPasswordHasher
-    {
-        string HashPassword(string password);
-        bool VerifyPassword(string password, string passwordHash);
-    }
+    string HashPassword(string password);
+    bool VerifyPassword(string password, string passwordHash);
 }

@@ -16,7 +16,7 @@ namespace MangaManagementSystem.Web.Services.Api
     /// transitional X-Actor-User-Id header, builds multipart/form-data for decision actions that
     /// carry a markup file, and parses safe error messages for UI snackbars.
     /// </summary>
-    public class EditorProposalApiClient : IEditorProposalApiClient
+    public sealed class EditorProposalApiClient : BaseApiClient, IEditorProposalApiClient
     {
         private const string ActorUserIdHeader = "X-Actor-User-Id";
 
@@ -231,64 +231,6 @@ namespace MangaManagementSystem.Web.Services.Api
             throw new InvalidOperationException(message);
         }
 
-        private static async Task<string> ExtractErrorMessageAsync(HttpResponseMessage response)
-        {
-            try
-            {
-                var body = await response.Content.ReadAsStringAsync();
-                if (string.IsNullOrWhiteSpace(body))
-                {
-                    return "An unexpected error occurred. Please try again.";
-                }
 
-                using var doc = JsonDocument.Parse(body);
-                var root = doc.RootElement;
-
-                // ApiErrorResponse: { "message": "..." }
-                if (root.TryGetProperty("message", out var msgProp) && msgProp.ValueKind == JsonValueKind.String)
-                {
-                    var msg = msgProp.GetString();
-                    if (!string.IsNullOrWhiteSpace(msg)) return msg;
-                }
-
-                // ProblemDetails: { "detail": "...", "title": "..." }
-                if (root.TryGetProperty("detail", out var detailProp) && detailProp.ValueKind == JsonValueKind.String)
-                {
-                    var detail = detailProp.GetString();
-                    if (!string.IsNullOrWhiteSpace(detail)) return detail;
-                }
-
-                // ValidationProblemDetails: { "errors": { field: [msg, ...] } }
-                if (root.TryGetProperty("errors", out var errorsProp) && errorsProp.ValueKind == JsonValueKind.Object)
-                {
-                    foreach (var error in errorsProp.EnumerateObject())
-                    {
-                        if (error.Value.ValueKind == JsonValueKind.Array)
-                        {
-                            foreach (var msg in error.Value.EnumerateArray())
-                            {
-                                if (msg.ValueKind == JsonValueKind.String)
-                                {
-                                    var errMsg = msg.GetString();
-                                    if (!string.IsNullOrWhiteSpace(errMsg)) return errMsg;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (root.TryGetProperty("title", out var titleProp) && titleProp.ValueKind == JsonValueKind.String)
-                {
-                    var title = titleProp.GetString();
-                    if (!string.IsNullOrWhiteSpace(title)) return title;
-                }
-            }
-            catch (JsonException)
-            {
-                // Not valid JSON — fall through.
-            }
-
-            return "An unexpected error occurred. Please try again.";
-        }
     }
 }

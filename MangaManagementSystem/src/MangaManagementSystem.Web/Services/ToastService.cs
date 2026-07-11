@@ -17,13 +17,18 @@ public sealed class ToastMessage
 
 public sealed class ToastService
 {
-    public event Action<ToastMessage>? OnShow;
-    public event Action<int>? OnClose;
+    public event Func<ToastMessage, Task>? OnShow;
+    public event Func<int, Task>? OnClose;
 
-    public void Show(string message, ToastType type = ToastType.Success)
+    public async Task Show(string message, ToastType type = ToastType.Success)
     {
-        OnShow?.Invoke(new ToastMessage { Message = message, Type = type });
+        if (OnShow != null)
+            await OnShow.Invoke(new ToastMessage { Message = message, Type = type });
     }
 
-    public void Close(int id) => OnClose?.Invoke(id);
+    public async Task Close(int id)
+    {
+        if (OnClose != null)
+            await OnClose.Invoke(id);
+    }
 }

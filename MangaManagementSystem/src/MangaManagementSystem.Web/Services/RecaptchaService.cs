@@ -61,7 +61,7 @@ namespace MangaManagementSystem.Web.Services
 
                 if (!result.Success)
                 {
-                    _logger.LogWarning("reCAPTCHA verification failed. Error codes: {ErrorCodes}", 
+                    _logger.LogWarning("reCAPTCHA verification failed. Error codes: {ErrorCodes}",
                         result.ErrorCodes != null ? string.Join(", ", result.ErrorCodes) : "none");
                 }
 

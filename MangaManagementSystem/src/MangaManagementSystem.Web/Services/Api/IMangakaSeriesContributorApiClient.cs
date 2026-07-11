@@ -1,4 +1,4 @@
-using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.Domain.ReadModels;
 using System;
 using System.Collections.Generic;
 using System.Threading;

@@ -382,14 +382,14 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
         // ── Custom error numbers raised by manga.usp_SeriesProposal_Submit ─────────
         private const int ErrProposalSubmitLockFailed = 57001;
-        private const int ErrSeriesNotFound          = 57002;
-        private const int ErrNotProposalDraft        = 57003;
+        private const int ErrSeriesNotFound = 57002;
+        private const int ErrNotProposalDraft = 57003;
         private const int ErrNotActiveMangakaContrib = 57004;
 
         // SQL Server constraint violation numbers.
-        private const int ErrDuplicateKey  = 2627;
-        private const int ErrUniqueIndex   = 2601;
-        private const int ErrConstraint    = 547;
+        private const int ErrDuplicateKey = 2627;
+        private const int ErrUniqueIndex = 2601;
+        private const int ErrConstraint = 547;
 
         /// <summary>
         /// Translates known SqlException error numbers into user-safe messages.

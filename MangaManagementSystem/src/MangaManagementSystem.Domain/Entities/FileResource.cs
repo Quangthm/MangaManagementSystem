@@ -4,9 +4,9 @@ using System.Collections.Generic;
 
 namespace MangaManagementSystem.Domain.Entities
 {
-public class FileResource : BaseEntity
-{
-    public Guid FileResourceId { get; set; }
+    public class FileResource : BaseEntity
+    {
+        public Guid FileResourceId { get; set; }
         public string FilePurposeCode { get; set; } = null!;
         public string OriginalFileName { get; set; } = null!;
         public string CloudinaryPublicId { get; set; } = null!;

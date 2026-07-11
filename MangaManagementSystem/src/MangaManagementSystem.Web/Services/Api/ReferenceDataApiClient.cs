@@ -7,18 +7,18 @@ using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Manga;
 using Microsoft.Extensions.Logging;
 
-namespace MangaManagementSystem.Web.Services.Api
-{
-    public class ReferenceDataApiClient : IReferenceDataApiClient
-    {
-        private readonly HttpClient _httpClient;
-        private readonly ILogger<ReferenceDataApiClient> _logger;
+namespace MangaManagementSystem.Web.Services.Api;
 
-        public ReferenceDataApiClient(HttpClient httpClient, ILogger<ReferenceDataApiClient> logger)
-        {
-            _httpClient = httpClient;
-            _logger = logger;
-        }
+public sealed class ReferenceDataApiClient : BaseApiClient, IReferenceDataApiClient
+{
+    private readonly HttpClient _httpClient;
+    private readonly ILogger<ReferenceDataApiClient> _logger;
+
+    public ReferenceDataApiClient(HttpClient httpClient, ILogger<ReferenceDataApiClient> logger)
+    {
+        _httpClient = httpClient;
+        _logger = logger;
+    }
 
         public async Task<IReadOnlyList<GenreDto>> GetGenresAsync(CancellationToken cancellationToken = default)
         {
@@ -52,4 +52,3 @@ namespace MangaManagementSystem.Web.Services.Api
             throw new InvalidOperationException("We could not load the tag list right now. Please try again later.");
         }
     }
-}

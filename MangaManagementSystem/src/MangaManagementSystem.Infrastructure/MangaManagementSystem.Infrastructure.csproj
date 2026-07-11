@@ -26,8 +26,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="CloudinaryDotNet" Version="1.25.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.2.0" />
+    <PackageReference Include="CloudinaryDotNet" Version="1.29.1" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="..\MangaManagementSystem.Application\MangaManagementSystem.Application.csproj" />
     <ProjectReference Include="..\MangaManagementSystem.Domain\MangaManagementSystem.Domain.csproj" />
   </ItemGroup>

@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.Domain.ReadModels;
 
-namespace MangaManagementSystem.Application.Interfaces
+namespace MangaManagementSystem.Domain.Interfaces
 {
     public interface IQuickSelectRepository
     {

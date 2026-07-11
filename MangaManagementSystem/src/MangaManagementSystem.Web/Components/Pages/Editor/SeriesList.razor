@@ -1,4 +1,5 @@
 @page "/editor/series"
+@layout EditorLayout
 @using System
 @using Microsoft.AspNetCore.Authorization
 @using System.Security.Claims
@@ -11,7 +12,6 @@
 @inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthStateProvider
 
-<EditorLayout>
     <div class="mf-page">
         <div class="mf-page-header">
             <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">Series Library</MudText>
@@ -86,7 +86,6 @@
             }
         </MudPaper>
     </div>
-</EditorLayout>
 
 @code {
     private bool _loading = true;

@@ -6,7 +6,7 @@ using System.Text.Json;
 
 namespace MangaManagementSystem.Web.Services.Api
 {
-    public class AssistantTaskApiClient : IAssistantTaskApiClient
+    public sealed class AssistantTaskApiClient : BaseApiClient, IAssistantTaskApiClient
     {
         private const string ActorUserIdHeader = "X-Actor-User-Id";
 
@@ -34,11 +34,8 @@ namespace MangaManagementSystem.Web.Services.Api
 
             if (!response.IsSuccessStatusCode)
             {
-                var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-                throw new HttpRequestException(
-                    $"API returned {(int)response.StatusCode} ({response.StatusCode}): {errorContent}",
-                    null,
-                    response.StatusCode);
+                var errorContent = await ExtractErrorMessageAsync(response, cancellationToken: cancellationToken);
+                throw new InvalidOperationException(errorContent);
             }
 
             var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -66,11 +63,8 @@ namespace MangaManagementSystem.Web.Services.Api
                     return null;
                 }
 
-                var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-                throw new HttpRequestException(
-                    $"API returned {(int)response.StatusCode} ({response.StatusCode}): {errorContent}",
-                    null,
-                    response.StatusCode);
+                var errorContent = await ExtractErrorMessageAsync(response, cancellationToken: cancellationToken);
+                throw new InvalidOperationException(errorContent);
             }
 
             var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -111,11 +105,8 @@ namespace MangaManagementSystem.Web.Services.Api
 
             if (!response.IsSuccessStatusCode)
             {
-                var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-                throw new HttpRequestException(
-                    $"API returned {(int)response.StatusCode} ({response.StatusCode}): {errorContent}",
-                    null,
-                    response.StatusCode);
+                var errorContent = await ExtractErrorMessageAsync(response, cancellationToken: cancellationToken);
+                throw new InvalidOperationException(errorContent);
             }
 
             var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -145,7 +136,7 @@ namespace MangaManagementSystem.Web.Services.Api
 
             // Build multipart form data
             using var content = new MultipartFormDataContent();
-            
+
             // Add file -- use async CopyToAsync to avoid "Synchronous reads are not supported" on Blazor Server streams
             using var ms = new MemoryStream();
             await using (var stream = file.OpenReadStream(10 * 1024 * 1024))
@@ -172,11 +163,8 @@ namespace MangaManagementSystem.Web.Services.Api
 
             if (!response.IsSuccessStatusCode)
             {
-                var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-                throw new HttpRequestException(
-                    $"API returned {(int)response.StatusCode} ({response.StatusCode}): {errorContent}",
-                    null,
-                    response.StatusCode);
+                var errorContent = await ExtractErrorMessageAsync(response, cancellationToken: cancellationToken);
+                throw new InvalidOperationException(errorContent);
             }
 
             // Deserialize response

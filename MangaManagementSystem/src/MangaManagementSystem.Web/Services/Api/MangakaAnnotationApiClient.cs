@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace MangaManagementSystem.Web.Services.Api
 {
-    public class MangakaAnnotationApiClient : IMangakaAnnotationApiClient
+    public sealed class MangakaAnnotationApiClient : BaseApiClient, IMangakaAnnotationApiClient
     {
         private const string ActorUserIdHeader = "X-Actor-User-Id";
 
@@ -27,7 +27,11 @@ namespace MangaManagementSystem.Web.Services.Api
             request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await ExtractErrorMessageAsync(response, "The request could not be completed.", cancellationToken);
+                throw new InvalidOperationException(errorContent);
+            }
 
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
             return JsonSerializer.Deserialize<List<ChapterPageAnnotationDto>>(content, _jsonOptions) ?? new List<ChapterPageAnnotationDto>();
@@ -40,7 +44,11 @@ namespace MangaManagementSystem.Web.Services.Api
             httpRequest.Content = new StringContent(JsonSerializer.Serialize(request, _jsonOptions), Encoding.UTF8, "application/json");
 
             var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await ExtractErrorMessageAsync(response, "The request could not be completed.", cancellationToken);
+                throw new InvalidOperationException(errorContent);
+            }
 
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
             return JsonSerializer.Deserialize<ChapterPageAnnotationDto>(content, _jsonOptions)
@@ -56,23 +64,14 @@ namespace MangaManagementSystem.Web.Services.Api
                 Encoding.UTF8, "application/json");
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await ExtractErrorMessageAsync(response, "The request could not be completed.", cancellationToken);
+                throw new InvalidOperationException(errorContent);
+            }
             return true;
         }
 
-        private async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken cancellationToken)
-        {
-            if (response.IsSuccessStatusCode) return;
 
-            string message = "The request could not be completed. Please try again.";
-            try
-            {
-                var body = await response.Content.ReadAsStringAsync(cancellationToken);
-                if (!string.IsNullOrWhiteSpace(body)) message = body.Trim('"');
-            }
-            catch { /* keep default */ }
-
-            throw new InvalidOperationException(message);
-        }
     }
 }

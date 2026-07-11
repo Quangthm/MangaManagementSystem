@@ -1,9 +1,10 @@
 @page "/mangaka/contributors"
+@layout MangakaLayout
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
 @using MangaManagementSystem.Application.DTOs.Manga
-@using MangaManagementSystem.Web.Components.Layouts
+@using MangaManagementSystem.Domain.ReadModels
 @using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Mangaka")]
 @inject IMangakaSeriesApiClient MangakaSeriesApiClient
@@ -12,7 +13,6 @@
 @inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthStateProvider
 
-<MangakaLayout>
     <div class="mf-page">
         <MudButton Variant="Variant.Text"
                    StartIcon="@Icons.Material.Filled.ArrowBack"
@@ -153,7 +153,6 @@
             }
         }
     </div>
-</MangakaLayout>
 
 <MudDialog @bind-Visible="_showAddAssistantDialog" Options="_dialogOptions">
     <DialogContent>

@@ -1,4 +1,5 @@
 using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.Domain.ReadModels;
 
 namespace MangaManagementSystem.Web.Services.Api
 {

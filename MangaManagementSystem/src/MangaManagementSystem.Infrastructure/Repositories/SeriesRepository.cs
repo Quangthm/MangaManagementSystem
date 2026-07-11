@@ -174,11 +174,11 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         }
 
         // ── Custom error numbers raised by manga.usp_Series_UpdateProfile ────────
-        private const int ErrUpdateLockFailed           = 57401;
-        private const int ErrUpdateSeriesNotFound       = 57402;
-        private const int ErrUpdateNotProposalDraft     = 57403;
-        private const int ErrUpdateNotActiveMangaka     = 57404;
-        private const int ErrUpdateIncompleteCoverMeta  = 57405;
+        private const int ErrUpdateLockFailed = 57401;
+        private const int ErrUpdateSeriesNotFound = 57402;
+        private const int ErrUpdateNotProposalDraft = 57403;
+        private const int ErrUpdateNotActiveMangaka = 57404;
+        private const int ErrUpdateIncompleteCoverMeta = 57405;
 
         /// <summary>
         /// Updates a PROPOSAL_DRAFT series profile through <c>manga.usp_Series_UpdateProfile</c>.
@@ -271,10 +271,10 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             };
 
         // ── Custom error numbers raised by manga.usp_Series_CancelDraft ─────────
-        private const int ErrCancelLockFailed       = 57101;
-        private const int ErrCancelSeriesNotFound   = 57102;
+        private const int ErrCancelLockFailed = 57101;
+        private const int ErrCancelSeriesNotFound = 57102;
         private const int ErrCancelNotProposalDraft = 57103;
-        private const int ErrCancelNotContributor   = 57104;
+        private const int ErrCancelNotContributor = 57104;
 
         /// <summary>
         /// Cancels a PROPOSAL_DRAFT series via <c>manga.usp_Series_CancelDraft</c>.
@@ -294,8 +294,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             cmd.CommandType = CommandType.StoredProcedure;
 
             cmd.Parameters.Add(new SqlParameter("@actor_user_id", SqlDbType.UniqueIdentifier) { Value = actorUserId });
-            cmd.Parameters.Add(new SqlParameter("@series_id",     SqlDbType.UniqueIdentifier) { Value = seriesId });
-            cmd.Parameters.Add(new SqlParameter("@reason",        SqlDbType.NVarChar, 500)    { Value = (object?)reason ?? DBNull.Value });
+            cmd.Parameters.Add(new SqlParameter("@series_id", SqlDbType.UniqueIdentifier) { Value = seriesId });
+            cmd.Parameters.Add(new SqlParameter("@reason", SqlDbType.NVarChar, 500) { Value = (object?)reason ?? DBNull.Value });
 
             if (conn.State != System.Data.ConnectionState.Open)
             {

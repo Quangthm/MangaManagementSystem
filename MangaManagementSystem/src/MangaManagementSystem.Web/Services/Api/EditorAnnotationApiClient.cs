@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MangaManagementSystem.Web.Services.Api
 {
-    public class EditorAnnotationApiClient : IEditorAnnotationApiClient
+    public sealed class EditorAnnotationApiClient : BaseApiClient, IEditorAnnotationApiClient
     {
         private const string ActorUserIdHeader = "X-Actor-User-Id";
 
@@ -71,42 +71,6 @@ namespace MangaManagementSystem.Web.Services.Api
             throw new InvalidOperationException(message);
         }
 
-        private static async Task<string> ExtractErrorMessageAsync(HttpResponseMessage response)
-        {
-            try
-            {
-                var body = await response.Content.ReadAsStringAsync();
-                if (string.IsNullOrWhiteSpace(body))
-                {
-                    return "An unexpected error occurred. Please try again.";
-                }
 
-                using var doc = JsonDocument.Parse(body);
-                var root = doc.RootElement;
-
-                if (root.TryGetProperty("message", out var msgProp) && msgProp.ValueKind == JsonValueKind.String)
-                {
-                    var msg = msgProp.GetString();
-                    if (!string.IsNullOrWhiteSpace(msg)) return msg;
-                }
-
-                if (root.TryGetProperty("detail", out var detailProp) && detailProp.ValueKind == JsonValueKind.String)
-                {
-                    var detail = detailProp.GetString();
-                    if (!string.IsNullOrWhiteSpace(detail)) return detail;
-                }
-
-                if (root.TryGetProperty("title", out var titleProp) && titleProp.ValueKind == JsonValueKind.String)
-                {
-                    var title = titleProp.GetString();
-                    if (!string.IsNullOrWhiteSpace(title)) return title;
-                }
-            }
-            catch (JsonException)
-            {
-            }
-
-            return "An unexpected error occurred. Please try again.";
-        }
     }
 }

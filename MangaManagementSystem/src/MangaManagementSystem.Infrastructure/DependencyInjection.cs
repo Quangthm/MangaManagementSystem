@@ -10,6 +10,7 @@ using EFCore.NamingConventions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MangaManagementSystem.Application.Features.EditorialBoard.Repositories;
+using MangaManagementSystem.Domain.Interfaces;
 
 namespace MangaManagementSystem.Infrastructure
 {
@@ -74,14 +75,19 @@ namespace MangaManagementSystem.Infrastructure
             services.AddScoped<MangaManagementSystem.Application.Interfaces.IAssistantTaskSubmissionService, Services.AssistantTaskSubmissionService>();
 
             // AI Service
-            services.AddHttpClient<IAiService, AiService>();
+            services.AddHttpClient<IAiService, AiService>((sp, client) =>
+            {
+                var baseUrl = configuration.GetSection("AiService:BaseUrl").Value;
+                if (!string.IsNullOrWhiteSpace(baseUrl))
+                    client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+            });
             services.AddScoped<IImageMetadataProvider, CloudinaryImageMetadataProvider>();
 
             services.AddScoped<IEditorialBoardRepository, EditorialBoardRepository>();
             services.AddScoped<IPublicationPeriodRepository, PublicationPeriodRepository>();
             services.AddScoped<IPublicationScheduleRepository, PublicationScheduleRepository>();
             services.AddScoped<IChapterOnHoldRepository, ChapterOnHoldRepository>();
- 
+
             return services;
         }
     }

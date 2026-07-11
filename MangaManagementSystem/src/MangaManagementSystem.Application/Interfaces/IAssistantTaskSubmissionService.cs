@@ -1,12 +1,11 @@
 using MangaManagementSystem.Application.DTOs.Manga;
 using System.Threading.Tasks;
 
-namespace MangaManagementSystem.Application.Interfaces
+namespace MangaManagementSystem.Application.Interfaces;
+
+public interface IAssistantTaskSubmissionService
 {
-    public interface IAssistantTaskSubmissionService
-    {
-        Task<AssistantTaskSubmitResultDto> SubmitTaskWorkAsync(
-            AssistantTaskSubmitRequestDto request,
-            System.Threading.CancellationToken cancellationToken = default);
-    }
+    Task<AssistantTaskSubmitResultDto> SubmitTaskWorkAsync(
+        AssistantTaskSubmitRequestDto request,
+        System.Threading.CancellationToken cancellationToken = default);
 }

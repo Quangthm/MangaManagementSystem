@@ -1,9 +1,9 @@
 @page "/admin/settings"
+@layout AdminLayout
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "Admin")]
 @inject NavigationManager Nav
 
-<AdminLayout>
     <div class="mf-page">
         <div class="mf-page-header">
             <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">System Settings</MudText>
@@ -34,7 +34,6 @@
         </MudGrid>
 
     </div>
-</AdminLayout>
 
 @code {
 

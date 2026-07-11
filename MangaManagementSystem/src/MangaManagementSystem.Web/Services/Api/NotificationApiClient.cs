@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace MangaManagementSystem.Web.Services.Api
 {
-    public class NotificationApiClient : INotificationApiClient
+    public sealed class NotificationApiClient : BaseApiClient, INotificationApiClient
     {
         private const string ActorUserIdHeader = "X-Actor-User-Id";
 

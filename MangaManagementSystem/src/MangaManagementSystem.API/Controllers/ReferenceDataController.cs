@@ -9,54 +9,53 @@ using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
-namespace MangaManagementSystem.API.Controllers
+namespace MangaManagementSystem.API.Controllers;
+
+[ApiController]
+[Authorize]
+[Route("api/reference")]
+public sealed class ReferenceDataController : BaseApiController
 {
-    [ApiController]
-    [Authorize]
-    [Route("api/reference")]
-    public class ReferenceDataController : ControllerBase
+    private readonly IMediator _mediator;
+    private readonly ILogger<ReferenceDataController> _logger;
+
+    public ReferenceDataController(IMediator mediator, ILogger<ReferenceDataController> logger)
     {
-        private readonly IMediator _mediator;
-        private readonly ILogger<ReferenceDataController> _logger;
+        _mediator = mediator;
+        _logger = logger;
+    }
 
-        public ReferenceDataController(IMediator mediator, ILogger<ReferenceDataController> logger)
+    [HttpGet("genres")]
+    public async Task<IActionResult> GetGenresAsync(CancellationToken cancellationToken)
+    {
+        try
         {
-            _mediator = mediator;
-            _logger = logger;
+            IReadOnlyList<GenreDto> genres = await _mediator.Send(new GetGenresQuery(), cancellationToken);
+            return Ok(genres);
         }
-
-        [HttpGet("genres")]
-        public async Task<IActionResult> GetGenresAsync(CancellationToken cancellationToken)
+        catch (Exception ex)
         {
-            try
-            {
-                IReadOnlyList<GenreDto> genres = await _mediator.Send(new GetGenresQuery(), cancellationToken);
-                return Ok(genres);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unexpected error loading reference genres.");
-                return Problem(
-                    detail: "We could not load the genre list right now. Please try again later.",
-                    statusCode: StatusCodes.Status500InternalServerError);
-            }
+            _logger.LogError(ex, "Unexpected error loading reference genres.");
+            return Problem(
+                detail: "We could not load the genre list right now. Please try again later.",
+                statusCode: StatusCodes.Status500InternalServerError);
         }
+    }
 
-        [HttpGet("tags")]
-        public async Task<IActionResult> GetTagsAsync(CancellationToken cancellationToken)
+    [HttpGet("tags")]
+    public async Task<IActionResult> GetTagsAsync(CancellationToken cancellationToken)
+    {
+        try
         {
-            try
-            {
-                IReadOnlyList<TagDto> tags = await _mediator.Send(new GetTagsQuery(), cancellationToken);
-                return Ok(tags);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unexpected error loading reference tags.");
-                return Problem(
-                    detail: "We could not load the tag list right now. Please try again later.",
-                    statusCode: StatusCodes.Status500InternalServerError);
-            }
+            IReadOnlyList<TagDto> tags = await _mediator.Send(new GetTagsQuery(), cancellationToken);
+            return Ok(tags);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error loading reference tags.");
+            return Problem(
+                detail: "We could not load the tag list right now. Please try again later.",
+                statusCode: StatusCodes.Status500InternalServerError);
         }
     }
 }

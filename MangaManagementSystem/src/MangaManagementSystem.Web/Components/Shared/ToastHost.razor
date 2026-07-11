@@ -20,7 +20,7 @@
         ToastService.OnClose += Close;
     }
 
-    private async void Show(ToastMessage toast)
+    private async Task Show(ToastMessage toast)
     {
         _toasts.Add(toast);
         await InvokeAsync(StateHasChanged);
@@ -28,10 +28,10 @@
         Close(toast.Id);
     }
 
-    private void Close(int id)
+    private Task Close(int id)
     {
         _toasts.RemoveAll(t => t.Id == id);
-        _ = InvokeAsync(StateHasChanged);
+        return InvokeAsync(StateHasChanged);
     }
 
     private static Severity GetSeverity(ToastType type) => type switch

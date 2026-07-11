@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace MangaManagementSystem.Application.DTOs.Manga
+namespace MangaManagementSystem.Domain.ReadModels
 {
     /// <summary>
     /// Read-model DTO for a single SeriesContributor row on the Mangaka contributor management page.
