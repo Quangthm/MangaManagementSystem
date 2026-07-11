@@ -1,4 +1,5 @@
-﻿using MangaManagementSystem.Application.DTOs.Admin;
+﻿using MangaManagementSystem.Application.Common;
+using MangaManagementSystem.Application.DTOs.Admin;
 using MangaManagementSystem.Domain.Interfaces;
 using MediatR;
 
@@ -6,15 +7,6 @@ namespace MangaManagementSystem.Application.Features.Admin.Files.Queries
 {
     internal static class AdminFileValidation
     {
-        private static readonly HashSet<string>
-            AllowedDeletedStates =
-                new(
-                    StringComparer.OrdinalIgnoreCase)
-                {
-                    "ACTIVE",
-                    "DELETED",
-                    "ALL"
-                };
 
         internal static Guid ValidateActorUserId(
             Guid actorUserId)
@@ -95,18 +87,21 @@ namespace MangaManagementSystem.Application.Features.Admin.Files.Queries
         }
 
         internal static string NormalizeDeletedState(
-            string? value)
+    string? value)
         {
             var normalized =
                 string.IsNullOrWhiteSpace(value)
-                    ? "ACTIVE"
+                    ? AdminFileDeletionStates.Active
                     : value.Trim().ToUpperInvariant();
 
-            if (!AllowedDeletedStates.Contains(
+            if (!AdminFileDeletionStates.IsSupported(
                     normalized))
             {
                 throw new InvalidOperationException(
-                    "Deleted state must be ACTIVE, DELETED, or ALL.");
+                    $"Deleted state must be "
+                    + $"{AdminFileDeletionStates.Active}, "
+                    + $"{AdminFileDeletionStates.Deleted}, "
+                    + $"or {AdminFileDeletionStates.All}.");
             }
 
             return normalized;

@@ -129,6 +129,24 @@ builder.Services.AddHttpClient<IAdminFileApiClient, AdminFileApiClient>((sp, cli
                     new Uri(settings.Value.BaseUrl);
             })
                 .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
+            builder.Services
+                .AddHttpClient<
+                    INotificationApiClient,
+                    NotificationApiClient>(
+                    (serviceProvider, client) =>
+                    {
+                        var settings =
+                            serviceProvider
+                                .GetRequiredService<
+                                    Microsoft.Extensions.Options
+                                        .IOptions<ApiSettings>>();
+
+                        client.BaseAddress =
+                            new Uri(
+                                settings.Value.BaseUrl);
+                    })
+                .AddHttpMessageHandler<
+                    ApiAuthorizationMessageHandler>();
 
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddAntiforgery();
