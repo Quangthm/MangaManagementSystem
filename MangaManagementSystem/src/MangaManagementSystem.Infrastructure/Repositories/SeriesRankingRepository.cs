@@ -127,15 +127,20 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
         var safeMaxResults = maxResults <= 0 ? 20 : maxResults;
 
         /*
-            Important:
-            This dropdown must show series from the real DB.
-            Do NOT restrict only to SERIALIZED / HIATUS / COMPLETED here,
-            because your test data may still be PROPOSAL_DRAFT,
-            UNDER_EDITORIAL_REVIEW, or UNDER_BOARD_REVIEW.
+            IMPORTANT FOR UI:
+            This method powers the Series dropdown in Create Ranking Input.
 
-            Duplicate vote input is still protected in CreateSeriesVoteInputAsync.
+            It intentionally reads directly from manga.Series.
+            It does NOT restrict to SERIALIZED / HIATUS / COMPLETED,
+            because current test data may be PROPOSAL_DRAFT,
+            UNDER_EDITORIAL_REVIEW, UNDER_BOARD_REVIEW, etc.
+
+            It also does NOT remove existing vote-input series here,
+            so you can confirm the dropdown is really reading DB data.
+            Duplicate input for the same period/series is still blocked
+            in CreateSeriesVoteInputAsync.
         */
-        var query =
+        IQueryable<RankableSeriesDto> query =
             from series in _context.Set<Series>().AsNoTracking()
             join cover in _context.Set<FileResource>().AsNoTracking()
                     .Where(file => file.DeletedAtUtc == null)
@@ -170,12 +175,14 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
                 user => user.UserId == actorUserId
                         && user.StatusCode == "ACTIVE"
                         && user.Role != null
-                        && (user.Role.RoleName == "Editorial Board Member"
+                        && (
+                            user.Role.RoleName == "Editorial Board Member"
                             || user.Role.RoleName == "EditorialBoardMember"
                             || user.Role.RoleName == "Board Member"
                             || user.Role.RoleName == "Editorial Board Chief"
                             || user.Role.RoleName == "EditorialBoardChief"
-                            || user.Role.RoleName == "Board Chief"),
+                            || user.Role.RoleName == "Board Chief"
+                        ),
                 cancellationToken);
     }
 

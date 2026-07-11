@@ -11,9 +11,12 @@ namespace MangaManagementSystem.API.Controllers.Ranking;
 
 [ApiController]
 [Route("api/ranking")]
-[Authorize(Roles = "Mangaka,Tantou Editor,Editorial Board Member,Editorial Board Chief,Admin")]
+[Authorize(Roles = "Mangaka,Assistant,Tantou Editor,Editorial Board Member,Editorial Board Chief,EditorialBoardMember,EditorialBoardChief,Board Member,Board Chief,Admin")]
 public sealed class SeriesRankingController : ControllerBase
 {
+    private const string BoardRankingInputRoles =
+        "Editorial Board Member,Editorial Board Chief,EditorialBoardMember,EditorialBoardChief,Board Member,Board Chief";
+
     private readonly IMediator _mediator;
 
     public SeriesRankingController(IMediator mediator)
@@ -60,11 +63,11 @@ public sealed class SeriesRankingController : ControllerBase
     }
 
     [HttpGet("periods/{publicationPeriodId:guid}/series-suggestions")]
-    [Authorize(Roles = "Editorial Board Member,Editorial Board Chief")]
+    [Authorize(Roles = BoardRankingInputRoles)]
     public async Task<IActionResult> SearchSeries(
         Guid publicationPeriodId,
         [FromQuery] string? searchText,
-        [FromQuery] int maxResults = 10,
+        [FromQuery] int maxResults = 20,
         CancellationToken cancellationToken = default)
     {
         var result = await _mediator.Send(
@@ -75,7 +78,7 @@ public sealed class SeriesRankingController : ControllerBase
     }
 
     [HttpPost("vote-inputs")]
-    [Authorize(Roles = "Editorial Board Member,Editorial Board Chief")]
+    [Authorize(Roles = BoardRankingInputRoles)]
     public async Task<IActionResult> CreateVoteInput(
         [FromBody] CreateSeriesVoteInputRequest request,
         CancellationToken cancellationToken)
@@ -99,16 +102,27 @@ public sealed class SeriesRankingController : ControllerBase
         }
         catch (UnauthorizedAccessException ex)
         {
-            return StatusCode(StatusCodes.Status403Forbidden, new { code = "RANKING_FORBIDDEN", message = ex.Message });
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new
+                {
+                    code = "RANKING_FORBIDDEN",
+                    message = ex.Message
+                });
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { code = "RANKING_VALIDATION_FAILED", message = ex.Message });
+            return BadRequest(
+                new
+                {
+                    code = "RANKING_VALIDATION_FAILED",
+                    message = ex.Message
+                });
         }
     }
 
     [HttpPut("vote-inputs/{seriesVoteInputId:guid}")]
-    [Authorize(Roles = "Editorial Board Member,Editorial Board Chief")]
+    [Authorize(Roles = BoardRankingInputRoles)]
     public async Task<IActionResult> UpdateVoteInput(
         Guid seriesVoteInputId,
         [FromBody] UpdateSeriesVoteInputRequest request,
@@ -132,11 +146,22 @@ public sealed class SeriesRankingController : ControllerBase
         }
         catch (UnauthorizedAccessException ex)
         {
-            return StatusCode(StatusCodes.Status403Forbidden, new { code = "RANKING_FORBIDDEN", message = ex.Message });
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new
+                {
+                    code = "RANKING_FORBIDDEN",
+                    message = ex.Message
+                });
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { code = "RANKING_VALIDATION_FAILED", message = ex.Message });
+            return BadRequest(
+                new
+                {
+                    code = "RANKING_VALIDATION_FAILED",
+                    message = ex.Message
+                });
         }
     }
 

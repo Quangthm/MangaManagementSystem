@@ -336,17 +336,35 @@
 
         return Task.FromResult(textResult);
     }
-
-    private Task<IEnumerable<CatalogEntry>> SearchAvailableSeriesAsync(
+    private async Task<IEnumerable<CatalogEntry>> SearchAvailableSeriesAsync(
         string? value,
         CancellationToken cancellationToken)
     {
         if (_form.PublicationPeriodId == Guid.Empty)
         {
-            return Task.FromResult(Enumerable.Empty<CatalogEntry>());
+            Snackbar.Add("Please select a publication week first.", Severity.Warning);
+            return [];
         }
 
-        return SearchSeriesAsync(value, cancellationToken);
+        try
+        {
+            var result = await SearchSeriesAsync(value, cancellationToken);
+            var series = result.ToList();
+
+            if (series.Count == 0)
+            {
+                Snackbar.Add(
+                    "The API returned 0 series. Check manga.Series in the database used by the API.",
+                    Severity.Warning);
+            }
+
+            return series;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Series search API failed: {ex.Message}", Severity.Error);
+            return [];
+        }
     }
 
     private async Task SaveAsync()
