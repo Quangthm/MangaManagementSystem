@@ -7,6 +7,7 @@ namespace MangaManagementSystem.Application.Features.Notifications
 {
     public sealed record GetCurrentUserNotificationsQuery(
         Guid RecipientUserId,
+        int Skip = 0,
         int Take = 20)
         : IRequest<IReadOnlyList<NotificationDto>>;
 

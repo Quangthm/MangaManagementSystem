@@ -93,42 +93,75 @@
                 <div class="mf-notification-list">
                     @foreach (var notification in _notifications)
                     {
-                        <button type="button"
-                                class="@BuildNotificationItemClass(notification)"
-                                disabled="@_operationInProgress"
-                                @onclick="() => MarkAsReadAsync(notification)">
+                        <div class="@BuildNotificationItemClass(notification)">
+    <span class="mf-notification-status"
+          aria-hidden="true"></span>
 
-                            <span class="mf-notification-status"
-                                  aria-hidden="true"></span>
+    <span class="mf-notification-content">
+        <span class="mf-notification-title">
+            @BuildNotificationTitle(notification)
+        </span>
 
-                            <span class="mf-notification-content">
-                                <span class="mf-notification-title">
-                                    @BuildNotificationTitle(notification)
-                                </span>
+        <span class="mf-notification-message">
+            @notification.Message
+        </span>
 
-                                <span class="mf-notification-message">
-                                    @notification.Message
-                                </span>
+        <time class="mf-notification-time"
+              datetime="@notification.CreatedAtUtc.ToString("O")">
+            @FormatCreatedAt(notification.CreatedAtUtc)
+        </time>
+    </span>
 
-                                <time class="mf-notification-time"
-                                      datetime="@notification.CreatedAtUtc.ToString("O")">
-                                    @FormatCreatedAt(notification.CreatedAtUtc)
-                                </time>
-                            </span>
-                        </button>
+    <span class="mf-notification-item-action">
+        @if (!notification.ReadAtUtc.HasValue)
+        {
+            <button type="button"
+                    class="mf-notification-mark-one"
+                    disabled="@_operationInProgress"
+                    @onclick="() => MarkAsReadAsync(notification)">
+                Mark as read
+            </button>
+        }
+        else
+        {
+            <span class="mf-notification-read-label">
+                Read
+            </span>
+        }
+    </span>
+</div>
                     }
                 </div>
+
+                @if (_hasMore)
+                {
+                    <div class="mf-notification-load-more-row">
+                        <button type="button"
+                                class="mf-notification-load-more"
+                                disabled="@(_operationInProgress || _loadMoreInProgress)"
+                                @onclick="LoadMoreAsync">
+                            @(_loadMoreInProgress
+                                ? "Loading..."
+                                : "Load more")
+                        </button>
+                    </div>
+                }
             }
         </div>
     </ChildContent>
 </MudMenu>
 
 @code {
+    private const int PageSize = 20;
+    private const int PageRequestSize = PageSize + 1;
+
     private readonly List<NotificationDto> _notifications =
         new();
 
     private bool _loading = true;
     private bool _loadInProgress;
+    private bool _loadMoreInProgress;
+    private bool _hasMore;
     private bool _operationInProgress;
     private bool _disposed;
     private int _unreadCount;
@@ -165,7 +198,7 @@
         {
             var notificationsTask =
                 NotificationApiClient
-                    .GetNotificationsAsync(20);
+                    .GetNotificationsAsync(0, PageRequestSize);
 
             var unreadCountTask =
                 NotificationApiClient
@@ -182,7 +215,22 @@
                 await unreadCountTask;
 
             _notifications.Clear();
-            _notifications.AddRange(notifications);
+
+            var initialItemCount =
+                Math.Min(
+                    PageSize,
+                    notifications.Count);
+
+            for (var index = 0;
+                 index < initialItemCount;
+                 index++)
+            {
+                _notifications.Add(
+                    notifications[index]);
+            }
+
+            _hasMore =
+                notifications.Count > PageSize;
 
             _unreadCount =
                 Math.Max(0, unreadCount);
@@ -208,6 +256,71 @@
         }
     }
 
+    private async Task LoadMoreAsync()
+    {
+        if (_disposed
+            || _operationInProgress
+            || _loadMoreInProgress
+            || !_hasMore)
+        {
+            return;
+        }
+
+        _loadMoreInProgress = true;
+        _errorMessage = null;
+
+        try
+        {
+            var nextPage =
+                await NotificationApiClient
+                    .GetNotificationsAsync(
+                        _notifications.Count,
+                        PageRequestSize);
+
+            var pageItemCount =
+                Math.Min(
+                    PageSize,
+                    nextPage.Count);
+
+            for (var index = 0;
+                 index < pageItemCount;
+                 index++)
+            {
+                var notification =
+                    nextPage[index];
+
+                var alreadyLoaded =
+                    _notifications.Exists(
+                        item =>
+                            item.NotificationId
+                            == notification.NotificationId);
+
+                if (alreadyLoaded)
+                {
+                    continue;
+                }
+
+                _notifications.Add(
+                    notification);
+            }
+
+            _hasMore =
+                nextPage.Count > PageSize;
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(
+                exception,
+                "Failed to load more notifications.");
+
+            _errorMessage =
+                "More notifications could not be loaded.";
+        }
+        finally
+        {
+            _loadMoreInProgress = false;
+        }
+    }
     private async Task MarkAsReadAsync(
         NotificationDto notification)
     {
@@ -426,9 +539,9 @@
 <style>
     .mf-notification-bell-button {
         position: relative;
-        width: 44px;
-        height: 44px;
-        flex: 0 0 44px;
+        width: 36px;
+        height: 36px;
+        flex: 0 0 36px;
         border: 1px solid rgba(148, 163, 184, 0.28);
         border-radius: 14px;
         padding: 0;
@@ -458,8 +571,8 @@
     }
 
     .mf-notification-bell-icon {
-        width: 23px;
-        height: 23px;
+        width: 20px;
+        height: 20px;
         fill: currentColor;
     }
 
@@ -565,7 +678,7 @@
 
     .mf-notification-item.is-unread {
         background: #f5f3ff;
-        cursor: pointer;
+        cursor: default;
     }
 
     .mf-notification-item.is-unread:hover {
@@ -591,6 +704,67 @@
         box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.12);
     }
 
+    .mf-notification-item-action {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+    }
+
+    .mf-notification-mark-one {
+        border: 0;
+        border-radius: 8px;
+        padding: 6px 8px;
+        background: #ede9fe;
+        color: #5b21b6;
+        font-size: 11px;
+        font-weight: 800;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+
+    .mf-notification-mark-one:hover:not(:disabled) {
+        background: #ddd6fe;
+    }
+
+    .mf-notification-mark-one:disabled {
+        cursor: not-allowed;
+        opacity: 0.65;
+    }
+
+    .mf-notification-read-label {
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    .mf-notification-load-more-row {
+        border-top: 1px solid #eef2f7;
+        padding: 10px 14px;
+        display: flex;
+        justify-content: center;
+    }
+
+    .mf-notification-load-more {
+        border: 0;
+        border-radius: 9px;
+        padding: 8px 16px;
+        background: #eef2ff;
+        color: #4338ca;
+        font-size: 12px;
+        font-weight: 800;
+        cursor: pointer;
+    }
+
+    .mf-notification-load-more:hover:not(:disabled) {
+        background: #e0e7ff;
+    }
+
+    .mf-notification-load-more:disabled {
+        color: #94a3b8;
+        cursor: not-allowed;
+        opacity: 0.72;
+    }
     .mf-notification-content {
         min-width: 0;
         flex: 1;

@@ -1,4 +1,4 @@
-﻿using MangaManagementSystem.Domain.Entities;
+using MangaManagementSystem.Domain.Entities;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -11,6 +11,7 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<IReadOnlyList<Notification>>
             GetRecentByRecipientUserIdAsync(
                 Guid recipientUserId,
+                int skip,
                 int take,
                 CancellationToken cancellationToken = default);
 

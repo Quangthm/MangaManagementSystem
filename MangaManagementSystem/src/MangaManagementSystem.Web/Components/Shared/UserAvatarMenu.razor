@@ -11,9 +11,9 @@
 
 <AuthorizeView>
     <Authorized>
-        <NotificationBell />
-
-        @if (_loading)
+        <div class="mf-user-profile-row">
+            <div class="mf-user-profile-account">
+                @if (_loading)
         {
             <div class="mf-user-profile-card mf-user-profile-loading">
                 <div class="mf-user-profile-avatar-placeholder"></div>
@@ -81,7 +81,11 @@
                     </div>
                 </ChildContent>
             </MudMenu>
-        }
+                }
+            </div>
+
+            <NotificationBell />
+        </div>
     </Authorized>
 
     <NotAuthorized>
@@ -348,6 +352,22 @@
 }
 
 <style>
+    .mf-user-profile-row {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .mf-user-profile-account {
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+
+    .mf-user-profile-account > * {
+        width: 100%;
+    }
+
     .mf-user-profile-card {
         width: 100%;
         min-height: 84px;

@@ -50,6 +50,7 @@ namespace MangaManagementSystem.API.Controllers
         [HttpGet]
         public async Task<IActionResult>
             GetCurrentUserNotificationsAsync(
+                [FromQuery] int skip = 0,
                 [FromQuery] int take = 20,
                 CancellationToken cancellationToken = default)
         {
@@ -65,6 +66,7 @@ namespace MangaManagementSystem.API.Controllers
                     await _sender.Send(
                         new GetCurrentUserNotificationsQuery(
                             currentUserId,
+                            skip,
                             take),
                         cancellationToken);
 

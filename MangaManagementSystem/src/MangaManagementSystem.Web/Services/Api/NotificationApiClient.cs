@@ -27,9 +27,15 @@ namespace MangaManagementSystem.Web.Services.Api
 
         public async Task<IReadOnlyList<NotificationDto>>
             GetNotificationsAsync(
+                int skip = 0,
                 int take = 20,
                 CancellationToken cancellationToken = default)
         {
+            var normalizedSkip =
+                Math.Max(
+                    0,
+                    skip);
+
             var normalizedTake =
                 take < 1
                     ? 20
@@ -38,7 +44,9 @@ namespace MangaManagementSystem.Web.Services.Api
             using var request =
                 new HttpRequestMessage(
                     HttpMethod.Get,
-                    "api/notifications?take="
+                    "api/notifications?skip="
+                    + normalizedSkip
+                    + "&take="
                     + normalizedTake);
 
             using var response =

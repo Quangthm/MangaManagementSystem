@@ -1,4 +1,4 @@
-﻿using MangaManagementSystem.Domain.Entities;
+using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -27,6 +27,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         public async Task<IReadOnlyList<Notification>>
             GetRecentByRecipientUserIdAsync(
                 Guid recipientUserId,
+                int skip,
                 int take,
                 CancellationToken cancellationToken = default)
         {
@@ -42,6 +43,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .ThenByDescending(
                     notification =>
                         notification.NotificationId)
+                .Skip(skip)
                 .Take(take)
                 .ToListAsync(cancellationToken);
         }

@@ -17,6 +17,8 @@ namespace MangaManagementSystem.Application.Services
         private const string StatusActive = "ACTIVE";
         private const string StatusDisabled = "DISABLED";
         private const string StatusRejected = "REJECTED";
+        private const string NotificationTypeAccountApproved =
+            "ACCOUNT_APPROVED";
 
         private static readonly HashSet<string> AllowedRoleNames = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -149,29 +151,43 @@ namespace MangaManagementSystem.Application.Services
                     StringComparison.OrdinalIgnoreCase)
                     ? "Rejected user registration approved again."
                     : "User registration approved.";
-
-            await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
-                adminUserId,
-                userId,
-                StatusActive,
-                reason);
-
-            var updated = await GetRequiredUserByIdForDtoAsync(userId);
-
             const string notificationTitle =
                 "Account approved";
 
             const string notificationMessage =
                 "Your MangaFlow account has been approved. You can now sign in and start using your account.";
 
-            await _notificationService.CreateNotificationAsync(
-                new CreateNotificationDto(
-                    RecipientUserId: userId,
-                    NotificationTypeCode: "SYSTEM_MESSAGE",
-                    Title: notificationTitle,
-                    Message: notificationMessage,
-                    RelatedEntityType: "User",
-                    RelatedEntityId: userId));
+            await _unitOfWork.BeginTransactionAsync();
+
+            try
+            {
+                await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
+                    adminUserId,
+                    userId,
+                    StatusActive,
+                    reason);
+
+                await _notificationService.CreateNotificationAsync(
+                    new CreateNotificationDto(
+                        RecipientUserId: userId,
+                        NotificationTypeCode:
+                            NotificationTypeAccountApproved,
+                        Title: notificationTitle,
+                        Message: notificationMessage,
+                        RelatedEntityType: "User",
+                        RelatedEntityId: userId));
+
+                await _unitOfWork.CommitTransactionAsync();
+            }
+            catch
+            {
+                await _unitOfWork.RollbackTransactionAsync();
+                throw;
+            }
+
+            var updated =
+                await GetRequiredUserByIdForDtoAsync(
+                    userId);
 
             var displayName =
                 string.IsNullOrWhiteSpace(updated.DisplayName)

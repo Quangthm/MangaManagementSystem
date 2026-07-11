@@ -6,6 +6,7 @@ namespace MangaManagementSystem.Web.Services.Api
     {
         Task<IReadOnlyList<NotificationDto>>
             GetNotificationsAsync(
+                int skip = 0,
                 int take = 20,
                 CancellationToken cancellationToken = default);
 

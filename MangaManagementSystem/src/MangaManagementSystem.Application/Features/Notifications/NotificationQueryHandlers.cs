@@ -36,6 +36,13 @@ namespace MangaManagementSystem.Application.Features.Notifications
             return notificationId;
         }
 
+        internal static int NormalizeSkip(
+            int skip)
+        {
+            return Math.Max(
+                0,
+                skip);
+        }
         internal static int NormalizeTake(
             int take)
         {
@@ -96,6 +103,11 @@ namespace MangaManagementSystem.Application.Features.Notifications
                     .ValidateRecipientUserId(
                         request.RecipientUserId);
 
+            var skip =
+                NotificationRequestValidation
+                    .NormalizeSkip(
+                        request.Skip);
+
             var take =
                 NotificationRequestValidation
                     .NormalizeTake(
@@ -105,6 +117,7 @@ namespace MangaManagementSystem.Application.Features.Notifications
                 await _notificationRepository
                     .GetRecentByRecipientUserIdAsync(
                         recipientUserId,
+                        skip,
                         take,
                         cancellationToken);
 
