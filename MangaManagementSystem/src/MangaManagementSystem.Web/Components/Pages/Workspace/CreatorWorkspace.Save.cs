@@ -127,6 +127,55 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 }
             }
 
+            // Phase 1 — upload all pending page images to Cloudinary in PARALLEL (bounded concurrency) so a
+            // multi-page save is not bottlenecked by sequential uploads. The DB creates below stay
+            // sequential (page-number ordering + orphan cleanup) and just consume these results.
+            var pendingVersions = new List<PageVersionModel>();
+            foreach (var chap in Chapters)
+            {
+                if (chap.ChapterId == Guid.Empty || chap.Pages == null) continue;
+                foreach (var page in chap.Pages)
+                {
+                    if (page.Versions.Any())
+                    {
+                        var v = page.Versions[page.ActiveVersionIndex];
+                        if (v.PendingBytes != null) pendingVersions.Add(v);
+                    }
+                }
+            }
+
+            var uploadResults = new System.Collections.Concurrent.ConcurrentDictionary<PageVersionModel, FileUploadResultDto>();
+            var uploadErrors = new System.Collections.Concurrent.ConcurrentDictionary<PageVersionModel, string>();
+            if (pendingVersions.Count > 0)
+            {
+                using var uploadGate = new SemaphoreSlim(3);   // at most 3 concurrent Cloudinary uploads
+                int uploadedSoFar = 0;
+                await Task.WhenAll(pendingVersions.Select(async v =>
+                {
+                    await uploadGate.WaitAsync();
+                    try
+                    {
+                        var res = await FileStorageService.UploadFileAsync(
+                            v.PendingBytes!,
+                            v.PendingFileName ?? "page.png",
+                            v.PendingContentType ?? "image/png",
+                            "CHAPTER_PAGE_VERSION");
+                        uploadResults[v] = res;
+                    }
+                    catch (Exception ex)
+                    {
+                        uploadErrors[v] = ex.Message;
+                    }
+                    finally
+                    {
+                        uploadGate.Release();
+                        var n = System.Threading.Interlocked.Increment(ref uploadedSoFar);
+                        _saveProgress = $"Uploading pages… ({n}/{pendingVersions.Count})";
+                        await InvokeAsync(StateHasChanged);
+                    }
+                }));
+            }
+
             foreach (var chap in Chapters)
             {
                 if (chap.ChapterId == Guid.Empty || chap.Pages == null) continue;
@@ -140,18 +189,18 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                             var ver = page.Versions[page.ActiveVersionIndex];
                             if (ver.PendingBytes != null)
                             {
-                                _saveProgress = $"Uploading pages… ({pagesUploaded + 1}/{totalPendingPages})";
+                                _saveProgress = $"Saving pages… ({pagesUploaded + 1}/{totalPendingPages})";
                                 StateHasChanged();
-                                // Upload Cloudinary FIRST (no SQL transaction held); track the public id so
-                                // an orphan file can be best-effort cleaned up if the DB create then fails.
+                                // Images were already uploaded to Cloudinary in parallel (Phase 1); consume
+                                // the result here. Track the public id so an orphan file can be best-effort
+                                // cleaned up if the DB create then fails.
                                 string? uploadedPublicId = null;
                                 try
                                 {
-                                    var uploadResult = await FileStorageService.UploadFileAsync(
-                                        ver.PendingBytes,
-                                        ver.PendingFileName ?? $"page_{pageNo}.png",
-                                        ver.PendingContentType ?? "image/png",
-                                        "CHAPTER_PAGE_VERSION");
+                                    if (uploadErrors.TryGetValue(ver, out var uploadErr))
+                                        throw new InvalidOperationException(uploadErr);
+                                    if (!uploadResults.TryGetValue(ver, out var uploadResult))
+                                        throw new InvalidOperationException("Upload result was not found for this page.");
                                     uploadedPublicId = uploadResult.PublicId;
 
                                     var fileDto = new CreateFileResourceDto(
