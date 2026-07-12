@@ -1,465 +1,175 @@
 @page "/publication/schedule"
 @using Microsoft.AspNetCore.Authorization
-<<<<<<< HEAD
 @using MangaManagementSystem.Application.DTOs.Publication
-=======
-@using Microsoft.AspNetCore.Components.Authorization
-@using MangaManagementSystem.Application.DTOs.Manga
-@using MangaManagementSystem.Application.DTOs.Editor
-@using MangaManagementSystem.Application.Features.Publication.Schedule.Queries.GetPublicationScheduleCalendar
->>>>>>> main
 @using MangaManagementSystem.Domain.Interfaces
 @using MangaManagementSystem.Web.Services.Api
-@using MangaManagementSystem.Web.Components.Pages.Publication
-@using MangaManagementSystem.Web.Helpers
-@using System.Security.Claims
 @attribute [Authorize]
 @inject IPublicationScheduleApiClient ScheduleApiClient
-@inject IMangakaChapterApiClient MangakaChapterApi
-@inject IEditorChapterReviewApiClient EditorChapterReviewApi
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
-@inject AuthenticationStateProvider AuthStateProvider
 
 <style>
-    .mf-schedule-page {
-        min-height: 100vh;
-        background: #f8fafc;
-        padding: 32px 32px 64px;
-    }
-
-    .mf-schedule-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 16px;
-        margin-bottom: 24px;
-    }
-
-    .mf-schedule-title {
-        font-size: 1.75rem;
-        font-weight: 700;
-        color: #0f172a;
-    }
-
-    .mf-schedule-subtitle {
-        color: #64748b;
-        margin-top: 4px;
-    }
-
-    .mf-week-nav {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-
-    .mf-week-label {
-        font-weight: 600;
-        color: #334155;
-        min-width: 200px;
-        text-align: center;
-    }
-
-    .mf-filters-bar {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        margin-bottom: 24px;
-        align-items: center;
-    }
-
-    .mf-search {
-        min-width: 300px;
-    }
-
-    .mf-filter-item {
-        min-width: 160px;
-    }
-
-    .mf-days-grid {
-        display: grid;
-        grid-template-columns: repeat(7, 1fr);
-        gap: 12px;
-    }
-
-    @@media (max-width: 1200px) {
-        .mf-days-grid {
-            grid-template-columns: repeat(4, 1fr);
-        }
-    }
-
-    @@media (max-width: 768px) {
-        .mf-days-grid {
-            grid-template-columns: repeat(2, 1fr);
-        }
-    }
-
-    @@media (max-width: 480px) {
-        .mf-days-grid {
-            grid-template-columns: 1fr;
-        }
-    }
-
-    .mf-day-column {
-        background: #fff;
-        border-radius: 12px;
-        padding: 12px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-        min-height: 100px;
-        transition: box-shadow 0.2s, border-color 0.2s;
-    }
-
-        .mf-day-column.mf-drag-over {
-            box-shadow: 0 0 0 2px #3b82f6, 0 4px 12px rgba(59,130,246,0.25);
-        }
-
-        .mf-day-column.today {
-            border: 2px solid #3b82f6;
-        }
-
-    .mf-day-header {
-        font-weight: 700;
-        font-size: 0.85rem;
-        color: #475569;
-        margin-bottom: 8px;
-        padding-bottom: 8px;
-        border-bottom: 1px solid #e2e8f0;
-    }
-
-        .mf-day-header.today {
-            color: #3b82f6;
-        }
-
-    .mf-day-empty {
-        color: #94a3b8;
-        font-size: 0.8rem;
-        text-align: center;
-        padding: 16px 0;
-    }
-
-    .mf-schedule-card {
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        padding: 8px;
-        margin-bottom: 8px;
-        display: flex;
-        gap: 8px;
-        align-items: flex-start;
-        background: #fff;
-        transition: box-shadow 0.15s;
-    }
-
-        .mf-schedule-card:hover {
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-
-    .mf-card-cover {
-        width: 44px;
-        height: 64px;
-        border-radius: 4px;
-        object-fit: cover;
-        background: #e2e8f0;
-        flex-shrink: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #94a3b8;
-        font-size: 0.6rem;
-        text-align: center;
-        overflow: hidden;
-    }
-
-        .mf-card-cover img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-    .mf-card-info {
-        flex: 1;
-        min-width: 0;
-    }
-
-    .mf-card-series {
-        font-size: 0.78rem;
-        font-weight: 600;
-        color: #1e293b;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        line-height: 1.3;
-    }
-
-    .mf-card-chapter {
-        font-size: 0.72rem;
-        color: #64748b;
-        margin-top: 1px;
-    }
-
-    .mf-card-badge {
-        margin-top: 3px;
-    }
-
-    .mf-no-results {
-        text-align: center;
-        padding: 64px 24px;
-        color: #94a3b8;
-    }
-
-    .mf-drawer-content {
-        width: 400px;
-        max-width: 90vw;
-    }
-
-    .mf-pending-placement .mud-overlay {
-        pointer-events: none !important;
-    }
-
-    .mf-pending-placement .mud-drawer {
-        opacity: 0;
-        pointer-events: none;
-    }
-
-    .mf-day-column.mf-pending-target {
-        cursor: pointer;
-    }
-
-        .mf-day-column.mf-pending-target:hover {
-            box-shadow: 0 0 0 3px #2563eb, 0 6px 16px rgba(37,99,235,0.30);
-        }
-
-    .mf-schedule-card.mf-draggable {
-        cursor: grab;
-    }
-
-        .mf-schedule-card.mf-draggable:active {
-            cursor: grabbing;
-        }
-
-    .mf-pending-indicator {
-        position: fixed;
-        bottom: 24px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: #3b82f6;
-        color: #fff;
-        padding: 10px 18px;
-        border-radius: 12px;
-        box-shadow: 0 4px 16px rgba(59,130,246,0.35);
-        z-index: 9999;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 0.85rem;
-        font-weight: 600;
-    }
-
-        .mf-pending-indicator strong {
-            color: #fff;
-        }
-
-    .mf-week-nav-active {
-        box-shadow: 0 0 0 2px #3b82f6;
-        border-radius: 8px;
-    }
+    .mf-schedule-page { min-height: 100vh; background: #f8fafc; padding: 32px 32px 64px; }
+    .mf-schedule-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
+    .mf-schedule-title { font-size: 1.75rem; font-weight: 700; color: #0f172a; }
+    .mf-schedule-subtitle { color: #64748b; margin-top: 4px; }
+    .mf-week-nav { display: flex; align-items: center; gap: 12px; }
+    .mf-week-label { font-weight: 600; color: #334155; min-width: 200px; text-align: center; }
+    .mf-filters-bar { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; align-items: center; }
+    .mf-search { min-width: 300px; }
+    .mf-filter-item { min-width: 160px; }
+    .mf-days-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; }
+    @@media (max-width: 1200px) { .mf-days-grid { grid-template-columns: repeat(4, 1fr); } }
+    @@media (max-width: 768px) { .mf-days-grid { grid-template-columns: repeat(2, 1fr); } }
+    @@media (max-width: 480px) { .mf-days-grid { grid-template-columns: 1fr; } }
+    .mf-day-column { background: #fff; border-radius: 12px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); min-height: 100px; }
+    .mf-day-column.today { border: 2px solid #3b82f6; }
+    .mf-day-header { font-weight: 700; font-size: 0.85rem; color: #475569; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0; }
+    .mf-day-header.today { color: #3b82f6; }
+    .mf-day-empty { color: #94a3b8; font-size: 0.8rem; text-align: center; padding: 16px 0; }
+    .mf-schedule-card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; margin-bottom: 8px; display: flex; gap: 8px; align-items: flex-start; background: #fff; transition: box-shadow 0.15s; }
+    .mf-schedule-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .mf-card-cover { width: 44px; height: 64px; border-radius: 4px; object-fit: cover; background: #e2e8f0; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 0.6rem; text-align: center; overflow: hidden; }
+    .mf-card-cover img { width: 100%; height: 100%; object-fit: cover; }
+    .mf-card-info { flex: 1; min-width: 0; }
+    .mf-card-series { font-size: 0.78rem; font-weight: 600; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
+    .mf-card-chapter { font-size: 0.72rem; color: #64748b; margin-top: 1px; }
+    .mf-card-badge { margin-top: 3px; }
+    .mf-no-results { text-align: center; padding: 64px 24px; color: #94a3b8; }
+    .mf-selected-series { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
 </style>
-<div class="@(IsPendingPlacement ? "mf-pending-placement" : null)">
-    <MudLayout>
-        <MudDrawer @bind-Open="_drawerOpen" Anchor="Anchor.Right" Variant="DrawerVariant.Persistent"
-                   ClipMode="DrawerClipMode.Always" Width="400px" Class="mf-drawer-content">
-            <PublicationScheduleActionDrawer @bind-IsOpen="_drawerOpen"
-                                             SelectedSeriesId="_selectedSeriesId"
-                                             SelectedSeriesTitle="@(_selectedSuggestion?.SeriesTitle)"
-                                             OnClearSeriesRequested="ClearSeriesFilterAsync"
-                                             OnActionCompleted="RefreshAfterAction"
-                                             OnChapterDragStarted="HandleChapterDragStarted"
-                                             OnChapterDragEnded="HandleChapterDragEnded"
-                                             DrawerReloadVersion="_drawerReloadVersion" />
-        </MudDrawer>
 
-        <MudMainContent>
-            <div class="mf-schedule-page">
-                @if (_loading)
-                {
-                    <MudProgressLinear Indeterminate="true" Class="mb-4" />
-                }
+<div class="mf-schedule-page">
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" Class="mb-4" />
+    }
 
-                @if (_error != null)
-                {
-                    <MudAlert Severity="Severity.Error" Class="mb-4">
-                        @_error
-                        <MudButton Variant="Variant.Text" Color="Color.Inherit" Class="ml-3" OnClick="LoadSchedule" StartIcon="@Icons.Material.Filled.Refresh">Retry</MudButton>
-                    </MudAlert>
-                }
+    @if (_error != null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-4">
+            @_error
+            <MudButton Variant="Variant.Text" Color="Color.Inherit" Class="ml-3" OnClick="LoadSchedule" StartIcon="@Icons.Material.Filled.Refresh">Retry</MudButton>
+        </MudAlert>
+    }
 
-                <div class="mf-schedule-header">
-                    <div>
-                        <div class="mf-schedule-title">Publication Release Calendar</div>
-                        <div class="mf-schedule-subtitle">Browse planned and released chapter updates</div>
-                    </div>
-                    <div class="mf-week-nav">
-                        <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft"
-                                       OnClick="GoToPreviousWeek"
-                                       Disabled="_loading"
-                                       Class="@(IsPendingPlacement ? "mf-week-nav-active" : null)"
-                                       @onmouseenter="@(() => StartWeekHoverNavigation(-7))"
-                                       @onmouseleave="CancelHoverNavigation" />
-                        <div class="mf-week-label">@FormatWeekLabel()</div>
-                        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight"
-                                       OnClick="GoToNextWeek"
-                                       Disabled="_loading"
-                                       Class="@(IsPendingPlacement ? "mf-week-nav-active" : null)"
-                                       @onmouseenter="@(() => StartWeekHoverNavigation(7))"
-                                       @onmouseleave="CancelHoverNavigation" />
-                        <MudButton Variant="Variant.Outlined" Size="Size.Small"
-                                   OnClick="GoToCurrentWeek" Disabled="_loading"
-                                   StartIcon="@Icons.Material.Filled.Today">
-                            Today
-                        </MudButton>
-                        @if (_isMangaka || _isEditor)
-                        {
-                            <MudButton Variant="Variant.Filled" Size="Size.Small" Color="Color.Primary"
-                                       OnClick="OpenDrawer"
-                                       StartIcon="@Icons.Material.Filled.EditCalendar">
-                                Manage Schedule
-                            </MudButton>
-                        }
-                    </div>
-                </div>
+    <div class="mf-schedule-header">
+        <div>
+            <div class="mf-schedule-title">Publication Release Calendar</div>
+            <div class="mf-schedule-subtitle">Browse planned and released chapter updates</div>
+        </div>
+        <div class="mf-week-nav">
+            <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft"
+                           OnClick="GoToPreviousWeek"
+                           Disabled="_loading" />
+            <div class="mf-week-label">@FormatWeekLabel()</div>
+            <MudIconButton Icon="@Icons.Material.Filled.ChevronRight"
+                           OnClick="GoToNextWeek"
+                           Disabled="_loading" />
+            <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                        OnClick="GoToCurrentWeek" Disabled="_loading"
+                        StartIcon="@Icons.Material.Filled.Today">
+                Today
+            </MudButton>
+        </div>
+    </div>
 
-                <div class="mf-filters-bar">
-                    <div style="display:flex; gap:4px; align-items:center; min-width: 300px;" class="mf-search">
-                        <MudAutocomplete T="PublicationScheduleSeriesSuggestion"
-                                         @ref="_seriesAutocomplete"
-                                         Value="_selectedSuggestion"
-                                         ValueChanged="OnSeriesSelected"
-                                         SearchFunc="@SearchSeriesAsync"
-                                         ToStringFunc="@(s => s?.SeriesTitle ?? string.Empty)"
-                                         Label="Search series..."
-                                         Variant="Variant.Outlined" Clearable="true"
-                                         ResetValueOnEmptyText="true" CoerceValue="true"
-                                         DebounceInterval="300"
-                                         Style="flex:1;"
-                                         Adornment="Adornment.Start"
-                                         AdornmentIcon="@Icons.Material.Filled.Search" />
-                        @if (_selectedSeriesId.HasValue)
-                        {
-                            <MudIconButton Icon="@Icons.Material.Filled.FilterAltOff"
-                                           Size="Size.Small"
-                                           Color="Color.Default"
-                                           OnClick="ClearSeriesFilterAsync"
-                                           Title="Clear series filter" />
-                        }
-                    </div>
+    <div class="mf-filters-bar">
+        <MudAutocomplete T="PublicationScheduleSeriesSuggestion"
+                         Value="_selectedSuggestion"
+                         ValueChanged="OnSeriesSelected"
+                         SearchFunc="@SearchSeriesAsync"
+                         ToStringFunc="@(s => s?.SeriesTitle ?? string.Empty)"
+                         Label="Search series..."
+                         Variant="Variant.Outlined" Clearable="true"
+                         ResetValueOnEmptyText="false" CoerceValue="false"
+                         DebounceInterval="300"
+                         Class="mf-search"
+                         Adornment="Adornment.Start"
+                         AdornmentIcon="@Icons.Material.Filled.Search" />
 
-                    <MudSelect T="string?" Value="_selectedFrequency" ValueChanged="OnFrequencyFilterChanged"
-                               Variant="Variant.Outlined" Label="Frequency" Clearable="true"
-                               Class="mf-filter-item">
-                        <MudSelectItem T="string?" Value="@((string?)null)">All Frequencies</MudSelectItem>
-                        <MudSelectItem T="string?" Value="@("WEEKLY")">Weekly</MudSelectItem>
-                        <MudSelectItem T="string?" Value="@("MONTHLY")">Monthly</MudSelectItem>
-                        <MudSelectItem T="string?" Value="@("IRREGULAR")">Irregular</MudSelectItem>
-                    </MudSelect>
-                </div>
+        <MudSelect T="string?" Value="_selectedFrequency" ValueChanged="OnFrequencyFilterChanged"
+                   Variant="Variant.Outlined" Label="Frequency" Clearable="true"
+                   Class="mf-filter-item">
+            <MudSelectItem T="string?" Value="@((string?)null)">All Frequencies</MudSelectItem>
+            <MudSelectItem T="string?" Value="@("WEEKLY")">Weekly</MudSelectItem>
+            <MudSelectItem T="string?" Value="@("MONTHLY")">Monthly</MudSelectItem>
+            <MudSelectItem T="string?" Value="@("IRREGULAR")">Irregular</MudSelectItem>
+        </MudSelect>
+    </div>
 
-                @if (_calendar != null)
-                {
-                    @if (_calendar.Days.All(d => d.Items.Count == 0))
+    @if (_calendar != null)
+    {
+        @if (_calendar.Days.All(d => d.Items.Count == 0))
+        {
+            <MudPaper Class="pa-12 mf-no-results" Elevation="0">
+                <MudIcon Icon="@Icons.Material.Filled.EventBusy" Size="Size.Large" Color="Color.Default" Class="mb-3" />
+                <MudText Typo="Typo.h6" Class="mb-1">No releases found</MudText>
+                <MudText Class="mf-muted">
+                    @if (_selectedSeriesId.HasValue || !string.IsNullOrWhiteSpace(_selectedFrequency))
                     {
-                        <MudPaper Class="pa-12 mf-no-results" Elevation="0">
-                            <MudIcon Icon="@Icons.Material.Filled.EventBusy" Size="Size.Large" Color="Color.Default" Class="mb-3" />
-                            <MudText Typo="Typo.h6" Class="mb-1">No releases found</MudText>
-                            <MudText Class="mf-muted">
-                                @if (_selectedSeriesId.HasValue || !string.IsNullOrWhiteSpace(_selectedFrequency))
-                                {
-                                    <span>No matching releases for this week with the current filters. Try adjusting your filters.</span>
-                                }
-                                else
-                                {
-                                    <span>No serialized chapters are scheduled or released during this week.</span>
-                                }
-                            </MudText>
-                        </MudPaper>
+                        <span>No matching releases for this week with the current filters. Try adjusting your filters.</span>
                     }
-                  
-                        <div class="mf-days-grid">
-                            @foreach (var day in _calendar.Days)
+                    else
+                    {
+                        <span>No serialized chapters are scheduled or released during this week.</span>
+                    }
+                </MudText>
+            </MudPaper>
+        }
+        else
+        {
+            <div class="mf-days-grid">
+                @foreach (var day in _calendar.Days)
+                {
+                    <div class="mf-day-column @(day.IsToday ? "today" : "")">
+                        <div class="mf-day-header @(day.IsToday ? "today" : "")">
+                            <span>@day.DayLabel</span>
+                            @if (day.IsToday)
                             {
-                                <div class="mf-day-column @(day.IsToday ? "today" : "") @(IsPendingPlacement ? "mf-drag-over mf-pending-target" : "")"
-                                     @ondragover="e => OnDragOverDate(e, day.Date)"
-                                     @ondragover:preventDefault
-                                     @ondrop="e => OnDropOnDate(e, day.Date)"
-                                     @onclick="() => PlaceChapterOnDate(day.Date)">
-                                    <div class="mf-day-header @(day.IsToday ? "today" : "")">
-                                        <span>@day.DayLabel</span>
-                                        @if (day.IsToday)
-                                        {
-                                            <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="ml-2">Today</MudChip>
-                                        }
-                                    </div>
-
-                                    @if (day.Items.Count == 0)
-                                    {
-                                        <div class="mf-day-empty">No releases</div>
-                                    }
-                                    else
-                                    {
-                                        @foreach (var item in day.Items)
-                                        {
-                                            <div class="@GetScheduleCardCss(item)"
-                                                 draggable="@GetCalendarDraggableAttribute(item)"
-                                                 @ondragstart="e => BeginChapterDragFromCalendar(e, item)"
-                                                 @ondragend="HandleChapterDragEnded"
-                                                 @onclick:stopPropagation="true">
-                                                <div class="mf-card-cover">
-                                                    @if (!string.IsNullOrWhiteSpace(item.SeriesCoverUrl))
-                                                    {
-                                                        <img src="@item.SeriesCoverUrl" alt="@item.SeriesTitle cover" loading="lazy" />
-                                                    }
-                                                    else
-                                                    {
-                                                        <span>No Cover</span>
-                                                    }
-                                                </div>
-                                                <div class="mf-card-info">
-                                                    <div class="mf-card-series" title="@item.SeriesTitle">@item.SeriesTitle</div>
-                                                    <div class="mf-card-chapter">@item.ChapterNumberLabel</div>
-                                                    <div class="mf-card-badge">
-                                                        <MudChip T="string" Color="@GetBadgeColor(item.StatusCode)" Size="Size.Small">
-                                                            @item.StatusBadgeLabel
-                                                        </MudChip>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        }
-                                    }
-                                </div>
+                                <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="ml-2">Today</MudChip>
                             }
                         </div>
-                    
-                }
-                @if (_pendingDragChapter != null)
-                {
-                    <div class="mf-pending-indicator">
-                        <MudIcon Icon="@Icons.Material.Filled.OpenWith" Size="Size.Small" />
-                        <span>
-                            Scheduling:
-                            <strong>@_pendingDragChapter.SeriesTitle — @_pendingDragChapter.ChapterNumberLabel</strong>
-                        </span>
-                        <MudIconButton Icon="@Icons.Material.Filled.Close"
-                                       Size="Size.Small"
-                                       Color="Color.Inherit"
-                                       OnClick="CancelPendingPlacement"
-                                       Title="Cancel scheduling placement" />
+
+                        @if (day.Items.Count == 0)
+                        {
+                            <div class="mf-day-empty">No releases</div>
+                        }
+                        else
+                        {
+                            @foreach (var item in day.Items)
+                            {
+                                <div class="mf-schedule-card">
+                                    <div class="mf-card-cover">
+                                        @if (!string.IsNullOrWhiteSpace(item.SeriesCoverUrl))
+                                        {
+                                            <img src="@item.SeriesCoverUrl" alt="@item.SeriesTitle cover" loading="lazy" />
+                                        }
+                                        else
+                                        {
+                                            <span>No Cover</span>
+                                        }
+                                    </div>
+                                    <div class="mf-card-info">
+                                        <div class="mf-card-series" title="@item.SeriesTitle">@item.SeriesTitle</div>
+                                        <div class="mf-card-chapter">@item.ChapterNumberLabel</div>
+                                        <div class="mf-card-badge">
+                                            <MudChip T="string" Color="@GetBadgeColor(item.StatusCode)" Size="Size.Small">
+                                                @item.StatusBadgeLabel
+                                            </MudChip>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
                     </div>
                 }
             </div>
-        </MudMainContent>
-    </MudLayout>
+        }
+    }
 </div>
+
 @code {
-    private MudAutocomplete<PublicationScheduleSeriesSuggestion>? _seriesAutocomplete;
     private bool _isInitialized;
     private bool _loading = true;
     private string? _error;
@@ -468,375 +178,23 @@
 
     private PublicationScheduleSeriesSuggestion? _selectedSuggestion;
     private Guid? _selectedSeriesId;
-    private string? _selectedSeriesSlug;
     private string? _selectedFrequency;
-    private bool _drawerOpen;
-    private bool _isMangaka;
-    private bool _isEditor;
-    private Guid _currentUserId;
-    private int _drawerReloadVersion;
-    private ActionableChapterItem? _draggedChapter;
-    private ActionableChapterItem? _pendingDragChapter;
-    private Dictionary<Guid, ActionableChapterItem> _authorizedDragPayloadByChapterId = new();
-    private CancellationTokenSource? _hoverNavCts;
-    private bool _isDragging => _draggedChapter != null || _pendingDragChapter != null;
-    private bool IsPendingPlacement => _pendingDragChapter != null;
-    private bool _drawerWasOpenBeforePlacement;
+
     private PublicationScheduleCalendarDto? _calendar;
 
     protected override async Task OnInitializedAsync()
     {
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-        var user = authState.User;
-        if (user.Identity?.IsAuthenticated == true)
-        {
-            _isMangaka = user.IsInRole("Mangaka");
-            _isEditor = user.IsInRole("Tantou Editor");
-            var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (Guid.TryParse(idClaim, out var uid))
-                _currentUserId = uid;
-        }
-
         var uri = new Uri(Nav.Uri);
         var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
 
         if (DateTime.TryParse(query["anchorDate"], out var parsed))
             _anchorDate = parsed.Date;
 
-        if (query["series"] is { Length: > 0 } seriesSlug)
-        {
-            await ResolveSelectedSeriesBySlugAsync(seriesSlug);
-        }
-        else if (query["seriesId"] is { Length: > 0 } sid && Guid.TryParse(sid, out var guid))
-        {
-            await ResolveLegacySelectedSeriesByIdAsync(guid);
-        }
+        if (query["seriesId"] is { Length: > 0 } sid && Guid.TryParse(sid, out var guid))
+            _selectedSeriesId = guid;
 
         _isInitialized = true;
-        await LoadAuthorizedActionDataAsync();
         await LoadSchedule();
-    }
-
-    private void OpenDrawer()
-    {
-        _drawerOpen = true;
-        StateHasChanged();
-    }
-
-    private async Task RefreshAfterAction()
-    {
-        await LoadSchedule();
-    }
-
-    private async Task LoadAuthorizedActionDataAsync()
-    {
-        try
-        {
-            IEnumerable<ActionableChapterItem> items;
-
-            if (_isMangaka)
-            {
-                var chapters = await MangakaChapterApi.GetMyChaptersAsync(_currentUserId);
-                items = chapters.Select(c => MapMangakaChapterToActionableItem(c));
-            }
-            else if (_isEditor)
-            {
-                var chapters = await EditorChapterReviewApi.GetActionableChaptersAsync(_currentUserId);
-                items = chapters.Select(c => MapEditorChapterToActionableItem(c));
-            }
-            else
-            {
-                _authorizedDragPayloadByChapterId.Clear();
-                return;
-            }
-
-            _authorizedDragPayloadByChapterId = items
-                .Where(CanDragPayloadForSchedule)
-                .GroupBy(c => c.ChapterId)
-                .ToDictionary(g => g.Key, g => g.First());
-        }
-        catch
-        {
-            _authorizedDragPayloadByChapterId.Clear();
-        }
-    }
-
-    private static ActionableChapterItem MapMangakaChapterToActionableItem(MangakaChapterListItemDto dto) =>
-     new(dto.ChapterId,
-         dto.SeriesId,
-         dto.SeriesTitle,
-         dto.ChapterNumberLabel,
-         dto.ChapterTitle,
-         dto.StatusCode,
-         dto.PlannedReleaseDate,
-         dto.ReleasedAtUtc,
-         dto.SeriesCoverUrl);
-
-    private static ActionableChapterItem MapEditorChapterToActionableItem(EditorActionableChapterDto dto) =>
-        new(dto.ChapterId,
-            dto.SeriesId,
-            dto.SeriesTitle,
-            dto.ChapterNumberLabel,
-            dto.ChapterTitle,
-            dto.StatusCode,
-            dto.PlannedReleaseDate,
-            dto.ReleasedAtUtc,
-            dto.SeriesCoverUrl);
-
-    private bool CanDragPayloadForSchedule(ActionableChapterItem payload)
-    {
-        if (ExcludedScheduleStatuses.Contains(payload.StatusCode))
-            return false;
-
-        if (_isMangaka && string.Equals(payload.StatusCode, "UNDER_REVIEW", StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        return ScheduleActionStatuses.Contains(payload.StatusCode);
-    }
-
-    private bool CanStartDragFromCalendar(PublicationScheduleItemDto item)
-    {
-        if (!_isMangaka && !_isEditor)
-            return false;
-
-        if (ExcludedScheduleStatuses.Contains(item.StatusCode))
-            return false;
-
-        if (!_authorizedDragPayloadByChapterId.TryGetValue(item.ChapterId, out var payload))
-            return false;
-
-        return CanDragPayloadForSchedule(payload);
-    }
-
-    private string GetScheduleCardCss(PublicationScheduleItemDto item)
-        => CanStartDragFromCalendar(item)
-            ? "mf-schedule-card mf-draggable"
-            : "mf-schedule-card";
-
-    private string? GetCalendarDraggableAttribute(PublicationScheduleItemDto item)
-        => CanStartDragFromCalendar(item) ? "true" : null;
-
-    private bool TryGetAuthorizedPayload(PublicationScheduleItemDto item, out ActionableChapterItem payload)
-        => _authorizedDragPayloadByChapterId.TryGetValue(item.ChapterId, out payload!)
-           && CanDragPayloadForSchedule(payload);
-
-    private void HandleChapterDragStarted(ActionableChapterItem chapter)
-    {
-        BeginChapterPlacementFromDrawer(chapter);
-    }
-
-    private void HandleChapterDragEnded()
-    {
-        _draggedChapter = null;
-        StateHasChanged();
-    }
-
-    private void BeginChapterPlacement(ActionableChapterItem chapter)
-    {
-        if (!CanDragPayloadForSchedule(chapter))
-        {
-            Snackbar.Add("This chapter cannot be scheduled.", Severity.Warning);
-            return;
-        }
-
-        _drawerWasOpenBeforePlacement = _drawerOpen;
-        _draggedChapter = chapter;
-        _pendingDragChapter = chapter;
-        StateHasChanged();
-    }
-    private void BeginChapterPlacementFromDrawer(ActionableChapterItem chapter)
-    {
-        if (!CanDragPayloadForSchedule(chapter))
-        {
-            Snackbar.Add("This chapter cannot be scheduled.", Severity.Warning);
-            return;
-        }
-
-        _drawerWasOpenBeforePlacement = _drawerOpen;
-
-        _draggedChapter = chapter;
-        _pendingDragChapter = chapter;
-
-        // Important:
-        // Do not keep the temporary drawer open while placing.
-        // The MudDrawer overlay/backdrop can block calendar date cells.
-        _drawerOpen = false;
-
-        StateHasChanged();
-    }
-
-    private void CancelPendingPlacement()
-    {
-        ClearPlacementState(restoreDrawer: true);
-    }
-
-    private void ClearPlacementState(bool restoreDrawer)
-    {
-        _pendingDragChapter = null;
-        _draggedChapter = null;
-        CancelHoverNavigation();
-
-        if (restoreDrawer)
-            _drawerOpen = _drawerWasOpenBeforePlacement;
-
-        StateHasChanged();
-    }
-    private void BeginChapterDragFromCalendar(DragEventArgs e, PublicationScheduleItemDto item)
-    {
-        if (!TryGetAuthorizedPayload(item, out var payload))
-        {
-            Snackbar.Add("You are not allowed to reschedule this chapter.", Severity.Warning);
-            return;
-        }
-
-        BeginChapterPlacement(payload);
-    }
-
-    private void OnDragOverDate(DragEventArgs e, DateTime date)
-    {
-        // preventDefault set via directive
-    }
-
-    private async Task OnDropOnDate(DragEventArgs e, DateTime date)
-    {
-        await TryPlaceChapterOnDateAsync(date);
-    }
-
-    private async Task PlaceChapterOnDate(DateTime date)
-    {
-        if (_pendingDragChapter == null)
-            return;
-
-        await TryPlaceChapterOnDateAsync(date);
-    }
-
-    private async Task TryPlaceChapterOnDateAsync(DateTime date)
-    {
-        var chapter = _draggedChapter ?? _pendingDragChapter;
-        if (chapter == null)
-            return;
-
-        if (!CanDragPayloadForSchedule(chapter))
-        {
-            Snackbar.Add("This chapter cannot be scheduled.", Severity.Warning);
-            ClearPlacementState(restoreDrawer: true);
-            return;
-        }
-
-        if (!IsDateDropTargetEnabled(date))
-        {
-            Snackbar.Add("Cannot schedule on a past date.", Severity.Warning);
-            StateHasChanged();
-            return;
-        }
-
-        await ScheduleChapterFromDropAsync(chapter, date);
-    }
-
-    private static bool IsDateDropTargetEnabled(DateTime date)
-        => date.Date >= DateTime.UtcNow.Date;
-
-    private async Task ScheduleChapterFromDropAsync(ActionableChapterItem chapter, DateTime targetDate)
-    {
-        try
-        {
-            var request = new SetPlannedReleaseDateRequest(targetDate);
-            SetChapterPlannedReleaseDateResponse response;
-
-            if (_isMangaka)
-            {
-                response = await MangakaChapterApi.SetPlannedReleaseDateAsync(
-                    _currentUserId, chapter.ChapterId, request);
-            }
-            else if (_isEditor)
-            {
-                response = await EditorChapterReviewApi.SetPlannedReleaseDateAsync(
-                    _currentUserId, chapter.ChapterId, request);
-            }
-            else
-            {
-                Snackbar.Add("You are not allowed to schedule chapters.", Severity.Warning);
-                ClearPlacementState(restoreDrawer: true);
-                return;
-            }
-
-            Snackbar.Add(
-                response.ValidationMessage ?? "Planned release date updated.",
-                Severity.Success);
-
-            if (!string.IsNullOrWhiteSpace(response.WarningMessage))
-                Snackbar.Add(response.WarningMessage, Severity.Warning);
-
-            await LoadSchedule();
-            await LoadAuthorizedActionDataAsync();
-
-            _drawerReloadVersion++;
-            ClearPlacementState(restoreDrawer: true);
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add(ex.Message, Severity.Error);
-            await LoadAuthorizedActionDataAsync();
-            ClearPlacementState(restoreDrawer: true);
-        }
-    }
-
-    private async Task ResolveSelectedSeriesBySlugAsync(string slug)
-    {
-        try
-        {
-            var suggestion = await ScheduleApiClient.GetSeriesSuggestionBySlugAsync(slug);
-            if (suggestion != null)
-            {
-                ApplySelectedSeriesSuggestion(suggestion);
-            }
-            else
-            {
-                ClearSelectedSeriesState();
-                Snackbar.Add("Selected series was not found or is not available for scheduling.", Severity.Warning);
-            }
-        }
-        catch
-        {
-            ClearSelectedSeriesState();
-            Snackbar.Add("Selected series was not found or is not available for scheduling.", Severity.Warning);
-        }
-    }
-
-    private async Task ResolveLegacySelectedSeriesByIdAsync(Guid seriesId)
-    {
-        try
-        {
-            var suggestion = await ScheduleApiClient.GetSeriesSuggestionByIdAsync(seriesId);
-            if (suggestion != null)
-            {
-                ApplySelectedSeriesSuggestion(suggestion);
-            }
-            else
-            {
-                ClearSelectedSeriesState();
-                Snackbar.Add("Selected series was not found or is not available for scheduling.", Severity.Warning);
-            }
-        }
-        catch
-        {
-            ClearSelectedSeriesState();
-            Snackbar.Add("Selected series was not found or is not available for scheduling.", Severity.Warning);
-        }
-    }
-
-    private void ClearSelectedSeriesState()
-    {
-        _selectedSuggestion = null;
-        _selectedSeriesId = null;
-        _selectedSeriesSlug = null;
-    }
-
-    private void ApplySelectedSeriesSuggestion(PublicationScheduleSeriesSuggestion suggestion)
-    {
-        _selectedSuggestion = suggestion;
-        _selectedSeriesId = suggestion.SeriesId;
-        _selectedSeriesSlug = suggestion.SeriesSlug;
     }
 
     private async Task<IEnumerable<PublicationScheduleSeriesSuggestion>> SearchSeriesAsync(string searchText, CancellationToken ct)
@@ -862,28 +220,8 @@
     {
         _selectedSuggestion = suggestion;
         _selectedSeriesId = suggestion?.SeriesId;
-        _selectedSeriesSlug = suggestion?.SeriesSlug;
-        if (_isInitialized)
-        {
-            UpdateUrl();
-            await LoadSchedule();
-        }
-    }
-
-    private async Task ClearSeriesFilterAsync()
-    {
-        _selectedSuggestion = null;
-        _selectedSeriesId = null;
-        _selectedSeriesSlug = null;
-        UpdateUrl();
         if (_isInitialized)
             await LoadSchedule();
-    }
-
-    private void UpdateUrl()
-    {
-        var url = PublicationScheduleNavigation.BuildUrl(_selectedSeriesId, _selectedSeriesSlug, _anchorDate);
-        Nav.NavigateTo(url, replace: true);
     }
 
     private async Task LoadSchedule()
@@ -906,73 +244,25 @@
             StateHasChanged();
         }
     }
-    private void StartWeekHoverNavigation(int dayOffset)
-    {
-        if (!IsPendingPlacement || _loading)
-            return;
-
-        CancelHoverNavigation();
-
-        _hoverNavCts = new CancellationTokenSource();
-        var token = _hoverNavCts.Token;
-
-        _ = NavigateWeekAfterHoverAsync(dayOffset, token);
-    }
-
-    private async Task NavigateWeekAfterHoverAsync(int dayOffset, CancellationToken token)
-    {
-        try
-        {
-            await Task.Delay(TimeSpan.FromSeconds(2), token);
-
-            await InvokeAsync(async () =>
-            {
-                if (!token.IsCancellationRequested && IsPendingPlacement && !_loading)
-                    await NavigateWeekAsync(dayOffset);
-            });
-        }
-        catch (TaskCanceledException)
-        {
-        }
-    }
-
-    private void CancelHoverNavigation()
-    {
-        if (_hoverNavCts == null)
-            return;
-
-        _hoverNavCts.Cancel();
-        _hoverNavCts.Dispose();
-        _hoverNavCts = null;
-    }
-
-    private async Task NavigateWeekAsync(int dayOffset)
-    {
-        if (_loading)
-            return;
-
-        _anchorDate = _anchorDate.AddDays(dayOffset);
-        UpdateUrl();
-        await LoadSchedule();
-    }
 
     private async void GoToPreviousWeek()
     {
-        await NavigateWeekAsync(-7);
+        if (_loading) return;
+        _anchorDate = _anchorDate.AddDays(-7);
+        await LoadSchedule();
     }
 
     private async void GoToNextWeek()
     {
-        await NavigateWeekAsync(7);
+        if (_loading) return;
+        _anchorDate = _anchorDate.AddDays(7);
+        await LoadSchedule();
     }
 
     private async void GoToCurrentWeek()
     {
-        if (_loading)
-            return;
-
+        if (_loading) return;
         _anchorDate = DateTime.UtcNow.Date;
-        UpdateUrl();
         await LoadSchedule();
     }
 
@@ -1003,19 +293,4 @@
         "ON_HOLD" => Color.Warning,
         _ => Color.Default
     };
-    private static readonly HashSet<string> ScheduleActionStatuses = new(StringComparer.OrdinalIgnoreCase)
-{
-    "DRAFT",
-    "REVISION_REQUESTED",
-    "UNDER_REVIEW",
-    "APPROVED",
-    "SCHEDULED",
-    "ON_HOLD"
-};
-
-    private static readonly HashSet<string> ExcludedScheduleStatuses = new(StringComparer.OrdinalIgnoreCase)
-{
-    "RELEASED",
-    "CANCELLED"
-};
 }

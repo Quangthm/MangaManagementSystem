@@ -1,325 +1,101 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using MangaManagementSystem.API.Contracts;
 using MangaManagementSystem.Application.DTOs.Auth;
-using MangaManagementSystem.Application.Features.Auth.Queries;
-using MangaManagementSystem.Application.Features.Auth.Registration;
-using MediatR;
-using Microsoft.AspNetCore.Authorization;
+using MangaManagementSystem.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 
-namespace MangaManagementSystem.API.Controllers
+namespace MangaManagementSystem.API.Controllers;
+
+[ApiController]
+[Route("api/auth")]
+public sealed class AuthController : ControllerBase
 {
-    [ApiController]
-    [Route("api/auth")]
-    public sealed class AuthController
-        : ControllerBase
+    private readonly IAuthService _authService;
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<AuthController> _logger;
+
+    public AuthController(
+        IAuthService authService,
+        IConfiguration configuration,
+        ILogger<AuthController> logger)
     {
-        private readonly ISender _sender;
-        private readonly ILogger<AuthController> _logger;
-        private readonly IConfiguration
-            _configuration;
+        _authService = authService;
+        _configuration = configuration;
+        _logger = logger;
+    }
 
-        public AuthController(
-            ISender sender,
-            ILogger<AuthController> logger,
-            IConfiguration configuration)
+    [HttpPost("login")]
+    public async Task<IActionResult> LoginAsync(
+        [FromBody] LoginRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
         {
-            _sender = sender;
-            _logger = logger;
-            _configuration = configuration;
+            return ValidationProblem(ModelState);
         }
 
-        [AllowAnonymous]
-        [HttpPost("login")]
-        public async Task<IActionResult> LoginAsync(
-            [FromBody] LoginRequest request,
-            CancellationToken cancellationToken)
+        var result = await _authService.LoginAsync(
+            new LoginDto(request.UsernameOrEmail, request.Password));
+
+        if (!result.Succeeded || result.User is null || string.IsNullOrWhiteSpace(result.RoleName))
         {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(
-                    new ApiErrorResponse(
-                        AuthErrorCodes.ValidationFailed,
-                        "Username or email and password are required."));
-            }
-
-            try
-            {
-                var result =
-                    await _sender.Send(
-                        new AuthenticateUserQuery(
-                            request.UsernameOrEmail,
-                            request.Password),
-                        cancellationToken);
-
-                if (!result.Succeeded
-                    || result.User is null
-                    || string.IsNullOrWhiteSpace(
-                        result.RoleName))
-                {
-                    return StatusCode(
-                        ResolveAuthenticationFailureStatus(
-                            result.ErrorCode),
-                        new ApiErrorResponse(
-                            result.ErrorCode
-                                ?? AuthErrorCodes.InvalidCredentials,
-                            result.ErrorMessage
-                                ?? "Invalid credentials."));
-                }
-
-                return Ok(
-                    CreateLoginResponse(
-                        result.User,
-                        result.RoleName));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Unexpected error processing login.");
-
-                return StatusCode(
-                    StatusCodes.Status500InternalServerError,
-                    new ApiErrorResponse(
-                        AuthErrorCodes.RequestFailed,
-                        "Login could not be completed right now."));
-            }
+            return Unauthorized(new ApiErrorResponse(
+                result.ErrorMessage ?? "Invalid credentials"));
         }
 
-        [AllowAnonymous]
-        [HttpPost("google-login/resolve")]
-        public async Task<IActionResult>
-            ResolveGoogleLoginAsync(
-                [FromBody] GoogleLoginRequest request,
-                CancellationToken cancellationToken)
+        var expiresAtUtc = DateTime.UtcNow.AddDays(14);
+        var accessToken = GenerateJwtToken(result.User, result.RoleName, expiresAtUtc);
+
+        var response = new LoginResponse(
+            result.User,
+            result.RoleName,
+            accessToken,
+            expiresAtUtc);
+
+        return Ok(response);
+    }
+
+    private string GenerateJwtToken(
+        UserDto user,
+        string roleName,
+        DateTime expiresAtUtc)
+    {
+        var jwtKey = _configuration["Jwt:Key"]
+            ?? throw new InvalidOperationException("Jwt:Key is missing.");
+
+        var jwtIssuer = _configuration["Jwt:Issuer"]
+            ?? throw new InvalidOperationException("Jwt:Issuer is missing.");
+
+        var jwtAudience = _configuration["Jwt:Audience"]
+            ?? throw new InvalidOperationException("Jwt:Audience is missing.");
+
+        var claims = new List<Claim>
         {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(
-                    new ApiErrorResponse(
-                        AuthErrorCodes.GoogleEmailMissing,
-                        "Google did not return a valid email address."));
-            }
+            new(JwtRegisteredClaimNames.Sub, user.UserId.ToString()),
+            new(ClaimTypes.NameIdentifier, user.UserId.ToString()),
+            new(ClaimTypes.Name, user.Username),
+            new(ClaimTypes.Email, user.Email),
+            new(ClaimTypes.Role, roleName),
+            new("user_id", user.UserId.ToString())
+        };
 
-            try
-            {
-                var result =
-                    await _sender.Send(
-                        new ResolveGoogleLoginQuery(
-                            request.Email),
-                        cancellationToken);
+        var signingKey = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes(jwtKey));
 
-                if (!result.Succeeded
-                    || result.User is null
-                    || string.IsNullOrWhiteSpace(
-                        result.RoleName))
-                {
-                    return StatusCode(
-                        ResolveAuthenticationFailureStatus(
-                            result.ErrorCode),
-                        new ApiErrorResponse(
-                            result.ErrorCode
-                                ?? AuthErrorCodes.AccountNotFound,
-                            result.ErrorMessage
-                                ?? "No active account was found for this Google email."));
-                }
+        var credentials = new SigningCredentials(
+            signingKey,
+            SecurityAlgorithms.HmacSha256);
 
-                return Ok(
-                    CreateLoginResponse(
-                        result.User,
-                        result.RoleName));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Unexpected error resolving Google login.");
+        var token = new JwtSecurityToken(
+            issuer: jwtIssuer,
+            audience: jwtAudience,
+            claims: claims,
+            expires: expiresAtUtc,
+            signingCredentials: credentials);
 
-                return StatusCode(
-                    StatusCodes.Status500InternalServerError,
-                    new ApiErrorResponse(
-                        AuthErrorCodes.GoogleOAuthFailed,
-                        "Google sign-in could not be completed right now."));
-            }
-        }
-
-        [AllowAnonymous]
-        [HttpPost("google-signup")]
-        public async Task<IActionResult>
-            GoogleSignupAsync(
-                [FromBody] GoogleSignupRequest request,
-                CancellationToken cancellationToken)
-        {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(
-                    new ApiErrorResponse(
-                        AuthErrorCodes.ValidationFailed,
-                        "Google sign-up information is invalid."));
-            }
-
-            var command =
-                new ProcessGoogleSignupCommand(
-                    request.Email,
-                    request.GoogleDisplayName,
-                    request.RoleName);
-
-            try
-            {
-                var result =
-                    await _sender.Send(
-                        command,
-                        cancellationToken);
-
-                return Ok(result);
-            }
-            catch (InvalidOperationException ex)
-            {
-                _logger.LogWarning(
-                    ex,
-                    "Google sign-up request was rejected.");
-
-                var errorCode =
-                    ex.Message.Contains(
-                        "role",
-                        StringComparison.OrdinalIgnoreCase)
-                        ? AuthErrorCodes.InvalidRole
-                        : AuthErrorCodes.GoogleSignupFailed;
-
-                var safeMessage =
-                    errorCode ==
-                    AuthErrorCodes.InvalidRole
-                        ? "The selected registration role is invalid."
-                        : "Google sign-up could not be completed.";
-
-                return BadRequest(
-                    new ApiErrorResponse(
-                        errorCode,
-                        safeMessage));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Unexpected error processing Google sign-up.");
-
-                return StatusCode(
-                    StatusCodes.Status500InternalServerError,
-                    new ApiErrorResponse(
-                        AuthErrorCodes.GoogleSignupFailed,
-                        "We could not process Google sign-up right now. Please try again later."));
-            }
-        }
-
-        private LoginResponse CreateLoginResponse(
-            UserDto user,
-            string roleName)
-        {
-            var expiresAtUtc =
-                DateTime.UtcNow.AddDays(14);
-
-            var accessToken =
-                GenerateJwtToken(
-                    user,
-                    roleName,
-                    expiresAtUtc);
-
-            return new LoginResponse(
-                user,
-                roleName,
-                accessToken,
-                expiresAtUtc);
-        }
-
-        private string GenerateJwtToken(
-            UserDto user,
-            string roleName,
-            DateTime expiresAtUtc)
-        {
-            var jwtKey =
-                _configuration["Jwt:Key"]
-                ?? throw new InvalidOperationException(
-                    "Jwt:Key is missing.");
-
-            var jwtIssuer =
-                _configuration["Jwt:Issuer"]
-                ?? throw new InvalidOperationException(
-                    "Jwt:Issuer is missing.");
-
-            var jwtAudience =
-                _configuration["Jwt:Audience"]
-                ?? throw new InvalidOperationException(
-                    "Jwt:Audience is missing.");
-
-            var claims =
-                new List<Claim>
-                {
-                    new(
-                        JwtRegisteredClaimNames.Sub,
-                        user.UserId.ToString()),
-                    new(
-                        ClaimTypes.NameIdentifier,
-                        user.UserId.ToString()),
-                    new(
-                        ClaimTypes.Name,
-                        user.Username),
-                    new(
-                        ClaimTypes.Email,
-                        user.Email),
-                    new(
-                        ClaimTypes.Role,
-                        roleName),
-                    new(
-                        "user_id",
-                        user.UserId.ToString())
-                };
-
-            var signingKey =
-                new SymmetricSecurityKey(
-                    Encoding.UTF8.GetBytes(
-                        jwtKey));
-
-            var credentials =
-                new SigningCredentials(
-                    signingKey,
-                    SecurityAlgorithms.HmacSha256);
-
-            var token =
-                new JwtSecurityToken(
-                    issuer: jwtIssuer,
-                    audience: jwtAudience,
-                    claims: claims,
-                    expires: expiresAtUtc,
-                    signingCredentials: credentials);
-
-            return new JwtSecurityTokenHandler()
-                .WriteToken(token);
-        }
-
-        private static int
-            ResolveAuthenticationFailureStatus(
-                string? errorCode)
-        {
-            return errorCode switch
-            {
-                AuthErrorCodes.AccountPending =>
-                    StatusCodes.Status403Forbidden,
-
-                AuthErrorCodes.AccountRejected =>
-                    StatusCodes.Status403Forbidden,
-
-                AuthErrorCodes.AccountDisabled =>
-                    StatusCodes.Status403Forbidden,
-
-                AuthErrorCodes.AccountConfigurationInvalid =>
-                    StatusCodes.Status403Forbidden,
-
-                _ =>
-                    StatusCodes.Status401Unauthorized
-            };
-        }
+        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 }

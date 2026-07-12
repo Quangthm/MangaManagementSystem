@@ -6,7 +6,6 @@ namespace MangaManagementSystem.Application.Interfaces;
 
 public interface IPageRegionService
 {
-<<<<<<< HEAD
     Task<PageRegionDto> CreatePageRegionAsync(CreatePageRegionDto dto);
     Task<PageRegionDto?> GetPageRegionByIdAsync(Guid id);
     Task<IEnumerable<PageRegionDto>> GetPageRegionsByChapterPageVersionIdAsync(Guid chapterPageVersionId);
@@ -14,9 +13,7 @@ public interface IPageRegionService
     Task<Dictionary<Guid, int>> GetRegionCountsByVersionIdsAsync(IEnumerable<Guid> chapterPageVersionIds);
     Task<PageRegionDto?> UpdatePageRegionAsync(UpdatePageRegionDto dto);
     Task<bool> DeletePageRegionAsync(Guid id);
-    Task<bool> BulkReplacePageRegionsAsync(Guid chapterPageVersionId, IEnumerable<CreatePageRegionDto> dtos);
-=======
-    public interface IPageRegionService
+    Task<bool> BulkReplacePageRegionsAsync(Guid chapterPageVersionId, IEnumerable<CreatePageRegionDto> dtos);    public interface IPageRegionService
     {
         Task<PageRegionDto> CreatePageRegionAsync(CreatePageRegionDto dto);
         Task<PageRegionDto?> GetPageRegionByIdAsync(Guid id);
@@ -34,5 +31,5 @@ public interface IPageRegionService
         /// </summary>
         Task<PageRegionDto> EnsureFullPageRegionAsync(Guid chapterPageVersionId, Guid actorUserId, CancellationToken cancellationToken = default);
     }
->>>>>>> main
+
 }

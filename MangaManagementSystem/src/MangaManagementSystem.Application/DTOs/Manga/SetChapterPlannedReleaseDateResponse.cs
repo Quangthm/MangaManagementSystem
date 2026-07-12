@@ -1,6 +1,6 @@
 using System;
+using MangaManagementSystem.Application.DTOs.Manga;
 
-<<<<<<< HEAD
 namespace MangaManagementSystem.Application.DTOs.Manga;
 
 public sealed record SetChapterPlannedReleaseDateResponse(
@@ -11,18 +11,3 @@ public sealed record SetChapterPlannedReleaseDateResponse(
     DateTime? AllowedPeriodStart,
     DateTime? AllowedPeriodEnd,
     string? FrequencyCode);
-=======
-namespace MangaManagementSystem.Application.DTOs.Manga
-{
-    public sealed record SetChapterPlannedReleaseDateResponse(
-        Guid ChapterId,
-        string StatusCode,
-        DateTime PlannedReleaseDate,
-        string? ValidationMessage,
-        DateTime? AllowedPeriodStart,
-        DateTime? AllowedPeriodEnd,
-        string? FrequencyCode,
-        DateTime? SuggestedReleaseDate = null,
-        string? WarningMessage = null);
-}
->>>>>>> main

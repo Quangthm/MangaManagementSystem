@@ -17,7 +17,6 @@ using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
-<<<<<<< HEAD:MangaManagementSystem/src/MangaManagementSystem.API/Controllers/MangakaSeriesController.cs
 namespace MangaManagementSystem.API.Controllers;
 
 /// <summary>
@@ -34,11 +33,7 @@ namespace MangaManagementSystem.API.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/mangaka/series")]
-public sealed class MangakaSeriesController : BaseApiController
-=======
-namespace MangaManagementSystem.API.Controllers.Mangaka
->>>>>>> main:MangaManagementSystem/src/MangaManagementSystem.API/Controllers/Mangaka/MangakaSeriesController.cs
-{
+public sealed class MangakaSeriesController : BaseApiController{
     private readonly IMediator _mediator;
     private readonly ILogger<MangakaSeriesController> _logger;
 

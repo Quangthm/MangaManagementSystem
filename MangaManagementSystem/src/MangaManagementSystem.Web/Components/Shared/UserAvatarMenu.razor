@@ -1,19 +1,19 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components.Routing
-@using MangaManagementSystem.Web.Services.Api
+@using MangaManagementSystem.Application.Interfaces
 
 @implements IDisposable
 
 @inject AuthenticationStateProvider AuthStateProvider
-@inject IProfileApiClient ProfileApiClient
+@inject IUserService UserService
+@inject IFileResourceService FileResourceService
 @inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
 
 <AuthorizeView>
     <Authorized>
-        <div class="mf-user-profile-row">
-            <div class="mf-user-profile-account">
-                @if (_loading)
+        @if (_loading)
         {
             <div class="mf-user-profile-card mf-user-profile-loading">
                 <div class="mf-user-profile-avatar-placeholder"></div>
@@ -57,7 +57,7 @@
 
                         <span class="mf-user-profile-chevron"
                               aria-hidden="true">
-                            &#8964;
+                            ⌄
                         </span>
                     </button>
                 </ActivatorContent>
@@ -65,7 +65,7 @@
                 <ChildContent>
                     <MudMenuItem OnClick="OpenProfileSettings">
                         <div class="mf-account-menu-item">
-                            <span class="mf-account-menu-icon">&#9881;</span>
+                            <span class="mf-account-menu-icon">⚙</span>
 
                             <span class="mf-account-menu-copy">
                                 <strong>Profile Settings</strong>
@@ -81,11 +81,7 @@
                     </div>
                 </ChildContent>
             </MudMenu>
-                }
-            </div>
-
-            <NotificationBell />
-        </div>
+        }
     </Authorized>
 
     <NotAuthorized>
@@ -104,7 +100,7 @@
 
             <span class="mf-user-profile-chevron"
                   aria-hidden="true">
-                &#8250;
+                ›
             </span>
         </button>
     </NotAuthorized>
@@ -117,7 +113,6 @@
     private bool _loading = true;
     private bool _profileLoadInProgress;
     private bool _disposed;
-<<<<<<< HEAD
     private Guid _userId;
 
 	protected override async Task OnInitializedAsync()
@@ -166,8 +161,6 @@
 		var content = "Profile editing, avatar upload, and password change are temporarily unavailable in the current build.";
 		Snackbar.Add(content, Severity.Info);
 	}
-=======
->>>>>>> main
     private string? _avatarUrl;
     private string _initial = "U";
     private string _displayName = "User";
@@ -233,7 +226,12 @@
             }
 
             var currentUser =
-                await ProfileApiClient.GetProfileAsync(userId);
+                await UserService.GetUserByIdAsync(userId);
+
+            if (currentUser == null)
+            {
+                return;
+            }
 
             _displayName = FirstNonEmpty(
                 currentUser.DisplayName,
@@ -259,7 +257,7 @@
             }
 
             var avatarFile =
-                await ProfileApiClient.GetFileAsync(
+                await FileResourceService.GetFileResourceByIdAsync(
                     currentUser.AvatarFileId.Value);
 
             if (avatarFile == null ||
@@ -406,22 +404,6 @@
 }
 
 <style>
-    .mf-user-profile-row {
-        width: 100%;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    .mf-user-profile-account {
-        min-width: 0;
-        flex: 1 1 auto;
-    }
-
-    .mf-user-profile-account > * {
-        width: 100%;
-    }
-
     .mf-user-profile-card {
         width: 100%;
         min-height: 84px;

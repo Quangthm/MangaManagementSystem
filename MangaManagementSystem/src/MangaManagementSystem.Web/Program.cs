@@ -208,7 +208,7 @@ namespace MangaManagementSystem.Web
 
             app.MapGet("/api/auth/google-callback", async (HttpContext context, IAuthService authService) =>
             {
-                var (_, email, _) = await GoogleAuthHelper.ResolveGoogleIdentityAsync(context);
+                var (_, email, _, _) = await GoogleAuthHelper.ResolveGoogleIdentityAsync(context);
 
                 if (string.IsNullOrWhiteSpace(email))
                 {
@@ -233,7 +233,7 @@ namespace MangaManagementSystem.Web
 
             app.MapGet("/api/auth/google-signup-callback", async (HttpContext context, IAuthService authService) =>
             {
-                var (_, email, displayName) = await GoogleAuthHelper.ResolveGoogleIdentityAsync(context);
+                var (_, email, displayName, _) = await GoogleAuthHelper.ResolveGoogleIdentityAsync(context);
 
                 if (string.IsNullOrWhiteSpace(email))
                 {

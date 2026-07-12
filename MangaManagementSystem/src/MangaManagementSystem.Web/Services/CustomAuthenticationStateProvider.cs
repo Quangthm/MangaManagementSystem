@@ -95,5 +95,13 @@ namespace MangaManagementSystem.Web.Services
                     new AuthenticationState(
                         principal)));
         }
+
+        public Task MarkUserAsLoggedOut()
+        {
+            var anonymous = new ClaimsPrincipal(new ClaimsIdentity());
+            NotifyAuthenticationStateChanged(
+                Task.FromResult(new AuthenticationState(anonymous)));
+            return Task.CompletedTask;
+        }
     }
 }

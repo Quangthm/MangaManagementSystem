@@ -5,21 +5,11 @@ using MangaManagementSystem.Application.Features.Auth.Registration;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
-<<<<<<< HEAD
 namespace MangaManagementSystem.API.Controllers;
 
 [ApiController]
 [Route("api/registration")]
-public sealed class RegistrationController : ControllerBase
-=======
-namespace MangaManagementSystem.API.Controllers
-{
-    [ApiController]
-    [Route("api/registration")]
-    public sealed class RegistrationController
-        : ControllerBase
->>>>>>> main
-    {
+public sealed class RegistrationController : ControllerBase    {
         private const long MultipartRequestLimitBytes =
             RegistrationPortfolioFileValidator.MaxFileSizeBytes
             + (1024L * 1024L);

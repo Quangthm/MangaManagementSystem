@@ -6,7 +6,6 @@ namespace MangaManagementSystem.Web.Services.Api
     public interface IMangakaPageRegionApiClient
     {
         Task<PageRegionDto> CreateAsync(Guid actorUserId, CreatePageRegionDto dto, CancellationToken cancellationToken = default);
-        Task<PageRegionDto> EnsureFullPageRegionAsync(Guid actorUserId, Guid versionId, CancellationToken cancellationToken = default);
         Task BulkReplaceAsync(Guid actorUserId, Guid versionId, IReadOnlyList<CreatePageRegionDto> regions, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<PageRegionDto>> GetByVersionsAsync(Guid actorUserId, IReadOnlyList<Guid> versionIds, CancellationToken cancellationToken = default);
         Task<IReadOnlyDictionary<Guid, int>> GetCountsAsync(Guid actorUserId, IReadOnlyList<Guid> versionIds, CancellationToken cancellationToken = default);

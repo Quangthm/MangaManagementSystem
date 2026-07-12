@@ -2,31 +2,7 @@ using System;
 using System.Collections.Generic;
 using MangaManagementSystem.Application.DTOs.Editor;
 
-<<<<<<< HEAD
 namespace MangaManagementSystem.Application.DTOs.Manga;
-=======
-namespace MangaManagementSystem.Application.DTOs.Manga
-{
-    /// <summary>
-    /// Mangaka chapter list item with latest editorial review summary and full review history.
-    /// </summary>
-    public sealed record MangakaChapterListItemDto(
-        Guid ChapterId,
-        Guid SeriesId,
-        string SeriesTitle,
-        string? SeriesSlug,
-        string ChapterNumberLabel,
-        string? ChapterTitle,
-        string StatusCode,
-        DateTime? PlannedReleaseDate,
-        DateTime? ReleasedAtUtc,
-        DateTime CreatedAtUtc,
-        DateTime? UpdatedAtUtc,
-        string? SeriesCoverUrl,
-        ChapterEditorialReviewSummaryDto? LatestReview,
-        IReadOnlyList<EditorChapterReviewHistoryDto> EditorialReviewHistory);
->>>>>>> main
-
 /// <summary>
 /// Mangaka chapter list item with latest editorial review summary and full review history.
 /// </summary>

@@ -1,63 +1,34 @@
-using System.Text.Json;
 using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.Interfaces;
-using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
+using System;
 
 namespace MangaManagementSystem.Infrastructure.Services
 {
-    public sealed class OtpCacheService : IOtpCacheService
+    /// <summary>
+    /// In-memory OTP cache adapter. Lives in Infrastructure so any host
+    /// (Web or API) can reuse the same implementation through <see cref="IOtpCacheService"/>.
+    /// </summary>
+    public class OtpCacheService : IOtpCacheService
     {
-        private const string RegistrationKeyPrefix =
-            "registration-otp:";
+        private const string RegistrationKeyPrefix = "registration-otp:";
+        private const string EmailVerificationKeyPrefix = "email-verification-otp:";
+        private const string ProfileActionKeyPrefix = "profile-action-otp:";
+        private static readonly TimeSpan OtpTtl = TimeSpan.FromMinutes(5);
 
-        private const string ProfileActionKeyPrefix =
-            "profile-action-otp:";
+        private readonly IMemoryCache _memoryCache;
 
-        private static readonly TimeSpan OtpTtl =
-            TimeSpan.FromMinutes(5);
-
-        private static readonly JsonSerializerOptions
-            SerializerOptions =
-                new(JsonSerializerDefaults.Web);
-
-        private readonly IDistributedCache
-            _distributedCache;
-
-        public OtpCacheService(
-            IDistributedCache distributedCache)
+        public OtpCacheService(IMemoryCache memoryCache)
         {
-            _distributedCache =
-                distributedCache
-                ?? throw new ArgumentNullException(
-                    nameof(distributedCache));
+            _memoryCache = memoryCache;
         }
 
-        public void StoreRegistrationOtp(
-            string email,
-            string otp,
-            RegisterDto request)
+        public void StoreRegistrationOtp(string email, string otp, RegisterDto request)
         {
-            var key =
-                RegistrationKeyPrefix
-                + NormalizeEmail(email);
-
-            var cachedOtp =
-                new CachedRegistrationOtp(
-                    otp.Trim(),
-                    request);
-
-            var serializedValue =
-                JsonSerializer.Serialize(
-                    cachedOtp,
-                    SerializerOptions);
-
-            _distributedCache.SetString(
-                key,
-                serializedValue,
-                CreateCacheEntryOptions());
+            var key = RegistrationKeyPrefix + NormalizeEmail(email);
+            _memoryCache.Set(key, new CachedRegistrationOtp(otp, request), OtpTtl);
         }
 
-<<<<<<< HEAD
         public RegisterDto? TryPeekRegistrationOtp(string email)
         {
             var key = RegistrationKeyPrefix + NormalizeEmail(email);
@@ -69,153 +40,71 @@ namespace MangaManagementSystem.Infrastructure.Services
         }
 
         public RegisterDto? TryValidateAndRemoveRegistrationOtp(string email, string otp)
-=======
-        public RegisterDto?
-            TryValidateAndRemoveRegistrationOtp(
-                string email,
-                string otp)
->>>>>>> main
         {
-            var key =
-                RegistrationKeyPrefix
-                + NormalizeEmail(email);
+            var key = RegistrationKeyPrefix + NormalizeEmail(email);
 
-            var serializedValue =
-                _distributedCache.GetString(key);
-
-            if (string.IsNullOrWhiteSpace(
-                    serializedValue))
+            if (!_memoryCache.TryGetValue<CachedRegistrationOtp>(key, out var cached) ||
+                cached is null ||
+                !string.Equals(cached.Otp, otp, StringComparison.Ordinal))
             {
                 return null;
             }
 
-            CachedRegistrationOtp? cachedOtp;
-
-            try
-            {
-                cachedOtp =
-                    JsonSerializer.Deserialize<
-                        CachedRegistrationOtp>(
-                            serializedValue,
-                            SerializerOptions);
-            }
-            catch (JsonException)
-            {
-                _distributedCache.Remove(key);
-                return null;
-            }
-
-            if (cachedOtp is null
-                || !string.Equals(
-                    cachedOtp.Otp,
-                    otp?.Trim(),
-                    StringComparison.Ordinal))
-            {
-                return null;
-            }
-
-            _distributedCache.Remove(key);
-
-            return cachedOtp.Request;
+            _memoryCache.Remove(key);
+            return cached.Request;
         }
 
-        public void StoreProfileActionOtp(
-            string email,
-            string actionCode,
-            string otp)
+        public void StoreEmailVerificationOtp(string email, string otp)
         {
-            var key =
-                BuildProfileActionKey(
-                    email,
-                    actionCode);
-
-            _distributedCache.SetString(
-                key,
-                otp.Trim(),
-                CreateCacheEntryOptions());
+            var key = EmailVerificationKeyPrefix + NormalizeEmail(email);
+            _memoryCache.Set(key, otp, OtpTtl);
         }
 
-        public bool TryValidateAndRemoveProfileActionOtp(
-            string email,
-            string actionCode,
-            string otp)
+        public bool TryValidateAndRemoveEmailVerificationOtp(string email, string otp)
         {
-            var key =
-                BuildProfileActionKey(
-                    email,
-                    actionCode);
+            var key = EmailVerificationKeyPrefix + NormalizeEmail(email);
 
-            var cachedOtp =
-                _distributedCache.GetString(key);
-
-            if (string.IsNullOrWhiteSpace(
-                    cachedOtp)
-                || !string.Equals(
-                    cachedOtp,
-                    otp?.Trim(),
-                    StringComparison.Ordinal))
+            if (!_memoryCache.TryGetValue<string>(key, out var cachedOtp) ||
+                !string.Equals(cachedOtp, otp, StringComparison.Ordinal))
             {
                 return false;
             }
 
-            _distributedCache.Remove(key);
-
+            _memoryCache.Remove(key);
             return true;
         }
 
-        private static DistributedCacheEntryOptions
-            CreateCacheEntryOptions()
+        public void StoreProfileActionOtp(string email, string actionCode, string otp)
         {
-            return new DistributedCacheEntryOptions
-            {
-                AbsoluteExpirationRelativeToNow =
-                    OtpTtl
-            };
+            var key = BuildProfileActionKey(email, actionCode);
+            _memoryCache.Set(key, otp, OtpTtl);
         }
 
-        private static string BuildProfileActionKey(
-            string email,
-            string actionCode)
+        public bool TryValidateAndRemoveProfileActionOtp(string email, string actionCode, string otp)
         {
-            return ProfileActionKeyPrefix
-                + NormalizeEmail(email)
-                + ":"
-                + NormalizeActionCode(actionCode);
-        }
+            var key = BuildProfileActionKey(email, actionCode);
 
-        private static string NormalizeEmail(
-            string email)
-        {
-            if (string.IsNullOrWhiteSpace(email))
+            if (!_memoryCache.TryGetValue<string>(key, out var cachedOtp) ||
+                !string.Equals(cachedOtp, otp?.Trim(), StringComparison.Ordinal))
             {
-                throw new ArgumentException(
-                    "Email is required.",
-                    nameof(email));
+                return false;
             }
 
-            return email
-                .Trim()
-                .ToLowerInvariant();
+            _memoryCache.Remove(key);
+            return true;
         }
 
-        private static string NormalizeActionCode(
-            string actionCode)
+        private static string BuildProfileActionKey(string email, string actionCode)
         {
-            if (string.IsNullOrWhiteSpace(
-                    actionCode))
-            {
-                throw new ArgumentException(
-                    "Action code is required.",
-                    nameof(actionCode));
-            }
-
-            return actionCode
-                .Trim()
-                .ToUpperInvariant();
+            return ProfileActionKeyPrefix + NormalizeEmail(email) + ":" + NormalizeActionCode(actionCode);
         }
 
-        private sealed record CachedRegistrationOtp(
-            string Otp,
-            RegisterDto Request);
+        private static string NormalizeEmail(string email)
+            => email.Trim().ToLowerInvariant();
+
+        private static string NormalizeActionCode(string actionCode)
+            => actionCode.Trim().ToUpperInvariant();
+
+        private sealed record CachedRegistrationOtp(string Otp, RegisterDto Request);
     }
 }

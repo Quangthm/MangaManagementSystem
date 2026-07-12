@@ -2,10 +2,7 @@ namespace MangaManagementSystem.Application.Interfaces;
 
 public interface IEmailService
 {
-<<<<<<< HEAD
-    Task SendOtpEmailAsync(string toEmail, string otpCode, CancellationToken cancellationToken = default);
-=======
-    public interface IEmailService
+    Task SendOtpEmailAsync(string toEmail, string otpCode, CancellationToken cancellationToken = default);    public interface IEmailService
     {
         Task SendOtpEmailAsync(
             string toEmail,
@@ -22,5 +19,5 @@ public interface IEmailService
             string displayName,
             CancellationToken cancellationToken = default);
     }
->>>>>>> main
+
 }
