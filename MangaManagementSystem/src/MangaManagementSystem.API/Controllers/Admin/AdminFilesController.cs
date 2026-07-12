@@ -2,6 +2,7 @@ using System.Net;
 using System.Security.Claims;
 using System.Text;
 using MangaManagementSystem.API.Contracts;
+using MangaManagementSystem.Application.Common;
 using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.DTOs.Admin;
 using MangaManagementSystem.Application.Features.Admin.Files.Commands;
@@ -84,7 +85,7 @@ namespace MangaManagementSystem.API.Controllers.Admin
         public async Task<IActionResult> SearchAsync(
             [FromQuery] string? search,
             [FromQuery] string? filePurposeCode,
-            [FromQuery] string? deletedState = "ACTIVE",
+            [FromQuery] string? deletedState = AdminFileDeletionStates.Active,
             [FromQuery] DateTime? fromUtc = null,
             [FromQuery] DateTime? toUtc = null,
             [FromQuery] int pageNumber = 1,
@@ -409,7 +410,7 @@ namespace MangaManagementSystem.API.Controllers.Admin
                 return asDownload
                     ? FileNotFound()
                     : SafePlaceholder(
-                        "missing");
+                            FileAvailabilityCodes.Missing);
             }
 
             if (source.IsDeleted)
@@ -421,7 +422,7 @@ namespace MangaManagementSystem.API.Controllers.Admin
                             AdminFileErrorCodes.Deleted,
                             "The file has been deleted and is no longer available for download."))
                     : SafePlaceholder(
-                        "deleted");
+                            FileAvailabilityCodes.Deleted);
             }
 
             if (!asDownload
@@ -467,7 +468,7 @@ namespace MangaManagementSystem.API.Controllers.Admin
                     return asDownload
                         ? FileNotFound()
                         : SafePlaceholder(
-                            "missing");
+                            FileAvailabilityCodes.Missing);
                 }
 
                 if (remote.StatusCode !=
@@ -695,12 +696,7 @@ namespace MangaManagementSystem.API.Controllers.Admin
             string reason)
         {
             var normalizedReason =
-                string.Equals(
-                    reason,
-                    "deleted",
-                    StringComparison.OrdinalIgnoreCase)
-                    ? "deleted"
-                    : "missing";
+                FileAvailabilityCodes.NormalizePlaceholderReason(reason);
 
             const string svg =
                 "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"640\" height=\"360\" viewBox=\"0 0 640 360\">"
@@ -723,7 +719,7 @@ namespace MangaManagementSystem.API.Controllers.Admin
                 "default-src 'none'; sandbox";
 
             Response.Headers[
-                "X-File-Placeholder"] =
+                FileAvailabilityHeaders.PlaceholderReason] =
                 normalizedReason;
 
             return File(

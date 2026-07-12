@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using MangaManagementSystem.Application.Common;
 using MangaManagementSystem.Application.DTOs.Admin;
 
 namespace MangaManagementSystem.Web.Services.Api
@@ -7,8 +8,6 @@ namespace MangaManagementSystem.Web.Services.Api
     public sealed class AdminFileApiClient
         : IAdminFileApiClient
     {
-        private const string PlaceholderHeaderName =
-            "X-File-Placeholder";
 
         private readonly HttpClient _httpClient;
         private readonly ILogger<AdminFileApiClient>
@@ -23,15 +22,16 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<AdminFilePageDto>
-            SearchAsync(
-                string? search = null,
-                string? filePurposeCode = null,
-                string? deletedState = "ACTIVE",
-                DateTime? fromUtc = null,
-                DateTime? toUtc = null,
-                int pageNumber = 1,
-                int pageSize = 20,
-                CancellationToken cancellationToken = default)
+    SearchAsync(
+        string? search = null,
+        string? filePurposeCode = null,
+        string? deletedState =
+            AdminFileDeletionStates.Active,
+        DateTime? fromUtc = null,
+        DateTime? toUtc = null,
+        int pageNumber = 1,
+        int pageSize = 20,
+        CancellationToken cancellationToken = default)
         {
             var query =
                 new List<string>
@@ -295,7 +295,7 @@ namespace MangaManagementSystem.Web.Services.Api
             string? placeholderReason = null;
 
             if (response.Headers.TryGetValues(
-                    PlaceholderHeaderName,
+                    FileAvailabilityHeaders.PlaceholderReason,
                     out var values))
             {
                 placeholderReason =
