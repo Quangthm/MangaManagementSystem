@@ -1,5 +1,6 @@
 using CloudinaryDotNet;
 using CloudinaryDotNet.Actions;
+using MangaManagementSystem.Application.Common;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Infrastructure.Options;
@@ -33,20 +34,16 @@ namespace MangaManagementSystem.Infrastructure.Services
 
         private const long MaxFileSizeBytes = 10 * 1024 * 1024;
 
-        private static readonly string[] ValidPurposes =
-        {
-            "SERIES_PROPOSAL",
-            "SERIES_COVER",
-            "CHAPTER_PAGE_VERSION",
-            "EDITORIAL_ATTACHMENT",
-            "REGISTRATION_PORTFOLIO",
-            "USER_AVATAR"
-        };
-
         public CloudinaryFileStorageService(Cloudinary cloudinary, IOptions<CloudinarySettings> options)
         {
             _cloudinary = cloudinary ?? throw new ArgumentNullException(nameof(cloudinary));
             _settings = options?.Value ?? throw new ArgumentNullException(nameof(options));
+
+            // A single large page image on a slow uplink can exceed the underlying HttpClient's 100s
+            // default, surfacing mid page-save as "The request was canceled due to the configured
+            // HttpClient.Timeout of 100 seconds elapsing". Give each upload a moderate 2-minute ceiling as
+            // a safety net (the workspace also uploads a multi-page batch in parallel). Value is in ms.
+            _cloudinary.Api.Timeout = 120000;
         }
 
         public async Task<FileUploadResultDto> UploadFileAsync(
@@ -64,7 +61,7 @@ namespace MangaManagementSystem.Infrastructure.Services
                 throw new ArgumentException("File purpose is required.", nameof(filePurposeCode));
             }
 
-            if (!ValidPurposes.Contains(filePurposeCode))
+            if (!FilePurposeCodes.IsSupported(filePurposeCode))
             {
                 throw new InvalidOperationException($"Invalid file purpose code: {filePurposeCode}");
             }
@@ -135,7 +132,7 @@ namespace MangaManagementSystem.Infrastructure.Services
                 throw new ArgumentException("File purpose is required.", nameof(filePurposeCode));
             }
 
-            if (!ValidPurposes.Contains(filePurposeCode))
+            if (!FilePurposeCodes.IsSupported(filePurposeCode))
             {
                 throw new InvalidOperationException($"Invalid file purpose code: {filePurposeCode}");
             }
@@ -240,22 +237,22 @@ namespace MangaManagementSystem.Infrastructure.Services
 
         private static void ValidateFileTypeForPurpose(string filePurposeCode, bool isImage, bool isRaw)
         {
-            if (filePurposeCode == "USER_AVATAR" && !isImage)
+            if (filePurposeCode == FilePurposeCodes.UserAvatar && !isImage)
             {
                 throw new InvalidOperationException("Avatar upload only supports image files.");
             }
 
-            if (filePurposeCode == "REGISTRATION_PORTFOLIO" && !isRaw)
+            if (filePurposeCode == FilePurposeCodes.RegistrationPortfolio && !isRaw)
             {
                 throw new InvalidOperationException("Portfolio upload only supports PDF, DOC, or DOCX files.");
             }
 
-            if (filePurposeCode == "SERIES_COVER" && !isImage)
+            if (filePurposeCode == FilePurposeCodes.SeriesCover && !isImage)
             {
                 throw new InvalidOperationException("Series cover upload only supports image files.");
             }
 
-            if (filePurposeCode == "CHAPTER_PAGE_VERSION" && !isImage)
+            if (filePurposeCode == FilePurposeCodes.ChapterPageVersion && !isImage)
             {
                 throw new InvalidOperationException("Chapter page upload only supports image files.");
             }
@@ -268,12 +265,12 @@ namespace MangaManagementSystem.Infrastructure.Services
 
         private static string BuildFolderForPurpose(string purpose) => purpose switch
         {
-            "REGISTRATION_PORTFOLIO" => "registration_portfolios",
-            "USER_AVATAR" => "avatars",
-            "SERIES_COVER" => "series/covers",
-            "SERIES_PROPOSAL" => "series/proposals",
-            "CHAPTER_PAGE_VERSION" => "chapters/pages",
-            "EDITORIAL_ATTACHMENT" => "editorial/attachments",
+            FilePurposeCodes.RegistrationPortfolio => "registration_portfolios",
+            FilePurposeCodes.UserAvatar => "avatars",
+            FilePurposeCodes.SeriesCover => "series/covers",
+            FilePurposeCodes.SeriesProposal => "series/proposals",
+            FilePurposeCodes.ChapterPageVersion => "chapters/pages",
+            FilePurposeCodes.EditorialAttachment => "editorial/attachments",
             _ => "misc"
         };
 

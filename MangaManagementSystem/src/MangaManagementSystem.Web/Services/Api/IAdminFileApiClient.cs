@@ -1,3 +1,4 @@
+using MangaManagementSystem.Application.Common;
 using MangaManagementSystem.Application.DTOs.Admin;
 
 namespace MangaManagementSystem.Web.Services.Api
@@ -7,7 +8,7 @@ namespace MangaManagementSystem.Web.Services.Api
         Task<AdminFilePageDto> SearchAsync(
             string? search = null,
             string? filePurposeCode = null,
-            string? deletedState = "ACTIVE",
+            string? deletedState = AdminFileDeletionStates.Active,
             DateTime? fromUtc = null,
             DateTime? toUtc = null,
             int pageNumber = 1,

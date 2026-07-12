@@ -1,10 +1,11 @@
+using System.Text.Json;
 using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.Interfaces;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Distributed;
 
 namespace MangaManagementSystem.Infrastructure.Services
 {
-    public class OtpCacheService : IOtpCacheService
+    public sealed class OtpCacheService : IOtpCacheService
     {
         private const string RegistrationKeyPrefix =
             "registration-otp:";
@@ -15,12 +16,20 @@ namespace MangaManagementSystem.Infrastructure.Services
         private static readonly TimeSpan OtpTtl =
             TimeSpan.FromMinutes(5);
 
-        private readonly IMemoryCache _memoryCache;
+        private static readonly JsonSerializerOptions
+            SerializerOptions =
+                new(JsonSerializerDefaults.Web);
+
+        private readonly IDistributedCache
+            _distributedCache;
 
         public OtpCacheService(
-            IMemoryCache memoryCache)
+            IDistributedCache distributedCache)
         {
-            _memoryCache = memoryCache;
+            _distributedCache =
+                distributedCache
+                ?? throw new ArgumentNullException(
+                    nameof(distributedCache));
         }
 
         public void StoreRegistrationOtp(
@@ -32,12 +41,20 @@ namespace MangaManagementSystem.Infrastructure.Services
                 RegistrationKeyPrefix
                 + NormalizeEmail(email);
 
-            _memoryCache.Set(
-                key,
+            var cachedOtp =
                 new CachedRegistrationOtp(
-                    otp,
-                    request),
-                OtpTtl);
+                    otp.Trim(),
+                    request);
+
+            var serializedValue =
+                JsonSerializer.Serialize(
+                    cachedOtp,
+                    SerializerOptions);
+
+            _distributedCache.SetString(
+                key,
+                serializedValue,
+                CreateCacheEntryOptions());
         }
 
         public RegisterDto?
@@ -49,21 +66,43 @@ namespace MangaManagementSystem.Infrastructure.Services
                 RegistrationKeyPrefix
                 + NormalizeEmail(email);
 
-            if (!_memoryCache.TryGetValue<
-                    CachedRegistrationOtp>(
-                        key,
-                        out var cached)
-                || cached is null
+            var serializedValue =
+                _distributedCache.GetString(key);
+
+            if (string.IsNullOrWhiteSpace(
+                    serializedValue))
+            {
+                return null;
+            }
+
+            CachedRegistrationOtp? cachedOtp;
+
+            try
+            {
+                cachedOtp =
+                    JsonSerializer.Deserialize<
+                        CachedRegistrationOtp>(
+                            serializedValue,
+                            SerializerOptions);
+            }
+            catch (JsonException)
+            {
+                _distributedCache.Remove(key);
+                return null;
+            }
+
+            if (cachedOtp is null
                 || !string.Equals(
-                    cached.Otp,
+                    cachedOtp.Otp,
                     otp?.Trim(),
                     StringComparison.Ordinal))
             {
                 return null;
             }
 
-            _memoryCache.Remove(key);
-            return cached.Request;
+            _distributedCache.Remove(key);
+
+            return cachedOtp.Request;
         }
 
         public void StoreProfileActionOtp(
@@ -76,10 +115,10 @@ namespace MangaManagementSystem.Infrastructure.Services
                     email,
                     actionCode);
 
-            _memoryCache.Set(
+            _distributedCache.SetString(
                 key,
-                otp,
-                OtpTtl);
+                otp.Trim(),
+                CreateCacheEntryOptions());
         }
 
         public bool TryValidateAndRemoveProfileActionOtp(
@@ -92,9 +131,11 @@ namespace MangaManagementSystem.Infrastructure.Services
                     email,
                     actionCode);
 
-            if (!_memoryCache.TryGetValue<string>(
-                    key,
-                    out var cachedOtp)
+            var cachedOtp =
+                _distributedCache.GetString(key);
+
+            if (string.IsNullOrWhiteSpace(
+                    cachedOtp)
                 || !string.Equals(
                     cachedOtp,
                     otp?.Trim(),
@@ -103,8 +144,19 @@ namespace MangaManagementSystem.Infrastructure.Services
                 return false;
             }
 
-            _memoryCache.Remove(key);
+            _distributedCache.Remove(key);
+
             return true;
+        }
+
+        private static DistributedCacheEntryOptions
+            CreateCacheEntryOptions()
+        {
+            return new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow =
+                    OtpTtl
+            };
         }
 
         private static string BuildProfileActionKey(
@@ -118,12 +170,35 @@ namespace MangaManagementSystem.Infrastructure.Services
         }
 
         private static string NormalizeEmail(
-            string email) =>
-                email.Trim().ToLowerInvariant();
+            string email)
+        {
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                throw new ArgumentException(
+                    "Email is required.",
+                    nameof(email));
+            }
+
+            return email
+                .Trim()
+                .ToLowerInvariant();
+        }
 
         private static string NormalizeActionCode(
-            string actionCode) =>
-                actionCode.Trim().ToUpperInvariant();
+            string actionCode)
+        {
+            if (string.IsNullOrWhiteSpace(
+                    actionCode))
+            {
+                throw new ArgumentException(
+                    "Action code is required.",
+                    nameof(actionCode));
+            }
+
+            return actionCode
+                .Trim()
+                .ToUpperInvariant();
+        }
 
         private sealed record CachedRegistrationOtp(
             string Otp,
