@@ -85,8 +85,12 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
             cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@actor_user_id", System.Data.SqlDbType.UniqueIdentifier) { Value = actorUserId });
             cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@chapter_page_annotation_id", System.Data.SqlDbType.UniqueIdentifier) { Value = annotationId });
+<<<<<<< HEAD
             cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@resolution_note", System.Data.SqlDbType.NVarChar, 500)
             {
+=======
+            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@resolution_note", System.Data.SqlDbType.NVarChar, 500) {
+>>>>>>> main
                 Value = string.IsNullOrWhiteSpace(resolutionNote) ? System.DBNull.Value : (object)resolutionNote
             });
 

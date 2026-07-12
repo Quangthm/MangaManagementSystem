@@ -1,10 +1,15 @@
 @page "/admin/user-approval"
+<<<<<<< HEAD
 @layout AdminLayout
+=======
+@using Microsoft.AspNetCore.Authorization
+@using MangaManagementSystem.Application.DTOs.Auth
+@using MangaManagementSystem.Application.DTOs.Manga
+@using MangaManagementSystem.Web.Services.Api
+>>>>>>> main
 @attribute [Authorize(Roles = "Admin")]
-@inject IUserService UserService
-@inject IFileResourceService _fileResourceService
+@inject IAdminUserApiClient AdminUserApiClient
 @inject ISnackbar Snackbar
-@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>User Approval - MangaFlow</PageTitle>
 
@@ -13,12 +18,15 @@
             <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">User Approval</MudText>
             <MudText Typo="Typo.body1" Class="mf-muted">Review and approve accounts pending admin activation</MudText>
         </div>
+
         <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4">
             <MudText Typo="Typo.caption" Class="font-weight-bold">Help</MudText>
             <MudText Class="mt-1">Use this page to approve or reject newly registered accounts before they can log in.</MudText>
         </MudAlert>
 
-        <MudText Typo="Typo.body2" Class="mf-muted mb-3">Review pending user registrations that require admin approval.</MudText>
+        <MudText Typo="Typo.body2" Class="mf-muted mb-3">
+            Review pending user registrations that require admin approval.
+        </MudText>
 
         <MudPaper Class="pa-5 mf-card" Elevation="0">
             @if (_isLoading)
@@ -32,8 +40,13 @@
                     <DialogContent>
                         <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Reject User</MudText>
                         <MudText Class="mt-2">Are you sure you want to reject this user registration?</MudText>
-                        <MudText Class="mt-2">Current status: <MudChip T="string" Size="Size.Small">@_rejectTarget.StatusCode</MudChip></MudText>
-                        <MudAlert Severity="Severity.Warning" Class="mt-3">Rejected accounts cannot log in. This action can be reviewed in the system records.</MudAlert>
+                        <MudText Class="mt-2">
+                            Current status:
+                            <MudChip T="string" Size="Size.Small">@_rejectTarget.StatusCode</MudChip>
+                        </MudText>
+                        <MudAlert Severity="Severity.Warning" Class="mt-3">
+                            Rejected accounts cannot log in. This action can be reviewed in the system records.
+                        </MudAlert>
                     </DialogContent>
                     <DialogActions>
                         <MudButton Variant="Variant.Text" OnClick="CancelReject">Cancel</MudButton>
@@ -47,15 +60,20 @@
                 <MudPaper Class="pa-8 mf-card text-center" Elevation="0">
                     <MudAvatar Color="Color.Primary" Size="Size.Large" Class="mx-auto mb-3">✓</MudAvatar>
                     <MudText Typo="Typo.h6" Class="font-weight-bold mb-1">No pending users</MudText>
-                    <MudText Typo="Typo.body2" Class="mf-muted">Newly registered accounts that require admin approval will appear here.</MudText>
+                    <MudText Typo="Typo.body2" Class="mf-muted">
+                        Newly registered accounts that require admin approval will appear here.
+                    </MudText>
                 </MudPaper>
             }
             else
             {
                 <MudTable Items="_pendingUsers" Hover="true" Dense="true" Breakpoint="Breakpoint.Sm">
                     <NoRecordsContent>
-                        <MudText Typo="Typo.body2" Class="mf-muted pa-4">No users are waiting for approval.</MudText>
+                        <MudText Typo="Typo.body2" Class="mf-muted pa-4">
+                            No users are waiting for approval.
+                        </MudText>
                     </NoRecordsContent>
+
                     <HeaderContent>
                         <MudTh>Name</MudTh>
                         <MudTh>Username</MudTh>
@@ -65,6 +83,7 @@
                         <MudTh>Created At</MudTh>
                         <MudTh>Actions</MudTh>
                     </HeaderContent>
+
                     <RowTemplate>
                         <MudTd DataLabel="Name">@(context.DisplayName ?? "-")</MudTd>
                         <MudTd DataLabel="Username">@context.Username</MudTd>
@@ -73,7 +92,12 @@
                         <MudTd DataLabel="Portfolio">
                             @if (context.PortfolioFileId.HasValue)
                             {
-                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(()=>ViewPortfolioAsync(context.PortfolioFileId.Value))">View Portfolio</MudButton>
+                                <MudButton Size="Size.Small"
+                                           Variant="Variant.Outlined"
+                                           Disabled="@IsRowBusy(context.UserId)"
+                                           OnClick="@(() => ViewPortfolioAsync(context.UserId))">
+                                    View Portfolio
+                                </MudButton>
                             }
                             else
                             {
@@ -112,25 +136,40 @@
                             Portfolio Preview - @_currentPortfolio.OriginalFileName
                         </MudText>
                     </TitleContent>
+
                     <DialogContent>
                         @if (_isImagePreview)
                         {
                             <div class="d-flex justify-center my-2">
-                                <MudImage Src="@_currentPortfolio.CloudinarySecureUrl" Alt="Portfolio Image" Fluid="true" Class="rounded" Style="max-height: 60vh; object-fit: contain;" />
+                                <MudImage Src="@_currentPortfolio.CloudinarySecureUrl"
+                                          Alt="Portfolio Image"
+                                          Fluid="true"
+                                          Class="rounded"
+                                          Style="max-height: 60vh; object-fit: contain;" />
                             </div>
                         }
                         else
                         {
                             <div style="height: 80vh;">
                                 <MudText Typo="Typo.caption" Class="mf-muted text-center mb-2">
-                                    If the document does not load, <MudLink Href="@($"/api/portfolio/{_currentPortfolio.FileResourceId}")" Target="_blank">click here to open in a new tab</MudLink>.
+                                    If the document does not load,
+                                    <MudLink Href="@($"/api/portfolio/{_currentPortfolio.FileResourceId}")"
+                                             Target="_blank">
+                                        click here to open in a new tab
+                                    </MudLink>.
                                 </MudText>
-                                <iframe src="@($"/api/portfolio/{_currentPortfolio.FileResourceId}")" width="100%" style="height: calc(80vh - 30px); border: none; border-radius: 4px;"></iframe>
+                                <iframe src="@($"/api/portfolio/{_currentPortfolio.FileResourceId}")"
+                                        width="100%"
+                                        style="height: calc(80vh - 30px); border: none; border-radius: 4px;">
+                                </iframe>
                             </div>
                         }
                     </DialogContent>
+
                     <DialogActions>
-                        <MudButton Variant="Variant.Text" Color="Color.Secondary" OnClick="ClosePortfolioPreview">Close</MudButton>
+                        <MudButton Variant="Variant.Text" Color="Color.Secondary" OnClick="ClosePortfolioPreview">
+                            Close
+                        </MudButton>
                     </DialogActions>
                 </MudDialog>
             }
@@ -138,25 +177,51 @@
     </div>
 
 @code {
-    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.ExtraLarge, FullWidth = true, CloseButton = true };
+    private readonly DialogOptions _dialogOptions =
+        new()
+        {
+            MaxWidth = MaxWidth.ExtraLarge,
+            FullWidth = true,
+            CloseButton = true
+        };
+
     private const string PendingStatus = "PENDING_APPROVAL";
 
     private readonly List<UserDto> _pendingUsers = new();
+
     private bool _isLoading;
     private Guid? _processingUserId;
+
+    private FileResourceDto? _currentPortfolio;
+    private bool _showPortfolioPreview;
+    private bool _isImagePreview;
+
+    private bool _showRejectConfirm;
+    private UserDto? _rejectTarget;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPendingUsersAsync();
+    }
 
     private async Task LoadPendingUsersAsync()
     {
         _isLoading = true;
+
         try
         {
-            var users = await UserService.GetUsersByStatusAsync(PendingStatus);
+            var users =
+                await AdminUserApiClient.GetUsersAsync(
+                    PendingStatus);
+
             _pendingUsers.Clear();
             _pendingUsers.AddRange(users);
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to load pending users: {ex.Message}", Severity.Error);
+            Snackbar.Add(
+                $"Failed to load pending users: {ex.Message}",
+                Severity.Error);
         }
         finally
         {
@@ -164,43 +229,43 @@
         }
     }
 
-    private bool IsRowBusy(Guid userId) => _isLoading || _processingUserId == userId;
-
-    private async Task<Guid> GetCurrentAdminUserIdAsync()
+    private bool IsRowBusy(Guid userId)
     {
-        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        var userIdClaim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-
-        if (!Guid.TryParse(userIdClaim, out var adminUserId))
-        {
-            throw new InvalidOperationException("Current admin user id is not available.");
-        }
-
-        return adminUserId;
+        return _isLoading
+            || _processingUserId == userId;
     }
 
-    private MangaManagementSystem.Application.DTOs.Manga.FileResourceDto? _currentPortfolio;
-    private bool _showPortfolioPreview;
-    private bool _isImagePreview;
-
-    private async Task ViewPortfolioAsync(Guid fileResourceId)
+    private async Task ViewPortfolioAsync(Guid userId)
     {
         try
         {
-            var file = await _fileResourceService.GetFileResourceByIdAsync(fileResourceId);
+            var file =
+                await AdminUserApiClient.GetPortfolioAsync(
+                    userId);
+
             if (file == null)
             {
-                Snackbar.Add("Portfolio file not found.", Severity.Error);
+                Snackbar.Add(
+                    "Portfolio file not found.",
+                    Severity.Error);
+
                 return;
             }
 
             _currentPortfolio = file;
-            _isImagePreview = file.ContentType?.StartsWith("image/") == true;
+            _isImagePreview =
+                file.ContentType?.StartsWith(
+                    "image/",
+                    StringComparison.OrdinalIgnoreCase)
+                == true;
+
             _showPortfolioPreview = true;
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to load portfolio: {ex.Message}", Severity.Error);
+            Snackbar.Add(
+                $"Failed to load portfolio: {ex.Message}",
+                Severity.Error);
         }
     }
 
@@ -208,24 +273,6 @@
     {
         _showPortfolioPreview = false;
         _currentPortfolio = null;
-    }
-
-    private string? _currentUserUsername;
-
-    private async Task<AuthenticationState> GetAuthenticationStateAsync()
-    {
-        return await AuthenticationStateProvider.GetAuthenticationStateAsync();
-    }
-
-    protected override async Task OnInitializedAsync()
-    {
-        var authState = await GetAuthenticationStateAsync();
-        var user = authState.User;
-        if (user?.Identity?.IsAuthenticated == true)
-        {
-            _currentUserUsername = user.Identity.Name;
-        }
-        await LoadPendingUsersAsync();
     }
 
     private async Task ApproveAsync(UserDto user)
@@ -236,20 +283,29 @@
         }
 
         _processingUserId = user.UserId;
+
         try
         {
-            var adminUserId = await GetCurrentAdminUserIdAsync();
-            await UserService.ApproveUserAsync(adminUserId, user.UserId);
-            Snackbar.Add($"Approved {user.Username}.", Severity.Success);
+            await AdminUserApiClient.ApproveUserAsync(
+                user.UserId);
+
+            Snackbar.Add(
+                $"Approved {user.Username}.",
+                Severity.Success);
+
             await LoadPendingUsersAsync();
         }
         catch (InvalidOperationException ex)
         {
-            Snackbar.Add(ex.Message, Severity.Error);
+            Snackbar.Add(
+                ex.Message,
+                Severity.Error);
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to approve {user.Username}: {ex.Message}", Severity.Error);
+            Snackbar.Add(
+                $"Failed to approve {user.Username}: {ex.Message}",
+                Severity.Error);
         }
         finally
         {
@@ -257,39 +313,53 @@
         }
     }
 
-    // Confirmation dialog state
-    private bool _showRejectConfirm;
-    private UserDto? _rejectTarget;
-
-    private async Task RejectAsync(UserDto user)
+    private Task RejectAsync(UserDto user)
     {
-        // Open confirmation dialog
         _rejectTarget = user;
         _showRejectConfirm = true;
+
+        return Task.CompletedTask;
     }
 
     private async Task ConfirmRejectAsync()
     {
-        if (_rejectTarget == null) return;
+        if (_rejectTarget == null)
+        {
+            return;
+        }
+
+        if (_processingUserId.HasValue)
+        {
+            return;
+        }
+
         var user = _rejectTarget;
-        if (_processingUserId.HasValue) return;
 
         _processingUserId = user.UserId;
         _showRejectConfirm = false;
+
         try
         {
-            var adminUserId = await GetCurrentAdminUserIdAsync();
-            await UserService.RejectUserAsync(adminUserId, user.UserId);
-            Snackbar.Add($"Rejected {user.Username}.", Severity.Warning);
+            await AdminUserApiClient.RejectUserAsync(
+                user.UserId);
+
+            Snackbar.Add(
+                $"Rejected {user.Username}.",
+                Severity.Warning);
+
             await LoadPendingUsersAsync();
         }
         catch (InvalidOperationException ex)
         {
-            Snackbar.Add(ex.Message, Severity.Error);
+            Snackbar.Add(
+                ex.Message,
+                Severity.Error);
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to reject {user.Username}: {ex.Message}", Severity.Error);
+            Snackbar.Add(
+                $"Failed to reject {user.Username}: {ex.Message}",
+                Severity.Error);
         }
         finally
         {

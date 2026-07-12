@@ -62,9 +62,24 @@
                                    Variant="Variant.Outlined"
                                    Required="true"
                                    Disabled="_isSendingOtp">
-                            <MudSelectItem T="string" Value="@("Mangaka")">Mangaka</MudSelectItem>
-                            <MudSelectItem T="string" Value="@("Assistant")">Assistant</MudSelectItem>
-                            <MudSelectItem T="string" Value="@("Tantou Editor")">Tantou Editor</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Mangaka")">
+                                Mangaka
+                            </MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Assistant")">
+                                Assistant
+                            </MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Tantou Editor")">
+                                Tantou Editor
+                            </MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Editorial Board Member")">
+                                Editorial Board Member
+                            </MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Editorial Board Chief")">
+                                Editorial Board Chief
+                            </MudSelectItem>
+                            <MudSelectItem T="string" Value="@("Admin")">
+                                Admin
+                            </MudSelectItem>
                         </MudSelect>
                         <MudTextField Label="Email"
                                       @bind-Value="_email"
@@ -75,7 +90,10 @@
                         <MudTextField Label="Password"
                                       @bind-Value="_password"
                                       Variant="Variant.Outlined"
-                                      InputType="InputType.Password"
+                                      InputType="@RegisterPasswordInputType"
+                                      Adornment="Adornment.End"
+                                      AdornmentIcon="@RegisterPasswordIcon"
+                                      OnAdornmentClick="ToggleRegisterPasswordVisibility"
                                       Required="true"
                                       Disabled="_isSendingOtp" />
                         <div>
@@ -140,8 +158,15 @@
                 }
 
                 <MudDivider Class="my-4" />
-                <form action="/api/auth/google-signup" method="post" data-enhance="false">
-                    <button type="submit" class="google-auth-button">
+                <form action="/api/auth/google-signup"
+                      method="post"
+                      data-enhance="false">
+                    <input type="hidden"
+                           name="roleName"
+                           value="@_roleName" />
+
+                    <button type="submit"
+                            class="google-auth-button">
                         <span class="google-auth-button__content">
                             <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
                                  alt=""
@@ -198,6 +223,23 @@
     private string _username = string.Empty;
     private string _email = string.Empty;
     private string _password = string.Empty;
+    private bool _showRegisterPassword;
+
+    private InputType RegisterPasswordInputType =>
+        _showRegisterPassword
+            ? InputType.Text
+            : InputType.Password;
+
+    private string RegisterPasswordIcon =>
+        _showRegisterPassword
+            ? Icons.Material.Filled.VisibilityOff
+            : Icons.Material.Filled.Visibility;
+
+    private void ToggleRegisterPasswordVisibility()
+    {
+        _showRegisterPassword =
+            !_showRegisterPassword;
+    }
     private string _roleName = "Mangaka";
     private string? _displayName = null;
     private string _otpCode = string.Empty;
@@ -223,16 +265,49 @@
         var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
         var query = QueryHelpers.ParseQuery(uri.Query);
 
-        if (query.TryGetValue("error", out var error))
+        if (query.TryGetValue(
+                "error",
+                out var error))
         {
-            var message = error.ToString() switch
-            {
-                "GoogleEmailMissing" => "Google did not return an email address. Try another account or use email registration.",
-                "account_pending" => "An account with this email is pending approval. Check your email for a verification code or complete verification below.",
-                "account_disabled" => "This account cannot be used for sign-up. Contact support.",
-                _ => Uri.UnescapeDataString(error.ToString())
-            };
-            Snackbar.Add(message, Severity.Error);
+            var errorCode =
+                error.ToString()
+                    .Trim()
+                    .ToLowerInvariant();
+
+            var message =
+                errorCode switch
+                {
+                    AuthErrorCodes.GoogleEmailMissing =>
+                        "Google did not return an email address. Try another account or use email registration.",
+
+                    AuthErrorCodes.InvalidRole =>
+                        "The selected registration role is invalid.",
+
+                    AuthErrorCodes.AccountPending =>
+                        "An account with this email is pending approval.",
+
+                    AuthErrorCodes.AccountRejected =>
+                        "This account registration was rejected. Contact an Admin for more information.",
+
+                    AuthErrorCodes.AccountDisabled =>
+                        "This account cannot be used for sign-up. Contact support.",
+
+                    AuthErrorCodes.EmailRequired =>
+                        "An email address is required.",
+
+                    AuthErrorCodes.EmailAlreadyExists =>
+                        "An account with this email already exists.",
+
+                    AuthErrorCodes.UsernameTaken =>
+                        "This username is already taken.",
+
+                    _ =>
+                        "Google sign-up could not be completed. Please try again."
+                };
+
+            Snackbar.Add(
+                message,
+                Severity.Error);
         }
     }
 
@@ -355,20 +430,20 @@
                 portfolioFileName: hasPortfolio && _selectedFileName != string.Empty ? _selectedFileName : null,
                 portfolioContentType: hasPortfolio && !string.IsNullOrEmpty(_selectedFileContentType) ? _selectedFileContentType : null);
 
-            // Determine portfolio presence using returned UserDto.PortfolioFileId
-            if (created?.PortfolioFileId != null && created.PortfolioFileId != Guid.Empty)
-            {
-                _registrationMessage = "Registration successful. Your account is waiting for Admin approval. Your portfolio was uploaded for Admin review.";
-                _registrationSeverity = Severity.Success;
-            }
-            else
-            {
-                _registrationMessage = "Registration successful. Your account is now waiting for Admin approval.";
-                _registrationSeverity = Severity.Success;
-            }
+            var message =
+                created?.PortfolioFileId is Guid portfolioFileId
+                && portfolioFileId != Guid.Empty
+                    ? "Registration successful. Your account is waiting for Admin approval, and your portfolio was uploaded for review."
+                    : "Registration successful. Your account is waiting for Admin approval.";
 
-            // Keep user on page per decision (do not auto-redirect). Show snackbar as well but the page-level alert remains.
-            Snackbar.Add(_registrationMessage, Severity.Success);
+            Snackbar.Add(
+                message,
+                Severity.Success);
+
+            NavigationManager.NavigateTo(
+                "/pending-approval",
+                forceLoad: true,
+                replace: true);
         }
         catch (InvalidOperationException ex)
         {

@@ -190,18 +190,28 @@ function setupEvents() {
                 return;
             }
 
-            // Check if clicking inside a region
-            const hit = regions.slice().reverse().find(r => 
-                pos.x >= r.x && pos.x <= r.x + r.width && 
+            // Check if clicking inside a region. FULL_PAGE regions are system-managed page anchors that
+            // cover the whole page, so exclude them here — otherwise they intercept every click/drag and
+            // the panel regions underneath become unreachable (and get nudged by accident).
+            const hit = regions.slice().reverse().find(r =>
+                (r.type || '').toUpperCase() !== 'FULL_PAGE' &&
+                pos.x >= r.x && pos.x <= r.x + r.width &&
                 pos.y >= r.y && pos.y <= r.y + r.height);
             
             if (hit) {
-                // User requested double-click to toggle selection (on/off). 
-                // So single mousedown no longer changes selection, but still allows dragging.
-                isDraggingRegion = true;
-                targetRegion = hit;
-                dragOffsetX = pos.x - hit.x;
-                dragOffsetY = pos.y - hit.y;
+                if (e.shiftKey || e.ctrlKey) {
+                    // Shift/Ctrl + click toggles this region in/out of the multi-selection —
+                    // matches the "Hold Shift to select multiple" hint on the task/annotation forms.
+                    hit.selected = !hit.selected;
+                    syncToBlazor();
+                    redraw();
+                } else {
+                    // Plain press starts a drag; single-region selection is toggled via double-click.
+                    isDraggingRegion = true;
+                    targetRegion = hit;
+                    dragOffsetX = pos.x - hit.x;
+                    dragOffsetY = pos.y - hit.y;
+                }
             } else {
                 if (!e.shiftKey && !e.ctrlKey) {
                     const hadSelection = regions.some(r => r.selected);
@@ -359,10 +369,21 @@ function setupEvents() {
             const startCanvasY = (drawStart.y - rect.top - panY) / scale;
             const endCanvasPos = getMousePos(e);
             
-            const x = Math.min(startCanvasX, endCanvasPos.x);
-            const y = Math.min(startCanvasY, endCanvasPos.y);
-            const w = Math.abs(endCanvasPos.x - startCanvasX);
-            const h = Math.abs(endCanvasPos.y - startCanvasY);
+            let x = Math.min(startCanvasX, endCanvasPos.x);
+            let y = Math.min(startCanvasY, endCanvasPos.y);
+            let w = Math.abs(endCanvasPos.x - startCanvasX);
+            let h = Math.abs(endCanvasPos.y - startCanvasY);
+
+            // #9: clamp the drawn box to the image bounds. A full-page/edge drag that spills into the
+            // gray margin would otherwise create a region with negative coordinates or one extending
+            // past the page — an invalid state (the DB also requires x,y >= 0 and a FULL_PAGE box to sit
+            // exactly at 0,0). Clamping keeps the box valid and inside the page.
+            const imgW = originalImg ? originalImg.width : null;
+            const imgH = originalImg ? originalImg.height : null;
+            if (x < 0) { w += x; x = 0; }
+            if (y < 0) { h += y; y = 0; }
+            if (imgW != null && x + w > imgW) w = imgW - x;
+            if (imgH != null && y + h > imgH) h = imgH - y;
 
             if (w > 10 && h > 10) { // Min size
                 regions.push({
@@ -383,8 +404,9 @@ function setupEvents() {
     container.addEventListener('dblclick', (e) => {
         if (currentTool !== 'select') return;
         const pos = getMousePos(e);
-        const hit = regions.slice().reverse().find(r => 
-            pos.x >= r.x && pos.x <= r.x + r.width && 
+        const hit = regions.slice().reverse().find(r =>
+            (r.type || '').toUpperCase() !== 'FULL_PAGE' &&   // don't select the system full-page anchor
+            pos.x >= r.x && pos.x <= r.x + r.width &&
             pos.y >= r.y && pos.y <= r.y + r.height);
         
         if (hit) {
@@ -576,6 +598,19 @@ function updateRegionData(id, data) {
         saveState();
         redraw();
     }
+}
+
+// #10 region editing: update a region's type and/or label, then sync back to Blazor so the change
+// marks the version dirty and persists (BulkReplace matches by db id / label on Save). Unlike
+// updateRegionData this echoes to Blazor because the edit originates from the Blazor edit dialog.
+function setRegionMeta(id, type, label) {
+    const index = regions.findIndex(r => r.id === id);
+    if (index === -1) return;
+    if (type != null && type !== '') regions[index].type = type;
+    regions[index].label = label;
+    saveState();
+    syncToBlazor();
+    redraw();
 }
 
 function loadRegions(savedRegionsStr, silent) {
@@ -1251,6 +1286,7 @@ function downloadRenderedImage(filename) {
         resetZoom,
         setTypography,
         updateRegionData,
+        setRegionMeta,
         loadRegions,
         selectRegion,
         selectRegionsByDbIds,

@@ -1,29 +1,743 @@
 @page "/admin/audit-logs"
+<<<<<<< HEAD
 @layout AdminLayout
+=======
+@using Microsoft.AspNetCore.Components.Web
+@using System.Text
+@using System.Text.Json
+>>>>>>> main
 @using Microsoft.AspNetCore.Authorization
+@using MangaManagementSystem.Application.DTOs.Admin
+@using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Admin")]
-@inject NavigationManager Nav
+@inject IAdminAuditApiClient AdminAuditApiClient
+
+<PageTitle>Audit Logs - MangaFlow</PageTitle>
 
     <div class="mf-page">
         <div class="mf-page-header">
-            <MudText Typo="Typo.h3" Class="font-weight-bold mb-1">System Audit Logs</MudText>
-            <MudText Typo="Typo.body1" Class="mf-muted">Review system actions, account changes, and workflow decisions</MudText>
+            <MudText Typo="Typo.h3"
+                     Class="font-weight-bold mb-1">
+                Audit Logs
+            </MudText>
+            <MudText Typo="Typo.body1"
+                     Class="mf-muted">
+                Review system activity across users and business entities.
+            </MudText>
         </div>
 
-        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
-            <MudText>System audit logs are disabled in this release. Contact your system administrator if you need to access audit data.</MudText>
-        </MudAlert>
+        <MudPaper Class="pa-4 mf-card mb-4">
+            <MudText Typo="Typo.h6"
+                     Class="mb-3">
+                Filters
+            </MudText>
 
+            <MudGrid Spacing="2">
+                <MudItem xs="12" md="6">
+                    <MudTextField T="string"
+                                  Label="Search"
+                                  Placeholder="Action, entity, actor, or detail"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Immediate="true"
+                                  OnKeyDown="HandleSearchKeyDownAsync"
+                                  @bind-Value="_search" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6" md="3">
+                    <MudText Typo="Typo.caption"
+                             Class="mf-muted mb-1">
+                        Action
+                    </MudText>
+                    <MudSelect T="string"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               @bind-Value="_actionCode">
+                        <MudSelectItem T="string"
+                                       Value="@AllFilterValue">
+                            All actions
+                        </MudSelectItem>
+
+                        @foreach (var actionCode in
+                            _filterOptions.ActionCodes)
+                        {
+                            <MudSelectItem T="string"
+                                           Value="@actionCode">
+                                @FormatCode(actionCode)
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" sm="6" md="3">
+                    <MudText Typo="Typo.caption"
+                             Class="mf-muted mb-1">
+                        Entity Type
+                    </MudText>
+                    <MudSelect T="string"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               @bind-Value="_entityType">
+                        <MudSelectItem T="string"
+                                       Value="@AllFilterValue">
+                            All entity types
+                        </MudSelectItem>
+
+                        @foreach (var entityType in
+                            _filterOptions.EntityTypes)
+                        {
+                            <MudSelectItem T="string"
+                                           Value="@entityType">
+                                @entityType
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" sm="6" md="3">
+                    <MudDatePicker Label="From date"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   @bind-Date="_fromDate" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6" md="3">
+                    <MudDatePicker Label="To date"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   @bind-Date="_toDate" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6" md="3">
+                    <MudSelect T="int"
+                               Label="Page size"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Value="_pageSize"
+                               ValueChanged="ChangePageSizeAsync">
+                        <MudSelectItem T="int"
+                                       Value="10">
+                            10
+                        </MudSelectItem>
+                        <MudSelectItem T="int"
+                                       Value="20">
+                            20
+                        </MudSelectItem>
+                        <MudSelectItem T="int"
+                                       Value="50">
+                            50
+                        </MudSelectItem>
+                        <MudSelectItem T="int"
+                                       Value="100">
+                            100
+                        </MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="3"
+                         Class="d-flex align-center gap-2">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Disabled="_isLoading"
+                               OnClick="ApplyFiltersAsync">
+                        Apply
+                    </MudButton>
+
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Default"
+                               Disabled="_isLoading"
+                               OnClick="ClearFiltersAsync">
+                        Clear
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        @if (_isLoading)
+        {
+            <MudProgressLinear Indeterminate="true"
+                               Class="mb-4" />
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_loadError))
+        {
+            <MudAlert Severity="Severity.Error"
+                      Class="mb-4">
+                @_loadError
+            </MudAlert>
+        }
+
+        <MudPaper Class="pa-4 mf-card">
+            <div class="d-flex justify-space-between align-center mb-3">
+                <div>
+                    <MudText Typo="Typo.h6">
+                        Audit Events
+                    </MudText>
+                    <MudText Typo="Typo.body2"
+                             Class="mf-muted">
+                        @_page.TotalCount event(s)
+                    </MudText>
+                </div>
+
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Default"
+                           Disabled="_isLoading"
+                           OnClick="RefreshAsync">
+                    Refresh
+                </MudButton>
+            </div>
+
+            <MudTable T="AdminAuditEventDto"
+                      Items="_page.Items"
+                      Dense="true"
+                      Hover="true"
+                      Bordered="true"
+                      Breakpoint="Breakpoint.Sm">
+                <HeaderContent>
+                    <MudTh>Time</MudTh>
+                    <MudTh>Action</MudTh>
+                    <MudTh>Entity Type</MudTh>
+                    <MudTh>Entity</MudTh>
+                    <MudTh>Actor</MudTh>
+                    <MudTh>Details</MudTh>
+                </HeaderContent>
+
+                <RowTemplate>
+                    <MudTd DataLabel="Time">
+                        @FormatDate(context.OccurredAtUtc)
+                    </MudTd>
+
+                    <MudTd DataLabel="Action">
+                        <MudChip T="string"
+                                 Size="Size.Small"
+                                 Variant="Variant.Outlined">
+                            @FormatCode(context.ActionCode)
+                        </MudChip>
+                    </MudTd>
+
+                    <MudTd DataLabel="Entity Type">
+                        @context.EntityType
+                    </MudTd>
+
+                    <MudTd DataLabel="Entity">
+                        @FormatEntityIdentifier(context.EntityId)
+                    </MudTd>
+
+                    <MudTd DataLabel="Actor">
+                        <div>@FormatActor(context)</div>
+
+                        @if (!string.IsNullOrWhiteSpace(
+                            context.ActorRoleName))
+                        {
+                            <MudText Typo="Typo.caption"
+                                     Class="mf-muted">
+                                @context.ActorRoleName
+                            </MudText>
+                        }
+                    </MudTd>
+
+                    <MudTd DataLabel="Details">
+                        <MudText Typo="Typo.body2"
+                                 Class="audit-details">
+                            @FormatDetails(context.DetailJson)
+                        </MudText>
+                    </MudTd>
+                </RowTemplate>
+
+                <NoRecordsContent>
+                    <MudText Class="pa-4">
+                        No audit events match the selected filters.
+                    </MudText>
+                </NoRecordsContent>
+            </MudTable>
+
+            <div class="d-flex justify-center align-center gap-3 mt-4">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Default"
+                           Disabled="@(_isLoading || _pageNumber <= 1)"
+                           OnClick="PreviousPageAsync">
+                    Previous
+                </MudButton>
+
+                <MudText Typo="Typo.body2">
+                    Page @_pageNumber of @DisplayTotalPages
+                </MudText>
+
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Default"
+                           Disabled="@(_isLoading || !CanMoveNext)"
+                           OnClick="NextPageAsync">
+                    Next
+                </MudButton>
+            </div>
+        </MudPaper>
     </div>
 
 @code {
+    private const string AllFilterValue = "";
 
-    private readonly List<AuditRow> Logs = new()
+    private AdminAuditPageDto _page =
+        new(
+            Array.Empty<AdminAuditEventDto>(),
+            1,
+            20,
+            0,
+            0);
+
+    private AdminAuditFilterOptionsDto _filterOptions =
+        new(
+            Array.Empty<string>(),
+            Array.Empty<string>());
+
+    private string _search = string.Empty;
+    private string _actionCode = AllFilterValue;
+    private string _entityType = AllFilterValue;
+    private DateTime? _fromDate;
+    private DateTime? _toDate;
+    private int _pageNumber = 1;
+    private int _pageSize = 20;
+    private bool _isLoading;
+    private string? _loadError;
+
+    private int DisplayTotalPages =>
+        Math.Max(
+            1,
+            _page.TotalPages);
+
+    private bool CanMoveNext =>
+        _page.TotalPages > 0
+        && _pageNumber < _page.TotalPages;
+
+    protected override async Task OnInitializedAsync()
     {
-        new("2026-05-21 09:15", "admin@mangaflow.jp", "USER_APPROVED", "auth.Users:42"),
-        new("2026-05-21 10:20", "Yuki Tanaka", "REVIEW_SUBMITTED", "ChapterSubmission:18"),
-        new("2026-05-21 11:45", "Board Member", "BOARD_VOTE_CAST", "SeriesBoardVote:7")
-    };
-    private record AuditRow(string Time, string Actor, string Action, string Object);
+        await LoadFilterOptionsAsync();
+        await LoadAuditEventsAsync();
+    }
 
+    private async Task LoadFilterOptionsAsync()
+    {
+        try
+        {
+            _filterOptions =
+                await AdminAuditApiClient
+                    .GetFilterOptionsAsync();
+        }
+        catch (Exception ex)
+        {
+            _loadError =
+                "Filter options could not be loaded. "
+                + ex.Message;
+        }
+    }
+
+    private async Task LoadAuditEventsAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        try
+        {
+            if (_fromDate.HasValue
+                && _toDate.HasValue
+                && _fromDate.Value.Date >
+                    _toDate.Value.Date)
+            {
+                throw new InvalidOperationException(
+                    "The from date cannot be later than the to date.");
+            }
+
+            DateTime? fromUtc =
+                _fromDate.HasValue
+                    ? ToUtcStartOfDay(
+                        _fromDate.Value)
+                    : null;
+
+            DateTime? toUtc =
+                _toDate.HasValue
+                    ? ToUtcEndOfDay(
+                        _toDate.Value)
+                    : null;
+
+            _page =
+                await AdminAuditApiClient.SearchAsync(
+                    _search,
+                    NormalizeFilter(_actionCode),
+                    NormalizeFilter(_entityType),
+                    fromUtc,
+                    toUtc,
+                    _pageNumber,
+                    _pageSize);
+
+            if (_page.TotalPages > 0
+                && _pageNumber > _page.TotalPages)
+            {
+                _pageNumber =
+                    _page.TotalPages;
+
+                _page =
+                    await AdminAuditApiClient.SearchAsync(
+                        _search,
+                        NormalizeFilter(_actionCode),
+                        NormalizeFilter(_entityType),
+                        fromUtc,
+                        toUtc,
+                        _pageNumber,
+                        _pageSize);
+            }
+        }
+        catch (Exception ex)
+        {
+            _loadError = ex.Message;
+
+            _page =
+                new AdminAuditPageDto(
+                    Array.Empty<AdminAuditEventDto>(),
+                    _pageNumber,
+                    _pageSize,
+                    0,
+                    0);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task HandleSearchKeyDownAsync(
+        KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter"
+            && !_isLoading)
+        {
+            await ApplyFiltersAsync();
+        }
+    }
+    private async Task ApplyFiltersAsync()
+    {
+        _pageNumber = 1;
+        await LoadAuditEventsAsync();
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        _search = string.Empty;
+        _actionCode = AllFilterValue;
+        _entityType = AllFilterValue;
+        _fromDate = null;
+        _toDate = null;
+        _pageNumber = 1;
+
+        await LoadAuditEventsAsync();
+    }
+
+    private Task RefreshAsync()
+    {
+        return LoadAuditEventsAsync();
+    }
+
+    private async Task PreviousPageAsync()
+    {
+        if (_pageNumber <= 1)
+        {
+            return;
+        }
+
+        _pageNumber--;
+        await LoadAuditEventsAsync();
+    }
+
+    private async Task NextPageAsync()
+    {
+        if (!CanMoveNext)
+        {
+            return;
+        }
+
+        _pageNumber++;
+        await LoadAuditEventsAsync();
+    }
+
+    private async Task ChangePageSizeAsync(
+        int pageSize)
+    {
+        _pageSize = pageSize;
+        _pageNumber = 1;
+
+        await LoadAuditEventsAsync();
+    }
+
+    private static string? NormalizeFilter(
+        string value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim();
+    }
+
+    private static DateTime ToUtcStartOfDay(
+        DateTime value)
+    {
+        var local =
+            DateTime.SpecifyKind(
+                value.Date,
+                DateTimeKind.Local);
+
+        return local.ToUniversalTime();
+    }
+
+    private static DateTime ToUtcEndOfDay(
+        DateTime value)
+    {
+        var local =
+            DateTime.SpecifyKind(
+                value.Date
+                    .AddDays(1)
+                    .AddTicks(-1),
+                DateTimeKind.Local);
+
+        return local.ToUniversalTime();
+    }
+
+    private static string FormatDate(
+        DateTime occurredAtUtc)
+    {
+        var utc =
+            DateTime.SpecifyKind(
+                occurredAtUtc,
+                DateTimeKind.Utc);
+
+        return utc
+            .ToLocalTime()
+            .ToString("yyyy-MM-dd HH:mm:ss");
+    }
+
+    private static string FormatActor(
+        AdminAuditEventDto item)
+    {
+        if (!string.IsNullOrWhiteSpace(
+                item.ActorDisplayName))
+        {
+            return item.ActorDisplayName;
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                item.ActorUsername))
+        {
+            return item.ActorUsername;
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                item.ActorRoleName))
+        {
+            return item.ActorRoleName;
+        }
+
+        return item.ActorUserId.HasValue
+            ? "User"
+            : "System";
+    }
+
+    private static string FormatEntityIdentifier(
+        string? entityId)
+    {
+        if (string.IsNullOrWhiteSpace(entityId))
+        {
+            return "â€”";
+        }
+
+        var normalized = entityId.Trim();
+
+        return normalized.Length <= 24
+            ? normalized
+            : normalized[..12]
+                + "â€¦"
+                + normalized[^8..];
+    }
+
+    private static string FormatCode(
+        string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "â€”";
+        }
+
+        return string.Join(
+            " ",
+            value
+                .Split(
+                    '_',
+                    StringSplitOptions.RemoveEmptyEntries)
+                .Select(
+                    part =>
+                        part.Length == 1
+                            ? part.ToUpperInvariant()
+                            : char.ToUpperInvariant(part[0])
+                                + part[1..]
+                                    .ToLowerInvariant()));
+    }
+
+    private static string FormatDetails(
+        string? detailJson)
+    {
+        if (string.IsNullOrWhiteSpace(detailJson))
+        {
+            return "â€”";
+        }
+
+        try
+        {
+            using var document =
+                JsonDocument.Parse(detailJson);
+
+            if (document.RootElement.ValueKind
+                != JsonValueKind.Object)
+            {
+                return Truncate(
+                    detailJson,
+                    240);
+            }
+
+            var parts =
+                new List<string>();
+
+            foreach (var property in
+                document.RootElement
+                    .EnumerateObject())
+            {
+                if (IsTechnicalIdentifier(
+                        property.Name,
+                        property.Value))
+                {
+                    continue;
+                }
+
+                var value =
+                    FormatJsonValue(
+                        property.Value);
+
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    continue;
+                }
+
+                parts.Add(
+                    FormatPropertyName(
+                        property.Name)
+                    + ": "
+                    + value);
+            }
+
+            return parts.Count == 0
+                ? "Event recorded."
+                : Truncate(
+                    string.Join("; ", parts),
+                    240);
+        }
+        catch (JsonException)
+        {
+            return Truncate(
+                detailJson,
+                240);
+        }
+    }
+
+    private static bool IsTechnicalIdentifier(
+        string propertyName,
+        JsonElement value)
+    {
+        var normalized =
+            propertyName
+                .Trim()
+                .ToLowerInvariant();
+
+        if (normalized.EndsWith("_id")
+            || normalized is "id"
+                or "userid"
+                or "user_id"
+                or "target_user_id"
+                or "actor_user_id"
+                or "role_id")
+        {
+            return true;
+        }
+
+        return value.ValueKind ==
+                JsonValueKind.String
+            && Guid.TryParse(
+                value.GetString(),
+                out _);
+    }
+
+    private static string FormatJsonValue(
+        JsonElement value)
+    {
+        return value.ValueKind switch
+        {
+            JsonValueKind.String =>
+                value.GetString()
+                ?? string.Empty,
+
+            JsonValueKind.Number =>
+                value.ToString(),
+
+            JsonValueKind.True =>
+                "Yes",
+
+            JsonValueKind.False =>
+                "No",
+
+            JsonValueKind.Null =>
+                string.Empty,
+
+            _ =>
+                value.ToString()
+        };
+    }
+
+    private static string FormatPropertyName(
+        string propertyName)
+    {
+        var builder =
+            new StringBuilder();
+
+        foreach (var part in
+            propertyName.Split(
+                '_',
+                StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (builder.Length > 0)
+            {
+                builder.Append(' ');
+            }
+
+            builder.Append(
+                part.Length == 1
+                    ? part.ToUpperInvariant()
+                    : char.ToUpperInvariant(part[0])
+                        + part[1..]);
+        }
+
+        return builder.Length == 0
+            ? propertyName
+            : builder.ToString();
+    }
+
+    private static string Truncate(
+        string value,
+        int maximumLength)
+    {
+        return value.Length <= maximumLength
+            ? value
+            : value[..maximumLength] + "â€¦";
+    }
 }
+
+<style>
+    .audit-details {
+        min-width: 260px;
+        max-width: 520px;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+</style>

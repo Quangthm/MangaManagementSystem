@@ -1,11 +1,14 @@
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Editor;
 using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.ReleaseChapter;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.RescheduleChapter;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.PutScheduledChapterOnHold;
 using Microsoft.AspNetCore.Components.Forms;
@@ -17,7 +20,7 @@ namespace MangaManagementSystem.Web.Services.Api
     /// HttpClient-backed implementation of <see cref="IEditorChapterReviewApiClient"/>. Sends
     /// the transitional X-Actor-User-Id header and parses safe error messages for UI display.
     /// </summary>
-    public sealed class EditorChapterReviewApiClient : BaseApiClient, IEditorChapterReviewApiClient
+    public class EditorChapterReviewApiClient : IEditorChapterReviewApiClient
     {
         private const string ActorUserIdHeader = "X-Actor-User-Id";
         private const long MaxMarkupFileSize = 10 * 1024 * 1024; // 10 MB
@@ -286,6 +289,129 @@ namespace MangaManagementSystem.Web.Services.Api
             throw new InvalidOperationException(message);
         }
 
+        public async Task<ReleaseChapterResponse> ReleaseChapterAsync(
+            Guid actorUserId,
+            Guid chapterId,
+            bool confirmRelease,
+            CancellationToken cancellationToken = default)
+        {
+            var request = new { confirmRelease };
+            using var requestMessage = new HttpRequestMessage(
+                HttpMethod.Post, $"api/editor/chapters/{chapterId}/release")
+            {
+                Content = JsonContent.Create(request)
+            };
+            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
+            var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<ReleaseChapterResponse>(
+                    cancellationToken: cancellationToken);
+                if (result is null)
+                    throw new InvalidOperationException("No confirmation was returned. Please refresh and verify.");
+                return result;
+            }
+
+            var message = await ExtractErrorMessageAsync(response);
+            throw new InvalidOperationException(message);
+        }
+
+        public async Task<IReadOnlyList<EditorActionableChapterDto>> GetActionableChaptersAsync(
+            Guid actorUserId,
+            Guid? seriesId = null,
+            string? searchText = null,
+            string? statusCode = null,
+            int? maxResults = null,
+            CancellationToken cancellationToken = default)
+        {
+            var sb = new StringBuilder("api/editor/chapters/series-chapters?");
+            var hasParam = false;
+
+            if (seriesId.HasValue && seriesId.Value != Guid.Empty)
+            {
+                sb.Append($"seriesId={seriesId.Value}");
+                hasParam = true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(searchText))
+            {
+                if (hasParam) sb.Append('&');
+                sb.Append($"searchText={Uri.EscapeDataString(searchText)}");
+                hasParam = true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(statusCode))
+            {
+                if (hasParam) sb.Append('&');
+                sb.Append($"statusCode={Uri.EscapeDataString(statusCode)}");
+                hasParam = true;
+            }
+
+            if (maxResults.HasValue)
+            {
+                if (hasParam) sb.Append('&');
+                sb.Append($"maxResults={maxResults.Value}");
+                hasParam = true;
+            }
+
+            if (!hasParam)
+                sb.Length -= 1;
+
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Get, sb.ToString());
+            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<List<EditorActionableChapterDto>>(
+                    cancellationToken: cancellationToken);
+                return result?.AsReadOnly() ?? (IReadOnlyList<EditorActionableChapterDto>)Array.Empty<EditorActionableChapterDto>();
+            }
+
+            var errorMessage = await ExtractErrorMessageAsync(response);
+            throw new InvalidOperationException(errorMessage);
+        }
+
+        private static async Task<string> ExtractErrorMessageAsync(HttpResponseMessage response)
+        {
+            try
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                if (string.IsNullOrWhiteSpace(body))
+                {
+                    return "An unexpected error occurred. Please try again.";
+                }
+
+                using var doc = JsonDocument.Parse(body);
+                var root = doc.RootElement;
+
+                if (root.TryGetProperty("message", out var msgProp) && msgProp.ValueKind == JsonValueKind.String)
+                {
+                    var msg = msgProp.GetString();
+                    if (!string.IsNullOrWhiteSpace(msg)) return msg;
+                }
+
+                if (root.TryGetProperty("detail", out var detailProp) && detailProp.ValueKind == JsonValueKind.String)
+                {
+                    var detail = detailProp.GetString();
+                    if (!string.IsNullOrWhiteSpace(detail)) return detail;
+                }
+
+                if (root.TryGetProperty("title", out var titleProp) && titleProp.ValueKind == JsonValueKind.String)
+                {
+                    var title = titleProp.GetString();
+                    if (!string.IsNullOrWhiteSpace(title)) return title;
+                }
+            }
+            catch (JsonException)
+            {
+                // Not valid JSON — fall through.
+            }
+
+            return "An unexpected error occurred. Please try again.";
+        }
     }
 }

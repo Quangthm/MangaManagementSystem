@@ -1,5 +1,4 @@
 using System.Net.Http.Json;
-using System.Text.Json;
 
 namespace MangaManagementSystem.Web.Services.Api
 {
@@ -7,7 +6,8 @@ namespace MangaManagementSystem.Web.Services.Api
         : BaseApiClient, IProfilePasswordApiClient
     {
         private readonly HttpClient _httpClient;
-        private readonly ILogger<ProfilePasswordApiClient> _logger;
+        private readonly ILogger<ProfilePasswordApiClient>
+            _logger;
 
         public ProfilePasswordApiClient(
             HttpClient httpClient,
@@ -17,9 +17,10 @@ namespace MangaManagementSystem.Web.Services.Api
             _logger = logger;
         }
 
-        public async Task SendOtpAsync(Guid userId)
+        public async Task SendOtpAsync(
+            Guid userId)
         {
-            var response =
+            using var response =
                 await _httpClient.PostAsJsonAsync(
                     "api/profile/password/otp",
                     new
@@ -27,22 +28,9 @@ namespace MangaManagementSystem.Web.Services.Api
                         UserId = userId
                     });
 
-            if (response.IsSuccessStatusCode)
-            {
-                return;
-            }
-
-            var message =
-                await ExtractErrorMessageAsync(
-                    response,
-                    "Unable to send OTP.");
-
-            _logger.LogWarning(
-                "Password OTP API failed: {StatusCode} {ReasonPhrase}",
-                (int)response.StatusCode,
-                response.ReasonPhrase);
-
-            throw new InvalidOperationException(message);
+            await EnsureSuccessAsync(
+                response,
+                "Password OTP");
         }
 
         public async Task ResetPasswordAsync(
@@ -50,7 +38,7 @@ namespace MangaManagementSystem.Web.Services.Api
             string otpCode,
             string newPassword)
         {
-            var response =
+            using var response =
                 await _httpClient.PostAsJsonAsync(
                     "api/profile/password/reset",
                     new
@@ -60,24 +48,36 @@ namespace MangaManagementSystem.Web.Services.Api
                         NewPassword = newPassword
                     });
 
+            await EnsureSuccessAsync(
+                response,
+                "Password reset");
+        }
+
+        private async Task EnsureSuccessAsync(
+            HttpResponseMessage response,
+            string operation)
+        {
             if (response.IsSuccessStatusCode)
             {
                 return;
             }
 
-            var message =
-                await ExtractErrorMessageAsync(
-                    response,
-                    "Unable to reset password.");
-
             _logger.LogWarning(
-                "Password reset API failed: {StatusCode} {ReasonPhrase}",
+                "{Operation} API failed: {StatusCode} {ReasonPhrase}",
+                operation,
                 (int)response.StatusCode,
                 response.ReasonPhrase);
 
+<<<<<<< HEAD
             throw new InvalidOperationException(message);
         }
 
 
+=======
+            throw await ApiResponseReader
+                .CreateExceptionAsync(
+                    response);
+        }
+>>>>>>> main
     }
 }

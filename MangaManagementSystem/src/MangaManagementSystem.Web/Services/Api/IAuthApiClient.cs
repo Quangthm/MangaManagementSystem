@@ -1,17 +1,29 @@
 using MangaManagementSystem.Application.DTOs.Auth;
 
-namespace MangaManagementSystem.Web.Services.Api;
-
-public interface IAuthApiClient
+namespace MangaManagementSystem.Web.Services.Api
 {
-    Task<LoginApiResult> LoginAsync(
-        string usernameOrEmail,
-        string password,
-        CancellationToken cancellationToken = default);
-}
+    public interface IAuthApiClient
+    {
+        Task<LoginApiResult> LoginAsync(
+            string usernameOrEmail,
+            string password,
+            CancellationToken cancellationToken = default);
 
-public sealed record LoginApiResult(
-    UserDto User,
-    string RoleName,
-    string AccessToken,
-    DateTime ExpiresAtUtc);
+        Task<LoginApiResult> ResolveGoogleLoginAsync(
+            string email,
+            CancellationToken cancellationToken = default);
+
+        Task<GoogleSignupCallbackResult>
+            ProcessGoogleSignupAsync(
+                string email,
+                string? googleDisplayName,
+                string roleName,
+                CancellationToken cancellationToken = default);
+    }
+
+    public sealed record LoginApiResult(
+        UserDto User,
+        string RoleName,
+        string AccessToken,
+        DateTime ExpiresAtUtc);
+}

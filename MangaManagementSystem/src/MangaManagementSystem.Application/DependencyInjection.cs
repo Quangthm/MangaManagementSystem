@@ -8,11 +8,22 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
-        // MediatR â€” registers all IRequestHandler<,> implementations in this assembly.
+<<<<<<< HEAD
+        // MediatR — registers all IRequestHandler<,> implementations in this assembly.
         // New CQRS workflows (e.g. SubmitSeriesProposalCommand) are picked up automatically.
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(DependencyInjection).Assembly));
 
+=======
+        public static IServiceCollection AddApplicationServices(
+            this IServiceCollection services)
+        {
+            // Register all MediatR command and query handlers
+            // contained in the Application assembly.
+            services.AddMediatR(configuration =>
+                configuration.RegisterServicesFromAssembly(
+                    typeof(DependencyInjection).Assembly));
+>>>>>>> main
 
         services.AddScoped<ISeriesService, SeriesService>();
         services.AddScoped<IChapterService, ChapterService>();

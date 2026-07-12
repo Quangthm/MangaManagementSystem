@@ -1,4 +1,4 @@
-﻿using MangaManagementSystem.Domain.Entities;
+using MangaManagementSystem.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -54,4 +54,3 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Configurations
         }
     }
 }
-

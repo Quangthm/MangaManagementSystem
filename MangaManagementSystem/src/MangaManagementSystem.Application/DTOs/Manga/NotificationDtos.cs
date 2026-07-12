@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace MangaManagementSystem.Application.DTOs.Manga;
 
+<<<<<<< HEAD
 public record NotificationDto(
     Guid NotificationId,
     Guid RecipientUserId,
@@ -23,3 +24,22 @@ public record CreateNotificationDto(
     string? RelatedEntityType,
     Guid? RelatedEntityId
 );
+=======
+    public record CreateNotificationDto(
+        [Required] Guid RecipientUserId,
+        [Required][MaxLength(50)] string NotificationTypeCode,
+        [MaxLength(200)] string? Title,
+        string Message,
+        string? RelatedEntityType,
+        Guid? RelatedEntityId
+    );
+
+    public sealed record UnreadNotificationCountDto(
+        int UnreadCount
+    );
+
+    public sealed record MarkAllNotificationsReadResultDto(
+        int UpdatedCount
+    );
+}
+>>>>>>> main

@@ -1,0 +1,73 @@
+@using MangaManagementSystem.Web.Components.Pages.Publication
+@using MudBlazor
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Release Chapter</MudText>
+    </TitleContent>
+    <DialogContent>
+        <div class="mb-4">
+            <MudText Typo="Typo.body2" Class="mb-2">
+                <strong>@_chapter.SeriesTitle</strong> — @_chapter.ChapterNumberLabel
+            </MudText>
+            @if (!string.IsNullOrWhiteSpace(_chapter.ChapterTitle))
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@_chapter.ChapterTitle</MudText>
+            }
+            <MudText Typo="Typo.caption" Class="mt-2">
+                Status: @_chapter.StatusCode
+                @if (_chapter.PlannedReleaseDate.HasValue)
+                {
+                    <span> | Planned: @_chapter.PlannedReleaseDate.Value.ToString("MMM d, yyyy")</span>
+                }
+                else
+                {
+                    <span> | No planned release date set</span>
+                }
+            </MudText>
+        </div>
+
+        <MudAlert Severity="Severity.Info" Class="mt-3" Dense="true">
+            This chapter will be marked as <strong>RELEASED</strong>.
+            <ul class="mt-1 mb-0 ps-3">
+                <li><code>released_at_utc</code> will be set to the current timestamp</li>
+                @if (!_chapter.PlannedReleaseDate.HasValue)
+                {
+                    <li><code>planned_release_date</code> will be set to the current date (UTC)</li>
+                }
+                else
+                {
+                    <li>The existing <code>planned_release_date</code> will be preserved</li>
+                }
+            </ul>
+        </MudAlert>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Color="Color.Default">Cancel</MudButton>
+        <MudButton OnClick="Submit"
+                   Color="Color.Success"
+                   Variant="Variant.Filled">
+            Confirm Release
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public ActionableChapterItem Chapter { get; set; } = null!;
+
+    private ActionableChapterItem _chapter = null!;
+
+    protected override void OnInitialized()
+    {
+        _chapter = Chapter;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Submit()
+    {
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+}

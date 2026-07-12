@@ -28,4 +28,3 @@ namespace MangaManagementSystem.Domain.Entities
         public ICollection<PageRegion> PageRegions { get; set; } = new List<PageRegion>();
     }
 }
-

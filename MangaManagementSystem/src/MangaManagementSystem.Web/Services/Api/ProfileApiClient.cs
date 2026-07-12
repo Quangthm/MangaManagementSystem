@@ -1,14 +1,14 @@
-using MangaManagementSystem.Application.DTOs.Auth;
-using MangaManagementSystem.Application.DTOs.Manga;
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using MangaManagementSystem.Application.DTOs.Auth;
+using MangaManagementSystem.Application.DTOs.Manga;
 
 namespace MangaManagementSystem.Web.Services.Api
 {
     public sealed class ProfileApiClient
-        : BaseApiClient, IProfileApiClient
+        : IProfileApiClient
     {
         private static readonly JsonSerializerOptions JsonOptions =
             new(JsonSerializerDefaults.Web)
@@ -30,9 +30,13 @@ namespace MangaManagementSystem.Web.Services.Api
         public async Task<UserDto> GetProfileAsync(
             Guid userId)
         {
-            using var response =
-                await _httpClient.GetAsync(
+            using var request =
+                CreateAuthorizedRequest(
+                    HttpMethod.Get,
                     $"api/profile/{userId:D}");
+
+            using var response =
+                await _httpClient.SendAsync(request);
 
             return await ReadRequiredAsync<UserDto>(
                 response,
@@ -42,9 +46,13 @@ namespace MangaManagementSystem.Web.Services.Api
         public async Task<FileResourceDto?> GetFileAsync(
             Guid fileResourceId)
         {
-            using var response =
-                await _httpClient.GetAsync(
+            using var request =
+                CreateAuthorizedRequest(
+                    HttpMethod.Get,
                     $"api/profile/files/{fileResourceId:D}");
+
+            using var response =
+                await _httpClient.SendAsync(request);
 
             if (response.StatusCode ==
                 HttpStatusCode.NotFound)
@@ -62,13 +70,20 @@ namespace MangaManagementSystem.Web.Services.Api
                 Guid userId,
                 string displayName)
         {
-            using var response =
-                await _httpClient.PutAsJsonAsync(
-                    $"api/profile/{userId:D}/display-name",
+            using var request =
+                CreateAuthorizedRequest(
+                    HttpMethod.Put,
+                    $"api/profile/{userId:D}/display-name");
+
+            request.Content =
+                JsonContent.Create(
                     new
                     {
                         DisplayName = displayName
                     });
+
+            using var response =
+                await _httpClient.SendAsync(request);
 
             return await ReadRequiredAsync<UserDto>(
                 response,
@@ -147,14 +162,29 @@ namespace MangaManagementSystem.Web.Services.Api
                 "file",
                 safeFileName);
 
+            using var request =
+                CreateAuthorizedRequest(
+                    HttpMethod.Post,
+                    requestUri);
+
+            request.Content = form;
+
             using var response =
-                await _httpClient.PostAsync(
-                    requestUri,
-                    form);
+                await _httpClient.SendAsync(request);
 
             return await ReadRequiredAsync<UserDto>(
                 response,
                 defaultErrorMessage);
+        }
+
+        private static HttpRequestMessage
+            CreateAuthorizedRequest(
+                HttpMethod method,
+                string requestUri)
+        {
+            return new HttpRequestMessage(
+                method,
+                requestUri);
         }
 
         private async Task<T> ReadRequiredAsync<T>(
@@ -187,6 +217,59 @@ namespace MangaManagementSystem.Web.Services.Api
                     "The Profile API returned an empty response.");
         }
 
+        private static async Task<string>
+            ExtractErrorMessageAsync(
+                HttpResponseMessage response,
+                string defaultMessage)
+        {
+            try
+            {
+                var body =
+                    await response.Content
+                        .ReadAsStringAsync();
 
+                if (string.IsNullOrWhiteSpace(body))
+                {
+                    return defaultMessage;
+                }
+
+                using var document =
+                    JsonDocument.Parse(body);
+
+                var root =
+                    document.RootElement;
+
+                foreach (var propertyName in
+                    new[]
+                    {
+                        "message",
+                        "detail",
+                        "title"
+                    })
+                {
+                    if (root.TryGetProperty(
+                            propertyName,
+                            out var property)
+                        && property.ValueKind ==
+                            JsonValueKind.String)
+                    {
+                        var value =
+                            property.GetString();
+
+                        if (!string.IsNullOrWhiteSpace(
+                                value))
+                        {
+                            return value;
+                        }
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // Use the safe fallback message.
+            }
+
+            return defaultMessage;
+        }
     }
 }

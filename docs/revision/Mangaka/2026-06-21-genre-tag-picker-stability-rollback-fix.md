@@ -63,7 +63,7 @@ None. No stored procedures, tables, or migrations changed.
 ### 5. No minimum genre enforcement in picker
 **Root cause:** HEAD picker allowed deselecting all genres and clicking Apply. The Create button was disabled when genre count was 0, but the picker itself had no guard.
 
-**Fix:** 
+**Fix:**
 - Apply button is disabled when `_genrePickerSelection.Count == 0`
 - "At least one genre is required." message shown below Apply button when count is 0
 - `TogglePickerGenre` silently blocks toggling off the last selected genre

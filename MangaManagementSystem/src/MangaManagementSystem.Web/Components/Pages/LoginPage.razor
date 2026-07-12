@@ -42,14 +42,23 @@
                         </div>
                         <div class="login-form__field">
                             <label class="login-form__label" for="password">Password</label>
-                            <input id="password"
-                                   name="password"
-                                   type="password"
-                                   class="login-form__input"
-                                   required
-                                   autocomplete="current-password" />
+                            <div class="login-form__password-wrapper">
+                                <input id="password"
+                                       name="password"
+                                       type="@LoginPasswordInputType"
+                                       class="login-form__input login-form__input--password"
+                                       required
+                                       autocomplete="current-password" />
+                                <button type="button"
+                                        class="login-form__password-toggle"
+                                        aria-label="@LoginPasswordToggleLabel"
+                                        title="@LoginPasswordToggleLabel"
+                                        @onclick="ToggleLoginPasswordVisibility">
+                                    <MudIcon Icon="@LoginPasswordToggleIcon" Size="Size.Medium" />
+                                </button>
+                            </div>
                         </div>
-                        <MudText Align="Align.Right"><MudLink Href="#">Forgot Password?</MudLink></MudText>
+                        <MudText Align="Align.Right"><MudLink Href="/forgot-password">Forgot Password?</MudLink></MudText>
                         <div id="login-recaptcha" class="my-2 d-flex justify-center"></div>
                         <button type="submit" class="login-form__submit">
                             Login
@@ -80,7 +89,7 @@
             </div>
         </MudPaper>
 
-        <MudText Align="Align.Center" Class="mt-4"><MudLink Href="/">← Back to Home</MudLink></MudText>
+        <MudText Align="Align.Center" Class="mt-4"><MudLink Href="/">Back to Home</MudLink></MudText>
     </MudContainer>
 </div>
 
@@ -161,40 +170,131 @@
     .google-auth-button__icon {
         display: block;
     }
+
+    .login-form__password-wrapper {
+        position: relative;
+        width: 100%;
+        display: block;
+    }
+
+    .login-form__input--password {
+        padding-right: 54px;
+    }
+
+    .login-form__password-toggle {
+        position: absolute;
+        top: 50%;
+        right: 10px;
+        transform: translateY(-50%);
+        width: 38px;
+        height: 38px;
+        padding: 0;
+        border: none;
+        border-radius: 50%;
+        background: transparent;
+        color: rgba(0, 0, 0, 0.58);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2;
+    }
+
+    .login-form__password-toggle:hover {
+        background: rgba(89, 74, 226, 0.08);
+        color: #594ae2;
+    }
+
+    /* Hide native browser password reveal controls so the custom toggle is the only eye icon. */
+    .login-form__input--password::-ms-reveal,
+    .login-form__input--password::-ms-clear {
+        display: none;
+        width: 0;
+        height: 0;
+    }
+
+    .login-form__input--password::-webkit-credentials-auto-fill-button,
+    .login-form__input--password::-webkit-contacts-auto-fill-button {
+        visibility: hidden;
+        display: none !important;
+        pointer-events: none;
+    }
 </style>
 
 @code {
     private string? _pageAlertMessage;
     private Severity _pageAlertSeverity = Severity.Info;
+    private bool _showLoginPassword;
+
+    private string LoginPasswordInputType =>
+        _showLoginPassword
+            ? "text"
+            : "password";
+
+    private string LoginPasswordToggleIcon =>
+        _showLoginPassword
+            ? Icons.Material.Filled.VisibilityOff
+            : Icons.Material.Filled.Visibility;
+
+    private string LoginPasswordToggleLabel =>
+        _showLoginPassword
+            ? "Hide password"
+            : "Show password";
+
+    private void ToggleLoginPasswordVisibility()
+    {
+        _showLoginPassword =
+            !_showLoginPassword;
+    }
 
     protected override void OnInitialized()
     {
         var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
         var query = QueryHelpers.ParseQuery(uri.Query);
-
-        if (query.TryGetValue("verified", out _))
+if (query.TryGetValue("error", out var error))
         {
-            _pageAlertMessage = "Email verified successfully. You can sign in once an administrator approves your account.";
-            _pageAlertSeverity = Severity.Success;
-        }
+            var errorCode =
+                error.ToString()
+                    .Trim()
+                    .ToLowerInvariant();
 
-        if (query.TryGetValue("error", out var error))
-        {
-            var err = error.ToString();
-            _pageAlertMessage = err switch
-            {
-                "GoogleAuthFailed" => "Google sign-in failed. Please try again or use email login.",
-                "GoogleEmailMissing" => "Google did not return an email address for this account. Try another Google account or use email login.",
-                "UserNotInDatabase" or "UserNotFoundOrInactive" => "No active account found for this Google email. Register first or contact an administrator.",
-                "account_pending" => "Your account has been created and is waiting for Admin approval. Please try again later or contact an Admin.",
-                "account_disabled" => "This account has been disabled. Please contact an Admin.",
-                "account_rejected" => "This account registration was rejected. Please contact an Admin for more information.",
-                "InvalidCredentials" or "invalid" => "Username/email or password is incorrect.",
-                "RecaptchaFailed" => "reCAPTCHA verification failed. Please complete the captcha.",
-                _ => "Unable to sign in. Please try again."
-            };
+            _pageAlertMessage =
+                errorCode switch
+                {
+                    AuthErrorCodes.GoogleOAuthFailed =>
+                        "Google sign-in could not be completed. Please try again.",
 
-            _pageAlertSeverity = (_pageAlertMessage == "Username/email or password is incorrect." || _pageAlertMessage == "reCAPTCHA verification failed. Please complete the captcha.") ? Severity.Error : Severity.Warning;
+                    AuthErrorCodes.GoogleEmailMissing =>
+                        "Google did not return an email address for this account. Try another Google account or use email login.",
+
+                    AuthErrorCodes.AccountNotFound =>
+                        "No active account was found for this Google email. Register first or contact an administrator.",
+
+                    AuthErrorCodes.AccountPending =>
+                        "Your account has been created and is waiting for Admin approval.",
+
+                    AuthErrorCodes.AccountDisabled =>
+                        "This account has been disabled. Please contact an Admin.",
+
+                    AuthErrorCodes.AccountRejected =>
+                        "This account registration was rejected. Please contact an Admin for more information.",
+
+                    AuthErrorCodes.AccountConfigurationInvalid =>
+                        "This account is not configured correctly. Please contact support.",
+
+                    AuthErrorCodes.RecaptchaFailed =>
+                        "reCAPTCHA verification failed. Please complete the captcha.",
+
+                    _ =>
+                        "Username/email or password is incorrect."
+                };
+
+            _pageAlertSeverity =
+                errorCode is
+                    AuthErrorCodes.InvalidCredentials
+                    or AuthErrorCodes.RecaptchaFailed
+                    ? Severity.Error
+                    : Severity.Warning;
         }
     }
 

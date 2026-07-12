@@ -91,4 +91,36 @@ public sealed class PublicationScheduleApiClient : BaseApiClient, IPublicationSc
 
             return Array.Empty<PublicationScheduleSeriesSuggestion>();
         }
+
+        public async Task<PublicationScheduleSeriesSuggestion?> GetSeriesSuggestionBySlugAsync(
+            string slug,
+            CancellationToken cancellationToken = default)
+        {
+            var url = $"api/publication/schedule/series/by-slug/{Uri.EscapeDataString(slug)}";
+            var response = await _httpClient.GetAsync(url, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<PublicationScheduleSeriesSuggestion>(
+                    cancellationToken: cancellationToken);
+            }
+
+            return null;
+        }
+
+        public async Task<PublicationScheduleSeriesSuggestion?> GetSeriesSuggestionByIdAsync(
+            Guid seriesId,
+            CancellationToken cancellationToken = default)
+        {
+            var url = $"api/publication/schedule/series/by-id/{seriesId}";
+            var response = await _httpClient.GetAsync(url, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<PublicationScheduleSeriesSuggestion>(
+                    cancellationToken: cancellationToken);
+            }
+
+            return null;
+        }
     }

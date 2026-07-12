@@ -39,6 +39,19 @@ namespace MangaManagementSystem.Web.Services.Api
                 ?? throw new InvalidOperationException("The region was created but no confirmation was returned.");
         }
 
+        public async Task<PageRegionDto> EnsureFullPageRegionAsync(Guid actorUserId, Guid versionId, CancellationToken cancellationToken = default)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"api/mangaka/regions/version/{versionId}/ensure-full-page");
+            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            await EnsureSuccessAsync(response, cancellationToken);
+
+            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            return JsonSerializer.Deserialize<PageRegionDto>(content, _jsonOptions)
+                ?? throw new InvalidOperationException("The full-page region was created but no confirmation was returned.");
+        }
+
         public async Task BulkReplaceAsync(Guid actorUserId, Guid versionId, IReadOnlyList<CreatePageRegionDto> regions, CancellationToken cancellationToken = default)
         {
             using var request = new HttpRequestMessage(HttpMethod.Put, $"api/mangaka/regions/version/{versionId}/bulk-replace");

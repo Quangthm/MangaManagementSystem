@@ -1,13 +1,11 @@
 using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.DTOs.Manga;
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace MangaManagementSystem.Application.Interfaces;
 
 public interface IUserService
 {
+<<<<<<< HEAD
     Task<UserDto> CreateUserAsync(CreateUserDto dto);
 
     Task<UserDto?> GetUserByIdAsync(Guid id);
@@ -17,6 +15,31 @@ public interface IUserService
     Task<UserDto?> GetUserByEmailAsync(string email);
 
     Task<IEnumerable<UserDto>> GetUsersByStatusAsync(string status);
+=======
+    public interface IUserService
+    {
+        Task<UserDto> CreateUserAsync(
+            CreateUserDto dto);
+
+        Task<UserDto?> GetUserByIdAsync(
+            Guid id);
+
+        Task<UserDto?> GetUserByEmailAsync(
+            string email);
+
+        Task<UserDto?> GetUserByPortfolioFileIdAsync(
+            Guid portfolioFileId);
+
+        Task<IEnumerable<UserDto>> GetUsersByStatusAsync(
+            string status);
+
+        Task<IEnumerable<UserDto>> GetUsersByRoleAsync(
+            string roleName);
+
+        Task<UserDto> ApproveUserAsync(
+            Guid adminUserId,
+            Guid userId);
+>>>>>>> main
 
     Task<IEnumerable<UserDto>> GetUsersByRoleAsync(
         string roleName);
@@ -58,6 +81,7 @@ public interface IUserService
         Guid userId,
         string actionCode);
 
+<<<<<<< HEAD
     Task<bool> VerifyProfileOtpAsync(
         Guid userId,
         string actionCode,
@@ -67,4 +91,7 @@ public interface IUserService
         Guid actorUserId,
         string actionCode,
         string detailJson);
+=======
+    }
+>>>>>>> main
 }

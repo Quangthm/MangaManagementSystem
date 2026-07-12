@@ -5,6 +5,7 @@
 @using System.Security.Claims
 @using MangaManagementSystem.Application.DTOs.Editor
 @using MangaManagementSystem.Web.Services.Api
+@using MangaManagementSystem.Web.Helpers
 @attribute [Authorize(Roles = "Tantou Editor")]
 @inject IEditorChapterReviewApiClient ChapterReviewApiClient
 @inject NavigationManager Nav
@@ -676,8 +677,9 @@
     private void NavigateToSchedule()
     {
         if (_detail is null) return;
-        var anchorDate = _detail.PlannedReleaseDate?.ToString("yyyy-MM-dd") ?? DateTime.UtcNow.ToString("yyyy-MM-dd");
-        Nav.NavigateTo(
-            $"/publication/schedule?seriesId={_detail.SeriesId}&anchorDate={anchorDate}");
+        var url = PublicationScheduleNavigation.BuildUrl(
+            _detail.SeriesId, _detail.SeriesSlug,
+            _detail.PlannedReleaseDate ?? DateTime.UtcNow.Date);
+        Nav.NavigateTo(url);
     }
 }

@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Editor;
 using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.ReleaseChapter;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.RescheduleChapter;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.PutScheduledChapterOnHold;
 using Microsoft.AspNetCore.Components.Forms;
@@ -74,6 +76,20 @@ namespace MangaManagementSystem.Web.Services.Api
             Guid actorUserId,
             Guid chapterId,
             SetPlannedReleaseDateRequest request,
+            CancellationToken cancellationToken = default);
+
+        Task<ReleaseChapterResponse> ReleaseChapterAsync(
+            Guid actorUserId,
+            Guid chapterId,
+            bool confirmRelease,
+            CancellationToken cancellationToken = default);
+
+        Task<IReadOnlyList<EditorActionableChapterDto>> GetActionableChaptersAsync(
+            Guid actorUserId,
+            Guid? seriesId = null,
+            string? searchText = null,
+            string? statusCode = null,
+            int? maxResults = null,
             CancellationToken cancellationToken = default);
     }
 

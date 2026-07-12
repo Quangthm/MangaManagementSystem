@@ -74,6 +74,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     old_status_code = previousStatusCode,
                     new_status_code = StatusOnHold,
                     old_planned_release_date = previousPlannedDate,
+                    actor_user_id = actorUserId,
                     reason = reason
                 });
 

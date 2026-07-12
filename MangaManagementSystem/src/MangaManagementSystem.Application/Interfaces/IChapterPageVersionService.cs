@@ -26,6 +26,7 @@ public interface IChapterPageVersionService
         string? actorRoleName,
         CancellationToken cancellationToken = default);
 
+<<<<<<< HEAD
     /// <summary>
     /// Atomically creates a FileResource, a new ChapterPageVersion that references it, its page
     /// regions, and (optionally) marks it the current version — all in one DB transaction.
@@ -47,4 +48,33 @@ public interface IChapterPageVersionService
     Task<CreatePageWithVersionResponseDto> CreatePageWithVersionAndFileAsync(
         CreatePageWithVersionRequestDto request,
         CancellationToken cancellationToken = default);
+=======
+        /// <summary>
+        /// Atomically creates a FileResource, a new ChapterPageVersion that references it, its page
+        /// regions, and (optionally) marks it the current version — all in one DB transaction.
+        /// The Cloudinary upload must already have happened; the caller is responsible for best-effort
+        /// Cloudinary cleanup if this throws.
+        /// </summary>
+        Task<ChapterPageVersionDto> CreateVersionWithFileAndRegionsAsync(
+            Guid chapterPageId,
+            short versionNo,
+            CreateFileResourceDto fileDto,
+            string? versionNote,
+            IEnumerable<CreatePageRegionDto> regionDtos,
+            bool setAsCurrent,
+            Guid actorUserId,
+            string? actorRoleName,
+            CancellationToken cancellationToken = default);
+        /// <summary>
+        /// Atomically creates a FileResource, a new ChapterPage, and ChapterPageVersion (version 1)
+        /// in a single database transaction. The uploader and audit actor are taken from the trusted
+        /// signed-in actor, not from the client-supplied file DTO.
+        /// </summary>
+        Task<CreatePageWithVersionResponseDto> CreatePageWithVersionAndFileAsync(
+            CreatePageWithVersionRequestDto request,
+            Guid actorUserId,
+            string? actorRoleName,
+            CancellationToken cancellationToken = default);
+    }
+>>>>>>> main
 }

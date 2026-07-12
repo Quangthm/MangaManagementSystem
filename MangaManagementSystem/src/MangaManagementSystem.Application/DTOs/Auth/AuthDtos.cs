@@ -14,6 +14,7 @@ public record RegisterDto(
     byte[]? PortfolioFileBytes = null
 );
 
+<<<<<<< HEAD
 public record LoginDto(
     [Required][MaxLength(254)] string UsernameOrEmail,
     [Required][MaxLength(255)] string Password
@@ -25,3 +26,13 @@ public record AuthResultDto(
     string? RoleName,
     string? ErrorMessage
 );
+=======
+    public record AuthResultDto(
+        bool Succeeded,
+        UserDto? User,
+        string? RoleName,
+        string? ErrorMessage,
+        string? ErrorCode = null
+    );
+}
+>>>>>>> main

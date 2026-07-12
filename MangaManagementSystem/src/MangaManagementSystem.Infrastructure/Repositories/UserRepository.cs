@@ -3,6 +3,7 @@ using MangaManagementSystem.Domain.Interfaces;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -19,7 +20,9 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
         private IQueryable<User> UsersWithRole()
         {
-            return _context.Users.Include(user => user.Role);
+            return _context.Users
+                .AsNoTracking()
+                .Include(user => user.Role);
         }
 
         public async Task<User?> GetByEmailAsync(string email)
@@ -41,6 +44,131 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .FirstOrDefaultAsync(user =>
                     user.Email == usernameOrEmail
                     || user.Username == usernameOrEmail);
+        }
+
+        public Task<User?> GetByIdWithRoleAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default)
+        {
+            return UsersWithRole()
+                .SingleOrDefaultAsync(
+                    user =>
+                        user.UserId == userId,
+                    cancellationToken);
+        }
+
+        public async Task<IReadOnlyList<User>>
+            GetAllWithRoleAsync(
+                CancellationToken cancellationToken = default)
+        {
+            return await UsersWithRole()
+                .OrderByDescending(
+                    user =>
+                        user.CreatedAtUtc)
+                .ToListAsync(
+                    cancellationToken);
+        }
+
+        public async Task<PagedUserResult>
+            SearchAdminUsersAsync(
+                UserSearchCriteria criteria,
+                CancellationToken cancellationToken = default)
+        {
+            var query =
+                UsersWithRole();
+
+            if (!string.IsNullOrWhiteSpace(
+                    criteria.Search))
+            {
+                var search =
+                    criteria.Search.Trim();
+
+                query =
+                    query.Where(
+                        user =>
+                            user.Username.Contains(search)
+                            || user.Email.Contains(search)
+                            || user.DisplayName.Contains(search));
+            }
+
+            if (!string.IsNullOrWhiteSpace(
+                    criteria.StatusCode))
+            {
+                var statusCode =
+                    criteria.StatusCode.Trim();
+
+                query =
+                    query.Where(
+                        user =>
+                            user.StatusCode == statusCode);
+            }
+
+            if (!string.IsNullOrWhiteSpace(
+                    criteria.RoleName))
+            {
+                var roleName =
+                    criteria.RoleName.Trim();
+
+                query =
+                    query.Where(
+                        user =>
+                            user.Role != null
+                            && user.Role.RoleName == roleName);
+            }
+
+            var totalCount =
+                await query.CountAsync(
+                    cancellationToken);
+
+            var items =
+                await query
+                    .OrderByDescending(
+                        user =>
+                            user.CreatedAtUtc)
+                    .ThenBy(
+                        user =>
+                            user.Username)
+                    .Skip(
+                        (criteria.PageNumber - 1)
+                        * criteria.PageSize)
+                    .Take(
+                        criteria.PageSize)
+                    .ToListAsync(
+                        cancellationToken);
+
+            return new PagedUserResult(
+                items,
+                totalCount);
+        }
+
+        public async Task<IReadOnlyDictionary<string, int>>
+            GetStatusCountsAsync(
+                CancellationToken cancellationToken = default)
+        {
+            var rows =
+                await _context.Users
+                    .AsNoTracking()
+                    .GroupBy(
+                        user =>
+                            user.StatusCode)
+                    .Select(
+                        group =>
+                            new
+                            {
+                                StatusCode =
+                                    group.Key,
+                                Count =
+                                    group.Count()
+                            })
+                    .ToListAsync(
+                        cancellationToken);
+
+            return rows.ToDictionary(
+                row =>
+                    row.StatusCode,
+                row =>
+                    row.Count,
+                StringComparer.OrdinalIgnoreCase);
         }
 
         public async Task<IReadOnlyList<User>> GetByStatusAsync(
@@ -65,6 +193,22 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .ToListAsync();
         }
 
+        public async Task<User?> GetByPortfolioFileIdAsync(
+            Guid portfolioFileId)
+        {
+            if (portfolioFileId == Guid.Empty)
+            {
+                return null;
+            }
+
+            return await UsersWithRole()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    user =>
+                        user.PortfolioFileId ==
+                        portfolioFileId);
+        }
+
         public async Task ChangeUserStatusViaProcAsync(
             Guid adminUserId,
             Guid targetUserId,
@@ -73,6 +217,15 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         {
             var conn = _context.Database.GetDbConnection();
             await using var cmd = conn.CreateCommand();
+
+            var currentTransaction =
+                _context.Database.CurrentTransaction;
+
+            if (currentTransaction is not null)
+            {
+                cmd.Transaction =
+                    currentTransaction.GetDbTransaction();
+            }
 
             cmd.CommandText = "auth.usp_Admin_ChangeUserStatus";
             cmd.CommandType = CommandType.StoredProcedure;
@@ -690,7 +843,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     SqlDbType.NVarChar,
                     500)
                 {
-                    Value = "Password reset verified by OTP."
+                    Value = "Password reset verified by one-time token."
                 });
 
             if (conn.State != ConnectionState.Open)

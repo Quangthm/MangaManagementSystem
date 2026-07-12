@@ -1,0 +1,36 @@
+﻿@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+
+<div class="d-flex align-center justify-center pa-8">
+    <MudProgressCircular Indeterminate="true"
+                         Color="Color.Primary" />
+</div>
+
+@code {
+    private bool _redirectStarted;
+
+    protected override async Task OnAfterRenderAsync(
+        bool firstRender)
+    {
+        if (!firstRender || _redirectStarted)
+        {
+            return;
+        }
+
+        _redirectStarted = true;
+
+        var authenticationState =
+            await AuthenticationStateProvider
+                .GetAuthenticationStateAsync();
+
+        var isAuthenticated =
+            authenticationState.User.Identity
+                ?.IsAuthenticated == true;
+
+        NavigationManager.NavigateTo(
+            isAuthenticated
+                ? "/access-denied"
+                : "/login");
+    }
+}

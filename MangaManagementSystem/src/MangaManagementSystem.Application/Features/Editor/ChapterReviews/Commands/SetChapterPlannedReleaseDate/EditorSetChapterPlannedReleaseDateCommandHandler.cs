@@ -2,7 +2,6 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Manga;
-using MangaManagementSystem.Application.Services;
 using MangaManagementSystem.Domain.Interfaces;
 using MediatR;
 
@@ -18,6 +17,7 @@ public sealed class EditorSetChapterPlannedReleaseDateCommandHandler
         IEditorChapterReviewRepository repository,
         ChapterSchedulingValidator schedulingValidator)
     {
+<<<<<<< HEAD
         _repository = repository;
         _schedulingValidator = schedulingValidator;
     }
@@ -28,6 +28,15 @@ public sealed class EditorSetChapterPlannedReleaseDateCommandHandler
     {
         if (request.ActorUserId == Guid.Empty)
             throw new InvalidOperationException("A valid signed-in user is required.");
+=======
+        private readonly IEditorChapterReviewRepository _repository;
+
+        public EditorSetChapterPlannedReleaseDateCommandHandler(
+            IEditorChapterReviewRepository repository)
+        {
+            _repository = repository;
+        }
+>>>>>>> main
 
         if (request.ChapterId == Guid.Empty)
             throw new InvalidOperationException("A valid chapter is required.");

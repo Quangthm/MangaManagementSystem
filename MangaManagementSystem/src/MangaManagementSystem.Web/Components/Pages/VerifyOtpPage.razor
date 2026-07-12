@@ -118,14 +118,24 @@
             return;
         }
 
-        if (query.TryGetValue("error", out var error))
+        if (query.TryGetValue(
+                "error",
+                out var error))
         {
-            var message = error.ToString() switch
-            {
-                "InvalidOtp" => "Invalid or expired verification code. Please try again.",
-                _ => Uri.UnescapeDataString(error.ToString())
-            };
-            Snackbar.Add(message, Severity.Error);
+            var errorCode =
+                error.ToString()
+                    .Trim()
+                    .ToLowerInvariant();
+
+            var message =
+                errorCode ==
+                AuthErrorCodes.InvalidOtp
+                    ? "Invalid or expired verification code. Please try again."
+                    : "The verification request could not be completed. Please try again.";
+
+            Snackbar.Add(
+                message,
+                Severity.Error);
         }
 
         if (query.TryGetValue("resent", out _))
