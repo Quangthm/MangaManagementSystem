@@ -10,7 +10,6 @@ using EFCore.NamingConventions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MangaManagementSystem.Application.Features.EditorialBoard.Repositories;
-using MangaManagementSystem.Domain.Interfaces;
 
 namespace MangaManagementSystem.Infrastructure
 {

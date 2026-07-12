@@ -15,13 +15,13 @@
             </div>
         </div>
         <div class="mf-assistant-content">
-            @ChildContent
+            @Body
         </div>
     </div>
 </RoleSidebarLayout>
 
 @code {
-    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Body { get; set; }
 
     private static readonly IReadOnlyList<RoleSidebarLayout.RoleSidebarNavItem> _navItems =
     [

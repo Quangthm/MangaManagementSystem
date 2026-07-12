@@ -19,12 +19,12 @@
         </NavLink>
     </ExtraNavContent>
     <ChildContent>
-        @ChildContent
+        @Body
     </ChildContent>
 </RoleSidebarLayout>
 
 @code {
-    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Body { get; set; }
 
     private static readonly IReadOnlyList<RoleSidebarLayout.RoleSidebarNavItem> _navItems =
     [

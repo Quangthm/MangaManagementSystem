@@ -149,6 +149,62 @@ public class ChapterPageTaskService : IChapterPageTaskService
         }
     }
 
+    private static IReadOnlyList<PageRegionDto> MapRegions(IEnumerable<PageRegion> regions) =>
+        regions.Select(r => new PageRegionDto(
+            r.PageRegionId,
+            r.ChapterPageVersionId,
+            r.TypeCode,
+            r.RegionLabel,
+            r.X,
+            r.Y,
+            r.Width,
+            r.Height,
+            r.ConfidenceScore,
+            r.SourceType,
+            r.OriginalText,
+            r.CreatedByUserId,
+            r.UpdatedByUserId
+        )).ToList();
+
+    private sealed record PageContext(
+        Guid? SeriesId,
+        string? SeriesTitle,
+        string? ChapterNumberLabel,
+        string? ChapterTitle,
+        int? PageNo,
+        int? PageVersionNo,
+        string? PageImageUrl,
+        string? CompletedOutputUrl,
+        Guid? ChapterId,
+        Guid? SourceChapterPageVersionId,
+        string? SeriesSlug
+    );
+
+    private static PageContext ExtractPageContext(ChapterPageTask t)
+    {
+        var firstRegion = t.PageRegions.FirstOrDefault();
+        var pageVersion = firstRegion?.ChapterPageVersion;
+        var page = pageVersion?.ChapterPage;
+        var chapter = page?.Chapter;
+        var series = chapter?.Series;
+        var pageFile = pageVersion?.PageFile;
+        var completedFile = t.CompletedPageVersion?.PageFile;
+
+        return new PageContext(
+            series?.SeriesId,
+            series?.Title,
+            chapter?.ChapterNumberLabel,
+            chapter?.ChapterTitle,
+            page?.PageNo,
+            pageVersion?.VersionNo,
+            pageFile?.CloudinarySecureUrl,
+            completedFile?.CloudinarySecureUrl,
+            chapter?.ChapterId,
+            firstRegion?.ChapterPageVersionId,
+            series?.Slug
+        );
+    }
+
     private static ChapterPageTaskDto MapToDto(ChapterPageTask t)
     {
         return new ChapterPageTaskDto(
@@ -161,20 +217,7 @@ public class ChapterPageTaskService : IChapterPageTaskService
             t.CompletedPageVersionId,
             t.TaskTitle,
             t.TaskDescription,
-            t.PageRegions.Select(r => new PageRegionDto(
-                r.PageRegionId,
-                r.ChapterPageVersionId,
-                r.TypeCode,
-                r.RegionLabel,
-                r.X,
-                r.Y,
-                r.Width,
-                r.Height,
-                r.ConfidenceScore,
-                r.SourceType,
-                r.OriginalText,
-                r.CreatedByUserId,
-                r.UpdatedByUserId)).ToList(),
+            MapRegions(t.PageRegions),
             AssignedToDisplayName: t.AssignedToUser?.DisplayName,
             AssignedUsername: t.AssignedToUser?.Username,
             CreatedAtUtc: t.CreatedAtUtc
@@ -248,7 +291,7 @@ public class ChapterPageTaskService : IChapterPageTaskService
         if (task.CreatedByUserId != actorUserId)
             throw new InvalidOperationException("You are not authorized to reassign this task.");
 
-        // Status check — only ASSIGNED and UNDER_REVIEW are reassignable
+        // Status check ï¿½ only ASSIGNED and UNDER_REVIEW are reassignable
         if (task.StatusCode is "COMPLETED" or "CANCELLED")
             throw new InvalidOperationException("Completed or cancelled tasks cannot be reassigned.");
 
@@ -264,7 +307,7 @@ public class ChapterPageTaskService : IChapterPageTaskService
             ? task.TaskDescription
             : request.UpdatedTaskDescription.Trim();
 
-        // Call SP — final guards for contributor membership, locking, and audit happen in SQL
+        // Call SP ï¿½ final guards for contributor membership, locking, and audit happen in SQL
         var newTaskId = await _unitOfWork.ChapterPageTasks.AssignToDifferentUserAsync(
             actorUserId,
             taskId,
@@ -292,13 +335,7 @@ public class ChapterPageTaskService : IChapterPageTaskService
 
     private static ChapterPageTaskDto MapToDtoWithFullContext(ChapterPageTask t)
     {
-        var firstRegion = t.PageRegions.FirstOrDefault();
-        var pageVersion = firstRegion?.ChapterPageVersion;
-        var page = pageVersion?.ChapterPage;
-        var chapter = page?.Chapter;
-        var series = chapter?.Series;
-        var pageFile = pageVersion?.PageFile;
-        var completedFile = t.CompletedPageVersion?.PageFile;
+        var ctx = ExtractPageContext(t);
 
         return new ChapterPageTaskDto(
             t.ChapterPageTaskId,
@@ -310,50 +347,30 @@ public class ChapterPageTaskService : IChapterPageTaskService
             t.CompletedPageVersionId,
             t.TaskTitle,
             t.TaskDescription,
-            t.PageRegions.Select(r => new PageRegionDto(
-                r.PageRegionId,
-                r.ChapterPageVersionId,
-                r.TypeCode,
-                r.RegionLabel,
-                r.X,
-                r.Y,
-                r.Width,
-                r.Height,
-                r.ConfidenceScore,
-                r.SourceType,
-                r.OriginalText,
-                r.CreatedByUserId,
-                r.UpdatedByUserId)).ToList(),
-            SeriesId: series?.SeriesId ?? null,
+            MapRegions(t.PageRegions),
+            SeriesId: ctx.SeriesId,
             AssignedToDisplayName: t.AssignedToUser?.DisplayName,
-            SeriesTitle: series?.Title,
-            ChapterNumberLabel: chapter?.ChapterNumberLabel,
-            ChapterTitle: chapter?.ChapterTitle,
-            PageNo: page?.PageNo ?? null,
-            PageVersionNo: pageVersion?.VersionNo ?? null,
-            PageImageUrl: pageFile?.CloudinarySecureUrl,
+            SeriesTitle: ctx.SeriesTitle,
+            ChapterNumberLabel: ctx.ChapterNumberLabel,
+            ChapterTitle: ctx.ChapterTitle,
+            PageNo: ctx.PageNo,
+            PageVersionNo: ctx.PageVersionNo,
+            PageImageUrl: ctx.PageImageUrl,
             CompensationAmount: t.CompensationAmount,
             AssignedUsername: t.AssignedToUser?.Username,
-            CompletedOutputUrl: completedFile?.CloudinarySecureUrl,
+            CompletedOutputUrl: ctx.CompletedOutputUrl,
             CreatedByDisplayName: t.CreatedByUser?.DisplayName,
             CreatedAtUtc: t.CreatedAtUtc,
             UpdatedAtUtc: t.UpdatedAtUtc,
-            SeriesSlug: series?.Slug,
-            ChapterId: chapter?.ChapterId,
-            SourceChapterPageVersionId: firstRegion?.ChapterPageVersionId
+            SeriesSlug: ctx.SeriesSlug,
+            ChapterId: ctx.ChapterId,
+            SourceChapterPageVersionId: ctx.SourceChapterPageVersionId
         );
     }
 
     private static ChapterPageTaskDto MapToDtoWithAssistantContext(ChapterPageTask t)
     {
-        // Extract page context from first page region (task is for one page)
-        var firstRegion = t.PageRegions.FirstOrDefault();
-        var pageVersion = firstRegion?.ChapterPageVersion;
-        var page = pageVersion?.ChapterPage;
-        var chapter = page?.Chapter;
-        var series = chapter?.Series;
-        var pageFile = pageVersion?.PageFile;
-        var completedFile = t.CompletedPageVersion?.PageFile;
+        var ctx = ExtractPageContext(t);
 
         return new ChapterPageTaskDto(
             t.ChapterPageTaskId,
@@ -365,35 +382,22 @@ public class ChapterPageTaskService : IChapterPageTaskService
             t.CompletedPageVersionId,
             t.TaskTitle,
             t.TaskDescription,
-            t.PageRegions.Select(r => new PageRegionDto(
-                r.PageRegionId,
-                r.ChapterPageVersionId,
-                r.TypeCode,
-                r.RegionLabel,
-                r.X,
-                r.Y,
-                r.Width,
-                r.Height,
-                r.ConfidenceScore,
-                r.SourceType,
-                r.OriginalText,
-                r.CreatedByUserId,
-                r.UpdatedByUserId)).ToList(),
-            SeriesId: series?.SeriesId ?? null,
+            MapRegions(t.PageRegions),
+            SeriesId: ctx.SeriesId,
             AssignedToDisplayName: t.AssignedToUser?.DisplayName,
-            SeriesTitle: series?.Title,
-            ChapterNumberLabel: chapter?.ChapterNumberLabel,
-            ChapterTitle: chapter?.ChapterTitle,
-            PageNo: page?.PageNo ?? null,
-            PageVersionNo: pageVersion?.VersionNo ?? null,
-            PageImageUrl: pageFile?.CloudinarySecureUrl,
+            SeriesTitle: ctx.SeriesTitle,
+            ChapterNumberLabel: ctx.ChapterNumberLabel,
+            ChapterTitle: ctx.ChapterTitle,
+            PageNo: ctx.PageNo,
+            PageVersionNo: ctx.PageVersionNo,
+            PageImageUrl: ctx.PageImageUrl,
             CompensationAmount: t.CompensationAmount,
             AssignedUsername: t.AssignedToUser?.Username,
-            CompletedOutputUrl: completedFile?.CloudinarySecureUrl,
+            CompletedOutputUrl: ctx.CompletedOutputUrl,
             CreatedAtUtc: t.CreatedAtUtc,
-            SeriesSlug: series?.Slug,
-            ChapterId: chapter?.ChapterId,
-            SourceChapterPageVersionId: firstRegion?.ChapterPageVersionId
+            SeriesSlug: ctx.SeriesSlug,
+            ChapterId: ctx.ChapterId,
+            SourceChapterPageVersionId: ctx.SourceChapterPageVersionId
         );
     }
 }

@@ -1,3 +1,4 @@
+using MangaManagementSystem.Application.Common.Constants;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Infrastructure.Services;
@@ -178,15 +179,13 @@ public sealed class AssistantTaskController : BaseApiController
             // usp_ChapterPageTask_SubmitForReview uses 58101-58106.
             return ex.Number switch
             {
-                // usp_ChapterPageTask_SubmitForReview error codes
-                58101 => StatusCode(StatusCodes.Status409Conflict, "The task is being processed. Please try again."),
-                58102 => NotFound("Task does not exist."),
-                58103 => BadRequest("This task must be in ASSIGNED status to submit work."),
-                58104 => StatusCode(StatusCodes.Status403Forbidden, "This task is not assigned to you."),
-                58105 => BadRequest("Submitted page version does not exist."),
-                58106 => BadRequest("Submitted page version must belong to the same chapter page as the task."),
-                // usp_FileResource_Create / unique constraint violations
-                2627 or 2601 => StatusCode(StatusCodes.Status409Conflict, "This file appears to have already been submitted."),
+                SubmitForReviewErrors.TaskLocked => StatusCode(StatusCodes.Status409Conflict, "The task is being processed. Please try again."),
+                SubmitForReviewErrors.TaskNotFound => NotFound("Task does not exist."),
+                SubmitForReviewErrors.NotInAssignedStatus => BadRequest("This task must be in ASSIGNED status to submit work."),
+                SubmitForReviewErrors.NotAssignedToActor => StatusCode(StatusCodes.Status403Forbidden, "This task is not assigned to you."),
+                SubmitForReviewErrors.PageVersionNotFound => BadRequest("Submitted page version does not exist."),
+                SubmitForReviewErrors.PageVersionMismatch => BadRequest("Submitted page version must belong to the same chapter page as the task."),
+                SqlErrors.UniqueConstraintViolation or SqlErrors.DuplicateKey => StatusCode(StatusCodes.Status409Conflict, "This file appears to have already been submitted."),
                 _ => Problem(
                     detail: "Could not submit work right now. Please try again later.",
                     statusCode: StatusCodes.Status500InternalServerError)

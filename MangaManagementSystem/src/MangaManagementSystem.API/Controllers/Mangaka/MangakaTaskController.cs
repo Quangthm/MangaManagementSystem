@@ -1,3 +1,4 @@
+using MangaManagementSystem.Application.Common.Constants;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Interfaces;
 using Microsoft.AspNetCore.Http;
@@ -452,17 +453,16 @@ public sealed class MangakaTaskController : BaseApiController
     {
         return ex.Number switch
         {
-            58201 or 58301 or 58401 or 58501 => "Could not acquire task lock. Please try again.",
-            58202 or 58302 or 58402 or 58502 => "Task does not exist.",
-            58203 => "This task cannot be cancelled because it is not in the expected status.",
-            58303 => "This task cannot be approved because it is not currently under review.",
-            58403 => "Only tasks currently under review can be returned for rework.",
-            58406 => "You must be an active contributor of this series to return a task for rework.",
-            // Reassignment SP errors
-            58503 => "Completed or cancelled tasks cannot be reassigned.",
-            58504 => "New assigned user must be different from the current assignee.",
-            58505 => "A reason is required when reassigning a task.",
-            58508 => "New assigned user must be an active contributor of the same series.",
+            MangakaTaskErrors.LockAcquisitionFailed or MangakaTaskErrors.ApproveLockFailed or MangakaTaskErrors.ReturnLockFailed or MangakaTaskErrors.ReassignLockFailed => "Could not acquire task lock. Please try again.",
+            MangakaTaskErrors.TaskNotFound or MangakaTaskErrors.ApproveTaskNotFound or MangakaTaskErrors.ReturnTaskNotFound or MangakaTaskErrors.ReassignTaskNotFound => "Task does not exist.",
+            MangakaTaskErrors.CancelWrongStatus => "This task cannot be cancelled because it is not in the expected status.",
+            MangakaTaskErrors.ApproveWrongStatus => "This task cannot be approved because it is not currently under review.",
+            MangakaTaskErrors.ReturnWrongStatus => "Only tasks currently under review can be returned for rework.",
+            MangakaTaskErrors.ReturnNotContributor => "You must be an active contributor of this series to return a task for rework.",
+            MangakaTaskErrors.ReassignCompletedOrCancelled => "Completed or cancelled tasks cannot be reassigned.",
+            MangakaTaskErrors.ReassignSameUser => "New assigned user must be different from the current assignee.",
+            MangakaTaskErrors.ReassignReasonRequired => "A reason is required when reassigning a task.",
+            MangakaTaskErrors.ReassignNotContributor => "New assigned user must be an active contributor of the same series.",
             _ => ex.Message
         };
     }

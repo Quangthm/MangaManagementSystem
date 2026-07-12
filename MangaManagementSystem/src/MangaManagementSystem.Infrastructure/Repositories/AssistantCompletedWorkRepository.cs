@@ -1,5 +1,5 @@
-using MangaManagementSystem.Domain.Entities;
-using MangaManagementSystem.Domain.Interfaces;
+using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -39,8 +39,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     {
                         r.PageRegionId,
                         SeriesTitle = r.ChapterPageVersion!.ChapterPage!.Chapter!.Series!.Title,
-                        ChapterTitle = r.ChapterPageVersion.ChapterPage.Chapter.ChapterTitle,
-                        PageNumber = r.ChapterPageVersion.ChapterPage.PageNo
+                        ChapterTitle = r.ChapterPageVersion!.ChapterPage!.Chapter!.ChapterTitle,
+                        PageNumber = r.ChapterPageVersion!.ChapterPage!.PageNo
                     }).ToList()
                 })
                 .OrderByDescending(t => t.UpdatedAtUtc ?? t.CreatedAtUtc)

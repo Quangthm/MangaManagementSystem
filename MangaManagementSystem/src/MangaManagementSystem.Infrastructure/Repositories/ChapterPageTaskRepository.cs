@@ -99,6 +99,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         public async Task<IReadOnlyList<ChapterPageTask>> GetByAssignedUserIdWithFullContextAsync(Guid assignedToUserId)
         {
             return await _context.ChapterPageTasks
+                .AsSplitQuery()
                 .Include(t => t.AssignedToUser)
                 .Include(t => t.CompletedPageVersion)
                     .ThenInclude(v => v!.PageFile)
@@ -118,6 +119,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         public async Task<ChapterPageTask?> GetByIdWithFullContextAsync(Guid taskId)
         {
             return await _context.ChapterPageTasks
+                .AsSplitQuery()
                 .Include(t => t.AssignedToUser)
                 .Include(t => t.CreatedByUser)
                 .Include(t => t.CompletedPageVersion)
@@ -202,6 +204,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         public async Task<IReadOnlyList<ChapterPageTask>> GetTasksForReviewByCreatorAsync(Guid creatorUserId)
         {
             return await _context.ChapterPageTasks
+                .AsSplitQuery()
                 .Include(t => t.AssignedToUser)
                 .Include(t => t.CreatedByUser)
                 .Include(t => t.CompletedPageVersion)

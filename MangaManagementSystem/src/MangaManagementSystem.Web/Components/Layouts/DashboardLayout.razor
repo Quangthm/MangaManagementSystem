@@ -4,11 +4,11 @@
                    NavTitle="Workspace"
                    OverviewHref="/dashboard"
                    NavItems="_navItems">
-    @ChildContent
+    @Body
 </RoleSidebarLayout>
 
 @code {
-    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Body { get; set; }
 
     private static readonly IReadOnlyList<RoleSidebarLayout.RoleSidebarNavItem> _navItems =
     [

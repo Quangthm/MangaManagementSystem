@@ -244,9 +244,8 @@
     private int _totalPages => Math.Max(1, (int)Math.Ceiling((double)_filteredTasks.Count / PageSize));
 
     private readonly TimeSpan _refreshInterval = TimeSpan.FromSeconds(30);
+    private CancellationTokenSource? _cts;
     private bool _disposed;
-    private PeriodicTimer? _timer;
-    private DateTime _lastRefresh = DateTime.MinValue;
 
     protected override async Task OnInitializedAsync()
     {
@@ -262,33 +261,29 @@
         }
 
         await LoadTasksAsync();
-        _lastRefresh = DateTime.UtcNow;
 
-        _timer = new PeriodicTimer(_refreshInterval);
-        _ = PollForUpdatesAsync();
+        _cts = new CancellationTokenSource();
+        _ = PollForUpdatesAsync(_cts.Token);
     }
 
-    private async Task PollForUpdatesAsync()
+    private async Task PollForUpdatesAsync(CancellationToken ct)
     {
-        while (!_disposed && _timer is not null)
+        using var timer = new PeriodicTimer(_refreshInterval);
+        try
         {
-            try
+            while (await timer.WaitForNextTickAsync(ct))
             {
-                await _timer.WaitForNextTickAsync();
+                if (_disposed) break;
+                await LoadTasksAsync();
                 if (!_disposed)
                 {
-                    await LoadTasksAsync();
-                    _lastRefresh = DateTime.UtcNow;
-                    if (!_disposed)
-                    {
-                        await InvokeAsync(StateHasChanged);
-                    }
+                    await InvokeAsync(StateHasChanged);
                 }
             }
-            catch
-            {
-                break;
-            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Component disposed — exit gracefully
         }
     }
 
@@ -357,6 +352,7 @@
     public void Dispose()
     {
         _disposed = true;
-        _timer?.Dispose();
+        _cts?.Cancel();
+        _cts?.Dispose();
     }
 }
