@@ -117,6 +117,45 @@ namespace MangaManagementSystem.Web.Services.Api
 
         // === Submit Operation ===
 
+        public async Task<AssistantTaskSubmitResultDto?> SubmitFromCanvasAsync(
+            Guid actorUserId,
+            Guid taskId,
+            string imageBase64,
+            string? versionNote = null,
+            CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(imageBase64))
+                throw new ArgumentNullException(nameof(imageBase64));
+
+            if (taskId == Guid.Empty)
+                throw new ArgumentException("Invalid task ID.", nameof(taskId));
+
+            var payload = new
+            {
+                imageBase64,
+                versionNote
+            };
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"api/assistant/tasks/{taskId}/submit-from-canvas");
+            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+            request.Content = new StringContent(
+                JsonSerializer.Serialize(payload, _jsonOptions),
+                Encoding.UTF8,
+                "application/json");
+
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await ExtractErrorMessageAsync(response, cancellationToken: cancellationToken);
+                throw new InvalidOperationException(errorContent);
+            }
+
+            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            var result = JsonSerializer.Deserialize<AssistantTaskSubmitResultDto>(responseContent, _jsonOptions);
+            return result;
+        }
+
         public async Task<AssistantTaskSubmitResultDto?> SubmitTaskWorkAsync(
             Guid actorUserId,
             Guid taskId,

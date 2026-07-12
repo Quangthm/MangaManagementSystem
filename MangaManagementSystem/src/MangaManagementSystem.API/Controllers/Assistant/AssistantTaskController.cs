@@ -5,6 +5,7 @@ using MangaManagementSystem.Infrastructure.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Http.Features;
 
 namespace MangaManagementSystem.API.Controllers.Assistant;
 
@@ -202,6 +203,117 @@ public sealed class AssistantTaskController : BaseApiController
         }
     }
     /// <summary>
+    /// Submit assistant task work from canvas export (base64 image data).
+    /// Moves task from ASSIGNED → UNDER_REVIEW.
+    /// Route: POST /api/assistant/tasks/{taskId}/submit-from-canvas
+    /// </summary>
+    [HttpPost("{taskId:guid}/submit-from-canvas")]
+    public async Task<IActionResult> SubmitFromCanvasAsync(
+        [FromRoute] Guid taskId,
+        [FromBody] SubmitFromCanvasRequest body)
+    {
+        if (taskId == Guid.Empty)
+            return BadRequest("Invalid task ID.");
+
+        if (string.IsNullOrWhiteSpace(body?.ImageBase64))
+            return BadRequest("Image data is required.");
+
+        var actorUserId = ResolveActorUserId();
+
+        // Parse base64 data URI: "data:image/png;base64,iVBOR..."
+        var base64Data = body.ImageBase64;
+        var mimeType = "image/png";
+        var idx = base64Data.IndexOf(";base64,", StringComparison.Ordinal);
+        if (idx > 0)
+        {
+            var prefix = base64Data[..idx];
+            var mimeMatch = System.Text.RegularExpressions.Regex.Match(prefix, @"data:(image/\w+)");
+            if (mimeMatch.Success)
+                mimeType = mimeMatch.Groups[1].Value;
+
+            base64Data = base64Data[(idx + 8)..];
+        }
+
+        byte[] imageBytes;
+        try
+        {
+            imageBytes = Convert.FromBase64String(base64Data);
+        }
+        catch (FormatException)
+        {
+            return BadRequest("Invalid base64 image data.");
+        }
+
+        const long MaxFileSizeBytes = 10 * 1024 * 1024;
+        if (imageBytes.Length > MaxFileSizeBytes)
+            return BadRequest($"Image exceeds maximum size of {MaxFileSizeBytes / 1024 / 1024} MB.");
+
+        var allowedTypes = new[] { "image/png", "image/jpeg", "image/jpg", "image/webp" };
+        if (!allowedTypes.Contains(mimeType.ToLowerInvariant()))
+            return BadRequest("Unsupported image type. Allowed: PNG, JPEG, WebP.");
+
+        // Wrap bytes as IFormFile and reuse the existing upload + submission flow
+        FileUploadResultDto uploadResult;
+        await using (var stream = new MemoryStream(imageBytes))
+        {
+            var formFile = new FormFile(stream, 0, imageBytes.Length, "file", $"canvas-export.{mimeType.Split('/').Last()}")
+            {
+                Headers = new HeaderDictionary(),
+                ContentType = mimeType
+            };
+
+            try
+            {
+                await EnsureChapterAllowsTaskMutationsAsync(taskId, actorUserId);
+                uploadResult = await _formAdapter.UploadFormFileAsync(formFile, "CHAPTER_PAGE_VERSION", null);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest($"Image upload failed: {ex.Message}");
+            }
+        }
+
+        var request = new AssistantTaskSubmitRequestDto(
+            ActorUserId: actorUserId,
+            ChapterPageTaskId: taskId,
+            StorageProviderCode: "CLOUDINARY",
+            PublicId: uploadResult.PublicId,
+            SecureUrl: uploadResult.SecureUrl,
+            OriginalFileName: uploadResult.OriginalFileName,
+            ContentType: uploadResult.ContentType,
+            FileSizeBytes: uploadResult.FileSizeBytes,
+            Sha256Hash: uploadResult.Sha256Hash ?? string.Empty,
+            VersionNote: body.VersionNote
+        );
+
+        try
+        {
+            var result = await _submissionService.SubmitTaskWorkAsync(request);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest($"Submission failed: {ex.Message}");
+        }
+        catch (Microsoft.Data.SqlClient.SqlException ex)
+        {
+            return ex.Number switch
+            {
+                SubmitForReviewErrors.TaskLocked => StatusCode(StatusCodes.Status409Conflict, "The task is being processed."),
+                SubmitForReviewErrors.TaskNotFound => NotFound("Task does not exist."),
+                SubmitForReviewErrors.NotInAssignedStatus => BadRequest("Task must be in ASSIGNED status."),
+                SubmitForReviewErrors.NotAssignedToActor => StatusCode(StatusCodes.Status403Forbidden, "Not assigned to you."),
+                _ => Problem(detail: "Could not submit right now.", statusCode: 500)
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error submitting from canvas for task {TaskId}.", taskId);
+            return Problem(detail: "Could not submit right now.", statusCode: 500);
+        }
+    }
+
+    /// <summary>
     /// Get annotations linked to the assigned page regions for a task.
     /// Route: GET /api/assistant/tasks/{taskId}/annotations
     /// </summary>
@@ -253,3 +365,5 @@ public sealed class AssistantTaskController : BaseApiController
         await _chapterService.EnsureChapterAllowsContentMutationsAsync(task.ChapterId.Value);
     }
 }
+
+public sealed record SubmitFromCanvasRequest(string ImageBase64, string? VersionNote = null);

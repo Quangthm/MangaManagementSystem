@@ -1,0 +1,724 @@
+@page "/series/{Slug}/workspace"
+@layout MangakaLayout
+@attribute [Authorize(Roles = "Mangaka")]
+@implements IDisposable
+
+@using System.Security.Claims
+@using System.Text.Json
+@using MangaManagementSystem.Web.Services.Api
+@using MangaManagementSystem.Web.Components.Pages.Workspace
+@using MangaManagementSystem.Domain.ReadModels
+@using static MangaManagementSystem.Web.Components.Pages.Workspace.WorkspaceHelpers
+
+@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JsRuntime
+@inject ISnackbar Snackbar
+@inject IMangakaSeriesApiClient SeriesClient
+@inject IMangakaChapterApiClient ChapterClient
+@inject IMangakaPageApiClient PageClient
+@inject IMangakaTaskApiClient TaskClient
+
+<style>
+    .cw-shell {
+        display: flex; flex-direction: column; height: 100%; background: #f8fafc; overflow: hidden;
+    }
+    .cw-body {
+        display: flex; flex: 1; overflow: hidden;
+    }
+    .cw-main {
+        display: flex; flex-direction: column; flex: 1; overflow: hidden; min-width: 0;
+    }
+    .cw-canvas-header {
+        display: flex; align-items: center; gap: 12px; padding: 8px 20px;
+        background: #fff; border-bottom: 1px solid #e2e8f0; flex-shrink: 0;
+    }
+    .cw-canvas-area {
+        flex: 1; overflow: hidden; position: relative; background: #e2e8f0;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .cw-canvas-area img {
+        max-width: 100%; max-height: 100%; object-fit: contain;
+        transition: transform 0.1s ease;
+    }
+    .cw-canvas-overlay {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        pointer-events: none;
+    }
+    .cw-region-box {
+        position: absolute; border: 2px solid #4f46e5;
+        background: rgba(79, 70, 229, 0.06); border-radius: 2px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 10px; font-weight: 700; color: #4f46e5;
+    }
+    .cw-region-box .rl {
+        background: #4f46e5; color: #fff; padding: 1px 5px; border-radius: 3px;
+        font-size: 9px;
+    }
+    .cw-task-panel {
+        width: 340px; background: #fff; border-left: 1px solid #e2e8f0;
+        display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0;
+    }
+    .cw-task-panel-header {
+        padding: 16px 20px; border-bottom: 1px solid #e2e8f0; flex-shrink: 0;
+    }
+    .cw-task-panel-body {
+        flex: 1; overflow: auto; padding: 16px 20px;
+    }
+    .cw-page-selector {
+        display: flex; align-items: center; gap: 8px;
+    }
+</style>
+
+<div class="cw-shell">
+    <div class="cw-body">
+        @* ─── SIDEBAR ─── *@
+        <WorkspaceChapterSidebar
+            Chapters="_chapters"
+            SelectedChapter="_selectedChapter"
+            IsAddingChapter="_addingChapter"
+            OnAddChapter="HandleAddChapter"
+            OnSelectChapter="@(EventCallback.Factory.Create<int>(this, async (int id) => { await HandleSelectChapter(id); }))"
+            OnSubmitChapter="@(EventCallback.Factory.Create<Guid>(this, async (Guid id) => { await HandleSubmitChapter(id); }))"
+            OnPromptRename="@(EventCallback.Factory.Create<ChapterModel>(this, async (ChapterModel c) => { HandlePromptRename(c); }))"
+            OnSaveRename="@(EventCallback.Factory.Create<ChapterModel>(this, async (ChapterModel c) => { await HandleSaveRename(c); }))"
+            OnCancelRename="@(EventCallback.Factory.Create<ChapterModel>(this, async (ChapterModel c) => { HandleCancelRename(c); }))"
+            OnDeleteChapter="@(EventCallback.Factory.Create<int>(this, async (int id) => { await HandleDeleteChapter(id); }))" />
+
+        @* ─── MAIN ─── *@
+        <div class="cw-main">
+            @* Canvas header *@
+            <div class="cw-canvas-header">
+                @if (_series != null)
+                {
+                    <div style="font-weight: 700; font-size: 0.9rem; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px;">
+                        @_series.Title
+                    </div>
+                    <span style="color: #94a3b8;">/</span>
+                }
+                @if (_currentPageId.HasValue)
+                {
+                    <div style="font-size: 0.85rem; color: #374151; font-weight: 500;">
+                        Page @_currentPageNo of @_totalPages
+                    </div>
+                }
+
+                <div style="flex:1;"></div>
+
+                @* Page navigator *@
+                <div class="cw-page-selector">
+                    <button @onclick="() => NavigatePage(-1)" disabled="@(_currentPageNo <= 1)" style="padding: 4px 10px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; cursor: pointer; font-size: 0.85rem;">◀</button>
+                    <span style="font-size: 0.78rem; color: #64748b; min-width: 60px; text-align: center;">
+                        @_currentPageNo / @_totalPages
+                    </span>
+                    <button @onclick="() => NavigatePage(1)" disabled="@(_currentPageNo >= _totalPages)" style="padding: 4px 10px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; cursor: pointer; font-size: 0.85rem;">▶</button>
+                </div>
+
+                <div style="width:1px; height:20px; background:#e2e8f0; margin:0 8px;"></div>
+
+                @* Zoom *@
+                <button @onclick="ZoomIn" style="padding: 4px 8px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; cursor: pointer; font-size: 0.78rem;">🔍+</button>
+                <span style="font-size: 0.75rem; color: #64748b; min-width: 40px; text-align: center;">@($"{_zoomLevel:F0}%")</span>
+                <button @onclick="ZoomOut" style="padding: 4px 8px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; cursor: pointer; font-size: 0.78rem;">🔍−</button>
+                <button @onclick="() => _zoomLevel = 100" style="padding: 4px 8px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; cursor: pointer; font-size: 0.72rem;">Reset</button>
+            </div>
+
+            @* Canvas *@
+            <div class="cw-canvas-area" id="cw-canvas-container">
+                @if (_loading)
+                {
+                    <MudProgressCircular Indeterminate="true" Size="Size.Medium" />
+                }
+                else if (_error != null)
+                {
+                    <div style="color: #dc2626; text-align: center; padding: 40px;">
+                        <div style="font-size: 2rem; margin-bottom: 8px;">⚠️</div>
+                        <div style="font-weight: 600;">@_error</div>
+                        <button @onclick="InitAsync" style="margin-top: 12px; padding: 8px 20px; border: none; border-radius: 8px; background: #4f46e5; color: #fff; cursor: pointer;">Retry</button>
+                    </div>
+                }
+                else if (_currentPageVersionUrl != null)
+                {
+                    <img src="@OptimizedImageUrl(_currentPageVersionUrl)" alt="Page @_currentPageNo"
+                         style="transform: scale(@(_zoomLevel / 100.0)); transform-origin: center center; cursor: crosshair;"
+                         id="cw-page-image" />
+                    <div class="cw-canvas-overlay" id="cw-canvas-overlay">
+                        @if (_currentRegions != null)
+                        {
+                            @foreach (var r in _currentRegions)
+                            {
+                                <div class="cw-region-box"
+                                     style="left: @(r.X)px; top: @(r.Y)px; width: @(r.Width)px; height: @(r.Height)px; transform: scale(@(_zoomLevel / 100.0)); transform-origin: 0 0;">
+                                    <span class="rl">@(r.Label ?? r.Type)</span>
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+                else if (!_loading && _chapters.Count > 0)
+                {
+                    <div style="color: #94a3b8; text-align: center;">
+                        <div style="font-size: 2.5rem; margin-bottom: 8px;">📄</div>
+                        <div style="font-weight: 500;">Select a chapter and page to start working</div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* ─── TASK PANEL ─── *@
+        <div class="cw-task-panel">
+            <div class="cw-task-panel-header">
+                <div style="font-weight: 700; font-size: 0.9rem; color: #111827;">Tasks</div>
+                <div style="font-size: 0.72rem; color: #94a3b8;">
+                    @if (_currentPageId.HasValue)
+                    {
+                        <span>Page @_currentPageNo — @_currentPageTasks.Count task(s)</span>
+                    }
+                    else
+                    {
+                        <span>Select a page to view tasks</span>
+                    }
+                </div>
+            </div>
+            <div class="cw-task-panel-body">
+                @if (_loadingTasks)
+                {
+                    <MudProgressLinear Indeterminate="true" />
+                }
+                else if (_currentPageId.HasValue)
+                {
+                    @if (_currentPageTasks.Count == 0)
+                    {
+                        <div style="color: #94a3b8; font-size: 0.85rem; text-align: center; padding: 20px;">
+                            No tasks for this page.
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var t in _currentPageTasks)
+                        {
+                            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 8px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                    <span style="font-weight: 600; font-size: 0.8rem; color: #111827;">@(t.TypeCode ?? "Task")</span>
+                                    <span style="font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; background: @GetTaskStatusBg(t.StatusCode); color: @GetTaskStatusText(t.StatusCode); font-weight: 500;">
+                                        @t.StatusCode
+                                    </span>
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(t.TaskTitle))
+                                {
+                                    <div style="font-size: 0.78rem; color: #374151; margin-bottom: 4px;">@t.TaskTitle</div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(t.AssignedToDisplayName))
+                                {
+                                    <div style="font-size: 0.72rem; color: #64748b;">
+                                        Assigned to: <span style="font-weight: 500;">@t.AssignedToDisplayName</span>
+                                    </div>
+                                }
+                                @if (t.DueAtUtc.HasValue)
+                                {
+                                    <div style="font-size: 0.72rem; color: #64748b;">
+                                        Due: @t.DueAtUtc.Value.ToString("MMM dd")
+                                    </div>
+                                }
+                                @if (t.StatusCode == "UNDER_REVIEW" || t.StatusCode == "COMPLETED")
+                                {
+                                    <div style="margin-top: 8px; display: flex; gap: 6px;">
+                                        @if (t.StatusCode == "UNDER_REVIEW")
+                                        {
+                                            <button @onclick="() => ApproveTask(t.ChapterPageTaskId)" style="padding: 4px 12px; border: none; border-radius: 6px; background: #059669; color: #fff; font-size: 0.72rem; cursor: pointer;">Approve</button>
+                                            <button @onclick="() => ReturnTask(t.ChapterPageTaskId)" style="padding: 4px 12px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; color: #374151; font-size: 0.72rem; cursor: pointer;">Return</button>
+                                        }
+                                        @if (t.CompletedOutputUrl != null)
+                                        {
+                                            <a href="@t.CompletedOutputUrl" target="_blank" style="padding: 4px 12px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; color: #4f46e5; font-size: 0.72rem; text-decoration: none;">View</a>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+
+                    @* Create task button *@
+                    <button @onclick="ToggleCreateTask" style="width: 100%; padding: 8px; border: 1px dashed #4f46e5; border-radius: 8px; background: transparent; color: #4f46e5; font-size: 0.8rem; font-weight: 600; cursor: pointer; margin-top: 8px;">
+                        @(_showCreateTask ? "− Cancel" : "+ Create Task")
+                    </button>
+
+                    @if (_showCreateTask && _currentPageId.HasValue)
+                    {
+                        <div style="margin-top: 12px; background: #f0f4ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 14px;">
+                            <div style="font-weight: 600; font-size: 0.8rem; color: #1e40af; margin-bottom: 8px;">New Task</div>
+
+                            <div style="margin-bottom: 8px;">
+                                <label style="font-size: 0.72rem; color: #374151; display: block; margin-bottom: 3px;">Type</label>
+                                <select @bind="_newTaskType" style="width: 100%; padding: 6px 8px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.78rem;">
+                                    <option value="REDRAW">Redraw</option>
+                                    <option value="CLEANUP">Cleanup</option>
+                                    <option value="TYPESETTING">Typesetting</option>
+                                    <option value="LETTERING">Lettering</option>
+                                    <option value="COLORING">Coloring</option>
+                                    <option value="TRANSLATION">Translation</option>
+                                    <option value="PROOFREADING">Proofreading</option>
+                                    <option value="OTHER">Other</option>
+                                </select>
+                            </div>
+
+                            <div style="margin-bottom: 8px;">
+                                <label style="font-size: 0.72rem; color: #374151; display: block; margin-bottom: 3px;">Title</label>
+                                <input @bind="_newTaskTitle" placeholder="e.g. Clean up panel 3" style="width: 100%; padding: 6px 8px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.78rem; outline: none;" />
+                            </div>
+
+                            <div style="margin-bottom: 8px;">
+                                <label style="font-size: 0.72rem; color: #374151; display: block; margin-bottom: 3px;">Description</label>
+                                <textarea @bind="_newTaskDescription" placeholder="What needs to be done?" style="width: 100%; padding: 6px 8px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.78rem; resize: vertical; min-height: 50px; outline: none;"></textarea>
+                            </div>
+
+                            @if (_eligibleAssistants.Count > 0)
+                            {
+                                <div style="margin-bottom: 12px;">
+                                    <label style="font-size: 0.72rem; color: #374151; display: block; margin-bottom: 3px;">Assign To</label>
+                                    <select @bind="_newTaskAssigneeId" style="width: 100%; padding: 6px 8px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.78rem;">
+                                        <option value="">Select assistant...</option>
+                                        @foreach (var a in _eligibleAssistants)
+                                        {
+                                            <option value="@a.UserId">@a.DisplayName</option>
+                                        }
+                                    </select>
+                                </div>
+                            }
+                            else
+                            {
+                                <div style="font-size: 0.72rem; color: #94a3b8; margin-bottom: 8px;">Loading assistants...</div>
+                            }
+
+                            <button @onclick="CreateTask" disabled="@(_creatingTask || _newTaskAssigneeId == Guid.Empty)" style="width: 100%; padding: 8px; border: none; border-radius: 8px; background: @(_creatingTask || _newTaskAssigneeId == Guid.Empty ? "#94a3b8" : "#4f46e5"); color: #fff; font-size: 0.8rem; font-weight: 600; cursor: @(_creatingTask || _newTaskAssigneeId == Guid.Empty ? "default" : "pointer");">
+                                @(_creatingTask ? "Creating..." : "Assign Task")
+                            </button>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div style="color: #94a3b8; font-size: 0.85rem; text-align: center; padding: 30px;">
+                        Select a chapter and page to manage tasks.
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = string.Empty;
+
+    private Guid _currentUserId;
+    private SeriesDto? _series;
+    private List<ChapterModel> _chapters = new();
+    private int _selectedChapter;
+    private bool _addingChapter;
+    private bool _loading = true;
+    private string? _error;
+
+    private ChapterModel? _selectedChapterModel;
+    private List<PageModel> _pages = new();
+    private int _currentPageNo;
+    private int _totalPages;
+    private Guid? _currentPageId;
+    private string? _currentPageVersionUrl;
+    private List<RegionModel>? _currentRegions;
+    private double _zoomLevel = 100;
+
+    private List<ChapterPageTaskDto> _currentPageTasks = new();
+    private bool _loadingTasks;
+
+    private bool _showCreateTask;
+    private string _newTaskType = "REDRAW";
+    private string _newTaskTitle = string.Empty;
+    private string _newTaskDescription = string.Empty;
+    private Guid _newTaskAssigneeId;
+    private bool _creatingTask;
+    private List<QuickSelectAssistantDto> _eligibleAssistants = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (Guid.TryParse(idClaim, out var uid))
+                _currentUserId = uid;
+        }
+
+        await InitAsync();
+    }
+
+    private async Task InitAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            var allSeries = await SeriesClient.GetMySeriesAsync(_currentUserId);
+            _series = allSeries.FirstOrDefault(s =>
+                s.Slug.Equals(Slug, StringComparison.OrdinalIgnoreCase));
+
+            if (_series == null)
+            {
+                _error = "Series not found or you don't have access.";
+                return;
+            }
+
+            var chapterDtos = await ChapterClient.GetSeriesChaptersAsync(_currentUserId, _series.SeriesId);
+            _chapters = chapterDtos.Select((c, i) => new ChapterModel
+            {
+                Id = i + 1,
+                ChapterId = c.ChapterId,
+                PageCount = 0,
+                StatusCode = c.StatusCode,
+                Title = c.ChapterTitle ?? c.ChapterNumberLabel,
+                Pages = new List<PageModel>()
+            }).ToList();
+
+            if (_chapters.Count > 0)
+            {
+                _selectedChapter = _chapters[0].Id;
+                await LoadChapterPages(_chapters[0]);
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load workspace: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadChapterPages(ChapterModel chapter)
+    {
+        if (chapter.IsPagesLoaded) return;
+
+        try
+        {
+            var pageDtos = await PageClient.GetByChapterAsync(_currentUserId, chapter.ChapterId);
+            chapter.Pages = pageDtos.Select(p => new PageModel
+            {
+                ChapterPageId = p.ChapterPageId,
+                PageNotes = p.PageNotes
+            }).ToList();
+
+            chapter.PageCount = chapter.Pages.Count;
+
+            if (chapter.Pages.Count > 0)
+            {
+                var pageIds = chapter.Pages.Select(p => p.ChapterPageId).ToList();
+                var versions = await PageClient.GetVersionsByPageIdsAsync(_currentUserId, pageIds);
+                var fileIds = versions.Select(v => v.PageFileId).Distinct().ToList();
+                var files = await PageClient.GetFileResourcesByIdsAsync(_currentUserId, fileIds);
+                var fileUrlMap = files.ToDictionary(f => f.FileResourceId, f => f.CloudinarySecureUrl);
+
+                foreach (var page in chapter.Pages)
+                {
+                    var pageVersions = versions.Where(v => v.ChapterPageId == page.ChapterPageId)
+                        .Select(v => new PageVersionModel
+                        {
+                            ChapterPageVersionId = v.ChapterPageVersionId,
+                            VersionNo = v.VersionNo,
+                            DataUrl = fileUrlMap.GetValueOrDefault(v.PageFileId) ?? string.Empty,
+                            IsCurrentVersion = v.IsCurrentVersion,
+                            CreatedAtUtc = DateTime.UtcNow
+                        }).ToList();
+
+                    page.Versions = pageVersions;
+                    page.ActiveVersionIndex = pageVersions.Count > 0 ? 0 : -1;
+                }
+            }
+
+            chapter.IsPagesLoaded = true;
+        }
+        catch
+        {
+        }
+    }
+
+    private async Task HandleSelectChapter(int chapterId)
+    {
+        _selectedChapter = chapterId;
+        _selectedChapterModel = _chapters.FirstOrDefault(c => c.Id == chapterId);
+        if (_selectedChapterModel == null) return;
+
+        await LoadChapterPages(_selectedChapterModel);
+        _pages = _selectedChapterModel.Pages;
+        _totalPages = _pages.Count;
+        _currentPageNo = _totalPages > 0 ? 1 : 0;
+        await LoadCurrentPage();
+    }
+
+    private async Task LoadCurrentPage()
+    {
+        _currentPageId = null;
+        _currentPageVersionUrl = null;
+        _currentRegions = null;
+        _currentPageTasks.Clear();
+
+        if (_currentPageNo < 1 || _currentPageNo > _totalPages) return;
+
+        var page = _pages[_currentPageNo - 1];
+        _currentPageId = page.ChapterPageId;
+
+        var activeVersion = page.Versions.FirstOrDefault(v => v.IsCurrentVersion)
+            ?? page.Versions.FirstOrDefault();
+        _currentPageVersionUrl = activeVersion?.DataUrl;
+
+        await LoadPageRegions(page);
+        await LoadPageTasks();
+    }
+
+    private async Task LoadPageRegions(PageModel page)
+    {
+        var activeVersion = page.Versions.FirstOrDefault(v => v.IsCurrentVersion)
+            ?? page.Versions.FirstOrDefault();
+        if (activeVersion?.Regions != null)
+        {
+            try
+            {
+                _currentRegions = JsonSerializer.Deserialize<List<RegionModel>>(
+                    activeVersion.Regions,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            }
+            catch
+            {
+                _currentRegions = new List<RegionModel>();
+            }
+        }
+    }
+
+    private async Task LoadPageTasks()
+    {
+        if (!_currentPageId.HasValue) return;
+        _loadingTasks = true;
+
+        try
+        {
+            var tasks = await TaskClient.GetTasksByPageAsync(_currentUserId, _currentPageId.Value);
+            _currentPageTasks = tasks.ToList();
+        }
+        catch
+        {
+            _currentPageTasks = new List<ChapterPageTaskDto>();
+        }
+        finally
+        {
+            _loadingTasks = false;
+        }
+    }
+
+    private async Task NavigatePage(int delta)
+    {
+        var newPage = _currentPageNo + delta;
+        if (newPage < 1 || newPage > _totalPages) return;
+        _currentPageNo = newPage;
+        await LoadCurrentPage();
+    }
+
+    private void ZoomIn() => _zoomLevel = Math.Min(300, _zoomLevel + 25);
+    private void ZoomOut() => _zoomLevel = Math.Max(25, _zoomLevel - 25);
+
+    private async Task HandleAddChapter()
+    {
+        if (_series == null) return;
+        _addingChapter = true;
+
+        try
+        {
+            var created = await ChapterClient.CreateChapterDraftAsync(_currentUserId,
+                new CreateChapterDraftRequest(_series.SeriesId, $"Chapter {_chapters.Count + 1}", null));
+            var model = new ChapterModel
+            {
+                Id = _chapters.Count + 1,
+                ChapterId = created.ChapterId,
+                PageCount = 0,
+                StatusCode = created.StatusCode,
+                Title = created.ChapterTitle ?? created.ChapterNumberLabel,
+                Pages = new List<PageModel>(),
+                IsPagesLoaded = true
+            };
+            _chapters.Add(model);
+            _selectedChapter = model.Id;
+            _selectedChapterModel = model;
+            _pages = model.Pages;
+            _totalPages = 0;
+            _currentPageNo = 0;
+            Snackbar.Add("Chapter created.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _addingChapter = false;
+        }
+    }
+
+    private async Task HandleSubmitChapter(Guid chapterId)
+    {
+        try
+        {
+            await ChapterClient.SubmitChapterForReviewAsync(_currentUserId, chapterId);
+            var ch = _chapters.FirstOrDefault(c => c.ChapterId == chapterId);
+            if (ch != null) ch.StatusCode = "UNDER_REVIEW";
+            Snackbar.Add("Chapter submitted for review.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void HandlePromptRename(ChapterModel chapter)
+    {
+        chapter.IsRenaming = true;
+    }
+
+    private async Task HandleSaveRename(ChapterModel chapter)
+    {
+        try
+        {
+            await ChapterClient.UpdateChapterDraftAsync(_currentUserId, chapter.ChapterId,
+                new UpdateChapterDraftRequest(chapter.Title, chapter.Title));
+            chapter.IsRenaming = false;
+            chapter.TitleDirty = false;
+            Snackbar.Add("Chapter renamed.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void HandleCancelRename(ChapterModel chapter)
+    {
+        chapter.IsRenaming = false;
+    }
+
+    private async Task HandleDeleteChapter(int chapterId)
+    {
+        var ch = _chapters.FirstOrDefault(c => c.Id == chapterId);
+        if (ch == null) return;
+
+        try
+        {
+            await ChapterClient.CancelChapterAsync(_currentUserId, ch.ChapterId);
+            _chapters.Remove(ch);
+            if (_selectedChapter == chapterId)
+            {
+                _selectedChapter = _chapters.Count > 0 ? _chapters[0].Id : 0;
+                if (_selectedChapter > 0)
+                    await HandleSelectChapter(_selectedChapter);
+            }
+            Snackbar.Add("Chapter cancelled.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ApproveTask(Guid taskId)
+    {
+        try
+        {
+            await TaskClient.ApproveTaskAsync(_currentUserId, taskId);
+            await LoadPageTasks();
+            Snackbar.Add("Task approved.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ReturnTask(Guid taskId)
+    {
+        try
+        {
+            await TaskClient.ReturnTaskForReworkAsync(_currentUserId, taskId, "Returned for revision");
+            await LoadPageTasks();
+            Snackbar.Add("Task returned for rework.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ToggleCreateTask()
+    {
+        _showCreateTask = !_showCreateTask;
+        if (_showCreateTask && _eligibleAssistants.Count == 0 && _series != null)
+        {
+            try
+            {
+                _eligibleAssistants = (await TaskClient.GetQuickSelectAssistantsAsync(_currentUserId, _series.SeriesId)).ToList();
+            }
+            catch
+            {
+                _eligibleAssistants = new List<QuickSelectAssistantDto>();
+            }
+        }
+    }
+
+    private async Task CreateTask()
+    {
+        if (_series == null || !_currentPageId.HasValue || _newTaskAssigneeId == Guid.Empty) return;
+        _creatingTask = true;
+
+        try
+        {
+            var request = new CreateMangakaTaskRequest(
+                _newTaskAssigneeId, _newTaskType, _newTaskTitle, _newTaskDescription,
+                2, null, Array.Empty<Guid>());
+            await TaskClient.CreateTaskAsync(_currentUserId, request);
+            Snackbar.Add("Task created and assigned.", Severity.Success);
+            _showCreateTask = false;
+            _newTaskTitle = string.Empty;
+            _newTaskDescription = string.Empty;
+            _newTaskType = "REDRAW";
+            _newTaskAssigneeId = Guid.Empty;
+            await LoadPageTasks();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _creatingTask = false;
+        }
+    }
+
+    private static string GetTaskStatusBg(string? status) => status switch
+    {
+        "ASSIGNED" => "#eff6ff",
+        "UNDER_REVIEW" => "#fef3c7",
+        "COMPLETED" => "#f0fdf4",
+        "CANCELLED" => "#f1f5f9",
+        _ => "#f1f5f9"
+    };
+
+    private static string GetTaskStatusText(string? status) => status switch
+    {
+        "ASSIGNED" => "#1e40af",
+        "UNDER_REVIEW" => "#92400e",
+        "COMPLETED" => "#166534",
+        "CANCELLED" => "#64748b",
+        _ => "#64748b"
+    };
+
+    public void Dispose()
+    {
+    }
+}

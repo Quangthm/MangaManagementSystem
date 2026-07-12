@@ -1,0 +1,478 @@
+@page "/assistant/workspace/{TaskId:guid}"
+@layout AssistantLayout
+@attribute [Authorize(Roles = "Assistant")]
+@implements IDisposable
+
+@using System.Security.Claims
+@using MangaManagementSystem.Web.Services.Api
+@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IAssistantTaskApiClient AssistantTaskClient
+@inject IJSRuntime JsRuntime
+@inject ISnackbar Snackbar
+
+<style>
+    .as-workspace {
+        display: flex; flex-direction: column; height: 100%; background: #f8fafc;
+    }
+    .as-workspace-body {
+        display: grid; grid-template-columns: 300px 1fr 320px; flex: 1; overflow: hidden;
+    }
+    @@media (max-width: 1200px) {
+        .as-workspace-body { grid-template-columns: 280px 1fr; }
+        .as-submission-panel { display: none; }
+    }
+    @@media (max-width: 900px) {
+        .as-workspace-body { grid-template-columns: 1fr; }
+        .as-task-panel, .as-submission-panel { display: none; }
+    }
+    .as-task-panel {
+        background: #fff; border-right: 1px solid #e2e8f0; overflow: auto; padding: 20px;
+    }
+    .as-canvas-area {
+        display: flex; flex-direction: column; overflow: hidden;
+    }
+    .as-canvas-toolbar {
+        display: flex; align-items: center; gap: 8px; padding: 8px 16px;
+        background: #fff; border-bottom: 1px solid #e2e8f0; flex-shrink: 0;
+    }
+    .as-canvas-container {
+        flex: 1; overflow: hidden; position: relative; background: #e2e8f0;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .as-canvas-container img {
+        max-width: 100%; max-height: 100%; object-fit: contain;
+    }
+    .as-canvas-overlay {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;
+    }
+    .as-region-overlay {
+        position: absolute; border: 2px solid #4f46e5; background: rgba(79, 70, 229, 0.08);
+        border-radius: 2px; display: flex; align-items: center; justify-content: center;
+        font-size: 11px; font-weight: 700; color: #4f46e5; cursor: default;
+    }
+    .as-region-overlay.assigned {
+        border-color: #dc2626; background: rgba(220, 38, 38, 0.1); border-width: 3px;
+        box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.3);
+    }
+    .as-region-overlay .label {
+        background: #4f46e5; color: #fff; padding: 1px 6px; border-radius: 4px;
+        font-size: 10px; font-weight: 700;
+    }
+    .as-region-overlay.assigned .label {
+        background: #dc2626;
+    }
+    .as-submission-panel {
+        background: #fff; border-left: 1px solid #e2e8f0; overflow: auto; padding: 20px;
+    }
+</style>
+
+<div class="as-workspace">
+    <div class="as-workspace-body">
+        @* ─── LEFT: Task Details ─── *@
+        <div class="as-task-panel">
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" />
+            }
+            else if (_error != null)
+            {
+                <MudAlert Severity="Severity.Error">@_error</MudAlert>
+            }
+            else if (_task != null)
+            {
+                <div style="margin-bottom: 16px;">
+                    <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Task Type</div>
+                    <div style="font-size: 1.2rem; font-weight: 800; color: #111827;">@_task.TypeCode</div>
+                </div>
+
+                <div style="margin-bottom: 16px;">
+                    <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Status</div>
+                    <StatusBadge Status="@_task.StatusCode" />
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(_task.TaskTitle))
+                {
+                    <div style="margin-bottom: 16px;">
+                        <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Title</div>
+                        <div style="font-size: 0.95rem; font-weight: 600; color: #111827;">@_task.TaskTitle</div>
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(_task.TaskDescription))
+                {
+                    <div style="margin-bottom: 16px;">
+                        <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Instructions</div>
+                        <div style="font-size: 0.85rem; color: #374151; white-space: pre-wrap; line-height: 1.5; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #f1f5f9;">@_task.TaskDescription</div>
+                    </div>
+                }
+
+                <div style="border-top: 1px solid #f1f5f9; padding-top: 16px; margin-bottom: 16px;">
+                    <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Context</div>
+                    <div style="display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem;">
+                        <div><span style="color: #64748b;">Series:</span> <span style="color: #111827; font-weight: 500;">@(_task.SeriesTitle ?? "—")</span></div>
+                        <div><span style="color: #64748b;">Chapter:</span> <span style="color: #111827; font-weight: 500;">@(_task.ChapterNumberLabel ?? "—")</span></div>
+                        @if (_task.PageNo.HasValue)
+                        {
+                            <div><span style="color: #64748b;">Page:</span> <span style="color: #111827; font-weight: 500;">@_task.PageNo.Value</span></div>
+                        }
+                        <div><span style="color: #64748b;">Due:</span> <span style="color: #111827; font-weight: 500;"><TimestampDisplay Value="@_task.DueAtUtc" EmptyText="No deadline" /></span></div>
+                    </div>
+                </div>
+
+                if (_task.PageRegions.Count > 0)
+                {
+                    <div style="border-top: 1px solid #f1f5f9; padding-top: 16px;">
+                        <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Assigned Regions (@_task.PageRegions.Count)</div>
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                            @foreach (var r in _task.PageRegions)
+                            {
+                                <div style="background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 6px; padding: 8px 10px; font-size: 0.78rem;">
+                                    <div style="font-weight: 600; color: #111827;">@(r.RegionLabel ?? r.TypeCode)</div>
+                                    <div style="color: #64748b;">@($"({r.X:F0}, {r.Y:F0}) {r.Width:F0} x {r.Height:F0}")</div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @if (_annotations.Count > 0)
+                {
+                    <div style="border-top: 1px solid #f1f5f9; padding-top: 16px;">
+                        <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Annotations (@_annotations.Count)</div>
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                            @foreach (var a in _annotations)
+                            {
+                                <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 8px 10px; font-size: 0.78rem;">
+                                    <div style="font-weight: 600; color: #92400e;">@a.IssueTypeCode</div>
+                                    <div style="color: #64748b;">@a.AnnotationText</div>
+                                    <div style="color: #94a3b8; font-size: 0.72rem; margin-top: 2px;">
+                                        @a.AnnotatedByDisplayName
+                                        @if (a.ResolvedAtUtc.HasValue)
+                                        {
+                                            <span style="color: #166534;"> — Resolved</span>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+
+        @* ─── CENTER: Canvas ─── *@
+        <div class="as-canvas-area">
+            <div class="as-canvas-toolbar">
+                <button @onclick="ZoomIn" disabled="@(!_taskLoaded)" style="padding: 4px 10px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; cursor: pointer; font-size: 0.85rem;">🔍+</button>
+                <span style="font-size: 0.78rem; color: #64748b; min-width: 50px; text-align: center;">@($"{_zoomLevel:F0}%")</span>
+                <button @onclick="ZoomOut" disabled="@(!_taskLoaded)" style="padding: 4px 10px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; cursor: pointer; font-size: 0.85rem;">🔍−</button>
+                <button @onclick="ResetZoom" disabled="@(!_taskLoaded)" style="padding: 4px 10px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; cursor: pointer; font-size: 0.78rem;">Reset</button>
+                <div style="flex: 1;"></div>
+                @if (_task != null && _task.StatusCode == "ASSIGNED")
+                {
+                    <button @onclick="SubmitWork" disabled="@_submitting" style="padding: 6px 16px; background: #4f46e5; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
+                        @(_submitting ? "Submitting..." : "✓ Submit Work")
+                    </button>
+                }
+            </div>
+            <div class="as-canvas-container" id="canvas-container-@_canvasId">
+                @if (_loading)
+                {
+                    <MudProgressCircular Indeterminate="true" Size="Size.Medium" />
+                }
+                else if (_task?.PageImageUrl != null)
+                {
+                    <img src="@_task.PageImageUrl" alt="Page" id="page-image-@_canvasId"
+                         style="transform: scale(@(_zoomLevel / 100.0)); transform-origin: center center;"
+                         @onloadstart="() => _imageLoaded = false"
+                         @onload="() => OnImageLoaded()" />
+                    <div class="as-canvas-overlay" id="canvas-overlay-@_canvasId">
+                        @if (_imageLoaded && _task != null)
+                        {
+                            @foreach (var r in _task.PageRegions)
+                            {
+                                var isAssigned = true;
+                                var regionStyle = $"left: {r.X}px; top: {r.Y}px; width: {r.Width}px; height: {r.Height}px; transform: scale({_zoomLevel / 100.0}); transform-origin: 0 0;";
+                                <div class="as-region-overlay @(isAssigned ? "assigned" : "")" style="@regionStyle">
+                                    <span class="label">@(r.RegionLabel ?? "#")</span>
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+                else if (!_loading && _task != null)
+                {
+                    <div style="color: #94a3b8; text-align: center;">
+                        <div style="font-size: 40px; margin-bottom: 8px;">🖼️</div>
+                        <div>Page image not available</div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* ─── RIGHT: Submission ─── *@
+        <div class="as-submission-panel">
+            @if (_task == null)
+            {
+                <div style="color: #94a3b8; font-size: 0.85rem;">Loading...</div>
+            }
+            else if (_task.StatusCode != "ASSIGNED")
+            {
+                <div style="margin-bottom: 16px;">
+                    <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Submission Status</div>
+                    <div style="background: @GetStatusBg(_task.StatusCode); border: 1px solid @GetStatusBorder(_task.StatusCode); border-radius: 8px; padding: 16px; text-align: center;">
+                        <div style="font-size: 1.2rem; margin-bottom: 4px;">@GetStatusIcon(_task.StatusCode)</div>
+                        <div style="font-weight: 600; color: @GetStatusText(_task.StatusCode); font-size: 0.85rem;">
+                            @(_task.StatusCode switch
+                            {
+                                "UNDER_REVIEW" => "Awaiting Review",
+                                "COMPLETED" => "Approved ✓",
+                                "CANCELLED" => "Cancelled",
+                                _ => _task.StatusCode
+                            })
+                        </div>
+                    </div>
+                </div>
+
+                <a href="/assistant/tasks" style="display: block; text-align: center; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; color: #374151; text-decoration: none; font-size: 0.85rem;">Back to Tasks</a>
+            }
+            else
+            {
+                <div style="margin-bottom: 20px;">
+                    <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Submit Your Work</div>
+                    <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 8px 12px; color: #1e40af; font-size: 0.78rem; margin-bottom: 12px;">
+                        Upload your completed page image. Allowed: PNG, JPEG, WebP (max 10 MB).
+                    </div>
+
+                    <div style="margin-bottom: 12px;">
+                        <InputFile OnChange="HandleFileSelected" />
+                        @if (_selectedFile != null)
+                        {
+                            <div style="font-size: 0.78rem; color: #111827; margin-top: 6px; font-weight: 500;">
+                                @_selectedFile.Name (@(_selectedFile.Size / 1024) KB)
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(_fileValidationError))
+                        {
+                            <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 8px 12px; color: #dc2626; font-size: 0.78rem; margin-top: 6px;">@_fileValidationError</div>
+                        }
+                    </div>
+
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: block; font-size: 0.78rem; color: #374151; font-weight: 500; margin-bottom: 4px;">Notes (optional)</label>
+                        <textarea @bind="_notes" style="width: 100%; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.85rem; color: #111827; resize: vertical; min-height: 80px; outline: none;" placeholder="Add notes about your work..."></textarea>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(_task.PageImageUrl))
+                    {
+                        <div style="margin-bottom: 12px;">
+                            <div style="font-size: 0.72rem; color: #94a3b8; margin-bottom: 4px;">Source Reference:</div>
+                            <MudImage Src="@_task.PageImageUrl" MaxHeight="120" ObjectFit="ObjectFit.Contain" Class="rounded" />
+                            <a href="@_task.PageImageUrl" target="_blank" style="font-size: 0.78rem; color: #4f46e5; text-decoration: none;">Download Source</a>
+                        </div>
+                    }
+
+                    <button @onclick="SubmitWork" disabled="@(!_canSubmit || _submitting)" style="padding: 10px; background: @(_canSubmit && !_submitting ? "#4f46e5" : "#94a3b8"); color: #fff; border: none; border-radius: 8px; cursor: @(_canSubmit && !_submitting ? "pointer" : "default"); font-size: 0.85rem; font-weight: 600; width: 100%;">
+                        @(_submitting ? "Submitting..." : "Submit Final Work")
+                    </button>
+
+                    <a href="/assistant/tasks" style="display: block; text-align: center; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; color: #374151; text-decoration: none; font-size: 0.85rem; margin-top: 8px;">Back to Tasks</a>
+
+                    if (_submitResult != null)
+                    {
+                        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px; margin-top: 12px; text-align: center;">
+                            <div style="font-size: 1.5rem; margin-bottom: 4px;">✅</div>
+                            <div style="font-weight: 600; color: #166534; font-size: 0.85rem;">Submitted successfully!</div>
+                            <div style="color: #64748b; font-size: 0.78rem;">Status: @_submitResult.StatusCode</div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid TaskId { get; set; }
+
+    private Guid _currentUserId;
+    private bool _loading = true;
+    private string? _error;
+    private ChapterPageTaskDto? _task;
+    private List<ChapterPageAnnotationDto> _annotations = new();
+    private bool _imageLoaded;
+    private bool _taskLoaded;
+    private double _zoomLevel = 100;
+    private string _canvasId = Guid.NewGuid().ToString("N");
+
+    private IBrowserFile? _selectedFile;
+    private string _fileValidationError = string.Empty;
+    private string _notes = string.Empty;
+    private bool _submitting;
+    private AssistantTaskSubmitResultDto? _submitResult;
+
+    private bool _canSubmit =>
+        _task != null &&
+        _task.StatusCode == "ASSIGNED" &&
+        _selectedFile != null &&
+        !_submitting;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (Guid.TryParse(idClaim, out var userId))
+                _currentUserId = userId;
+        }
+
+        await LoadTaskAsync();
+    }
+
+    private async Task LoadTaskAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _task = await AssistantTaskClient.GetTaskDetailAsync(_currentUserId, TaskId);
+            if (_task == null)
+            {
+                _error = "Task not found or not assigned to you.";
+                return;
+            }
+
+            try
+            {
+                _annotations = (await AssistantTaskClient.GetTaskAnnotationsAsync(_currentUserId, TaskId)).ToList();
+            }
+            catch
+            {
+            }
+
+            _taskLoaded = true;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load task: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OnImageLoaded()
+    {
+        _imageLoaded = true;
+    }
+
+    private void ZoomIn()
+    {
+        _zoomLevel = Math.Min(300, _zoomLevel + 25);
+    }
+
+    private void ZoomOut()
+    {
+        _zoomLevel = Math.Max(25, _zoomLevel - 25);
+    }
+
+    private void ResetZoom()
+    {
+        _zoomLevel = 100;
+    }
+
+    private void HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        _selectedFile = e.File;
+        _fileValidationError = string.Empty;
+        _submitResult = null;
+
+        if (_selectedFile == null) return;
+
+        if (_selectedFile.Size > 10 * 1024 * 1024)
+        {
+            _fileValidationError = "File exceeds 10 MB limit.";
+            _selectedFile = null;
+            return;
+        }
+
+        var allowed = new[] { "image/png", "image/jpeg", "image/jpg", "image/webp" };
+        if (!allowed.Contains(_selectedFile.ContentType.ToLowerInvariant()))
+        {
+            _fileValidationError = "Unsupported file type. Allowed: PNG, JPEG, WebP.";
+            _selectedFile = null;
+            return;
+        }
+    }
+
+    private async Task SubmitWork()
+    {
+        if (!_canSubmit || _task == null) return;
+
+        _submitting = true;
+        _error = null;
+
+        try
+        {
+            var result = await AssistantTaskClient.SubmitTaskWorkAsync(
+                _currentUserId, TaskId, _selectedFile!, _notes);
+
+            if (result != null)
+            {
+                _submitResult = result;
+                _task = await AssistantTaskClient.GetTaskDetailAsync(_currentUserId, TaskId);
+                Snackbar.Add("Task submitted for review!", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Submission failed: {ex.Message}";
+            Snackbar.Add($"Submission failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private string GetStatusBg(string status) => status switch
+    {
+        "UNDER_REVIEW" => "#fef3c7",
+        "COMPLETED" => "#f0fdf4",
+        "CANCELLED" => "#f1f5f9",
+        _ => "#f1f5f9"
+    };
+
+    private string GetStatusBorder(string status) => status switch
+    {
+        "UNDER_REVIEW" => "#fde68a",
+        "COMPLETED" => "#bbf7d0",
+        "CANCELLED" => "#e2e8f0",
+        _ => "#e2e8f0"
+    };
+
+    private string GetStatusText(string status) => status switch
+    {
+        "UNDER_REVIEW" => "#92400e",
+        "COMPLETED" => "#166534",
+        "CANCELLED" => "#64748b",
+        _ => "#64748b"
+    };
+
+    private string GetStatusIcon(string status) => status switch
+    {
+        "UNDER_REVIEW" => "⏳",
+        "COMPLETED" => "✅",
+        "CANCELLED" => "🚫",
+        _ => "❓"
+    };
+
+    public void Dispose()
+    {
+    }
+}

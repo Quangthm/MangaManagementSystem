@@ -1337,4 +1337,17 @@ if (!window.__mmsUnloadGuard) {
             return '';
         }
     });
-}
+})();
+
+// Global export function — returns the canvas content as a base64 data URI.
+// Called from Blazor JS interop when the user clicks "Submit from Canvas".
+window.exportCanvasImage = function (format, quality) {
+    format = format || 'image/png';
+    quality = quality || 0.92;
+    const canvas = document.getElementById('ai-canvas');
+    if (!canvas) {
+        console.error('exportCanvasImage: canvas element #ai-canvas not found.');
+        return null;
+    }
+    return canvas.toDataURL(format, quality);
+};

@@ -21,5 +21,13 @@ namespace MangaManagementSystem.Web.Services.Api
             IBrowserFile file,
             string? versionNote = null,
             CancellationToken cancellationToken = default);
+
+        // Submit from canvas export (base64 image data)
+        Task<AssistantTaskSubmitResultDto?> SubmitFromCanvasAsync(
+            Guid actorUserId,
+            Guid taskId,
+            string imageBase64,
+            string? versionNote = null,
+            CancellationToken cancellationToken = default);
     }
 }
