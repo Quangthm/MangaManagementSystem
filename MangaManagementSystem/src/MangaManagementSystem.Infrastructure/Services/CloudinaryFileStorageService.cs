@@ -47,6 +47,12 @@ namespace MangaManagementSystem.Infrastructure.Services
         {
             _cloudinary = cloudinary ?? throw new ArgumentNullException(nameof(cloudinary));
             _settings = options?.Value ?? throw new ArgumentNullException(nameof(options));
+
+            // A single large page image on a slow uplink can exceed the underlying HttpClient's 100s
+            // default, surfacing mid page-save as "The request was canceled due to the configured
+            // HttpClient.Timeout of 100 seconds elapsing". Give each upload a moderate 2-minute ceiling as
+            // a safety net (the workspace also uploads a multi-page batch in parallel). Value is in ms.
+            _cloudinary.Api.Timeout = 120000;
         }
 
         public async Task<FileUploadResultDto> UploadFileAsync(

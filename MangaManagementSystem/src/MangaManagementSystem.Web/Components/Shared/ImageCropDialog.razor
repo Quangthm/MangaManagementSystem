@@ -16,7 +16,9 @@
                     <div>
                         <MudText Typo="Typo.h6" Style="font-weight: 800; color: #0f172a; margin: 0;">Adjust Crop</MudText>
                         <MudText Typo="Typo.body2" Style="color: #64748b; margin: 4px 0 0;">
-                            Drag the image to reposition it and use the slider to zoom.
+                            @(AllowFreeResize
+                                ? "Drag the crop box edges/corners to resize, or drag inside to move it."
+                                : "Drag the image to reposition it and use the slider to zoom.")
                         </MudText>
                     </div>
                     <MudIconButton Icon="@Icons.Material.Filled.Close"
@@ -57,38 +59,41 @@
                             <MudText Typo="Typo.caption" Style="color: #64748b; margin-top: 3px;">@HelperText</MudText>
                         </div>
 
-                        <MudText Typo="Typo.caption" Style="font-weight: 700; color: #334155;">Zoom</MudText>
+                        @if (!AllowFreeResize)
+                        {
+                            <MudText Typo="Typo.caption" Style="font-weight: 700; color: #334155;">Zoom</MudText>
 
-                        <div style="display: grid; grid-template-columns: 38px minmax(0, 1fr) 38px; gap: 9px; align-items: center;">
-                            <MudButton Variant="Variant.Outlined"
-                                       Size="Size.Small"
-                                       Style="min-width: 38px; height: 38px; padding: 0;"
-                                       Disabled="@(!_ready || _busy)"
-                                       OnClick="ZoomOutAsync">
-                                −
-                            </MudButton>
+                            <div style="display: grid; grid-template-columns: 38px minmax(0, 1fr) 38px; gap: 9px; align-items: center;">
+                                <MudButton Variant="Variant.Outlined"
+                                           Size="Size.Small"
+                                           Style="min-width: 38px; height: 38px; padding: 0;"
+                                           Disabled="@(!_ready || _busy)"
+                                           OnClick="ZoomOutAsync">
+                                    −
+                                </MudButton>
 
-                            <MudSlider Min="1" Max="3" Step="0.01"
-                                       Value="@_zoom"
-                                       ValueChanged="@((double v) => SetZoomAsync(v))"
-                                       Disabled="@(!_ready || _busy)"
-                                       Immediate="true" />
+                                <MudSlider Min="1" Max="3" Step="0.01"
+                                           Value="@_zoom"
+                                           ValueChanged="@((double v) => SetZoomAsync(v))"
+                                           Disabled="@(!_ready || _busy)"
+                                           Immediate="true" />
 
-                            <MudButton Variant="Variant.Outlined"
-                                       Size="Size.Small"
-                                       Style="min-width: 38px; height: 38px; padding: 0;"
-                                       Disabled="@(!_ready || _busy)"
-                                       OnClick="ZoomInAsync">
-                                +
-                            </MudButton>
-                        </div>
+                                <MudButton Variant="Variant.Outlined"
+                                           Size="Size.Small"
+                                           Style="min-width: 38px; height: 38px; padding: 0;"
+                                           Disabled="@(!_ready || _busy)"
+                                           OnClick="ZoomInAsync">
+                                    +
+                                </MudButton>
+                            </div>
+                        }
 
                         <MudButton Variant="Variant.Outlined"
                                    Size="Size.Small"
                                    FullWidth="true"
                                    Disabled="@(!_ready || _busy)"
                                    OnClick="ResetCropAsync">
-                            Reset position and zoom
+                            @(AllowFreeResize ? "Reset crop" : "Reset position and zoom")
                         </MudButton>
 
                         @if (_showUpscaleWarning)
@@ -101,7 +106,9 @@
                         }
 
                         <div style="padding: 14px; border-radius: 12px; background: #f8fafc; color: #64748b; font-size: 12px; line-height: 1.4;">
-                            Drag the image inside the fixed crop frame.
+                            @(AllowFreeResize
+                                ? "Drag the crop box edges or corners to resize it (width and height independently); drag inside the box to move it."
+                                : "Drag the image inside the fixed crop frame.")
                         </div>
                     </div>
                 </div>
@@ -184,6 +191,13 @@
     /// </summary>
     [Parameter] public EventCallback OnCancel { get; set; }
 
+    /// <summary>
+    /// When true, the crop frame becomes a freely movable + resizable rectangle (drag its edges/corners,
+    /// width and height independently) instead of a fixed aspect-ratio frame. The whole image is shown and
+    /// the output matches the crop rectangle exactly.
+    /// </summary>
+    [Parameter] public bool AllowFreeResize { get; set; }
+
     private const string CanvasId = "image-crop-canvas";
     private const int CanvasPixelSize = 640;
     private const long MaxUploadBytes = 10 * 1024 * 1024;
@@ -209,13 +223,14 @@
             _jsModule ??=
                 await JSRuntime.InvokeAsync<IJSObjectReference>(
                     "import",
-                    "./js/image-crop.js?v=20260621-02");
+                    "./js/image-crop.js?v=20260709-01");
 
             await _jsModule.InvokeVoidAsync(
                 "initialize",
                 CanvasId,
                 SourceDataUrl,
-                AspectRatio);
+                AspectRatio,
+                AllowFreeResize);
 
             var dims = await _jsModule.InvokeAsync<JsonElement>(
                 "getImageDimensions",
@@ -225,8 +240,9 @@
             _sourceImageHeight = dims.GetProperty("naturalHeight").GetDouble();
 
             _showUpscaleWarning =
-                _sourceImageWidth < OutputWidth ||
-                _sourceImageHeight < OutputHeight;
+                !AllowFreeResize &&
+                (_sourceImageWidth < OutputWidth ||
+                _sourceImageHeight < OutputHeight);
 
             _ready = true;
         }
