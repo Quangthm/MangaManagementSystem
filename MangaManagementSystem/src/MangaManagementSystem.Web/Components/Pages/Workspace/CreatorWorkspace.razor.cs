@@ -386,19 +386,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private async Task ToggleCanvasAnnotations()
     {
         _showAnnotationsOnCanvas = !_showAnnotationsOnCanvas;
-        var canvas = _activePane == "Left" ? _leftCanvasRef : _rightCanvasRef;
-        if (canvas != null)
-        {
-            if (_showAnnotationsOnCanvas)
-            {
-                var currentAnnotations = ActiveAnnotations.Where(a => a.PageNumber == SelectedPage && MatchesActiveVersion(a.VersionId) && a.PinX.HasValue && a.PinY.HasValue);
-                await canvas.InvokeVoidAsync("syncAnnotations", currentAnnotations.Select(a => new { pinX = a.PinX.Value, pinY = a.PinY.Value, isResolved = a.IsResolved }));
-            }
-            else
-            {
-                await canvas.InvokeVoidAsync("syncAnnotations", Array.Empty<object>());
-            }
-        }
+        await SyncAnnotationsToJS();   // re-sync BOTH panes, each with its own page/version pins
     }
 
     // Saves manga.ChapterPage.page_notes (whole-page note, shared across versions). Explicit button,
@@ -548,20 +536,43 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         {
             Snackbar.Add($"Error creating annotation: {ex.Message}", Severity.Error);
         }
-        if (GetActiveCanvas() != null)
-        {
-            var pageAnnotations = ActiveAnnotations.Where(a => (a.PageNumber == SelectedPage || a.PageNumber == 0) && MatchesActiveVersion(a.VersionId)).ToList();
-            await GetActiveCanvas()!.InvokeVoidAsync("syncAnnotations", pageAnnotations);
-        }
+        await SyncAnnotationsToJS();
     }
 
     private async Task SyncAnnotationsToJS()
     {
-        if (GetActiveCanvas() != null)
+        // Per-pane: each pane draws only the pins belonging to the page + version IT is showing, so in
+        // split view one pane never renders another pane's (or another version's) pins.
+        await SyncPaneAnnotationsAsync(_leftCanvasRef, UploadedPages, ActivePageIndex);
+        if (_isSplitView)
+            await SyncPaneAnnotationsAsync(_rightCanvasRef, _splitUploadedPages, _splitPageIndex);
+    }
+
+    private async Task SyncPaneAnnotationsAsync(IJSObjectReference? canvas, List<PageModel> panePages, int paneIndex)
+    {
+        if (canvas == null) return;
+
+        if (!_showAnnotationsOnCanvas)
         {
-            var pageAnnotations = ActiveAnnotations.Where(a => (a.PageNumber == SelectedPage || a.PageNumber == 0) && MatchesActiveVersion(a.VersionId)).ToList();
-            await GetActiveCanvas()!.InvokeVoidAsync("syncAnnotations", pageAnnotations);
+            await canvas.InvokeVoidAsync("syncAnnotations", Array.Empty<object>());
+            return;
         }
+
+        var page = panePages.ElementAtOrDefault(paneIndex);
+        var ver = (page != null && page.Versions.Any())
+            ? page.Versions[Math.Clamp(page.ActiveVersionIndex, 0, page.Versions.Count - 1)]
+            : null;
+        int panePageNo = paneIndex + 1;
+
+        var pins = (ver == null)
+            ? Enumerable.Empty<object>()
+            : ActiveAnnotations
+                .Where(a => a.PinX.HasValue && a.PinY.HasValue
+                            && (a.PageNumber == panePageNo || a.PageNumber == 0)
+                            && (a.VersionId == null || a.VersionId == ver.ChapterPageVersionId))
+                .Select(a => (object)new { pinX = a.PinX!.Value, pinY = a.PinY!.Value, isResolved = a.IsResolved });
+
+        await canvas.InvokeVoidAsync("syncAnnotations", pins);
     }
 
     private async Task ResolveAnnotation(int id)

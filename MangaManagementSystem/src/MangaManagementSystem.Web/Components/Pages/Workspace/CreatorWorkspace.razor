@@ -234,6 +234,8 @@ else
                                               </MudTooltip>
                                               <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Versions</MudText>
                                           </div>
+                                          @if (CanManageContent)
+                                          {
                                           <div class="d-flex gap-1">
                                               <MudTooltip Text="Create Canvas as New Version">
                                                   <MudIconButton Icon="@Icons.Material.Filled.AddPhotoAlternate" Color="Color.Secondary" Size="Size.Small" OnClick='() => SaveAsNewVersion("Left")' Disabled="@IsChapterLocked" />
@@ -244,6 +246,7 @@ else
 
                                               </MudTooltip>
                                           </div>
+                                          }
                                       </div>
                                       <MudDivider Class="mb-2" />
                                       <div class="d-flex flex-column gap-1" style="max-height: 200px; overflow-y: auto;">
@@ -271,7 +274,7 @@ else
                                                           {
                                                               <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Outlined" Class="ma-0" Style="height: 20px; font-size: 0.65rem;">Viewing</MudChip>
                                                           }
-                                                          @if (!ver.IsCurrentVersion && isSelected && !ver.IsDeleted)
+                                                          @if (CanManageContent && !ver.IsCurrentVersion && isSelected && !ver.IsDeleted)
                                                           {
                                                               <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" OnClick='() => SetActiveVersion("Left", ver)' Disabled="@IsChapterLocked" Class="pa-0 px-1 ml-1" Style="min-width: unset; text-transform: none; font-size: 0.75rem;">Set Active</MudButton>
                                                           }
@@ -324,6 +327,8 @@ else
                                               </MudTooltip>
                                               <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Versions</MudText>
                                           </div>
+                                          @if (CanManageContent)
+                                          {
                                           <div class="d-flex gap-1">
                                               <MudTooltip Text="Create Canvas as New Version">
                                                   <MudIconButton Icon="@Icons.Material.Filled.AddPhotoAlternate" Color="Color.Secondary" Size="Size.Small" OnClick='() => SaveAsNewVersion("Right")' Disabled="@IsChapterLocked" />
@@ -334,6 +339,7 @@ else
 
                                               </MudTooltip>
                                           </div>
+                                          }
                                       </div>
                                       <MudDivider Class="mb-2" />
                                       <div class="d-flex flex-column gap-1" style="max-height: 200px; overflow-y: auto;">
@@ -361,7 +367,7 @@ else
                                                           {
                                                               <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Outlined" Class="ma-0" Style="height: 20px; font-size: 0.65rem;">Viewing</MudChip>
                                                           }
-                                                          @if (!ver.IsCurrentVersion && isSelected && !ver.IsDeleted)
+                                                          @if (CanManageContent && !ver.IsCurrentVersion && isSelected && !ver.IsDeleted)
                                                           {
                                                               <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" OnClick='() => SetActiveVersion("Right", ver)' Disabled="@IsChapterLocked" Class="pa-0 px-1 ml-1" Style="min-width: unset; text-transform: none; font-size: 0.75rem;">Set Active</MudButton>
                                                           }
@@ -742,8 +748,11 @@ else
                             var activePage = UploadedPages[ActivePageIndex];
 
                             <MudText Typo="Typo.subtitle2" Class="font-weight-bold mt-2">PAGE NOTE</MudText>
-                            <MudTextField T="string" Label="@($"Page {SelectedPage} Note")" @bind-Value="activePage.PageNotes" Variant="Variant.Outlined" Lines="4" FullWidth="true" Placeholder="Notes about this page (applies to the whole page, all versions)…" />
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SavePageNote" Disabled="@IsChapterLocked">Save Page Note</MudButton>
+                            <MudTextField T="string" Label="@($"Page {SelectedPage} Note")" @bind-Value="activePage.PageNotes" Variant="Variant.Outlined" Lines="4" FullWidth="true" ReadOnly="@(!CanManageContent)" Placeholder="Notes about this page (applies to the whole page, all versions)…" />
+                            @if (CanManageContent)
+                            {
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SavePageNote" Disabled="@IsChapterLocked">Save Page Note</MudButton>
+                            }
 
                             <MudDivider Class="my-2" />
 
@@ -751,8 +760,11 @@ else
                             @if (activePage.Versions.Any() && activePage.ActiveVersionIndex >= 0 && activePage.ActiveVersionIndex < activePage.Versions.Count)
                             {
                                 var activeVer = activePage.Versions[activePage.ActiveVersionIndex];
-                                <MudTextField T="string" Label="@($"v{activeVer.VersionNo} Note")" @bind-Value="activeVer.Note" Variant="Variant.Outlined" Lines="8" FullWidth="true" />
-                                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveVersionNote" Disabled="@IsChapterLocked">Save Note</MudButton>
+                                <MudTextField T="string" Label="@($"v{activeVer.VersionNo} Note")" @bind-Value="activeVer.Note" Variant="Variant.Outlined" Lines="8" FullWidth="true" ReadOnly="@(!CanManageContent)" />
+                                @if (CanManageContent)
+                                {
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveVersionNote" Disabled="@IsChapterLocked">Save Note</MudButton>
+                                }
                             }
                             else
                             {
