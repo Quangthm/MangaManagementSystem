@@ -1,5 +1,67 @@
 # Handoff — Mangaka Workspace: manual-save + full API migration (2026-07-01)
 
+> ### UPDATE 2026-07-07 — refactor CreatorWorkspace (partial split) + gom using. ⚠️ CHƯA COMMIT, CHƯA CHẠY RUNTIME
+>
+> **Vấn đề đang làm:** `CreatorWorkspace.razor` quá lớn/khó bảo trì → tách nhỏ (code-behind + topical partials), rút view-model/helper ra file riêng, và **gom using trùng lặp**. Đây là refactor CẤU TRÚC (không đổi hành vi).
+>
+> **Nguyên nhân / phát hiện quan trọng:**
+> - Lúc build kiểm tra `GlobalUsings.cs`, CLI báo **"246 errors"** → ban đầu tôi tưởng `GlobalUsings` gây **ambiguity** nên định bỏ. **CHẨN ĐOÁN SAI.** Thực chất **ổ C: đầy 100%** (scratchpad của tôi phình 348MB) làm bước copy DLL fail (`MSB3021 not enough space`), **KHÔNG có lỗi CS nào**. Sau khi dọn cache + build lại và **chỉ grep lỗi `CS`/`RZ`** → xác nhận `GlobalUsings` compile SẠCH, an toàn. → **Bài học: build tới scratch trên C: không đáng tin khi C: gần đầy; verify bằng cách grep `error CS`/`error RZ`, bỏ qua lỗi MSB copy/lock.**
+> - **C: hiện chỉ còn ~318MB trống** (đã dọn 338MB cache build của tôi). Ảnh hưởng cả build trong Visual Studio — user nên dọn C:.
+>
+> **Files ĐÃ THAY ĐỔI (đều nằm trong `Components/Pages/Workspace/`, đều LOCAL chưa commit):**
+> - `CreatorWorkspace.razor` — tách markup, phần logic chuyển sang các partial dưới.
+> - `CreatorWorkspace.razor.cs` (mới) — code-behind chính; using rút còn 1 dòng `using static ...WorkspaceHelpers;`.
+> - `CreatorWorkspace.Save.cs`, `CreatorWorkspace.Versions.cs`, `CreatorWorkspace.Pages.cs` (mới) — partial theo chủ đề; mỗi file chỉ còn `using static ...WorkspaceHelpers;`.
+> - `WorkspaceHelpers.cs` (mới) — hàm pure (BuildRegionDtosForSave, StripSelected, OptimizedImageUrl, NormalizeRegionType); không cần using nào.
+> - `Models/WorkspaceViewModels.cs` (mới) — view-model UI (ProductionTask, AnnotationModel, ChapterModel, PageModel, PageVersionModel, RegionModel); không cần using nào.
+> - `GlobalUsings.cs` (mới, **cấp project Web**) — mirror `_Imports.razor` cho file `.cs` (Components, MudBlazor, JSInterop, DTOs.Auth/Manga, Interfaces, Services...). `ImplicitUsings` đã lo `System.*`/`Linq`/`Net.Http`.
+> - 1 comment mồ côi ở seam Pages đã sửa (quét toàn bộ: chỉ có 1 cái).
+> - Ngoài ra 1 message VN→EN đã sửa trước đó (cùng đợt local).
+>
+> **ĐÃ verify:** `dotnet build` Web **và** API → **0 lỗi `CS`/`RZ`** (compile sạch cả hai). Comment mồ côi: đã quét, sạch.
+>
+> **CHƯA kiểm tra (QUAN TRỌNG):**
+> - **CHƯA chạy runtime** — chưa mở Visual Studio build đầy đủ (link+copy) và chưa smoke test workspace thật (upload page, save version, tạo task/annotation, submit chapter...). Refactor cấu trúc lớn → **BẮT BUỘC smoke test trước khi push.**
+> - **CHƯA full build** (chỉ compile-check qua CLI vì C: đầy làm bước copy fail — không phải lỗi code).
+> - **CHƯA commit** toàn bộ đợt này (VN fix + refactor + gom using). Merge `origin/main` trước đó ĐÃ push lên `feature/workspace-v3`; mọi thứ sau merge còn local uncommitted.
+>
+> **CẬP NHẬT 2026-07-07 (cùng ngày, muộn hơn) — đã commit + merge main + dọn C::**
+> - Refactor đã **commit local** `bb322b1` (chưa push).
+> - **Merge `origin/main` vào `feature/workspace-v3`** → merge commit `fc91f30`, **SẠCH, 0 xung đột** (main +59 commit: auth/admin, publication scheduling, security hardening, file cleanup, legacy delete... KHÔNG đụng file `Workspace/` nào). Branch giờ ahead 61 origin/feature/workspace-v3, **CHƯA push**.
+> - **Compile-verify lại SAU merge:** Web + API **0 lỗi CS/RZ/NU** → `GlobalUsings.cs` không đụng độ `using` với code mới của main.
+> - **Dọn ổ C::** NuGet cache 1.4GB đã dời C:→`D:\NugetPackages`; set env **`NUGET_PACKAGES=D:\NugetPackages`** cấp User (vĩnh viễn, reversible). C: từ 985MB → ~4.8GB trống. ⚠️ **VS/terminal đang mở phải khởi động lại** mới nhận env mới (tiến trình cũ vẫn ghi cache về C:).
+>
+> **Bước tiếp theo (vẫn còn):**
+> 1. **Khởi động lại Visual Studio 2022** (để nhận `NUGET_PACKAGES` mới) → build đầy đủ + **chạy Web**, smoke test luồng workspace (đặc biệt Save/Versions/Pages vì vừa tách partial) + kiểm tính năng mới từ main không vỡ.
+> 2. Nếu OK → **push `feature/workspace-v3`** (hiện đang giữ local, ahead 61).
+
+> ### UPDATE 2026-07-07 (tiếp) — workspace bugfix batch (leader feedback). CHƯA COMMIT
+> **Đã sửa (build sạch Web/API, local uncommitted):**
+> - **#1** sidebar status label thiếu status mới → thêm SCHEDULED/PUBLISHED/RELEASED/CANCELLED trong `WorkspaceChapterSidebar.razor` (method `StatusLabel()`).
+> - **#4** bỏ chip "Active"; chapter đang chọn: nền `#eef2ff` + `border-left 3px #4f46e5` + label bold primary (luôn hiện status thật).
+> - **#2** save timeout ("HttpClient.Timeout 100s"): nguyên nhân Cloudinary SDK dùng HttpClient default 100s. Fix trong `CloudinaryFileStorageService` ctor: `_cloudinary.Api.Timeout = 300000` (5', ms). ⚠️ file Infrastructure dùng chung — chỉ nâng timeout.
+> - **#5a** task panel gọn: `CompactTarget()` (2 panel + "…(+N)") + tooltip full — `CreatorWorkspace.razor.cs` + `.razor`.
+> - **#5b** deadline mỗi task: `ProductionTask.DueAtUtc` + map từ `t.DueAtUtc`/`dbTask.DueAtUtc` (client `GetTasksByPageAsync`/`CreateTaskAsync` trả `ChapterPageTaskDto` vốn CÓ sẵn `DueAtUtc`) + hiển thị "Due MMM d" (đỏ + "(overdue)" nếu quá hạn). KHÔNG đụng API/DTO.
+> - **#8** user CHỐT **giữ soft-delete** → không đổi code.
+> - **#6** shift/ctrl+click chọn nhiều region: thêm nhánh `e.shiftKey||e.ctrlKey` trong mousedown của `mangaAiCanvas.js` (toggle `hit.selected` + `syncToBlazor`). Trước chỉ double-click mới toggle → label "Hold Shift" bị lệch, nay đúng.
+> - **#7** edit nhiều region cùng lúc: nút Edit Region bật khi `SelectedRegions.Count >= 1`; `OpenEditRegionDialog`/`ApplyEditRegion` xử lý batch — set TYPE cho mọi region đã chọn, GIỮ label từng cái (loop `setRegionMeta(r.Id, type, r.Label)` vì JS dòng 606 luôn ghi đè label); ô Label chỉ hiện khi chọn đúng 1.
+>
+> **Leader feedback round 2 (2026-07-08) — ĐÃ SỬA (build sạch, local):**
+> - **Bug save deadlock ("0 saved, 0 failed", kẹt "unsaved"):** version active `IsDirty` nhưng `ChapterPageVersionId == Guid.Empty` + không có `PendingBytes` → cả upload-loop lẫn region-save branch bỏ qua, cờ dirty kẹt mãi → không save/không tạo task được. Fix ở `CreatorWorkspace.Save.cs`: khi gặp version dirty id-rỗng + no PendingBytes → **clear `IsDirty`** (region không thể attach vào version chưa tồn tại). Nguồn thường là kéo nhầm FULL_PAGE (xem dưới).
+> - **Full-page region chặn panel:** hit-test click/drag + dblclick trong `mangaAiCanvas.js` giờ **loại region `type == FULL_PAGE`** → panel bên dưới bấm/kéo được; không kéo nhầm full-page (full-page là anchor hệ thống, task cấp-trang tự dùng khi không chọn region). Programmatic `selectRegionsByDbIds` KHÔNG bị ảnh hưởng.
+> - **Highlight task khi click:** `SelectTaskPanels` set `_taskFilterId = task.DbId` → tái dùng styling `isTargetTask` (border-left `#4f46e5` + nền `#eef2ff`) giống highlight chapter.
+> - **Rename chapter → buffered (không ghi DB ngay):** trước đây `SaveChapterName` (Enter) gọi thẳng `UpdateChapterDraftAsync`. Giờ Enter chỉ cập nhật `chapter.Title` + set `TitleDirty` (field mới trên `ChapterModel`) + `_saveState=Dirty`; Escape/Cancel revert về `_renameBackupTitle`. DB update dời vào `SaveAllChangesAsync` (vòng lặp mới cho chapter `ChapterId != Empty && TitleDirty`), và `TitleDirty` được thêm vào `anyRemainingUnsaved`. New chapter vẫn mang title vào create-on-Save như cũ.
+> - **Highlight annotation khi click:** `SelectAnnotationPanels` set `_selectedAnnotationId = ann.Id` → MudPaper annotation highlight (border `#4f46e5` + nền `#eef2ff`) giống task/chapter.
+> - **Crop từng page trong dialog "Add pages":** staged images giờ giữ trong field `_addPagesStaged` (List<StagedImage> {Bytes,Name,ContentType,DataUrl}); mỗi ảnh trong lưới review click được → mở **`ImageCropDialog`** (tái dùng của split double page) → `OnStagedCropConfirmed` thay bytes+dataUrl của staged đó → Save upload đúng ảnh đã crop. Review dialog ẩn khi đang crop (`@if _showUploadConfirm && !_cropStagedIndex.HasValue`) để tránh z-index đè. Luồng upload-version (Versions.cs) KHÔNG đổi.
+> - **Crop free-resize (kéo cạnh/góc):** `ImageCropDialog` thêm param **`AllowFreeResize`**; `image-crop.js` thêm nhánh free-resize — ảnh fit-to-canvas, khung crop có 8 handle (4 góc + 4 cạnh) kéo resize tự do (rộng/cao độc lập) + kéo trong để move; output = đúng vùng crop ở độ phân giải gốc (`exportFreeCrop`). Bật cho crop add-pages (`AllowFreeResize="true"`); cover + split VẪN dùng khung 2:3 cố định (default `false` → nhánh cũ, không đổi). Bumped JS import `?v=20260709-01` để bust cache. Zoom controls ẩn ở free mode.
+> - **Upload page tối ưu (thay cho timeout 5' trước đó):** user chốt GIỮ chất lượng (không nén). `SaveAllChangesAsync` giờ có **Phase 1 upload Cloudinary SONG SONG** (`SemaphoreSlim(3)`, `Task.WhenAll`, kết quả gom vào `ConcurrentDictionary<PageVersionModel,FileUploadResultDto>`), rồi vòng tạo DB (Phase 2) GIỮ tuần tự — chỉ đọc kết quả upload (ordering + orphan cleanup không đổi). Cloudinary `Api.Timeout` hạ **300000→120000 (2')** làm lưới an toàn cho 1 ảnh lớn/mạng chậm. Chất lượng lưu = nguyên gốc (display vẫn tự tối ưu qua `OptimizedImageUrl` f_auto/q_auto, không đụng bản gốc).
+>
+> **Còn lại (đã chẩn đoán, CHƯA làm):**
+> - **#3 editor vào workspace — CORE ĐÃ SỬA (cần smoke test):** thêm `QueryWorkspaceChapters` trong `MangakaChapterRepository` (gate = active contributor có role ∈ `WorkspaceRoles {Mangaka, Tantou Editor, Assistant}` theo BR-WORKSPACE-006/008); `GetSeriesChaptersAsync` dùng nó thay `QueryAccessibleChapters`. GIỮ `QueryAccessibleChapters` (Mangaka-only) cho "my chapters" dashboard + reload-sau-ghi. → Editor giờ thấy DANH SÁCH CHAPTER. **Đã rà:** đây là read Mangaka-role-gate DUY NHẤT ở tầng EF; pages/versions/regions đi qua `ChapterPageService`/`ChapterPageVersionService`/`PageRegionService` **KHÔNG** gate theo role → editor sẽ thấy pages. Ghi/status VẪN Mangaka-only qua `EnsureActiveMangakaContributorAsync` (đúng).
+>   - **HẠN CHẾ còn lại:** (a) **tasks** đọc qua **stored procedure** (`ChapterPageTaskRepository`, `@actor_user_id`) → nếu SP lọc theo Mangaka thì editor thấy task panel rỗng; sửa = **đổi SP = tầng DB (rule 1, phải hỏi team)**. Tasks là production-tracking của Mangaka nên editor rỗng cũng chấp nhận được. (b) annotations (`ChapterPageAnnotationService`) chưa verify kỹ — editor có flow review riêng. (c) role-specific RENDERING sâu hơn (ẩn/hiện nút theo role: New Chapter, Create Task...) — hiện razor mới gate 1 phần bằng `_currentRoleName == "Mangaka"`, cần rà thêm.
+>   - **→ BẮT BUỘC smoke test bằng account Editor** (đã là active contributor role "Tantou Editor" của series) để xác nhận thấy chapter + pages.
+> - **#6/#7 ĐÃ XONG** (xem mục "Đã sửa"). → **Chỉ còn #3** là việc lớn duy nhất chưa làm.
+
 > ### ⚠️ FILE MOVE 2026-07-03 — workspace code sang thư mục Workspace
 > `CreatorWorkspace.razor` + `WorkspaceChapterSidebar.razor` đã `git mv` từ
 > `Components/Pages/Mangaka/` → **`Components/Pages/Workspace/`** (cạnh `TaskWorkspaceRedirect.razor`).

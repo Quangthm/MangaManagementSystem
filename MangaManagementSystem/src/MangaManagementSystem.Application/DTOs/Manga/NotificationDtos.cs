@@ -23,4 +23,12 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         string? RelatedEntityType,
         Guid? RelatedEntityId
     );
+
+    public sealed record UnreadNotificationCountDto(
+        int UnreadCount
+    );
+
+    public sealed record MarkAllNotificationsReadResultDto(
+        int UpdatedCount
+    );
 }

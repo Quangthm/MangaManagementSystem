@@ -190,18 +190,28 @@ function setupEvents() {
                 return;
             }
 
-            // Check if clicking inside a region
-            const hit = regions.slice().reverse().find(r => 
-                pos.x >= r.x && pos.x <= r.x + r.width && 
+            // Check if clicking inside a region. FULL_PAGE regions are system-managed page anchors that
+            // cover the whole page, so exclude them here — otherwise they intercept every click/drag and
+            // the panel regions underneath become unreachable (and get nudged by accident).
+            const hit = regions.slice().reverse().find(r =>
+                (r.type || '').toUpperCase() !== 'FULL_PAGE' &&
+                pos.x >= r.x && pos.x <= r.x + r.width &&
                 pos.y >= r.y && pos.y <= r.y + r.height);
             
             if (hit) {
-                // User requested double-click to toggle selection (on/off). 
-                // So single mousedown no longer changes selection, but still allows dragging.
-                isDraggingRegion = true;
-                targetRegion = hit;
-                dragOffsetX = pos.x - hit.x;
-                dragOffsetY = pos.y - hit.y;
+                if (e.shiftKey || e.ctrlKey) {
+                    // Shift/Ctrl + click toggles this region in/out of the multi-selection —
+                    // matches the "Hold Shift to select multiple" hint on the task/annotation forms.
+                    hit.selected = !hit.selected;
+                    syncToBlazor();
+                    redraw();
+                } else {
+                    // Plain press starts a drag; single-region selection is toggled via double-click.
+                    isDraggingRegion = true;
+                    targetRegion = hit;
+                    dragOffsetX = pos.x - hit.x;
+                    dragOffsetY = pos.y - hit.y;
+                }
             } else {
                 if (!e.shiftKey && !e.ctrlKey) {
                     const hadSelection = regions.some(r => r.selected);
@@ -394,8 +404,9 @@ function setupEvents() {
     container.addEventListener('dblclick', (e) => {
         if (currentTool !== 'select') return;
         const pos = getMousePos(e);
-        const hit = regions.slice().reverse().find(r => 
-            pos.x >= r.x && pos.x <= r.x + r.width && 
+        const hit = regions.slice().reverse().find(r =>
+            (r.type || '').toUpperCase() !== 'FULL_PAGE' &&   // don't select the system full-page anchor
+            pos.x >= r.x && pos.x <= r.x + r.width &&
             pos.y >= r.y && pos.y <= r.y + r.height);
         
         if (hit) {

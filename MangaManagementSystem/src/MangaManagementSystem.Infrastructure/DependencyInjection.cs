@@ -38,7 +38,14 @@ namespace MangaManagementSystem.Infrastructure
                 var cloudinary = new CloudinaryDotNet.Cloudinary(account) { Api = { Secure = true } };
                 services.AddSingleton(cloudinary);
             }
+
+            // PasswordResetTokenService still uses IMemoryCache.
             services.AddMemoryCache();
+
+            // Local/dev provider for the IDistributedCache abstraction used by OTP.
+            // Production can replace this with Redis or SQL distributed cache.
+            services.AddDistributedMemoryCache();
+
             services.AddSingleton<IOtpCacheService, OtpCacheService>();
 
             services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
@@ -67,6 +74,7 @@ namespace MangaManagementSystem.Infrastructure
 
             // Unit of Work
             services.AddScoped<IFileResourceRepository, FileResourceRepository>();
+            services.AddScoped<INotificationRepository, NotificationRepository>();
             services.AddScoped<IPasswordResetTokenService, PasswordResetTokenService>();
             services.AddScoped<IAuditEventRepository, AuditEventRepository>();
             services.AddScoped<IUnitOfWork, UnitOfWork>();
