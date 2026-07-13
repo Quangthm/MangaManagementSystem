@@ -20,6 +20,7 @@
 @inject IMangakaPageRegionApiClient MangakaRegionApi
 @inject IMangakaAnnotationApiClient MangakaAnnotationApi
 @inject IMangakaSeriesContributorApiClient MangakaContributorApi
+@inject IEditorChapterReviewApiClient EditorReviewApi
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IFileStorageService FileStorageService
 @inject IAiService AiService
@@ -112,6 +113,10 @@ else
                         Discard
                     </MudButton>
                 }
+            }
+            @if (_headerChap != null && _currentRoleName == "Tantou Editor" && _headerChap.StatusCode == "UNDER_REVIEW")
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" StartIcon="@Icons.Material.Filled.RateReview" Class="mr-2" DisableElevation="true" OnClick="@(() => { _reviewDecision = "APPROVED"; _reviewComment = ""; _showReviewDialog = true; })">Submit Review</MudButton>
             }
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.FileDownload" DisableElevation="true" OnClick="ExportCurrentPage">Export</MudButton>
         </div>
@@ -878,6 +883,23 @@ else
             </div>
         </div>
     }
+
+    <MudDialog @bind-Visible="_showReviewDialog" Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
+        <TitleContent><MudText Typo="Typo.h6">Submit Editorial Review</MudText></TitleContent>
+        <DialogContent>
+            <MudSelect T="string" Label="Decision" @bind-Value="_reviewDecision" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3">
+                <MudSelectItem Value="@("APPROVED")">Approve</MudSelectItem>
+                <MudSelectItem Value="@("REVISION_REQUESTED")">Request Revision</MudSelectItem>
+                <MudSelectItem Value="@("CANCELLED")">Cancel Chapter</MudSelectItem>
+            </MudSelect>
+            <MudTextField T="string" @bind-Value="_reviewComment" Label="Comments" Variant="Variant.Outlined" Lines="4" Margin="Margin.Dense"
+                          HelperText="Required when requesting a revision or cancelling." />
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="@(() => _showReviewDialog = false)" Disabled="@_reviewSubmitting">Cancel</MudButton>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitEditorReview" Disabled="@_reviewSubmitting">@(_reviewSubmitting ? "Submitting…" : "Submit")</MudButton>
+        </DialogActions>
+    </MudDialog>
 
     <MudDialog @bind-Visible="_showEditRegionDialog" Options="new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true }">
         <TitleContent><MudText Typo="Typo.h6">@(_editRegionCount > 1 ? $"Edit {_editRegionCount} Regions" : "Edit Region")</MudText></TitleContent>

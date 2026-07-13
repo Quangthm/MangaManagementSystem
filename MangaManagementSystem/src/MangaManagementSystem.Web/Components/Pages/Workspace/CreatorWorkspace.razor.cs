@@ -21,6 +21,51 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     // in an unsaved state that blocks annotating.
     private bool CanManageContent => _currentRoleName == "Mangaka";
 
+    // #4b — Tantou Editor chapter review decision (BR-CH-REV / BR-CP-018): editors submit APPROVED /
+    // REVISION_REQUESTED / CANCELLED for a chapter that is UNDER_REVIEW, via the editor review API.
+    private bool _showReviewDialog;
+    private string _reviewDecision = "APPROVED";
+    private string _reviewComment = "";
+    private bool _reviewSubmitting;
+
+    private async Task SubmitEditorReview()
+    {
+        var chap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
+        if (chap == null || chap.ChapterId == Guid.Empty || !_currentUserId.HasValue) return;
+
+        // Revision/cancel decisions require a comment so the Mangaka knows what to fix.
+        if ((_reviewDecision == "REVISION_REQUESTED" || _reviewDecision == "CANCELLED")
+            && string.IsNullOrWhiteSpace(_reviewComment))
+        {
+            Snackbar.Add("Please add comments when requesting a revision or cancelling.", Severity.Warning);
+            return;
+        }
+
+        _reviewSubmitting = true;
+        try
+        {
+            var res = await EditorReviewApi.SubmitReviewDecisionAsync(
+                _currentUserId.Value,
+                chap.ChapterId,
+                new MangaManagementSystem.Application.DTOs.Editor.SubmitChapterEditorialReviewRequest(
+                    _reviewDecision,
+                    string.IsNullOrWhiteSpace(_reviewComment) ? null : _reviewComment.Trim()));
+
+            chap.StatusCode = res.StatusCode;
+            _showReviewDialog = false;
+            _reviewComment = "";
+            Snackbar.Add($"Review submitted ({res.DecisionCode}). Chapter is now {res.StatusCode}.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to submit review: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _reviewSubmitting = false;
+        }
+    }
+
     // Split View
     private bool _isSplitView = false;
     private int _splitPageIndex = 0;
