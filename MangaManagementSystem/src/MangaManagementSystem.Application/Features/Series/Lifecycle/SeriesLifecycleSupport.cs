@@ -2,6 +2,10 @@ using MangaManagementSystem.Domain.Interfaces;
 
 namespace MangaManagementSystem.Application.Features.Series.Lifecycle
 {
+    internal sealed record SeriesLifecycleActorContext(
+        string DatabaseRoleName,
+        bool IsActiveContributor);
+
     internal static class SeriesLifecycleSupport
     {
         internal const string ActiveStatusCode = "ACTIVE";
@@ -33,6 +37,37 @@ namespace MangaManagementSystem.Application.Features.Series.Lifecycle
             IReadOnlySet<string> allowedRoles,
             CancellationToken cancellationToken)
         {
+            SeriesLifecycleActorContext actorContext =
+                await ResolveActorContextAsync(
+                    unitOfWork,
+                    seriesId,
+                    actorUserId,
+                    actorRoleName,
+                    cancellationToken);
+
+            if (!allowedRoles.Contains(actorContext.DatabaseRoleName))
+            {
+                throw new UnauthorizedAccessException(
+                    "The signed-in user is not permitted to perform this series operation.");
+            }
+
+            if (!actorContext.IsActiveContributor)
+            {
+                throw new UnauthorizedAccessException(
+                    "An active series contributor assignment is required for this operation.");
+            }
+
+            return actorContext.DatabaseRoleName;
+        }
+
+        internal static async Task<SeriesLifecycleActorContext>
+            ResolveActorContextAsync(
+                IUnitOfWork unitOfWork,
+                Guid seriesId,
+                Guid actorUserId,
+                string actorRoleName,
+                CancellationToken cancellationToken)
+        {
             if (actorUserId == Guid.Empty)
             {
                 throw new UnauthorizedAccessException(
@@ -49,7 +84,10 @@ namespace MangaManagementSystem.Application.Features.Series.Lifecycle
                     "The signed-in user no longer exists.");
             }
 
-            if (actor.StatusCode != ActiveStatusCode)
+            if (!string.Equals(
+                    actor.StatusCode,
+                    ActiveStatusCode,
+                    StringComparison.OrdinalIgnoreCase))
             {
                 throw new UnauthorizedAccessException(
                     "An active account is required for this series operation.");
@@ -71,25 +109,15 @@ namespace MangaManagementSystem.Application.Features.Series.Lifecycle
                     "The signed-in role does not match the user's current role.");
             }
 
-            if (!allowedRoles.Contains(databaseRoleName))
-            {
-                throw new UnauthorizedAccessException(
-                    "The signed-in user is not permitted to perform this series operation.");
-            }
-
             var activeContributors = await unitOfWork.SeriesContributors.FindAsync(
                 seriesContributor =>
                     seriesContributor.SeriesId == seriesId
                     && seriesContributor.UserId == actorUserId
                     && seriesContributor.EndDate == null);
 
-            if (activeContributors.Count == 0)
-            {
-                throw new UnauthorizedAccessException(
-                    "An active series contributor assignment is required for this operation.");
-            }
-
-            return databaseRoleName;
+            return new SeriesLifecycleActorContext(
+                databaseRoleName,
+                activeContributors.Count > 0);
         }
     }
 }
