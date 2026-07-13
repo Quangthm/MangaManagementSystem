@@ -7,6 +7,9 @@ namespace MangaManagementSystem.Application.Common
 
         public const string BoardPoll =
             "BOARD_POLL";
+
+        public const string PublicationFrequencyRequest =
+            "PUBLICATION_FREQUENCY_REQUEST";
     }
 
     public static class NotificationRelatedEntityTypes
@@ -16,5 +19,8 @@ namespace MangaManagementSystem.Application.Common
 
         public const string SeriesBoardPoll =
             "SeriesBoardPoll";
+
+        public const string Series =
+            "Series";
     }
 }

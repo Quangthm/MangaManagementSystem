@@ -8,6 +8,7 @@ using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Features.Mangaka.Series.Commands.CancelSeriesDraft;
 using MangaManagementSystem.Application.Features.Mangaka.Series.Commands.CreateSeriesDraft;
 using MangaManagementSystem.Application.Features.Mangaka.Series.Commands.UpdateSeriesDraft;
+using MangaManagementSystem.Application.Features.Mangaka.Series.PublicationFrequencyRequests;
 using MangaManagementSystem.Application.Features.Mangaka.Series.Queries.GetMyMangakaSeries;
 using MangaManagementSystem.Application.Features.Mangaka.Series.Queries.GetMyMangakaSeriesCardById;
 using MangaManagementSystem.Application.Features.Mangaka.SeriesProposals.Commands.SubmitSeriesProposal;
@@ -24,11 +25,13 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
     /// resolve the actor, call one Application use case via IMediator, and map known failures
     /// to safe HTTP responses. No Cloudinary, SQL, repository, or business logic lives here.
     ///
-    /// All four Mangaka series workflows now use the MediatR/CQRS pattern:
+    /// Mangaka series write workflows use the MediatR/CQRS pattern:
     ///   CreateDraftAsync       → CreateSeriesDraftCommand
     ///   SubmitProposalAsync    → SubmitSeriesProposalCommand
     ///   UpdateDraftProfileAsync → UpdateSeriesDraftCommand
     ///   CancelDraftAsync       → CancelSeriesDraftCommand
+    ///   RequestPublicationFrequencyChangeAsync
+    ///       → RequestPublicationFrequencyChangeCommand
     /// </summary>
     [ApiController]
     [Route("api/mangaka/series")]
@@ -317,6 +320,71 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         }
 
         /// <summary>
+        /// Sends a publication frequency change request for a serialized series.
+        /// This creates notification and audit records only. It does not directly
+        /// modify the official Series.publication_frequency_code value.
+        /// </summary>
+        [HttpPost("{seriesId:guid}/publication-frequency-change-requests")]
+        public async Task<IActionResult>
+            RequestPublicationFrequencyChangeAsync(
+                Guid seriesId,
+                [FromBody]
+                PublicationFrequencyChangeRequestApiRequest request,
+                CancellationToken cancellationToken)
+        {
+            if (!TryResolveActorUserId(
+                    out Guid actorUserId))
+            {
+                return BadRequest(
+                    new ApiErrorResponse(
+                        "Could not identify the requesting user. Please sign in again."));
+            }
+
+            if (request is null)
+            {
+                return BadRequest(
+                    new ApiErrorResponse(
+                        "A publication frequency change request is required."));
+            }
+
+            try
+            {
+                var result =
+                    await _mediator.Send(
+                        new RequestPublicationFrequencyChangeCommand(
+                            ActorUserId:
+                                actorUserId,
+                            SeriesId:
+                                seriesId,
+                            Reason:
+                                request.Reason),
+                        cancellationToken);
+
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(
+                    new ApiErrorResponse(
+                        ex.Message));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Unexpected error sending publication frequency change request for series {SeriesId}.",
+                    seriesId);
+
+                return Problem(
+                    detail:
+                        "We could not send the publication frequency change request right now. Please try again later.",
+                    statusCode:
+                        StatusCodes
+                            .Status500InternalServerError);
+            }
+        }
+
+        /// <summary>
         /// Returns series where the logged-in actor is an active Mangaka contributor.
         /// Filters by: SeriesContributor.UserId == actorUserId, EndDate IS NULL,
         /// User.StatusCode == "ACTIVE", and Role.RoleName == "Mangaka".
@@ -477,5 +545,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 
             return false;
         }
+
+        public sealed record
+            PublicationFrequencyChangeRequestApiRequest(
+                string Reason);
     }
 }

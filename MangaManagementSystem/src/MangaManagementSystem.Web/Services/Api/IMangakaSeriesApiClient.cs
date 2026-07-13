@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.Application.Features.Mangaka.Series.PublicationFrequencyRequests;
 
 namespace MangaManagementSystem.Web.Services.Api
 {
@@ -100,6 +101,18 @@ namespace MangaManagementSystem.Web.Services.Api
             Guid actorUserId,
             Guid proposalId,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Sends a publication frequency change request for a serialized series.
+        /// The request creates notifications for active Editorial Board Chiefs and
+        /// does not directly modify the official publication frequency.
+        /// </summary>
+        Task<PublicationFrequencyChangeRequestResultDto>
+            RequestPublicationFrequencyChangeAsync(
+                Guid actorUserId,
+                Guid seriesId,
+                string reason,
+                CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Returns a single series card by id where the actor is an active Mangaka contributor.

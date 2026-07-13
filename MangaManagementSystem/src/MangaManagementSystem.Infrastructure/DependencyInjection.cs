@@ -10,6 +10,7 @@ using EFCore.NamingConventions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MangaManagementSystem.Application.Features.EditorialBoard.Repositories;
+using MangaManagementSystem.Application.Features.Mangaka.Series.PublicationFrequencyRequests;
 
 namespace MangaManagementSystem.Infrastructure
 {
@@ -90,6 +91,9 @@ namespace MangaManagementSystem.Infrastructure
             services.AddScoped<IImageMetadataProvider, CloudinaryImageMetadataProvider>();
 
             services.AddScoped<IEditorialBoardRepository, EditorialBoardRepository>();
+            services.AddScoped<
+                IPublicationFrequencyRequestRepository,
+                PublicationFrequencyRequestRepository>();
             services.AddScoped<IPublicationPeriodRepository, PublicationPeriodRepository>();
             services.AddScoped<IPublicationScheduleRepository, PublicationScheduleRepository>();
             services.AddScoped<IChapterOnHoldRepository, ChapterOnHoldRepository>();

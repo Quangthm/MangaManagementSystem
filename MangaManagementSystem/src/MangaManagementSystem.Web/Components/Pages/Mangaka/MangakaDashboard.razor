@@ -291,6 +291,20 @@
                                             </MudButton>
                                         </div>
                                     }
+                                    else if (series.StatusCode == "SERIALIZED")
+                                    {
+                                        <div style="margin-top: 2px;" @onclick:stopPropagation>
+                                            <MudButton Variant="Variant.Outlined"
+                                                       Color="Color.Primary"
+                                                       Size="Size.Small"
+                                                       FullWidth="true"
+                                                       StartIcon="@Icons.Material.Filled.Schedule"
+                                                       Disabled="@string.IsNullOrWhiteSpace(series.PublicationFrequencyCode)"
+                                                       OnClick="@(() => OpenFrequencyRequest(series))">
+                                                Request Frequency Change
+                                            </MudButton>
+                                        </div>
+                                    }
                                 }
                             </div>
                         </div>
@@ -1067,6 +1081,82 @@
     </MudCard>
 </MudOverlay>
 
+@* Publication Frequency Change Request Modal *@
+<MudOverlay Visible="@_frequencyRequestDialogOpen"
+            OnClick="@(() => { if (!_frequencyRequestBusy) CloseFrequencyRequest(); })">
+    <MudCard Style="width: 500px; max-width: 92vw; margin: 7% auto 0; border-radius: 14px;"
+             @onclick:stopPropagation>
+        <MudCardContent Style="padding: 0;">
+            <div style="padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between;">
+                <div style="min-width: 0;">
+                    <div style="font-weight: 700; font-size: 1rem; color: #111827;">
+                        Request Frequency Change
+                    </div>
+                    <div style="color: #94a3b8; font-size: 0.72rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 340px;"
+                         title="@_frequencyRequestSeries?.Title">
+                        @_frequencyRequestSeries?.Title
+                    </div>
+                </div>
+
+                <MudIconButton Icon="@Icons.Material.Filled.Close"
+                               Size="Size.Small"
+                               Disabled="@_frequencyRequestBusy"
+                               OnClick="CloseFrequencyRequest" />
+            </div>
+
+            <div style="padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+                <MudAlert Severity="Severity.Info"
+                          Variant="Variant.Outlined"
+                          Dense="true">
+                    This request notifies the Editorial Board Chief.
+                    It does not directly change the official publication frequency.
+                </MudAlert>
+
+                <div style="padding: 12px 14px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc;">
+                    <div style="font-size: 0.72rem; color: #64748b; margin-bottom: 4px;">
+                        Current official frequency
+                    </div>
+                    <div style="font-size: 0.9rem; font-weight: 700; color: #111827;">
+                        @DisplayPublicationFrequency(_frequencyRequestSeries?.PublicationFrequencyCode)
+                    </div>
+                </div>
+
+                <MudTextField Label="Request / Reason"
+                              @bind-Value="_frequencyRequestReason"
+                              Placeholder="Explain why the official publication frequency should be reviewed..."
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              FullWidth="true"
+                              Immediate="true"
+                              Required="true"
+                              Lines="4"
+                              MaxLength="500"
+                              Disabled="@_frequencyRequestBusy" />
+
+                <div style="font-size: 0.72rem; color: #64748b;">
+                    The official frequency remains unchanged until the Chief handles it through a separate controlled workflow.
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <MudButton Variant="Variant.Outlined"
+                               FullWidth="true"
+                               Disabled="@_frequencyRequestBusy"
+                               OnClick="CloseFrequencyRequest">
+                        Cancel
+                    </MudButton>
+
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               FullWidth="true"
+                               Disabled="@(_frequencyRequestBusy || string.IsNullOrWhiteSpace(_frequencyRequestReason))"
+                               OnClick="SendFrequencyRequestAsync">
+                        @(_frequencyRequestBusy ? "Sending..." : "Send Request")
+                    </MudButton>
+                </div>
+            </div>
+        </MudCardContent>
+    </MudCard>
+</MudOverlay>
 @* â”€â”€ Cover Crop Dialog â”€â”€ *@
 @if (_showCoverCropDialog && !string.IsNullOrWhiteSpace(_coverCropSourceDataUrl))
 {
@@ -1160,7 +1250,7 @@
 
     // â”€â”€ Dashboard modal state â”€â”€
     private bool IsAnyDashboardModalOpen =>
-        _cancelDraftDialogOpen || _newSeriesDialogOpen || _draftDetailsOpen || _reviewStatusOpen || _submitProposalDialogOpen || _genrePickerOpen || _tagPickerOpen || _showCoverCropDialog || _showCoverPreviewDialog;
+        _cancelDraftDialogOpen || _frequencyRequestDialogOpen || _newSeriesDialogOpen || _draftDetailsOpen || _reviewStatusOpen || _submitProposalDialogOpen || _genrePickerOpen || _tagPickerOpen || _showCoverCropDialog || _showCoverPreviewDialog;
 
     // â”€â”€ Dashboard pagination â”€â”€
     private int _dashboardPage = 1;
@@ -1412,6 +1502,168 @@
         }
     }
 
+    // Publication Frequency Change Request state
+    private bool _frequencyRequestDialogOpen;
+    private SeriesCardData? _frequencyRequestSeries;
+    private string _frequencyRequestReason = string.Empty;
+    private bool _frequencyRequestBusy;
+
+    private void OpenFrequencyRequest(
+        SeriesCardData series)
+    {
+        _openSeriesActionMenuId =
+            null;
+
+        if (!string.Equals(
+                series.StatusCode,
+                "SERIALIZED",
+                StringComparison.Ordinal))
+        {
+            Snackbar.Add(
+                "Frequency change requests are only available for serialized series.",
+                Severity.Warning);
+
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                series.PublicationFrequencyCode))
+        {
+            Snackbar.Add(
+                "This series does not have an official publication frequency.",
+                Severity.Warning);
+
+            return;
+        }
+
+        _frequencyRequestSeries =
+            series;
+
+        _frequencyRequestReason =
+            string.Empty;
+
+        _frequencyRequestBusy =
+            false;
+
+        _frequencyRequestDialogOpen =
+            true;
+    }
+
+    private void CloseFrequencyRequest()
+    {
+        if (_frequencyRequestBusy)
+        {
+            return;
+        }
+
+        _frequencyRequestDialogOpen =
+            false;
+
+        _frequencyRequestReason =
+            string.Empty;
+
+        _frequencyRequestSeries =
+            null;
+    }
+
+    private async Task SendFrequencyRequestAsync()
+    {
+        if (_frequencyRequestSeries is null)
+        {
+            Snackbar.Add(
+                "The selected series is no longer available.",
+                Severity.Error);
+
+            return;
+        }
+
+        if (_currentUserId is null
+            || _currentUserId == Guid.Empty)
+        {
+            Snackbar.Add(
+                "Could not identify the signed-in user. Please sign in again.",
+                Severity.Error);
+
+            return;
+        }
+
+        var reason =
+            _frequencyRequestReason.Trim();
+
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            Snackbar.Add(
+                "Please enter a request or reason.",
+                Severity.Warning);
+
+            return;
+        }
+
+        _frequencyRequestBusy =
+            true;
+
+        try
+        {
+            var result =
+                await MangakaSeriesApiClient
+                    .RequestPublicationFrequencyChangeAsync(
+                        actorUserId:
+                            _currentUserId.Value,
+                        seriesId:
+                            _frequencyRequestSeries.Id,
+                        reason:
+                            reason,
+                        cancellationToken:
+                            default);
+
+            Snackbar.Add(
+                $"Frequency change request sent to {result.NotificationCount} Editorial Board Chief account(s). "
+                + $"Current official frequency remains {DisplayPublicationFrequency(result.CurrentPublicationFrequencyCode)}.",
+                Severity.Success);
+
+            _frequencyRequestDialogOpen =
+                false;
+
+            _frequencyRequestReason =
+                string.Empty;
+
+            _frequencyRequestSeries =
+                null;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(
+                ex.Message,
+                Severity.Error);
+        }
+        finally
+        {
+            _frequencyRequestBusy =
+                false;
+        }
+    }
+
+    private static string DisplayPublicationFrequency(
+        string? frequencyCode)
+    {
+        return frequencyCode switch
+        {
+            "WEEKLY" =>
+                "Weekly",
+
+            "MONTHLY" =>
+                "Monthly",
+
+            "IRREGULAR" =>
+                "Irregular",
+
+            null or "" =>
+                "Not set",
+
+            _ =>
+                frequencyCode
+        };
+    }
     // â”€â”€ Submit Proposal state (BF-SERIES-003) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private bool _submitProposalDialogOpen;
     private Guid _submitProposalSeriesId;
