@@ -1,5 +1,34 @@
 # Handoff — Mangaka Workspace: manual-save + full API migration (2026-07-01)
 
+> ## ▶️ BẮT ĐẦU SESSION SAU TỪ ĐÂY (2026-07-13) — editor workspace round 2/3
+>
+> **Branch:** `feature/workspace-v3`. **4 commit local CHƯA PUSH** (ahead 4 of origin): `dc77446` (gate Notes/Versions cho editor + fix pin split-view) · `e2992cd` (handoff) · `0b25133` (editor duyệt chapter #4b) · `28ee732` (Cancel cần markup + ẩn DRAFT với editor). PR đang mở = **#78** (`feature/workspace-v3 → main`); push branch là PR tự cập nhật.
+>
+> **1. Vấn đề đang fix:** hoàn thiện **workspace cho role Editor (Tantou Editor)** theo feedback leader — phân quyền (editor không được sửa nội dung), sửa lỗi UI, và bổ sung tính năng duyệt chapter.
+>
+> **2. Nguyên nhân đã tìm ra (quan trọng):**
+> - **Editor vào workspace trống** (đã fix session trước): `MangakaChapterRepository.QueryAccessibleChapters` lọc Mangaka-only → thêm `QueryWorkspaceChapters` (contributor role ∈ {Mangaka, Tantou Editor, Assistant}).
+> - **Editor bấm được action Mangaka rồi kẹt unsaved chặn annotation:** UI content-mutation chưa gate role → gate bằng `CanManageContent = (_currentRoleName == "Mangaka")`.
+> - **Pin hiện nhầm ở split view:** annotation sync dùng `SelectedPage` + active-version toàn cục, chỉ đẩy canvas active → nay sync **per-pane** (`SyncPaneAnnotationsAsync`).
+> - **Submit Review "Cancel" fail:** KHÔNG phải lỗi quyền — DB constraint `ck_chapter_editorial_review_feedback_required` bắt CANCELLED phải có **comments + markup_file_id** (schema dòng ~967-972). → thêm upload markup, dùng `SubmitReviewDecisionWithMarkupAsync`.
+>
+> **3. Files đã đọc/thay đổi (đợt editor này):**
+> - **Thay đổi:** `Components/Pages/Workspace/CreatorWorkspace.razor` (gate toolbar/New Task/Notes/Versions, nút "Submit Review" + dialog, ẩn toolbar khi crop), `CreatorWorkspace.razor.cs` (cờ `CanManageContent`, per-pane pin sync, `SubmitEditorReview` + markup, lọc DRAFT), `WorkspaceChapterSidebar.razor` (param `CanManageChapters`), `Components/Shared/ImageCropDialog.razor` + `wwwroot/js/image-crop.js` (free-resize + snap 2:3 — commit trước đó), `Infrastructure/Services/CloudinaryFileStorageService.cs` (timeout 2') + `CreatorWorkspace.Save.cs` (parallel upload — commit trước).
+> - **Chỉ đọc (không sửa):** `docs/business-rules.md` (BR-WORKSPACE-006/007/008, BR-CP-018, BR-CH-CANCEL, BR-ANN), `IEditorChapterReviewApiClient.cs` + `EditorChapterReviewDtos.cs` + `SubmitChapterEditorialReviewCommandHandler.cs` + `EditorChapterReviewRepository.Scheduling.cs`, `MangaManagementSystem_Schema.sql` (CHECK constraint review).
+>
+> **4. Bước tiếp theo:**
+> 1. **Smoke test** trong VS (restart để nhận `NUGET_PACKAGES=D:\NugetPackages`, hard-refresh `Ctrl+F5` cho JS): (a) editor không thấy New Chapter/New Task/Upload/Save note/version actions; không thấy chapter DRAFT; (b) split view hết pin nhầm; (c) editor duyệt chapter UNDER_REVIEW: Approve/Revision OK, **Cancel** cần chọn file markup + comment; (d) Mangaka mọi thứ vẫn đủ; (e) parallel upload + crop free-resize + snap 2:3 + compensation pattern.
+> 2. Nếu OK → **push `feature/workspace-v3`** → PR #78 cập nhật.
+> 3. **Follow-up nhỏ (nếu leader muốn):** handler `SubmitChapterEditorialReviewCommandHandler` nên validate markup cho CANCELLED để báo lỗi rõ (hiện DB reject → generic error) — nhưng đó là code editor team.
+>
+> **5. Những gì CHƯA kiểm tra:**
+> - **Chưa test runtime bất kỳ thứ gì** trong đợt này — chỉ compile-clean (Web 0 CS/RZ). Không có DB/VS trong phiên làm.
+> - Chưa xác nhận `IEditorChapterReviewApiClient` inject OK lúc chạy (đã đăng ký DI ở Program.cs, nhưng chưa chạy thật).
+> - Chưa test upload markup thật (validate content-type/size của `EditorialMarkupUploader`).
+> - Pin per-pane: pane hiển thị page mà `ActiveAnnotations` chưa load sẽ KHÔNG có pin (chấp nhận được, nhưng chưa xác nhận UX trên nhiều page khác nhau).
+>
+> ---
+
 > ### UPDATE 2026-07-07 — refactor CreatorWorkspace (partial split) + gom using. ⚠️ CHƯA COMMIT, CHƯA CHẠY RUNTIME
 >
 > **Vấn đề đang làm:** `CreatorWorkspace.razor` quá lớn/khó bảo trì → tách nhỏ (code-behind + topical partials), rút view-model/helper ra file riêng, và **gom using trùng lặp**. Đây là refactor CẤU TRÚC (không đổi hành vi).
