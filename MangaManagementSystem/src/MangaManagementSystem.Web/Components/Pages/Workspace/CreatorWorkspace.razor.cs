@@ -27,13 +27,17 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private string _reviewDecision = "APPROVED";
     private string _reviewComment = "";
     private bool _reviewSubmitting;
+    // DB constraint ck_chapter_editorial_review_feedback_required: CANCELLED requires comments AND a
+    // markup file (like proposal cancellation); REVISION only requires comments; APPROVED requires neither.
+    private IBrowserFile? _reviewMarkupFile;
+
+    private void OnReviewMarkupSelected(InputFileChangeEventArgs e) => _reviewMarkupFile = e.File;
 
     private async Task SubmitEditorReview()
     {
         var chap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
         if (chap == null || chap.ChapterId == Guid.Empty || !_currentUserId.HasValue) return;
 
-        // Revision/cancel decisions require a comment so the Mangaka knows what to fix.
         if ((_reviewDecision == "REVISION_REQUESTED" || _reviewDecision == "CANCELLED")
             && string.IsNullOrWhiteSpace(_reviewComment))
         {
@@ -41,19 +45,27 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             return;
         }
 
+        if (_reviewDecision == "CANCELLED" && _reviewMarkupFile == null)
+        {
+            Snackbar.Add("Cancelling a chapter requires an attached markup file (plus comments).", Severity.Warning);
+            return;
+        }
+
         _reviewSubmitting = true;
         try
         {
-            var res = await EditorReviewApi.SubmitReviewDecisionAsync(
-                _currentUserId.Value,
-                chap.ChapterId,
-                new MangaManagementSystem.Application.DTOs.Editor.SubmitChapterEditorialReviewRequest(
-                    _reviewDecision,
-                    string.IsNullOrWhiteSpace(_reviewComment) ? null : _reviewComment.Trim()));
+            var comments = string.IsNullOrWhiteSpace(_reviewComment) ? null : _reviewComment.Trim();
+            var res = _reviewMarkupFile != null
+                ? await EditorReviewApi.SubmitReviewDecisionWithMarkupAsync(
+                    _currentUserId.Value, chap.ChapterId, _reviewDecision, comments, _reviewMarkupFile)
+                : await EditorReviewApi.SubmitReviewDecisionAsync(
+                    _currentUserId.Value, chap.ChapterId,
+                    new MangaManagementSystem.Application.DTOs.Editor.SubmitChapterEditorialReviewRequest(_reviewDecision, comments));
 
             chap.StatusCode = res.StatusCode;
             _showReviewDialog = false;
             _reviewComment = "";
+            _reviewMarkupFile = null;
             Snackbar.Add($"Review submitted ({res.DecisionCode}). Chapter is now {res.StatusCode}.", Severity.Success);
         }
         catch (Exception ex)
@@ -755,8 +767,10 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 if (chapters != null && chapters.Any())
                 {
                     var chapterModels = chapters
-                        .Where(c => c.StatusCode != "CANCELLED")
-                        .Select((c, i) => new ChapterModel 
+                        // Editors/assistants only see chapters that have been submitted for review onward;
+                        // DRAFT is the Mangaka's private work-in-progress. CANCELLED is hidden for everyone.
+                        .Where(c => c.StatusCode != "CANCELLED" && (CanManageContent || c.StatusCode != "DRAFT"))
+                        .Select((c, i) => new ChapterModel
                     { 
                         Id = int.TryParse(c.ChapterNumberLabel, out int num) ? num : (i + 1), 
                         ChapterId = c.ChapterId,
