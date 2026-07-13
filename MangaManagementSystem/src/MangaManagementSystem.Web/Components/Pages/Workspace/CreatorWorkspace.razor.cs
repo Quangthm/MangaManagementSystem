@@ -14,6 +14,13 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private Guid? _currentUserId;
     private string _currentRoleName = "";
 
+    // BR-WORKSPACE-007: only Mangaka may mutate chapter/page content (create/rename chapters, upload
+    // pages/versions, assign tasks, edit regions). Tantou Editors get a view + review-annotations mode
+    // (they can still view, use AI tools, and create/manage editorial annotations). This gates the
+    // content-mutation UI so editors don't trigger actions that fail server-side and leave the workspace
+    // in an unsaved state that blocks annotating.
+    private bool CanManageContent => _currentRoleName == "Mangaka";
+
     // Split View
     private bool _isSplitView = false;
     private int _splitPageIndex = 0;
