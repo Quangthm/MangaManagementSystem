@@ -131,3 +131,62 @@ The request is an in-app communication to the Editorial Board Chief. Changing th
 10. Confirm an audit event was inserted.
 11. Confirm `Series.PublicationFrequencyCode` remains unchanged.
 12. Confirm a non-contributor cannot submit the request.
+
+## Runtime validation update - Publication Frequency Request
+
+The complete successful runtime flow was executed.
+
+### Workflow result
+
+- Runtime series: Notification Frequency Runtime Test.
+- Series status before request: SERIALIZED.
+- Current official frequency shown by the UI: WEEKLY.
+- TestMangaka1 submitted a non-empty request reason.
+- The UI reported delivery to 5 Editorial Board Chief accounts.
+- The official frequency remained WEEKLY after submission.
+
+### Notification database evidence
+
+- Active Editorial Board Chief count: 5.
+- PUBLICATION_FREQUENCY_REQUEST notifications created: 5.
+- Distinct recipients: 5.
+- Invalid recipient count: 0.
+- Duplicate-recipient query returned no rows.
+- Every recipient had role Editorial Board Chief and status ACTIVE.
+- Related entity type was Series.
+- Related entity ID matched the runtime test series.
+
+### Audit evidence
+
+- Audit object: [audit].[AuditEvent].
+- Action code: PUBLICATION_FREQUENCY_CHANGE_REQUESTED.
+- Actor: TestMangaka1.
+- Actor role: Mangaka.
+- Recipient role: Editorial Board Chief.
+- Recipient count: 5.
+- Audit detail retained the current frequency WEEKLY and submitted reason.
+
+### Series state evidence
+
+- Series status: SERIALIZED.
+- Official publication frequency: WEEKLY.
+- Final state check: PASS.
+- The request did not directly modify the official publication frequency.
+
+### Notification Bell evidence
+
+- TestBoardChief1 saw one unread Publication Frequency Change Request.
+- The notification showed the correct actor, series, frequency, and reason.
+- Mark as read removed the unread badge.
+- The notification remained visible with status Read.
+- Database read_at_utc was populated.
+- Final read-status verification returned PASS.
+
+### Negative paths not forced
+
+The following defensive paths were not intentionally executed against the shared runtime database:
+
+1. A non-contributor submitting a request.
+2. A serialized series without an official frequency.
+3. A request when no active Editorial Board Chief exists.
+4. A forced persistence failure to verify transaction rollback.

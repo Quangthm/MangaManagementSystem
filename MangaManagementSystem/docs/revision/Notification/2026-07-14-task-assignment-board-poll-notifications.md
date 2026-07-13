@@ -125,3 +125,51 @@ Not included in this commit:
 - Publication schedule notifications
 
 These require separate validated business flows or recipient rules.
+
+## Runtime validation update - Board Poll
+
+Runtime validation was completed for the real Board Poll workflow.
+
+### Workflow result
+
+- TestMangaka1 created and submitted Notification Frequency Runtime Test.
+- TestEditor1 claimed the proposal and passed it to the Editorial Board.
+- TestBoardChief1 opened a START_SERIALIZATION poll.
+- TestBoardMember1 voted APPROVE.
+- TestBoardChief1 closed the poll.
+- Final result: Approved.
+- Poll status: CLOSED.
+- Series status: SERIALIZED.
+- Official frequency: WEEKLY.
+
+### Notification database evidence
+
+- Active Editorial Board Member count: 5.
+- BOARD_POLL notifications created: 5.
+- Distinct recipients: 5.
+- Invalid recipient count: 0.
+- Duplicate-recipient query returned no rows.
+- Every recipient had role Editorial Board Member and status ACTIVE.
+- Related entity type was SeriesBoardPoll.
+- Related entity ID matched the created poll.
+- Editorial Board Chief was excluded.
+
+### Notification Bell evidence
+
+- TestBoardMember1 saw one unread New Board Poll notification.
+- Mark as read removed the unread badge.
+- The notification remained visible with status Read.
+- Database read_at_utc was populated.
+- Final read-status verification returned PASS.
+
+### Task Assignment runtime status
+
+TASK_ASSIGNMENT remains build-validated but runtime-pending.
+
+The following paths were not executed during this runtime session:
+
+1. Single task creation.
+2. Quick Select task creation.
+3. Task reassignment.
+4. Bell navigation to the Assistant task page.
+5. Forced transaction rollback when notification insertion fails.

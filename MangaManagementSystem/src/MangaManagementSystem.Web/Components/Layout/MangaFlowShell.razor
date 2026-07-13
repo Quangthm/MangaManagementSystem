@@ -3,10 +3,7 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Authorization
-@using Microsoft.JSInterop
 
-@inject NavigationManager NavigationManager
-@inject IJSRuntime JSRuntime
 
 <div class="mf-app-shell mf-board-shell">
     <aside class="mf-sidebar mf-board-editor-sidebar">
@@ -57,9 +54,9 @@
 
                         <div class="mf-board-profile-dropdown-divider"></div>
 
-                        <button type="button"
-                                class="mf-board-profile-dropdown-item logout"
-                                @onclick="LogoutAsync">
+                        <button type="submit"
+                                form="global-logout-form"
+                                class="mf-board-profile-dropdown-item logout">
                             Logout
                         </button>
                     </div>
@@ -145,6 +142,12 @@
             </div>
 
             <div class="mf-top-actions">
+                <AuthorizeView>
+                    <Authorized>
+                        <NotificationBell />
+                    </Authorized>
+                </AuthorizeView>
+
                 @if (Actions is not null)
                 {
                     @Actions
@@ -189,29 +192,6 @@
         return ActiveMenu.Equals(key, StringComparison.OrdinalIgnoreCase)
             ? "mf-board-nav-link active"
             : "mf-board-nav-link";
-    }
-
-    private async Task LogoutAsync()
-    {
-        var keys = new[]
-        {
-            "authToken",
-            "token",
-            "jwt",
-            "accessToken",
-            "currentUser",
-            "user",
-            "role",
-            "roleName"
-        };
-
-        foreach (var key in keys)
-        {
-            await JSRuntime.InvokeVoidAsync("localStorage.removeItem", key);
-            await JSRuntime.InvokeVoidAsync("sessionStorage.removeItem", key);
-        }
-
-        NavigationManager.NavigateTo("/signout", forceLoad: true);
     }
 
     private static string GetDisplayName(ClaimsPrincipal user)
