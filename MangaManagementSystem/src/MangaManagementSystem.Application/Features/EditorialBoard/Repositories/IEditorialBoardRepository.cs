@@ -14,6 +14,7 @@ public interface IEditorialBoardRepository
     Task<OpenSeriesBoardPollResultDto> OpenPollAsync(
         OpenSeriesBoardPollRequestDto request,
         Guid chiefUserId,
+        BoardPollNotificationPlan notificationPlan,
         CancellationToken cancellationToken);
 
     Task<CastSeriesBoardVoteResultDto> CastVoteAsync(

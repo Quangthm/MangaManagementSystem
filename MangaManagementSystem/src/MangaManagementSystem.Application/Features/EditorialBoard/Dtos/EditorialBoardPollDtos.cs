@@ -33,6 +33,14 @@ public sealed record OpenSeriesBoardPollResultDto(
     Guid ProposalId,
     string PollStatusCode);
 
+public sealed record BoardPollNotificationPlan(
+    string RecipientRoleName,
+    string RecipientStatusCode,
+    string NotificationTypeCode,
+    string Title,
+    string Message,
+    string RelatedEntityType);
+
 public sealed record CastSeriesBoardVoteRequestDto(
     Guid PollId,
     string ChoiceCode,

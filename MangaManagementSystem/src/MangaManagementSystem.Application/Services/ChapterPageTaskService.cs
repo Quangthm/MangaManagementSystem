@@ -1,4 +1,5 @@
-﻿using MangaManagementSystem.Application.DTOs.Manga;
+﻿using MangaManagementSystem.Application.Common;
+using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
@@ -20,23 +21,58 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<ChapterPageTaskDto> CreateChapterPageTaskAsync(CreateChapterPageTaskDto dto)
         {
-            // Workflow create goes through the stored procedure so permission checks,
-            // same-page-version validation, transaction handling, and audit logging
-            // are owned by SQL. The actor (task creator) is distinct from the assignee.
-            var newTaskId = await _unitOfWork.ChapterPageTasks.CreateChapterPageTaskAsync(
-                dto.ActorUserId,
-                dto.AssignedToUserId,
-                dto.TypeCode,
-                dto.TaskTitle,
-                dto.TaskDescription,
-                (byte)dto.PriorityLevel,
-                dto.DueAtUtc ?? DateTime.UtcNow.AddDays(7),
-                dto.CompensationAmount,
-                dto.PageRegionIds);
+            await _unitOfWork.BeginTransactionAsync();
 
-            // Reload with regions
-            var entity = await _unitOfWork.ChapterPageTasks.GetByIdWithRegionsAsync(newTaskId);
-            return entity == null ? throw new InvalidOperationException("Failed to create task") : MapToDto(entity);
+            try
+            {
+                // SQL keeps the final workflow guards and audit logging.
+                // The outer EF transaction keeps task creation and notification atomic.
+                var newTaskId =
+                    await _unitOfWork.ChapterPageTasks
+                        .CreateChapterPageTaskAsync(
+                            dto.ActorUserId,
+                            dto.AssignedToUserId,
+                            dto.TypeCode,
+                            dto.TaskTitle,
+                            dto.TaskDescription,
+                            (byte)dto.PriorityLevel,
+                            dto.DueAtUtc ?? DateTime.UtcNow.AddDays(7),
+                            dto.CompensationAmount,
+                            dto.PageRegionIds);
+
+                if (newTaskId == Guid.Empty)
+                {
+                    throw new InvalidOperationException(
+                        "Failed to create task.");
+                }
+
+                await _unitOfWork.Notifications.AddAsync(
+                    CreateTaskAssignmentNotification(
+                        dto.AssignedToUserId,
+                        newTaskId,
+                        "You have been assigned a new production task."));
+
+                await _unitOfWork.SaveChangesAsync();
+
+                var entity =
+                    await _unitOfWork.ChapterPageTasks
+                        .GetByIdWithRegionsAsync(newTaskId);
+
+                if (entity == null)
+                {
+                    throw new InvalidOperationException(
+                        "Failed to load the created task.");
+                }
+
+                await _unitOfWork.CommitTransactionAsync();
+
+                return MapToDto(entity);
+            }
+            catch
+            {
+                await _unitOfWork.RollbackTransactionAsync();
+                throw;
+            }
         }
 
         public async Task<ChapterPageTaskDto?> GetChapterPageTaskByIdAsync(Guid id)
@@ -261,15 +297,46 @@ namespace MangaManagementSystem.Application.Services
                 ? task.TaskDescription
                 : request.UpdatedTaskDescription.Trim();
 
-            // Call SP — final guards for contributor membership, locking, and audit happen in SQL
-            var newTaskId = await _unitOfWork.ChapterPageTasks.AssignToDifferentUserAsync(
-                actorUserId,
-                taskId,
-                request.NewAssignedToUserId,
-                request.Reason.Trim(),
-                updatedDescription);
+            await _unitOfWork.BeginTransactionAsync();
 
-            return new ReassignChapterPageTaskResult(taskId, newTaskId);
+            try
+            {
+                // SQL owns final contributor guards, locking, cancellation of
+                // the old task, creation of the replacement task, region links,
+                // and audit. EF adds the assignment notification atomically.
+                var newTaskId =
+                    await _unitOfWork.ChapterPageTasks
+                        .AssignToDifferentUserAsync(
+                            actorUserId,
+                            taskId,
+                            request.NewAssignedToUserId,
+                            request.Reason.Trim(),
+                            updatedDescription);
+
+                if (newTaskId == Guid.Empty)
+                {
+                    throw new InvalidOperationException(
+                        "Failed to create the replacement task.");
+                }
+
+                await _unitOfWork.Notifications.AddAsync(
+                    CreateTaskAssignmentNotification(
+                        request.NewAssignedToUserId,
+                        newTaskId,
+                        "A production task has been reassigned to you."));
+
+                await _unitOfWork.SaveChangesAsync();
+                await _unitOfWork.CommitTransactionAsync();
+
+                return new ReassignChapterPageTaskResult(
+                    taskId,
+                    newTaskId);
+            }
+            catch
+            {
+                await _unitOfWork.RollbackTransactionAsync();
+                throw;
+            }
         }
 
         public async Task<IReadOnlyList<EligibleAssistantDto>> GetEligibleAssistantsForTaskAsync(
@@ -285,6 +352,25 @@ namespace MangaManagementSystem.Application.Services
             return rawAssistants
                 .Select(a => new EligibleAssistantDto(a.UserId, a.DisplayName, a.Username))
                 .ToList();
+        }
+
+        private static Notification CreateTaskAssignmentNotification(
+            Guid recipientUserId,
+            Guid taskId,
+            string message)
+        {
+            return new Notification
+            {
+                RecipientUserId = recipientUserId,
+                NotificationTypeCode =
+                    NotificationTypeCodes.TaskAssignment,
+                Title = "New Task Assignment",
+                Message = message,
+                RelatedEntityType =
+                    NotificationRelatedEntityTypes.ChapterPageTask,
+                RelatedEntityId = taskId,
+                CreatedAtUtc = DateTime.UtcNow
+            };
         }
 
         private static ChapterPageTaskDto MapToDtoWithFullContext(ChapterPageTask t)

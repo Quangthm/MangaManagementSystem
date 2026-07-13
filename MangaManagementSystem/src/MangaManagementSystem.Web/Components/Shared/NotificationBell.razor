@@ -1,9 +1,11 @@
+@using MangaManagementSystem.Application.Common
 @using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Web.Services.Api
 
 @implements IDisposable
 
 @inject INotificationApiClient NotificationApiClient
+@inject NavigationManager Navigation
 @inject ILogger<NotificationBell> Logger
 
 <MudMenu>
@@ -94,42 +96,48 @@
                     @foreach (var notification in _notifications)
                     {
                         <div class="@BuildNotificationItemClass(notification)">
-    <span class="mf-notification-status"
-          aria-hidden="true"></span>
+                            <button type="button"
+                                    class="mf-notification-main-action"
+                                    disabled="@(!CanNavigateToRelatedEntity(notification) || _operationInProgress)"
+                                    aria-label="@BuildNotificationNavigationLabel(notification)"
+                                    @onclick="() => HandleNotificationClickAsync(notification)">
+                                <span class="mf-notification-status"
+                                      aria-hidden="true"></span>
 
-    <span class="mf-notification-content">
-        <span class="mf-notification-title">
-            @BuildNotificationTitle(notification)
-        </span>
+                                <span class="mf-notification-content">
+                                    <span class="mf-notification-title">
+                                        @BuildNotificationTitle(notification)
+                                    </span>
 
-        <span class="mf-notification-message">
-            @notification.Message
-        </span>
+                                    <span class="mf-notification-message">
+                                        @notification.Message
+                                    </span>
 
-        <time class="mf-notification-time"
-              datetime="@notification.CreatedAtUtc.ToString("O")">
-            @FormatCreatedAt(notification.CreatedAtUtc)
-        </time>
-    </span>
+                                    <time class="mf-notification-time"
+                                          datetime="@notification.CreatedAtUtc.ToString("O")">
+                                        @FormatCreatedAt(notification.CreatedAtUtc)
+                                    </time>
+                                </span>
+                            </button>
 
-    <span class="mf-notification-item-action">
-        @if (!notification.ReadAtUtc.HasValue)
-        {
-            <button type="button"
-                    class="mf-notification-mark-one"
-                    disabled="@_operationInProgress"
-                    @onclick="() => MarkAsReadAsync(notification)">
-                Mark as read
-            </button>
-        }
-        else
-        {
-            <span class="mf-notification-read-label">
-                Read
-            </span>
-        }
-    </span>
-</div>
+                            <span class="mf-notification-item-action">
+                                @if (!notification.ReadAtUtc.HasValue)
+                                {
+                                    <button type="button"
+                                            class="mf-notification-mark-one"
+                                            disabled="@_operationInProgress"
+                                            @onclick="() => MarkAsReadAsync(notification)">
+                                        Mark as read
+                                    </button>
+                                }
+                                else
+                                {
+                                    <span class="mf-notification-read-label">
+                                        Read
+                                    </span>
+                                }
+                            </span>
+                        </div>
                     }
                 </div>
 
@@ -321,14 +329,53 @@
             _loadMoreInProgress = false;
         }
     }
+    private async Task HandleNotificationClickAsync(
+        NotificationDto notification)
+    {
+        if (_disposed || _operationInProgress)
+        {
+            return;
+        }
+
+        var targetRoute =
+            BuildNotificationRoute(notification);
+
+        if (string.IsNullOrWhiteSpace(targetRoute))
+        {
+            return;
+        }
+
+        if (!notification.ReadAtUtc.HasValue)
+        {
+            var markedAsRead =
+                await TryMarkAsReadAsync(notification);
+
+            if (!markedAsRead)
+            {
+                return;
+            }
+        }
+
+        Navigation.NavigateTo(targetRoute);
+    }
+
     private async Task MarkAsReadAsync(
         NotificationDto notification)
     {
-        if (_disposed
-            || _operationInProgress
-            || notification.ReadAtUtc.HasValue)
+        await TryMarkAsReadAsync(notification);
+    }
+
+    private async Task<bool> TryMarkAsReadAsync(
+        NotificationDto notification)
+    {
+        if (_disposed || _operationInProgress)
         {
-            return;
+            return false;
+        }
+
+        if (notification.ReadAtUtc.HasValue)
+        {
+            return true;
         }
 
         _operationInProgress = true;
@@ -346,7 +393,7 @@
                 _errorMessage =
                     "This notification is no longer available.";
 
-                return;
+                return false;
             }
 
             var index =
@@ -355,23 +402,23 @@
                         item.NotificationId
                         == notification.NotificationId);
 
-            if (index < 0
-                || _notifications[index]
+            if (index >= 0
+                && !_notifications[index]
                     .ReadAtUtc.HasValue)
             {
-                return;
+                _notifications[index] =
+                    _notifications[index] with
+                    {
+                        ReadAtUtc = DateTime.UtcNow
+                    };
+
+                _unreadCount =
+                    Math.Max(
+                        0,
+                        _unreadCount - 1);
             }
 
-            _notifications[index] =
-                _notifications[index] with
-                {
-                    ReadAtUtc = DateTime.UtcNow
-                };
-
-            _unreadCount =
-                Math.Max(
-                    0,
-                    _unreadCount - 1);
+            return true;
         }
         catch (Exception exception)
         {
@@ -382,13 +429,14 @@
 
             _errorMessage =
                 "The notification could not be updated.";
+
+            return false;
         }
         finally
         {
             _operationInProgress = false;
         }
     }
-
     private async Task MarkAllAsReadAsync()
     {
         if (_disposed
@@ -481,9 +529,58 @@
     private static string BuildNotificationItemClass(
         NotificationDto notification)
     {
-        return notification.ReadAtUtc.HasValue
-            ? "mf-notification-item"
-            : "mf-notification-item is-unread";
+        var stateClass =
+            notification.ReadAtUtc.HasValue
+                ? "mf-notification-item"
+                : "mf-notification-item is-unread";
+
+        return CanNavigateToRelatedEntity(notification)
+            ? $"{stateClass} is-navigable"
+            : stateClass;
+    }
+
+    private static bool CanNavigateToRelatedEntity(
+        NotificationDto notification)
+    {
+        return BuildNotificationRoute(notification)
+            is not null;
+    }
+
+    private static string BuildNotificationNavigationLabel(
+        NotificationDto notification)
+    {
+        return CanNavigateToRelatedEntity(notification)
+            ? $"Open {BuildNotificationTitle(notification)}"
+            : BuildNotificationTitle(notification);
+    }
+
+    private static string? BuildNotificationRoute(
+        NotificationDto notification)
+    {
+        if (!string.Equals(
+                notification.NotificationTypeCode,
+                NotificationTypeCodes.TaskAssignment,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (!string.Equals(
+                notification.RelatedEntityType,
+                NotificationRelatedEntityTypes.ChapterPageTask,
+                StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        if (!notification.RelatedEntityId.HasValue
+            || notification.RelatedEntityId.Value
+                == Guid.Empty)
+        {
+            return null;
+        }
+
+        return $"/assistant/task/{notification.RelatedEntityId.Value:D}";
     }
 
     private static string FormatCreatedAt(
@@ -685,8 +782,41 @@
         background: #ede9fe;
     }
 
+    .mf-notification-item.is-navigable:hover {
+        background: #f8fafc;
+    }
+
+    .mf-notification-item.is-unread.is-navigable:hover {
+        background: #ede9fe;
+    }
+
     .mf-notification-item:disabled {
         opacity: 0.72;
+    }
+
+    .mf-notification-main-action {
+        min-width: 0;
+        flex: 1;
+        border: 0;
+        padding: 0;
+        background: transparent;
+        color: inherit;
+        display: flex;
+        align-items: flex-start;
+        gap: 11px;
+        text-align: left;
+        cursor: pointer;
+    }
+
+    .mf-notification-main-action:disabled {
+        cursor: default;
+        opacity: 1;
+    }
+
+    .mf-notification-main-action:focus-visible {
+        border-radius: 8px;
+        outline: 2px solid #8b5cf6;
+        outline-offset: 3px;
     }
 
     .mf-notification-status {

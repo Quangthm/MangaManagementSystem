@@ -1,8 +1,10 @@
 using MangaManagementSystem.Application.Features.EditorialBoard.Dtos;
 using MangaManagementSystem.Application.Features.EditorialBoard.Repositories;
+using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using System.Data;
 using System.Data.Common;
 using System.Text.Json;
@@ -242,18 +244,21 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
     public async Task<OpenSeriesBoardPollResultDto> OpenPollAsync(
         OpenSeriesBoardPollRequestDto request,
         Guid chiefUserId,
+        BoardPollNotificationPlan notificationPlan,
         CancellationToken cancellationToken)
     {
         ValidateOpenPollRequest(request);
+        ValidateBoardPollNotificationPlan(notificationPlan);
 
-        var connection = _dbContext.Database.GetDbConnection();
+        await using var efTransaction =
+            await _dbContext.Database.BeginTransactionAsync(
+                cancellationToken);
 
-        if (connection.State != ConnectionState.Open)
-        {
-            await connection.OpenAsync(cancellationToken);
-        }
+        var connection =
+            _dbContext.Database.GetDbConnection();
 
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        var transaction =
+            efTransaction.GetDbTransaction();
 
         try
         {
@@ -361,7 +366,14 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 openPollAuditJson,
                 cancellationToken);
 
-            await transaction.CommitAsync(cancellationToken);
+            await CreateBoardPollNotificationsAsync(
+                notificationPlan,
+                chiefUserId,
+                pollId,
+                cancellationToken);
+
+            await efTransaction.CommitAsync(
+                cancellationToken);
 
             return new OpenSeriesBoardPollResultDto(
                 PollId: pollId,
@@ -382,6 +394,69 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             await TryRollbackAsync(transaction, cancellationToken);
             throw;
         }
+    }
+
+    private async Task CreateBoardPollNotificationsAsync(
+        BoardPollNotificationPlan plan,
+        Guid chiefUserId,
+        Guid pollId,
+        CancellationToken cancellationToken)
+    {
+        var recipientUserIds =
+            await _dbContext.Users
+                .AsNoTracking()
+                .Where(user =>
+                    user.UserId != chiefUserId
+                    && user.StatusCode ==
+                        plan.RecipientStatusCode
+                    && user.Role != null
+                    && user.Role.RoleName ==
+                        plan.RecipientRoleName)
+                .Select(user =>
+                    user.UserId)
+                .Distinct()
+                .ToListAsync(
+                    cancellationToken);
+
+        if (recipientUserIds.Count == 0)
+        {
+            return;
+        }
+
+        var createdAtUtc =
+            DateTime.UtcNow;
+
+        var notifications =
+            recipientUserIds
+                .Select(recipientUserId =>
+                    new Notification
+                    {
+                        RecipientUserId =
+                            recipientUserId,
+                        NotificationTypeCode =
+                            plan.NotificationTypeCode,
+                        Title =
+                            plan.Title,
+                        Message =
+                            plan.Message,
+                        RelatedEntityType =
+                            plan.RelatedEntityType,
+                        RelatedEntityId =
+                            pollId,
+                        ReadAtUtc =
+                            null,
+                        CreatedAtUtc =
+                            createdAtUtc
+                    })
+                .ToList();
+
+        await _dbContext.Notifications
+            .AddRangeAsync(
+                notifications,
+                cancellationToken);
+
+        await _dbContext.SaveChangesAsync(
+            cancellationToken);
     }
 
     public async Task<CastSeriesBoardVoteResultDto> CastVoteAsync(
@@ -1291,6 +1366,54 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         AddGuidParameter(command, "@chiefUserId", chiefUserId);
 
         await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static void ValidateBoardPollNotificationPlan(
+        BoardPollNotificationPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        if (string.IsNullOrWhiteSpace(
+                plan.RecipientRoleName))
+        {
+            throw new InvalidOperationException(
+                "Notification recipient role is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                plan.RecipientStatusCode))
+        {
+            throw new InvalidOperationException(
+                "Notification recipient status is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                plan.NotificationTypeCode))
+        {
+            throw new InvalidOperationException(
+                "Notification type is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                plan.Title))
+        {
+            throw new InvalidOperationException(
+                "Notification title is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                plan.Message))
+        {
+            throw new InvalidOperationException(
+                "Notification message is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                plan.RelatedEntityType))
+        {
+            throw new InvalidOperationException(
+                "Notification related entity type is required.");
+        }
     }
 
     private static void ValidateOpenPollRequest(OpenSeriesBoardPollRequestDto request)

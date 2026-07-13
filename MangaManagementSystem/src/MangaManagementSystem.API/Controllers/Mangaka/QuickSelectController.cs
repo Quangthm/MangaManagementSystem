@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Manga;
@@ -17,16 +16,13 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         private const string ActorUserIdHeader = "X-Actor-User-Id";
 
         private readonly IQuickSelectService _quickSelectService;
-        private readonly INotificationService _notificationService;
         private readonly ILogger<QuickSelectController> _logger;
 
         public QuickSelectController(
             IQuickSelectService quickSelectService,
-            INotificationService notificationService,
             ILogger<QuickSelectController> logger)
         {
             _quickSelectService = quickSelectService;
-            _notificationService = notificationService;
             _logger = logger;
         }
 
@@ -150,14 +146,6 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 var result = await _quickSelectService.AssignQuickSelectTasksAsync(
                     actorUserId, request, cancellationToken);
 
-                if (result.CreatedTasks.Count > 0)
-                {
-                    await NotifyAssistantAsync(
-                        request.AssignedToUserId,
-                        actorUserId,
-                        result.CreatedTasks.Select(t => t.ChapterPageTaskId).ToList(),
-                        cancellationToken);
-                }
 
                 return Ok(result);
             }
@@ -172,39 +160,6 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return Problem(
                     detail: "Quick Select assignment failed. No tasks were created.",
                     statusCode: StatusCodes.Status500InternalServerError);
-            }
-        }
-
-        private async Task NotifyAssistantAsync(
-            Guid assignedToUserId,
-            Guid actorUserId,
-            IReadOnlyList<Guid> taskIds,
-            CancellationToken cancellationToken)
-        {
-            try
-            {
-                if (assignedToUserId == Guid.Empty || taskIds.Count == 0)
-                    return;
-
-                var title = "New Task Assignment";
-                var taskCount = taskIds.Count;
-                var message = taskCount == 1
-                    ? "A new task has been assigned to you."
-                    : $"{taskCount} new tasks have been assigned to you.";
-
-                await _notificationService.CreateNotificationAsync(new CreateNotificationDto(
-                    RecipientUserId: assignedToUserId,
-                    NotificationTypeCode: "TASK_ASSIGNED",
-                    Title: title,
-                    Message: message,
-                    RelatedEntityType: "ChapterPageTask",
-                    RelatedEntityId: taskIds[0]));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex,
-                    "Failed to send assignment notification to user {RecipientUserId}. Non-blocking.",
-                    assignedToUserId);
             }
         }
 

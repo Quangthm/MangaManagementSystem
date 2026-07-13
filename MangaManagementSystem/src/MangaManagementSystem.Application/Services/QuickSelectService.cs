@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using MangaManagementSystem.Application.Common;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Domain.Entities;
@@ -143,6 +144,20 @@ namespace MangaManagementSystem.Application.Services
                 ));
             }
 
+            var notifications = items
+                .Select(item => new CreateNotificationDto(
+                    RecipientUserId: request.AssignedToUserId,
+                    NotificationTypeCode:
+                        NotificationTypeCodes.TaskAssignment,
+                    Title: "New Task Assignment",
+                    Message:
+                        "You have been assigned a new production task.",
+                    RelatedEntityType:
+                        NotificationRelatedEntityTypes.ChapterPageTask,
+                    RelatedEntityId:
+                        item.ChapterPageTaskId))
+                .ToList();
+
             var plan = new QuickSelectAssignmentPlan(
                 ActorUserId: actorUserId,
                 SeriesId: request.SeriesId,
@@ -153,7 +168,8 @@ namespace MangaManagementSystem.Application.Services
                 PriorityLevel: request.PriorityLevel,
                 DueAtUtc: request.DueAtUtc,
                 CompensationAmount: request.CompensationAmount,
-                Items: items
+                Items: items,
+                Notifications: notifications
             );
 
             return await _repository.PersistQuickSelectAssignmentAsync(plan, cancellationToken);

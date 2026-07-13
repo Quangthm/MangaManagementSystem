@@ -138,6 +138,26 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     var auditEvents = new List<AuditEvent>();
                     var createdDtos = new List<QuickSelectCreatedTaskDto>();
 
+                    var notifications = plan.Notifications
+                        .Select(intent => new Notification
+                        {
+                            RecipientUserId =
+                                intent.RecipientUserId,
+                            NotificationTypeCode =
+                                intent.NotificationTypeCode,
+                            Title =
+                                intent.Title,
+                            Message =
+                                intent.Message,
+                            RelatedEntityType =
+                                intent.RelatedEntityType,
+                            RelatedEntityId =
+                                intent.RelatedEntityId,
+                            CreatedAtUtc =
+                                now
+                        })
+                        .ToList();
+
                     foreach (var item in plan.Items)
                     {
                         var fullPageRegion = regionLookup[item.ChapterPageVersionId];
@@ -184,6 +204,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
                     _context.ChapterPageTasks.AddRange(tasks);
                     _context.AuditEvents.AddRange(auditEvents);
+                    _context.Set<Notification>()
+                        .AddRange(notifications);
 
                     foreach (var item in plan.Items)
                     {

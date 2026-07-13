@@ -2,6 +2,7 @@ using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -33,6 +34,15 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = "manga.usp_ChapterPageTask_Create";
             cmd.CommandType = CommandType.StoredProcedure;
+
+            var currentTransaction =
+                _context.Database.CurrentTransaction;
+
+            if (currentTransaction != null)
+            {
+                cmd.Transaction =
+                    currentTransaction.GetDbTransaction();
+            }
 
             cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@actor_user_id", System.Data.SqlDbType.UniqueIdentifier) { Value = actorUserId });
             cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@assigned_to_user_id", System.Data.SqlDbType.UniqueIdentifier) { Value = assignedToUserId });
@@ -232,6 +242,15 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = "manga.usp_ChapterPageTask_AssignToDifferentUser";
             cmd.CommandType = CommandType.StoredProcedure;
+
+            var currentTransaction =
+                _context.Database.CurrentTransaction;
+
+            if (currentTransaction != null)
+            {
+                cmd.Transaction =
+                    currentTransaction.GetDbTransaction();
+            }
 
             cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@actor_user_id", System.Data.SqlDbType.UniqueIdentifier) { Value = actorUserId });
             cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@chapter_page_task_id", System.Data.SqlDbType.UniqueIdentifier) { Value = chapterPageTaskId });
