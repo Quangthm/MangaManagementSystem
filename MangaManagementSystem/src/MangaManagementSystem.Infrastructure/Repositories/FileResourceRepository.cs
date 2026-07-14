@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using MangaManagementSystem.Application.Common;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
 using MangaManagementSystem.Infrastructure.Persistence;
@@ -36,8 +37,10 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
             var deletedState =
                 string.IsNullOrWhiteSpace(criteria.DeletedState)
-                    ? "active"
-                    : criteria.DeletedState.Trim().ToLowerInvariant();
+                    ? AdminFileDeletionStates.ActiveNormalized
+                    : criteria.DeletedState
+                        .Trim()
+                        .ToLowerInvariant();
 
             var pageNumber =
                 criteria.PageNumber <= 0
@@ -75,15 +78,15 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
             query = deletedState switch
             {
-                "active" =>
+                AdminFileDeletionStates.ActiveNormalized =>
                     query.Where(file =>
                         file.DeletedAtUtc == null),
 
-                "deleted" =>
+                AdminFileDeletionStates.DeletedNormalized =>
                     query.Where(file =>
                         file.DeletedAtUtc != null),
 
-                "all" =>
+                AdminFileDeletionStates.AllNormalized =>
                     query,
 
                 _ =>

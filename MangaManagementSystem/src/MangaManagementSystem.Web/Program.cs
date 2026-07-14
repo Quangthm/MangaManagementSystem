@@ -129,6 +129,24 @@ builder.Services.AddHttpClient<IAdminFileApiClient, AdminFileApiClient>((sp, cli
                     new Uri(settings.Value.BaseUrl);
             })
                 .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
+            builder.Services
+                .AddHttpClient<
+                    INotificationApiClient,
+                    NotificationApiClient>(
+                    (serviceProvider, client) =>
+                    {
+                        var settings =
+                            serviceProvider
+                                .GetRequiredService<
+                                    Microsoft.Extensions.Options
+                                        .IOptions<ApiSettings>>();
+
+                        client.BaseAddress =
+                            new Uri(
+                                settings.Value.BaseUrl);
+                    })
+                .AddHttpMessageHandler<
+                    ApiAuthorizationMessageHandler>();
 
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddAntiforgery();
@@ -198,11 +216,13 @@ builder.Services.AddHttpClient<IAdminFileApiClient, AdminFileApiClient>((sp, cli
                 var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
                 client.BaseAddress = new Uri(settings.Value.BaseUrl);
             });
-            builder.Services.AddHttpClient<Services.Api.ISeriesApiClient, Services.Api.SeriesApiClient>((sp, client) =>
-            {
-                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
-                client.BaseAddress = new Uri(settings.Value.BaseUrl);
-            });
+            builder.Services
+                .AddHttpClient<Services.Api.ISeriesApiClient, Services.Api.SeriesApiClient>((sp, client) =>
+                {
+                    var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                    client.BaseAddress = new Uri(settings.Value.BaseUrl);
+                })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
             builder.Services.AddHttpClient<Services.Api.IEditorProposalApiClient, Services.Api.EditorProposalApiClient>((sp, client) =>
             {
                 var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();

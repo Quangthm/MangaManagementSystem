@@ -1,0 +1,96 @@
+@using MangaManagementSystem.Application.DTOs.Manga
+@using MudBlazor
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Mark Series as Completed</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.caption" Color="Color.Secondary">Series</MudText>
+        <MudText Typo="Typo.body1" Class="mb-3">
+            <strong>@SeriesTitle</strong>
+        </MudText>
+
+        <MudAlert Severity="Severity.Error" Dense="true" Class="mb-3">
+            <strong>Completion is final and normally irreversible.</strong>
+            The series will become <strong>COMPLETED</strong>.
+        </MudAlert>
+
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px;">
+            <MudText Typo="Typo.body2">
+                Current series status: <strong>@Impact.SeriesStatusCode</strong>
+            </MudText>
+            <MudText Typo="Typo.body2">
+                Affected chapters: <strong>@Impact.AffectedChapterCount</strong>
+            </MudText>
+        </div>
+
+        <div class="mb-2" style="font-size: 0.875rem; line-height: 1.5;">
+            <ul class="my-0 ps-3">
+                <li>Existing <strong>RELEASED</strong> chapters remain unchanged.</li>
+                <li>Existing <strong>CANCELLED</strong> chapters remain unchanged.</li>
+                <li>Listed active unreleased chapters will be changed to <strong>CANCELLED</strong>.</li>
+                <li>Existing files, versions, tasks, annotations, and reviews are preserved.</li>
+            </ul>
+        </div>
+
+        @if (Impact.AffectedChapterCount > 0)
+        {
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Affected chapters</MudText>
+            <div style="max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
+                @foreach (var chapter in Impact.AffectedChapters)
+                {
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-bottom: 1px solid #f1f5f9;">
+                        <div style="min-width: 0;">
+                            <MudText Typo="Typo.body2">
+                                <strong>Chapter @chapter.ChapterNumberLabel</strong>
+                            </MudText>
+                            @if (!string.IsNullOrWhiteSpace(chapter.ChapterTitle))
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @chapter.ChapterTitle
+                                </MudText>
+                            }
+                        </div>
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning">
+                            @chapter.StatusCode
+                        </MudChip>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Info" Dense="true">
+                No unreleased active chapters will be cancelled.
+            </MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Color="Color.Default">Cancel</MudButton>
+        <MudButton OnClick="Submit"
+                   Color="Color.Error"
+                   Variant="Variant.Filled">
+            Mark as Completed
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public string SeriesTitle { get; set; } = string.Empty;
+
+    [Parameter]
+    public SeriesCompletionImpactDto Impact { get; set; } = null!;
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Submit()
+    {
+        MudDialog.Close(
+            DialogResult.Ok(true));
+    }
+}

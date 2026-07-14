@@ -3,6 +3,7 @@ using MangaManagementSystem.Domain.Interfaces;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -216,6 +217,15 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         {
             var conn = _context.Database.GetDbConnection();
             await using var cmd = conn.CreateCommand();
+
+            var currentTransaction =
+                _context.Database.CurrentTransaction;
+
+            if (currentTransaction is not null)
+            {
+                cmd.Transaction =
+                    currentTransaction.GetDbTransaction();
+            }
 
             cmd.CommandText = "auth.usp_Admin_ChangeUserStatus";
             cmd.CommandType = CommandType.StoredProcedure;
