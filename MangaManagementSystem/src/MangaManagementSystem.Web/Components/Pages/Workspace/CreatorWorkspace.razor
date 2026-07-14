@@ -737,7 +737,7 @@ else
                                         <div @onclick:stopPropagation="true">
                                             @if (!ann.IsResolved)
                                             {
-                                                <MudTooltip Text="Resolve Issue"><MudIconButton Icon="@Icons.Material.Filled.Check" Size="Size.Small" Color="Color.Success" OnClick="@(() => ResolveAnnotation(ann.Id))" Disabled="@IsChapterLocked" /></MudTooltip>
+                                                <MudTooltip Text="Resolve Issue"><MudIconButton Icon="@Icons.Material.Filled.Check" Size="Size.Small" Color="Color.Success" OnClick="@(() => ResolveAnnotation(ann.Id))" Disabled="@(!CanAnnotate)" /></MudTooltip>
                                             }
                                         </div>
                                     </div>

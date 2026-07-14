@@ -634,7 +634,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
     private async Task ResolveAnnotation(int id)
     {
-        if (IsChapterLocked) return;
+        if (!CanAnnotate) return;
         var ann = ActiveAnnotations.FirstOrDefault(a => a.Id == id);
         if (ann != null)
         {
