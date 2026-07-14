@@ -15,8 +15,9 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
         _context = context;
     }
 
-    public async Task<IReadOnlyList<PublicationPeriodDto>> GetWeeklyPublicationPeriodsAsync(
-        CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<PublicationPeriodDto>>
+        GetWeeklyPublicationPeriodsAsync(
+            CancellationToken cancellationToken)
     {
         return await _context.Set<PublicationPeriod>()
             .AsNoTracking()
@@ -31,132 +32,245 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<SeriesVoteInputDto>> GetSeriesVoteInputsAsync(
-        Guid publicationPeriodId,
-        string? searchText,
-        string? sort,
-        CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<SeriesVoteInputDto>>
+        GetSeriesVoteInputsAsync(
+            Guid publicationPeriodId,
+            string? searchText,
+            string? sort,
+            CancellationToken cancellationToken)
     {
-        IQueryable<SeriesVoteInputDto> query =
+        var query =
             from input in _context.Set<SeriesVoteInput>().AsNoTracking()
             join series in _context.Set<Series>().AsNoTracking()
                 on input.SeriesId equals series.SeriesId
-            join cover in _context.Set<FileResource>().AsNoTracking()
+            join cover in _context.Set<FileResource>()
+                    .AsNoTracking()
                     .Where(file => file.DeletedAtUtc == null)
-                on series.CoverFileId equals cover.FileResourceId into coverGroup
+                on series.CoverFileId equals cover.FileResourceId
+                into coverGroup
             from cover in coverGroup.DefaultIfEmpty()
             where input.PublicationPeriodId == publicationPeriodId
-            select new SeriesVoteInputDto(
-                input.SeriesVoteInputId,
-                input.PublicationPeriodId,
-                input.SeriesId,
-                series.Title,
-                series.Slug,
-                cover == null ? null : cover.CloudinarySecureUrl,
-                input.RatingCount,
-                input.AverageRating,
-                input.ReadingCount,
-                input.DataSourceNote,
-                input.EnteredByUserId,
-                input.EnteredAtUtc,
-                input.UpdatedByUserId,
-                input.UpdatedAtUtc);
+            select new
+            {
+                Input = input,
+                Series = series,
+                Cover = cover
+            };
 
         var normalizedSearch = NormalizeSearch(searchText);
 
         if (normalizedSearch is not null)
         {
             query = query.Where(row =>
-                row.SeriesTitle.Contains(normalizedSearch));
+                row.Series.Title.Contains(normalizedSearch));
         }
 
-        query = ApplyVoteInputSort(query, sort);
+        query = sort switch
+        {
+            "title_desc" =>
+                query.OrderByDescending(row => row.Series.Title),
 
-        return await query.ToListAsync(cancellationToken);
+            "average_rating_desc" =>
+                query.OrderByDescending(row => row.Input.AverageRating),
+
+            "average_rating_asc" =>
+                query.OrderBy(row => row.Input.AverageRating),
+
+            "reading_count_desc" =>
+                query.OrderByDescending(row => row.Input.ReadingCount),
+
+            "reading_count_asc" =>
+                query.OrderBy(row => row.Input.ReadingCount),
+
+            "rating_count_desc" =>
+                query.OrderByDescending(row => row.Input.RatingCount),
+
+            "rating_count_asc" =>
+                query.OrderBy(row => row.Input.RatingCount),
+
+            "updated_desc" =>
+                query.OrderByDescending(row =>
+                    row.Input.UpdatedAtUtc ?? row.Input.EnteredAtUtc),
+
+            "updated_asc" =>
+                query.OrderBy(row =>
+                    row.Input.UpdatedAtUtc ?? row.Input.EnteredAtUtc),
+
+            _ => query.OrderBy(row => row.Series.Title)
+        };
+
+        return await query
+            .Select(row => new SeriesVoteInputDto(
+                row.Input.SeriesVoteInputId,
+                row.Input.PublicationPeriodId,
+                row.Input.SeriesId,
+                row.Series.Title,
+                row.Series.Slug,
+                row.Cover == null
+                    ? null
+                    : row.Cover.CloudinarySecureUrl,
+                row.Input.RatingCount,
+                row.Input.AverageRating,
+                row.Input.ReadingCount,
+                row.Input.DataSourceNote,
+                row.Input.EnteredByUserId,
+                row.Input.EnteredAtUtc,
+                row.Input.UpdatedByUserId,
+                row.Input.UpdatedAtUtc))
+            .ToListAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<SeriesRankingRowDto>> GetSeriesRankingAsync(
-        Guid publicationPeriodId,
-        string? searchText,
-        string? sort,
-        CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<SeriesRankingRowDto>>
+        GetSeriesRankingAsync(
+            Guid publicationPeriodId,
+            string? searchText,
+            string? sort,
+            CancellationToken cancellationToken)
     {
-        IQueryable<SeriesRankingRowDto> query =
-            from ranking in _context.Set<SeriesRankingViewRow>().AsNoTracking()
+        var query =
+            from ranking in _context.Set<SeriesRankingViewRow>()
+                .AsNoTracking()
             join series in _context.Set<Series>().AsNoTracking()
                 on ranking.SeriesId equals series.SeriesId
-            join cover in _context.Set<FileResource>().AsNoTracking()
+            join cover in _context.Set<FileResource>()
+                    .AsNoTracking()
                     .Where(file => file.DeletedAtUtc == null)
-                on series.CoverFileId equals cover.FileResourceId into coverGroup
+                on series.CoverFileId equals cover.FileResourceId
+                into coverGroup
             from cover in coverGroup.DefaultIfEmpty()
             where ranking.PublicationPeriodId == publicationPeriodId
-            select new SeriesRankingRowDto(
-                ranking.PublicationPeriodId,
-                ranking.PeriodName,
-                ranking.PeriodTypeCode,
-                ranking.PeriodStartDate,
-                ranking.PeriodEndDate,
-                ranking.SeriesId,
-                ranking.Title,
-                ranking.Slug,
-                cover == null ? null : cover.CloudinarySecureUrl,
-                ranking.RatingCount,
-                ranking.AverageRating,
-                ranking.ReadingCount,
-                ranking.RankingScore,
-                ranking.RankPosition);
+            select new
+            {
+                Ranking = ranking,
+                Series = series,
+                Cover = cover
+            };
 
         var normalizedSearch = NormalizeSearch(searchText);
 
         if (normalizedSearch is not null)
         {
             query = query.Where(row =>
-                row.SeriesTitle.Contains(normalizedSearch));
+                row.Ranking.Title.Contains(normalizedSearch));
         }
 
-        query = ApplyRankingSort(query, sort);
+        query = sort switch
+        {
+            "rank_desc" =>
+                query.OrderByDescending(row =>
+                    row.Ranking.RankPosition),
 
-        return await query.ToListAsync(cancellationToken);
+            "title_asc" =>
+                query.OrderBy(row =>
+                    row.Ranking.Title),
+
+            "title_desc" =>
+                query.OrderByDescending(row =>
+                    row.Ranking.Title),
+
+            "score_desc" =>
+                query.OrderByDescending(row =>
+                    row.Ranking.RankingScore),
+
+            "score_asc" =>
+                query.OrderBy(row =>
+                    row.Ranking.RankingScore),
+
+            "average_rating_desc" =>
+                query.OrderByDescending(row =>
+                    row.Ranking.AverageRating),
+
+            "average_rating_asc" =>
+                query.OrderBy(row =>
+                    row.Ranking.AverageRating),
+
+            "reading_count_desc" =>
+                query.OrderByDescending(row =>
+                    row.Ranking.ReadingCount),
+
+            "reading_count_asc" =>
+                query.OrderBy(row =>
+                    row.Ranking.ReadingCount),
+
+            "rating_count_desc" =>
+                query.OrderByDescending(row =>
+                    row.Ranking.RatingCount),
+
+            "rating_count_asc" =>
+                query.OrderBy(row =>
+                    row.Ranking.RatingCount),
+
+            _ => query.OrderBy(row =>
+                row.Ranking.RankPosition)
+        };
+
+        return await query
+            .Select(row => new SeriesRankingRowDto(
+                row.Ranking.PublicationPeriodId,
+                row.Ranking.PeriodName,
+                row.Ranking.PeriodTypeCode,
+                row.Ranking.PeriodStartDate,
+                row.Ranking.PeriodEndDate,
+                row.Ranking.SeriesId,
+                row.Ranking.Title,
+                row.Ranking.Slug,
+                row.Cover == null
+                    ? null
+                    : row.Cover.CloudinarySecureUrl,
+                row.Ranking.RatingCount,
+                row.Ranking.AverageRating,
+                row.Ranking.ReadingCount,
+                row.Ranking.RankingScore,
+
+                // DTO currently uses int, while DENSE_RANK returns BIGINT.
+                (int)row.Ranking.RankPosition))
+            .ToListAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<RankableSeriesDto>> SearchRankableSeriesAsync(
-        Guid publicationPeriodId,
-        string? searchText,
-        int maxResults,
-        CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<RankableSeriesDto>>
+        SearchRankableSeriesAsync(
+            Guid publicationPeriodId,
+            string? searchText,
+            int maxResults,
+            CancellationToken cancellationToken)
     {
         var normalizedSearch = NormalizeSearch(searchText);
-        var safeMaxResults = maxResults <= 0 ? 20 : maxResults;
 
-        /*
-            This method powers the Series dropdown in Create Ranking Input.
+        var safeMaxResults = maxResults <= 0
+            ? 20
+            : maxResults;
 
-            Only SERIALIZED series are eligible for ranking input.
-            Duplicate input for the same period and series is validated
-            in CreateSeriesVoteInputAsync.
-        */
-        IQueryable<RankableSeriesDto> query =
+        var query =
             from series in _context.Set<Series>().AsNoTracking()
-            join cover in _context.Set<FileResource>().AsNoTracking()
+            join cover in _context.Set<FileResource>()
+                    .AsNoTracking()
                     .Where(file => file.DeletedAtUtc == null)
-                on series.CoverFileId equals cover.FileResourceId into coverGroup
+                on series.CoverFileId equals cover.FileResourceId
+                into coverGroup
             from cover in coverGroup.DefaultIfEmpty()
             where series.StatusCode == "SERIALIZED"
-            select new RankableSeriesDto(
-                series.SeriesId,
-                series.Title,
-                series.Slug,
-                cover == null ? null : cover.CloudinarySecureUrl);
+            select new
+            {
+                Series = series,
+                Cover = cover
+            };
 
         if (normalizedSearch is not null)
         {
             query = query.Where(row =>
-                row.Title.Contains(normalizedSearch));
+                row.Series.Title.Contains(normalizedSearch));
         }
 
         return await query
-            .OrderBy(row => row.Title)
+            .OrderBy(row => row.Series.Title)
             .Take(safeMaxResults)
+            .Select(row => new RankableSeriesDto(
+                row.Series.SeriesId,
+                row.Series.Title,
+                row.Series.Slug,
+                row.Cover == null
+                    ? null
+                    : row.Cover.CloudinarySecureUrl))
             .ToListAsync(cancellationToken);
     }
 
@@ -168,31 +282,34 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
             .AsNoTracking()
             .Include(user => user.Role)
             .AnyAsync(
-                user => user.UserId == actorUserId
-                        && user.StatusCode == "ACTIVE"
-                        && user.Role != null
-                        && (
-                            user.Role.RoleName == "Editorial Board Member"
-                            || user.Role.RoleName == "EditorialBoardMember"
-                            || user.Role.RoleName == "Board Member"
-                            || user.Role.RoleName == "Editorial Board Chief"
-                            || user.Role.RoleName == "EditorialBoardChief"
-                            || user.Role.RoleName == "Board Chief"
-                        ),
+                user =>
+                    user.UserId == actorUserId
+                    && user.StatusCode == "ACTIVE"
+                    && user.Role != null
+                    && (
+                        user.Role.RoleName == "Editorial Board Member"
+                        || user.Role.RoleName == "EditorialBoardMember"
+                        || user.Role.RoleName == "Board Member"
+                        || user.Role.RoleName == "Editorial Board Chief"
+                        || user.Role.RoleName == "EditorialBoardChief"
+                        || user.Role.RoleName == "Board Chief"
+                    ),
                 cancellationToken);
     }
 
-    public async Task<SeriesVoteInputDto> CreateSeriesVoteInputAsync(
-        Guid actorUserId,
-        Guid publicationPeriodId,
-        Guid seriesId,
-        int ratingCount,
-        decimal averageRating,
-        int readingCount,
-        string? dataSourceNote,
-        CancellationToken cancellationToken)
+    public async Task<SeriesVoteInputDto>
+        CreateSeriesVoteInputAsync(
+            Guid actorUserId,
+            Guid publicationPeriodId,
+            Guid seriesId,
+            int ratingCount,
+            decimal averageRating,
+            int readingCount,
+            string? dataSourceNote,
+            CancellationToken cancellationToken)
     {
         var periodExists = await _context.Set<PublicationPeriod>()
+            .AsNoTracking()
             .AnyAsync(
                 period =>
                     period.PublicationPeriodId == publicationPeriodId,
@@ -205,6 +322,7 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
         }
 
         var seriesExists = await _context.Set<Series>()
+            .AsNoTracking()
             .AnyAsync(
                 series =>
                     series.SeriesId == seriesId
@@ -218,6 +336,7 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
         }
 
         var duplicateExists = await _context.Set<SeriesVoteInput>()
+            .AsNoTracking()
             .AnyAsync(
                 input =>
                     input.PublicationPeriodId == publicationPeriodId
@@ -251,18 +370,20 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
             cancellationToken);
     }
 
-    public async Task<SeriesVoteInputDto> UpdateSeriesVoteInputAsync(
-        Guid actorUserId,
-        Guid seriesVoteInputId,
-        int ratingCount,
-        decimal averageRating,
-        int readingCount,
-        string? dataSourceNote,
-        CancellationToken cancellationToken)
+    public async Task<SeriesVoteInputDto>
+        UpdateSeriesVoteInputAsync(
+            Guid actorUserId,
+            Guid seriesVoteInputId,
+            int ratingCount,
+            decimal averageRating,
+            int readingCount,
+            string? dataSourceNote,
+            CancellationToken cancellationToken)
     {
         var input = await _context.Set<SeriesVoteInput>()
             .FirstOrDefaultAsync(
-                item => item.SeriesVoteInputId == seriesVoteInputId,
+                item =>
+                    item.SeriesVoteInputId == seriesVoteInputId,
                 cancellationToken);
 
         if (input is null)
@@ -285,17 +406,21 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
             cancellationToken);
     }
 
-    private async Task<SeriesVoteInputDto> GetRequiredVoteInputAsync(
-        Guid seriesVoteInputId,
-        CancellationToken cancellationToken)
+    private async Task<SeriesVoteInputDto>
+        GetRequiredVoteInputAsync(
+            Guid seriesVoteInputId,
+            CancellationToken cancellationToken)
     {
         var result = await (
-            from input in _context.Set<SeriesVoteInput>().AsNoTracking()
+            from input in _context.Set<SeriesVoteInput>()
+                .AsNoTracking()
             join series in _context.Set<Series>().AsNoTracking()
                 on input.SeriesId equals series.SeriesId
-            join cover in _context.Set<FileResource>().AsNoTracking()
+            join cover in _context.Set<FileResource>()
+                    .AsNoTracking()
                     .Where(file => file.DeletedAtUtc == null)
-                on series.CoverFileId equals cover.FileResourceId into coverGroup
+                on series.CoverFileId equals cover.FileResourceId
+                into coverGroup
             from cover in coverGroup.DefaultIfEmpty()
             where input.SeriesVoteInputId == seriesVoteInputId
             select new SeriesVoteInputDto(
@@ -304,7 +429,9 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
                 input.SeriesId,
                 series.Title,
                 series.Slug,
-                cover == null ? null : cover.CloudinarySecureUrl,
+                cover == null
+                    ? null
+                    : cover.CloudinarySecureUrl,
                 input.RatingCount,
                 input.AverageRating,
                 input.ReadingCount,
@@ -320,94 +447,13 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
                 "Series vote input could not be loaded after saving.");
     }
 
-    private static string? NormalizeSearch(string? searchText)
+    private static string? NormalizeSearch(
+        string? searchText)
     {
         var normalized = searchText?.Trim();
 
         return string.IsNullOrWhiteSpace(normalized)
             ? null
             : normalized;
-    }
-
-    private static IQueryable<SeriesVoteInputDto> ApplyVoteInputSort(
-        IQueryable<SeriesVoteInputDto> query,
-        string? sort)
-    {
-        return sort switch
-        {
-            "title_desc" =>
-                query.OrderByDescending(row => row.SeriesTitle),
-
-            "average_rating_desc" =>
-                query.OrderByDescending(row => row.AverageRating),
-
-            "average_rating_asc" =>
-                query.OrderBy(row => row.AverageRating),
-
-            "reading_count_desc" =>
-                query.OrderByDescending(row => row.ReadingCount),
-
-            "reading_count_asc" =>
-                query.OrderBy(row => row.ReadingCount),
-
-            "rating_count_desc" =>
-                query.OrderByDescending(row => row.RatingCount),
-
-            "rating_count_asc" =>
-                query.OrderBy(row => row.RatingCount),
-
-            "updated_desc" =>
-                query.OrderByDescending(
-                    row => row.UpdatedAtUtc ?? row.EnteredAtUtc),
-
-            "updated_asc" =>
-                query.OrderBy(
-                    row => row.UpdatedAtUtc ?? row.EnteredAtUtc),
-
-            _ => query.OrderBy(row => row.SeriesTitle)
-        };
-    }
-
-    private static IQueryable<SeriesRankingRowDto> ApplyRankingSort(
-        IQueryable<SeriesRankingRowDto> query,
-        string? sort)
-    {
-        return sort switch
-        {
-            "rank_desc" =>
-                query.OrderByDescending(row => row.RankPosition),
-
-            "title_asc" =>
-                query.OrderBy(row => row.SeriesTitle),
-
-            "title_desc" =>
-                query.OrderByDescending(row => row.SeriesTitle),
-
-            "score_desc" =>
-                query.OrderByDescending(row => row.RankingScore),
-
-            "score_asc" =>
-                query.OrderBy(row => row.RankingScore),
-
-            "average_rating_desc" =>
-                query.OrderByDescending(row => row.AverageRating),
-
-            "average_rating_asc" =>
-                query.OrderBy(row => row.AverageRating),
-
-            "reading_count_desc" =>
-                query.OrderByDescending(row => row.ReadingCount),
-
-            "reading_count_asc" =>
-                query.OrderBy(row => row.ReadingCount),
-
-            "rating_count_desc" =>
-                query.OrderByDescending(row => row.RatingCount),
-
-            "rating_count_asc" =>
-                query.OrderBy(row => row.RatingCount),
-
-            _ => query.OrderBy(row => row.RankPosition)
-        };
     }
 }
