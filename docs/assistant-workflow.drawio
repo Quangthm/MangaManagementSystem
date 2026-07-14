@@ -1,0 +1,437 @@
+<mxfile host="Electron" pages="4">
+  <diagram id="assistant-overview" name="Assistant Overview">
+    <mxGraphModel dx="2258" dy="1358" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="ov-title" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;autosize=1;resizable=0;" value="&lt;font style=&quot;font-size: 25px;&quot;&gt;Assistant Workflow Overview&lt;/font&gt;" vertex="1">
+          <mxGeometry x="360" y="30" width="380" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-start" parent="1" style="strokeWidth=2;html=1;shape=mxgraph.flowchart.start_2;whiteSpace=wrap;" value="" vertex="1">
+          <mxGeometry x="535" y="90" width="30" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Mangaka creates assistant task" vertex="1">
+          <mxGeometry x="455" y="180" width="190" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Assistant opens task" vertex="1">
+          <mxGeometry x="470" y="280" width="160" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Open workspace" vertex="1">
+          <mxGeometry x="485" y="380" width="130" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-4" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="System navigates to assigned chapter and page" vertex="1">
+          <mxGeometry x="425" y="480" width="250" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-5" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Assistant submits work" vertex="1">
+          <mxGeometry x="470" y="580" width="160" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-6" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Set task status to UNDER_REVIEW" vertex="1">
+          <mxGeometry x="445" y="680" width="210" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-7" parent="1" style="rhombus;whiteSpace=wrap;html=1;" value="Mangaka review decision ?" vertex="1">
+          <mxGeometry x="455" y="790" width="190" height="140" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ov-approve" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Approve&#xa;Task = COMPLETED" vertex="1">
+          <mxGeometry x="120" y="980" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-rework" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Return for rework&#xa;Task = ASSIGNED" vertex="1">
+          <mxGeometry x="360" y="980" width="180" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-reassign" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Reassign&#xa;Replacement task = ASSIGNED" vertex="1">
+          <mxGeometry x="610" y="980" width="210" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-cancel" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Cancel&#xa;Task = CANCELLED" vertex="1">
+          <mxGeometry x="890" y="980" width="170" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ov-end1" parent="1" style="ellipse;html=1;shape=endState;fillColor=#000000;strokeColor=#ff0000;" value="" vertex="1">
+          <mxGeometry x="190" y="1090" width="30" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-end2" parent="1" style="ellipse;html=1;shape=endState;fillColor=#000000;strokeColor=#ff0000;" value="" vertex="1">
+          <mxGeometry x="435" y="1090" width="30" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-end3" parent="1" style="ellipse;html=1;shape=endState;fillColor=#000000;strokeColor=#ff0000;" value="" vertex="1">
+          <mxGeometry x="700" y="1090" width="30" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-end4" parent="1" style="ellipse;html=1;shape=endState;fillColor=#000000;strokeColor=#ff0000;" value="" vertex="1">
+          <mxGeometry x="960" y="1090" width="30" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ov-e1" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ov-start" target="ov-1" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-e2" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ov-1" target="ov-2" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-e3" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ov-2" target="ov-3" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-e4" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ov-3" target="ov-4" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-e5" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ov-4" target="ov-5" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-e6" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ov-5" target="ov-6" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-e7" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ov-6" target="ov-7" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ov-e8" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ov-7" target="ov-approve" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-e9" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ov-7" target="ov-rework" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-e10" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ov-7" target="ov-reassign" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-e11" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ov-7" target="ov-cancel" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ov-e12" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ov-approve" target="ov-end1" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-e13" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ov-rework" target="ov-end2" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-e14" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ov-reassign" target="ov-end3" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-e15" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ov-cancel" target="ov-end4" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ov-t1" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;Approve&lt;/font&gt;" vertex="1">
+          <mxGeometry x="325" y="900" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-t2" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;Rework&lt;/font&gt;" vertex="1">
+          <mxGeometry x="470" y="940" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-t3" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;Reassign&lt;/font&gt;" vertex="1">
+          <mxGeometry x="670" y="940" width="70" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="ov-t4" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;Cancel&lt;/font&gt;" vertex="1">
+          <mxGeometry x="840" y="900" width="60" height="30" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="assistant-submit" name="Assistant Open and Submit">
+    <mxGraphModel dx="2258" dy="1358" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1700" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="as-title" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;autosize=1;resizable=0;" value="&lt;font style=&quot;font-size: 25px;&quot;&gt;Assistant Open and Submit&lt;/font&gt;" vertex="1">
+          <mxGeometry x="380" y="20" width="330" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="as-start" parent="1" style="strokeWidth=2;html=1;shape=mxgraph.flowchart.start_2;whiteSpace=wrap;" value="" vertex="1">
+          <mxGeometry x="535" y="90" width="30" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="as-end" parent="1" style="ellipse;html=1;shape=endState;fillColor=#000000;strokeColor=#ff0000;" value="" vertex="1">
+          <mxGeometry x="535" y="1560" width="30" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="as-1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Open Dashboard or Assigned Tasks" vertex="1">
+          <mxGeometry x="435" y="170" width="230" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="as-2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Open assigned task" vertex="1">
+          <mxGeometry x="470" y="270" width="160" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="as-3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Open workspace" vertex="1">
+          <mxGeometry x="485" y="370" width="130" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="as-4" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Resolve task context&#xa;series + chapter + page + regions + source version" vertex="1">
+          <mxGeometry x="430" y="470" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="as-5" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Navigate to assigned chapter and page" vertex="1">
+          <mxGeometry x="440" y="580" width="220" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="as-6" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Review task detail, notes and annotations" vertex="1">
+          <mxGeometry x="440" y="680" width="220" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="as-7" parent="1" style="rhombus;whiteSpace=wrap;html=1;" value="Submission method ?" vertex="1">
+          <mxGeometry x="465" y="790" width="170" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="as-upload" parent="1" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;" value="Upload finished image file" vertex="1">
+          <mxGeometry x="150" y="840" width="190" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="as-canvas" parent="1" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;" value="Submit current canvas as PNG" vertex="1">
+          <mxGeometry x="760" y="840" width="210" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="as-8" parent="1" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;" value="Enter submission notes" vertex="1">
+          <mxGeometry x="425" y="980" width="250" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="as-9" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Validate submission" vertex="1">
+          <mxGeometry x="470" y="1080" width="160" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="as-10" parent="1" style="rhombus;whiteSpace=wrap;html=1;" value="Submission valid ?" vertex="1">
+          <mxGeometry x="465" y="1180" width="170" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="as-error" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Show validation errors" vertex="1">
+          <mxGeometry x="150" y="1225" width="190" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="as-11" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Create new page version" vertex="1">
+          <mxGeometry x="760" y="1225" width="180" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="as-12" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Attach submission notes to page version" vertex="1">
+          <mxGeometry x="720" y="1325" width="260" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="as-13" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Link submitted page version to task" vertex="1">
+          <mxGeometry x="735" y="1425" width="230" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="as-14" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Set task status to UNDER_REVIEW" vertex="1">
+          <mxGeometry x="425" y="1425" width="230" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="as-e1" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="as-start" target="as-1" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="as-e2" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="as-1" target="as-2" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="as-e3" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="as-2" target="as-3" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="as-e4" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="as-3" target="as-4" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="as-e5" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="as-4" target="as-5" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="as-e6" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="as-5" target="as-6" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="as-e7" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="as-6" target="as-7" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="as-e8" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="as-7" target="as-upload" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="as-e9" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="as-7" target="as-canvas" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="as-e10" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="as-upload" target="as-8" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="as-e11" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="as-canvas" target="as-8" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="as-e12" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="as-8" target="as-9" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="as-e13" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="as-9" target="as-10" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="as-e14" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="as-10" target="as-error" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="as-e15" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="as-10" target="as-11" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="as-e16" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="as-error" target="as-8" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="as-e17" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="as-11" target="as-12" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="as-e18" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="as-12" target="as-13" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="as-e19" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="as-13" target="as-14" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="as-e20" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="as-14" target="as-end" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="as-t1" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;Upload&lt;/font&gt;" vertex="1">
+          <mxGeometry x="360" y="835" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="as-t2" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;Canvas&lt;/font&gt;" vertex="1">
+          <mxGeometry x="675" y="835" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="as-t3" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;No&lt;/font&gt;" vertex="1">
+          <mxGeometry x="355" y="1210" width="40" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="as-t4" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;Yes&lt;/font&gt;" vertex="1">
+          <mxGeometry x="675" y="1210" width="40" height="30" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="assistant-review" name="Mangaka Review Submission">
+    <mxGraphModel dx="2258" dy="1358" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1300" pageHeight="1450" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="ar-title" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;autosize=1;resizable=0;" value="&lt;font style=&quot;font-size: 25px;&quot;&gt;Mangaka Review Submission&lt;/font&gt;" vertex="1">
+          <mxGeometry x="440" y="20" width="360" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-start" parent="1" style="strokeWidth=2;html=1;shape=mxgraph.flowchart.start_2;whiteSpace=wrap;" value="" vertex="1">
+          <mxGeometry x="605" y="90" width="30" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Open submitted task" vertex="1">
+          <mxGeometry x="540" y="180" width="160" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Review source page, submitted output, notes and annotations" vertex="1">
+          <mxGeometry x="475" y="280" width="290" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-3" parent="1" style="rhombus;whiteSpace=wrap;html=1;" value="Review decision ?" vertex="1">
+          <mxGeometry x="525" y="400" width="190" height="140" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ar-approve" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Approve&#xa;Set task status to COMPLETED" vertex="1">
+          <mxGeometry x="90" y="620" width="210" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-rework-note" parent="1" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;" value="Enter revised instructions and add annotation if needed" vertex="1">
+          <mxGeometry x="350" y="620" width="320" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-rework" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Return task to same Assistant" vertex="1">
+          <mxGeometry x="425" y="730" width="170" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-rework-status" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Set task status to ASSIGNED" vertex="1">
+          <mxGeometry x="425" y="830" width="170" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ar-reassign-note" parent="1" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;" value="Select new Assistant and enter reason" vertex="1">
+          <mxGeometry x="810" y="620" width="300" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-reassign-1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Cancel current task" vertex="1">
+          <mxGeometry x="875" y="730" width="170" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-reassign-2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Create replacement task" vertex="1">
+          <mxGeometry x="875" y="830" width="170" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-reassign-3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Set replacement task status to ASSIGNED" vertex="1">
+          <mxGeometry x="860" y="930" width="200" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ar-cancel-note" parent="1" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;" value="Enter cancellation reason" vertex="1">
+          <mxGeometry x="500" y="970" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-cancel" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Set task status to CANCELLED" vertex="1">
+          <mxGeometry x="535" y="1080" width="170" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ar-end1" parent="1" style="ellipse;html=1;shape=endState;fillColor=#000000;strokeColor=#ff0000;" value="" vertex="1">
+          <mxGeometry x="180" y="760" width="30" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-end2" parent="1" style="ellipse;html=1;shape=endState;fillColor=#000000;strokeColor=#ff0000;" value="" vertex="1">
+          <mxGeometry x="495" y="930" width="30" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-end3" parent="1" style="ellipse;html=1;shape=endState;fillColor=#000000;strokeColor=#ff0000;" value="" vertex="1">
+          <mxGeometry x="950" y="1030" width="30" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-end4" parent="1" style="ellipse;html=1;shape=endState;fillColor=#000000;strokeColor=#ff0000;" value="" vertex="1">
+          <mxGeometry x="605" y="1180" width="30" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ar-e1" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ar-start" target="ar-1" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-e2" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ar-1" target="ar-2" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-e3" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ar-2" target="ar-3" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ar-e4" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ar-3" target="ar-approve" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-e5" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ar-3" target="ar-rework-note" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-e6" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ar-3" target="ar-reassign-note" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-e7" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ar-3" target="ar-cancel-note" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ar-e8" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ar-approve" target="ar-end1" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-e9" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ar-rework-note" target="ar-rework" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-e10" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ar-rework" target="ar-rework-status" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-e11" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ar-rework-status" target="ar-end2" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ar-e12" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ar-reassign-note" target="ar-reassign-1" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-e13" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ar-reassign-1" target="ar-reassign-2" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-e14" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ar-reassign-2" target="ar-reassign-3" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-e15" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ar-reassign-3" target="ar-end3" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ar-e16" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ar-cancel-note" target="ar-cancel" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-e17" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" source="ar-cancel" target="ar-end4" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ar-t1" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;Approve&lt;/font&gt;" vertex="1">
+          <mxGeometry x="355" y="560" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-t2" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;Rework&lt;/font&gt;" vertex="1">
+          <mxGeometry x="490" y="590" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-t3" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;Reassign&lt;/font&gt;" vertex="1">
+          <mxGeometry x="760" y="590" width="70" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="ar-t4" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;Cancel&lt;/font&gt;" vertex="1">
+          <mxGeometry x="655" y="940" width="60" height="30" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="assistant-rules" name="Assistant Rules">
+    <mxGraphModel dx="2258" dy="1358" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="rl-title" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;autosize=1;resizable=0;" value="&lt;font style=&quot;font-size: 25px;&quot;&gt;Assistant Rules&lt;/font&gt;" vertex="1">
+          <mxGeometry x="420" y="30" width="220" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="rl-1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Open Workspace must navigate to the assigned chapter and page." vertex="1">
+          <mxGeometry x="200" y="130" width="660" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="rl-2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Assistant should always have a Jump to Assigned Page action when viewing a different page." vertex="1">
+          <mxGeometry x="200" y="260" width="660" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="rl-3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Assistant can submit by uploading a finished image or by submitting the current canvas." vertex="1">
+          <mxGeometry x="200" y="390" width="660" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="rl-4" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Submission notes must be stored with the submitted page version." vertex="1">
+          <mxGeometry x="200" y="520" width="660" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="rl-5" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Return for rework should use task notes and annotations to tell the Assistant exactly what to fix." vertex="1">
+          <mxGeometry x="200" y="650" width="660" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="rl-6" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Assistant should only see chapters needed for assigned work, but the assigned chapter must never be hidden." vertex="1">
+          <mxGeometry x="200" y="780" width="660" height="70" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -33,6 +33,29 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     // in an unsaved state that blocks annotating.
     private bool CanManageContent => _currentRoleName == "Mangaka";
 
+    private bool ShouldIncludeChapterInWorkspace(MangaManagementSystem.Application.DTOs.Manga.MangakaChapterListItemDto chapter)
+    {
+        if (string.Equals(chapter.StatusCode, "CANCELLED", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (CanManageContent)
+        {
+            return true;
+        }
+
+        // Assistant chapter visibility is now owned by the backend chapter list. The workspace
+        // should trust that result so any draft chapter returned for the assistant remains
+        // selectable here instead of being filtered out again on the client.
+        if (string.Equals(_currentRoleName, "Assistant", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return !string.Equals(chapter.StatusCode, "DRAFT", StringComparison.OrdinalIgnoreCase);
+    }
+
     // #4b — Tantou Editor chapter review decision (BR-CH-REV / BR-CP-018): editors submit APPROVED /
     // REVISION_REQUESTED / CANCELLED for a chapter that is UNDER_REVIEW, via the editor review API.
     private bool _showReviewDialog;
@@ -838,9 +861,10 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 if (chapters != null && chapters.Any())
                 {
                     var chapterModels = chapters
-                        // Editors/assistants only see chapters that have been submitted for review onward;
-                        // DRAFT is the Mangaka's private work-in-progress. CANCELLED is hidden for everyone.
-                        .Where(c => c.StatusCode != "CANCELLED" && (CanManageContent || c.StatusCode != "DRAFT"))
+                        // Frontend keeps only lightweight presentation filtering here. Assistant-
+                        // specific chapter visibility comes from the backend so task-linked draft
+                        // chapters are preserved in the list.
+                        .Where(ShouldIncludeChapterInWorkspace)
                         .Select((c, i) => new ChapterModel
                     { 
                         Id = int.TryParse(c.ChapterNumberLabel, out int num) ? num : (i + 1), 
