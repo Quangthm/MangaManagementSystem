@@ -1,0 +1,24 @@
+<MudGrid>
+    @foreach (var stat in Items)
+    {
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="stat-card pa-4" Elevation="0">
+                <MudIcon Icon="@stat.Icon" Color="@stat.Color" />
+                <MudText Typo="Typo.h5" Class="@GetValueClass(stat)">@stat.Value</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@stat.Label</MudText>
+            </MudPaper>
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<RankingStatItem> Items { get; set; } = [];
+
+    private static string GetValueClass(RankingStatItem stat)
+    {
+        return string.IsNullOrWhiteSpace(stat.ExtraClass)
+            ? "fw-800 mt-2"
+            : $"fw-800 mt-2 {stat.ExtraClass}";
+    }
+}

@@ -11,11 +11,12 @@
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
     private static readonly IReadOnlyList<RoleSidebarLayout.RoleSidebarNavItem> _navItems =
-    [
-        new("/mangaka", "Dashboard", Icons.Material.Filled.ViewModule, true),
-        new("/mangaka/proposals", "Series Proposals", Icons.Material.Filled.Assignment),
-        new("/mangaka/chapters", "Chapter Submissions", Icons.Material.Filled.LibraryBooks),
-        new("/mangaka/review-submissions", "Assistant Review", Icons.Material.Filled.AssignmentTurnedIn),
-        new("/mangaka/contributors", "Manage Contributors", Icons.Material.Filled.People),
-    ];
+[
+    new("/mangaka", "Dashboard", Icons.Material.Filled.ViewModule, true),
+    new("/mangaka/proposals", "Series Proposals", Icons.Material.Filled.Assignment),
+    new("/mangaka/chapters", "Chapter Submissions", Icons.Material.Filled.LibraryBooks),
+    new("/mangaka/review-submissions", "Assistant Review", Icons.Material.Filled.AssignmentTurnedIn),
+    new("/mangaka/contributors", "Manage Contributors", Icons.Material.Filled.People),
+    new("/ranking", "Ranking", Icons.Material.Filled.Leaderboard),
+];
 }

@@ -3244,3 +3244,182 @@ a {
 .workspace-tabs .mud-tab.mud-tab-active {
     color: #ffffff !important;                       /* active tab = full white */
 }
+
+/* Attachment two-line layout with safe filename ellipsis */
+.mf-attachment {
+    position: relative;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 46px;
+    align-items: center;
+    gap: 8px;
+    min-height: 54px;
+    padding: 9px 10px;
+    overflow: hidden;
+}
+
+.mf-attachment-main {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    line-height: 1.2;
+}
+
+    .mf-attachment-main strong {
+        display: block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 12px;
+        font-weight: 900;
+    }
+
+    .mf-attachment-main small {
+        display: block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 11px;
+        color: #64748b;
+    }
+
+.mf-open-file {
+    justify-self: end;
+    width: 42px;
+    text-align: right;
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: 900;
+    color: #4f46e5;
+    opacity: 0;
+    transform: translateX(4px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.mf-attachment:hover .mf-open-file,
+.mf-attachment:focus-within .mf-open-file {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.mf-attachment.empty {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+    .mf-attachment.empty .mf-open-file {
+        display: none;
+    }
+
+/* Collapsible proposal tags */
+.mf-tags-tile {
+    align-self: start;
+}
+
+.mf-tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+    .mf-tag-list.expanded {
+        max-height: 220px;
+        overflow-y: auto;
+        padding-right: 4px;
+    }
+
+.mf-tag-pill {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    min-height: 24px;
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #4f46e5;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.mf-tag-toggle {
+    margin-top: 8px;
+    padding: 5px 10px;
+    border: 1px solid #c7d2fe;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #4f46e5;
+    font-size: 12px;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+    .mf-tag-toggle:hover {
+        background: #e0e7ff;
+    }
+
+/* Collapsible proposal genres */
+.mf-genres-tile {
+    align-self: start;
+}
+
+.mf-genre-cell {
+    max-width: 520px;
+    vertical-align: top;
+}
+
+.mf-genre-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+    .mf-genre-list.table {
+        margin-top: 0;
+    }
+
+        .mf-genre-list.table.collapsed {
+            max-width: 420px;
+            max-height: 30px;
+            overflow: hidden;
+        }
+
+    .mf-genre-list.expanded {
+        max-height: 180px;
+        overflow-y: auto;
+        padding-right: 4px;
+    }
+
+.mf-genre-pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: #f1f5f9;
+    color: #0f172a;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.mf-genre-toggle {
+    margin-top: 8px;
+    padding: 5px 10px;
+    border: 1px solid #c7d2fe;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #4f46e5;
+    font-size: 12px;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+    .mf-genre-toggle:hover {
+        background: #e0e7ff;
+    }
