@@ -756,11 +756,17 @@ else
             <div class="px-4 mf-active-tasks">
                   <div class="d-flex justify-space-between align-center mb-3">
                       <MudText Typo="Typo.subtitle2" Class="font-weight-bold">ACTIVE TASKS</MudText>
-                      <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">@ActiveTasks.Count(t => MatchesActiveVersion(t.VersionId))</MudChip>
+                      <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">@ActiveTasks.Count</MudChip>
                   </div>
+                  @if (ActiveTasks.Any())
+                  {
+                      <MudText Typo="Typo.caption" Class="mf-muted d-block mb-3">
+                          @ActiveTasksOnCurrentVersionCount task(s) belong to the version you are viewing now.
+                      </MudText>
+                  }
 
                   <MudStack Spacing="2">
-                      @foreach (var task in ActiveTasks.Where(t => MatchesActiveVersion(t.VersionId)))
+                      @foreach (var task in ActiveTasks)
                       {
                           var icon = task.Type switch {
                               "Background" => Icons.Material.Filled.Image,
@@ -781,9 +787,12 @@ else
                           };
                           var initials = string.Join("", task.Assistant.Split(' ').Select(n => n[0]));
                           var isTargetTask = _taskFilterId != null && task.DbId.HasValue && task.DbId.ToString() == _taskFilterId;
+                          var isTaskOnActiveVersion = IsTaskOnActiveVersion(task);
+                          var locationChipColor = isTaskOnActiveVersion ? Color.Primary : Color.Default;
+                          var locationChipText = isTaskOnActiveVersion ? "Current version" : "Other version";
                           
                           <MudPaper Elevation="0" Class="pa-3 border-1 mud-border-lines-default rounded-lg"
-                                    Style="@($"cursor: pointer; {(isTargetTask ? "border-left: 3px solid #4f46e5; background: #eef2ff;" : "")}")"
+                                    Style="@($"cursor: pointer; {(isTargetTask ? "border-left: 3px solid #4f46e5; background: #eef2ff;" : (!isTaskOnActiveVersion ? "background: #f8fafc;" : ""))}")"
                                     @onclick="@(() => SelectTaskPanels(task))">
                               <div class="d-flex justify-space-between">
                                   <div class="d-flex">
@@ -792,19 +801,26 @@ else
                                           <MudTooltip Text="@task.Target">
                                               <MudText Typo="Typo.body2" Class="@(isTerminal ? "font-weight-bold text-decoration-line-through" : "font-weight-bold")">@task.Type &bull; @CompactTarget(task.Target)</MudText>
                                           </MudTooltip>
-                                          <MudText Typo="Typo.caption" Class="mf-muted d-flex align-center mt-1">
-                                              <MudAvatar Size="Size.Small" Color="Color.Primary" Class="mr-1" Style="width:16px; height:16px; font-size:8px;">@initials</MudAvatar> @task.Assistant
-                                          </MudText>
-                                          @if (task.DueAtUtc.HasValue)
-                                          {
-                                              var overdue = task.DueAtUtc.Value < DateTime.UtcNow && !isTerminal;
-                                              <MudText Typo="Typo.caption" Class="d-flex align-center mt-1" Color="@(overdue ? Color.Error : Color.Default)">
-                                                  <MudIcon Icon="@Icons.Material.Filled.Event" Class="mr-1" Style="width:14px; height:14px; font-size:14px;" /> Due @task.DueAtUtc.Value.ToLocalTime().ToString("MMM d")@(overdue ? " (overdue)" : "")
+                                           <MudText Typo="Typo.caption" Class="mf-muted d-flex align-center mt-1">
+                                               <MudAvatar Size="Size.Small" Color="Color.Primary" Class="mr-1" Style="width:16px; height:16px; font-size:8px;">@initials</MudAvatar> @task.Assistant
+                                           </MudText>
+                                           <MudText Typo="Typo.caption" Class="d-flex align-center mt-1" Color="@(isTaskOnActiveVersion ? Color.Primary : Color.Default)">
+                                               <MudIcon Icon="@(isTaskOnActiveVersion ? Icons.Material.Filled.Visibility : Icons.Material.Filled.Layers)" Class="mr-1" Style="width:14px; height:14px; font-size:14px;" />
+                                               @locationChipText
+                                           </MudText>
+                                           @if (task.DueAtUtc.HasValue)
+                                           {
+                                               var overdue = task.DueAtUtc.Value < DateTime.UtcNow && !isTerminal;
+                                               <MudText Typo="Typo.caption" Class="d-flex align-center mt-1" Color="@(overdue ? Color.Error : Color.Default)">
+                                                   <MudIcon Icon="@Icons.Material.Filled.Event" Class="mr-1" Style="width:14px; height:14px; font-size:14px;" /> Due @task.DueAtUtc.Value.ToLocalTime().ToString("MMM d")@(overdue ? " (overdue)" : "")
                                               </MudText>
                                           }
                                       </div>
                                   </div>
                                   <div class="d-flex align-center" @onclick:stopPropagation="true">
+                                      <MudTooltip Text="Tasks are shown for the whole page. This chip tells you whether the task belongs to the version currently open on the canvas.">
+                                          <MudChip T="string" Size="Size.Small" Color="@locationChipColor" Variant="Variant.Text" Class="mr-1">@locationChipText</MudChip>
+                                      </MudTooltip>
                                       <MudTooltip Text="Status is set by the workflow (assistant submits / Mangaka reviews), not edited here.">
                                           <MudChip T="string" Size="Size.Small" Color="@chipColor" Variant="Variant.Outlined">@task.Status</MudChip>
                                       </MudTooltip>

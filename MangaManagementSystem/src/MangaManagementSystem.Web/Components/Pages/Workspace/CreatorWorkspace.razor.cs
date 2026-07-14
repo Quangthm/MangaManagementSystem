@@ -229,9 +229,10 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         return string.Join(", ", parts.Take(max)) + $" …(+{parts.Length - max})";
     }
 
-    // --- Version-scoped task/annotation display (Option B) -------------------------------
-    // Tasks and annotations belong to the specific version of their regions (BR-CP-015/016),
-    // so the Task Panel and canvas pins show only items of the currently active version.
+    // --- Version-aware task/annotation display --------------------------------------------
+    // Tasks and annotations belong to the specific version of their regions (BR-CP-015/016).
+    // The canvas still highlights only the regions of the CURRENT version, but the task list can
+    // show the whole page's tasks and mark which ones belong to another version.
     private Guid GetActiveVersionId()
     {
         var page = UploadedPages.ElementAtOrDefault(ActivePageIndex);
@@ -246,6 +247,10 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         if (versionId == null) return true;
         return versionId.Value == GetActiveVersionId();
     }
+
+    private bool IsTaskOnActiveVersion(ProductionTask task) => MatchesActiveVersion(task.VersionId);
+
+    private int ActiveTasksOnCurrentVersionCount => ActiveTasks.Count(IsTaskOnActiveVersion);
 
     private async Task<List<Guid>> EnsureRegionsSavedAsync(IEnumerable<RegionModel> regionsToSave)
     {
@@ -1509,6 +1514,13 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         // Highlight the clicked task (reuses the isTargetTask border/background styling, mirroring the
         // selected-chapter highlight in the sidebar) and select its panels on the canvas.
         _taskFilterId = task.DbId?.ToString();
+
+        if (!IsTaskOnActiveVersion(task))
+        {
+            Snackbar.Add("This task belongs to another page version. Switch to that version to inspect its assigned panels on the canvas.", Severity.Info);
+            return Task.CompletedTask;
+        }
+
         return SelectPanelsByRegions(task.Regions);
     }
     private Task SelectAnnotationPanels(AnnotationModel ann)
