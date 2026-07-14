@@ -207,8 +207,8 @@
     public IReadOnlyList<PublicationPeriodOption> PublicationPeriods { get; set; } = [];
 
     [Parameter]
-    public Func<string?, CancellationToken, Task<IEnumerable<CatalogEntry>>> SearchSeriesAsync { get; set; }
-        = (_, _) => Task.FromResult(Enumerable.Empty<CatalogEntry>());
+    public Func<Guid, string?, CancellationToken, Task<IEnumerable<CatalogEntry>>> SearchSeriesAsync { get; set; }
+        = (_, _, _) => Task.FromResult(Enumerable.Empty<CatalogEntry>());
 
     [Parameter]
     public EventCallback<InsertFormState> Saved { get; set; }
@@ -355,7 +355,11 @@
         {
             _seriesSearchMessage = null;
 
-            var result = await SearchSeriesAsync(value, cancellationToken);
+            var result = await SearchSeriesAsync(
+                _form.PublicationPeriodId,
+                value,
+                cancellationToken);
+
             var series = result.ToList();
 
             if (series.Count == 0)
