@@ -1,5 +1,40 @@
 # Handoff — Mangaka Workspace: manual-save + full API migration (2026-07-01)
 
+> ## ▶️ BẮT ĐẦU SESSION SAU TỪ ĐÂY (2026-07-13) — editor workspace round 2/3
+>
+> **Branch:** `feature/workspace-v3`. **4 commit local CHƯA PUSH** (ahead 4 of origin): `dc77446` (gate Notes/Versions cho editor + fix pin split-view) · `e2992cd` (handoff) · `0b25133` (editor duyệt chapter #4b) · `28ee732` (Cancel cần markup + ẩn DRAFT với editor). PR đang mở = **#78** (`feature/workspace-v3 → main`); push branch là PR tự cập nhật.
+>
+> **BUG-FIX (2026-07-13): editor không pin/tạo annotation được trên chapter UNDER_REVIEW.**
+> `IsChapterLocked` (khóa CONTENT khi UNDER_REVIEW/APPROVED/...) khóa luôn Pin/Select/Add Annotation + guard nội bộ `CreateAnnotation` (`if (IsChapterLocked) return`). Nhưng annotation là FEEDBACK review (BR-CP-018/BR-WORKSPACE-007), editor review đúng lúc UNDER_REVIEW. Fix: thêm `CanAnnotate` (DRAFT/UNDER_REVIEW/REVISION_REQUESTED, tách khỏi IsChapterLocked); đổi Select/Pin/Add Annotation + guard CreateAnnotation sang `!CanAnnotate`. (`OnPinAdded` vốn không chặn lock.) **Resolve annotation → CanAnnotate (sau đó, cùng ngày):** đổi nốt nút Resolve + guard `ResolveAnnotation()` từ `IsChapterLocked` sang `CanAnnotate` — editor tự resolve được lúc review. Đã kiểm server (`MangakaAnnotationController.ResolveAsync`/`ChapterPageAnnotationService`) KHÔNG role-gate nên an toàn mở phía UI.
+>
+> **BUG-FIX (2026-07-13, sau editor round): số trang UI dùng vị trí thay vì PageNo thật.**
+> Annotation của DB page 2 hiện ở "Page 1". Gốc rễ: workspace đánh số trang theo **VỊ TRÍ list** (`SelectedPage = index+1`), bỏ qua `ChapterPage.page_number` thật (DTO `ChapterPageDto.PageNo` có sẵn). Xóa page là **soft-delete KHÔNG renumber** → PageNo có gap → position ≠ PageNo. Fix: thêm `PageModel.PageNo` (map từ `p.PageNo`), `SelectedPage = page.PageNo` (LoadPage + SetActivePane, fallback index+1 cho pending page PageNo==0), per-pane pin sync dùng `page.PageNo`. → header + annotation/task target + filter đều theo PageNo thật. **CÒN LẠI:** `MudPagination` vẫn đánh theo vị trí (1..Count) — trên chapter có gap thì nút pagination (vị trí) ≠ header (PageNo); nếu muốn đồng nhất tuyệt đối phải thay MudPagination bằng nút custom hiển thị PageNo (follow-up).
+>
+> **1. Vấn đề đang fix:** hoàn thiện **workspace cho role Editor (Tantou Editor)** theo feedback leader — phân quyền (editor không được sửa nội dung), sửa lỗi UI, và bổ sung tính năng duyệt chapter.
+>
+> **2. Nguyên nhân đã tìm ra (quan trọng):**
+> - **Editor vào workspace trống** (đã fix session trước): `MangakaChapterRepository.QueryAccessibleChapters` lọc Mangaka-only → thêm `QueryWorkspaceChapters` (contributor role ∈ {Mangaka, Tantou Editor, Assistant}).
+> - **Editor bấm được action Mangaka rồi kẹt unsaved chặn annotation:** UI content-mutation chưa gate role → gate bằng `CanManageContent = (_currentRoleName == "Mangaka")`.
+> - **Pin hiện nhầm ở split view:** annotation sync dùng `SelectedPage` + active-version toàn cục, chỉ đẩy canvas active → nay sync **per-pane** (`SyncPaneAnnotationsAsync`).
+> - **Submit Review "Cancel" fail:** KHÔNG phải lỗi quyền — DB constraint `ck_chapter_editorial_review_feedback_required` bắt CANCELLED phải có **comments + markup_file_id** (schema dòng ~967-972). → thêm upload markup, dùng `SubmitReviewDecisionWithMarkupAsync`.
+>
+> **3. Files đã đọc/thay đổi (đợt editor này):**
+> - **Thay đổi:** `Components/Pages/Workspace/CreatorWorkspace.razor` (gate toolbar/New Task/Notes/Versions, nút "Submit Review" + dialog, ẩn toolbar khi crop), `CreatorWorkspace.razor.cs` (cờ `CanManageContent`, per-pane pin sync, `SubmitEditorReview` + markup, lọc DRAFT), `WorkspaceChapterSidebar.razor` (param `CanManageChapters`), `Components/Shared/ImageCropDialog.razor` + `wwwroot/js/image-crop.js` (free-resize + snap 2:3 — commit trước đó), `Infrastructure/Services/CloudinaryFileStorageService.cs` (timeout 2') + `CreatorWorkspace.Save.cs` (parallel upload — commit trước).
+> - **Chỉ đọc (không sửa):** `docs/business-rules.md` (BR-WORKSPACE-006/007/008, BR-CP-018, BR-CH-CANCEL, BR-ANN), `IEditorChapterReviewApiClient.cs` + `EditorChapterReviewDtos.cs` + `SubmitChapterEditorialReviewCommandHandler.cs` + `EditorChapterReviewRepository.Scheduling.cs`, `MangaManagementSystem_Schema.sql` (CHECK constraint review).
+>
+> **4. Bước tiếp theo:**
+> 1. **Smoke test** trong VS (restart để nhận `NUGET_PACKAGES=D:\NugetPackages`, hard-refresh `Ctrl+F5` cho JS): (a) editor không thấy New Chapter/New Task/Upload/Save note/version actions; không thấy chapter DRAFT; (b) split view hết pin nhầm; (c) editor duyệt chapter UNDER_REVIEW: Approve/Revision OK, **Cancel** cần chọn file markup + comment; (d) Mangaka mọi thứ vẫn đủ; (e) parallel upload + crop free-resize + snap 2:3 + compensation pattern.
+> 2. Nếu OK → **push `feature/workspace-v3`** → PR #78 cập nhật.
+> 3. **Follow-up nhỏ (nếu leader muốn):** handler `SubmitChapterEditorialReviewCommandHandler` nên validate markup cho CANCELLED để báo lỗi rõ (hiện DB reject → generic error) — nhưng đó là code editor team.
+>
+> **5. Những gì CHƯA kiểm tra:**
+> - **Chưa test runtime bất kỳ thứ gì** trong đợt này — chỉ compile-clean (Web 0 CS/RZ). Không có DB/VS trong phiên làm.
+> - Chưa xác nhận `IEditorChapterReviewApiClient` inject OK lúc chạy (đã đăng ký DI ở Program.cs, nhưng chưa chạy thật).
+> - Chưa test upload markup thật (validate content-type/size của `EditorialMarkupUploader`).
+> - Pin per-pane: pane hiển thị page mà `ActiveAnnotations` chưa load sẽ KHÔNG có pin (chấp nhận được, nhưng chưa xác nhận UX trên nhiều page khác nhau).
+>
+> ---
+
 > ### UPDATE 2026-07-07 — refactor CreatorWorkspace (partial split) + gom using. ⚠️ CHƯA COMMIT, CHƯA CHẠY RUNTIME
 >
 > **Vấn đề đang làm:** `CreatorWorkspace.razor` quá lớn/khó bảo trì → tách nhỏ (code-behind + topical partials), rút view-model/helper ra file riêng, và **gom using trùng lặp**. Đây là refactor CẤU TRÚC (không đổi hành vi).
@@ -55,6 +90,19 @@
 > - **Crop từng page trong dialog "Add pages":** staged images giờ giữ trong field `_addPagesStaged` (List<StagedImage> {Bytes,Name,ContentType,DataUrl}); mỗi ảnh trong lưới review click được → mở **`ImageCropDialog`** (tái dùng của split double page) → `OnStagedCropConfirmed` thay bytes+dataUrl của staged đó → Save upload đúng ảnh đã crop. Review dialog ẩn khi đang crop (`@if _showUploadConfirm && !_cropStagedIndex.HasValue`) để tránh z-index đè. Luồng upload-version (Versions.cs) KHÔNG đổi.
 > - **Crop free-resize (kéo cạnh/góc):** `ImageCropDialog` thêm param **`AllowFreeResize`**; `image-crop.js` thêm nhánh free-resize — ảnh fit-to-canvas, khung crop có 8 handle (4 góc + 4 cạnh) kéo resize tự do (rộng/cao độc lập) + kéo trong để move; output = đúng vùng crop ở độ phân giải gốc (`exportFreeCrop`). Bật cho crop add-pages (`AllowFreeResize="true"`); cover + split VẪN dùng khung 2:3 cố định (default `false` → nhánh cũ, không đổi). Bumped JS import `?v=20260709-01` để bust cache. Zoom controls ẩn ở free mode.
 > - **Upload page tối ưu (thay cho timeout 5' trước đó):** user chốt GIỮ chất lượng (không nén). `SaveAllChangesAsync` giờ có **Phase 1 upload Cloudinary SONG SONG** (`SemaphoreSlim(3)`, `Task.WhenAll`, kết quả gom vào `ConcurrentDictionary<PageVersionModel,FileUploadResultDto>`), rồi vòng tạo DB (Phase 2) GIỮ tuần tự — chỉ đọc kết quả upload (ordering + orphan cleanup không đổi). Cloudinary `Api.Timeout` hạ **300000→120000 (2')** làm lưới an toàn cho 1 ảnh lớn/mạng chậm. Chất lượng lưu = nguyên gốc (display vẫn tự tối ưu qua `OptimizedImageUrl` f_auto/q_auto, không đụng bản gốc).
+>
+> **Editor workspace round 2 (2026-07-13) — 4a + #1 DONE (commit dc77446, local chưa push); #4b PLANNED:**
+> - **4a — gate nốt content actions cho editor:** Notes tab (fields `ReadOnly="@(!CanManageContent)"`, ẩn Save Page/Version Note); Versions panel (ẩn Create/Upload version cả 2 pane, ẩn "Set Active"). Editor giữ view + annotation.
+> - **#1 — fix pin split-view:** `SyncAnnotationsToJS()` giờ sync **per-pane** qua `SyncPaneAnnotationsAsync(canvas, panePages, paneIndex)` — mỗi pane chỉ vẽ pin của đúng page(`paneIndex+1`)+version(`ChapterPageVersionId`) nó đang xem; pane hiển thị page khác → rỗng (không còn pin nhầm). `ToggleCanvasAnnotations` + CreateAnnotation sync đều gọi qua đây. **Hạn chế:** `ActiveAnnotations` chỉ load page active nên pane hiển thị page KHÁC sẽ không có pin (chấp nhận được — trước đây hiện SAI pin).
+> - **#4b-fix (2026-07-13): Cancel decision cần markup file.** DB constraint `ck_chapter_editorial_review_feedback_required`: `CANCELLED` yêu cầu comments **VÀ** `markup_file_id` (giống hủy proposal). Dialog review nay có `<InputFile>` markup (bắt buộc khi Cancel, optional khi Revision) → dùng `SubmitReviewDecisionWithMarkupAsync` khi có file, else `SubmitReviewDecisionAsync`. Approve/Revision không cần markup. → hết lỗi "could not process" khi cancel. **KHÔNG phải lỗi quyền editor.**
+> - **Editor không thấy chapter DRAFT:** chapter load lọc `CanManageContent || StatusCode != "DRAFT"` → editor/assistant chỉ thấy chapter đã submit trở đi (UNDER_REVIEW/REVISION/APPROVED/SCHEDULED...), không thấy WIP nháp của mangaka.
+> - **#4b — ĐÃ LÀM (editor duyệt chapter):** inject `IEditorChapterReviewApiClient EditorReviewApi`; header có nút **"Submit Review"** (chỉ hiện khi role `Tantou Editor` + chapter `UNDER_REVIEW`) → mở dialog chọn decision (Approve / Request Revision / Cancel) + comment (bắt buộc cho Revision/Cancel) → `SubmitReviewDecisionAsync(chapterId, {DecisionCode, Comments})`; cập nhật `chap.StatusCode` từ response. Chưa dùng markup file (dùng `SubmitReviewDecisionWithMarkupAsync` sau nếu cần đính file).
+>
+> **Editor workspace permissions + crop polish (2026-07-12):**
+> - **Phân quyền editor (#4 leader feedback):** thêm cờ `CanManageContent => _currentRoleName == "Mangaka"` (BR-WORKSPACE-007). Ẩn với editor: New Chapter + menu chapter (sidebar param `CanManageChapters`), toolbar Upload/Region/Brush/Edit-Region/Delete, panel NEW TASK (thay bằng MudAlert). GIỮ cho editor: view, Select/Pin, AI segment/translate (BR-WORKSPACE-006), zoom/undo, **tạo annotation** (`MangakaAnnotationApi.CreateAsync` vốn cho phép editor — demo xác nhận). Save/Submit/Discard vốn đã gate Mangaka. → editor không còn tạo được unsaved-state làm kẹt annotation.
+> - **Toolbar bleed qua crop dialog:** ẩn canvas toolbar khi crop mở (`@if !_cropStagedIndex.HasValue && !_showDoublePageCrop`).
+> - **Crop snap tỉ lệ manga:** `image-crop.js` thêm `setCropAspect(id, ratio)` + nút "Snap to manga page ratio (2:3)" trong ImageCropDialog (chỉ free-resize). Bump JS `?v=20260712-01`.
+> - **Compensation:** thêm `Pattern="^\d{0,10}(\.\d{0,2})?$"` chặn ký tự lạ (":"...); C# đã validate range + round sẵn.
 >
 > **Còn lại (đã chẩn đoán, CHƯA làm):**
 > - **#3 editor vào workspace — CORE ĐÃ SỬA (cần smoke test):** thêm `QueryWorkspaceChapters` trong `MangakaChapterRepository` (gate = active contributor có role ∈ `WorkspaceRoles {Mangaka, Tantou Editor, Assistant}` theo BR-WORKSPACE-006/008); `GetSeriesChaptersAsync` dùng nó thay `QueryAccessibleChapters`. GIỮ `QueryAccessibleChapters` (Mangaka-only) cho "my chapters" dashboard + reload-sau-ghi. → Editor giờ thấy DANH SÁCH CHAPTER. **Đã rà:** đây là read Mangaka-role-gate DUY NHẤT ở tầng EF; pages/versions/regions đi qua `ChapterPageService`/`ChapterPageVersionService`/`PageRegionService` **KHÔNG** gate theo role → editor sẽ thấy pages. Ghi/status VẪN Mangaka-only qua `EnsureActiveMangakaContributorAsync` (đúng).

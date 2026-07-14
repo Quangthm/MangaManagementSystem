@@ -26,6 +26,70 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private const long AssistantWorkspaceMaxFileSizeBytes = 10 * 1024 * 1024;
     private static readonly string[] AssistantWorkspaceAllowedFileTypes = new[] { "image/png", "image/jpeg", "image/jpg", "image/webp" };
 
+    // BR-WORKSPACE-007: only Mangaka may mutate chapter/page content (create/rename chapters, upload
+    // pages/versions, assign tasks, edit regions). Tantou Editors get a view + review-annotations mode
+    // (they can still view, use AI tools, and create/manage editorial annotations). This gates the
+    // content-mutation UI so editors don't trigger actions that fail server-side and leave the workspace
+    // in an unsaved state that blocks annotating.
+    private bool CanManageContent => _currentRoleName == "Mangaka";
+
+    // #4b — Tantou Editor chapter review decision (BR-CH-REV / BR-CP-018): editors submit APPROVED /
+    // REVISION_REQUESTED / CANCELLED for a chapter that is UNDER_REVIEW, via the editor review API.
+    private bool _showReviewDialog;
+    private string _reviewDecision = "APPROVED";
+    private string _reviewComment = "";
+    private bool _reviewSubmitting;
+    // DB constraint ck_chapter_editorial_review_feedback_required: CANCELLED requires comments AND a
+    // markup file (like proposal cancellation); REVISION only requires comments; APPROVED requires neither.
+    private IBrowserFile? _reviewMarkupFile;
+
+    private void OnReviewMarkupSelected(InputFileChangeEventArgs e) => _reviewMarkupFile = e.File;
+
+    private async Task SubmitEditorReview()
+    {
+        var chap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
+        if (chap == null || chap.ChapterId == Guid.Empty || !_currentUserId.HasValue) return;
+
+        if ((_reviewDecision == "REVISION_REQUESTED" || _reviewDecision == "CANCELLED")
+            && string.IsNullOrWhiteSpace(_reviewComment))
+        {
+            Snackbar.Add("Please add comments when requesting a revision or cancelling.", Severity.Warning);
+            return;
+        }
+
+        if (_reviewDecision == "CANCELLED" && _reviewMarkupFile == null)
+        {
+            Snackbar.Add("Cancelling a chapter requires an attached markup file (plus comments).", Severity.Warning);
+            return;
+        }
+
+        _reviewSubmitting = true;
+        try
+        {
+            var comments = string.IsNullOrWhiteSpace(_reviewComment) ? null : _reviewComment.Trim();
+            var res = _reviewMarkupFile != null
+                ? await EditorReviewApi.SubmitReviewDecisionWithMarkupAsync(
+                    _currentUserId.Value, chap.ChapterId, _reviewDecision, comments, _reviewMarkupFile)
+                : await EditorReviewApi.SubmitReviewDecisionAsync(
+                    _currentUserId.Value, chap.ChapterId,
+                    new MangaManagementSystem.Application.DTOs.Editor.SubmitChapterEditorialReviewRequest(_reviewDecision, comments));
+
+            chap.StatusCode = res.StatusCode;
+            _showReviewDialog = false;
+            _reviewComment = "";
+            _reviewMarkupFile = null;
+            Snackbar.Add($"Review submitted ({res.DecisionCode}). Chapter is now {res.StatusCode}.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to submit review: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _reviewSubmitting = false;
+        }
+    }
+
     // Split View
     private bool _isSplitView = false;
     private int _splitPageIndex = 0;
@@ -443,19 +507,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private async Task ToggleCanvasAnnotations()
     {
         _showAnnotationsOnCanvas = !_showAnnotationsOnCanvas;
-        var canvas = _activePane == "Left" ? _leftCanvasRef : _rightCanvasRef;
-        if (canvas != null)
-        {
-            if (_showAnnotationsOnCanvas)
-            {
-                var currentAnnotations = ActiveAnnotations.Where(a => a.PageNumber == SelectedPage && MatchesActiveVersion(a.VersionId) && a.PinX.HasValue && a.PinY.HasValue);
-                await canvas.InvokeVoidAsync("syncAnnotations", currentAnnotations.Select(a => new { pinX = a.PinX.Value, pinY = a.PinY.Value, isResolved = a.IsResolved }));
-            }
-            else
-            {
-                await canvas.InvokeVoidAsync("syncAnnotations", Array.Empty<object>());
-            }
-        }
+        await SyncAnnotationsToJS();   // re-sync BOTH panes, each with its own page/version pins
     }
 
     // Saves manga.ChapterPage.page_notes (whole-page note, shared across versions). Explicit button,
@@ -512,7 +564,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
     private async Task CreateAnnotation()
     {
-        if (IsChapterLocked) return;
+        if (!CanAnnotate) return;
         if (string.IsNullOrWhiteSpace(AnnotationComment))
         {
             Snackbar.Add("Please enter a comment.", Severity.Warning);
@@ -605,25 +657,48 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         {
             Snackbar.Add($"Error creating annotation: {ex.Message}", Severity.Error);
         }
-        if (GetActiveCanvas() != null)
-        {
-            var pageAnnotations = ActiveAnnotations.Where(a => (a.PageNumber == SelectedPage || a.PageNumber == 0) && MatchesActiveVersion(a.VersionId)).ToList();
-            await GetActiveCanvas()!.InvokeVoidAsync("syncAnnotations", pageAnnotations);
-        }
+        await SyncAnnotationsToJS();
     }
 
     private async Task SyncAnnotationsToJS()
     {
-        if (GetActiveCanvas() != null)
+        // Per-pane: each pane draws only the pins belonging to the page + version IT is showing, so in
+        // split view one pane never renders another pane's (or another version's) pins.
+        await SyncPaneAnnotationsAsync(_leftCanvasRef, UploadedPages, ActivePageIndex);
+        if (_isSplitView)
+            await SyncPaneAnnotationsAsync(_rightCanvasRef, _splitUploadedPages, _splitPageIndex);
+    }
+
+    private async Task SyncPaneAnnotationsAsync(IJSObjectReference? canvas, List<PageModel> panePages, int paneIndex)
+    {
+        if (canvas == null) return;
+
+        if (!_showAnnotationsOnCanvas)
         {
-            var pageAnnotations = ActiveAnnotations.Where(a => (a.PageNumber == SelectedPage || a.PageNumber == 0) && MatchesActiveVersion(a.VersionId)).ToList();
-            await GetActiveCanvas()!.InvokeVoidAsync("syncAnnotations", pageAnnotations);
+            await canvas.InvokeVoidAsync("syncAnnotations", Array.Empty<object>());
+            return;
         }
+
+        var page = panePages.ElementAtOrDefault(paneIndex);
+        var ver = (page != null && page.Versions.Any())
+            ? page.Versions[Math.Clamp(page.ActiveVersionIndex, 0, page.Versions.Count - 1)]
+            : null;
+        int panePageNo = (page != null && page.PageNo > 0) ? page.PageNo : paneIndex + 1;
+
+        var pins = (ver == null)
+            ? Enumerable.Empty<object>()
+            : ActiveAnnotations
+                .Where(a => a.PinX.HasValue && a.PinY.HasValue
+                            && (a.PageNumber == panePageNo || a.PageNumber == 0)
+                            && (a.VersionId == null || a.VersionId == ver.ChapterPageVersionId))
+                .Select(a => (object)new { pinX = a.PinX!.Value, pinY = a.PinY!.Value, isResolved = a.IsResolved });
+
+        await canvas.InvokeVoidAsync("syncAnnotations", pins);
     }
 
     private async Task ResolveAnnotation(int id)
     {
-        if (IsChapterLocked) return;
+        if (!CanAnnotate) return;
         var ann = ActiveAnnotations.FirstOrDefault(a => a.Id == id);
         if (ann != null)
         {
@@ -758,8 +833,10 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 if (chapters != null && chapters.Any())
                 {
                     var chapterModels = chapters
-                        .Where(c => c.StatusCode != "CANCELLED")
-                        .Select((c, i) => new ChapterModel 
+                        // Editors/assistants only see chapters that have been submitted for review onward;
+                        // DRAFT is the Mangaka's private work-in-progress. CANCELLED is hidden for everyone.
+                        .Where(c => c.StatusCode != "CANCELLED" && (CanManageContent || c.StatusCode != "DRAFT"))
+                        .Select((c, i) => new ChapterModel
                     { 
                         Id = int.TryParse(c.ChapterNumberLabel, out int num) ? num : (i + 1), 
                         ChapterId = c.ChapterId,
@@ -970,7 +1047,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
                 foreach(var p in pages)
                 {
-                    var pageModel = new PageModel { ChapterPageId = p.ChapterPageId, PageNotes = p.PageNotes };
+                    var pageModel = new PageModel { ChapterPageId = p.ChapterPageId, PageNo = p.PageNo, PageNotes = p.PageNotes };
                     var versions = versionsGrouped[p.ChapterPageId];
                     foreach(var v in versions)
                     {
@@ -1349,6 +1426,19 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
     private static bool IsAssistantTaskChapterSubmissionBlocked(string? statusCode) =>
         statusCode is "APPROVED" or "SCHEDULED" or "ON_HOLD" or "RELEASED" or "CANCELLED";
+    // Annotations are review/production FEEDBACK (BR-CP-018 / BR-WORKSPACE-007), not page content, so they
+    // stay available while a chapter is in an editing/review cycle — including UNDER_REVIEW, which is exactly
+    // when a Tantou Editor reviews. Only the finalized states stop new annotations. This is deliberately
+    // separate from IsChapterLocked (which locks page/version/region CONTENT while under review or later).
+    private bool CanAnnotate
+    {
+        get
+        {
+            var chap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
+            var code = chap?.StatusCode;
+            return code == "DRAFT" || code == "UNDER_REVIEW" || code == "REVISION_REQUESTED";
+        }
+    }
 
     // AI Canvas logic
     private IJSObjectReference _moduleFactory = null!;
@@ -1363,11 +1453,12 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         if (_activePane != pane)
         {
             _activePane = pane;
-            SelectedPage = pane == "Left" ? ActivePageIndex + 1 : _splitPageIndex + 1;
-            
+
             // Sync SelectedRegions for the newly active pane
             SelectedRegions.Clear();
-            var page = pane == "Left" ? UploadedPages.ElementAtOrDefault(ActivePageIndex) : _splitUploadedPages.ElementAtOrDefault(_splitPageIndex);
+            var paneIdx = pane == "Left" ? ActivePageIndex : _splitPageIndex;
+            var page = (pane == "Left" ? UploadedPages : _splitUploadedPages).ElementAtOrDefault(paneIdx);
+            SelectedPage = (page != null && page.PageNo > 0) ? page.PageNo : paneIdx + 1; // true DB page number
             if (page != null && page.Versions.Any())
             {
                 var regionsStr = page.Versions[page.ActiveVersionIndex].Regions;

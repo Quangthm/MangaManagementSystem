@@ -12,6 +12,7 @@
 <aside class="mf-workspace-sidebar pt-2 pb-4 d-flex flex-column border-r-1 mud-border-lines-default" style="width: 250px; flex-shrink: 0; background-color: white; height: 100%; overflow: hidden;">
     <MudNavMenu Class="mud-width-full flex-grow-1" Style="overflow-y: auto;">
         @if (CanCreateChapter)
+        @if (CanManageChapters)
         {
             <div class="px-4 mt-2 mb-2">
                 <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" StartIcon="@Icons.Material.Filled.Add" Class="rounded-lg" OnClick="OnAddChapter" Disabled="@IsAddingChapter">
@@ -118,6 +119,7 @@
     [Parameter] public bool IsAddingChapter { get; set; }
     [Parameter] public bool CanCreateChapter { get; set; } = true;
     [Parameter] public bool CanManageChapters { get; set; } = true;
+    [Parameter] public bool CanManageChapters { get; set; } = true;   // Mangaka only; editors get view-only
 
     [Parameter] public EventCallback OnAddChapter { get; set; }
     [Parameter] public EventCallback<int> OnSelectChapter { get; set; }
