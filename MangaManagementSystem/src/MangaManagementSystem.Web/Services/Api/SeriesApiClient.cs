@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.DTOs.Manga;
 using Microsoft.Extensions.Logging;
 
@@ -78,13 +79,196 @@ namespace MangaManagementSystem.Web.Services.Api
             throw new InvalidOperationException(message);
         }
 
-        private static async Task<string> ExtractErrorMessageAsync(HttpResponseMessage response)
+        public async Task<SeriesLifecycleActionsDto> GetLifecycleActionsAsync(
+            Guid seriesId,
+            CancellationToken cancellationToken = default)
+        {
+            using var requestMessage = new HttpRequestMessage(
+                HttpMethod.Get,
+                $"api/series/{seriesId:D}/lifecycle-actions");
+
+            return await SendLifecycleRequestAsync<SeriesLifecycleActionsDto>(
+                requestMessage,
+                seriesId,
+                "Load lifecycle actions",
+                "The available series actions could not be loaded.",
+                cancellationToken);
+        }
+
+        public async Task<SeriesCompletionImpactDto> GetCompletionImpactAsync(
+            Guid seriesId,
+            CancellationToken cancellationToken = default)
+        {
+            using var requestMessage = new HttpRequestMessage(
+                HttpMethod.Get,
+                $"api/series/{seriesId:D}/completion-impact");
+
+            return await SendLifecycleRequestAsync<SeriesCompletionImpactDto>(
+                requestMessage,
+                seriesId,
+                "Load completion impact",
+                "The completion impact could not be loaded.",
+                cancellationToken);
+        }
+
+        public async Task<SeriesLifecycleChangedDto> SetHiatusAsync(
+            Guid seriesId,
+            string reason,
+            CancellationToken cancellationToken = default)
+        {
+            if (seriesId == Guid.Empty)
+            {
+                throw new ArgumentException(
+                    "Series id is required.",
+                    nameof(seriesId));
+            }
+
+            var normalizedReason = reason?.Trim() ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(normalizedReason))
+            {
+                throw new ArgumentException(
+                    "A hiatus reason is required.",
+                    nameof(reason));
+            }
+
+            if (normalizedReason.Length > 500)
+            {
+                throw new ArgumentException(
+                    "The hiatus reason cannot exceed 500 characters.",
+                    nameof(reason));
+            }
+
+            using var requestMessage = new HttpRequestMessage(
+                HttpMethod.Post,
+                $"api/series/{seriesId:D}/hiatus")
+            {
+                Content = JsonContent.Create(
+                    new
+                    {
+                        reason = normalizedReason
+                    })
+            };
+
+            return await SendLifecycleRequestAsync<SeriesLifecycleChangedDto>(
+                requestMessage,
+                seriesId,
+                "Set series hiatus",
+                "The series could not be set to hiatus.",
+                cancellationToken);
+        }
+
+        public async Task<SeriesLifecycleChangedDto> ResumeSerializationAsync(
+            Guid seriesId,
+            CancellationToken cancellationToken = default)
+        {
+            using var requestMessage = new HttpRequestMessage(
+                HttpMethod.Post,
+                $"api/series/{seriesId:D}/resume-serialization");
+
+            return await SendLifecycleRequestAsync<SeriesLifecycleChangedDto>(
+                requestMessage,
+                seriesId,
+                "Resume series serialization",
+                "Serialization could not be resumed.",
+                cancellationToken);
+        }
+
+        public async Task<SeriesLifecycleChangedDto> CompleteSeriesAsync(
+            Guid seriesId,
+            CancellationToken cancellationToken = default)
+        {
+            using var requestMessage = new HttpRequestMessage(
+                HttpMethod.Post,
+                $"api/series/{seriesId:D}/complete");
+
+            return await SendLifecycleRequestAsync<SeriesLifecycleChangedDto>(
+                requestMessage,
+                seriesId,
+                "Complete series",
+                "The series could not be marked as completed.",
+                cancellationToken);
+        }
+
+        private async Task<TResponse> SendLifecycleRequestAsync<TResponse>(
+            HttpRequestMessage requestMessage,
+            Guid seriesId,
+            string operation,
+            string fallbackMessage,
+            CancellationToken cancellationToken)
+        {
+            using var response = await _httpClient.SendAsync(
+                requestMessage,
+                cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var message = await ExtractErrorMessageAsync(
+                    response,
+                    fallbackMessage,
+                    cancellationToken);
+
+                _logger.LogWarning(
+                    "{Operation} failed for series {SeriesId}: {StatusCode} {ReasonPhrase}",
+                    operation,
+                    seriesId,
+                    (int)response.StatusCode,
+                    response.ReasonPhrase);
+
+                throw new ApiClientException(
+                    AuthErrorCodes.RequestFailed,
+                    message,
+                    response.StatusCode);
+            }
+
+            try
+            {
+                var result = await response.Content.ReadFromJsonAsync<TResponse>(
+                    cancellationToken: cancellationToken);
+
+                return result
+                    ?? throw new ApiClientException(
+                        AuthErrorCodes.RequestFailed,
+                        fallbackMessage,
+                        response.StatusCode);
+            }
+            catch (JsonException)
+            {
+                _logger.LogWarning(
+                    "{Operation} returned an invalid response for series {SeriesId}.",
+                    operation,
+                    seriesId);
+
+                throw new ApiClientException(
+                    AuthErrorCodes.RequestFailed,
+                    fallbackMessage,
+                    response.StatusCode);
+            }
+            catch (NotSupportedException)
+            {
+                _logger.LogWarning(
+                    "{Operation} returned an unsupported response for series {SeriesId}.",
+                    operation,
+                    seriesId);
+
+                throw new ApiClientException(
+                    AuthErrorCodes.RequestFailed,
+                    fallbackMessage,
+                    response.StatusCode);
+            }
+        }
+
+        private static async Task<string> ExtractErrorMessageAsync(
+            HttpResponseMessage response,
+            string fallbackMessage = "An unexpected error occurred. Please try again.",
+            CancellationToken cancellationToken = default)
         {
             try
             {
-                var body = await response.Content.ReadAsStringAsync();
+                var body = await response.Content.ReadAsStringAsync(
+                    cancellationToken);
                 if (string.IsNullOrWhiteSpace(body))
-                    return "An unexpected error occurred. Please try again.";
+                    return fallbackMessage;
 
                 using var doc = JsonDocument.Parse(body);
                 var root = doc.RootElement;
@@ -108,7 +292,7 @@ namespace MangaManagementSystem.Web.Services.Api
                 // Ignore invalid JSON and fall through.
             }
 
-            return "An unexpected error occurred. Please try again.";
+            return fallbackMessage;
         }
     }
 }
