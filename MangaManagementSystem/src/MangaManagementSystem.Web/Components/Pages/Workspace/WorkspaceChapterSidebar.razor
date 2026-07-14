@@ -11,11 +11,14 @@
 
 <aside class="mf-workspace-sidebar pt-2 pb-4 d-flex flex-column border-r-1 mud-border-lines-default" style="width: 250px; flex-shrink: 0; background-color: white; height: 100%; overflow: hidden;">
     <MudNavMenu Class="mud-width-full flex-grow-1" Style="overflow-y: auto;">
-        <div class="px-4 mt-2 mb-2">
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" StartIcon="@Icons.Material.Filled.Add" Class="rounded-lg" OnClick="OnAddChapter" Disabled="@IsAddingChapter">
-                @if (IsAddingChapter) { <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/> } else { <span>New Chapter</span> }
-            </MudButton>
-        </div>
+        @if (CanCreateChapter)
+        {
+            <div class="px-4 mt-2 mb-2">
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" StartIcon="@Icons.Material.Filled.Add" Class="rounded-lg" OnClick="OnAddChapter" Disabled="@IsAddingChapter">
+                    @if (IsAddingChapter) { <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/> } else { <span>New Chapter</span> }
+                </MudButton>
+            </div>
+        }
 
         <MudText Typo="Typo.caption" Class="mf-muted px-4 font-weight-bold mt-4 mb-2 d-block">CHAPTERS</MudText>
 
@@ -65,7 +68,7 @@
                                             <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" Color="Color.Success" Class="pa-1" />
                                         </MudTooltip>
                                     }
-                                    else
+                                    else if (CanManageChapters)
                                     {
                                         <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
                                             @if (chapter.StatusCode == "DRAFT" || chapter.StatusCode == "REVISION_REQUESTED")
@@ -113,6 +116,8 @@
     [Parameter] public List<ChapterModel> Chapters { get; set; } = new();
     [Parameter] public int SelectedChapter { get; set; }
     [Parameter] public bool IsAddingChapter { get; set; }
+    [Parameter] public bool CanCreateChapter { get; set; } = true;
+    [Parameter] public bool CanManageChapters { get; set; } = true;
 
     [Parameter] public EventCallback OnAddChapter { get; set; }
     [Parameter] public EventCallback<int> OnSelectChapter { get; set; }
@@ -165,7 +170,8 @@
     private string BuildSignature()
     {
         var sb = new System.Text.StringBuilder();
-        sb.Append(SelectedChapter).Append('|').Append(IsAddingChapter).Append('|');
+        sb.Append(SelectedChapter).Append('|').Append(IsAddingChapter).Append('|')
+          .Append(CanCreateChapter).Append('|').Append(CanManageChapters).Append('|');
         foreach (var c in Chapters)
         {
             sb.Append(c.Id).Append(':')

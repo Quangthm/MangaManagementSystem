@@ -47,6 +47,12 @@ namespace MangaManagementSystem.Web.Services.Api
             var message =
                 "The request could not be completed.";
 
+            var requestMethod =
+                response.RequestMessage?.Method?.Method ?? "UNKNOWN";
+
+            var requestUri =
+                response.RequestMessage?.RequestUri?.ToString() ?? "UNKNOWN";
+
             try
             {
                 var body =
@@ -145,7 +151,9 @@ namespace MangaManagementSystem.Web.Services.Api
             return new ApiClientException(
                 code,
                 message,
-                response.StatusCode);
+                response.StatusCode,
+                requestMethod,
+                requestUri);
         }
 
         private static bool TryReadString(

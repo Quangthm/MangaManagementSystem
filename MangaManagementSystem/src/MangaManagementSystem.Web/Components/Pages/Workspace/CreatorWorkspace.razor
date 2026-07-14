@@ -16,6 +16,7 @@
 @inject ISeriesApiClient SeriesApiClient
 @inject IMangakaChapterApiClient MangakaChapterApi
 @inject IMangakaTaskApiClient MangakaTaskApi
+@inject IAssistantTaskApiClient AssistantTaskApi
 @inject IMangakaPageApiClient MangakaPageApi
 @inject IMangakaPageRegionApiClient MangakaRegionApi
 @inject IMangakaAnnotationApiClient MangakaAnnotationApi
@@ -124,6 +125,8 @@ else
         <WorkspaceChapterSidebar Chapters="Chapters"
                                  SelectedChapter="SelectedChapter"
                                  IsAddingChapter="_isAddingChapter"
+                                 CanCreateChapter="CanManageChapterStructure"
+                                 CanManageChapters="CanManageChapterStructure"
                                  OnAddChapter="AddNewChapter"
                                  OnSelectChapter="SelectChapter"
                                  OnSubmitChapter="SubmitChapterForReview"
@@ -140,10 +143,10 @@ else
             <!-- Canvas Toolbar -->
             <div class="d-flex justify-center mt-4" style="position: absolute; left: 50%; transform: translateX(-50%); z-index: 100;">
                 <MudPaper Elevation="2" Class="d-flex align-center rounded-pill px-1 py-1" Style="background: white; gap: 1px;">
-                    <InputFile id="fileInput" OnChange="HandleFileUpload" hidden accept="image/*" multiple disabled="@IsChapterLocked" />
-                    <InputFile id="doublePageInput" OnChange="HandleDoublePageSelected" hidden accept="image/*" disabled="@IsChapterLocked" />
+                    <InputFile id="fileInput" OnChange="HandleFileUpload" hidden accept="image/*" multiple disabled="@(IsChapterLocked || IsAssistantWorkspace)" />
+                    <InputFile id="doublePageInput" OnChange="HandleDoublePageSelected" hidden accept="image/*" disabled="@(IsChapterLocked || IsAssistantWorkspace)" />
                     <MudTooltip Text="Upload Pages">
-                        <MudIconButton Icon="@Icons.Material.Filled.CloudUpload" OnClick="@(() => _showUploadChoice = true)" Size="Size.Small" Class="rounded-pill" Style="background: linear-gradient(90deg, #7c3aed, #c026d3); color: white;" Disabled="@IsChapterLocked" />
+                        <MudIconButton Icon="@Icons.Material.Filled.CloudUpload" OnClick="@(() => _showUploadChoice = true)" Size="Size.Small" Class="rounded-pill" Style="background: linear-gradient(90deg, #7c3aed, #c026d3); color: white;" Disabled="@(IsChapterLocked || IsAssistantWorkspace)" />
                     </MudTooltip>
                     <MudDivider Vertical="true" FlexItem="true" Class="mx-1" />
                     <MudTooltip Text="@(_isSplitView ? "Exit Split View" : "Split View")">
@@ -223,11 +226,11 @@ else
                                           </div>
                                           <div class="d-flex gap-1">
                                               <MudTooltip Text="Create Canvas as New Version">
-                                                  <MudIconButton Icon="@Icons.Material.Filled.AddPhotoAlternate" Color="Color.Secondary" Size="Size.Small" OnClick='() => SaveAsNewVersion("Left")' Disabled="@IsChapterLocked" />
-                                              </MudTooltip>
-                                              <InputFile id="uploadVersionLeft" OnChange='@(e => HandleUploadVersion(e, "Left"))' hidden accept="image/*" disabled="@IsChapterLocked" />
+                                                  <MudIconButton Icon="@Icons.Material.Filled.AddPhotoAlternate" Color="Color.Secondary" Size="Size.Small" OnClick='() => SaveAsNewVersion("Left")' Disabled="@(IsChapterLocked || IsAssistantWorkspace)" />
+                                               </MudTooltip>
+                                              <InputFile id="uploadVersionLeft" OnChange='@(e => HandleUploadVersion(e, "Left"))' hidden accept="image/*" disabled="@(IsChapterLocked || IsAssistantWorkspace)" />
                                               <MudTooltip Text="Upload Page Version">
-                                                  <MudIconButton HtmlTag="label" for="uploadVersionLeft" Icon="@Icons.Material.Filled.Upload" Color="Color.Info" Size="Size.Small" Disabled="@IsChapterLocked" />
+                                                  <MudIconButton HtmlTag="label" for="uploadVersionLeft" Icon="@Icons.Material.Filled.Upload" Color="Color.Info" Size="Size.Small" Disabled="@(IsChapterLocked || IsAssistantWorkspace)" />
 
                                               </MudTooltip>
                                           </div>
@@ -260,7 +263,7 @@ else
                                                           }
                                                           @if (!ver.IsCurrentVersion && isSelected && !ver.IsDeleted)
                                                           {
-                                                              <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" OnClick='() => SetActiveVersion("Left", ver)' Disabled="@IsChapterLocked" Class="pa-0 px-1 ml-1" Style="min-width: unset; text-transform: none; font-size: 0.75rem;">Set Active</MudButton>
+                                                              <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" OnClick='() => SetActiveVersion("Left", ver)' Disabled="@(IsChapterLocked || IsAssistantWorkspace)" Class="pa-0 px-1 ml-1" Style="min-width: unset; text-transform: none; font-size: 0.75rem;">Set Active</MudButton>
                                                           }
                                                       </div>
                                                   </div>
@@ -313,11 +316,11 @@ else
                                           </div>
                                           <div class="d-flex gap-1">
                                               <MudTooltip Text="Create Canvas as New Version">
-                                                  <MudIconButton Icon="@Icons.Material.Filled.AddPhotoAlternate" Color="Color.Secondary" Size="Size.Small" OnClick='() => SaveAsNewVersion("Right")' Disabled="@IsChapterLocked" />
-                                              </MudTooltip>
-                                              <InputFile id="uploadVersionRight" OnChange='@(e => HandleUploadVersion(e, "Right"))' hidden accept="image/*" disabled="@IsChapterLocked" />
+                                                  <MudIconButton Icon="@Icons.Material.Filled.AddPhotoAlternate" Color="Color.Secondary" Size="Size.Small" OnClick='() => SaveAsNewVersion("Right")' Disabled="@(IsChapterLocked || IsAssistantWorkspace)" />
+                                               </MudTooltip>
+                                              <InputFile id="uploadVersionRight" OnChange='@(e => HandleUploadVersion(e, "Right"))' hidden accept="image/*" disabled="@(IsChapterLocked || IsAssistantWorkspace)" />
                                               <MudTooltip Text="Upload Page Version">
-                                                  <MudIconButton HtmlTag="label" for="uploadVersionRight" Icon="@Icons.Material.Filled.Upload" Color="Color.Info" Size="Size.Small" Disabled="@IsChapterLocked" />
+                                                  <MudIconButton HtmlTag="label" for="uploadVersionRight" Icon="@Icons.Material.Filled.Upload" Color="Color.Info" Size="Size.Small" Disabled="@(IsChapterLocked || IsAssistantWorkspace)" />
 
                                               </MudTooltip>
                                           </div>
@@ -350,7 +353,7 @@ else
                                                           }
                                                           @if (!ver.IsCurrentVersion && isSelected && !ver.IsDeleted)
                                                           {
-                                                              <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" OnClick='() => SetActiveVersion("Right", ver)' Disabled="@IsChapterLocked" Class="pa-0 px-1 ml-1" Style="min-width: unset; text-transform: none; font-size: 0.75rem;">Set Active</MudButton>
+                                                              <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" OnClick='() => SetActiveVersion("Right", ver)' Disabled="@(IsChapterLocked || IsAssistantWorkspace)" Class="pa-0 px-1 ml-1" Style="min-width: unset; text-transform: none; font-size: 0.75rem;">Set Active</MudButton>
                                                           }
                                                       </div>
                                                   </div>
@@ -411,7 +414,7 @@ else
                 
                 <MudDivider Vertical="true" FlexItem="true" />
                 <MudTooltip Text="Delete Current Page (Left)">
-                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="DeleteCurrentPage" Disabled="@IsChapterLocked" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="DeleteCurrentPage" Disabled="@(IsChapterLocked || IsAssistantWorkspace)" />
                 </MudTooltip>
             </div>
 
@@ -441,6 +444,194 @@ else
         <!-- Right Panel (Tasks) -->
         <aside class="mf-workspace-right-panel border-l-1 mud-border-lines-default d-flex flex-column" style="width: @(_isRightPanelOpen ? "320px" : "0px"); flex-shrink: 0; background-color: white; height: 100%; overflow: hidden; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative;">
             <div class="pt-2 pb-3 d-flex flex-column" style="width: 320px; height: 100%;">
+            @if (IsAssistantWorkspace)
+            {
+                <div class="px-4 d-flex flex-column gap-3" style="height: 100%; overflow-y: auto;">
+                    <MudPaper Elevation="0" Class="pa-4 border-1 mud-border-lines-default rounded-lg">
+                        <div class="d-flex align-center justify-space-between mb-2">
+                            <MudText Typo="Typo.subtitle1" Class="font-weight-bold">Assigned Task</MudText>
+                            @if (_assistantWorkspaceTask is not null)
+                            {
+                                <StatusBadge Status="@_assistantWorkspaceTask.StatusCode" />
+                            }
+                        </div>
+
+                        @if (_assistantWorkspaceTask is null)
+                        {
+                            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">
+                                The task context for this workspace could not be loaded.
+                            </MudAlert>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body1" Class="font-weight-bold">@(_assistantWorkspaceTask.TaskTitle ?? $"{_assistantWorkspaceTask.TypeCode} Task")</MudText>
+                            <MudText Typo="Typo.caption" Class="mf-muted d-block mt-1">
+                                @_assistantWorkspaceTask.TypeCode • @(_assistantWorkspaceTask.ChapterNumberLabel ?? $"Chapter {SelectedChapter}") • Page @(_assistantWorkspaceTask.PageNo ?? SelectedPage)
+                            </MudText>
+
+                            @if (!string.IsNullOrWhiteSpace(_assistantWorkspaceTask.TaskDescription))
+                            {
+                                <MudText Typo="Typo.body2" Class="mt-3">@_assistantWorkspaceTask.TaskDescription</MudText>
+                            }
+
+                            <div class="d-flex flex-column gap-1 mt-3">
+                                <MudText Typo="Typo.caption"><strong>Priority:</strong> @_assistantWorkspaceTask.PriorityLevel</MudText>
+                                <MudText Typo="Typo.caption"><strong>Due:</strong> <TimestampDisplay Value="@_assistantWorkspaceTask.DueAtUtc" EmptyText="No deadline" /></MudText>
+                                <MudText Typo="Typo.caption"><strong>Compensation:</strong> @(_assistantWorkspaceTask.CompensationAmount?.ToString("0.##") ?? "0")</MudText>
+                            </div>
+
+                            <div class="mt-3">
+                                <MudText Typo="Typo.caption" Class="mf-muted d-block mb-1">Assigned regions</MudText>
+                                <div class="d-flex flex-wrap gap-1">
+                                    @if (_assistantWorkspaceTask.PageRegions.Any())
+                                    {
+                                        @foreach (var region in _assistantWorkspaceTask.PageRegions)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Outlined">
+                                                @(!string.IsNullOrWhiteSpace(region.RegionLabel) ? region.RegionLabel : region.TypeCode)
+                                            </MudChip>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">
+                                            Full page
+                                        </MudChip>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </MudPaper>
+
+                    @if (_assistantWorkspaceTask is not null && !IsViewingAssignedTaskPage)
+                    {
+                        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                            You are not viewing the assigned task page right now.
+                            <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" Class="ml-2" OnClick="JumpToAssignedTaskPageAsync">
+                                Jump to assigned page
+                            </MudButton>
+                        </MudAlert>
+                    }
+
+                    <MudPaper Elevation="0" Class="pa-4 border-1 mud-border-lines-default rounded-lg">
+                        <div class="d-flex align-center justify-space-between mb-2">
+                            <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Task Notes</MudText>
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text">@_assistantWorkspaceTaskAnnotations.Count</MudChip>
+                        </div>
+
+                        @if (_assistantWorkspaceTaskAnnotations.Any())
+                        {
+                            <MudStack Spacing="1" Class="mt-2">
+                                @foreach (var ann in _assistantWorkspaceTaskAnnotations)
+                                {
+                                    <MudPaper Elevation="0" Class="pa-2 rounded border-1 mud-border-lines-default">
+                                        <MudText Typo="Typo.caption" Class="font-weight-bold">@ann.IssueTypeCode</MudText>
+                                        <MudText Typo="Typo.body2">@ann.AnnotationText</MudText>
+                                        <MudText Typo="Typo.caption" Class="mf-muted">@(ann.AnnotatedByDisplayName ?? "Editor")</MudText>
+                                    </MudPaper>
+                                }
+                            </MudStack>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Class="mf-muted">No annotations are linked to this assignment.</MudText>
+                        }
+                    </MudPaper>
+
+                    <MudPaper Elevation="0" Class="pa-4 border-1 mud-border-lines-default rounded-lg">
+                        <MudText Typo="Typo.subtitle2" Class="font-weight-bold mb-2">Submit From Workspace</MudText>
+
+                        @if (!string.IsNullOrWhiteSpace(AssistantWorkspaceSubmissionBlockedReason))
+                        {
+                            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-3">
+                                @AssistantWorkspaceSubmissionBlockedReason
+                            </MudAlert>
+                        }
+                        else
+                        {
+                            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-3">
+                                Submit this task as a new page version for the assigned chapter page. If you do not choose a file, the current canvas will be rendered as PNG and submitted instead.
+                            </MudAlert>
+                        }
+
+                        @if (_assistantWorkspaceTask is not null)
+                        {
+                            <MudText Typo="Typo.caption" Class="mf-muted d-block mb-2">Assigned chapter page</MudText>
+                            <MudPaper Elevation="0" Class="pa-2 border-1 mud-border-lines-default rounded mb-3">
+                                <MudText Typo="Typo.body2" Class="font-weight-medium mb-1">@AssistantAssignedLocationLabel</MudText>
+                                <MudText Typo="Typo.caption" Class="mf-muted d-block mb-2">
+                                    Jump directly to the chapter and page that this task was assigned on.
+                                </MudText>
+                                <MudButton Variant="Variant.Outlined"
+                                           Color="Color.Primary"
+                                           Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.MyLocation"
+                                           OnClick="JumpToAssignedTaskPageAsync">
+                                    Jump to assigned chapter/page
+                                </MudButton>
+                            </MudPaper>
+                        }
+
+                        <div class="mb-3">
+                            <InputFile OnChange="HandleAssistantWorkspaceFileSelected"
+                                       accept="image/png,image/jpeg,image/jpg,image/webp"
+                                       disabled="@(!AssistantWorkspaceCanAcceptSubmission || _assistantSubmitting)" />
+                            <MudText Typo="Typo.caption" Class="mf-muted d-block mt-2">
+                                @if (HasAssistantSelectedFile)
+                                {
+                                    @_assistantSelectedFileDisplay
+                                }
+                                else
+                                {
+                                    <span>No file selected. The current canvas will be used.</span>
+                                }
+                            </MudText>
+
+                            @if (!string.IsNullOrWhiteSpace(_assistantFileValidationError))
+                            {
+                                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mt-2">
+                                    @_assistantFileValidationError
+                                </MudAlert>
+                            }
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(_assistantWorkspaceError))
+                        {
+                            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mb-3">
+                                @_assistantWorkspaceError
+                            </MudAlert>
+                        }
+
+                        <MudTextField T="string"
+                                      Label="Page version notes (optional)"
+                                      @bind-Value="_assistantSubmissionNotes"
+                                      Variant="Variant.Outlined"
+                                      HelperText="Saved together with the submitted page version for this chapter page."
+                                      Lines="4"
+                                      FullWidth="true"
+                                      Class="mb-3" />
+
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   FullWidth="true"
+                                   StartIcon="@Icons.Material.Filled.Send"
+                                   OnClick="SubmitAssistantWorkspaceAsync"
+                                   Disabled="@(!CanSubmitAssistantWorkspace)">
+                            @AssistantSubmitButtonText
+                        </MudButton>
+
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Default"
+                                   FullWidth="true"
+                                   Class="mt-2"
+                                   OnClick="@(() => Nav.NavigateTo($"/assistant/task/{_assistantWorkspaceTask?.ChapterPageTaskId}"))">
+                            Back to Task Detail
+                        </MudButton>
+                    </MudPaper>
+                </div>
+            }
+            else
+            {
             <MudTabs Elevation="0" Rounded="true" PanelClass="pt-2" Color="Color.Primary" Class="workspace-tabs">
                 <MudTabPanel Text="Tasks">
                     <div class="px-4 mb-3" style="flex-shrink: 0;">
@@ -744,6 +935,7 @@ else
                     </div>
                 </MudTabPanel>
             </MudTabs>
+            }
             </div>
         </aside>
 
