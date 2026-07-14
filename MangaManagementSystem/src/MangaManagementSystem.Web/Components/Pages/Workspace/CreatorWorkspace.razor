@@ -20,6 +20,7 @@
 @inject IMangakaPageRegionApiClient MangakaRegionApi
 @inject IMangakaAnnotationApiClient MangakaAnnotationApi
 @inject IMangakaSeriesContributorApiClient MangakaContributorApi
+@inject IEditorChapterReviewApiClient EditorReviewApi
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IFileStorageService FileStorageService
 @inject IAiService AiService
@@ -113,6 +114,10 @@ else
                     </MudButton>
                 }
             }
+            @if (_headerChap != null && _currentRoleName == "Tantou Editor" && _headerChap.StatusCode == "UNDER_REVIEW")
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" StartIcon="@Icons.Material.Filled.RateReview" Class="mr-2" DisableElevation="true" OnClick="@(() => { _reviewDecision = "APPROVED"; _reviewComment = ""; _reviewMarkupFile = null; _showReviewDialog = true; })">Submit Review</MudButton>
+            }
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.FileDownload" DisableElevation="true" OnClick="ExportCurrentPage">Export</MudButton>
         </div>
     </header>
@@ -124,6 +129,7 @@ else
         <WorkspaceChapterSidebar Chapters="Chapters"
                                  SelectedChapter="SelectedChapter"
                                  IsAddingChapter="_isAddingChapter"
+                                 CanManageChapters="CanManageContent"
                                  OnAddChapter="AddNewChapter"
                                  OnSelectChapter="SelectChapter"
                                  OnSubmitChapter="SubmitChapterForReview"
@@ -137,26 +143,34 @@ else
         <!-- Main Canvas Area -->
         <main class="flex-grow-1 d-flex flex-column" style="min-width: 0; background-color: #f8fafc; position: relative;">
             
-            <!-- Canvas Toolbar -->
+            <!-- Canvas Toolbar (hidden while a crop dialog is open so it does not bleed over the overlay) -->
+            @if (!_cropStagedIndex.HasValue && !_showDoublePageCrop)
+            {
             <div class="d-flex justify-center mt-4" style="position: absolute; left: 50%; transform: translateX(-50%); z-index: 100;">
                 <MudPaper Elevation="2" Class="d-flex align-center rounded-pill px-1 py-1" Style="background: white; gap: 1px;">
-                    <InputFile id="fileInput" OnChange="HandleFileUpload" hidden accept="image/*" multiple disabled="@IsChapterLocked" />
-                    <InputFile id="doublePageInput" OnChange="HandleDoublePageSelected" hidden accept="image/*" disabled="@IsChapterLocked" />
-                    <MudTooltip Text="Upload Pages">
-                        <MudIconButton Icon="@Icons.Material.Filled.CloudUpload" OnClick="@(() => _showUploadChoice = true)" Size="Size.Small" Class="rounded-pill" Style="background: linear-gradient(90deg, #7c3aed, #c026d3); color: white;" Disabled="@IsChapterLocked" />
-                    </MudTooltip>
-                    <MudDivider Vertical="true" FlexItem="true" Class="mx-1" />
+                    @if (CanManageContent)
+                    {
+                        <InputFile id="fileInput" OnChange="HandleFileUpload" hidden accept="image/*" multiple disabled="@IsChapterLocked" />
+                        <InputFile id="doublePageInput" OnChange="HandleDoublePageSelected" hidden accept="image/*" disabled="@IsChapterLocked" />
+                        <MudTooltip Text="Upload Pages">
+                            <MudIconButton Icon="@Icons.Material.Filled.CloudUpload" OnClick="@(() => _showUploadChoice = true)" Size="Size.Small" Class="rounded-pill" Style="background: linear-gradient(90deg, #7c3aed, #c026d3); color: white;" Disabled="@IsChapterLocked" />
+                        </MudTooltip>
+                        <MudDivider Vertical="true" FlexItem="true" Class="mx-1" />
+                    }
                     <MudTooltip Text="@(_isSplitView ? "Exit Split View" : "Split View")">
                         <MudIconButton Icon="@(_isSplitView ? Icons.Material.Filled.VerticalSplit : Icons.Material.Filled.VerticalSplit)" Color="@(_isSplitView ? Color.Primary : Color.Default)" OnClick="ToggleSplitView" Size="Size.Small" />
                     </MudTooltip>
 
                     <!-- Drawing Tools -->
-                    <MudTooltip Text="Select Tool"><MudIconButton Icon="@Icons.Material.Filled.NearMe" Color="@(CurrentTool == "select" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("select"))" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
-                    <MudTooltip Text="Region Tool"><MudIconButton Icon="@Icons.Material.Filled.Crop" Color="@(CurrentTool == "draw" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("draw"))" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
-                    <MudTooltip Text="Brush Tool"><MudIconButton Icon="@Icons.Material.Filled.Brush" Color="@(CurrentTool == "brush" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("brush"))" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
-                    <MudTooltip Text="Pin Tool"><MudIconButton Icon="@Icons.Material.Filled.PushPin" Color="@(CurrentTool == "pin" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("pin"))" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
+                    <MudTooltip Text="Select Tool"><MudIconButton Icon="@Icons.Material.Filled.NearMe" Color="@(CurrentTool == "select" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("select"))" Size="Size.Small" Disabled="@(!CanAnnotate)" /></MudTooltip>
+                    @if (CanManageContent)
+                    {
+                        <MudTooltip Text="Region Tool"><MudIconButton Icon="@Icons.Material.Filled.Crop" Color="@(CurrentTool == "draw" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("draw"))" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
+                        <MudTooltip Text="Brush Tool"><MudIconButton Icon="@Icons.Material.Filled.Brush" Color="@(CurrentTool == "brush" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("brush"))" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
+                    }
+                    <MudTooltip Text="Pin Tool"><MudIconButton Icon="@Icons.Material.Filled.PushPin" Color="@(CurrentTool == "pin" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("pin"))" Size="Size.Small" Disabled="@(!CanAnnotate)" /></MudTooltip>
                     
-                    @if (CurrentTool == "brush")
+                    @if (CanManageContent && CurrentTool == "brush")
                     {
                         <div class="d-flex align-center mx-2">
                             <input type="color" value="@BrushColor" @onchange="OnBrushColorChanged" style="width: 24px; height: 24px; border: none; padding: 0; cursor: pointer; border-radius: 4px;" disabled="@IsChapterLocked" />
@@ -171,8 +185,11 @@ else
                             <MudMenuItem Icon="@Icons.Material.Filled.Translate" OnClick='@(() => RunTranslateAI("en"))'>English (EN)</MudMenuItem>
                         </MudMenu>
                     </MudTooltip>
-                    <MudTooltip Text="Edit region type (label editable when one is selected)"><MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Default" OnClick="OpenEditRegionDialog" Size="Size.Small" Disabled="@(IsChapterLocked || SelectedRegions.Count < 1)" /></MudTooltip>
-                    <MudTooltip Text="Delete Selected"><MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" OnClick="DeleteSelectedRegions" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
+                    @if (CanManageContent)
+                    {
+                        <MudTooltip Text="Edit region type (label editable when one is selected)"><MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Default" OnClick="OpenEditRegionDialog" Size="Size.Small" Disabled="@(IsChapterLocked || SelectedRegions.Count < 1)" /></MudTooltip>
+                        <MudTooltip Text="Delete Selected"><MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" OnClick="DeleteSelectedRegions" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
+                    }
                     <MudTooltip Text="Select All"><MudIconButton Icon="@Icons.Material.Filled.SelectAll" OnClick="SelectAllRegions" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
                     <MudTooltip Text="Deselect All"><MudIconButton Icon="@Icons.Material.Filled.HighlightOff" OnClick="DeselectAllRegions" Size="Size.Small" /></MudTooltip>
                     <MudTooltip Text="@(_regionsHidden ? "Show Detection Frames" : "Hide Detection Frames")"><MudIconButton Icon="@(_regionsHidden ? Icons.Material.Filled.GridOff : Icons.Material.Filled.GridOn)" Color="@(_regionsHidden ? Color.Default : Color.Secondary)" OnClick="ToggleRegionsVisibility" Size="Size.Small" /></MudTooltip>
@@ -185,6 +202,7 @@ else
                     <MudTooltip Text="Redo"><MudIconButton Icon="@Icons.Material.Filled.Redo" OnClick="Redo" Disabled="@(!CanRedo)" Size="Size.Small" /></MudTooltip>
                 </MudPaper>
             </div>
+            }
 
             <!-- Canvas Container -->
             <div class="flex-grow-1 d-flex" style="overflow: hidden; background-color: #e5e5e5; min-height: 0;">
@@ -221,6 +239,8 @@ else
                                               </MudTooltip>
                                               <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Versions</MudText>
                                           </div>
+                                          @if (CanManageContent)
+                                          {
                                           <div class="d-flex gap-1">
                                               <MudTooltip Text="Create Canvas as New Version">
                                                   <MudIconButton Icon="@Icons.Material.Filled.AddPhotoAlternate" Color="Color.Secondary" Size="Size.Small" OnClick='() => SaveAsNewVersion("Left")' Disabled="@IsChapterLocked" />
@@ -231,6 +251,7 @@ else
 
                                               </MudTooltip>
                                           </div>
+                                          }
                                       </div>
                                       <MudDivider Class="mb-2" />
                                       <div class="d-flex flex-column gap-1" style="max-height: 200px; overflow-y: auto;">
@@ -258,7 +279,7 @@ else
                                                           {
                                                               <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Outlined" Class="ma-0" Style="height: 20px; font-size: 0.65rem;">Viewing</MudChip>
                                                           }
-                                                          @if (!ver.IsCurrentVersion && isSelected && !ver.IsDeleted)
+                                                          @if (CanManageContent && !ver.IsCurrentVersion && isSelected && !ver.IsDeleted)
                                                           {
                                                               <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" OnClick='() => SetActiveVersion("Left", ver)' Disabled="@IsChapterLocked" Class="pa-0 px-1 ml-1" Style="min-width: unset; text-transform: none; font-size: 0.75rem;">Set Active</MudButton>
                                                           }
@@ -311,6 +332,8 @@ else
                                               </MudTooltip>
                                               <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Versions</MudText>
                                           </div>
+                                          @if (CanManageContent)
+                                          {
                                           <div class="d-flex gap-1">
                                               <MudTooltip Text="Create Canvas as New Version">
                                                   <MudIconButton Icon="@Icons.Material.Filled.AddPhotoAlternate" Color="Color.Secondary" Size="Size.Small" OnClick='() => SaveAsNewVersion("Right")' Disabled="@IsChapterLocked" />
@@ -321,6 +344,7 @@ else
 
                                               </MudTooltip>
                                           </div>
+                                          }
                                       </div>
                                       <MudDivider Class="mb-2" />
                                       <div class="d-flex flex-column gap-1" style="max-height: 200px; overflow-y: auto;">
@@ -348,7 +372,7 @@ else
                                                           {
                                                               <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Outlined" Class="ma-0" Style="height: 20px; font-size: 0.65rem;">Viewing</MudChip>
                                                           }
-                                                          @if (!ver.IsCurrentVersion && isSelected && !ver.IsDeleted)
+                                                          @if (CanManageContent && !ver.IsCurrentVersion && isSelected && !ver.IsDeleted)
                                                           {
                                                               <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" OnClick='() => SetActiveVersion("Right", ver)' Disabled="@IsChapterLocked" Class="pa-0 px-1 ml-1" Style="min-width: unset; text-transform: none; font-size: 0.75rem;">Set Active</MudButton>
                                                           }
@@ -443,6 +467,8 @@ else
             <div class="pt-2 pb-3 d-flex flex-column" style="width: 320px; height: 100%;">
             <MudTabs Elevation="0" Rounded="true" PanelClass="pt-2" Color="Color.Primary" Class="workspace-tabs">
                 <MudTabPanel Text="Tasks">
+                    @if (CanManageContent)
+                    {
                     <div class="px-4 mb-3" style="flex-shrink: 0;">
                 <MudPaper Elevation="0" Class="pa-3 border-1 mud-border-lines-default rounded-lg">
                     <div class="d-flex align-center justify-space-between @(_newTaskFormCollapsed ? "" : "mb-3")">
@@ -498,7 +524,8 @@ else
 
                     <MudNumericField T="decimal" Label="Compensation" @bind-Value="TaskCompensation" Variant="Variant.Outlined"
                                      Margin="Margin.Dense" Class="mb-3" Min="0" Max="9999999999.99M" Format="0.##"
-                                     HelperText="Per-task amount (metadata only; 0 = none)." />
+                                     Pattern="^\d{0,10}(\.\d{0,2})?$" Step="1M"
+                                     HelperText="Whole or 2-decimal amount, 0–9,999,999,999.99 (metadata only; 0 = none)." />
 
                     <MudDatePicker Label="Deadline" @bind-Date="_taskDueDate" Variant="Variant.Outlined"
                                    Margin="Margin.Dense" Class="mb-3" MinDate="DateTime.Today"
@@ -529,6 +556,13 @@ else
                     }
                 </MudPaper>
             </div>
+                    }
+                    else
+                    {
+                        <div class="px-4 mb-3" style="flex-shrink: 0;">
+                            <MudAlert Severity="Severity.Info" Dense="true">Task assignment is available to the Mangaka. As an editor you can review pages and add annotations.</MudAlert>
+                        </div>
+                    }
 
             <div class="px-4 mf-active-tasks">
                   <div class="d-flex justify-space-between align-center mb-3">
@@ -650,7 +684,7 @@ else
                                 </div>
                             </div>
 
-                            <MudButton Variant="Variant.Filled" Color="Color.Warning" FullWidth="true" StartIcon="@Icons.Material.Filled.AddComment" OnClick="CreateAnnotation" Disabled="@IsChapterLocked">Add Annotation</MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Warning" FullWidth="true" StartIcon="@Icons.Material.Filled.AddComment" OnClick="CreateAnnotation" Disabled="@(!CanAnnotate)">Add Annotation</MudButton>
                             }
                         </MudPaper>
                     </div>
@@ -703,7 +737,7 @@ else
                                         <div @onclick:stopPropagation="true">
                                             @if (!ann.IsResolved)
                                             {
-                                                <MudTooltip Text="Resolve Issue"><MudIconButton Icon="@Icons.Material.Filled.Check" Size="Size.Small" Color="Color.Success" OnClick="@(() => ResolveAnnotation(ann.Id))" Disabled="@IsChapterLocked" /></MudTooltip>
+                                                <MudTooltip Text="Resolve Issue"><MudIconButton Icon="@Icons.Material.Filled.Check" Size="Size.Small" Color="Color.Success" OnClick="@(() => ResolveAnnotation(ann.Id))" Disabled="@(!CanAnnotate)" /></MudTooltip>
                                             }
                                         </div>
                                     </div>
@@ -719,8 +753,11 @@ else
                             var activePage = UploadedPages[ActivePageIndex];
 
                             <MudText Typo="Typo.subtitle2" Class="font-weight-bold mt-2">PAGE NOTE</MudText>
-                            <MudTextField T="string" Label="@($"Page {SelectedPage} Note")" @bind-Value="activePage.PageNotes" Variant="Variant.Outlined" Lines="4" FullWidth="true" Placeholder="Notes about this page (applies to the whole page, all versions)…" />
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SavePageNote" Disabled="@IsChapterLocked">Save Page Note</MudButton>
+                            <MudTextField T="string" Label="@($"Page {SelectedPage} Note")" @bind-Value="activePage.PageNotes" Variant="Variant.Outlined" Lines="4" FullWidth="true" ReadOnly="@(!CanManageContent)" Placeholder="Notes about this page (applies to the whole page, all versions)…" />
+                            @if (CanManageContent)
+                            {
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SavePageNote" Disabled="@IsChapterLocked">Save Page Note</MudButton>
+                            }
 
                             <MudDivider Class="my-2" />
 
@@ -728,8 +765,11 @@ else
                             @if (activePage.Versions.Any() && activePage.ActiveVersionIndex >= 0 && activePage.ActiveVersionIndex < activePage.Versions.Count)
                             {
                                 var activeVer = activePage.Versions[activePage.ActiveVersionIndex];
-                                <MudTextField T="string" Label="@($"v{activeVer.VersionNo} Note")" @bind-Value="activeVer.Note" Variant="Variant.Outlined" Lines="8" FullWidth="true" />
-                                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveVersionNote" Disabled="@IsChapterLocked">Save Note</MudButton>
+                                <MudTextField T="string" Label="@($"v{activeVer.VersionNo} Note")" @bind-Value="activeVer.Note" Variant="Variant.Outlined" Lines="8" FullWidth="true" ReadOnly="@(!CanManageContent)" />
+                                @if (CanManageContent)
+                                {
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveVersionNote" Disabled="@IsChapterLocked">Save Note</MudButton>
+                                }
                             }
                             else
                             {
@@ -843,6 +883,31 @@ else
             </div>
         </div>
     }
+
+    <MudDialog @bind-Visible="_showReviewDialog" Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
+        <TitleContent><MudText Typo="Typo.h6">Submit Editorial Review</MudText></TitleContent>
+        <DialogContent>
+            <MudSelect T="string" Label="Decision" @bind-Value="_reviewDecision" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3">
+                <MudSelectItem Value="@("APPROVED")">Approve</MudSelectItem>
+                <MudSelectItem Value="@("REVISION_REQUESTED")">Request Revision</MudSelectItem>
+                <MudSelectItem Value="@("CANCELLED")">Cancel Chapter</MudSelectItem>
+            </MudSelect>
+            <MudTextField T="string" @bind-Value="_reviewComment" Label="Comments" Variant="Variant.Outlined" Lines="4" Margin="Margin.Dense"
+                          HelperText="Required when requesting a revision or cancelling." />
+            <div class="mt-3">
+                <MudText Typo="Typo.caption" Class="mf-muted d-block mb-1">Markup file @(_reviewDecision == "CANCELLED" ? "(required to cancel)" : "(optional)")</MudText>
+                <InputFile OnChange="OnReviewMarkupSelected" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" />
+                @if (_reviewMarkupFile != null)
+                {
+                    <MudText Typo="Typo.caption" Class="mf-muted d-block mt-1">Selected: @_reviewMarkupFile.Name</MudText>
+                }
+            </div>
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="@(() => _showReviewDialog = false)" Disabled="@_reviewSubmitting">Cancel</MudButton>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitEditorReview" Disabled="@_reviewSubmitting">@(_reviewSubmitting ? "Submitting…" : "Submit")</MudButton>
+        </DialogActions>
+    </MudDialog>
 
     <MudDialog @bind-Visible="_showEditRegionDialog" Options="new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true }">
         <TitleContent><MudText Typo="Typo.h6">@(_editRegionCount > 1 ? $"Edit {_editRegionCount} Regions" : "Edit Region")</MudText></TitleContent>

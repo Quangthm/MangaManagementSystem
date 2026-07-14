@@ -17,7 +17,11 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             var page = UploadedPages[index];
 
             ActivePageIndex = index;
-            SelectedPage = index + 1; // update the header number
+            // Use the TRUE DB page number (ChapterPage.page_number), not the list position — soft-deletes
+            // leave gaps, so position can differ from page_number and annotations/tasks (keyed by the real
+            // page) would otherwise appear under the wrong page number. Fallback to position for pending
+            // pages not yet saved (PageNo == 0).
+            SelectedPage = page.PageNo > 0 ? page.PageNo : index + 1;
 
             if (page.Versions.Any() && _leftCanvasRef != null)
             {

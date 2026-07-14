@@ -96,6 +96,18 @@
                             @(AllowFreeResize ? "Reset crop" : "Reset position and zoom")
                         </MudButton>
 
+                        @if (AllowFreeResize)
+                        {
+                            <MudButton Variant="Variant.Outlined"
+                                       Size="Size.Small"
+                                       FullWidth="true"
+                                       Color="Color.Primary"
+                                       Disabled="@(!_ready || _busy)"
+                                       OnClick="SnapToMangaRatioAsync">
+                                Snap to manga page ratio (2:3)
+                            </MudButton>
+                        }
+
                         @if (_showUpscaleWarning)
                         {
                             <MudAlert Severity="Severity.Warning"
@@ -223,7 +235,7 @@
             _jsModule ??=
                 await JSRuntime.InvokeAsync<IJSObjectReference>(
                     "import",
-                    "./js/image-crop.js?v=20260709-01");
+                    "./js/image-crop.js?v=20260712-01");
 
             await _jsModule.InvokeVoidAsync(
                 "initialize",
@@ -307,6 +319,16 @@
         await _jsModule.InvokeVoidAsync(
             "reset",
             CanvasId);
+
+        StateHasChanged();
+    }
+
+    // Free-resize only: snap the crop box to the 2:3 manga page ratio (largest that fits, centered).
+    private async Task SnapToMangaRatioAsync()
+    {
+        if (!_ready || _jsModule == null) return;
+
+        await _jsModule.InvokeVoidAsync("setCropAspect", CanvasId, 2.0 / 3.0);
 
         StateHasChanged();
     }
