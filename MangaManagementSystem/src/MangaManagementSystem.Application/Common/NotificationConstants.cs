@@ -10,6 +10,8 @@ namespace MangaManagementSystem.Application.Common
 
         public const string PublicationFrequencyRequest =
             "PUBLICATION_FREQUENCY_REQUEST";
+        public const string SystemMessage =
+            "SYSTEM_MESSAGE";
     }
 
     public static class NotificationRelatedEntityTypes
@@ -22,5 +24,8 @@ namespace MangaManagementSystem.Application.Common
 
         public const string Series =
             "Series";
+
+        public const string Chapter =
+            "Chapter";
     }
 }

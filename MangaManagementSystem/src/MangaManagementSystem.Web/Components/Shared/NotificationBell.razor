@@ -557,6 +557,22 @@
     private static string? BuildNotificationRoute(
         NotificationDto notification)
     {
+        if (string.Equals(
+                notification.NotificationTypeCode,
+                NotificationTypeCodes
+                    .SystemMessage,
+                StringComparison.OrdinalIgnoreCase)
+            && string.Equals(
+                notification.RelatedEntityType,
+                NotificationRelatedEntityTypes.Chapter,
+                StringComparison.Ordinal)
+            && notification.RelatedEntityId.HasValue
+            && notification.RelatedEntityId.Value
+                != Guid.Empty)
+        {
+            return "/editor/chapters";
+        }
+
         if (!string.Equals(
                 notification.NotificationTypeCode,
                 NotificationTypeCodes.TaskAssignment,
