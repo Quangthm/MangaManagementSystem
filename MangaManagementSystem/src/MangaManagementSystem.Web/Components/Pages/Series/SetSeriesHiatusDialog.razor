@@ -1,0 +1,67 @@
+@using MudBlazor
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Set Series to Hiatus</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.caption" Color="Color.Secondary">Series</MudText>
+        <MudText Typo="Typo.body1" Class="mb-4">
+            <strong>@SeriesTitle</strong>
+        </MudText>
+
+        <MudTextField T="string"
+                      Label="Reason"
+                      @bind-Value="_reason"
+                      Lines="4"
+                      Variant="Variant.Outlined"
+                      Required="true"
+                      MaxLength="500"
+                      Counter="500"
+                      Immediate="true" />
+
+        <MudAlert Severity="Severity.Warning" Class="mt-3" Dense="true">
+            <ul class="my-0 ps-3">
+                <li>Chapter release is paused while the series is on hiatus.</li>
+                <li>Existing planned release dates and scheduled chapter statuses are not changed.</li>
+                <li>Drafting, editing, review, and scheduling work may continue.</li>
+            </ul>
+        </MudAlert>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Color="Color.Default">Cancel</MudButton>
+        <MudButton OnClick="Submit"
+                   Color="Color.Warning"
+                   Variant="Variant.Filled"
+                   Disabled="@IsConfirmDisabled">
+            Set to Hiatus
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public string SeriesTitle { get; set; } = string.Empty;
+
+    private string _reason = string.Empty;
+
+    private bool IsConfirmDisabled =>
+        string.IsNullOrWhiteSpace(_reason)
+        || _reason.Length > 500;
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Submit()
+    {
+        if (IsConfirmDisabled)
+        {
+            return;
+        }
+
+        MudDialog.Close(
+            DialogResult.Ok(_reason.Trim()));
+    }
+}

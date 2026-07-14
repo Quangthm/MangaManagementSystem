@@ -9,6 +9,7 @@
 @attribute [Authorize]
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 @inject ISeriesApiClient SeriesApiClient
 @inject AuthenticationStateProvider AuthStateProvider
 
@@ -171,6 +172,72 @@
                                     </div>
                                 }
                             </div>
+
+                            @if (_lifecycleActionsLoading)
+                            {
+                                <div style="margin-top: 12px; display: flex; align-items: center; gap: 8px; color: #64748b; font-size: 0.8rem;">
+                                    <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Primary" />
+                                    <span>Loading series actions...</span>
+                                </div>
+                            }
+                            else if (_lifecycleActions?.CanSetHiatus == true
+                                || _lifecycleActions?.CanResumeSerialization == true
+                                || _lifecycleActions?.CanCompleteSeries == true)
+                            {
+                                <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+                                    @if (_lifecycleActions?.CanSetHiatus == true)
+                                    {
+                                        <MudButton Variant="Variant.Filled"
+                                                   Color="Color.Warning"
+                                                   StartIcon="@Icons.Material.Filled.PauseCircle"
+                                                   Disabled="@_lifecycleMutationInProgress"
+                                                   OnClick="OpenSetSeriesHiatusDialogAsync">
+                                            Set to Hiatus
+                                        </MudButton>
+                                    }
+
+                                    @if (_lifecycleActions?.CanResumeSerialization == true)
+                                    {
+                                        <MudButton Variant="Variant.Filled"
+                                                   Color="Color.Success"
+                                                   StartIcon="@Icons.Material.Filled.PlayArrow"
+                                                   Disabled="@_lifecycleMutationInProgress"
+                                                   OnClick="OpenResumeSerializationDialogAsync">
+                                            Resume Serialization
+                                        </MudButton>
+                                    }
+
+                                    @if (_lifecycleActions?.CanCompleteSeries == true)
+                                    {
+                                        <MudButton Variant="Variant.Filled"
+                                                   Color="Color.Error"
+                                                   StartIcon="@Icons.Material.Filled.CheckCircle"
+                                                   Disabled="@_lifecycleMutationInProgress"
+                                                   OnClick="OpenCompleteSeriesDialogAsync">
+                                            Mark as Completed
+                                        </MudButton>
+                                    }
+                                </div>
+                            }
+
+                            @if (string.Equals(
+                                _series.StatusCode,
+                                "HIATUS",
+                                StringComparison.OrdinalIgnoreCase))
+                            {
+                                <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3">
+                                    Chapter release is paused while this series is on hiatus.
+                                </MudAlert>
+                            }
+                            else if (string.Equals(
+                                _series.StatusCode,
+                                "COMPLETED",
+                                StringComparison.OrdinalIgnoreCase))
+                            {
+                                <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3">
+                                    This series has been completed. Existing content remains available for reference.
+                                </MudAlert>
+                            }
                         </div>
                     </div>
                 </div>
@@ -381,7 +448,10 @@
 
     private SeriesDetailDto? _series;
     private SeriesWorkspaceEntryDto? _workspaceAccess;
+    private SeriesLifecycleActionsDto? _lifecycleActions;
     private bool _loading = true;
+    private bool _lifecycleActionsLoading;
+    private bool _lifecycleMutationInProgress;
     private bool _seriesSynopsisExpanded;
     private Guid? _currentUserId;
 
@@ -415,16 +485,316 @@
             {
                 _workspaceAccess = await SeriesApiClient.GetWorkspaceEntryAsync(_currentUserId.Value, Slug);
             }
+
         }
         catch
         {
             _series = null;
+            _lifecycleActions = null;
         }
         finally
         {
             _loading = false;
         }
+
+        if (_series is not null)
+        {
+            await LoadLifecycleActionsAsync(_series.SeriesId);
+        }
     }
+
+    private async Task LoadLifecycleActionsAsync(Guid seriesId)
+    {
+        _lifecycleActionsLoading = true;
+        _lifecycleActions = null;
+
+        try
+        {
+            _lifecycleActions = await SeriesApiClient.GetLifecycleActionsAsync(
+                seriesId);
+        }
+        catch
+        {
+            _lifecycleActions = null;
+            Snackbar.Add(
+                "Series lifecycle actions could not be loaded.",
+                Severity.Warning);
+        }
+        finally
+        {
+            _lifecycleActionsLoading = false;
+        }
+    }
+
+    private async Task ReloadSeriesStateAsync()
+    {
+        if (_series is null)
+        {
+            return;
+        }
+
+        var chapterPage = Math.Max(1, _series.ChapterPage);
+        var chapterPageSize = Math.Max(1, _series.ChapterPageSize);
+        _lifecycleActions = null;
+
+        SeriesDetailDto? refreshedSeries;
+
+        try
+        {
+            refreshedSeries = await SeriesApiClient.GetSeriesDetailAsync(
+                Slug,
+                chapterPage,
+                chapterPageSize);
+        }
+        catch
+        {
+            Snackbar.Add(
+                "The updated series state could not be loaded.",
+                Severity.Warning);
+
+            return;
+        }
+
+        if (refreshedSeries is null)
+        {
+            Snackbar.Add(
+                "The updated series state could not be loaded.",
+                Severity.Warning);
+
+            return;
+        }
+
+        _series = refreshedSeries;
+
+        await LoadLifecycleActionsAsync(
+            refreshedSeries.SeriesId);
+    }
+
+    private async Task OpenSetSeriesHiatusDialogAsync()
+    {
+        if (_series is null
+            || _lifecycleActions?.CanSetHiatus != true
+            || _lifecycleMutationInProgress)
+        {
+            return;
+        }
+
+        var seriesId = _series.SeriesId;
+        var parameters =
+            new DialogParameters
+            {
+                ["SeriesTitle"] = _series.Title
+            };
+        var options =
+            new DialogOptions
+            {
+                MaxWidth = MaxWidth.Small,
+                FullWidth = true
+            };
+
+        var dialog = await DialogService.ShowAsync<SetSeriesHiatusDialog>(
+            "Set Series to Hiatus",
+            parameters,
+            options);
+        var result = await dialog.Result;
+
+        if (result is null
+            || result.Canceled
+            || result.Data is not string reason)
+        {
+            return;
+        }
+
+        _lifecycleMutationInProgress = true;
+        StateHasChanged();
+
+        try
+        {
+            await SeriesApiClient.SetHiatusAsync(
+                seriesId,
+                reason);
+
+            Snackbar.Add(
+                "The series has been set to hiatus.",
+                Severity.Success);
+
+            await ReloadSeriesStateAsync();
+        }
+        catch (ApiClientException ex)
+        {
+            Snackbar.Add(
+                GetLifecycleErrorMessage(
+                    ex,
+                    "The series could not be set to hiatus."),
+                Severity.Error);
+        }
+        catch
+        {
+            Snackbar.Add(
+                "The series could not be set to hiatus.",
+                Severity.Error);
+        }
+        finally
+        {
+            _lifecycleMutationInProgress = false;
+        }
+    }
+
+    private async Task OpenResumeSerializationDialogAsync()
+    {
+        if (_series is null
+            || _lifecycleActions?.CanResumeSerialization != true
+            || _lifecycleMutationInProgress)
+        {
+            return;
+        }
+
+        var seriesId = _series.SeriesId;
+        var parameters =
+            new DialogParameters
+            {
+                ["SeriesTitle"] = _series.Title
+            };
+        var options =
+            new DialogOptions
+            {
+                MaxWidth = MaxWidth.Small,
+                FullWidth = true
+            };
+
+        var dialog = await DialogService.ShowAsync<ResumeSeriesSerializationDialog>(
+            "Resume Serialization",
+            parameters,
+            options);
+        var result = await dialog.Result;
+
+        if (result is null
+            || result.Canceled
+            || result.Data is not true)
+        {
+            return;
+        }
+
+        _lifecycleMutationInProgress = true;
+        StateHasChanged();
+
+        try
+        {
+            await SeriesApiClient.ResumeSerializationAsync(
+                seriesId);
+
+            Snackbar.Add(
+                "Serialization has been resumed.",
+                Severity.Success);
+
+            await ReloadSeriesStateAsync();
+        }
+        catch (ApiClientException ex)
+        {
+            Snackbar.Add(
+                GetLifecycleErrorMessage(
+                    ex,
+                    "Serialization could not be resumed."),
+                Severity.Error);
+        }
+        catch
+        {
+            Snackbar.Add(
+                "Serialization could not be resumed.",
+                Severity.Error);
+        }
+        finally
+        {
+            _lifecycleMutationInProgress = false;
+        }
+    }
+
+    private async Task OpenCompleteSeriesDialogAsync()
+    {
+        if (_series is null
+            || _lifecycleActions?.CanCompleteSeries != true
+            || _lifecycleMutationInProgress)
+        {
+            return;
+        }
+
+        var seriesId = _series.SeriesId;
+        var seriesTitle = _series.Title;
+        var fallbackMessage =
+            "The completion impact could not be loaded.";
+
+        _lifecycleMutationInProgress = true;
+        StateHasChanged();
+
+        try
+        {
+            var impact = await SeriesApiClient.GetCompletionImpactAsync(
+                seriesId);
+
+            fallbackMessage =
+                "The series could not be marked as completed.";
+
+            var parameters =
+                new DialogParameters
+                {
+                    ["SeriesTitle"] = seriesTitle,
+                    ["Impact"] = impact
+                };
+            var options =
+                new DialogOptions
+                {
+                    MaxWidth = MaxWidth.Small,
+                    FullWidth = true
+                };
+
+            var dialog = await DialogService.ShowAsync<CompleteSeriesDialog>(
+                "Mark Series as Completed",
+                parameters,
+                options);
+            var result = await dialog.Result;
+
+            if (result is null
+                || result.Canceled
+                || result.Data is not true)
+            {
+                return;
+            }
+
+            await SeriesApiClient.CompleteSeriesAsync(
+                seriesId);
+
+            Snackbar.Add(
+                "The series has been marked as completed.",
+                Severity.Success);
+
+            await ReloadSeriesStateAsync();
+        }
+        catch (ApiClientException ex)
+        {
+            Snackbar.Add(
+                GetLifecycleErrorMessage(
+                    ex,
+                    fallbackMessage),
+                Severity.Error);
+        }
+        catch
+        {
+            Snackbar.Add(
+                fallbackMessage,
+                Severity.Error);
+        }
+        finally
+        {
+            _lifecycleMutationInProgress = false;
+        }
+    }
+
+    private static string GetLifecycleErrorMessage(
+        ApiClientException exception,
+        string fallbackMessage) =>
+        string.IsNullOrWhiteSpace(exception.Message)
+            ? fallbackMessage
+            : exception.Message;
 
     private async Task LoadChaptersAsync(int chapterPage)
     {

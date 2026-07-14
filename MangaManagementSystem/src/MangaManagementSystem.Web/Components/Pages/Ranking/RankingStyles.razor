@@ -1,0 +1,113 @@
+<style>
+    .ranking-page {
+        max-width: 1480px;
+        margin: 0 auto;
+    }
+
+    .ranking-hero,
+    .section-card,
+    .stat-card,
+    .top-card {
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 18px;
+        background: var(--mud-palette-surface);
+    }
+
+    .ranking-hero {
+        background: linear-gradient(135deg, rgba(99, 102, 241, .10), rgba(168, 85, 247, .08));
+    }
+
+    .ranking-period-select {
+        min-width: 220px;
+    }
+
+    .section-card {
+        overflow: hidden;
+    }
+
+    .fw-700 { font-weight: 700; }
+    .fw-800 { font-weight: 800; }
+    .fw-900 { font-weight: 900; }
+    .mono { font-variant-numeric: tabular-nums; }
+
+    .cover-avatar {
+        width: 38px !important;
+        height: 52px !important;
+        border-radius: 10px !important;
+    }
+
+    .inline-number {
+        max-width: 130px;
+        margin-left: auto;
+    }
+
+    .text-end { text-align: right; }
+    .text-center { text-align: center; }
+    .text-truncate {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .rank-gold { color: #f59e0b; }
+    .rank-silver { color: #94a3b8; }
+    .rank-bronze { color: #f97316; }
+    .rank-normal { color: var(--mud-palette-text-secondary); }
+
+    .top-card {
+        overflow: hidden;
+        transition: transform .16s ease, box-shadow .16s ease;
+    }
+
+    .top-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--mud-elevation-4);
+    }
+
+    .top-cover-wrap {
+        position: relative;
+        height: 142px;
+        overflow: hidden;
+        background: var(--mud-palette-background-gray);
+    }
+
+    .top-cover {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .top-rank-chip {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 2;
+        font-weight: 800;
+    }
+
+    .top-title {
+        min-height: 38px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .dialog-overlay {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+    }
+
+    .insert-dialog {
+        width: min(560px, 100%);
+        border-radius: 20px;
+        overflow: hidden;
+    }
+
+    .dialog-footer {
+        background: rgba(0, 0, 0, .02);
+    }
+</style>

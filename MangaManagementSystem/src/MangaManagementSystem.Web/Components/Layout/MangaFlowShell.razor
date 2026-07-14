@@ -107,7 +107,7 @@
                 Board Polls
             </a>
 
-            <AuthorizeView Roles="Editorial Board Chief">
+            <AuthorizeView Roles="Editorial Board Chief,Board Chief">
                 <Authorized>
                     <a class="@MenuClass("decisions")" href="/demo/mangaflow/decisions">
                         Decision Center
@@ -116,11 +116,11 @@
             </AuthorizeView>
 
             <div class="mf-board-nav-section">
-                Ranking &amp; Context
+                Ranking
             </div>
 
-            <a class="mf-board-nav-link" href="/demo/mangaflow/ranking">
-                Series Ranking
+            <a class="@MenuClass("ranking")" href="/ranking">
+                Ranking
             </a>
         </nav>
 
@@ -147,7 +147,6 @@
                         <NotificationBell />
                     </Authorized>
                 </AuthorizeView>
-
                 @if (Actions is not null)
                 {
                     @Actions
@@ -180,12 +179,23 @@
 </div>
 
 @code {
-    [Parameter] public string Title { get; set; } = string.Empty;
-    [Parameter] public string Subtitle { get; set; } = string.Empty;
-    [Parameter] public string ActiveMenu { get; set; } = string.Empty;
-    [Parameter] public bool ShowLiveBadge { get; set; }
-    [Parameter] public RenderFragment? Actions { get; set; }
-    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter]
+    public string Subtitle { get; set; } = string.Empty;
+
+    [Parameter]
+    public string ActiveMenu { get; set; } = string.Empty;
+
+    [Parameter]
+    public bool ShowLiveBadge { get; set; }
+
+    [Parameter]
+    public RenderFragment? Actions { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
 
     private string MenuClass(string key)
     {

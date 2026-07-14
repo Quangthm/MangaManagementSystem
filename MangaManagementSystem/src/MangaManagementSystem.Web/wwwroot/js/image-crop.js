@@ -829,6 +829,34 @@ async function exportFreeCrop(state) {
     return new Uint8Array(arrayBuffer);
 }
 
+// Free-resize helper: snap the crop rectangle to a fixed aspect ratio (e.g. 2:3 manga page), keeping it
+// centered on the current crop and as large as fits inside the image. Used by the "Manga page ratio" button.
+export function setCropAspect(canvasId, aspectRatio) {
+    const state = getState(canvasId);
+    if (!state.freeResize) return;
+
+    const ratio = Number(aspectRatio);
+    if (!ratio || ratio <= 0) return;
+
+    const centerX = state.cropX + state.cropWidth / 2;
+    const centerY = state.cropY + state.cropHeight / 2;
+
+    // Largest rectangle with this aspect ratio that fits inside the fitted image.
+    let w = state.fitW;
+    let h = w / ratio;
+    if (h > state.fitH) {
+        h = state.fitH;
+        w = h * ratio;
+    }
+
+    state.cropWidth = w;
+    state.cropHeight = h;
+    state.cropX = clamp(centerX - w / 2, state.fitX, state.fitX + state.fitW - w);
+    state.cropY = clamp(centerY - h / 2, state.fitY, state.fitY + state.fitH - h);
+
+    drawCropper(state);
+}
+
 export function dispose(canvasId) {
     const state =
         imageCropStates.get(canvasId);
