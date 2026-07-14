@@ -24,45 +24,51 @@
             <MudDivider />
 
             <MudStack Spacing="3" Class="pa-4">
-                <MudAutocomplete T="PublicationPeriodOption"
-                                 Label="Publication Week"
-                                 Placeholder="Type dd/mm/yyyy, month, year, or week name"
-                                 Required="true"
-                                 Value="@SelectedPublicationPeriod"
-                                 ValueChanged="OnPublicationPeriodSelected"
-                                 SearchFunc="SearchPublicationPeriodsAsync"
-                                 ToStringFunc="FormatPublicationPeriod"
-                                 Variant="Variant.Outlined"
-                                 Margin="Margin.Dense"
-                                 Dense="true"
-                                 Clearable="false"
-                                 CoerceText="false"
-                                 CoerceValue="false"
-                                 ResetValueOnEmptyText="false"
-                                 MinCharacters="0"
-                                 MaxItems="100"
-                                 Adornment="Adornment.Start"
-                                 AdornmentIcon="@Icons.Material.Filled.CalendarMonth"
-                                 Error="@HasError(nameof(InsertFormState.PublicationPeriodId))"
-                                 ErrorText="@GetError(nameof(InsertFormState.PublicationPeriodId))">
-                    <ItemTemplate>
-                        <MudStack Spacing="0">
-                            <MudText Typo="Typo.body2" Class="fw-700">
-                                @context.PeriodName
-                            </MudText>
+                <div @onmousedown="ClearPublicationPeriodPickerAsync"
+                     @onfocusin="ClearPublicationPeriodPickerAsync">
+                    <MudAutocomplete T="PublicationPeriodOption"
+                                     Label="Publication Week"
+                                     Placeholder="Type dd/mm/yyyy, month, year, or week name"
+                                     Required="true"
+                                     Value="@SelectedPublicationPeriod"
+                                     ValueChanged="OnPublicationPeriodSelected"
+                                     Text="@_publicationPeriodSearchText"
+                                     TextChanged="OnPublicationPeriodTextChanged"
+                                     SearchFunc="SearchPublicationPeriodsAsync"
+                                     ToStringFunc="FormatPublicationPeriod"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Dense="true"
+                                     Clearable="false"
+                                     CoerceText="false"
+                                     CoerceValue="false"
+                                     ResetValueOnEmptyText="false"
+                                     MinCharacters="0"
+                                     MaxItems="100"
+                                     OpenOnFocus="true"
+                                     Adornment="Adornment.Start"
+                                     AdornmentIcon="@Icons.Material.Filled.CalendarMonth"
+                                     Error="@HasError(nameof(InsertFormState.PublicationPeriodId))"
+                                     ErrorText="@GetError(nameof(InsertFormState.PublicationPeriodId))">
+                        <ItemTemplate>
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.body2" Class="fw-700">
+                                    @context.PeriodName
+                                </MudText>
 
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                @FormatPeriodDateRange(context)
-                            </MudText>
-                        </MudStack>
-                    </ItemTemplate>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @FormatPeriodDateRange(context)
+                                </MudText>
+                            </MudStack>
+                        </ItemTemplate>
 
-                    <NoItemsTemplate>
-                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="pa-2">
-                            No matching weekly publication period found.
-                        </MudText>
-                    </NoItemsTemplate>
-                </MudAutocomplete>
+                        <NoItemsTemplate>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="pa-2">
+                                No matching weekly publication period found.
+                            </MudText>
+                        </NoItemsTemplate>
+                    </MudAutocomplete>
+                </div>
 
                 <MudAutocomplete T="CatalogEntry"
                                  Label="Series"
@@ -193,6 +199,7 @@
     private Dictionary<string, string> _errors = [];
     private bool _wasOpen;
     private string? _seriesSearchMessage;
+    private string _publicationPeriodSearchText = string.Empty;
 
     [Parameter]
     public bool Open { get; set; }
@@ -207,8 +214,8 @@
     public IReadOnlyList<PublicationPeriodOption> PublicationPeriods { get; set; } = [];
 
     [Parameter]
-    public Func<string?, CancellationToken, Task<IEnumerable<CatalogEntry>>> SearchSeriesAsync { get; set; }
-        = (_, _) => Task.FromResult(Enumerable.Empty<CatalogEntry>());
+    public Func<Guid, string?, CancellationToken, Task<IEnumerable<CatalogEntry>>> SearchSeriesAsync { get; set; }
+        = (_, _, _) => Task.FromResult(Enumerable.Empty<CatalogEntry>());
 
     [Parameter]
     public EventCallback<InsertFormState> Saved { get; set; }
@@ -231,6 +238,8 @@
             {
                 PublicationPeriodId = SelectedPublicationPeriodId
             };
+
+            _publicationPeriodSearchText = FormatPublicationPeriod(SelectedPublicationPeriod);
         }
 
         if (Open
@@ -238,6 +247,7 @@
             && SelectedPublicationPeriodId != Guid.Empty)
         {
             _form.PublicationPeriodId = SelectedPublicationPeriodId;
+            _publicationPeriodSearchText = FormatPublicationPeriod(SelectedPublicationPeriod);
         }
 
         _wasOpen = Open;
@@ -253,6 +263,34 @@
         await OpenChanged.InvokeAsync(false);
     }
 
+    private async Task ClearPublicationPeriodPickerAsync()
+    {
+        if (Saving)
+        {
+            return;
+        }
+
+        if (_form.PublicationPeriodId == Guid.Empty)
+        {
+            return;
+        }
+
+        _form.PublicationPeriodId = Guid.Empty;
+        _form.Series = null;
+        _publicationPeriodSearchText = string.Empty;
+        _seriesSearchMessage = null;
+
+        ClearError(nameof(InsertFormState.PublicationPeriodId));
+        ClearError(nameof(InsertFormState.Series));
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void OnPublicationPeriodTextChanged(string value)
+    {
+        _publicationPeriodSearchText = value ?? string.Empty;
+    }
+
     private void OnPublicationPeriodSelected(PublicationPeriodOption? value)
     {
         if (value is null)
@@ -262,6 +300,7 @@
 
         _form.PublicationPeriodId = value.PublicationPeriodId;
         _form.Series = null;
+        _publicationPeriodSearchText = FormatPublicationPeriod(value);
         _seriesSearchMessage = null;
 
         ClearError(nameof(InsertFormState.PublicationPeriodId));
@@ -355,7 +394,11 @@
         {
             _seriesSearchMessage = null;
 
-            var result = await SearchSeriesAsync(value, cancellationToken);
+            var result = await SearchSeriesAsync(
+                _form.PublicationPeriodId,
+                value,
+                cancellationToken);
+
             var series = result.ToList();
 
             if (series.Count == 0)

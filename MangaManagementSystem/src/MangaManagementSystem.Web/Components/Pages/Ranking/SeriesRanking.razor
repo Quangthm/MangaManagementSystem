@@ -56,11 +56,11 @@
 
             <RankingStatsGrid Items="@Stats" />
 
-            @if (_canManageRankingInput && _rankingScope == ScopeWeekly && HasSelectedPeriod)
+            @if (_canManageRankingInput)
             {
                 <SeriesVoteInputSection Rows="@_inputRows"
                                         SortOptions="@_sortOptions"
-                                        SelectedPublicationWeek="@SelectedPeriodLabel"
+                                        SelectedPublicationWeek="@InputSectionLabel"
                                         Search="@_inputSearch"
                                         SearchChanged="OnInputSearchChangedAsync"
                                         Sort="@_inputSort"
@@ -83,11 +83,11 @@
                                     SelectedPublicationWeek="@SelectedPeriodLabel" />
         </MudStack>
 
-        @if (_canManageRankingInput && _rankingScope == ScopeWeekly)
+        @if (_canManageRankingInput)
         {
             <RankingInputDialog Open="@_insertDialogOpen"
                                 OpenChanged="OnInsertDialogOpenChanged"
-                                SelectedPublicationPeriodId="@_selectedPeriodOptionId"
+                                SelectedPublicationPeriodId="@SelectedInputPublicationPeriodId"
                                 PublicationPeriods="@_weeklyPublicationPeriods"
                                 SearchSeriesAsync="SearchSeriesAsync"
                                 Saved="OnCreateVoteInputAsync"
@@ -144,6 +144,34 @@
 
     private bool HasSelectedPeriod =>
         _rankingScope == ScopeAllTime || _selectedPeriodOptionId != Guid.Empty;
+
+    private Guid SelectedInputPublicationPeriodId
+    {
+        get
+        {
+            if (_rankingScope == ScopeWeekly && _selectedPeriodOptionId != Guid.Empty)
+            {
+                return _selectedPeriodOptionId;
+            }
+
+            if (_rankingScope == ScopeMonthly
+                && _selectedPeriodOptionId != Guid.Empty
+                && _monthWeekPeriodIds.TryGetValue(_selectedPeriodOptionId, out var weekIds))
+            {
+                return weekIds.FirstOrDefault();
+            }
+
+            return _weeklyPublicationPeriods.FirstOrDefault()?.PublicationPeriodId ?? Guid.Empty;
+        }
+    }
+
+    private string InputSectionLabel => _rankingScope switch
+    {
+        ScopeWeekly => SelectedPeriodLabel,
+        ScopeMonthly => $"Weekly inputs inside {SelectedPeriodLabel}",
+        ScopeAllTime => "All weekly inputs",
+        _ => SelectedPeriodLabel
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -318,7 +346,7 @@
 
         try
         {
-            _inputRows = [];
+            await LoadInputRowsForCurrentScopeAsync();
 
             if (_rankingScope == ScopeWeekly)
             {
@@ -349,21 +377,8 @@
     {
         if (_selectedPeriodOptionId == Guid.Empty)
         {
-            _inputRows = [];
             _rankingRows = [];
             return;
-        }
-
-        if (_canManageRankingInput)
-        {
-            var inputRows = await RankingApiClient.GetVoteInputsAsync(
-                _selectedPeriodOptionId,
-                _inputSearch,
-                _inputSort);
-
-            _inputRows = inputRows
-                .Select(RankingUiHelper.ToInputRow)
-                .ToList();
         }
 
         var rankingRows = await RankingApiClient.GetRankingAsync(
@@ -373,6 +388,59 @@
 
         _rankingRows = rankingRows
             .Select(RankingUiHelper.ToRankingRow)
+            .ToList();
+    }
+
+    private async Task LoadInputRowsForCurrentScopeAsync()
+    {
+        if (!_canManageRankingInput)
+        {
+            _inputRows = [];
+            return;
+        }
+
+        var periodIds = GetInputPeriodIdsForCurrentScope();
+
+        if (periodIds.Count == 0)
+        {
+            _inputRows = [];
+            return;
+        }
+
+        var rows = new List<SeriesInputRow>();
+
+        foreach (var periodId in periodIds)
+        {
+            var inputRows = await RankingApiClient.GetVoteInputsAsync(
+                periodId,
+                _inputSearch,
+                _inputSort);
+
+            rows.AddRange(inputRows.Select(RankingUiHelper.ToInputRow));
+        }
+
+        _inputRows = rows;
+    }
+
+    private IReadOnlyList<Guid> GetInputPeriodIdsForCurrentScope()
+    {
+        if (_rankingScope == ScopeWeekly)
+        {
+            return _selectedPeriodOptionId == Guid.Empty
+                ? []
+                : [_selectedPeriodOptionId];
+        }
+
+        if (_rankingScope == ScopeMonthly)
+        {
+            return _selectedPeriodOptionId != Guid.Empty
+                   && _monthWeekPeriodIds.TryGetValue(_selectedPeriodOptionId, out var weekIds)
+                ? weekIds
+                : [];
+        }
+
+        return _weeklyPublicationPeriods
+            .Select(period => period.PublicationPeriodId)
             .ToList();
     }
 
@@ -592,11 +660,7 @@
     private async Task OnInputSearchChangedAsync(string value)
     {
         _inputSearch = value ?? string.Empty;
-
-        if (_rankingScope == ScopeWeekly)
-        {
-            await LoadRowsAsync();
-        }
+        await LoadRowsAsync();
     }
 
     private async Task OnRankingSearchChangedAsync(string value)
@@ -611,10 +675,7 @@
             ? "updated_desc"
             : value;
 
-        if (_rankingScope == ScopeWeekly)
-        {
-            await LoadRowsAsync();
-        }
+        await LoadRowsAsync();
     }
 
     private async Task OnRankingSortChangedAsync(string value)
@@ -637,19 +698,10 @@
             return;
         }
 
-        if (_rankingScope != ScopeWeekly)
+        if (_weeklyPublicationPeriods.Count == 0)
         {
             Snackbar.Add(
-                "Please switch to Weekly mode before adding series vote input.",
-                Severity.Warning);
-
-            return;
-        }
-
-        if (!HasSelectedPeriod)
-        {
-            Snackbar.Add(
-                "Please select a weekly publication period before adding series vote input.",
+                "Please seed at least one weekly publication period before adding series vote input.",
                 Severity.Warning);
 
             return;
@@ -664,18 +716,17 @@
     }
 
     private async Task<IEnumerable<CatalogEntry>> SearchSeriesAsync(
-        string? searchText,
-        CancellationToken cancellationToken)
+    Guid publicationPeriodId,
+    string searchText,
+    CancellationToken cancellationToken)
     {
-        if (!_canManageRankingInput
-            || _rankingScope != ScopeWeekly
-            || _selectedPeriodOptionId == Guid.Empty)
+        if (!_canManageRankingInput || publicationPeriodId == Guid.Empty)
         {
             return [];
         }
 
         var result = await RankingApiClient.SearchSeriesAsync(
-            _selectedPeriodOptionId,
+            publicationPeriodId,
             searchText,
             maxResults: 10,
             cancellationToken);
