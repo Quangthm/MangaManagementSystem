@@ -6,6 +6,8 @@
 
 > **Latest alignment update — 2026-07-04:** This version replaces strict publication-period schedule validation with advisory chapter-level publication scheduling. `Series.publication_frequency_code` now provides default suggestions and warnings only. Authorized Mangaka and Tantou Editors may schedule/reschedule future planned release dates; Editors handle hold/release enforcement; held chapters require a new planned date to return to `SCHEDULED`; and auto-hold/release automation remain deferred.
 
+> **Latest series lifecycle alignment — 2026-07-11:** The system shall use `HIATUS` for paused series; active Mangaka or Tantou Editor contributors may pause/resume serialized series; `HIATUS` blocks release only. Only active Mangaka contributors may mark serialized or hiatus series as `COMPLETED`; completion blocks future business mutations, cancels unreleased chapters after confirmation, preserves history, and does not hide completed series from rankings.
+
 ---
 
 ## 3. Functional Requirements
@@ -175,6 +177,24 @@
 | FR-SERIES-024 | The system shall reject normal series profile update attempts after the series leaves `PROPOSAL_DRAFT`, unless a separate controlled workflow allows the specific change. | BR-SERIES-023 |
 | FR-SERIES-025 | The system shall allow Mangaka production work after serialization through chapters, pages, page versions, regions, tasks, and the authorized chapter workspace rather than normal series profile editing. | BR-SERIES-024 |
 | FR-SERIES-026 | The system shall create an active `SeriesContributor` record for the Mangaka who creates a new series draft in the same backend workflow or transaction that creates the `Series` record. | BR-SERIES-025 |
+| FR-SERIES-027 | The system shall restrict series lifecycle status to `PROPOSAL_DRAFT`, `UNDER_EDITORIAL_REVIEW`, `UNDER_BOARD_REVIEW`, `SERIALIZED`, `HIATUS`, `COMPLETED`, or `CANCELLED`. | BR-SERIES-026 |
+| FR-SERIES-028 | The system shall treat `HIATUS` as the paused-series status and shall not require a separate `PAUSED` status. | BR-SERIES-027 |
+| FR-SERIES-029 | The system shall allow only active Mangaka contributors or active Tantou Editor contributors of a `SERIALIZED` series to change the series to `HIATUS`. | BR-SERIES-028 |
+| FR-SERIES-030 | The system shall allow only active Mangaka contributors or active Tantou Editor contributors of a `HIATUS` series to resume the series back to `SERIALIZED`. | BR-SERIES-029 |
+| FR-SERIES-031 | The system shall block chapter release while the parent series is `HIATUS`. | BR-SERIES-030, BR-SERIES-032, BR-CH-019 |
+| FR-SERIES-032 | The system shall continue allowing drafting, chapter creation, page work, review, scheduling, and rescheduling for `HIATUS` series when normal chapter status and role permissions allow those actions. | BR-SERIES-030 |
+| FR-SERIES-033 | The system shall not automatically change scheduled chapters to `ON_HOLD` when a series is changed to `HIATUS`. | BR-SERIES-031 |
+| FR-SERIES-034 | The system shall allow only active Mangaka contributors of a `SERIALIZED` or `HIATUS` series to mark the series as `COMPLETED`. | BR-SERIES-033 |
+| FR-SERIES-035 | The system shall treat `COMPLETED` as an author-ended final state that is distinct from board/business `CANCELLED`. | BR-SERIES-034 |
+| FR-SERIES-036 | The system shall require clear warning and explicit confirmation before marking a series as `COMPLETED`. | BR-SERIES-035 |
+| FR-SERIES-037 | The system shall block normal future business mutations under a `COMPLETED` series, including series profile/status changes, new chapters, chapter/page content changes, page-version changes, region edits, task changes, review actions, scheduling, rescheduling, hold, and release actions. | BR-SERIES-036 |
+| FR-SERIES-038 | The system shall preserve completed-series records for authorized viewing and traceability instead of deleting existing chapters, pages, versions, regions, annotations, tasks, reviews, notifications, or audit logs. | BR-SERIES-037 |
+| FR-SERIES-039 | The system shall keep already `RELEASED` chapters unchanged when their parent series is marked `COMPLETED`. | BR-SERIES-038 |
+| FR-SERIES-040 | The system shall change unreleased active chapters under a newly completed series to `CANCELLED` with a completion-related reason after confirmation. | BR-SERIES-039, BR-SERIES-040 |
+| FR-SERIES-041 | The system shall preserve completion-cancelled chapters as read-only historical records. | BR-SERIES-041 |
+| FR-SERIES-042 | The system shall allow `CANCEL_SERIALIZATION` board polls for `SERIALIZED` or `HIATUS` series, but not for `COMPLETED` series through normal MVP workflow. | BR-SERIES-042 |
+
+
 ---
 
 ## 3.6 Series Contributors
@@ -238,7 +258,7 @@
 | FR-BOARD-POLL-002 | The system shall allow a `START_SERIALIZATION` poll only when `Series.status_code = UNDER_BOARD_REVIEW`. | BR-BOARD-POLL-002 |
 | FR-BOARD-POLL-003 | The system shall allow a `START_SERIALIZATION` poll only when the selected series has exactly one active proposal with `SeriesProposal.status_code = UNDER_BOARD_REVIEW`. | BR-BOARD-POLL-003 |
 | FR-BOARD-POLL-004 | The system shall treat a `START_SERIALIZATION` poll as voting on the active under-board-review proposal for the selected series even though the poll stores only `series_id`. | BR-BOARD-POLL-004 |
-| FR-BOARD-POLL-005 | The system shall allow a `CANCEL_SERIALIZATION` poll for a serialized or paused series only when the Editorial Board Chief provides a reason. | BR-BOARD-POLL-005 |
+| FR-BOARD-POLL-005 | The system shall allow a `CANCEL_SERIALIZATION` poll for a `SERIALIZED` or `HIATUS` series only when the Editorial Board Chief provides a reason. | BR-BOARD-POLL-005 |
 | FR-BOARD-POLL-006 | The system shall display low ranking or high cancellation risk as supporting evidence for cancellation polls when available. | BR-BOARD-POLL-006 |
 | FR-BOARD-POLL-007 | The system shall not require low ranking or high cancellation risk to be the only reason for opening a cancellation poll. | BR-BOARD-POLL-006 |
 | FR-BOARD-POLL-008 | The system shall require each board poll to have a non-empty reason. | BR-BOARD-POLL-007 |
@@ -319,6 +339,8 @@
 | FR-CH-016 | The system shall lock Mangaka chapter content changes when a chapter is `SCHEDULED`. | BR-CH-016 |
 | FR-CH-017 | The system shall allow authorized Mangaka and Tantou Editors to reschedule a `SCHEDULED` chapter to a future date while treating publication frequency mismatch as a warning rather than a hard blocker. | BR-CH-017 |
 | FR-CH-018 | The system shall require a new future planned release date when returning a chapter from `ON_HOLD` to `SCHEDULED`. | BR-CH-018 |
+| FR-CH-019 | The system shall block chapter release when the parent series is `HIATUS`, `COMPLETED`, or `CANCELLED`. | BR-CH-019 |
+| FR-CH-020 | The system shall block normal chapter creation and mutation workflows when the parent series is `COMPLETED`. | BR-CH-020 |
 
 ---
 
@@ -554,6 +576,8 @@
 | FR-PUB-SCHEDULED-008 | The system shall defer automatic overdue-to-ON_HOLD transitions unless a later workflow explicitly implements them. | BR-PUB-SCHEDULED-009 |
 | FR-PUB-SCHEDULED-009 | The system shall defer release automation and public release visibility to later workflows. | BR-PUB-SCHEDULED-010 |
 | FR-PUB-SCHEDULED-010 | The system may support bulk schedule, bulk hold, and bulk release later; when implemented, those workflows shall require confirmation and audit each affected chapter. | BR-PUB-SCHEDULED-011 |
+| FR-PUB-SCHEDULED-011 | The system shall block release actions when the parent series is `HIATUS`, `COMPLETED`, or `CANCELLED`; `HIATUS` series must return to `SERIALIZED` before release. | BR-PUB-SCHEDULED-012 |
+| FR-PUB-SCHEDULED-012 | The system shall allow scheduling and rescheduling while the parent series is `HIATUS` when the chapter status and normal permissions allow it. | BR-PUB-SCHEDULED-013 |
 
 ---
 
@@ -590,6 +614,7 @@
 | FR-RANK-007 | The system shall avoid storing `ranking_score` and `rank_position` as duplicated normal columns unless later performance profiling proves caching is required. | BR-RANK-006 |
 | FR-RANK-008 | The system shall prevent ranking results from automatically cancelling a series. | BR-RANK-007 |
 | FR-RANK-009 | The system shall allow ranking evidence to support board review while still requiring the applicable workflow decision for cancellation. | BR-RANK-008 |
+| FR-RANK-010 | The system shall keep completed series visible in dynamic rankings when `SeriesVoteInput` exists for the selected publication period. | BR-RANK-009 |
 
 
 ---

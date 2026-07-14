@@ -6,6 +6,8 @@
 
 > **Latest scheduling alignment — 2026-07-04:** Publication scheduling is chapter-level and advisory. `SCHEDULED` applies to `Chapter.status_code`, not `Series.status_code`; `Series.publication_frequency_code` suggests defaults and warnings but no longer hard-blocks scheduling. Mangaka and Tantou Editors may schedule/reschedule future planned release dates when status/permissions allow; Editors remain the final release enforcer, on-hold recovery requires a new planned date, and automatic hold for overdue chapters is deferred.
 
+> **Latest series lifecycle alignment — 2026-07-11:** `HIATUS` is the schema status for a paused series. Active Mangaka or Tantou Editor contributors may set a `SERIALIZED` series to `HIATUS` and resume it back to `SERIALIZED`; `HIATUS` blocks chapter release only. Only active Mangaka contributors may mark a `SERIALIZED` or `HIATUS` series as `COMPLETED`; completed series are immutable for normal business changes, cancel unreleased chapters after confirmation, preserve history, and remain visible in rankings when ranking input exists.
+
 ---
 
 ## 1. Project Summary
@@ -33,6 +35,7 @@ The MVP should stay focused and avoid unnecessary tables unless a table represen
 | File management | Store actual media in Cloudinary; store metadata and references in `manga.FileResource`. Every file resource must store a backend-calculated `sha256_hash`; duplicate-file warnings based on this hash are optional MVP usability behavior and may be implemented only where time allows. |
 | Series cover crop | The Web UI may crop a selected cover image in the browser before upload. The current MVP cover output is a `1000×1500` PNG in a 2:3 portrait ratio; the cropped file is the actual `SERIES_COVER`, while the original source image and crop metadata are not stored. |
 | Series management | Manage series profile, unique slug, lifecycle status, primary language, normalized genres, normalized tags, current cover image, publication frequency, and optional source series reference. `series_id` is the internal backend identity; `slug` is the stable URL identity after serialization. No separate `series_code` is used in MVP. |
+| Series lifecycle | Use `HIATUS` as the paused-series status. Active Mangaka or Tantou Editor contributors may pause/resume a serialized series. Only active Mangaka contributors may mark a series as `COMPLETED`. `HIATUS` blocks release only; `COMPLETED` freezes normal business mutations, cancels unreleased chapters after confirmation, preserves history, and remains ranking-visible. |
 | Series contributors | Manage team membership through `SeriesContributor`, not a direct lead Mangaka column on `Series`. |
 | Series proposals | Store formal submitted proposal versions in `SeriesProposal`; revisions create new proposal rows. |
 | Board workflow | Use `SeriesBoardPoll` and `SeriesBoardVote`; Editorial Board Chief opens, closes, and cancels board polls, specifies publication frequency when opening `START_SERIALIZATION` polls, may also vote, and board results are computed from votes. Do **not** use a separate `SeriesBoardDecision` table. |
@@ -230,6 +233,18 @@ The project uses **permission-based actor grouping** for shared features and rol
 - Historical contributor rows are preserved.
 - First proposal submission from `PROPOSAL_DRAFT` into `UNDER_EDITORIAL_REVIEW` requires at least one active Mangaka contributor, but does not require an active Tantou Editor contributor yet. Submitted proposals appear in the editorial review queue for active Tantou Editors to claim or handle later.
 
+- The approved MVP series status list is `PROPOSAL_DRAFT`, `UNDER_EDITORIAL_REVIEW`, `UNDER_BOARD_REVIEW`, `SERIALIZED`, `HIATUS`, `COMPLETED`, and `CANCELLED`.
+- `HIATUS` is the schema status for a paused series; do not add a separate `PAUSED` status.
+- Active Mangaka contributors and active Tantou Editor contributors may move a `SERIALIZED` series to `HIATUS`, and may resume a `HIATUS` series back to `SERIALIZED`.
+- `HIATUS` blocks chapter release only. Drafting, chapter creation, page work, editorial review, scheduling, and rescheduling may continue when normal chapter status and role permissions allow them.
+- Setting a series to `HIATUS` does not automatically change scheduled chapters to `ON_HOLD`.
+- Only an active Mangaka contributor may mark a `SERIALIZED` or `HIATUS` series as `COMPLETED`.
+- `COMPLETED` means the author-side series has naturally ended; it is distinct from board/business `CANCELLED`.
+- Marking a series as `COMPLETED` requires clear warning and confirmation because the action is final and normally irreversible.
+- A completed series blocks normal future business mutations under that series, including series profile/status changes, new chapters, page/page-version changes, region edits, task changes, review actions, scheduling, rescheduling, hold, and release actions.
+- When a series is completed, already released chapters remain released; unreleased active chapters are cancelled with a completion-related reason after confirmation; already cancelled chapters remain unchanged.
+- Completed series and their historical records remain viewable to authorized users, and completed series remain visible in rankings when vote input exists.
+
 ## 4.6 Series Proposal
 
 - `SeriesProposal` stores one formal submitted proposal version.
@@ -260,7 +275,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 - A `START_SERIALIZATION` poll may open only when `Series.status_code = UNDER_BOARD_REVIEW`.
 - A `START_SERIALIZATION` poll may open only when the series has exactly one active proposal with `SeriesProposal.status_code = UNDER_BOARD_REVIEW`.
 - A `START_SERIALIZATION` poll represents voting on the active under-board-review proposal even though the poll stores only `series_id`.
-- A `CANCEL_SERIALIZATION` poll may open for serialized or paused series when Editorial Board Chief provides a reason.
+- A `CANCEL_SERIALIZATION` poll may open for `SERIALIZED` or `HIATUS` series when Editorial Board Chief provides a reason.
 - Low ranking or high cancellation risk may support cancellation polls but cannot be the only allowed reason.
 - Each poll must have a non-empty reason.
 - A poll may have an end time or be closed manually by the Editorial Board Chief.
@@ -464,6 +479,8 @@ The project uses **permission-based actor grouping** for shared features and rol
 - When a chapter is `SCHEDULED`, Mangaka and page/content mutation workflows are locked.
 - `ON_HOLD` means the previous active release plan is suspended. Returning from `ON_HOLD` to `SCHEDULED` requires setting a new future planned release date.
 - Tantou Editors may put a scheduled chapter `ON_HOLD` with a required reason and may release eligible chapters as the final publication enforcement action.
+- Chapter release is blocked when the parent series is `HIATUS`, `COMPLETED`, or `CANCELLED`; a `HIATUS` series must return to `SERIALIZED` before release can proceed.
+- While the parent series is `HIATUS`, scheduling and rescheduling may still proceed when normal chapter status and role permissions allow it.
 - Releasing a chapter sets `released_at_utc` to the current UTC timestamp. If `planned_release_date` is missing, the system sets it to the current publication business date; if it already exists, it is preserved for planned-versus-actual comparison.
 - Auto-hold for overdue scheduled chapters, release automation, and public release visibility are deferred to later tasks.
 
@@ -498,6 +515,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 - `ranking_score` and `rank_position` are derived values and should not be stored as duplicated `Series` attributes unless later profiling proves caching is necessary.
 - Ranking results do not automatically cancel a series.
 - Ranking evidence may support board or editorial review, but cancellation still requires the applicable workflow decision.
+- Completed series remain visible in dynamic rankings when `SeriesVoteInput` exists for the selected publication period.
 
 ## 4.14 Notifications
 
@@ -616,7 +634,17 @@ Use direct `status_code` or fixed code columns with database constraints where a
 - `ACTIVE`
 - `DISABLED`
 
-### 7.2 Chapter Status
+### 7.2 Series Status
+
+- `PROPOSAL_DRAFT`
+- `UNDER_EDITORIAL_REVIEW`
+- `UNDER_BOARD_REVIEW`
+- `SERIALIZED`
+- `HIATUS`
+- `COMPLETED`
+- `CANCELLED`
+
+### 7.3 Chapter Status
 
 - `DRAFT`
 - `UNDER_REVIEW`
@@ -627,26 +655,26 @@ Use direct `status_code` or fixed code columns with database constraints where a
 - `ON_HOLD`
 - `CANCELLED`
 
-### 7.3 Page Task Status
+### 7.4 Page Task Status
 
 - `ASSIGNED`
 - `UNDER_REVIEW`
 - `COMPLETED`
 - `CANCELLED`
 
-### 7.4 Board Poll Status
+### 7.5 Board Poll Status
 
 - `OPEN`
 - `CLOSED`
 - `CANCELLED`
 
-### 7.5 Board Vote Choice
+### 7.6 Board Vote Choice
 
 - `APPROVE`
 - `REJECT`
 - `ABSTAIN`
 
-### 7.6 Board Computed Result
+### 7.7 Board Computed Result
 
 - `PENDING` for open poll
 - `APPROVED`
@@ -654,7 +682,7 @@ Use direct `status_code` or fixed code columns with database constraints where a
 - `NO_DECISION`
 - `INVALIDATED` for cancelled poll
 
-### 7.7 Region Type
+### 7.8 Region Type
 
 - `PANEL`
 - `SPEECH_BUBBLE`
@@ -663,12 +691,12 @@ Use direct `status_code` or fixed code columns with database constraints where a
 - `BACKGROUND`
 - `OTHER`
 
-### 7.8 Region Source
+### 7.9 Region Source
 
 - `AI`
 - `MANUAL`
 
-### 7.9 Publication Frequency
+### 7.10 Publication Frequency
 
 - `WEEKLY`
 - `MONTHLY`

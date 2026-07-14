@@ -2,7 +2,9 @@
 
 **Project:** Manga Creation Workflow and Publishing Management System  
 **Target UI:** Blazor Server / MudBlazor MVP  
-**Last updated:** 2026-07-04  
+**Last updated:** 2026-07-11
+
+**Latest lifecycle update:** `HIATUS` is the paused-series status. Active Mangaka or Tantou Editor contributors may pause/resume serialized series. Only active Mangaka contributors may mark serialized/hiatus series as `COMPLETED`. `HIATUS` blocks release only; `COMPLETED` makes the series read-only/immutable for normal business actions, cancels unreleased chapters after confirmation, and remains ranking-visible.  
 **Purpose:** Define the UI behavior for Mangaka-owned series drafting, slug usage, stable series URLs, and the centralized chapter-level workspace.
 
 ---
@@ -17,10 +19,14 @@
 | Slug behavior | Backend generates slug from title during `PROPOSAL_DRAFT`; slug may auto-update when title changes during draft; slug locks after the series leaves `PROPOSAL_DRAFT`. |
 | Stable series URL | `/series/{slug}` becomes the main stable series URL, especially after the series becomes `SERIALIZED`. |
 | Series profile editing | Normal Mangaka edits are allowed only while `status_code = PROPOSAL_DRAFT`. |
+| Series hiatus | Active Mangaka or Tantou Editor contributors may set `SERIALIZED` series to `HIATUS` and resume `HIATUS` series to `SERIALIZED`; hiatus blocks release only. |
+| Series completion | Only active Mangaka contributors may mark a `SERIALIZED` or `HIATUS` series as `COMPLETED`; completion requires warning/confirmation, cancels unreleased chapters, and makes the series read-only. |
 | Publication frequency | Mangaka may set `publication_frequency_code` during draft as a proposed/preferred frequency; board serialization workflow may override it later. |
 | Workspace level | The centralized authorized workspace is chapter-level, not page-level. |
 | Workspace AI tools | AI segmentation and AI/OCR translation tools are available to all Authorized Page Workspace Users who have access to the relevant workspace. |
 | Workspace permissions | AI tools are shared; business actions remain role-specific and permission-gated. |
+| Publication schedule page | `/publication/schedule` is a shared weekly calendar. Read-only roles load only scheduled/released schedule data; scheduling actors may open a role-gated action drawer. |
+| Publication action drawer | Mangaka and Tantou Editor scheduling actions use a restricted actionable chapter feed, full-card drag/drop, and confirmation dialogs. Assistant, Board, Admin, and future public viewers must not load unscheduled/actionable drawer data. |
 
 ---
 
@@ -33,6 +39,7 @@
 | `/editor/proposals` | Editorial proposal queue, prioritizing unclaimed submitted proposals. | Tantou Editor |
 | `/editor/proposals/{proposalId}` | Proposal review detail page for request revision, cancel, or pass to board. | Tantou Editor contributor / authorized Tantou Editor |
 | `/series/{slug}` | Stable main series page after serialization; future public reader URL can reuse it. | Authorized now; public in future |
+| `/publication/schedule` | Shared weekly publication calendar with optional series slug filter and role-gated scheduling action drawer. | Authorized users for schedule viewing; Mangaka/Tantou Editor actions only |
 | `/workspace/chapters/{chapterId}` | Central authorized chapter workspace. | Authorized Page Workspace User |
 | `/workspace/chapters/{chapterId}?page={pageNumber}` | Workspace opened with selected page. | Authorized Page Workspace User |
 | `/workspace/chapters/{chapterId}?page={pageNumber}&version={versionId}` | Workspace opened with selected page version. | Authorized Page Workspace User |
@@ -43,6 +50,8 @@
 - Use slug mainly for the stable main series page.
 - Use `chapter_id`, `chapter_page_id`, and `chapter_page_version_id` for workspace editing context.
 - Do not use slug as the primary identifier for page/version editing.
+- Use `?series={slug}` as the preferred publication schedule series filter URL identity; keep legacy `?seriesId={guid}` support only for backward-compatible navigation.
+- Use `anchorDate=yyyy-MM-dd` for publication schedule week navigation; the selected week is derived from the anchor date.
 
 ---
 
@@ -252,9 +261,9 @@ A unified series page that can later become the public reader-facing series URL.
 
 | Role | Possible actions |
 |---|---|
-| Mangaka contributor | Add chapter, manage chapters, open workspace, view ranking context, request frequency change after board decision. |
+| Mangaka contributor | Add chapter, manage chapters, open workspace, view ranking context, request frequency change after board decision, set/resume hiatus, and mark eligible own series as completed. |
 | Assistant | Open assigned task or workspace context only for assigned work. |
-| Tantou Editor | Open review workspace, review chapter, view annotations. |
+| Tantou Editor | Open review workspace, review chapter, view annotations, set/resume hiatus for contributed series. |
 | Editorial Board Member / Chief | View ranking and board context; no page workspace access by default unless explicitly granted. |
 | Admin | No normal manga production actions. |
 
@@ -670,6 +679,58 @@ The End Assistant flow requires `manga.usp_SeriesContributor_EndAssistant` to be
 
 ---
 
+
+## 6A. Series Lifecycle Actions
+
+### Purpose
+
+Define the UI behavior for changing a serialized series to `HIATUS`, resuming it back to `SERIALIZED`, and marking it as `COMPLETED`.
+
+### Status meanings
+
+| Series status | UI meaning |
+|---|---|
+| `SERIALIZED` | Active production/publication series. |
+| `HIATUS` | Paused series. Production and scheduling may continue, but chapter release is blocked until the series returns to `SERIALIZED`. |
+| `COMPLETED` | Author-ended final series. The series and related production records are read-only for normal business actions. |
+| `CANCELLED` | Board/business-cancelled final series. |
+
+### Hiatus actions
+
+| Action | Actor | Availability | UI behavior |
+|---|---|---|---|
+| Set to Hiatus | Active Mangaka contributor or active Tantou Editor contributor | Series status is `SERIALIZED` | Show confirmation and optional/required reason according to implementation. On success, show `HIATUS` badge and refresh actions. |
+| Resume Serialization | Active Mangaka contributor or active Tantou Editor contributor | Series status is `HIATUS` | Show confirmation and optional/required reason according to implementation. On success, show `SERIALIZED` badge and refresh actions. |
+
+Hiatus UI rules:
+
+- `HIATUS` must be shown as a series-level status badge, not as a chapter status.
+- While a series is `HIATUS`, the UI may still show chapter creation, drafting, review, scheduling, and rescheduling actions when the normal chapter status and role permissions allow those actions.
+- While a series is `HIATUS`, release actions must be hidden or disabled with helper text explaining that the series must be resumed to `SERIALIZED` first.
+- Setting a series to `HIATUS` must not automatically change scheduled chapter badges to `ON_HOLD`.
+
+### Completion action
+
+| Action | Actor | Availability | UI behavior |
+|---|---|---|---|
+| Mark as Completed | Active Mangaka contributor only | Series status is `SERIALIZED` or `HIATUS` | Show a strong confirmation dialog listing unreleased chapters that will be cancelled. On success, show `COMPLETED` badge and read-only state. |
+
+Completion confirmation dialog should explain:
+
+```text
+This will mark the series as completed. All unreleased chapters will be cancelled and become read-only. Released chapters and historical records will be preserved. This action cannot be undone through normal workflow.
+```
+
+Completion UI rules:
+
+- `COMPLETED` series pages remain viewable to authorized users.
+- `COMPLETED` series should hide or disable normal business mutation actions, including edit series details/status, add chapter, edit chapter/page content, upload page versions, edit regions, create/update tasks, review, schedule, reschedule, hold, and release.
+- Released chapters remain visible as released.
+- Completion-cancelled chapters remain visible as cancelled/read-only historical records.
+- Completed series remain visible in the ranking UI when ranking input exists.
+
+---
+
 ## 7.x Safe Return URL Behavior
 
 ### Purpose
@@ -1021,24 +1082,115 @@ For MVP, symbolic `returnContext` is safer and easier to avoid open-redirect mis
 
 ### Purpose
 
-Support flexible chapter planned release date selection, schedule visibility, hold handling, and editor-driven release actions.
+Support a shared weekly publication calendar for planned and released chapters, plus role-gated scheduling actions for users who are allowed to modify chapter release plans.
 
 Scheduling is chapter-level. The UI must use `Chapter.planned_release_date`, `Chapter.released_at_utc`, and `Chapter.status_code`; it must not present `SCHEDULED` as a series status.
 
-`Series.publication_frequency_code` is advisory. It may provide suggested default dates and warning messages, but it must not hard-block authorized users from choosing a different future date.
+`Series.publication_frequency_code` is advisory. It may provide suggested dates and warning messages, but it must not hard-block authorized users from choosing a different future date.
+
+### Current route and URL behavior
+
+| Route / query | Behavior |
+|---|---|
+| `/publication/schedule` | Main shared publication calendar page. |
+| `?anchorDate=yyyy-MM-dd` | Selects the week to display. Week navigation updates this value. |
+| `?series={slug}` | Preferred series filter identity for the schedule page. |
+| `?seriesId={guid}` | Legacy series filter support only. When resolvable, the UI should upgrade navigation/state to slug identity. |
+
+URL and state rules:
+
+- The schedule page should resolve a selected series slug to the internal `series_id` for API filtering.
+- The UI may keep `series_id` internally, but public/shared navigation should prefer `series` slug.
+- If an incoming slug or legacy `seriesId` cannot be resolved, the UI should clear the selected series state, show a safe warning, and load the calendar unfiltered.
+- Clearing the series filter must clear both the visible autocomplete value and the URL query value.
+
+### Data feeds and authorization boundaries
+
+The schedule page has two different data feeds and they must not be mixed.
+
+| Feed | Loaded for | Contains | Notes |
+|---|---|---|---|
+| Calendar schedule feed | Authorized schedule viewers | Chapters that are scheduled or released for the selected week/filter from `SERIALIZED`, `HIATUS`, or historically relevant `COMPLETED` series. | Safe for read-only schedule viewing. Completed series are read-only. |
+| Actionable chapter feed | Mangaka and Tantou Editor only | Role-authorized chapters that can be scheduled/rescheduled/held/released or used as drag payloads. | Must not be loaded for Assistant, Board Member, Board Chief, Admin read-only views, or future public viewers. |
+
+Loading rules:
+
+- Always load the calendar schedule feed for users who may view the schedule page.
+- Load the actionable chapter feed only when the current actor can use schedule actions.
+- Prefer lazy-loading the actionable feed when the scheduling action drawer opens, then refresh it after successful schedule/hold/release actions.
+- The drawer must not query or display unscheduled/actionable chapters for roles that cannot schedule.
+- Frontend gating is a performance and UX guard only; backend endpoints must still enforce actor authorization.
 
 ### Actor behavior
 
-| Actor | Allowed behavior |
+| Actor | Calendar access | Action drawer | Allowed behavior |
+|---|---|---|---|
+| Mangaka | Yes, authorized schedule view. | Yes, when authenticated as allowed Mangaka actor. | May set or reschedule a planned release date for allowed chapters, including under `HIATUS` series. Cannot release chapters and cannot mutate page/content when a chapter is `SCHEDULED` or `ON_HOLD`. |
+| Tantou Editor | Yes. | Yes. | May set/reschedule a planned date, put `SCHEDULED` chapters on hold, return held chapters to schedule by selecting a new planned date, and release eligible chapters only when the parent series is `SERIALIZED`. |
+| Assistant | Read-only schedule view if route access is granted. | No. | Must not load actionable/unscheduled drawer data. |
+| Editorial Board Member / Chief | Read-only schedule view if route access is granted. | No. | Board workflows control series-level/frequency decisions elsewhere, not chapter scheduling through this drawer. |
+| Admin | Read-only/system oversight only if route access is granted. | No. | No normal manga production actions. |
+| Future public viewer | Public schedule view only if enabled later. | No. | Must load only public-safe schedule data. |
+
+### Calendar layout behavior
+
+- The calendar displays one week at a time as day columns.
+- The day grid must render even when the selected week has no scheduled/released chapter cards.
+- Empty weeks may show an informational empty-state alert, but that alert must not replace the day grid.
+- Empty day columns should show a safe empty label such as `No releases`.
+- When a scheduling placement is active, empty day columns may show placement helper text such as `Click to place here`.
+- Week navigation through previous/next buttons remains available by click.
+- Hover-over-arrow week navigation while dragging is not implemented in the current MVP and should be treated as deferred.
+
+### Calendar card placement behavior
+
+- The shared publication calendar should show schedule/release cards for `SERIALIZED` and `HIATUS` series, and may show historical released cards for `COMPLETED` series; mutation actions remain status- and permission-gated.
+- A chapter card is placed on its release business date when `released_at_utc` exists.
+- If `released_at_utc` is missing, the card is placed on `planned_release_date`.
+- `released_at_utc` must be converted to Vietnam publication time (UTC+7), then date-only, before business-date placement.
+- Chapter cards should prioritize series cover, series title, chapter number label, and status badge.
+- Missing covers should use a safe placeholder.
+- Calendar cards are draggable only when the current actor has an authorized actionable payload for that chapter.
+- Calendar-card drag must not be enabled for read-only roles.
+
+### Search and filter behavior
+
+| Element | Behavior |
 |---|---|
-| Mangaka | May set or reschedule a planned release date when the chapter is in a status that allows scheduling, subject to permission and future-date validation. |
-| Mangaka | May view schedule context, contributor contact information where authorized, and audit-visible changes for chapters they work on. |
-| Mangaka | Cannot edit pages, page versions, or content when the chapter is `SCHEDULED` or `ON_HOLD`. |
-| Tantou Editor | May set or reschedule a planned release date when the chapter is in a status that allows scheduling. |
-| Tantou Editor | May put a `SCHEDULED` chapter `ON_HOLD` with a required reason. |
-| Tantou Editor | May return an `ON_HOLD` chapter to `SCHEDULED` only by setting a new future planned release date. |
-| Tantou Editor | May release an eligible approved or scheduled chapter with confirmation. |
-| Editorial Board Chief | Controls official series publication frequency through board/frequency workflows, not chapter-level content scheduling. |
+| Series filter | Uses series-title autocomplete/typeahead and stores the selected internal `series_id`. |
+| URL series filter | Uses slug as preferred external URL identity through `?series={slug}`. |
+| Legacy series filter | Supports `?seriesId={guid}` only as backward-compatible input. |
+| Clear filter | Clears selected series, visible autocomplete text/chip, and URL query state. |
+| Frequency filter/badges | Allowed for display/filtering, but frequency remains advisory. |
+| Chapter-title search | Not part of the shared calendar filter; the calendar search should remain series-focused. |
+
+### Action drawer behavior
+
+The scheduling action drawer is a role-gated UI for Mangaka and Tantou Editor scheduling actions.
+
+| Element | Behavior |
+|---|---|
+| Drawer visibility | Render/open only for actors who can use schedule actions. |
+| Data source | Uses the restricted actionable chapter feed for the current actor/role. |
+| Unauthorized roles | Do not render the drawer and do not load actionable chapter data. |
+| Drawer chapter cards | Full card is draggable when scheduling is allowed for that chapter. |
+| Custom drag preview | JavaScript may create a small card-style drag preview for browser drag image only. It must not contain business logic. |
+| Schedule/Reschedule action | Opens confirmation/date dialog before saving. |
+| Put On Hold action | Tantou Editor only; requires non-blank reason and confirmation. |
+| Release action | Tantou Editor only; requires confirmation. |
+| Refresh after mutation | Reload the weekly calendar data and refresh actionable drawer data so status/action buttons stay consistent. |
+
+### Drag/drop scheduling behavior
+
+- Drag/drop is used only to set or change a chapter planned release date.
+- Dragging from the action drawer to a calendar day is allowed for authorized actionable chapters.
+- Dragging an existing calendar card is allowed only when the actor has an authorized actionable payload for that chapter.
+- Dropping onto a future date opens or completes the same scheduling confirmation flow used by normal schedule/reschedule actions.
+- Dropping onto past dates must be blocked or rejected with a clear error.
+- There is no unschedule-by-drag behavior in the MVP.
+- The drawer is not a drop target for clearing planned dates.
+- Changing week by hovering over arrows while dragging is deferred and should not be documented as implemented.
+- Pending placement state may be used as a UI safety net after a drag starts; it should be cleared after successful scheduling or explicit cancellation.
 
 ### Advisory scheduling behavior
 
@@ -1057,6 +1209,8 @@ Scheduling is chapter-level. The UI must use `Chapter.planned_release_date`, `Ch
 | User chooses a date that does not match frequency suggestion | Show a warning, then allow the authorized user to continue. |
 | Multiple chapters use the same planned release date | Allow; bulk/catch-up release plans may be intentional. |
 | Chapter is `CANCELLED` or `RELEASED` | Hide or disable schedule/reschedule/hold/release actions that are no longer valid. |
+| Parent series is `HIATUS` | Allow schedule/reschedule when normal chapter rules allow it, but hide/disable release until the series is resumed to `SERIALIZED`. |
+| Parent series is `COMPLETED` or `CANCELLED` | Hide/disable all normal scheduling, hold, release, and mutation actions. |
 | Actor lacks permission | Hide action where possible and rely on backend permission checks. |
 
 ### Status behavior
@@ -1070,19 +1224,8 @@ Scheduling is chapter-level. The UI must use `Chapter.planned_release_date`, `Ch
 | `SCHEDULED` + Mangaka/Editor reschedules | Chapter remains `SCHEDULED`; planned date is updated. |
 | `SCHEDULED` + Editor puts on hold | Chapter becomes `ON_HOLD`; the previous release plan is suspended and audit details preserve the old date/reason. |
 | `ON_HOLD` + Editor returns to schedule | Requires a new future planned release date; chapter becomes `SCHEDULED`. |
-| `APPROVED` or `SCHEDULED` + Editor releases | Chapter becomes `RELEASED`; `released_at_utc` is set to the current UTC time. |
-| `RELEASED` or `CANCELLED` + schedule/reschedule/release action | Blocked. |
-
-### Publication calendar behavior
-
-- The shared publication calendar should show serialized series only.
-- The calendar should place a chapter card on the date where it is planned or released.
-- If `released_at_utc` exists, use the release business date for placement.
-- Otherwise use `planned_release_date`.
-- Chapter cards should prioritize series cover, series title, and chapter number label.
-- Search should use series-title typeahead/autocomplete, not chapter-title search.
-- Missing covers should use a safe placeholder.
-- The calendar may show frequency filters or badges, but frequency must remain advisory.
+| `APPROVED` or `SCHEDULED` + Editor releases while parent series is `SERIALIZED` | Chapter becomes `RELEASED`; `released_at_utc` is set to the current UTC time. |
+| `RELEASED` or `CANCELLED` chapter, or parent series `HIATUS`/`COMPLETED`/`CANCELLED` for release action | Blocked. |
 
 ### Confirmation behavior
 
@@ -1115,6 +1258,14 @@ The UI should ask for confirmation before:
 - On-hold recovery requires a new future planned release date.
 - Automatic overdue-to-on-hold behavior is deferred. The UI may show overdue warnings, but it should not trigger writes from read-only page loading.
 
+### Current non-goals / deferred items
+
+- No public reader release automation.
+- No hover-over-arrow week navigation while dragging.
+- No unschedule-by-drag or drawer-drop unscheduling behavior.
+- No bulk scheduling/holding/releasing unless implemented later.
+- No loading of actionable/unscheduled chapter data for read-only schedule roles.
+
 ## 10. Series Ranking UI
 
 ### Purpose
@@ -1136,6 +1287,7 @@ Display dynamic series rankings from `manga.vw_SeriesRanking` for a selected `Pu
 ### Filtering behavior
 
 - Ranking should be queried by `publication_period_id`.
+- Completed series must remain visible in ranking results when `SeriesVoteInput` exists for the selected publication period; the UI must not hide a row only because the series status is `COMPLETED`.
 - `period_name` is display-friendly and unique, but backend filtering should prefer the stable ID.
 - The ranking UI does not need to show entered/updated timestamps or source notes; those belong to the vote input management screen.
 
