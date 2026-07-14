@@ -2,7 +2,7 @@
 
 <MudPaper Class="ranking-hero pa-5" Elevation="0">
     <MudGrid>
-        <MudItem xs="12" md="7">
+        <MudItem xs="12" md="6">
             <MudStack Row="true" Spacing="2">
                 <MudAvatar Color="Color.Primary" Variant="Variant.Filled" Rounded="true">
                     <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" />
@@ -14,71 +14,177 @@
                     </MudText>
 
                     <MudText Typo="Typo.body2" Color="Color.Secondary">
-                        Weekly editorial ranking input and live database-calculated results
+                        Weekly, monthly, and all-time database-calculated results
                     </MudText>
                 </div>
             </MudStack>
         </MudItem>
 
-        <MudItem xs="12" md="5">
-            <MudAutocomplete T="PublicationPeriodOption"
-                             Label="Publication Week"
-                             Placeholder="Type dd/mm/yyyy, month, year, or week name"
-                             Value="@SelectedPublicationPeriod"
-                             ValueChanged="OnPublicationPeriodSelectedAsync"
-                             SearchFunc="SearchPublicationPeriodsAsync"
-                             ToStringFunc="FormatPublicationPeriod"
-                             Variant="Variant.Outlined"
-                             Margin="Margin.Dense"
-                             Dense="true"
-                             Clearable="false"
-                             CoerceText="false"
-                             CoerceValue="false"
-                             ResetValueOnEmptyText="false"
-                             MinCharacters="0"
-                             MaxItems="100"
-                             Disabled="@(PublicationPeriods.Count == 0 || Loading)"
-                             Adornment="Adornment.Start"
-                             AdornmentIcon="@Icons.Material.Filled.CalendarMonth"
-                             Class="ranking-period-select">
-                <ItemTemplate>
-                    <MudStack Spacing="0">
-                        <MudText Typo="Typo.body2" Class="fw-700">
-                            @context.PeriodName
-                        </MudText>
+        <MudItem xs="12" md="2">
+            <MudSelect T="string"
+                       Label="View Mode"
+                       Value="@RankingScope"
+                       ValueChanged="OnRankingScopeChangedAsync"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Dense="true"
+                       Disabled="@Loading">
+                <MudSelectItem T="string" Value="@("WEEKLY")">
+                    Weekly
+                </MudSelectItem>
 
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">
-                            @FormatPeriodDateRange(context)
-                        </MudText>
-                    </MudStack>
-                </ItemTemplate>
+                <MudSelectItem T="string" Value="@("MONTHLY")">
+                    Monthly
+                </MudSelectItem>
 
-                <NoItemsTemplate>
-                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="pa-2">
-                        No matching weekly publication period found.
-                    </MudText>
-                </NoItemsTemplate>
-            </MudAutocomplete>
+                <MudSelectItem T="string" Value="@("ALL_TIME")">
+                    All Time
+                </MudSelectItem>
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            @if (RankingScope == "ALL_TIME")
+            {
+                <MudTextField T="string"
+                              Label="Ranking Period"
+                              Value="@("All Time")"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              ReadOnly="true"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.AllInclusive" />
+            }
+            else
+            {
+                <div @onmousedown="ClearPeriodPickerAsync"
+                     @onfocusin="ClearPeriodPickerAsync">
+                    <MudAutocomplete T="PublicationPeriodOption"
+                                     Label="@PeriodLabel"
+                                     Placeholder="@PeriodPlaceholder"
+                                     Value="@SelectedPeriod"
+                                     ValueChanged="OnPublicationPeriodSelectedAsync"
+                                     Text="@_periodSearchText"
+                                     TextChanged="OnPeriodTextChanged"
+                                     SearchFunc="SearchPublicationPeriodsAsync"
+                                     ToStringFunc="FormatPublicationPeriod"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Dense="true"
+                                     Clearable="false"
+                                     CoerceText="false"
+                                     CoerceValue="false"
+                                     ResetValueOnEmptyText="false"
+                                     MinCharacters="0"
+                                     MaxItems="100"
+                                     OpenOnFocus="true"
+                                     Disabled="@(PeriodOptions.Count == 0 || Loading)"
+                                     Adornment="Adornment.Start"
+                                     AdornmentIcon="@Icons.Material.Filled.CalendarMonth"
+                                     Class="ranking-period-select">
+                        <ItemTemplate>
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.body2" Class="fw-700">
+                                    @context.PeriodName
+                                </MudText>
+
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @FormatPeriodDateRange(context)
+                                </MudText>
+                            </MudStack>
+                        </ItemTemplate>
+
+                        <NoItemsTemplate>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="pa-2">
+                                No matching publication period found.
+                            </MudText>
+                        </NoItemsTemplate>
+                    </MudAutocomplete>
+                </div>
+            }
         </MudItem>
     </MudGrid>
 </MudPaper>
 
 @code {
-    [Parameter]
-    public IReadOnlyList<PublicationPeriodOption> PublicationPeriods { get; set; } = [];
+    private string _periodSearchText = string.Empty;
+    private Guid _lastSelectedPeriodId;
+    private string _lastRankingScope = string.Empty;
+    private int _lastPeriodCount;
 
     [Parameter]
-    public Guid SelectedPublicationPeriodId { get; set; }
+    public string RankingScope { get; set; } = "WEEKLY";
 
     [Parameter]
-    public EventCallback<Guid> SelectedPublicationPeriodIdChanged { get; set; }
+    public EventCallback<string> RankingScopeChanged { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<PublicationPeriodOption> PeriodOptions { get; set; } = [];
+
+    [Parameter]
+    public Guid SelectedPeriodId { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> SelectedPeriodIdChanged { get; set; }
 
     [Parameter]
     public bool Loading { get; set; }
 
-    private PublicationPeriodOption? SelectedPublicationPeriod =>
-        PublicationPeriods.FirstOrDefault(period =>
-            period.PublicationPeriodId == SelectedPublicationPeriodId);
+    private string PeriodLabel => RankingScope == "MONTHLY"
+        ? "Publication Month"
+        : "Publication Week";
+
+    private string PeriodPlaceholder => RankingScope == "MONTHLY"
+        ? "Type dd/mm/yyyy, month, year, or month name"
+        : "Type dd/mm/yyyy, month, year, or week name";
+
+    private PublicationPeriodOption? SelectedPeriod =>
+        PeriodOptions.FirstOrDefault(period =>
+            period.PublicationPeriodId == SelectedPeriodId);
+
+    protected override void OnParametersSet()
+    {
+        var shouldRefreshText =
+            _lastSelectedPeriodId != SelectedPeriodId
+            || !string.Equals(_lastRankingScope, RankingScope, StringComparison.Ordinal)
+            || _lastPeriodCount != PeriodOptions.Count;
+
+        if (shouldRefreshText)
+        {
+            _periodSearchText = FormatPublicationPeriod(SelectedPeriod);
+
+            _lastSelectedPeriodId = SelectedPeriodId;
+            _lastRankingScope = RankingScope;
+            _lastPeriodCount = PeriodOptions.Count;
+        }
+    }
+
+    private async Task ClearPeriodPickerAsync()
+    {
+        if (Loading || RankingScope == "ALL_TIME")
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_periodSearchText))
+        {
+            return;
+        }
+
+        _periodSearchText = string.Empty;
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void OnPeriodTextChanged(string value)
+    {
+        _periodSearchText = value ?? string.Empty;
+    }
+
+    private async Task OnRankingScopeChangedAsync(string value)
+    {
+        await RankingScopeChanged.InvokeAsync(value);
+    }
 
     private async Task OnPublicationPeriodSelectedAsync(PublicationPeriodOption? value)
     {
@@ -87,7 +193,9 @@
             return;
         }
 
-        await SelectedPublicationPeriodIdChanged.InvokeAsync(value.PublicationPeriodId);
+        _periodSearchText = FormatPublicationPeriod(value);
+
+        await SelectedPeriodIdChanged.InvokeAsync(value.PublicationPeriodId);
     }
 
     private Task<IEnumerable<PublicationPeriodOption>> SearchPublicationPeriodsAsync(
@@ -99,7 +207,7 @@
         if (string.IsNullOrWhiteSpace(normalizedSearch))
         {
             return Task.FromResult(
-                PublicationPeriods
+                PeriodOptions
                     .OrderByDescending(period => period.PeriodStartDate)
                     .AsEnumerable());
         }
@@ -108,14 +216,14 @@
         {
             var date = parsedDate.Date;
 
-            var result = PublicationPeriods
+            var result = PeriodOptions
                 .Select(period => new
                 {
                     Period = period,
                     ContainsDate = IsDateInsidePeriod(period, date),
                     DistanceDays = GetDistanceDaysFromPeriod(period, date)
                 })
-                .Where(item => item.ContainsDate || item.DistanceDays <= 28)
+                .Where(item => item.ContainsDate || item.DistanceDays <= 31)
                 .OrderByDescending(item => item.ContainsDate)
                 .ThenBy(item => item.DistanceDays)
                 .ThenBy(item => item.Period.PeriodStartDate)
@@ -125,7 +233,7 @@
             return Task.FromResult(result);
         }
 
-        var textResult = PublicationPeriods
+        var textResult = PeriodOptions
             .Where(period => MatchesPeriodText(period, normalizedSearch))
             .OrderByDescending(period => period.PeriodStartDate)
             .AsEnumerable();
