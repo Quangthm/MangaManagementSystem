@@ -4,6 +4,9 @@
 >
 > **Branch:** `feature/workspace-v3`. **4 commit local CHƯA PUSH** (ahead 4 of origin): `dc77446` (gate Notes/Versions cho editor + fix pin split-view) · `e2992cd` (handoff) · `0b25133` (editor duyệt chapter #4b) · `28ee732` (Cancel cần markup + ẩn DRAFT với editor). PR đang mở = **#78** (`feature/workspace-v3 → main`); push branch là PR tự cập nhật.
 >
+> **BUG-FIX (2026-07-13): editor không pin/tạo annotation được trên chapter UNDER_REVIEW.**
+> `IsChapterLocked` (khóa CONTENT khi UNDER_REVIEW/APPROVED/...) khóa luôn Pin/Select/Add Annotation + guard nội bộ `CreateAnnotation` (`if (IsChapterLocked) return`). Nhưng annotation là FEEDBACK review (BR-CP-018/BR-WORKSPACE-007), editor review đúng lúc UNDER_REVIEW. Fix: thêm `CanAnnotate` (DRAFT/UNDER_REVIEW/REVISION_REQUESTED, tách khỏi IsChapterLocked); đổi Select/Pin/Add Annotation + guard CreateAnnotation sang `!CanAnnotate`. (`OnPinAdded` vốn không chặn lock.) CÒN: nút Resolve annotation vẫn `IsChapterLocked` — chưa đổi (ai resolve khi review chưa rõ).
+>
 > **BUG-FIX (2026-07-13, sau editor round): số trang UI dùng vị trí thay vì PageNo thật.**
 > Annotation của DB page 2 hiện ở "Page 1". Gốc rễ: workspace đánh số trang theo **VỊ TRÍ list** (`SelectedPage = index+1`), bỏ qua `ChapterPage.page_number` thật (DTO `ChapterPageDto.PageNo` có sẵn). Xóa page là **soft-delete KHÔNG renumber** → PageNo có gap → position ≠ PageNo. Fix: thêm `PageModel.PageNo` (map từ `p.PageNo`), `SelectedPage = page.PageNo` (LoadPage + SetActivePane, fallback index+1 cho pending page PageNo==0), per-pane pin sync dùng `page.PageNo`. → header + annotation/task target + filter đều theo PageNo thật. **CÒN LẠI:** `MudPagination` vẫn đánh theo vị trí (1..Count) — trên chapter có gap thì nút pagination (vị trí) ≠ header (PageNo); nếu muốn đồng nhất tuyệt đối phải thay MudPagination bằng nút custom hiển thị PageNo (follow-up).
 >

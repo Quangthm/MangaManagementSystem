@@ -162,13 +162,13 @@ else
                     </MudTooltip>
 
                     <!-- Drawing Tools -->
-                    <MudTooltip Text="Select Tool"><MudIconButton Icon="@Icons.Material.Filled.NearMe" Color="@(CurrentTool == "select" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("select"))" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
+                    <MudTooltip Text="Select Tool"><MudIconButton Icon="@Icons.Material.Filled.NearMe" Color="@(CurrentTool == "select" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("select"))" Size="Size.Small" Disabled="@(!CanAnnotate)" /></MudTooltip>
                     @if (CanManageContent)
                     {
                         <MudTooltip Text="Region Tool"><MudIconButton Icon="@Icons.Material.Filled.Crop" Color="@(CurrentTool == "draw" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("draw"))" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
                         <MudTooltip Text="Brush Tool"><MudIconButton Icon="@Icons.Material.Filled.Brush" Color="@(CurrentTool == "brush" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("brush"))" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
                     }
-                    <MudTooltip Text="Pin Tool"><MudIconButton Icon="@Icons.Material.Filled.PushPin" Color="@(CurrentTool == "pin" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("pin"))" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
+                    <MudTooltip Text="Pin Tool"><MudIconButton Icon="@Icons.Material.Filled.PushPin" Color="@(CurrentTool == "pin" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("pin"))" Size="Size.Small" Disabled="@(!CanAnnotate)" /></MudTooltip>
                     
                     @if (CanManageContent && CurrentTool == "brush")
                     {
@@ -684,7 +684,7 @@ else
                                 </div>
                             </div>
 
-                            <MudButton Variant="Variant.Filled" Color="Color.Warning" FullWidth="true" StartIcon="@Icons.Material.Filled.AddComment" OnClick="CreateAnnotation" Disabled="@IsChapterLocked">Add Annotation</MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Warning" FullWidth="true" StartIcon="@Icons.Material.Filled.AddComment" OnClick="CreateAnnotation" Disabled="@(!CanAnnotate)">Add Annotation</MudButton>
                             }
                         </MudPaper>
                     </div>

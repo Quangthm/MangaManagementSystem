@@ -500,7 +500,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
     private async Task CreateAnnotation()
     {
-        if (IsChapterLocked) return;
+        if (!CanAnnotate) return;
         if (string.IsNullOrWhiteSpace(AnnotationComment))
         {
             Snackbar.Add("Please enter a comment.", Severity.Warning);
@@ -1274,6 +1274,20 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             if (chap == null) return false;
             var code = chap.StatusCode;
             return code == "UNDER_REVIEW" || code == "APPROVED" || code == "SCHEDULED" || code == "RELEASED" || code == "CANCELLED";
+        }
+    }
+
+    // Annotations are review/production FEEDBACK (BR-CP-018 / BR-WORKSPACE-007), not page content, so they
+    // stay available while a chapter is in an editing/review cycle — including UNDER_REVIEW, which is exactly
+    // when a Tantou Editor reviews. Only the finalized states stop new annotations. This is deliberately
+    // separate from IsChapterLocked (which locks page/version/region CONTENT while under review or later).
+    private bool CanAnnotate
+    {
+        get
+        {
+            var chap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
+            var code = chap?.StatusCode;
+            return code == "DRAFT" || code == "UNDER_REVIEW" || code == "REVISION_REQUESTED";
         }
     }
 
