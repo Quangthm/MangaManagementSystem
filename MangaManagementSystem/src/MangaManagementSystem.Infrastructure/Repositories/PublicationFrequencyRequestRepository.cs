@@ -35,10 +35,6 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             ArgumentNullException.ThrowIfNull(
                 notificationPlan);
 
-            await using var transaction =
-                await _dbContext.Database
-                    .BeginTransactionAsync(
-                        cancellationToken);
 
             try
             {
@@ -241,8 +237,6 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 await _dbContext.SaveChangesAsync(
                     cancellationToken);
 
-                await transaction.CommitAsync(
-                    cancellationToken);
 
                 return new PublicationFrequencyChangeRequestResultDto(
                     SeriesId:
@@ -258,9 +252,6 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             }
             catch
             {
-                await transaction.RollbackAsync(
-                    cancellationToken);
-
                 throw;
             }
         }
