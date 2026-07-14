@@ -66,7 +66,8 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
 
         if (normalizedSearch is not null)
         {
-            query = query.Where(row => row.SeriesTitle.Contains(normalizedSearch));
+            query = query.Where(row =>
+                row.SeriesTitle.Contains(normalizedSearch));
         }
 
         query = ApplyVoteInputSort(query, sort);
@@ -109,7 +110,8 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
 
         if (normalizedSearch is not null)
         {
-            query = query.Where(row => row.SeriesTitle.Contains(normalizedSearch));
+            query = query.Where(row =>
+                row.SeriesTitle.Contains(normalizedSearch));
         }
 
         query = ApplyRankingSort(query, sort);
@@ -127,17 +129,10 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
         var safeMaxResults = maxResults <= 0 ? 20 : maxResults;
 
         /*
-            IMPORTANT FOR UI:
             This method powers the Series dropdown in Create Ranking Input.
 
-            It intentionally reads directly from manga.Series.
-            It does NOT restrict to SERIALIZED / HIATUS / COMPLETED,
-            because current test data may be PROPOSAL_DRAFT,
-            UNDER_EDITORIAL_REVIEW, UNDER_BOARD_REVIEW, etc.
-
-            It also does NOT remove existing vote-input series here,
-            so you can confirm the dropdown is really reading DB data.
-            Duplicate input for the same period/series is still blocked
+            Only SERIALIZED series are eligible for ranking input.
+            Duplicate input for the same period and series is validated
             in CreateSeriesVoteInputAsync.
         */
         IQueryable<RankableSeriesDto> query =
@@ -146,7 +141,7 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
                     .Where(file => file.DeletedAtUtc == null)
                 on series.CoverFileId equals cover.FileResourceId into coverGroup
             from cover in coverGroup.DefaultIfEmpty()
-            where series.StatusCode != "CANCELLED"
+            where series.StatusCode == "SERIALIZED"
             select new RankableSeriesDto(
                 series.SeriesId,
                 series.Title,
@@ -155,7 +150,8 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
 
         if (normalizedSearch is not null)
         {
-            query = query.Where(row => row.Title.Contains(normalizedSearch));
+            query = query.Where(row =>
+                row.Title.Contains(normalizedSearch));
         }
 
         return await query
@@ -198,29 +194,34 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
     {
         var periodExists = await _context.Set<PublicationPeriod>()
             .AnyAsync(
-                period => period.PublicationPeriodId == publicationPeriodId,
+                period =>
+                    period.PublicationPeriodId == publicationPeriodId,
                 cancellationToken);
 
         if (!periodExists)
         {
-            throw new InvalidOperationException("Publication period was not found.");
+            throw new InvalidOperationException(
+                "Publication period was not found.");
         }
 
         var seriesExists = await _context.Set<Series>()
             .AnyAsync(
-                series => series.SeriesId == seriesId
-                          && series.StatusCode != "CANCELLED",
+                series =>
+                    series.SeriesId == seriesId
+                    && series.StatusCode == "SERIALIZED",
                 cancellationToken);
 
         if (!seriesExists)
         {
-            throw new InvalidOperationException("Series was not found or cannot be ranked.");
+            throw new InvalidOperationException(
+                "Series was not found or is not currently serialized.");
         }
 
         var duplicateExists = await _context.Set<SeriesVoteInput>()
             .AnyAsync(
-                input => input.PublicationPeriodId == publicationPeriodId
-                         && input.SeriesId == seriesId,
+                input =>
+                    input.PublicationPeriodId == publicationPeriodId
+                    && input.SeriesId == seriesId,
                 cancellationToken);
 
         if (duplicateExists)
@@ -266,7 +267,8 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
 
         if (input is null)
         {
-            throw new InvalidOperationException("Series vote input was not found.");
+            throw new InvalidOperationException(
+                "Series vote input was not found.");
         }
 
         input.RatingCount = ratingCount;
@@ -333,15 +335,35 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
     {
         return sort switch
         {
-            "title_desc" => query.OrderByDescending(row => row.SeriesTitle),
-            "average_rating_desc" => query.OrderByDescending(row => row.AverageRating),
-            "average_rating_asc" => query.OrderBy(row => row.AverageRating),
-            "reading_count_desc" => query.OrderByDescending(row => row.ReadingCount),
-            "reading_count_asc" => query.OrderBy(row => row.ReadingCount),
-            "rating_count_desc" => query.OrderByDescending(row => row.RatingCount),
-            "rating_count_asc" => query.OrderBy(row => row.RatingCount),
-            "updated_desc" => query.OrderByDescending(row => row.UpdatedAtUtc ?? row.EnteredAtUtc),
-            "updated_asc" => query.OrderBy(row => row.UpdatedAtUtc ?? row.EnteredAtUtc),
+            "title_desc" =>
+                query.OrderByDescending(row => row.SeriesTitle),
+
+            "average_rating_desc" =>
+                query.OrderByDescending(row => row.AverageRating),
+
+            "average_rating_asc" =>
+                query.OrderBy(row => row.AverageRating),
+
+            "reading_count_desc" =>
+                query.OrderByDescending(row => row.ReadingCount),
+
+            "reading_count_asc" =>
+                query.OrderBy(row => row.ReadingCount),
+
+            "rating_count_desc" =>
+                query.OrderByDescending(row => row.RatingCount),
+
+            "rating_count_asc" =>
+                query.OrderBy(row => row.RatingCount),
+
+            "updated_desc" =>
+                query.OrderByDescending(
+                    row => row.UpdatedAtUtc ?? row.EnteredAtUtc),
+
+            "updated_asc" =>
+                query.OrderBy(
+                    row => row.UpdatedAtUtc ?? row.EnteredAtUtc),
+
             _ => query.OrderBy(row => row.SeriesTitle)
         };
     }
@@ -352,17 +374,39 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
     {
         return sort switch
         {
-            "rank_desc" => query.OrderByDescending(row => row.RankPosition),
-            "title_asc" => query.OrderBy(row => row.SeriesTitle),
-            "title_desc" => query.OrderByDescending(row => row.SeriesTitle),
-            "score_desc" => query.OrderByDescending(row => row.RankingScore),
-            "score_asc" => query.OrderBy(row => row.RankingScore),
-            "average_rating_desc" => query.OrderByDescending(row => row.AverageRating),
-            "average_rating_asc" => query.OrderBy(row => row.AverageRating),
-            "reading_count_desc" => query.OrderByDescending(row => row.ReadingCount),
-            "reading_count_asc" => query.OrderBy(row => row.ReadingCount),
-            "rating_count_desc" => query.OrderByDescending(row => row.RatingCount),
-            "rating_count_asc" => query.OrderBy(row => row.RatingCount),
+            "rank_desc" =>
+                query.OrderByDescending(row => row.RankPosition),
+
+            "title_asc" =>
+                query.OrderBy(row => row.SeriesTitle),
+
+            "title_desc" =>
+                query.OrderByDescending(row => row.SeriesTitle),
+
+            "score_desc" =>
+                query.OrderByDescending(row => row.RankingScore),
+
+            "score_asc" =>
+                query.OrderBy(row => row.RankingScore),
+
+            "average_rating_desc" =>
+                query.OrderByDescending(row => row.AverageRating),
+
+            "average_rating_asc" =>
+                query.OrderBy(row => row.AverageRating),
+
+            "reading_count_desc" =>
+                query.OrderByDescending(row => row.ReadingCount),
+
+            "reading_count_asc" =>
+                query.OrderBy(row => row.ReadingCount),
+
+            "rating_count_desc" =>
+                query.OrderByDescending(row => row.RatingCount),
+
+            "rating_count_asc" =>
+                query.OrderBy(row => row.RatingCount),
+
             _ => query.OrderBy(row => row.RankPosition)
         };
     }

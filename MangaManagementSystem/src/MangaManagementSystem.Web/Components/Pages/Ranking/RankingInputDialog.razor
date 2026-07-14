@@ -104,8 +104,8 @@
                     </ItemTemplate>
 
                     <NoItemsTemplate>
-                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="pa-2">
-                            No available series found in the database.
+                        <MudText Typo="Typo.caption" Color="Color.Error" Class="pa-2">
+                            @(_seriesSearchMessage ?? "No data found in the database.")
                         </MudText>
                     </NoItemsTemplate>
                 </MudAutocomplete>
@@ -192,6 +192,7 @@
     private InsertFormState _form = new();
     private Dictionary<string, string> _errors = [];
     private bool _wasOpen;
+    private string? _seriesSearchMessage;
 
     [Parameter]
     public bool Open { get; set; }
@@ -224,6 +225,8 @@
         if (Open && !_wasOpen)
         {
             _errors = [];
+            _seriesSearchMessage = null;
+
             _form = new InsertFormState
             {
                 PublicationPeriodId = SelectedPublicationPeriodId
@@ -259,6 +262,7 @@
 
         _form.PublicationPeriodId = value.PublicationPeriodId;
         _form.Series = null;
+        _seriesSearchMessage = null;
 
         ClearError(nameof(InsertFormState.PublicationPeriodId));
         ClearError(nameof(InsertFormState.Series));
@@ -336,33 +340,34 @@
 
         return Task.FromResult(textResult);
     }
+
     private async Task<IEnumerable<CatalogEntry>> SearchAvailableSeriesAsync(
         string? value,
         CancellationToken cancellationToken)
     {
         if (_form.PublicationPeriodId == Guid.Empty)
         {
-            Snackbar.Add("Please select a publication week first.", Severity.Warning);
+            _seriesSearchMessage = "Please select a publication week first.";
             return [];
         }
 
         try
         {
+            _seriesSearchMessage = null;
+
             var result = await SearchSeriesAsync(value, cancellationToken);
             var series = result.ToList();
 
             if (series.Count == 0)
             {
-                Snackbar.Add(
-                    "The API returned 0 series. Check manga.Series in the database used by the API.",
-                    Severity.Warning);
+                _seriesSearchMessage = "No data found in the database.";
             }
 
             return series;
         }
-        catch (Exception ex)
+        catch
         {
-            Snackbar.Add($"Series search API failed: {ex.Message}", Severity.Error);
+            _seriesSearchMessage = "No data found in the database.";
             return [];
         }
     }
