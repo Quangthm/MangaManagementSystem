@@ -12,7 +12,16 @@ namespace MangaManagementSystem.Infrastructure.Repositories
     public class PublicationScheduleRepository : IPublicationScheduleRepository
     {
         private const string SeriesStatusSerialized = "SERIALIZED";
+        private const string SeriesStatusHiatus = "HIATUS";
+        private const string SeriesStatusCompleted = "COMPLETED";
         private const string ChapterStatusCancelled = "CANCELLED";
+
+        private static readonly string[] CalendarVisibleSeriesStatuses =
+        {
+            SeriesStatusSerialized,
+            SeriesStatusHiatus,
+            SeriesStatusCompleted
+        };
 
         private readonly ApplicationDbContext _dbContext;
 
@@ -30,7 +39,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         {
             var query = _dbContext.Chapters
                 .AsNoTracking()
-                .Where(c => c.Series != null && c.Series.StatusCode == SeriesStatusSerialized)
+                .Where(c => c.Series != null && CalendarVisibleSeriesStatuses.Contains(c.Series.StatusCode))
                 .Where(c => c.StatusCode != ChapterStatusCancelled)
                 .Where(c =>
                     (c.PlannedReleaseDate != null && c.PlannedReleaseDate.Value >= weekStart && c.PlannedReleaseDate.Value < weekEnd.AddDays(1)) ||
@@ -80,7 +89,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
             var results = await _dbContext.Series
                 .AsNoTracking()
-                .Where(s => s.StatusCode == SeriesStatusSerialized)
+                .Where(s => CalendarVisibleSeriesStatuses.Contains(s.StatusCode))
                 .Where(s => s.Title.Contains(searchText))
                 .OrderBy(s => s.Title)
                 .Take(maxResults)
@@ -103,7 +112,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
             return await _dbContext.Series
                 .AsNoTracking()
-                .Where(s => s.StatusCode == SeriesStatusSerialized && s.Slug == slug)
+                .Where(s => CalendarVisibleSeriesStatuses.Contains(s.StatusCode) && s.Slug == slug)
                 .Select(s => new PublicationScheduleSeriesSuggestion(
                     s.SeriesId,
                     s.Title,
@@ -121,7 +130,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
             return await _dbContext.Series
                 .AsNoTracking()
-                .Where(s => s.StatusCode == SeriesStatusSerialized && s.SeriesId == seriesId)
+                .Where(s => CalendarVisibleSeriesStatuses.Contains(s.StatusCode) && s.SeriesId == seriesId)
                 .Select(s => new PublicationScheduleSeriesSuggestion(
                     s.SeriesId,
                     s.Title,
