@@ -81,6 +81,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     public class PageModel
     {
         public Guid ChapterPageId { get; set; }
+        public int PageNo { get; set; }                         // manga.ChapterPage.page_number (true DB number; may have gaps after soft-deletes)
         public string? PageNotes { get; set; }                  // manga.ChapterPage.page_notes
         public List<PageVersionModel> Versions { get; set; } = new();
         public int ActiveVersionIndex { get; set; } = 0;

@@ -619,7 +619,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         var ver = (page != null && page.Versions.Any())
             ? page.Versions[Math.Clamp(page.ActiveVersionIndex, 0, page.Versions.Count - 1)]
             : null;
-        int panePageNo = paneIndex + 1;
+        int panePageNo = (page != null && page.PageNo > 0) ? page.PageNo : paneIndex + 1;
 
         var pins = (ver == null)
             ? Enumerable.Empty<object>()
@@ -900,7 +900,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
                 foreach(var p in pages)
                 {
-                    var pageModel = new PageModel { ChapterPageId = p.ChapterPageId, PageNotes = p.PageNotes };
+                    var pageModel = new PageModel { ChapterPageId = p.ChapterPageId, PageNo = p.PageNo, PageNotes = p.PageNotes };
                     var versions = versionsGrouped[p.ChapterPageId];
                     foreach(var v in versions)
                     {
@@ -1290,11 +1290,12 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         if (_activePane != pane)
         {
             _activePane = pane;
-            SelectedPage = pane == "Left" ? ActivePageIndex + 1 : _splitPageIndex + 1;
-            
+
             // Sync SelectedRegions for the newly active pane
             SelectedRegions.Clear();
-            var page = pane == "Left" ? UploadedPages.ElementAtOrDefault(ActivePageIndex) : _splitUploadedPages.ElementAtOrDefault(_splitPageIndex);
+            var paneIdx = pane == "Left" ? ActivePageIndex : _splitPageIndex;
+            var page = (pane == "Left" ? UploadedPages : _splitUploadedPages).ElementAtOrDefault(paneIdx);
+            SelectedPage = (page != null && page.PageNo > 0) ? page.PageNo : paneIdx + 1; // true DB page number
             if (page != null && page.Versions.Any())
             {
                 var regionsStr = page.Versions[page.ActiveVersionIndex].Regions;
