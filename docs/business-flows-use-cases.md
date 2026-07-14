@@ -4,6 +4,8 @@
 >
 > **Expansion note:** This file is meant to be continuously expanded when new workflows are agreed upon. Add new flows without rewriting unrelated existing flows.
 
+> **Latest series lifecycle alignment — 2026-07-11:** `HIATUS` means a paused series. Active Mangaka or Tantou Editor contributors may set a `SERIALIZED` series to `HIATUS` and resume it back to `SERIALIZED`. `HIATUS` blocks chapter release only. Only active Mangaka contributors may mark a `SERIALIZED` or `HIATUS` series as `COMPLETED`; completion blocks future mutations, cancels unreleased chapters after confirmation, preserves history, and completed series remain visible in rankings when ranking input exists.
+
 ---
 
 ## 1. Document Conventions
@@ -642,6 +644,107 @@ audit.usp_AuditEvent_Append
 
 ---
 # Suggested Additions — Business Flows / Use Case Notes
+
+---
+
+
+## BF-SERIES-004 — Pause or Resume Series Serialization
+
+**Status:** Agreed  
+**Primary actor:** Mangaka contributor / Tantou Editor contributor  
+**Goal:** Allow authorized active contributors to temporarily pause a serialized series by setting it to `HIATUS`, or resume it back to `SERIALIZED`.
+
+### Main Flow — Set Series to HIATUS
+
+```text
+Active Mangaka or Tantou Editor contributor opens the series page
+→ User chooses Set Series to Hiatus
+→ UI asks for confirmation and may collect a reason
+→ Backend validates actor is an active Mangaka or Tantou Editor contributor of the series
+→ Backend validates Series.status_code = SERIALIZED
+→ Backend changes Series.status_code to HIATUS
+→ Backend/database writes SERIES_HIATUS_SET audit event
+→ Backend may notify active contributors
+→ UI refreshes the series status badge and available actions
+```
+
+### Main Flow — Resume Serialization
+
+```text
+Active Mangaka or Tantou Editor contributor opens a HIATUS series
+→ User chooses Resume Serialization
+→ UI asks for confirmation and may collect a reason
+→ Backend validates actor is an active Mangaka or Tantou Editor contributor of the series
+→ Backend validates Series.status_code = HIATUS
+→ Backend changes Series.status_code to SERIALIZED
+→ Backend/database writes SERIES_SERIALIZATION_RESUMED audit event
+→ Backend may notify active contributors
+→ UI refreshes the series status badge and available actions
+```
+
+### Important Notes
+
+- `HIATUS` is the schema status for a paused series; do not introduce a separate `PAUSED` status.
+- Hiatus is a series-level release pause, not a full production freeze.
+- While a series is `HIATUS`, drafting, chapter creation, page work, review, scheduling, and rescheduling may continue when normal chapter status and role rules allow those actions.
+- While a series is `HIATUS`, chapter release actions are blocked.
+- Releasing a chapter requires the series to be resumed back to `SERIALIZED` first.
+- Setting a series to `HIATUS` must not automatically move scheduled chapters to `ON_HOLD`; scheduled chapters keep their chapter-level status until a valid chapter workflow changes them.
+- A `CANCEL_SERIALIZATION` poll may still target a `HIATUS` series.
+
+### System Should Try To
+
+- Keep `HIATUS` simple and understandable as a release pause.
+- Avoid mutating unrelated chapter statuses automatically.
+- Keep status changes audit-visible.
+- Keep contributor permissions based on active `SeriesContributor` membership.
+
+---
+
+## BF-SERIES-005 — Mark Series as Completed
+
+**Status:** Agreed  
+**Primary actor:** Mangaka contributor  
+**Goal:** Allow the author-side contributor to end a serialized or hiatus series and freeze future business changes.
+
+### Main Flow
+
+```text
+Active Mangaka contributor opens the series page
+→ Mangaka chooses Mark Series as Completed
+→ UI loads a summary of unreleased chapters that will be cancelled
+→ UI warns that the completed series will become immutable and unreleased chapters will be cancelled
+→ Mangaka confirms the action
+→ Backend validates actor is an active Mangaka contributor of the series
+→ Backend validates Series.status_code is SERIALIZED or HIATUS
+→ Backend changes Series.status_code to COMPLETED
+→ Backend keeps RELEASED chapters unchanged
+→ Backend changes unreleased active chapters to CANCELLED with a completion-related reason
+→ Backend preserves already CANCELLED chapters unchanged
+→ Backend/database writes SERIES_COMPLETED audit event and audit details for affected chapter cancellations
+→ Backend may notify active contributors and assigned editors
+→ UI refreshes the series page as read-only/completed
+```
+
+### Important Notes
+
+- Only active Mangaka contributors may mark a series as `COMPLETED`.
+- `COMPLETED` means the series naturally ended by author-side decision.
+- `COMPLETED` is different from `CANCELLED`, which represents board/business cancellation.
+- Completion is final and normally irreversible through normal workflow.
+- Completion blocks future business mutations under the series, including series profile/status changes, new chapters, page/page-version changes, region edits, task changes, review actions, scheduling, rescheduling, hold, and release actions.
+- Released chapters remain released.
+- Unreleased active chapters are cancelled only after a clear warning and explicit confirmation.
+- Completion-cancelled chapters remain preserved as read-only historical records.
+- Existing files, page versions, annotations, tasks, reviews, notifications, and audit logs remain preserved for authorized viewing.
+- Completed series remain visible in dynamic rankings when vote input exists for the selected publication period.
+
+### System Should Try To
+
+- Make the completion action deliberate and hard to trigger accidentally.
+- Preserve history instead of deleting records.
+- Keep `COMPLETED`, `HIATUS`, and `CANCELLED` clearly separated.
+- Avoid adding generic series status-history tables; use current status plus audit logs.
 
 ---
 
@@ -2091,6 +2194,7 @@ Tantou Editor opens a publication schedule or chapter review screen
 - Releasing should ask for confirmation.
 - Preserving an existing planned date helps compare planned release timing against actual release time.
 - Release action should be blocked for `CANCELLED` and already `RELEASED` chapters.
+- Release action should also be blocked when the parent series is `HIATUS`, `COMPLETED`, or `CANCELLED`; a `HIATUS` series must be resumed to `SERIALIZED` before chapter release.
 - Bulk release may be supported later; when implemented, it should ask for confirmation and audit each affected chapter.
 
 ### System Should Try To
@@ -2176,6 +2280,7 @@ ranking_score = average_rating * LOG10(1 + rating_count) + reading_count * 0.001
 - The MVP does not use `SeriesRankingSnapshot` because there is no ranking finalization workflow.
 - The ranking view should keep technical IDs available for backend filtering and navigation even if the UI hides them.
 - Ranking evidence may support board/editorial review but does not automatically cancel a series.
+- Completed series remain visible in dynamic rankings when vote input exists for the selected publication period.
 
 ### System Should Try To
 

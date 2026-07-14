@@ -21,5 +21,26 @@ namespace MangaManagementSystem.Web.Services.Api
             Guid actorUserId,
             string slug,
             CancellationToken cancellationToken = default);
+
+        Task<SeriesLifecycleActionsDto> GetLifecycleActionsAsync(
+            Guid seriesId,
+            CancellationToken cancellationToken = default);
+
+        Task<SeriesCompletionImpactDto> GetCompletionImpactAsync(
+            Guid seriesId,
+            CancellationToken cancellationToken = default);
+
+        Task<SeriesLifecycleChangedDto> SetHiatusAsync(
+            Guid seriesId,
+            string reason,
+            CancellationToken cancellationToken = default);
+
+        Task<SeriesLifecycleChangedDto> ResumeSerializationAsync(
+            Guid seriesId,
+            CancellationToken cancellationToken = default);
+
+        Task<SeriesLifecycleChangedDto> CompleteSeriesAsync(
+            Guid seriesId,
+            CancellationToken cancellationToken = default);
     }
 }
