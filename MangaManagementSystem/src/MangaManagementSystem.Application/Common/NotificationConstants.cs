@@ -2,13 +2,20 @@ namespace MangaManagementSystem.Application.Common
 {
     public static class NotificationTypeCodes
     {
+        public const string ProposalDecision =
+            "PROPOSAL_DECISION";
+
         public const string TaskAssignment =
             "TASK_ASSIGNMENT";
 
         public const string BoardPoll =
             "BOARD_POLL";
+
         public const string ChapterReview =
             "CHAPTER_REVIEW";
+
+        public const string ChapterDecision =
+            "CHAPTER_DECISION";
 
         public const string SystemMessage =
             "SYSTEM_MESSAGE";
@@ -16,6 +23,9 @@ namespace MangaManagementSystem.Application.Common
 
     public static class NotificationRelatedEntityTypes
     {
+        public const string SeriesProposal =
+            "SeriesProposal";
+
         public const string ChapterPageTask =
             "ChapterPageTask";
 

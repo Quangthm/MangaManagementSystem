@@ -573,6 +573,34 @@
             return "/editor/chapters";
         }
 
+        if (string.Equals(
+                notification.NotificationTypeCode,
+                NotificationTypeCodes.ProposalDecision,
+                StringComparison.OrdinalIgnoreCase)
+            && string.Equals(
+                notification.RelatedEntityType,
+                NotificationRelatedEntityTypes.SeriesProposal,
+                StringComparison.Ordinal)
+            && notification.RelatedEntityId.HasValue
+            && notification.RelatedEntityId.Value != Guid.Empty)
+        {
+            return $"/mangaka/proposals/{notification.RelatedEntityId.Value:D}";
+        }
+
+        if (string.Equals(
+                notification.NotificationTypeCode,
+                NotificationTypeCodes.ChapterDecision,
+                StringComparison.OrdinalIgnoreCase)
+            && string.Equals(
+                notification.RelatedEntityType,
+                NotificationRelatedEntityTypes.Chapter,
+                StringComparison.Ordinal)
+            && notification.RelatedEntityId.HasValue
+            && notification.RelatedEntityId.Value != Guid.Empty)
+        {
+            return "/mangaka/chapters";
+        }
+
         if (!string.Equals(
                 notification.NotificationTypeCode,
                 NotificationTypeCodes.TaskAssignment,
