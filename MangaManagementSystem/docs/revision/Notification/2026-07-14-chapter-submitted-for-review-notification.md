@@ -95,38 +95,38 @@ The audit detail includes:
 
 ## Persistence and transaction boundary
 
-The Chapter status update, Notifications and Audit Event are tracked by the same `ApplicationDbContext`.
+The Chapter status update, Notifications and Audit Event are tracked by one
+`ApplicationDbContext` and persisted by one
+`ApplicationDbContext.SaveChangesAsync` call.
 
-They are persisted through one EF Core:
-
-- `SaveChangesAsync`.
-
-No explicit:
-
-- `BeginTransaction`;
-- `Commit`;
-- `Rollback`;
-
-is added to this EF-only operation.
-
-A single EF Core `SaveChangesAsync` is the correct atomic persistence boundary for these tracked entity changes.
+EF Core provides the atomic persistence boundary for that single save. No
+explicit `BeginTransaction`, `Commit` or `Rollback` is added to this EF-only
+operation.
 
 ## Unit of Work clarification
 
-The project uses both `ApplicationDbContext` and `IUnitOfWork`, but they are not interchangeable.
+`IUnitOfWork` is not independent from `ApplicationDbContext`.
 
-`MangakaChapterRepository` is an Infrastructure EF Core repository and performs this EF-only workflow through `ApplicationDbContext`.
+The concrete `UnitOfWork` wraps the shared scoped `ApplicationDbContext`.
+Its `SaveChangesAsync` method calls `_context.SaveChangesAsync`, and its
+transaction methods operate through `_context.Database`.
 
-`IUnitOfWork` remains necessary for workflows that coordinate stored procedures or raw SQL with EF notification writes, including:
+The Chapter Submit flow is implemented inside
+`MangakaChapterRepository` as an EF-only repository operation, so it uses the
+repository's injected `ApplicationDbContext` and one save.
 
-- Single Task Assignment;
-- Quick Select Assignment;
-- Task Reassignment;
-- Board Poll creation.
+Single Task Assignment and Task Reassignment combine stored-procedure or SQL
+changes with EF Notification writes. Their Application service therefore uses
+the Unit of Work transaction so the task changes, Audit Events and
+Notifications share one transaction boundary.
 
-Those mixed persistence workflows require the stored procedure/raw SQL operation and EF notification insert to commit or roll back together.
+Quick Select and Board Poll currently own explicit transactions directly
+inside their Infrastructure repositories through the injected
+`ApplicationDbContext`. They use the same EF transaction principle, although
+they do not currently use the `IUnitOfWork` abstraction.
 
-The Chapter Submit flow does not combine stored procedures or raw SQL with EF writes, so adding a Unit of Work transaction would be redundant.
+The earlier wording that treated DbContext and Unit of Work as separate
+persistence mechanisms was incorrect and has been removed.
 
 ## Database compatibility
 

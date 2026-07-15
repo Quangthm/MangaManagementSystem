@@ -1,5 +1,16 @@
 # Task Assignment and Board Poll Notifications
 
+> **Superseded reassignment evidence notice - 2026-07-15**
+>
+> The latest Leader requirement now requires a cancellation/reassignment
+> Notification for the original Assistant, including the reassignment reason.
+> Any earlier section in this document that treats an old-assignee notification
+> count of zero as PASS is historical evidence only and must not be used as the
+> final PR #82 acceptance result.
+>
+> The corrected implementation and completed runtime evidence are documented in
+> `2026-07-15-task-reassignment-old-assignee-notification.md`.
+
 ## Date
 
 2026-07-14
@@ -164,7 +175,7 @@ Runtime validation was completed for the real Board Poll workflow.
 
 Runtime validation has now been completed for the Quick Select task-assignment path.
 
-The following paths remain pending:
+The following paths were pending at that historical checkpoint:
 
 1. Single task creation.
 2. Task reassignment.
@@ -381,8 +392,8 @@ Result: PASS.
 16. `read_at_utc` was populated: PASS
 17. Assistant unread task count became `0`: PASS
 18. Successful transaction persistence: PASS
-19. Forced rollback path: PENDING
-20. Audit `actor_role_name`: OBSERVATION — not populated
+19. Forced rollback path: NOT EXECUTED
+20. Audit `actor_role_name`: OBSERVATION - not populated
 
 ## Runtime validation update - Task Reassignment
 

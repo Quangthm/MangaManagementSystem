@@ -269,48 +269,65 @@ namespace MangaManagementSystem.Application.Services
                 throw new InvalidOperationException("New assigned user ID is required.");
             if (string.IsNullOrWhiteSpace(request.Reason))
                 throw new InvalidOperationException("A reason is required when reassigning a task.");
-            if (request.Reason.Trim().Length > 500)
+
+            var reassignmentReason = request.Reason.Trim();
+
+            if (reassignmentReason.Length > 500)
                 throw new InvalidOperationException("Reason must not exceed 500 characters.");
 
-            // Load task to validate status and ownership
-            var task = await _unitOfWork.ChapterPageTasks.GetByIdWithRegionsAsync(taskId);
+            // Load task to validate status and ownership.
+            var task = await _unitOfWork.ChapterPageTasks
+                .GetByIdWithRegionsAsync(taskId);
+
             if (task == null)
                 throw new InvalidOperationException("Task not found.");
 
-            // Verify actor created this task
+            // Verify actor created this task.
             if (task.CreatedByUserId != actorUserId)
-                throw new InvalidOperationException("You are not authorized to reassign this task.");
+                throw new InvalidOperationException(
+                    "You are not authorized to reassign this task.");
 
-            // Status check — only ASSIGNED and UNDER_REVIEW are reassignable
+            // Only ASSIGNED and UNDER_REVIEW tasks can be reassigned.
             if (task.StatusCode is "COMPLETED" or "CANCELLED")
-                throw new InvalidOperationException("Completed or cancelled tasks cannot be reassigned.");
+                throw new InvalidOperationException(
+                    "Completed or cancelled tasks cannot be reassigned.");
 
             if (task.StatusCode is not ("ASSIGNED" or "UNDER_REVIEW"))
-                throw new InvalidOperationException($"Task with status '{task.StatusCode}' cannot be reassigned.");
+                throw new InvalidOperationException(
+                    $"Task with status '{task.StatusCode}' cannot be reassigned.");
 
-            // Cannot reassign to the same user
+            // Reassignment must target a different Assistant.
             if (task.AssignedToUserId == request.NewAssignedToUserId)
-                throw new InvalidOperationException("New assigned user must be different from the current assignee.");
+                throw new InvalidOperationException(
+                    "New assigned user must be different from the current assignee.");
 
-            // Use the current task description if no updated description is provided
-            var updatedDescription = string.IsNullOrWhiteSpace(request.UpdatedTaskDescription)
-                ? task.TaskDescription
-                : request.UpdatedTaskDescription.Trim();
+            // Keep the current description unless Mangaka supplies updated instructions.
+            var updatedDescription =
+                string.IsNullOrWhiteSpace(request.UpdatedTaskDescription)
+                    ? task.TaskDescription
+                    : request.UpdatedTaskDescription.Trim();
 
             await _unitOfWork.BeginTransactionAsync();
 
             try
             {
-                // SQL owns final contributor guards, locking, cancellation of
-                // the old task, creation of the replacement task, region links,
-                // and audit. EF adds the assignment notification atomically.
+                // SQL owns the final contributor guards, locking, cancellation
+                // of the original task, creation of the replacement task,
+                // Page Region links and Audit Events.
+                //
+                // EF adds both:
+                // 1. the original assistant's cancellation/reassignment notice;
+                // 2. the replacement assistant's new assignment notification.
+                //
+                // Both Notifications are saved before the shared transaction
+                // is committed.
                 var newTaskId =
                     await _unitOfWork.ChapterPageTasks
                         .AssignToDifferentUserAsync(
                             actorUserId,
                             taskId,
                             request.NewAssignedToUserId,
-                            request.Reason.Trim(),
+                            reassignmentReason,
                             updatedDescription);
 
                 if (newTaskId == Guid.Empty)
@@ -318,6 +335,12 @@ namespace MangaManagementSystem.Application.Services
                     throw new InvalidOperationException(
                         "Failed to create the replacement task.");
                 }
+
+                await _unitOfWork.Notifications.AddAsync(
+                    CreateTaskReassignmentNotification(
+                        task.AssignedToUserId,
+                        taskId,
+                        reassignmentReason));
 
                 await _unitOfWork.Notifications.AddAsync(
                     CreateTaskAssignmentNotification(
@@ -352,6 +375,26 @@ namespace MangaManagementSystem.Application.Services
             return rawAssistants
                 .Select(a => new EligibleAssistantDto(a.UserId, a.DisplayName, a.Username))
                 .ToList();
+        }
+
+        private static Notification CreateTaskReassignmentNotification(
+            Guid recipientUserId,
+            Guid originalTaskId,
+            string reason)
+        {
+            return new Notification
+            {
+                RecipientUserId = recipientUserId,
+                NotificationTypeCode =
+                    NotificationTypeCodes.TaskAssignment,
+                Title = "Task Reassigned",
+                Message =
+                    $"Your task was cancelled and reassigned to another assistant. Reason: {reason}",
+                RelatedEntityType =
+                    NotificationRelatedEntityTypes.ChapterPageTask,
+                RelatedEntityId = originalTaskId,
+                CreatedAtUtc = DateTime.UtcNow
+            };
         }
 
         private static Notification CreateTaskAssignmentNotification(

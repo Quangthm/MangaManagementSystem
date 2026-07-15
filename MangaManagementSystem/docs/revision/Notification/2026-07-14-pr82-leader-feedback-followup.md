@@ -12,40 +12,80 @@ This follow-up addresses the Leader feedback concerning:
 2. The Unit of Work and DbContext transaction boundary.
 3. Editorial Board Bell visibility.
 4. Invalid success evidence that did not display the Bell.
-## 2. Unit of Work and DbContext boundary
+## 2. DbContext and Unit of Work relationship
 
-The project uses both `ApplicationDbContext` and `IUnitOfWork`, but they serve different persistence and transaction boundaries.
+`ApplicationDbContext` is the EF Core persistence context used for entity
+tracking, database access and `SaveChangesAsync`.
+
+`IUnitOfWork` and `UnitOfWork` are not a second persistence mechanism.
+`UnitOfWork` wraps the same scoped `ApplicationDbContext`, exposes repositories
+that operate through that context, and provides transaction orchestration.
+
+The current implementation confirms that:
+
+- `UnitOfWork.SaveChangesAsync` calls `_context.SaveChangesAsync`;
+- `UnitOfWork.BeginTransactionAsync` opens a transaction through
+  `_context.Database`;
+- `UnitOfWork.CommitTransactionAsync` commits that context transaction;
+- `UnitOfWork.RollbackTransactionAsync` rolls it back and clears the same
+  context Change Tracker.
+
+Therefore, a Unit of Work save ultimately remains a DbContext save.
 
 ### EF-only repository flow
 
-`MangakaChapterRepository` is an Infrastructure EF Core repository. Chapter submission updates:
+`MangakaChapterRepository` performs the Chapter Submit flow through one
+`ApplicationDbContext`.
 
-- the Chapter status;
-- the Audit Event;
-- the Chapter Review notifications.
+The Chapter status update, Chapter Review Notifications and Audit Event are
+tracked by that context and persisted through one `SaveChangesAsync` call.
 
-All entities are tracked by one shared `ApplicationDbContext` and persisted through one `SaveChangesAsync` call. No explicit `BeginTransaction`, `Commit` or `Rollback` is required for this EF-only operation.
+No explicit transaction is added because one EF Core `SaveChangesAsync` is the
+atomic persistence boundary for this EF-only operation.
 
-### Mixed stored procedure and EF flows
+### Application-coordinated mixed SQL and EF flows
 
-Explicit Unit of Work transactions are retained for flows combining stored procedures or raw SQL with EF notification writes:
+Single Task Assignment and Task Reassignment are coordinated by the
+Application service through `IUnitOfWork`.
 
-- Single Task Assignment;
-- Quick Select Assignment;
-- Task Reassignment;
-- Board Poll creation.
+Their sequence is:
 
-In these flows, the stored procedure or raw SQL operation and the EF notification insert must commit or roll back together.
+1. Begin the transaction on the shared DbContext.
+2. Execute the stored procedure or SQL task operation through a repository
+   using that transaction.
+3. Add the EF Notification through a repository backed by the same context.
+4. Call `IUnitOfWork.SaveChangesAsync`, which calls
+   `ApplicationDbContext.SaveChangesAsync`.
+5. Commit only after every operation succeeds.
+6. Roll back and clear the shared Change Tracker when an exception occurs.
 
-### Architecture decision
+### Repository-owned explicit transactions in the current code
 
-`IMangakaChapterRepository` is not exposed by the existing `IUnitOfWork`. Adding it only for this EF-only submission flow would broaden the architecture without providing additional atomicity.
+Quick Select and Board Poll currently encapsulate their explicit transactions
+inside Infrastructure repositories by using the repositories' injected
+`ApplicationDbContext` directly.
 
-Therefore:
+They still coordinate SQL and EF writes within one DbContext transaction, but
+they do not call the `IUnitOfWork` abstraction.
 
-- Infrastructure repositories use `ApplicationDbContext` for their EF queries and writes;
-- Application services use `IUnitOfWork` when coordinating multiple repositories or mixed stored procedure/EF persistence;
-- transaction ownership is selected according to the persistence boundary rather than used interchangeably.
+The previous documentation incorrectly listed these flows as Unit of Work
+flows. This documentation correction records the actual implementation and
+does not perform an unrelated architectural refactor.
+
+### Rule used for this PR
+
+DbContext and Unit of Work must not be described as independent persistence
+systems.
+
+Use one EF `SaveChangesAsync` for an EF-only atomic operation. Use an explicit
+transaction when SQL or stored-procedure changes must commit or roll back with
+EF changes. When an Application service owns that orchestration, it uses
+`IUnitOfWork`, whose save and transaction methods operate on the shared
+`ApplicationDbContext`.
+
+A broader refactor requiring every repository-owned mixed flow to be moved
+behind `IUnitOfWork` is outside this correction and requires explicit scope
+confirmation.
 ## 3. Single Task Assignment runtime validation
 
 ### Test context
@@ -139,7 +179,7 @@ Final full solution build completed successfully after stopping the runtime API 
 
 - Build errors: `0`
 - Build warnings: `0`
-- Build duration: `2.8 seconds`
+- Build duration: `3.46 seconds`
 
 The earlier runtime build showed existing analyzer warnings. The final clean verification build completed without errors or warnings.
 
@@ -153,6 +193,11 @@ Completed:
 - Task Assignment read-state database validation.
 - Editorial Board Bell visibility validation.
 - Board Poll read-state database validation.
+- Task Reassignment old-assignee and replacement-assignee runtime validation.
+- Task Reassignment Bell route and read-state database validation.
+- Task Reassignment transaction persistence and Audit Event validation.
+- Seven Notification Types requirement and scope audit.
+- Final full-solution Release build after all documentation.
 - Evidence criteria corrected.
 
 Pending:
