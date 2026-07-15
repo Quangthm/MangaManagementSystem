@@ -8,68 +8,45 @@
 
 This follow-up addresses the Leader feedback concerning:
 
-1. The source and scope of Publication Frequency Change Request.
-2. Missing runtime evidence for Task Assignment Notification.
-3. Redundant explicit transaction usage around a single EF Core `SaveChangesAsync`.
-4. Editorial Board Bell visibility.
-5. Invalid success evidence that did not display the Bell.
+1. Missing runtime evidence for Task Assignment Notification.
+2. The Unit of Work and DbContext transaction boundary.
+3. Editorial Board Bell visibility.
+4. Invalid success evidence that did not display the Bell.
+## 2. Unit of Work and DbContext boundary
 
-## 2. Publication Frequency Change Request traceability
+The project uses both `ApplicationDbContext` and `IUnitOfWork`, but they serve different persistence and transaction boundaries.
 
-The flow was not invented during implementation. It is traceable to existing project artifacts that predate the implementation commit:
+### EF-only repository flow
 
-- `BR-PUB-014`
-- `BR-NOTIF-013`
-- `FR-PUB-014`
-- `FR-PUB-015`
-- `FR-NOTIF-013`
-- `FR-NOTIF-014`
-- `US-MANGAKA-025`
-- Notification type code `PUBLICATION_FREQUENCY_REQUEST`
+`MangakaChapterRepository` is an Infrastructure EF Core repository. Chapter submission updates:
 
-However, this flow was not a direct task explicitly assigned by the Leader. It was included while completing remaining notification flows.
+- the Chapter status;
+- the Audit Event;
+- the Chapter Review notifications.
 
-This distinction must be stated clearly:
+All entities are tracked by one shared `ApplicationDbContext` and persisted through one `SaveChangesAsync` call. No explicit `BeginTransaction`, `Commit` or `Rollback` is required for this EF-only operation.
 
-- It exists in project requirements.
-- It must not be represented as a directly assigned task.
-- Final PR scope remains subject to Leader confirmation.
+### Mixed stored procedure and EF flows
 
-## 3. Transaction correction
+Explicit Unit of Work transactions are retained for flows combining stored procedures or raw SQL with EF notification writes:
 
-### Updated file
+- Single Task Assignment;
+- Quick Select Assignment;
+- Task Reassignment;
+- Board Poll creation.
 
-`src/MangaManagementSystem.Infrastructure/Repositories/PublicationFrequencyRequestRepository.cs`
+In these flows, the stored procedure or raw SQL operation and the EF notification insert must commit or roll back together.
 
-### Change
+### Architecture decision
 
-Removed the redundant explicit transaction calls:
+`IMangakaChapterRepository` is not exposed by the existing `IUnitOfWork`. Adding it only for this EF-only submission flow would broaden the architecture without providing additional atomicity.
 
-- `BeginTransactionAsync`
-- `CommitAsync`
-- `RollbackAsync`
+Therefore:
 
-The flow performs EF Core entity additions for:
-
-- `Notification`
-- `AuditEvent`
-
-and persists them through one `SaveChangesAsync` call.
-
-EF Core already executes a single `SaveChangesAsync` atomically when the provider supports transactions. Therefore, the additional explicit transaction did not provide extra atomicity for this flow.
-
-### Transactions intentionally retained elsewhere
-
-Explicit transactions remain necessary in flows that combine stored procedures or raw SQL with EF Core writes:
-
-- Single Task Assignment
-- Task Reassignment
-- Quick Select Assignment
-- Board Poll creation
-
-Those flows require all stored procedure/raw SQL and EF notification operations to commit or roll back together.
-
-## 4. Single Task Assignment runtime validation
+- Infrastructure repositories use `ApplicationDbContext` for their EF queries and writes;
+- Application services use `IUnitOfWork` when coordinating multiple repositories or mixed stored procedure/EF persistence;
+- transaction ownership is selected according to the persistence boundary rather than used interchangeably.
+## 3. Single Task Assignment runtime validation
 
 ### Test context
 
@@ -109,7 +86,7 @@ For Task ID `957a624d-8de7-4d55-b0fe-9a69aebb51dd`:
 
 Result: **PASS**
 
-## 5. Editorial Board Bell runtime validation
+## 4. Editorial Board Bell runtime validation
 
 ### Test context
 
@@ -141,7 +118,7 @@ For `TestBoardMember2` and Poll ID `3f0dfd19-01c4-441c-b647-7c850f9b7c15`:
 
 Result: **PASS**
 
-## 6. Evidence correction
+## 5. Evidence correction
 
 The earlier screenshot that did not show the Editorial Board Bell must not be used as success evidence.
 
@@ -156,7 +133,7 @@ The final report must only use screenshots that visibly show:
 
 Any earlier image without the Bell may only be labeled as `Before fix`, or it must be removed entirely.
 
-## 7. Build validation
+## 6. Build validation
 
 Final full solution build completed successfully after stopping the runtime API and Web processes:
 
@@ -166,7 +143,7 @@ Final full solution build completed successfully after stopping the runtime API 
 
 The earlier runtime build showed existing analyzer warnings. The final clean verification build completed without errors or warnings.
 
-## 8. Current status
+## 7. Current status
 
 Completed:
 

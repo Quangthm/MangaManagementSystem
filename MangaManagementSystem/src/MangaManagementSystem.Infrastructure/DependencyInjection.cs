@@ -11,7 +11,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MangaManagementSystem.Application.Features.EditorialBoard.Repositories;
 using MangaManagementSystem.Application.Features.Ranking.Repositories;
-using MangaManagementSystem.Application.Features.Mangaka.Series.PublicationFrequencyRequests;
 
 namespace MangaManagementSystem.Infrastructure
 {
@@ -93,9 +92,6 @@ namespace MangaManagementSystem.Infrastructure
 
             services.AddScoped<IEditorialBoardRepository, EditorialBoardRepository>();
             services.AddScoped<ISeriesRankingRepository, SeriesRankingRepository>();
-            services.AddScoped<
-                IPublicationFrequencyRequestRepository,
-                PublicationFrequencyRequestRepository>();
             services.AddScoped<IPublicationPeriodRepository, PublicationPeriodRepository>();
             services.AddScoped<IPublicationScheduleRepository, PublicationScheduleRepository>();
             services.AddScoped<IChapterOnHoldRepository, ChapterOnHoldRepository>();

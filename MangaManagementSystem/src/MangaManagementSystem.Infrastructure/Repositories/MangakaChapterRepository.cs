@@ -189,20 +189,23 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     "Only DRAFT or REVISION_REQUESTED chapters can be submitted for editorial review.");
             }
 
-            var recipientUserIds = await _context.Users
+            var recipientUserIds = await _context
+                .ActiveSeriesContributors
                 .AsNoTracking()
-                .Where(user =>
-                    user.StatusCode == ActiveUserStatus
-                    && user.Role != null
-                    && user.Role.RoleName == TantouEditorRoleName)
-                .Select(user => user.UserId)
+                .Where(contributor =>
+                    contributor.SeriesId == chapter.SeriesId
+                    && contributor.EndDate == null
+                    && contributor.UserStatusCode == ActiveUserStatus
+                    && contributor.RoleName == TantouEditorRoleName)
+                .Select(contributor =>
+                    contributor.UserId)
                 .Distinct()
                 .ToListAsync(cancellationToken);
 
             if (recipientUserIds.Count == 0)
             {
                 throw new InvalidOperationException(
-                    "No active Tantou Editor is available to review this chapter.");
+                    "No active Tantou Editor contributor is assigned to this series.");
             }
 
             var oldStatusCode = chapter.StatusCode;
@@ -232,7 +235,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                                 recipientUserId,
                             NotificationTypeCode =
                                 NotificationTypeCodes
-                                    .SystemMessage,
+                                    .ChapterReview,
                             Title =
                                 "Chapter Submitted for Review",
                             Message =
@@ -272,9 +275,11 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                         submittedAtUtc,
                     notification_type_code =
                         NotificationTypeCodes
-                            .SystemMessage,
+                            .ChapterReview,
                     recipient_role_name =
                         TantouEditorRoleName,
+                    recipient_scope =
+                        "ACTIVE_SERIES_CONTRIBUTOR",
                     recipient_count =
                         recipientUserIds.Count
                 });

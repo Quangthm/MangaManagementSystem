@@ -7,9 +7,9 @@ namespace MangaManagementSystem.Application.Common
 
         public const string BoardPoll =
             "BOARD_POLL";
+        public const string ChapterReview =
+            "CHAPTER_REVIEW";
 
-        public const string PublicationFrequencyRequest =
-            "PUBLICATION_FREQUENCY_REQUEST";
         public const string SystemMessage =
             "SYSTEM_MESSAGE";
     }

@@ -5,7 +5,6 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Manga;
-using MangaManagementSystem.Application.Features.Mangaka.Series.PublicationFrequencyRequests;
 using Microsoft.Extensions.Logging;
 
 namespace MangaManagementSystem.Web.Services.Api
@@ -366,68 +365,6 @@ namespace MangaManagementSystem.Web.Services.Api
                 "Load proposal detail {ProposalId} failed: {StatusCode} {ReasonPhrase}",
                 proposalId, (int)response.StatusCode, response.ReasonPhrase);
             throw new InvalidOperationException(message);
-        }
-
-        public async Task<PublicationFrequencyChangeRequestResultDto>
-            RequestPublicationFrequencyChangeAsync(
-                Guid actorUserId,
-                Guid seriesId,
-                string reason,
-                CancellationToken cancellationToken = default)
-        {
-            var route =
-                $"api/mangaka/series/{seriesId}/publication-frequency-change-requests";
-
-            using var requestMessage =
-                new HttpRequestMessage(
-                    HttpMethod.Post,
-                    route)
-                {
-                    Content =
-                        JsonContent.Create(
-                            new
-                            {
-                                Reason =
-                                    reason
-                                    ?? string.Empty
-                            })
-                };
-
-            requestMessage.Headers.Add(
-                ActorUserIdHeader,
-                actorUserId.ToString());
-
-            using var response =
-                await _httpClient.SendAsync(
-                    requestMessage,
-                    cancellationToken);
-
-            if (response.IsSuccessStatusCode)
-            {
-                var result =
-                    await response.Content
-                        .ReadFromJsonAsync<
-                            PublicationFrequencyChangeRequestResultDto>(
-                            cancellationToken:
-                                cancellationToken);
-
-                return result
-                    ?? throw new InvalidOperationException(
-                        "The publication frequency request was accepted, but the response was empty.");
-            }
-
-            var message =
-                await ExtractErrorMessageAsync(
-                    response);
-
-            _logger.LogWarning(
-                "Publication frequency request failed for series {SeriesId}: {StatusCode} {ReasonPhrase}",
-                seriesId,
-                (int)response.StatusCode,
-                response.ReasonPhrase);
-
-            throw new InvalidOperationException(
-                message);
         }
 
         public async Task<SeriesDto?> GetMySeriesCardByIdAsync(

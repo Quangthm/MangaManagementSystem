@@ -1,205 +1,362 @@
-# Chapter Submitted for Review Notification
+# Chapter Submitted for Review Notification - Leader Correction
 
 ## Date
 
-2026-07-14
+2026-07-15
 
 ## Branch and baseline
 
 - Branch: `feature/notification-remaining-flows`
-- Baseline merge commit: `b28a296`
-- Latest `origin/main` was merged into the feature branch.
+- PR: `#82`
+- Baseline synchronization commit: `b28a296`
 - No direct changes were made on `main`.
 
-## Leader request
+## Leader correction
 
-Add notifications to additional workflow transitions, including when a Mangaka submits a chapter for editorial review.
+The previous implementation used an incorrect participant rule and notification type.
+
+The corrected requirements are:
+
+1. Use database-supported notification type `CHAPTER_REVIEW`.
+2. Notify only active Tantou Editor contributors of the submitted chapter's exact series.
+3. Do not notify active Tantou Editors who are not contributors of that series.
+4. Reuse the existing active-series-contributor check/view.
+5. Do not introduce unnecessary explicit transactions for a single EF Core `SaveChangesAsync`.
 
 ## Trigger
 
-A Mangaka submits a chapter whose status is:
+A Mangaka submits a chapter whose current status is:
 
-- `DRAFT`, or
-- `REVISION_REQUESTED`
+- `DRAFT`; or
+- `REVISION_REQUESTED`.
 
 The chapter transitions to:
 
-- `UNDER_REVIEW`
+- `UNDER_REVIEW`.
 
-## Recipients
+## Correct recipient rule
 
-The existing Chapter Review Queue is a global MVP queue and currently has no per-Tantou-Editor assignment relationship.
+Recipients are selected from the existing:
 
-Therefore, one notification is created for each distinct user who has:
+- `manga.vw_ActiveSeriesContributor`;
+- EF Core DbSet: `ApplicationDbContext.ActiveSeriesContributors`.
 
-- exact role `Tantou Editor`;
-- status `ACTIVE`.
+A recipient must satisfy all of the following conditions:
 
-## Notification
+- `SeriesId` equals the submitted chapter's `SeriesId`;
+- `RoleName` equals `Tantou Editor`;
+- `UserStatusCode` equals `ACTIVE`;
+- `EndDate` is `NULL`.
 
-- Type: `SYSTEM_MESSAGE`
+The resulting user IDs are selected with `Distinct()` to prevent duplicate notifications.
+
+This means:
+
+- an active Tantou Editor contributor of the exact series receives the notification;
+- an active Tantou Editor who belongs to another series does not receive the notification;
+- an ended contributor does not receive the notification;
+- an inactive user does not receive the notification.
+
+## Notification values
+
+- Notification type: `CHAPTER_REVIEW`
 - Title: `Chapter Submitted for Review`
 - Related entity type: `Chapter`
 - Related entity ID: submitted `chapter_id`
+- Initial read state: unread
 - Bell navigation route: `/editor/chapters`
 
-## Persistence
+The message identifies:
 
-The following changes are persisted by one EF Core `SaveChangesAsync` call:
+- the chapter number;
+- the optional chapter title;
+- the series title.
 
-- Chapter status update;
-- Audit event;
-- Notifications.
+## Audit Event
 
-No redundant explicit `BeginTransaction`, `Commit` or `Rollback` was added to this EF-only flow.
+The submission creates one Audit Event with:
 
-## Database impact
+- action code: `CHAPTER_SUBMITTED_FOR_EDITORIAL_REVIEW`;
+- entity type: `Chapter`;
+- entity ID: submitted `chapter_id`.
 
-- No schema change.
-- No migration.
-- No new table.
-- No stored procedure added or modified.
-- Existing `manga.Notification` and `audit.AuditEvent` tables are reused.
+The audit detail includes:
 
-## Validation status
+- `chapter_id`;
+- `series_id`;
+- `series_title`;
+- old and new status codes;
+- submitting user ID;
+- submission timestamp;
+- notification type `CHAPTER_REVIEW`;
+- recipient role `Tantou Editor`;
+- recipient scope `ACTIVE_SERIES_CONTRIBUTOR`;
+- recipient count.
 
-## First runtime attempt
+## Persistence and transaction boundary
 
-The first runtime submission attempt failed because the existing database CHECK constraint on `manga.Notification.notification_type_code` does not allow the new value `CHAPTER_SUBMITTED_FOR_REVIEW`.
+The Chapter status update, Notifications and Audit Event are tracked by the same `ApplicationDbContext`.
 
-The failed `SaveChangesAsync` persisted no partial data:
+They are persisted through one EF Core:
 
-- Chapter remained `DRAFT`;
-- notification count remained `0`;
-- audit event count remained `0`.
+- `SaveChangesAsync`.
 
-No database constraint, schema, migration or stored procedure was changed.
+No explicit:
 
-The implementation was corrected to reuse the existing allowed notification type:
+- `BeginTransaction`;
+- `Commit`;
+- `Rollback`;
 
-- `APPROVAL_REQUEST`
+is added to this EF-only operation.
 
-The Chapter notification remains unambiguous through:
+A single EF Core `SaveChangesAsync` is the correct atomic persistence boundary for these tracked entity changes.
 
-- title `Chapter Submitted for Review`;
-- related entity type `Chapter`;
-- related entity ID equal to the submitted `chapter_id`.
+## Unit of Work clarification
 
+The project uses both `ApplicationDbContext` and `IUnitOfWork`, but they are not interchangeable.
 
-## Second runtime attempt
+`MangakaChapterRepository` is an Infrastructure EF Core repository and performs this EF-only workflow through `ApplicationDbContext`.
 
-The second runtime attempt failed because `APPROVAL_REQUEST` is also not included in the deployed database CHECK constraint `ck_notification_type_code`.
+`IUnitOfWork` remains necessary for workflows that coordinate stored procedures or raw SQL with EF notification writes, including:
 
-The second failed `SaveChangesAsync` persisted no partial data:
+- Single Task Assignment;
+- Quick Select Assignment;
+- Task Reassignment;
+- Board Poll creation.
 
-- Chapter remained `DRAFT`;
-- notification count remained `0`;
-- audit event count remained `0`.
+Those mixed persistence workflows require the stored procedure/raw SQL operation and EF notification insert to commit or roll back together.
 
-The implementation was corrected without modifying the database and now reuses the existing allowed notification type:
+The Chapter Submit flow does not combine stored procedures or raw SQL with EF writes, so adding a Unit of Work transaction would be redundant.
 
-- `SYSTEM_MESSAGE`
+## Database compatibility
 
-The Chapter review event remains identifiable through:
+The project database schema already includes:
 
-- title `Chapter Submitted for Review`;
-- related entity type `Chapter`;
-- related entity ID equal to the submitted `chapter_id`.
+- `CHAPTER_REVIEW`
 
-## Final runtime validation
+in the `ck_notification_type_code` CHECK constraint.
 
-### Mangaka UI
+Therefore, this correction does not require:
 
-Test account:
+- an ALTER TABLE statement;
+- a migration;
+- a new table;
+- a stored procedure change;
+- a CHECK constraint change.
 
-- `TestMangaka1`
+## Code validation
 
-Test data:
+Confirmed implementation changes:
 
-- Series: `Notification Frequency Runtime Test`
-- Chapter: `1`
-- Chapter ID: `1f1783c9-e954-4d4e-c23f-08dee1b53155`
+- added `NotificationTypeCodes.ChapterReview`;
+- removed the Chapter Review use of `NotificationTypeCodes.SystemMessage`;
+- changed recipient lookup from global active users to `ActiveSeriesContributors`;
+- added exact series scoping;
+- added active-user, Tantou-role and active-contributor filtering;
+- updated Notification Bell routing to recognize `CHAPTER_REVIEW`.
+
+## Build validation
+
+Full solution build result:
+
+- Build: PASS
+- Errors: `0`
+- Warnings: `69`
+
+The warnings are existing nullable, generated Razor and MudBlazor analyzer warnings and do not block the build.
+
+## Runtime validation status
+
+Runtime validation was repeated after correcting both:
+
+- notification type;
+- participant scoping.
+
+The previous `SYSTEM_MESSAGE` and global-editor evidence remains invalid and is not used as final proof.
+
+## Corrected runtime test context
+
+### Series
+
+- Title: `Notification Frequency Runtime Test`
+- Series ID: `5da0dfb7-dcbe-4466-a662-323fdde5e286`
+
+### Chapter
+
+- Number: `2`
+- Title: `Chapter Review Runtime Test`
+- Chapter ID: `624553bb-d271-47f4-4fdf-08dee2640de6`
+
+### Actor
+
+- Username: `TestMangaka1`
+- Role: `Mangaka`
+
+### Expected recipient
+
+- Username: `TestEditor1`
+- User ID: `0a0b9066-b19e-4008-9f27-a812f3484f49`
+- Role: `Tantou Editor`
+- User status: `ACTIVE`
+- Active contributor of the exact series: `YES`
+
+### Explicitly excluded active Tantou Editors
+
+The following active Tantou Editors were not contributors of the test series and therefore had to receive no notification:
+
+- `TestEditor2`
+- `TestEditor3`
+- `TestEditor4`
+- `TestEditor5`
+
+## Before-submit evidence
 
 Before submission:
 
-- Chapter status was `DRAFT`;
-- `SUBMIT FOR REVIEW` was available.
+- Chapter status: `DRAFT`
+- Notification count for Chapter 2: `0`
+- Matching Audit Event count: `0`
+- `TestEditor1`: `EXPECTED_RECIPIENT`
+- `TestEditor2–5`: `MUST_NOT_RECEIVE`
 
-After submission:
+The Mangaka UI displayed:
 
-- success message `Chapter submitted for review.` was displayed;
+- Chapter `2 — Chapter Review Runtime Test`;
+- status `DRAFT`;
+- action `SUBMIT FOR REVIEW`.
+
+## Submission result
+
+After `TestMangaka1` submitted Chapter 2:
+
+- success message displayed: `Chapter submitted for review.`;
 - Chapter status changed to `UNDER_REVIEW`;
-- the page displayed `Awaiting Tantou Editor review`;
-- the submit button was no longer available.
+- UI displayed `Awaiting Tantou Editor review`;
+- the submit action was no longer displayed.
 
 Result: PASS.
 
-### Database validation
+## Database notification evidence
 
-The submission produced:
+Exactly one Notification was created:
 
-- Chapter status `UNDER_REVIEW`;
-- exactly `5` notifications;
-- exactly `5` distinct recipients;
-- all recipients had exact role `Tantou Editor`;
-- all recipients had user status `ACTIVE`;
-- invalid recipient count `0`;
-- exactly `1` audit event with action code `CHAPTER_SUBMITTED_FOR_EDITORIAL_REVIEW`.
+- Notification ID: `f021216c-e89c-45cd-3d8f-08dee264ae82`
+- Recipient: `TestEditor1`
+- Recipient role: `Tantou Editor`
+- Recipient user status: `ACTIVE`
+- Notification type: `CHAPTER_REVIEW`
+- Title: `Chapter Submitted for Review`
+- Related entity type: `Chapter`
+- Related entity ID: `624553bb-d271-47f4-4fdf-08dee2640de6`
+- Initial read state: unread
 
-Notification values:
+Recipient validation:
 
-- type: `SYSTEM_MESSAGE`;
-- title: `Chapter Submitted for Review`;
-- related entity type: `Chapter`;
-- related entity ID: `1f1783c9-e954-4d4e-c23f-08dee1b53155`.
+- `TestEditor1`: notification count `1`, type `CHAPTER_REVIEW`
+- `TestEditor2`: notification count `0`
+- `TestEditor3`: notification count `0`
+- `TestEditor4`: notification count `0`
+- `TestEditor5`: notification count `0`
+
+Duplicate validation:
+
+- `TestEditor1` notification count for Chapter 2: `1`
+- Duplicate notification count: `0`
 
 Result: PASS.
 
-### Tantou Editor Bell
+## Audit Event evidence
 
-Test account:
+Exactly one Audit Event was created:
 
-- `TestEditor1`
+- Audit Event ID: `45`
+- Actor role: `Mangaka`
+- Action code: `CHAPTER_SUBMITTED_FOR_EDITORIAL_REVIEW`
+- Entity type: `Chapter`
+- Entity ID: `624553bb-d271-47f4-4fdf-08dee2640de6`
+- Notification type: `CHAPTER_REVIEW`
+- Recipient role: `Tantou Editor`
+- Recipient scope: `ACTIVE_SERIES_CONTRIBUTOR`
+- Recipient count: `1`
+- Old status: `DRAFT`
+- New status: `UNDER_REVIEW`
 
-Before clicking:
+Result: PASS.
 
-- Bell badge displayed `1`;
+## Tantou Editor Bell evidence
+
+After logging in as `TestEditor1`:
+
+- Bell displayed unread badge `1`;
 - dropdown displayed `Chapter Submitted for Review`;
-- message identified Chapter `1` and series `Notification Frequency Runtime Test`.
+- message identified Chapter 2 and the correct series;
+- the new notification was displayed as unread;
+- the previous Chapter 1 notification remained read.
 
-After clicking:
+After clicking the Chapter 2 notification:
 
-- navigation opened `/editor/chapters`;
-- Chapter Review Queue displayed Chapter `1` as `UNDER REVIEW`;
-- the notification was marked as read;
-- `read_at_utc` was populated;
-- TestEditor1 unread count became `0`;
-- the other four Tantou Editor notifications remained unread.
+- browser navigated to `/editor/chapters`;
+- Chapter Review Queue displayed Chapter 2;
+- Chapter 2 status was `UNDER REVIEW`;
+- Bell unread badge was cleared;
+- database `read_at_utc` was populated;
+- unread `CHAPTER_REVIEW` count for `TestEditor1` became `0`.
+
+Read timestamp:
+
+- `2026-07-15 11:40:03`
 
 Result: PASS.
 
-### Atomic persistence
+## Atomic persistence result
 
-Chapter status, Audit Event and all five Notifications were saved through one EF Core `SaveChangesAsync` call.
+Before submission:
 
-No explicit `BeginTransaction`, `Commit` or `Rollback` was added.
+- Chapter status: `DRAFT`
+- Notification count: `0`
+- Audit Event count: `0`
 
-The two failed validation attempts persisted no partial data:
+After successful submission:
 
-- Chapter remained `DRAFT`;
-- notification count remained `0`;
-- audit event count remained `0`.
+- Chapter status: `UNDER_REVIEW`
+- Notification count: `1`
+- Audit Event count: `1`
 
-### Database compatibility
+The Chapter update, Notification and Audit Event were persisted through one EF Core `SaveChangesAsync`.
 
-The deployed `ck_notification_type_code` constraint does not permit new notification types without a database change.
+No redundant explicit transaction was added.
 
-To comply with the instruction not to modify the database, this flow reuses the allowed `SYSTEM_MESSAGE` type and distinguishes the event through title and related entity fields.
+Result: PASS.
 
-No database schema, migration, CHECK constraint or stored procedure was modified.
+## Acceptance-check results
 
-### Final build
+1. Chapter started as `DRAFT`: PASS
+2. Active Tantou Editor contributor existed for exact series: PASS
+3. Active Tantou Editors outside the series existed: PASS
+4. Chapter transitioned to `UNDER_REVIEW`: PASS
+5. Only exact-series active Tantou Editor contributor was notified: PASS
+6. Tantou Editors outside the series received no notification: PASS
+7. Notification type was `CHAPTER_REVIEW`: PASS
+8. Related entity type was `Chapter`: PASS
+9. Related entity ID matched Chapter 2: PASS
+10. Exactly one Audit Event was created: PASS
+11. Bell displayed the notification: PASS
+12. Bell navigation opened `/editor/chapters`: PASS
+13. `read_at_utc` was populated: PASS
+14. Unread count became `0`: PASS
+15. No duplicate notification was created: PASS
 
+## Final validation result
+
+- Code correction: COMPLETE
+- Publication Frequency flow removal: COMPLETE
+- Participant correction: PASS
+- Notification type correction: PASS
+- Static validation: PASS
 - Full solution build: PASS
-- Errors: `0`
-- Warnings: `69` existing warnings after synchronizing the latest `main`
+- Build errors: `0`
+- Build warnings: `69`
+- Corrected Chapter Review runtime validation: PASS
+- Bell UI validation: PASS
+- Database recipient validation: PASS
+- Read-state validation: PASS

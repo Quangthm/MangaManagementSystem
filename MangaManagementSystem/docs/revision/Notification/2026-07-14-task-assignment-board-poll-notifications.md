@@ -117,10 +117,8 @@ Database-backed manual tests should confirm:
 ## Deferred notification flows
 
 Not included in this commit:
-
-- `PUBLICATION_FREQUENCY_REQUEST`
 - Proposal review and decision notifications
-- Chapter review and decision notifications
+- Chapter decision notifications
 - Ranking warning notifications
 - Publication schedule notifications
 
