@@ -2,6 +2,7 @@ using System.Text.Json;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
+using MangaManagementSystem.Domain.Policies;
 using MediatR;
 
 namespace MangaManagementSystem.Application.Features.Series.Lifecycle.Commands.ResumeSeriesSerialization
@@ -49,8 +50,8 @@ namespace MangaManagementSystem.Application.Features.Series.Lifecycle.Commands.R
                         SeriesLifecycleSupport.PauseResumeAllowedRoles,
                         cancellationToken);
 
-                if (series.StatusCode !=
-                    SeriesLifecycleSupport.HiatusStatusCode)
+                if (!SeriesLifecycleTransitionPolicy.CanResumeSerialization(
+                        series.StatusCode))
                 {
                     throw new InvalidOperationException(
                         $"Series '{command.SeriesId:D}' cannot resume serialization from status " +

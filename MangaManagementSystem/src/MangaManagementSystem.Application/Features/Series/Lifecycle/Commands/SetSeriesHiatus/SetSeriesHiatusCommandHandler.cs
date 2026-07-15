@@ -2,6 +2,7 @@ using System.Text.Json;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
+using MangaManagementSystem.Domain.Policies;
 using MediatR;
 
 namespace MangaManagementSystem.Application.Features.Series.Lifecycle.Commands.SetSeriesHiatus
@@ -63,8 +64,8 @@ namespace MangaManagementSystem.Application.Features.Series.Lifecycle.Commands.S
                         SeriesLifecycleSupport.PauseResumeAllowedRoles,
                         cancellationToken);
 
-                if (series.StatusCode !=
-                    SeriesLifecycleSupport.SerializedStatusCode)
+                if (!SeriesLifecycleTransitionPolicy.CanSetHiatus(
+                        series.StatusCode))
                 {
                     throw new InvalidOperationException(
                         "Only a serialized series can be set on hiatus.");

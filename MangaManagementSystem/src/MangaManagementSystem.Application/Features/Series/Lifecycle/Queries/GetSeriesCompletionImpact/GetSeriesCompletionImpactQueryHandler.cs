@@ -1,5 +1,6 @@
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Domain.Interfaces;
+using MangaManagementSystem.Domain.Policies;
 using MediatR;
 
 namespace MangaManagementSystem.Application.Features.Series.Lifecycle.Queries.GetSeriesCompletionImpact
@@ -55,16 +56,8 @@ namespace MangaManagementSystem.Application.Features.Series.Lifecycle.Queries.Ge
                 SeriesLifecycleSupport.MangakaOnlyAllowedRoles,
                 cancellationToken);
 
-            bool canComplete = string.Equals(
-                    series.StatusCode,
-                    SeriesLifecycleSupport.SerializedStatusCode,
-                    StringComparison.OrdinalIgnoreCase)
-                || string.Equals(
-                    series.StatusCode,
-                    SeriesLifecycleSupport.HiatusStatusCode,
-                    StringComparison.OrdinalIgnoreCase);
-
-            if (!canComplete)
+            if (!SeriesLifecycleTransitionPolicy.CanCompleteSeries(
+                    series.StatusCode))
             {
                 throw new InvalidOperationException(
                     $"Series '{query.SeriesId:D}' cannot be completed from status " +
