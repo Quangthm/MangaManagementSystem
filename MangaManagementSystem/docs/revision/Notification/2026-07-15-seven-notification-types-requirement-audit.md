@@ -1,3 +1,15 @@
+> **Status update — 2026-07-16**
+>
+> This document was a point-in-time pre-implementation audit at commit
+> `ef2ab3d13055419001e069f72baba36275ca8556`.
+>
+> The conclusions for `PROPOSAL_DECISION` and `CHAPTER_DECISION` are superseded:
+> both types were subsequently implemented and runtime validated in commit
+> `9bce33d5fa370c943fe6b138d73acf01f1e6289e`.
+>
+> The remaining five types continue to require approved requirement/scope
+> confirmation as documented in:
+> `2026-07-16-remaining-notification-types-final-audit.md`.
 # PR #82 - Seven Notification Types Requirement and Scope Audit
 
 Date: 2026-07-15
