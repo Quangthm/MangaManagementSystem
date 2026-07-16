@@ -202,10 +202,12 @@
                             <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); padding: 20px 24px;">
                                 <div style="font-weight: 700; font-size: 0.9rem; color: #111827; margin-bottom: 12px;">Actions</div>
                                 <div style="display: flex; flex-direction: column; gap: 8px;">
-                                    <a href="@($"/workspace/tasks/{_task.ChapterPageTaskId}?returnUrl=/assistant/task/{_task.ChapterPageTaskId}")" style="background: #4f46e5; color: #fff; padding: 10px; border-radius: 8px; text-decoration: none; font-size: 0.85rem; font-weight: 500; text-align: center;">Open Workspace</a>
+                                    <a href="@($"/workspace/tasks/{_task.ChapterPageTaskId}?returnUrl=/assistant/task/{_task.ChapterPageTaskId}")" style="background: #4f46e5; color: #fff; display: inline-flex; align-items: center; justify-content: center; min-width: 160px; padding: 10px 16px; border-radius: 8px; text-decoration: none; font-size: 0.85rem; font-weight: 600; text-align: center; line-height: 1; white-space: nowrap;">Open Workspace</a>
                                     @if (_task.StatusCode == "ASSIGNED")
                                     {
-                                        <a href="@($"/assistant/task/{_task.ChapterPageTaskId}/submit")" style="border: 1px solid #e2e8f0; color: #374151; padding: 10px; border-radius: 8px; text-decoration: none; font-size: 0.85rem; font-weight: 500; text-align: center;">Submit Work</a>
+                                        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 12px; color: #1d4ed8; font-size: 0.8rem; text-align: center;">
+                                            Submit your result from inside the workspace.
+                                        </div>
                                     }
                                     else if (_task.StatusCode == "UNDER_REVIEW")
                                     {
@@ -270,9 +272,16 @@
                                 <div style="font-weight: 700; font-size: 0.9rem; color: #111827; margin-bottom: 12px;">Source Page</div>
                                 @if (!string.IsNullOrWhiteSpace(_task.PageImageUrl))
                                 {
-                                    <MudImage Src="@_task.PageImageUrl" MaxHeight="150" ObjectFit="ObjectFit.Contain" Class="rounded w-100" />
-                                    <div style="text-align: center; margin-top: 8px;">
-                                        <a href="@_task.PageImageUrl" target="_blank" style="color: #4f46e5; font-size: 0.85rem; text-decoration: none; font-weight: 500;">Download Source</a>
+                                    <div style="border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; overflow: hidden;">
+                                        <div style="height: 220px; display: flex; align-items: center; justify-content: center; padding: 12px;">
+                                            <img src="@_task.PageImageUrl"
+                                                 alt="Source page preview"
+                                                 style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px;" />
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">
+                                        <button @onclick="OpenSourcePreview" style="border: 1px solid #e2e8f0; color: #374151; padding: 8px 16px; border-radius: 8px; background: none; cursor: pointer; font-size: 0.85rem; font-weight: 500; width: 100%;">View Source Page</button>
+                                        <a href="@_task.PageImageUrl" target="_blank" style="color: #4f46e5; font-size: 0.85rem; text-decoration: none; font-weight: 500; text-align: center;">Download Source</a>
                                     </div>
                                 }
                                 else
@@ -280,6 +289,29 @@
                                     <div style="color: #94a3b8; font-size: 0.85rem; text-align: center; padding: 16px;">Source image not available.</div>
                                 }
                             </div>
+
+                            @* Source Page Preview Overlay *@
+                            <MudOverlay Visible="_showSourcePreview" AutoClose="false">
+                                <div style="display: flex; align-items: center; justify-content: center; height: 100%; padding: 24px;">
+                                    <div style="max-width: 900px; width: 100%; max-height: 85vh; background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); overflow: hidden; display: flex; flex-direction: column;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-bottom: 1px solid #e2e8f0;">
+                                            <div style="font-weight: 700; font-size: 1rem; color: #111827;">Source Page Preview</div>
+                                            <button @onclick="CloseSourcePreview" style="background: none; border: none; cursor: pointer; color: #94a3b8;">
+                                                <svg style="width: 20px; height: 20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                            </button>
+                                        </div>
+                                        <div style="flex: 1; overflow: auto; padding: 24px; text-align: center;">
+                                            @if (!string.IsNullOrWhiteSpace(_task?.PageImageUrl))
+                                            {
+                                                <img src="@_task.PageImageUrl" style="max-width: 100%; max-height: 72vh; object-fit: contain; border-radius: 8px;" />
+                                            }
+                                        </div>
+                                        <div style="padding: 12px 24px; border-top: 1px solid #e2e8f0; text-align: right;">
+                                            <button @onclick="CloseSourcePreview" style="background: #4f46e5; color: #fff; padding: 8px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: 0.85rem; font-weight: 500;">Close</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </MudOverlay>
 
                             @* Submitted Output Card *@
                             <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.05); padding: 20px 24px;">
@@ -339,6 +371,7 @@
 
     private Guid _currentUserId;
     private bool _loading = true;
+    private bool _showSourcePreview;
     private bool _showOutputPreview;
     private string? _error;
     private ChapterPageTaskDto? _task;
@@ -395,6 +428,16 @@
     private void CloseOutputPreview()
     {
         _showOutputPreview = false;
+    }
+
+    private void OpenSourcePreview()
+    {
+        _showSourcePreview = true;
+    }
+
+    private void CloseSourcePreview()
+    {
+        _showSourcePreview = false;
     }
 
     protected override async Task OnInitializedAsync()

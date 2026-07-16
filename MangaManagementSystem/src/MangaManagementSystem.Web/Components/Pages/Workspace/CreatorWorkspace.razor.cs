@@ -1,4 +1,5 @@
 using static MangaManagementSystem.Web.Components.Pages.Workspace.WorkspaceHelpers;
+using Microsoft.AspNetCore.Components.Forms;
 
 namespace MangaManagementSystem.Web.Components.Pages.Workspace
 {
@@ -13,6 +14,17 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private bool _accessDenied = false;
     private Guid? _currentUserId;
     private string _currentRoleName = "";
+    private MangaManagementSystem.Application.DTOs.Manga.ChapterPageTaskDto? _assistantWorkspaceTask;
+    private IReadOnlyList<MangaManagementSystem.Application.DTOs.Manga.ChapterPageAnnotationDto> _assistantWorkspaceTaskAnnotations
+        = Array.Empty<MangaManagementSystem.Application.DTOs.Manga.ChapterPageAnnotationDto>();
+    private string _assistantSubmissionNotes = string.Empty;
+    private bool _assistantSubmitting;
+    private string? _assistantWorkspaceError;
+    private IBrowserFile? _assistantSelectedFile;
+    private string _assistantSelectedFileDisplay = string.Empty;
+    private string _assistantFileValidationError = string.Empty;
+    private const long AssistantWorkspaceMaxFileSizeBytes = 10 * 1024 * 1024;
+    private static readonly string[] AssistantWorkspaceAllowedFileTypes = new[] { "image/png", "image/jpeg", "image/jpg", "image/webp" };
 
     // BR-WORKSPACE-007: only Mangaka may mutate chapter/page content (create/rename chapters, upload
     // pages/versions, assign tasks, edit regions). Tantou Editors get a view + review-annotations mode
@@ -20,6 +32,29 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     // content-mutation UI so editors don't trigger actions that fail server-side and leave the workspace
     // in an unsaved state that blocks annotating.
     private bool CanManageContent => _currentRoleName == "Mangaka";
+
+    private bool ShouldIncludeChapterInWorkspace(MangaManagementSystem.Application.DTOs.Manga.MangakaChapterListItemDto chapter)
+    {
+        if (string.Equals(chapter.StatusCode, "CANCELLED", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (CanManageContent)
+        {
+            return true;
+        }
+
+        // Assistant chapter visibility is now owned by the backend chapter list. The workspace
+        // should trust that result so any draft chapter returned for the assistant remains
+        // selectable here instead of being filtered out again on the client.
+        if (string.Equals(_currentRoleName, "Assistant", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return !string.Equals(chapter.StatusCode, "DRAFT", StringComparison.OrdinalIgnoreCase);
+    }
 
     // #4b — Tantou Editor chapter review decision (BR-CH-REV / BR-CP-018): editors submit APPROVED /
     // REVISION_REQUESTED / CANCELLED for a chapter that is UNDER_REVIEW, via the editor review API.
@@ -108,6 +143,58 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private int? _selectedAnnotationId;   // highlight the clicked annotation in the Page Issues list
     private bool _isRightPanelOpen = true;
     private bool _isLeftPanelOpen = true;   // Chapters sidebar collapse (mirror of the task panel)
+    private bool IsAssistantWorkspace => string.Equals(_currentRoleName, "Assistant", StringComparison.OrdinalIgnoreCase)
+        && !string.IsNullOrWhiteSpace(taskId);
+    private bool CanManageChapterStructure => !IsAssistantWorkspace;
+    private bool CanSubmitAssistantWorkspace => AssistantWorkspaceSubmissionBlockedReason is null
+        && IsViewingAssignedTaskPage
+        && !_assistantSubmitting;
+    private bool IsViewingAssignedTaskPage
+    {
+        get
+        {
+            if (!_taskTargetVersionId.HasValue)
+            {
+                return true;
+            }
+
+            var currentPage = UploadedPages.ElementAtOrDefault(ActivePageIndex);
+            return currentPage?.Versions.Any(v => v.ChapterPageVersionId == _taskTargetVersionId.Value) == true;
+        }
+    }
+    private string AssistantSubmitButtonText => _assistantSubmitting ? "Submitting..." : "Submit Current Canvas";
+    private bool HasAssistantSelectedFile => _assistantSelectedFile is not null;
+    private bool AssistantWorkspaceCanAcceptSubmission => AssistantWorkspaceSubmissionBlockedReason is null;
+    private string AssistantAssignedLocationLabel =>
+        $"{_assistantWorkspaceTask?.ChapterNumberLabel ?? $"Chapter {SelectedChapter}"} • Page {_assistantWorkspaceTask?.PageNo?.ToString() ?? SelectedPage.ToString()}";
+
+    private string? AssistantTaskChapterStatusCode =>
+        _assistantWorkspaceTask?.ChapterId is Guid taskChapterId
+            ? Chapters.FirstOrDefault(c => c.ChapterId == taskChapterId)?.StatusCode
+            : null;
+    private string? AssistantWorkspaceSubmissionBlockedReason
+    {
+        get
+        {
+            if (_assistantWorkspaceTask is null)
+            {
+                return "The assigned task context could not be loaded.";
+            }
+
+            if (!string.Equals(_assistantWorkspaceTask.StatusCode, "ASSIGNED", StringComparison.OrdinalIgnoreCase))
+            {
+                return $"Only tasks in ASSIGNED status can be submitted. Current status: {_assistantWorkspaceTask.StatusCode}.";
+            }
+
+            if (IsAssistantTaskChapterSubmissionBlocked(AssistantTaskChapterStatusCode))
+            {
+                var chapterStatus = AssistantTaskChapterStatusCode ?? "UNKNOWN";
+                return $"This task cannot be submitted because its chapter is {chapterStatus}. Assistant submissions are allowed only while the chapter is DRAFT, REVISION_REQUESTED, or UNDER_REVIEW.";
+            }
+
+            return null;
+        }
+    }
 
     /// <summary>
     /// Context-aware back-navigation URL. When the workspace is opened from the Editor chapter
@@ -165,9 +252,10 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         return string.Join(", ", parts.Take(max)) + $" …(+{parts.Length - max})";
     }
 
-    // --- Version-scoped task/annotation display (Option B) -------------------------------
-    // Tasks and annotations belong to the specific version of their regions (BR-CP-015/016),
-    // so the Task Panel and canvas pins show only items of the currently active version.
+    // --- Version-aware task/annotation display --------------------------------------------
+    // Tasks and annotations belong to the specific version of their regions (BR-CP-015/016).
+    // The canvas still highlights only the regions of the CURRENT version, but the task list can
+    // show the whole page's tasks and mark which ones belong to another version.
     private Guid GetActiveVersionId()
     {
         var page = UploadedPages.ElementAtOrDefault(ActivePageIndex);
@@ -182,6 +270,10 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         if (versionId == null) return true;
         return versionId.Value == GetActiveVersionId();
     }
+
+    private bool IsTaskOnActiveVersion(ProductionTask task) => MatchesActiveVersion(task.VersionId);
+
+    private int ActiveTasksOnCurrentVersionCount => ActiveTasks.Count(IsTaskOnActiveVersion);
 
     private async Task<List<Guid>> EnsureRegionsSavedAsync(IEnumerable<RegionModel> regionsToSave)
     {
@@ -732,6 +824,8 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             return;
         }
 
+        await LoadWorkspaceTaskContextAsync();
+
         // Fetch assistant users for the dropdown from Series Contributors
         try
         {
@@ -767,9 +861,10 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 if (chapters != null && chapters.Any())
                 {
                     var chapterModels = chapters
-                        // Editors/assistants only see chapters that have been submitted for review onward;
-                        // DRAFT is the Mangaka's private work-in-progress. CANCELLED is hidden for everyone.
-                        .Where(c => c.StatusCode != "CANCELLED" && (CanManageContent || c.StatusCode != "DRAFT"))
+                        // Frontend keeps only lightweight presentation filtering here. Assistant-
+                        // specific chapter visibility comes from the backend so task-linked draft
+                        // chapters are preserved in the list.
+                        .Where(ShouldIncludeChapterInWorkspace)
                         .Select((c, i) => new ChapterModel
                     { 
                         Id = int.TryParse(c.ChapterNumberLabel, out int num) ? num : (i + 1), 
@@ -791,51 +886,8 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                     
                     if (Chapters.Any())
                     {
-                        Guid? resolveChapterId = null;
-
-                        if (!string.IsNullOrWhiteSpace(taskId) && Guid.TryParse(taskId, out var parsedTaskId))
-                        {
-                            try
-                            {
-                                var task = await MangakaTaskApi.GetTaskDetailAsync(_currentUserId!.Value, parsedTaskId);
-                                if (task != null)
-                                {
-                                    resolveChapterId = task.ChapterId;
-                                    _taskTargetVersionId = task.SourceChapterPageVersionId;
-                                    _taskFilterId = taskId;
-                                }
-                            }
-                            catch
-                            {
-                                // fall through to default chapter selection
-                            }
-                        }
-
-                        if (resolveChapterId.HasValue)
-                        {
-                            var targetChapter = Chapters.FirstOrDefault(c => c.ChapterId == resolveChapterId.Value);
-                            if (targetChapter != null)
-                            {
-                                await SelectChapter(targetChapter.Id);
-                            }
-                            else
-                            {
-                                await SelectChapter(Chapters.First().Id);
-                            }
-                        }
-                        else if (!string.IsNullOrWhiteSpace(chapterId) && Guid.TryParse(chapterId, out var targetChapterId))
-                        {
-                            var targetChapter = Chapters.FirstOrDefault(c => c.ChapterId == targetChapterId);
-                            if (targetChapter != null)
-                            {
-                                await SelectChapter(targetChapter.Id);
-                            }
-                            else
-                            {
-                                await SelectChapter(Chapters.First().Id);
-                            }
-                        }
-                        else
+                        var selectedInitialChapter = await TrySelectInitialWorkspaceChapterAsync();
+                        if (!selectedInitialChapter)
                         {
                             await SelectChapter(Chapters.First().Id);
                         }
@@ -850,6 +902,130 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             }
         }
         _seriesNotFound = true;
+    }
+
+    private async Task LoadWorkspaceTaskContextAsync()
+    {
+        _assistantWorkspaceError = null;
+        _assistantWorkspaceTask = null;
+        _assistantWorkspaceTaskAnnotations = Array.Empty<MangaManagementSystem.Application.DTOs.Manga.ChapterPageAnnotationDto>();
+        _assistantSelectedFile = null;
+        _assistantSelectedFileDisplay = string.Empty;
+        _assistantFileValidationError = string.Empty;
+        _assistantSubmissionNotes = string.Empty;
+        _taskTargetVersionId = null;
+        _taskFilterId = null;
+
+        if (!_currentUserId.HasValue || string.IsNullOrWhiteSpace(taskId) || !Guid.TryParse(taskId, out var parsedTaskId))
+        {
+            return;
+        }
+
+        try
+        {
+            var task = await ResolveWorkspaceTaskAsync(_currentUserId.Value, parsedTaskId);
+            if (task == null)
+            {
+                if (IsAssistantWorkspace)
+                {
+                    _assistantWorkspaceError = "The assigned task could not be loaded for this workspace.";
+                }
+                return;
+            }
+
+            _taskTargetVersionId = task.SourceChapterPageVersionId;
+            _taskFilterId = task.ChapterPageTaskId.ToString();
+
+            if (IsAssistantWorkspace)
+            {
+                _assistantWorkspaceTask = task;
+                _assistantWorkspaceTaskAnnotations = await AssistantTaskApi.GetTaskAnnotationsAsync(_currentUserId.Value, parsedTaskId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _assistantWorkspaceError = $"Could not load the assigned task context: {ex.Message}";
+        }
+    }
+
+    private async Task<MangaManagementSystem.Application.DTOs.Manga.ChapterPageTaskDto?> ResolveWorkspaceTaskAsync(Guid actorUserId, Guid parsedTaskId)
+    {
+        if (IsAssistantWorkspace)
+        {
+            return await AssistantTaskApi.GetTaskDetailAsync(actorUserId, parsedTaskId);
+        }
+
+        return await MangakaTaskApi.GetTaskDetailAsync(actorUserId, parsedTaskId);
+    }
+
+    private async Task<bool> TrySelectInitialWorkspaceChapterAsync()
+    {
+        var attemptedChapterIds = new HashSet<Guid>();
+
+        if (_assistantWorkspaceTask?.ChapterId is Guid taskChapterId)
+        {
+            attemptedChapterIds.Add(taskChapterId);
+            if (await TrySelectChapterForTaskAsync(taskChapterId))
+            {
+                return true;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(chapterId) && Guid.TryParse(chapterId, out var queryChapterId))
+        {
+            if (attemptedChapterIds.Add(queryChapterId) && await TrySelectChapterForTaskAsync(queryChapterId))
+            {
+                return true;
+            }
+        }
+
+        if (_taskTargetVersionId.HasValue)
+        {
+            foreach (var chapter in Chapters)
+            {
+                if (attemptedChapterIds.Contains(chapter.ChapterId))
+                {
+                    continue;
+                }
+
+                await SelectChapter(chapter.Id);
+                if (CurrentChapterContainsTaskVersion())
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private async Task<bool> TrySelectChapterForTaskAsync(Guid targetChapterId)
+    {
+        var targetChapter = Chapters.FirstOrDefault(c => c.ChapterId == targetChapterId);
+        if (targetChapter == null)
+        {
+            return false;
+        }
+
+        await SelectChapter(targetChapter.Id);
+
+        if (!_taskTargetVersionId.HasValue)
+        {
+            return true;
+        }
+
+        return CurrentChapterContainsTaskVersion();
+    }
+
+    private bool CurrentChapterContainsTaskVersion()
+    {
+        if (!_taskTargetVersionId.HasValue)
+        {
+            return false;
+        }
+
+        return UploadedPages.Any(page =>
+            page.Versions.Any(version => version.ChapterPageVersionId == _taskTargetVersionId.Value));
     }
 
     private async Task SelectChapter(int chapterId)
@@ -1273,10 +1449,12 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             var chap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
             if (chap == null) return false;
             var code = chap.StatusCode;
-            return code == "UNDER_REVIEW" || code == "APPROVED" || code == "SCHEDULED" || code == "RELEASED" || code == "CANCELLED";
+            return code == "UNDER_REVIEW" || code == "APPROVED" || code == "SCHEDULED" || code == "ON_HOLD" || code == "RELEASED" || code == "CANCELLED";
         }
     }
 
+    private static bool IsAssistantTaskChapterSubmissionBlocked(string? statusCode) =>
+        statusCode is "APPROVED" or "SCHEDULED" or "ON_HOLD" or "RELEASED" or "CANCELLED";
     // Annotations are review/production FEEDBACK (BR-CP-018 / BR-WORKSPACE-007), not page content, so they
     // stay available while a chapter is in an editing/review cycle — including UNDER_REVIEW, which is exactly
     // when a Tantou Editor reviews. Only the finalized states stop new annotations. This is deliberately
@@ -1360,6 +1538,13 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         // Highlight the clicked task (reuses the isTargetTask border/background styling, mirroring the
         // selected-chapter highlight in the sidebar) and select its panels on the canvas.
         _taskFilterId = task.DbId?.ToString();
+
+        if (!IsTaskOnActiveVersion(task))
+        {
+            Snackbar.Add("This task belongs to another page version. Switch to that version to inspect its assigned panels on the canvas.", Severity.Info);
+            return Task.CompletedTask;
+        }
+
         return SelectPanelsByRegions(task.Regions);
     }
     private Task SelectAnnotationPanels(AnnotationModel ann)
@@ -1447,6 +1632,215 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             if (result == true) await SaveAllChangesAsync();
         }
         Nav.NavigateTo(BackHref);
+    }
+
+    private async Task JumpToAssignedTaskPageAsync()
+    {
+        if (_assistantWorkspaceTask?.ChapterId is Guid taskChapterId)
+        {
+            var targetChapter = Chapters.FirstOrDefault(c => c.ChapterId == taskChapterId);
+            if (targetChapter != null && targetChapter.Id != SelectedChapter)
+            {
+                await SelectChapter(targetChapter.Id);
+            }
+        }
+
+        if (_taskTargetVersionId.HasValue && UploadedPages.Any())
+        {
+            for (int i = 0; i < UploadedPages.Count; i++)
+            {
+                if (UploadedPages[i].Versions.Any(v => v.ChapterPageVersionId == _taskTargetVersionId.Value))
+                {
+                    await LoadPage(i);
+                    return;
+                }
+            }
+        }
+
+        if (_assistantWorkspaceTask?.PageNo is int pageNo && pageNo > 0 && UploadedPages.Count >= pageNo)
+        {
+            await LoadPage(pageNo - 1);
+        }
+    }
+
+    private async Task SubmitAssistantWorkspaceAsync()
+    {
+        if (!_currentUserId.HasValue || _assistantWorkspaceTask is null)
+        {
+            return;
+        }
+
+        if (!AssistantWorkspaceCanAcceptSubmission)
+        {
+            _assistantWorkspaceError = AssistantWorkspaceSubmissionBlockedReason ?? "This task cannot be submitted right now.";
+            return;
+        }
+
+        if (!IsViewingAssignedTaskPage)
+        {
+            _assistantWorkspaceError = "Open the assigned page before submitting this task.";
+            return;
+        }
+
+        _assistantSubmitting = true;
+        _assistantWorkspaceError = null;
+
+        try
+        {
+            AssistantTaskSubmitResultDto? result;
+
+            if (_assistantSelectedFile is not null)
+            {
+                result = await AssistantTaskApi.SubmitTaskWorkAsync(
+                    _currentUserId.Value,
+                    _assistantWorkspaceTask.ChapterPageTaskId,
+                    _assistantSelectedFile,
+                    _assistantSubmissionNotes);
+            }
+            else
+            {
+                var canvas = GetActiveCanvas();
+                if (canvas == null)
+                {
+                    _assistantWorkspaceError = "The workspace canvas is not ready yet. Please try again in a moment.";
+                    return;
+                }
+
+                var dataUrl = await canvas.InvokeAsync<string>("exportRenderedImage");
+                if (!TryDecodeDataUrl(dataUrl, out var fileBytes, out var contentType))
+                {
+                    _assistantWorkspaceError = "Could not capture the current canvas output for submission.";
+                    return;
+                }
+
+                var fileName = BuildAssistantSubmissionFileName();
+                result = await AssistantTaskApi.SubmitTaskWorkAsync(
+                    _currentUserId.Value,
+                    _assistantWorkspaceTask.ChapterPageTaskId,
+                    fileBytes,
+                    fileName,
+                    contentType,
+                    _assistantSubmissionNotes);
+            }
+
+            if (result != null)
+            {
+                Snackbar.Add("Task submitted for review.", Severity.Success);
+                Nav.NavigateTo($"/assistant/task/{_assistantWorkspaceTask.ChapterPageTaskId}");
+            }
+            else
+            {
+                _assistantWorkspaceError = "Task submission failed. Please try again.";
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            _assistantWorkspaceError = $"Submission failed: {ex.Message}";
+        }
+        catch (Exception ex)
+        {
+            _assistantWorkspaceError = $"Could not submit the current canvas: {ex.Message}";
+        }
+        finally
+        {
+            _assistantSubmitting = false;
+        }
+    }
+
+    private void HandleAssistantWorkspaceFileSelected(InputFileChangeEventArgs e)
+    {
+        _assistantSelectedFile = e.File;
+        _assistantSelectedFileDisplay = string.Empty;
+        _assistantFileValidationError = string.Empty;
+        _assistantWorkspaceError = null;
+
+        if (_assistantSelectedFile is null)
+        {
+            return;
+        }
+
+        if (_assistantSelectedFile.Size > AssistantWorkspaceMaxFileSizeBytes)
+        {
+            _assistantFileValidationError = $"File is too large. Maximum allowed is {AssistantWorkspaceMaxFileSizeBytes / (1024 * 1024)} MB.";
+            _assistantSelectedFile = null;
+            return;
+        }
+
+        var contentType = _assistantSelectedFile.ContentType?.ToLowerInvariant() ?? string.Empty;
+        if (!AssistantWorkspaceAllowedFileTypes.Contains(contentType))
+        {
+            _assistantFileValidationError = "Unsupported file type. Allowed: PNG, JPEG, WebP.";
+            _assistantSelectedFile = null;
+            return;
+        }
+
+        _assistantSelectedFileDisplay = $"{_assistantSelectedFile.Name} ({FormatAssistantFileSize(_assistantSelectedFile.Size)})";
+    }
+
+    private static string FormatAssistantFileSize(long sizeInBytes)
+    {
+        const long kb = 1024;
+        const long mb = 1024 * 1024;
+
+        if (sizeInBytes >= mb)
+        {
+            return $"{sizeInBytes / (double)mb:0.##} MB";
+        }
+
+        if (sizeInBytes >= kb)
+        {
+            return $"{sizeInBytes / (double)kb:0.##} KB";
+        }
+
+        return $"{sizeInBytes} B";
+    }
+
+    private string BuildAssistantSubmissionFileName()
+    {
+        var slugPart = string.IsNullOrWhiteSpace(Slug) ? "task" : Slug;
+        var safeSlug = new string(slugPart.Select(ch => char.IsLetterOrDigit(ch) || ch == '-' || ch == '_' ? ch : '-').ToArray());
+        var pageNo = _assistantWorkspaceTask?.PageNo ?? SelectedPage;
+        return $"{safeSlug}_task_{_assistantWorkspaceTask?.ChapterPageTaskId.ToString("N")[..8]}_page{pageNo}.png";
+    }
+
+    private static bool TryDecodeDataUrl(string? dataUrl, out byte[] fileBytes, out string contentType)
+    {
+        fileBytes = Array.Empty<byte>();
+        contentType = "image/png";
+
+        if (string.IsNullOrWhiteSpace(dataUrl))
+        {
+            return false;
+        }
+
+        var commaIndex = dataUrl.IndexOf(',');
+        if (commaIndex <= 0)
+        {
+            return false;
+        }
+
+        var header = dataUrl[..commaIndex];
+        var payload = dataUrl[(commaIndex + 1)..];
+
+        var mimeMatch = System.Text.RegularExpressions.Regex.Match(header, @"data:(.*?)(;base64)?$");
+        if (mimeMatch.Success && !string.IsNullOrWhiteSpace(mimeMatch.Groups[1].Value))
+        {
+            contentType = mimeMatch.Groups[1].Value;
+        }
+
+        try
+        {
+            fileBytes = header.Contains(";base64", StringComparison.OrdinalIgnoreCase)
+                ? Convert.FromBase64String(payload)
+                : System.Text.Encoding.UTF8.GetBytes(Uri.UnescapeDataString(payload));
+
+            return fileBytes.Length > 0;
+        }
+        catch
+        {
+            fileBytes = Array.Empty<byte>();
+            return false;
+        }
     }
 
     private async Task ExportCurrentPage()

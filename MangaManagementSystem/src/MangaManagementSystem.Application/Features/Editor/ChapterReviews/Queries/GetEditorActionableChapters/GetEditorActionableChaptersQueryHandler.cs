@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Editor;
 using MangaManagementSystem.Domain.Interfaces;
+using MangaManagementSystem.Domain.Policies;
 using MediatR;
 
 namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queries.GetEditorActionableChapters
@@ -56,7 +57,9 @@ namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queri
             var canSchedule = c.StatusCode is "DRAFT" or "REVISION_REQUESTED" or "UNDER_REVIEW"
                 or "APPROVED" or "SCHEDULED" or "ON_HOLD";
             var canPutOnHold = c.StatusCode == "SCHEDULED";
-            var canRelease = c.StatusCode is "SCHEDULED" or "APPROVED";
+            var hasReleaseEligibleChapterStatus = c.StatusCode is "SCHEDULED" or "APPROVED";
+            var canRelease = hasReleaseEligibleChapterStatus
+                && SeriesReleasePolicy.AllowsChapterRelease(c.SeriesStatusCode);
 
             return new EditorActionableChapterDto(
                 c.ChapterId,

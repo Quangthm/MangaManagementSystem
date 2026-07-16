@@ -67,6 +67,7 @@ namespace MangaManagementSystem.Domain.Interfaces
         string SeriesTitle,
         string? SeriesSlug,
         string? SeriesCoverUrl,
+        string SeriesStatusCode,
         string ChapterNumberLabel,
         string? ChapterTitle,
         string StatusCode,

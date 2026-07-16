@@ -75,6 +75,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     c.Series != null && c.Series.CoverFile != null
                         ? c.Series.CoverFile.CloudinarySecureUrl
                         : null,
+                    c.Series != null ? c.Series.StatusCode : string.Empty,
                     c.ChapterNumberLabel,
                     c.ChapterTitle,
                     c.StatusCode,

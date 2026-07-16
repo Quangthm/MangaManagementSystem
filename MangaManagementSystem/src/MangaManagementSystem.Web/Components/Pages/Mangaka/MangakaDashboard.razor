@@ -9,6 +9,7 @@
 @inject IReferenceDataApiClient ReferenceDataApiClient
 @inject AuthenticationStateProvider AuthStateProvider
 @using MangaManagementSystem.Application.Common
+@using MangaManagementSystem.Application.Common.Policies
 @using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Web.Services.Api
 
@@ -975,7 +976,7 @@
                     {
                         "UNDER_EDITORIAL_REVIEW" => "This series is currently under editorial review. Normal draft editing is locked until the editor returns it for revision or it advances to board review.",
                         "UNDER_BOARD_REVIEW" => "This series is under board review. Editing is locked while the board evaluates it for serialization.",
-                        "HIATUS" => "This series is on hiatus. It is not accepting new chapter submissions at this time.",
+                        "HIATUS" => "This series is on hiatus. Chapter release is paused, but drafting, review, scheduling, and other production work may continue under the normal workflow rules.",
                         "CANCELLED" => "This series has been cancelled.",
                         "COMPLETED" => "This series is completed. The story has concluded.",
                         _ => "This series is locked from normal editing in its current status."
@@ -1442,27 +1443,32 @@
     /// Routes card clicks to the correct behaviour based on status.
     /// PROPOSAL_DRAFT → Draft Details modal (not workspace).
     /// UNDER_EDITORIAL_REVIEW / UNDER_BOARD_REVIEW → Review Status modal.
-    /// SERIALIZED → navigate to /series/{slug}.
-    /// HIATUS / CANCELLED / COMPLETED → Review Status modal (read-only).
+    /// Slug-page-eligible series → navigate to /series/{slug}.
+    /// Other statuses → Review Status modal (read-only).
     /// </summary>
     private void OpenSeriesCard(SeriesCardData series)
     {
         _openSeriesActionMenuId = null;
-        switch (series.StatusCode)
+
+        if (series.StatusCode == "PROPOSAL_DRAFT")
         {
-            case "PROPOSAL_DRAFT":
-                OpenDraftDetails(series);
-                break;
-            case "SERIALIZED":
-                if (!string.IsNullOrWhiteSpace(series.Slug))
-                    Nav.NavigateTo($"/series/{series.Slug}?returnUrl={Uri.EscapeDataString("/mangaka")}");
-                else
-                    Snackbar.Add("Series page is not available yet.", Severity.Info);
-                break;
-            default:
-                OpenReviewStatus(series);
-                break;
+            OpenDraftDetails(series);
+            return;
         }
+
+        var canOpenSlugPage = SeriesNavigationPolicy.CanOpenSeriesSlugPage(
+            series.StatusCode,
+            series.Slug,
+            latestProposalId: null,
+            latestProposalStatusCode: null);
+
+        if (canOpenSlugPage)
+        {
+            Nav.NavigateTo($"/series/{series.Slug}?returnUrl={Uri.EscapeDataString("/mangaka")}");
+            return;
+        }
+
+        OpenReviewStatus(series);
     }
 
     private void OpenDraftDetails(SeriesCardData series)
