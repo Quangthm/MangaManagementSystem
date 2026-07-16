@@ -30,7 +30,8 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         public string Type { get; set; } = "";
         public string Comment { get; set; } = "";
         public string Target { get; set; } = "";
-        public string Author { get; set; } = "Editor";
+        public string Author { get; set; } = "";
+        public string? CreatedByRoleName { get; set; }   // creator's role, for BR-ANN-021 resolve gating
         public int PageNumber { get; set; } = 1;
         public bool IsResolved { get; set; } = false;
         public double? PinX { get; set; }

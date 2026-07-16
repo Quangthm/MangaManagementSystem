@@ -53,20 +53,10 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             return false;
         }
 
-        if (CanManageContent)
-        {
-            return true;
-        }
-
-        // Assistant chapter visibility is now owned by the backend chapter list. The workspace
-        // should trust that result so any draft chapter returned for the assistant remains
-        // selectable here instead of being filtered out again on the client.
-        if (string.Equals(_currentRoleName, "Assistant", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        return !string.Equals(chapter.StatusCode, "DRAFT", StringComparison.OrdinalIgnoreCase);
+        // Mangaka and Tantou Editor see all non-cancelled chapters, INCLUDING drafts, so the editor
+        // has full production context on the series. Assistant chapter visibility is scoped by the
+        // backend chapter query (task-linked drafts only), so the workspace trusts that result.
+        return true;
     }
 
     // #4b — Tantou Editor chapter review decision (BR-CH-REV / BR-CP-018): editors submit APPROVED /
@@ -689,6 +679,8 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 Type = AnnotationType,
                 Comment = AnnotationComment,
                 Target = target,
+                Author = _currentRoleName,              // shown until reload replaces it with name · role
+                CreatedByRoleName = _currentRoleName,   // creator is the current user
                 PageNumber = SelectedPage,
                 PinX = PendingPinX,
                 PinY = PendingPinY,
@@ -746,9 +738,14 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
     private async Task ResolveAnnotation(int id)
     {
-        if (!CanAnnotate) return;
         var ann = ActiveAnnotations.FirstOrDefault(a => a.Id == id);
-        if (ann != null)
+        if (ann == null) return;
+        // BR-ANN-021: block a Mangaka from resolving a Tantou Editor's annotation (also enforced server-side).
+        if (!CanResolveAnnotation(ann))
+        {
+            Snackbar.Add("Only a Tantou Editor can resolve an annotation created by a Tantou Editor.", Severity.Warning);
+            return;
+        }
         {
             ann.IsResolved = true;
             if (ann.DbId.HasValue && _currentUserId.HasValue)
@@ -1309,7 +1306,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     // not silently auto-incremented, so a Mangaka can insert interstitial chapters.
     private bool _showNewChapterDialog;
     private string _newChapterNumberLabel = "";
-    private List<string> _existingChapterLabels = new();   // ALL labels incl. hidden CANCELLED, for collision check
+    private List<string> _existingChapterLabels = new();   // labels of NON-cancelled chapters, for collision check
 
     // Opens the new-chapter dialog with a suggested next number pre-filled. Blocked on COMPLETED series.
     private async Task AddNewChapter()
@@ -1334,11 +1331,12 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             _isAddingChapter = true;
             StateHasChanged();
 
-            // Chapter numbers must be unique across ALL chapters in the series, including hidden
-            // CANCELLED ones (uq_chapter_series_chapter_number is NOT a filtered index). Load the full
-            // list once so the dialog can pre-fill a safe suggestion and reject collisions client-side.
+            // A number only needs to be unique among NON-cancelled chapters: a cancelled chapter does not
+            // reserve its number (BR-CH-002), and the server frees the number by relabelling the cancelled
+            // chapter on create. So the client only blocks collisions with active (non-cancelled) chapters.
             var allChapters = await MangakaChapterApi.GetSeriesChaptersAsync(_currentUserId!.Value, seriesGuid);
             _existingChapterLabels = allChapters
+                .Where(c => !string.Equals(c.StatusCode, "CANCELLED", StringComparison.OrdinalIgnoreCase))
                 .Select(c => (c.ChapterNumberLabel ?? "").Trim())
                 .Where(l => l.Length > 0)
                 .Concat(Chapters.Where(c => !string.IsNullOrWhiteSpace(c.NumberLabel)).Select(c => c.NumberLabel.Trim()))
@@ -1386,7 +1384,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         // cannot be reused because the DB unique constraint is not filtered by status.
         if (_existingChapterLabels.Any(l => string.Equals(l, label, StringComparison.OrdinalIgnoreCase)))
         {
-            Snackbar.Add($"Chapter number \"{label}\" is already used (including cancelled chapters). Choose another.", Severity.Warning);
+            Snackbar.Add($"Chapter number \"{label}\" is already used by an active chapter. Choose another.", Severity.Warning);
             return;
         }
 
@@ -1569,6 +1567,16 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             var code = chap?.StatusCode;
             return code == "DRAFT" || code == "UNDER_REVIEW" || code == "REVISION_REQUESTED";
         }
+    }
+
+    // BR-ANN-020/021: a Mangaka may resolve Mangaka-created annotations but NOT ones created by a Tantou
+    // Editor; a Tantou Editor may resolve either. Backend enforces this too (ChapterPageAnnotationRepository).
+    private bool CanResolveAnnotation(AnnotationModel ann)
+    {
+        if (!CanAnnotate) return false;
+        if (_currentRoleName == "Mangaka" && string.Equals(ann.CreatedByRoleName, "Tantou Editor", StringComparison.Ordinal))
+            return false;
+        return true;
     }
 
     // AI Canvas logic

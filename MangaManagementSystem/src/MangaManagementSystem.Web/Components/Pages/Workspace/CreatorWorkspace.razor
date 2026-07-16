@@ -937,13 +937,13 @@ else
                                             </div>
                                             <MudText Typo="Typo.body2" Class="mb-2">@ann.Comment</MudText>
                                             <MudText Typo="Typo.caption" Class="mf-muted d-flex align-center">
-                                                <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Class="mr-1" Style="font-size: 12px;"/> @ann.Author
+                                                <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Class="mr-1" Style="font-size: 12px;"/> @ann.Author@(!string.IsNullOrWhiteSpace(ann.CreatedByRoleName) && ann.CreatedByRoleName != ann.Author ? $" · {ann.CreatedByRoleName}" : "")
                                             </MudText>
                                         </div>
                                         <div @onclick:stopPropagation="true">
-                                            @if (!ann.IsResolved)
+                                            @if (!ann.IsResolved && CanResolveAnnotation(ann))
                                             {
-                                                <MudTooltip Text="Resolve Issue"><MudIconButton Icon="@Icons.Material.Filled.Check" Size="Size.Small" Color="Color.Success" OnClick="@(() => ResolveAnnotation(ann.Id))" Disabled="@(!CanAnnotate)" /></MudTooltip>
+                                                <MudTooltip Text="Resolve Issue"><MudIconButton Icon="@Icons.Material.Filled.Check" Size="Size.Small" Color="Color.Success" OnClick="@(() => ResolveAnnotation(ann.Id))" /></MudTooltip>
                                             }
                                         </div>
                                     </div>
@@ -1099,7 +1099,7 @@ else
             <div style="background: var(--mud-palette-surface); color: var(--mud-palette-text-primary); border-radius: 8px; width: 90%; max-width: 420px; padding: 24px; box-shadow: 0 8px 32px rgba(0,0,0,0.35);" @onclick:stopPropagation="true">
                 <MudText Typo="Typo.h6" Class="mb-3">New Chapter</MudText>
                 <MudTextField T="string" @bind-Value="_newChapterNumberLabel" Label="Chapter Number" Variant="Variant.Outlined" Margin="Margin.Dense"
-                              Immediate="true" HelperText="A positive number, e.g. 3 or 2.5. Must be unique (cancelled chapters count)." />
+                              Immediate="true" HelperText="A positive number, e.g. 3 or 2.5. Must be unique among active chapters (a cancelled number can be reused)." />
                 <div class="d-flex justify-end gap-2 mt-4">
                     <MudButton OnClick="@(() => _showNewChapterDialog = false)">Cancel</MudButton>
                     <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="ConfirmNewChapter">Add Chapter</MudButton>
