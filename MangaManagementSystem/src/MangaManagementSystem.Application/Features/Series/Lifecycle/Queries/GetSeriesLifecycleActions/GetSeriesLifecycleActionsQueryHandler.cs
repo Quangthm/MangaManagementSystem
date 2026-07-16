@@ -1,5 +1,6 @@
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Domain.Interfaces;
+using MangaManagementSystem.Domain.Policies;
 using MediatR;
 
 namespace MangaManagementSystem.Application.Features.Series.Lifecycle.Queries.GetSeriesLifecycleActions
@@ -52,16 +53,6 @@ namespace MangaManagementSystem.Application.Features.Series.Lifecycle.Queries.Ge
                 actorContext.IsActiveContributor
                 && hasLifecycleRole;
 
-            bool isSerialized = string.Equals(
-                series.StatusCode,
-                SeriesLifecycleSupport.SerializedStatusCode,
-                StringComparison.OrdinalIgnoreCase);
-
-            bool isOnHiatus = string.Equals(
-                series.StatusCode,
-                SeriesLifecycleSupport.HiatusStatusCode,
-                StringComparison.OrdinalIgnoreCase);
-
             bool isMangaka = string.Equals(
                 actorContext.DatabaseRoleName,
                 SeriesLifecycleSupport.MangakaRoleName,
@@ -70,12 +61,19 @@ namespace MangaManagementSystem.Application.Features.Series.Lifecycle.Queries.Ge
             return new SeriesLifecycleActionsDto(
                 series.SeriesId,
                 series.StatusCode,
-                CanSetHiatus: isEligibleContributor && isSerialized,
-                CanResumeSerialization: isEligibleContributor && isOnHiatus,
+                CanSetHiatus:
+                    isEligibleContributor
+                    && SeriesLifecycleTransitionPolicy.CanSetHiatus(
+                        series.StatusCode),
+                CanResumeSerialization:
+                    isEligibleContributor
+                    && SeriesLifecycleTransitionPolicy.CanResumeSerialization(
+                        series.StatusCode),
                 CanCompleteSeries:
                     isEligibleContributor
                     && isMangaka
-                    && (isSerialized || isOnHiatus));
+                    && SeriesLifecycleTransitionPolicy.CanCompleteSeries(
+                        series.StatusCode));
         }
     }
 }

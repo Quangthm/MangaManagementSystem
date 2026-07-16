@@ -11,9 +11,10 @@
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
     private static readonly IReadOnlyList<RoleSidebarLayout.RoleSidebarNavItem> _navItems =
-    [
-        new("/assistant", "Dashboard", "", true),
-        new("/assistant/tasks", "Assigned Tasks"),
-        new("/assistant/completed-work", "Completed Work"),
-    ];
+ [
+     new("/assistant", "Dashboard", "", true),
+    new("/assistant/tasks", "Assigned Tasks"),
+    new("/assistant/completed-work", "Completed Work"),
+    new("/ranking", "Ranking"),
+];
 }

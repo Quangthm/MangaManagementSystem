@@ -5,8 +5,8 @@
 @using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Mangaka,Tantou Editor,Assistant")]
 @inject NavigationManager Nav
-@inject MangaManagementSystem.Web.Services.Api.IMangakaTaskApiClient MangakaTaskApi
 @inject MangaManagementSystem.Web.Services.Api.IAssistantTaskApiClient AssistantTaskApi
+@inject MangaManagementSystem.Web.Services.Api.IMangakaTaskApiClient MangakaTaskApi
 @inject AuthenticationStateProvider AuthStateProvider
 
 @if (!string.IsNullOrWhiteSpace(_redirectUrl))
@@ -71,16 +71,12 @@ else
                 return;
             }
 
-            // Resolve the task through the API that matches the actor's role: the Mangaka endpoint is
-            // scoped to the series owner and returns null for an assistant, so an assistant opening their
-            // own assigned task must go through the assistant task API instead.
-            var roleName = user.FindFirst(ClaimTypes.Role)?.Value ?? "";
-            var task = roleName == "Assistant"
-                ? await AssistantTaskApi.GetTaskDetailAsync(userId, TaskId)
-                : await MangakaTaskApi.GetTaskDetailAsync(userId, TaskId);
+            _returnUrl ??= GetDefaultReturnUrl(user);
+
+            var task = await ResolveTaskForCurrentUserAsync(user, userId);
             if (task is null)
             {
-                _error = "Task not found.";
+                _error = BuildTaskLookupError(user);
                 return;
             }
 
@@ -109,5 +105,52 @@ else
         {
             _error = $"An error occurred: {ex.Message}";
         }
+    }
+
+    private async Task<MangaManagementSystem.Application.DTOs.Manga.ChapterPageTaskDto?> ResolveTaskForCurrentUserAsync(
+        ClaimsPrincipal user,
+        Guid userId)
+    {
+        if (user.IsInRole("Assistant"))
+        {
+            return await AssistantTaskApi.GetTaskDetailAsync(userId, TaskId);
+        }
+
+        return await MangakaTaskApi.GetTaskDetailAsync(userId, TaskId);
+    }
+
+    private static string GetDefaultReturnUrl(ClaimsPrincipal user)
+    {
+        if (user.IsInRole("Assistant"))
+        {
+            return "/assistant/tasks";
+        }
+
+        if (user.IsInRole("Mangaka"))
+        {
+            return "/mangaka/review-submissions";
+        }
+
+        if (user.IsInRole("Tantou Editor"))
+        {
+            return "/editor/chapters";
+        }
+
+        return "/";
+    }
+
+    private string BuildTaskLookupError(ClaimsPrincipal user)
+    {
+        if (user.IsInRole("Assistant"))
+        {
+            return $"Task {TaskId} was not found in the current assistant assignment list.";
+        }
+
+        if (user.IsInRole("Tantou Editor"))
+        {
+            return $"Task {TaskId} could not be resolved for the current editor account through this workspace redirect.";
+        }
+
+        return $"Task {TaskId} was not found for the current user.";
     }
 }

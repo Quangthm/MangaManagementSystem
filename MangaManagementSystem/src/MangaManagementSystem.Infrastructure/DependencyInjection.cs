@@ -10,6 +10,7 @@ using EFCore.NamingConventions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MangaManagementSystem.Application.Features.EditorialBoard.Repositories;
+using MangaManagementSystem.Application.Features.Ranking.Repositories;
 
 namespace MangaManagementSystem.Infrastructure
 {
@@ -69,8 +70,6 @@ namespace MangaManagementSystem.Infrastructure
             services.AddScoped<IReferenceDataRepository, ReferenceDataRepository>();
             services.AddScoped<ISeriesContributorManagementRepository, SeriesContributorRepository>();
             services.AddScoped<IQuickSelectRepository, QuickSelectRepository>();
-            services.AddScoped<ILandingPageRepository, LandingPageRepository>();
-
             // Unit of Work
             services.AddScoped<IFileResourceRepository, FileResourceRepository>();
             services.AddScoped<INotificationRepository, NotificationRepository>();
@@ -90,6 +89,7 @@ namespace MangaManagementSystem.Infrastructure
             services.AddScoped<IImageMetadataProvider, CloudinaryImageMetadataProvider>();
 
             services.AddScoped<IEditorialBoardRepository, EditorialBoardRepository>();
+            services.AddScoped<ISeriesRankingRepository, SeriesRankingRepository>();
             services.AddScoped<IPublicationPeriodRepository, PublicationPeriodRepository>();
             services.AddScoped<IPublicationScheduleRepository, PublicationScheduleRepository>();
             services.AddScoped<IChapterOnHoldRepository, ChapterOnHoldRepository>();

@@ -526,7 +526,6 @@
 | BR-PUB-011 | Mangaka may provide or update `Series.publication_frequency_code` only while the series is in `PROPOSAL_DRAFT`; before board approval, this value is treated as the Mangaka's proposed/preferred frequency and no separate desired-frequency column is required in MVP. | Active draft |
 | BR-PUB-012 | After the series leaves `PROPOSAL_DRAFT`, Mangaka cannot directly change the official `Series.publication_frequency_code`. | Active draft |
 | BR-PUB-013 | The publication frequency specified through the valid board serialization decision overrides the Mangaka's preference and becomes the official `Series.publication_frequency_code`. | Active draft |
-| BR-PUB-014 | After a board decision has set the official publication frequency, Mangaka may request a publication frequency change by sending an in-app notification to the Editorial Board Chief; MVP does not require a separate official publication-frequency change request table. | Active draft |
 | BR-PUB-015 | Editorial Board Chief may directly change `Series.publication_frequency_code` for a series after providing a required reason that must be written to the audit log. | Active draft |
 | BR-PUB-016 | Mangaka and Tantou Editor scheduling collaboration is treated as an out-of-system team coordination process in MVP; the system records schedule changes and audit details but does not try to resolve interpersonal scheduling disputes. | Active draft |
 | BR-PUB-017 | Active series contributors may be shown relevant contributor contact information such as display name and email for coordination, but contact visibility must remain limited to authorized contributors/workflow participants. | Active draft |
@@ -651,8 +650,6 @@
 | BR-NOTIF-009 | Task assignment notifications should be sent to the assigned user when a page task is created. | Active draft |
 | BR-NOTIF-010 | Review result notifications should be sent to relevant contributors when a proposal or chapter review decision is recorded. | Active draft |
 | BR-NOTIF-011 | Board poll notifications may be sent to Editorial Board Members when a new board poll is opened. | Active draft |
-| BR-NOTIF-012 | Mangaka may use an in-app notification to request a publication frequency change from the Editorial Board Chief after the board decision has set the official frequency. | Active draft |
-| BR-NOTIF-013 | A publication frequency change request notification is an MVP communication mechanism, not an official request table or authoritative approval record. | Active draft |
 | BR-NOTIF-014 | Notifications are user-facing awareness records and should not be treated as the authoritative audit trail. | Active draft |
 | BR-NOTIF-015 | Important workflow actions that create notifications should still be recorded in the audit log when auditability is required. | Active draft |
 

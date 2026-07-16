@@ -538,8 +538,6 @@
 | FR-PUB-011 | The system shall allow Mangaka users to provide or update their preferred publication frequency only while the series is in `PROPOSAL_DRAFT`, without requiring a separate desired publication frequency column on `Series`. | BR-PUB-011 |
 | FR-PUB-012 | The system shall prevent Mangaka users from directly changing the official `Series.publication_frequency_code` after the series leaves `PROPOSAL_DRAFT`. | BR-PUB-012 |
 | FR-PUB-013 | The system shall apply the board-specified publication frequency as the official `Series.publication_frequency_code` when a `START_SERIALIZATION` poll is approved, overriding the Mangaka's preference. | BR-PUB-013 |
-| FR-PUB-014 | The system shall allow Mangaka users to request a publication frequency change after the board decision by sending an in-app notification to the Editorial Board Chief. | BR-PUB-014, BR-NOTIF-012 |
-| FR-PUB-015 | The system shall not require a separate official publication-frequency change request table for MVP. | BR-PUB-014, BR-NOTIF-013 |
 | FR-PUB-016 | The system shall allow Editorial Board Chief users to directly change `Series.publication_frequency_code` only when they provide a required audit reason. | BR-PUB-015 |
 | FR-PUB-017 | The system shall treat `Series.publication_frequency_code` as an advisory source for default date suggestions and warnings, not as a hard scheduling constraint. | BR-PUB-006, BR-PUB-SCHEDULE-001 |
 | FR-PUB-018 | The system shall allow authorized Mangaka and Tantou Editor users to schedule or reschedule chapters to any future planned release date when chapter status and permissions allow. | BR-PUB-SCHEDULE-001, BR-PUB-SCHEDULED-003 |
@@ -637,8 +635,6 @@
 | FR-NOTIF-010 | The system shall send task assignment notifications to assigned users when page tasks are created. | BR-NOTIF-009 |
 | FR-NOTIF-011 | The system shall send review result notifications to relevant contributors when proposal or chapter review decisions are recorded. | BR-NOTIF-010 |
 | FR-NOTIF-012 | The system shall allow board poll notifications to be sent to Editorial Board Members when a new board poll is opened. | BR-NOTIF-011 |
-| FR-NOTIF-013 | The system shall allow Mangaka users to send an in-app publication frequency change request notification to the Editorial Board Chief after the official frequency has been set by board decision. | BR-NOTIF-012, BR-PUB-014 |
-| FR-NOTIF-014 | The system shall treat publication frequency change request notifications as communication records, not as an official request table or authoritative approval record. | BR-NOTIF-013 |
 | FR-NOTIF-015 | The system shall not treat notifications as the authoritative audit trail. | BR-NOTIF-014 |
 | FR-NOTIF-016 | The system shall audit-log important workflow actions that also create notifications when auditability is required. | BR-NOTIF-015 |
 

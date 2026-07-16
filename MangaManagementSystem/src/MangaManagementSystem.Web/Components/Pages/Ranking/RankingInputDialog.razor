@@ -1,0 +1,585 @@
+@using System.Globalization
+@inject ISnackbar Snackbar
+
+@if (Open)
+{
+    <MudOverlay Visible="true" DarkBackground="true" ZIndex="1300" Class="dialog-overlay">
+        <MudPaper Class="insert-dialog pa-0" Elevation="12">
+            <MudStack Row="true" Spacing="2" Class="pa-4">
+                <MudAvatar Color="Color.Primary" Variant="Variant.Text" Rounded="true">
+                    <MudIcon Icon="@Icons.Material.Filled.Add" />
+                </MudAvatar>
+
+                <MudText Typo="Typo.h6" Class="fw-800">
+                    Create Ranking Input
+                </MudText>
+
+                <MudSpacer />
+
+                <MudIconButton Icon="@Icons.Material.Filled.Close"
+                               OnClick="CloseAsync"
+                               Disabled="@Saving" />
+            </MudStack>
+
+            <MudDivider />
+
+            <MudStack Spacing="3" Class="pa-4">
+                <div @onmousedown="ClearPublicationPeriodPickerAsync"
+                     @onfocusin="ClearPublicationPeriodPickerAsync">
+                    <MudAutocomplete T="PublicationPeriodOption"
+                                     Label="Publication Week"
+                                     Placeholder="Type dd/mm/yyyy, month, year, or week name"
+                                     Required="true"
+                                     Value="@SelectedPublicationPeriod"
+                                     ValueChanged="OnPublicationPeriodSelected"
+                                     Text="@_publicationPeriodSearchText"
+                                     TextChanged="OnPublicationPeriodTextChanged"
+                                     SearchFunc="SearchPublicationPeriodsAsync"
+                                     ToStringFunc="FormatPublicationPeriod"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Dense="true"
+                                     Clearable="false"
+                                     CoerceText="false"
+                                     CoerceValue="false"
+                                     ResetValueOnEmptyText="false"
+                                     MinCharacters="0"
+                                     MaxItems="100"
+                                     OpenOnFocus="true"
+                                     Adornment="Adornment.Start"
+                                     AdornmentIcon="@Icons.Material.Filled.CalendarMonth"
+                                     Error="@HasError(nameof(InsertFormState.PublicationPeriodId))"
+                                     ErrorText="@GetError(nameof(InsertFormState.PublicationPeriodId))">
+                        <ItemTemplate>
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.body2" Class="fw-700">
+                                    @context.PeriodName
+                                </MudText>
+
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @FormatPeriodDateRange(context)
+                                </MudText>
+                            </MudStack>
+                        </ItemTemplate>
+
+                        <NoItemsTemplate>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="pa-2">
+                                No matching weekly publication period found.
+                            </MudText>
+                        </NoItemsTemplate>
+                    </MudAutocomplete>
+                </div>
+
+                <MudAutocomplete T="CatalogEntry"
+                                 Label="Series"
+                                 Placeholder="Search series from database"
+                                 Required="true"
+                                 Clearable="true"
+                                 Dense="true"
+                                 MinCharacters="0"
+                                 MaxItems="20"
+                                 Value="@_form.Series"
+                                 ValueChanged="OnSeriesChanged"
+                                 SearchFunc="SearchAvailableSeriesAsync"
+                                 ToStringFunc="@(series => series?.Title ?? string.Empty)"
+                                 ResetValueOnEmptyText="true"
+                                 CoerceText="false"
+                                 CoerceValue="false"
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 AdornmentIcon="@Icons.Material.Filled.Search"
+                                 Adornment="Adornment.Start"
+                                 Error="@HasError(nameof(InsertFormState.Series))"
+                                 ErrorText="@GetError(nameof(InsertFormState.Series))">
+                    <ItemTemplate>
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                            <MudAvatar Image="@context.CoverUrl"
+                                       Rounded="true"
+                                       Size="Size.Small" />
+
+                            <div>
+                                <MudText Typo="Typo.body2" Class="fw-700">
+                                    @context.Title
+                                </MudText>
+
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @context.SeriesId
+                                </MudText>
+                            </div>
+                        </MudStack>
+                    </ItemTemplate>
+
+                    <NoItemsTemplate>
+                        <MudText Typo="Typo.caption" Color="Color.Error" Class="pa-2">
+                            @(_seriesSearchMessage ?? "No data found in the database.")
+                        </MudText>
+                    </NoItemsTemplate>
+                </MudAutocomplete>
+
+                <MudGrid>
+                    <MudItem xs="12" md="6">
+                        <MudNumericField T="int?"
+                                         Label="Reading Count"
+                                         Required="true"
+                                         Min="1"
+                                         HideSpinButtons="true"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Value="@_form.ReadingCount"
+                                         ValueChanged="OnReadingCountChanged"
+                                         Error="@HasError(nameof(InsertFormState.ReadingCount))"
+                                         ErrorText="@GetError(nameof(InsertFormState.ReadingCount))" />
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudNumericField T="int?"
+                                         Label="Rating Count"
+                                         Required="true"
+                                         Min="1"
+                                         HideSpinButtons="true"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Value="@_form.RatingCount"
+                                         ValueChanged="OnRatingCountChanged"
+                                         Error="@HasError(nameof(InsertFormState.RatingCount))"
+                                         ErrorText="@GetError(nameof(InsertFormState.RatingCount))" />
+                    </MudItem>
+                </MudGrid>
+
+                <MudNumericField T="decimal?"
+                                 Label="Average Rating"
+                                 HelperText="0 – 10"
+                                 Required="true"
+                                 Min="0"
+                                 Max="10"
+                                 Step="@DecimalStep"
+                                 HideSpinButtons="true"
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 Value="@_form.AverageRating"
+                                 ValueChanged="OnAverageRatingChanged"
+                                 Error="@HasError(nameof(InsertFormState.AverageRating))"
+                                 ErrorText="@GetError(nameof(InsertFormState.AverageRating))" />
+
+                <MudTextField T="string"
+                              Label="Data Source Note"
+                              Placeholder="e.g. Editorial Board report / spreadsheet source"
+                              Lines="2"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Value="@_form.DataSourceNote"
+                              ValueChanged="OnDataSourceChanged" />
+            </MudStack>
+
+            <MudDivider />
+
+            <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2" Class="pa-4 dialog-footer">
+                <MudButton Variant="Variant.Outlined"
+                           OnClick="CloseAsync"
+                           Disabled="@Saving">
+                    Cancel
+                </MudButton>
+
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Save"
+                           OnClick="SaveAsync"
+                           Disabled="@Saving">
+                    @(Saving ? "Saving..." : "Save")
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    </MudOverlay>
+}
+
+@code {
+    private const decimal DecimalStep = 0.1m;
+
+    private InsertFormState _form = new();
+    private Dictionary<string, string> _errors = [];
+    private bool _wasOpen;
+    private string? _seriesSearchMessage;
+    private string _publicationPeriodSearchText = string.Empty;
+
+    [Parameter]
+    public bool Open { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> OpenChanged { get; set; }
+
+    [Parameter]
+    public Guid SelectedPublicationPeriodId { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<PublicationPeriodOption> PublicationPeriods { get; set; } = [];
+
+    [Parameter]
+    public Func<Guid, string?, CancellationToken, Task<IEnumerable<CatalogEntry>>> SearchSeriesAsync { get; set; }
+        = (_, _, _) => Task.FromResult(Enumerable.Empty<CatalogEntry>());
+
+    [Parameter]
+    public EventCallback<InsertFormState> Saved { get; set; }
+
+    [Parameter]
+    public bool Saving { get; set; }
+
+    private PublicationPeriodOption? SelectedPublicationPeriod =>
+        PublicationPeriods.FirstOrDefault(period =>
+            period.PublicationPeriodId == _form.PublicationPeriodId);
+
+    protected override void OnParametersSet()
+    {
+        if (Open && !_wasOpen)
+        {
+            _errors = [];
+            _seriesSearchMessage = null;
+
+            _form = new InsertFormState
+            {
+                PublicationPeriodId = SelectedPublicationPeriodId
+            };
+
+            _publicationPeriodSearchText = FormatPublicationPeriod(SelectedPublicationPeriod);
+        }
+
+        if (Open
+            && _form.PublicationPeriodId == Guid.Empty
+            && SelectedPublicationPeriodId != Guid.Empty)
+        {
+            _form.PublicationPeriodId = SelectedPublicationPeriodId;
+            _publicationPeriodSearchText = FormatPublicationPeriod(SelectedPublicationPeriod);
+        }
+
+        _wasOpen = Open;
+    }
+
+    private async Task CloseAsync()
+    {
+        if (Saving)
+        {
+            return;
+        }
+
+        await OpenChanged.InvokeAsync(false);
+    }
+
+    private async Task ClearPublicationPeriodPickerAsync()
+    {
+        if (Saving)
+        {
+            return;
+        }
+
+        if (_form.PublicationPeriodId == Guid.Empty)
+        {
+            return;
+        }
+
+        _form.PublicationPeriodId = Guid.Empty;
+        _form.Series = null;
+        _publicationPeriodSearchText = string.Empty;
+        _seriesSearchMessage = null;
+
+        ClearError(nameof(InsertFormState.PublicationPeriodId));
+        ClearError(nameof(InsertFormState.Series));
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void OnPublicationPeriodTextChanged(string value)
+    {
+        _publicationPeriodSearchText = value ?? string.Empty;
+    }
+
+    private void OnPublicationPeriodSelected(PublicationPeriodOption? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        _form.PublicationPeriodId = value.PublicationPeriodId;
+        _form.Series = null;
+        _publicationPeriodSearchText = FormatPublicationPeriod(value);
+        _seriesSearchMessage = null;
+
+        ClearError(nameof(InsertFormState.PublicationPeriodId));
+        ClearError(nameof(InsertFormState.Series));
+    }
+
+    private void OnSeriesChanged(CatalogEntry? value)
+    {
+        _form.Series = value;
+        ClearError(nameof(InsertFormState.Series));
+    }
+
+    private void OnReadingCountChanged(int? value)
+    {
+        _form.ReadingCount = value;
+        ClearError(nameof(InsertFormState.ReadingCount));
+        ClearError(nameof(InsertFormState.RatingCount));
+    }
+
+    private void OnRatingCountChanged(int? value)
+    {
+        _form.RatingCount = value;
+        ClearError(nameof(InsertFormState.RatingCount));
+    }
+
+    private void OnAverageRatingChanged(decimal? value)
+    {
+        _form.AverageRating = value;
+        ClearError(nameof(InsertFormState.AverageRating));
+    }
+
+    private void OnDataSourceChanged(string value)
+    {
+        _form.DataSourceNote = value ?? string.Empty;
+    }
+
+    private Task<IEnumerable<PublicationPeriodOption>> SearchPublicationPeriodsAsync(
+        string? searchText,
+        CancellationToken cancellationToken)
+    {
+        var normalizedSearch = searchText?.Trim();
+
+        if (string.IsNullOrWhiteSpace(normalizedSearch))
+        {
+            return Task.FromResult(
+                PublicationPeriods
+                    .OrderByDescending(period => period.PeriodStartDate)
+                    .AsEnumerable());
+        }
+
+        if (TryParseSearchDate(normalizedSearch, out var parsedDate))
+        {
+            var date = parsedDate.Date;
+
+            var result = PublicationPeriods
+                .Select(period => new
+                {
+                    Period = period,
+                    ContainsDate = IsDateInsidePeriod(period, date),
+                    DistanceDays = GetDistanceDaysFromPeriod(period, date)
+                })
+                .Where(item => item.ContainsDate || item.DistanceDays <= 28)
+                .OrderByDescending(item => item.ContainsDate)
+                .ThenBy(item => item.DistanceDays)
+                .ThenBy(item => item.Period.PeriodStartDate)
+                .Select(item => item.Period)
+                .AsEnumerable();
+
+            return Task.FromResult(result);
+        }
+
+        var textResult = PublicationPeriods
+            .Where(period => MatchesPeriodText(period, normalizedSearch))
+            .OrderByDescending(period => period.PeriodStartDate)
+            .AsEnumerable();
+
+        return Task.FromResult(textResult);
+    }
+
+    private async Task<IEnumerable<CatalogEntry>> SearchAvailableSeriesAsync(
+        string? value,
+        CancellationToken cancellationToken)
+    {
+        if (_form.PublicationPeriodId == Guid.Empty)
+        {
+            _seriesSearchMessage = "Please select a publication week first.";
+            return [];
+        }
+
+        try
+        {
+            _seriesSearchMessage = null;
+
+            var result = await SearchSeriesAsync(
+                _form.PublicationPeriodId,
+                value,
+                cancellationToken);
+
+            var series = result.ToList();
+
+            if (series.Count == 0)
+            {
+                _seriesSearchMessage = "No data found in the database.";
+            }
+
+            return series;
+        }
+        catch
+        {
+            _seriesSearchMessage = "No data found in the database.";
+            return [];
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _errors = ValidateForm();
+
+        if (_errors.Count > 0)
+        {
+            Snackbar.Add("Validation failed. Please fix the highlighted fields.", Severity.Error);
+            return;
+        }
+
+        await Saved.InvokeAsync(_form);
+    }
+
+    private Dictionary<string, string> ValidateForm()
+    {
+        var errors = new Dictionary<string, string>();
+
+        if (_form.PublicationPeriodId == Guid.Empty)
+        {
+            errors[nameof(InsertFormState.PublicationPeriodId)] =
+                "Publication week is required.";
+        }
+
+        if (_form.Series is null)
+        {
+            errors[nameof(InsertFormState.Series)] =
+                "Series is required.";
+        }
+
+        if (!_form.ReadingCount.HasValue || _form.ReadingCount.Value <= 0)
+        {
+            errors[nameof(InsertFormState.ReadingCount)] =
+                "Reading count must be greater than 0.";
+        }
+
+        if (!_form.RatingCount.HasValue || _form.RatingCount.Value <= 0)
+        {
+            errors[nameof(InsertFormState.RatingCount)] =
+                "Rating count must be greater than 0.";
+        }
+
+        if (_form.ReadingCount.HasValue
+            && _form.RatingCount.HasValue
+            && _form.RatingCount.Value > _form.ReadingCount.Value)
+        {
+            errors[nameof(InsertFormState.RatingCount)] =
+                "Rating count cannot exceed reading count.";
+        }
+
+        if (!_form.AverageRating.HasValue
+            || _form.AverageRating.Value < 0
+            || _form.AverageRating.Value > 10)
+        {
+            errors[nameof(InsertFormState.AverageRating)] =
+                "Average rating must be between 0 and 10.";
+        }
+
+        return errors;
+    }
+
+    private bool HasError(string fieldName)
+    {
+        return _errors.ContainsKey(fieldName);
+    }
+
+    private string GetError(string fieldName)
+    {
+        return _errors.TryGetValue(fieldName, out var error)
+            ? error
+            : string.Empty;
+    }
+
+    private void ClearError(string fieldName)
+    {
+        _errors.Remove(fieldName);
+    }
+
+    private static bool MatchesPeriodText(
+        PublicationPeriodOption period,
+        string searchText)
+    {
+        return period.PeriodName.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+               || period.Label.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+               || period.PeriodStartDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture).Contains(searchText, StringComparison.OrdinalIgnoreCase)
+               || period.PeriodEndDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture).Contains(searchText, StringComparison.OrdinalIgnoreCase)
+               || period.PeriodStartDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture).Contains(searchText, StringComparison.OrdinalIgnoreCase)
+               || period.PeriodEndDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture).Contains(searchText, StringComparison.OrdinalIgnoreCase)
+               || period.PeriodStartDate.ToString("MM/yyyy", CultureInfo.InvariantCulture).Contains(searchText, StringComparison.OrdinalIgnoreCase)
+               || period.PeriodEndDate.ToString("MM/yyyy", CultureInfo.InvariantCulture).Contains(searchText, StringComparison.OrdinalIgnoreCase)
+               || period.PeriodStartDate.ToString("MMMM", CultureInfo.InvariantCulture).Contains(searchText, StringComparison.OrdinalIgnoreCase)
+               || period.PeriodEndDate.ToString("MMMM", CultureInfo.InvariantCulture).Contains(searchText, StringComparison.OrdinalIgnoreCase)
+               || period.PeriodStartDate.Year.ToString(CultureInfo.InvariantCulture).Contains(searchText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsDateInsidePeriod(
+        PublicationPeriodOption period,
+        DateTime date)
+    {
+        return date >= period.PeriodStartDate.Date
+               && date <= period.PeriodEndDate.Date;
+    }
+
+    private static int GetDistanceDaysFromPeriod(
+        PublicationPeriodOption period,
+        DateTime date)
+    {
+        if (IsDateInsidePeriod(period, date))
+        {
+            return 0;
+        }
+
+        if (date < period.PeriodStartDate.Date)
+        {
+            return Math.Abs((period.PeriodStartDate.Date - date).Days);
+        }
+
+        return Math.Abs((date - period.PeriodEndDate.Date).Days);
+    }
+
+    private static bool TryParseSearchDate(
+        string searchText,
+        out DateTime date)
+    {
+        var formats = new[]
+        {
+            "dd/MM/yyyy",
+            "d/MM/yyyy",
+            "dd/M/yyyy",
+            "d/M/yyyy",
+
+            "dd-MM-yyyy",
+            "d-MM-yyyy",
+            "dd-M-yyyy",
+            "d-M-yyyy",
+
+            "yyyy-MM-dd",
+            "yyyy-M-dd",
+            "yyyy-MM-d",
+            "yyyy-M-d",
+
+            "yyyy/MM/dd",
+            "yyyy/M/dd",
+            "yyyy/MM/d",
+            "yyyy/M/d"
+        };
+
+        return DateTime.TryParseExact(
+            searchText,
+            formats,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out date);
+    }
+
+    private static string FormatPublicationPeriod(
+        PublicationPeriodOption? period)
+    {
+        return period is null
+            ? string.Empty
+            : $"{period.PeriodName} ({FormatPeriodDateRange(period)})";
+    }
+
+    private static string FormatPeriodDateRange(
+        PublicationPeriodOption period)
+    {
+        return $"{period.PeriodStartDate:dd/MM/yyyy} – {period.PeriodEndDate:dd/MM/yyyy}";
+    }
+}

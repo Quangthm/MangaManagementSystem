@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
+using MangaManagementSystem.Domain.Policies;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -54,6 +55,11 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 if (!isAuthorized)
                     throw new InvalidOperationException(
                         "You are not authorized to release this chapter.");
+
+                var seriesStatusCode = chapter.Series?.StatusCode;
+                if (!SeriesReleasePolicy.AllowsChapterRelease(seriesStatusCode))
+                    throw new InvalidOperationException(
+                        GetSeriesReleaseBlockedMessage(seriesStatusCode));
 
                 if (chapter.StatusCode == StatusReleased)
                     throw new InvalidOperationException("This chapter has already been released.");
@@ -122,6 +128,23 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 await transaction.RollbackAsync(ct);
                 throw;
             }
+        }
+
+        private static string GetSeriesReleaseBlockedMessage(string? seriesStatusCode)
+        {
+            if (seriesStatusCode is null)
+                return "The chapter's parent series could not be found.";
+
+            if (string.Equals(seriesStatusCode, "HIATUS", StringComparison.OrdinalIgnoreCase))
+                return "Chapter release is paused while the series is on hiatus.";
+
+            if (string.Equals(seriesStatusCode, "COMPLETED", StringComparison.OrdinalIgnoreCase))
+                return "A chapter under a completed series cannot be released.";
+
+            if (string.Equals(seriesStatusCode, "CANCELLED", StringComparison.OrdinalIgnoreCase))
+                return "A chapter under a cancelled series cannot be released.";
+
+            return "Chapters can only be released while the series is serialized.";
         }
     }
 }

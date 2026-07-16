@@ -1265,35 +1265,6 @@ Poll is closed
 
 ---
 
-## BF-BOARD-003 — Mangaka Requests Publication Frequency Change After Board Decision
-
-**Status:** Agreed
-**Primary actor:** Mangaka
-**Goal:** Let Mangaka communicate schedule concerns after the board has already decided the official frequency.
-
-### Main Flow
-
-```text
-Mangaka views serialized series publication frequency
-→ Mangaka writes request/reason for frequency change
-→ Backend creates in-app notification to Editorial Board Chief
-→ Editorial Board Chief reviews notification
-→ Chief may decide to directly change official frequency through separate controlled workflow
-```
-
-### Important Notes
-
-- No official frequency-change request table is required in MVP.
-- Notification is communication, not approval.
-- Only Editorial Board Chief can directly change official publication frequency.
-- Direct frequency change must include audit reason.
-
-### System Should Try To
-
-- Keep the request lightweight for MVP.
-- Avoid adding unnecessary workflow tables.
-- Preserve official control under Editorial Board Chief.
-
 ---
 
 # 6. Page Modification and Page Version Flows
