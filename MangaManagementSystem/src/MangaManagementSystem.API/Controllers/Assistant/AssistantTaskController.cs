@@ -147,7 +147,7 @@ namespace MangaManagementSystem.API.Controllers.Assistant
             FileUploadResultDto uploadResult;
             try
             {
-                await EnsureChapterAllowsTaskMutationsAsync(taskId, actorUserId);
+                await EnsureTaskCanBeSubmittedAsync(taskId, actorUserId);
                 uploadResult = await _formAdapter.UploadFormFileAsync(file, "CHAPTER_PAGE_VERSION", null);
             }
             catch (InvalidOperationException ex)
@@ -273,13 +273,17 @@ namespace MangaManagementSystem.API.Controllers.Assistant
             return false;
         }
 
-        private async Task EnsureChapterAllowsTaskMutationsAsync(Guid taskId, Guid actorUserId)
+        private async Task EnsureTaskCanBeSubmittedAsync(Guid taskId, Guid actorUserId)
         {
             var task = await _chapterPageTaskService.GetAssignedTaskDetailForAssistantAsync(actorUserId, taskId);
-            if (task?.ChapterId == null)
-                throw new InvalidOperationException("Task or chapter context not found.");
+            if (task == null || task.ChapterId == null)
+                throw new InvalidOperationException("Task or chapter context not found for this assistant.");
 
-            await _chapterService.EnsureChapterAllowsContentMutationsAsync(task.ChapterId.Value);
+            if (!string.Equals(task.StatusCode, "ASSIGNED", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    $"Only tasks in ASSIGNED status can be submitted. Current status: {task.StatusCode}.");
+
+            await _chapterService.EnsureChapterAllowsAssistantTaskSubmissionAsync(task.ChapterId.Value);
         }
     }
 }

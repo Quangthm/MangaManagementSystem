@@ -132,6 +132,7 @@
     private string Notes { get; set; } = string.Empty;
     private bool _loading = true;
     private bool _submitting;
+    private bool _redirectingToWorkspace;
     private string? _error;
     private ChapterPageTaskDto? _task;
 
@@ -143,6 +144,13 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (!_redirectingToWorkspace)
+        {
+            _redirectingToWorkspace = true;
+            Nav.NavigateTo($"/workspace/tasks/{TaskId}?returnUrl=/assistant/task/{TaskId}");
+            return;
+        }
+
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         if (user.Identity?.IsAuthenticated == true)
