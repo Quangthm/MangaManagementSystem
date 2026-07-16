@@ -575,6 +575,20 @@
 
         if (string.Equals(
                 notification.NotificationTypeCode,
+                NotificationTypeCodes.ProposalReview,
+                StringComparison.OrdinalIgnoreCase)
+            && string.Equals(
+                notification.RelatedEntityType,
+                NotificationRelatedEntityTypes.SeriesProposal,
+                StringComparison.Ordinal)
+            && notification.RelatedEntityId.HasValue
+            && notification.RelatedEntityId.Value != Guid.Empty)
+        {
+            return $"/editor/proposals/{notification.RelatedEntityId.Value:D}";
+        }
+
+        if (string.Equals(
+                notification.NotificationTypeCode,
                 NotificationTypeCodes.ProposalDecision,
                 StringComparison.OrdinalIgnoreCase)
             && string.Equals(

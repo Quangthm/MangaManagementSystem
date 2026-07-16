@@ -2,6 +2,9 @@ namespace MangaManagementSystem.Application.Common
 {
     public static class NotificationTypeCodes
     {
+        public const string ProposalReview =
+            "PROPOSAL_REVIEW";
+
         public const string ProposalDecision =
             "PROPOSAL_DECISION";
 
