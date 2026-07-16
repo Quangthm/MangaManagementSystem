@@ -393,10 +393,11 @@ else
                     </div>
             </div>
 
-            <!-- Bottom Pagination -->
-            <div class="d-flex justify-center align-center py-2 bg-white border-t-1 mud-border-lines-default" style="gap: 16px;">
-                <!-- Left Pane Pagination -->
-                <div class="d-flex align-center">
+            <!-- Bottom Pagination: each pane's pager is centered under its own canvas half so they mirror
+                 the split. In single view the left block spans the whole bar (still centered). -->
+            <div class="d-flex align-center py-2 bg-white border-t-1 mud-border-lines-default" style="position: relative;">
+                <!-- Left Pane Pagination (centered in the left half) -->
+                <div class="d-flex justify-center align-center" style="flex: 1 1 0; min-width: 0;">
                     @if (_isSplitView)
                     {
                         <MudText Typo="Typo.caption" Class="mf-muted font-weight-bold mr-2">Left Pane:</MudText>
@@ -415,13 +416,20 @@ else
                     {
                         <MudText Typo="Typo.caption" Class="mf-muted">0 / 0</MudText>
                     }
+                    @if (!_isSplitView)
+                    {
+                        <MudDivider Vertical="true" FlexItem="true" Class="mx-2" />
+                        <MudTooltip Text="Delete Current Page">
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="DeleteCurrentPage" Disabled="@(IsChapterLocked || IsAssistantWorkspace)" />
+                        </MudTooltip>
+                    }
                 </div>
-                
+
                 @if (_isSplitView)
                 {
                     <MudDivider Vertical="true" FlexItem="true" />
-                    <!-- Right Pane Pagination -->
-                    <div class="d-flex align-center">
+                    <!-- Right Pane Pagination (centered in the right half) -->
+                    <div class="d-flex justify-center align-center" style="flex: 1 1 0; min-width: 0;">
                         <MudText Typo="Typo.caption" Class="mf-muted font-weight-bold mr-2">Right Pane:</MudText>
                         @if (_splitUploadedPages.Any())
                         {
@@ -432,12 +440,11 @@ else
                             <MudText Typo="Typo.caption" Class="mf-muted">0 / 0</MudText>
                         }
                     </div>
+                    <!-- Delete (acts on the left pane) pinned to the far right so both pagers stay centered. -->
+                    <MudTooltip Text="Delete Current Page (Left)">
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="DeleteCurrentPage" Disabled="@(IsChapterLocked || IsAssistantWorkspace)" Style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%);" />
+                    </MudTooltip>
                 }
-                
-                <MudDivider Vertical="true" FlexItem="true" />
-                <MudTooltip Text="Delete Current Page (Left)">
-                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="DeleteCurrentPage" Disabled="@(IsChapterLocked || IsAssistantWorkspace)" />
-                </MudTooltip>
             </div>
 
             <!-- Left Panel (Chapters) Toggle Button -->
@@ -786,16 +793,15 @@ else
                           var initials = string.Join("", task.Assistant.Split(' ').Select(n => n[0]));
                           var isTargetTask = _taskFilterId != null && task.DbId.HasValue && task.DbId.ToString() == _taskFilterId;
                           var isTaskOnActiveVersion = IsTaskOnActiveVersion(task);
-                          var locationChipColor = isTaskOnActiveVersion ? Color.Primary : Color.Default;
                           var locationChipText = isTaskOnActiveVersion ? "Current version" : "Other version";
                           
                           <MudPaper Elevation="0" Class="pa-3 border-1 mud-border-lines-default rounded-lg"
                                     Style="@($"cursor: pointer; {(isTargetTask ? "border-left: 3px solid #4f46e5; background: #eef2ff;" : (!isTaskOnActiveVersion ? "background: #f8fafc;" : ""))}")"
                                     @onclick="@(() => SelectTaskPanels(task))">
-                              <div class="d-flex justify-space-between">
-                                  <div class="d-flex">
-                                      <MudIcon Icon="@icon" Size="Size.Small" Color="@iconColor" Class="mr-2 mt-1" />
-                                      <div>
+                              <div class="d-flex justify-space-between" style="gap: 8px;">
+                                  <div class="d-flex" style="min-width: 0; flex: 1 1 auto;">
+                                      <MudIcon Icon="@icon" Size="Size.Small" Color="@iconColor" Class="mr-2 mt-1 flex-shrink-0" />
+                                      <div style="min-width: 0;">
                                           <MudTooltip Text="@task.Target">
                                               <MudText Typo="Typo.body2" Class="@(isTerminal ? "font-weight-bold text-decoration-line-through" : "font-weight-bold")">@task.Type &bull; @CompactTarget(task.Target)</MudText>
                                           </MudTooltip>
@@ -815,10 +821,7 @@ else
                                           }
                                       </div>
                                   </div>
-                                  <div class="d-flex align-center" @onclick:stopPropagation="true">
-                                      <MudTooltip Text="Tasks are shown for the whole page. This chip tells you whether the task belongs to the version currently open on the canvas.">
-                                          <MudChip T="string" Size="Size.Small" Color="@locationChipColor" Variant="Variant.Text" Class="mr-1">@locationChipText</MudChip>
-                                      </MudTooltip>
+                                  <div class="d-flex align-center flex-shrink-0" @onclick:stopPropagation="true">
                                       <MudTooltip Text="Status is set by the workflow (assistant submits / Mangaka reviews), not edited here.">
                                           <MudChip T="string" Size="Size.Small" Color="@chipColor" Variant="Variant.Outlined">@task.Status</MudChip>
                                       </MudTooltip>

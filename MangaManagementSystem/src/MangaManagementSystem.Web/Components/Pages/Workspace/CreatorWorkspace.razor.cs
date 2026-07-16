@@ -1219,6 +1219,11 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 await _leftCanvasRef.InvokeVoidAsync("loadImage", "");
             if (_rightCanvasRef != null)
                 await _rightCanvasRef.InvokeVoidAsync("loadImage", "");
+            // No page is loaded here, so LoadPage never runs to refresh the task/annotation panels.
+            // Clear them explicitly so a 0-page chapter does not keep showing the previous chapter's tasks.
+            ActiveTasks = new();
+            ActiveAnnotations = new();
+            SelectedRegions.Clear();
             Snackbar.Add("Please upload an image to begin.", Severity.Info);
         }
         // Sync split view pane when chapter changes. Updating the data alone does not
