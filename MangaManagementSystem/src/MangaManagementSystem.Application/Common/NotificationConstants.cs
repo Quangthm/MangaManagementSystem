@@ -14,6 +14,9 @@ namespace MangaManagementSystem.Application.Common
         public const string BoardPoll =
             "BOARD_POLL";
 
+        public const string BoardDecision =
+            "BOARD_DECISION";
+
         public const string ChapterReview =
             "CHAPTER_REVIEW";
 

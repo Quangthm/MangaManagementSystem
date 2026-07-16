@@ -589,6 +589,21 @@
 
         if (string.Equals(
                 notification.NotificationTypeCode,
+                NotificationTypeCodes.BoardDecision,
+                StringComparison.OrdinalIgnoreCase)
+            && string.Equals(
+                notification.RelatedEntityType,
+                NotificationRelatedEntityTypes.SeriesBoardPoll,
+                StringComparison.Ordinal)
+            && notification.NotificationId != Guid.Empty
+            && notification.RelatedEntityId.HasValue
+            && notification.RelatedEntityId.Value != Guid.Empty)
+        {
+            return $"/notifications/board-decision/{notification.NotificationId:D}";
+        }
+
+        if (string.Equals(
+                notification.NotificationTypeCode,
                 NotificationTypeCodes.ProposalDecision,
                 StringComparison.OrdinalIgnoreCase)
             && string.Equals(

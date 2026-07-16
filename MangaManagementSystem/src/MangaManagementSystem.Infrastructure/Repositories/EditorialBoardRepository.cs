@@ -1,3 +1,4 @@
+using MangaManagementSystem.Application.Common;
 using MangaManagementSystem.Application.Features.EditorialBoard.Dtos;
 using MangaManagementSystem.Application.Features.EditorialBoard.Repositories;
 using MangaManagementSystem.Domain.Entities;
@@ -635,7 +636,12 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             await connection.OpenAsync(cancellationToken);
         }
 
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await using var efTransaction =
+            await _dbContext.Database.BeginTransactionAsync(
+                cancellationToken);
+
+        var transaction =
+            efTransaction.GetDbTransaction();
 
         try
         {
@@ -798,13 +804,17 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                     @finalPollStatusCode AS poll_status_code,
                     ISNULL(@seriesStatusCode, N'UNKNOWN') AS series_status_code,
                     @publicationFrequencyCode AS publication_frequency_code,
-                    @endedAtUtc AS ended_at_utc;
+                    @endedAtUtc AS ended_at_utc,
+                    @computedResultCode AS computed_result_code,
+                    @pollTypeCode AS poll_type_code;
                 """;
 
             AddGuidParameter(command, "@pollId", pollId);
             AddGuidParameter(command, "@chiefUserId", chiefUserId);
 
             FinalizeBoardPollResultDto result;
+            string computedResultCode;
+            string pollTypeCode;
 
             await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
             {
@@ -820,6 +830,12 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                     SeriesStatusCode: reader.GetString(3),
                     PublicationFrequencyCode: reader.IsDBNull(4) ? null : reader.GetString(4),
                     EndedAtUtc: reader.GetDateTime(5));
+
+                computedResultCode =
+                    reader.GetString(6);
+
+                pollTypeCode =
+                    reader.GetString(7);
             }
 
             var closePollAuditJson =
@@ -829,6 +845,8 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                   "series_id": "{{result.SeriesId}}",
                   "poll_status_code": "{{result.PollStatusCode}}",
                   "series_status_code": "{{result.SeriesStatusCode}}",
+                  "poll_type_code": "{{pollTypeCode}}",
+                  "computed_result_code": "{{computedResultCode}}",
                   "publication_frequency_code": {{JsonSerializer.Serialize(result.PublicationFrequencyCode)}},
                   "ended_at_utc": "{{result.EndedAtUtc:O}}"
                 }
@@ -844,7 +862,87 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 closePollAuditJson,
                 cancellationToken);
 
-            await transaction.CommitAsync(cancellationToken);
+            var recipientUserIds =
+                await _dbContext.ActiveSeriesContributors
+                    .AsNoTracking()
+                    .Where(contributor =>
+                        contributor.SeriesId == result.SeriesId
+                        && contributor.EndDate == null
+                        && contributor.UserStatusCode == "ACTIVE")
+                    .Select(contributor => contributor.UserId)
+                    .Distinct()
+                    .ToListAsync(cancellationToken);
+
+            var seriesTitle =
+                await _dbContext.Series
+                    .AsNoTracking()
+                    .Where(series =>
+                        series.SeriesId == result.SeriesId)
+                    .Select(series => series.Title)
+                    .FirstOrDefaultAsync(cancellationToken)
+                ?? "this series";
+
+            var notificationTitle =
+                computedResultCode switch
+                {
+                    "APPROVED" =>
+                        "Board Decision Approved",
+                    "REJECTED" =>
+                        "Board Decision Rejected",
+                    _ =>
+                        "Board Poll Closed Without Decision"
+                };
+
+            var decisionLabel =
+                computedResultCode.Replace(
+                    '_',
+                    ' ');
+
+            var notificationMessage =
+                $"The {MapPollType(pollTypeCode)} poll for "
+                + $"'{seriesTitle}' closed with result "
+                + $"{decisionLabel}.";
+
+            if (recipientUserIds.Count > 0)
+            {
+                var createdAtUtc =
+                    DateTime.UtcNow;
+
+                var notifications =
+                    recipientUserIds
+                        .Select(recipientUserId =>
+                            new Notification
+                            {
+                                RecipientUserId =
+                                    recipientUserId,
+                                NotificationTypeCode =
+                                    NotificationTypeCodes.BoardDecision,
+                                Title =
+                                    notificationTitle,
+                                Message =
+                                    notificationMessage,
+                                RelatedEntityType =
+                                    NotificationRelatedEntityTypes.SeriesBoardPoll,
+                                RelatedEntityId =
+                                    result.PollId,
+                                ReadAtUtc =
+                                    null,
+                                CreatedAtUtc =
+                                    createdAtUtc
+                            })
+                        .ToList();
+
+                await _dbContext.Notifications
+                    .AddRangeAsync(
+                        notifications,
+                        cancellationToken);
+
+                await _dbContext.SaveChangesAsync(
+                    cancellationToken);
+            }
+
+            await efTransaction.CommitAsync(
+                cancellationToken);
 
             return result;
         }
