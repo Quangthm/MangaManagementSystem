@@ -1,105 +1,49 @@
-# _CURRENT_SESSION — Fix Publication Schedule Filter UI Bugs
+# Current Session — Create Chapter Production Eligibility
 
-**Started:** 2026-07-06T08:00:00Z
-**Agent:** OpenCode
-**Branch:** feature/Mangaka
-**Goal:** Fix 4 UI bugs + implement slug-based URL for Publication Schedule
-**Status:** DONE (both fixes)
+**Date:** 2026-07-16
+**Branch:** `feature/Mangaka`
+**Status:** Implemented; static verification only
 
----
+## Goal
 
-## 5. Slug URL + follow-up fixes (2026-07-06)
+Allow Mangaka chapter creation only when the parent series is `SERIALIZED` or `HIATUS`, while preserving existing authorization, input normalization, draft initialization, and database-owned duplicate handling.
 
-**Changes:** 13 files across Domain/Infrastructure/API/Web layers
-**Build result:** 0 errors, 66 pre-existing warnings
-**Handoff:** `docs/revision/PublicationScheduling/2026-07-06-schedule-slug-filter-state-fixes.md`
+## Production files changed
 
-Backend additions:
-- `PublicationScheduleSeriesSuggestion.SeriesSlug` added
-- 2 lightweight EF resolution methods in `IPublicationScheduleRepository`
-- 2 new API endpoints: `by-slug/{slug}` and `by-id/{id}`
-- `MangakaChapterListItemDto.SeriesSlug` added
+- `MangaManagementSystem/src/MangaManagementSystem.Domain/Policies/SeriesProductionPolicy.cs`
+- `MangaManagementSystem/src/MangaManagementSystem.Infrastructure/Repositories/MangakaChapterRepository.cs`
+- `MangaManagementSystem/src/MangaManagementSystem.Web/Components/Pages/Mangaka/Chapters.razor`
 
-Web fixes:
-- URL now uses `?series={slug}` (user-facing), internal filtering still uses `seriesId`
-- Legacy `?seriesId={guid}` supported with slug upgrade
-- All 4 bugs fixed (autocomplete label, drawer clear, chapter search scoping, stale chapter state)
-- Source navigation links updated
-
-## 6. Phase 2 — Drag/Drop Scheduling UX (2026-07-06)
-
-**Changes:** 2 files (Web-only)
-**Build result:** 0 errors, 66 pre-existing warnings
-**Handoff:** `docs/revision/PublicationScheduling/2026-07-06-schedule-drag-drop-ux.md`
-
-Added drag-and-drop scheduling: drawer chapter cards → calendar day cells.
-Uses existing `SetPlannedReleaseDateAsync` APIs. No backend changes.
-Calendar items not draggable (no-unschedule guarantee preserved).
-
----
-
-## 0. Context loaded
-
-- [x] `docs/agents/AGENTS.md`
-- [x] `docs/agents/AI_AGENT_SKILLS_GUIDE.md`
-- [x] `docs/agents/SESSION_RULE.md`
-- [x] `docs/agents/RESUME_PACK.md`
-- [x] `docs/context.md`
-- [x] `docs/revision/PublicationScheduling/2026-07-05-action-drawer-editor-endpoint-integration.md`
-- [x] `docs/revision/PublicationScheduling/2026-07-05-action-drawer-series-filter-and-mangaka-cover-polish.md`
-- [x] `docs/revision/PublicationScheduling/2026-07-05-advisory-scheduling-backend-update.md`
-
----
-
-## 1. Verified state at start
+## Architecture flow
 
 ```text
-## feature/Mangaka...origin/feature/Mangaka
+Chapters.razor
+→ typed chapter API client
+→ Mangaka Chapters API controller
+→ CreateChapterDraftCommand
+→ CreateChapterDraftCommandHandler
+→ MangakaChapterRepository
+→ EF Core / SQL Server
 ```
-No dirty files.
 
----
+No API, command, handler, client, DTO, task, workspace, SQL, migration, or configuration file was changed.
 
-## 2. Task scope
+## Implementation
 
-### In scope
-- Fix Bug 1: Initial series filter stuck in "Loading..."
-- Fix Bug 2: Clearing and reselecting same series does not apply filtering
-- Fix Bug 3: Editor clear series filter does not work like Mangaka
-- Fix Bug 4: Clearing chapter search does not unfilter chapter list
-- Refactor for maintainability (computed properties, separated methods)
+- Added `SeriesProductionPolicy.AllowsNormalProduction(string?)` with case-insensitive allow rules for `SERIALIZED` and `HIATUS` only.
+- Create Chapter now loads the exact parent series row inside the existing repository transaction, distinguishes a missing series, validates the existing active Mangaka contributor rule, and rejects ineligible series states.
+- Create Chapter uses `IsolationLevel.RepeatableRead`. The exact series-row read is retained through commit, so completion or board cancellation must wait for the chapter transaction; no phantom/range protection is needed.
+- The Chapters page retains all series for list filtering but exposes only production-eligible series in the create dialog, disables creation when none are eligible, and protects stale handler invocation.
+- Existing database-first duplicate-label handling remains unchanged; no pre-insert duplicate query was added.
 
-### Out of scope
-- API/Application/Infrastructure/Database changes
-- Scheduling business rule changes
-- New API endpoints
+## Separate follow-up
 
-### Architecture flow
-Web-only UI state/filter fix. No backend changes.
+`ChapterConfiguration` declares an unfiltered unique index while `MangaManagementSystem_Schema.sql` defines the intended filtered index for non-cancelled chapters. This task intentionally did not modify EF metadata, SQL, schema, or migrations.
 
----
+## Verification boundary
 
-## 3. Plan
+Only static checks are authorized: status/diff inspection, `git diff --check`, and targeted source searches. Restore, build, test, run, server, watcher, and migration commands were not run.
 
-1. Add `OnClearSeriesRequested` EventCallback to drawer, wire in parent
-2. Add computed properties: `SeriesChipLabel`, `HasSeriesFilter`, `HasChapterFilter`
-3. Add `_resolvedSeriesTitle` field, `ResolveSeriesDisplayTitle()`, `ResetResolvedSeriesLabel()`
-4. Separate `LoadChaptersAsync` into `LoadMangakaChaptersAsync()` / `LoadEditorChaptersAsync()`
-5. Refactor `ClearSeriesFilter()` → `ClearSelectedSeriesAsync()` — invokes parent callback, resets local state
-6. Add `ClearChapterSearch()` method
-7. Rename `ApplyFilters()` → `ApplyChapterFilters()` at all call sites
-8. Fix Bug 4: `ResetValueOnEmptyText="true"` on chapter autocomplete
-9. Build and verify
+## Final handoff
 
----
-
-## 4. Build result
-
-```
-dotnet build .\MangaManagementSystem\MangaManagementSystem.slnx --no-incremental
-```
-Result: SUCCESS — 0 errors, 66 pre-existing warnings (none from changed files)
-
-## 5. Handoff
-
-`docs/revision/PublicationScheduling/2026-07-06-schedule-filter-clear-fixes.md`
+`docs/revision/2026-07-16-create-chapter-production-eligibility.md`

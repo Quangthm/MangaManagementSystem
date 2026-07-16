@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.DTOs.Editor;
 using MangaManagementSystem.Domain.Entities;
+using MangaManagementSystem.Domain.Policies;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
@@ -109,11 +111,25 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             string? chapterTitle,
             CancellationToken cancellationToken = default)
         {
-            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            await using var transaction = await _context.Database.BeginTransactionAsync(
+                IsolationLevel.RepeatableRead,
+                cancellationToken);
 
             try
             {
+                var series = await _context.Series
+                    .FirstOrDefaultAsync(s => s.SeriesId == seriesId, cancellationToken);
+
+                if (series == null)
+                    throw new InvalidOperationException("Series does not exist.");
+
                 await EnsureActiveMangakaContributorAsync(actorUserId, seriesId, cancellationToken);
+
+                if (!SeriesProductionPolicy.AllowsNormalProduction(series.StatusCode))
+                {
+                    throw new InvalidOperationException(
+                        "New chapters can only be created while the series is SERIALIZED or HIATUS.");
+                }
 
                 string normalizedLabel = NormalizeRequiredLabel(chapterNumberLabel);
                 string? normalizedTitle = NormalizeOptionalTitle(chapterTitle);
