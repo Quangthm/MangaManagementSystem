@@ -316,7 +316,7 @@
 | Rule ID | Business Rule | Review Status |
 |---|---|---|
 | BR-CH-001 | Each chapter belongs to exactly one series. | Active draft |
-| BR-CH-002 | Chapter number labels must be unique among non-cancelled chapters within the same series. Cancelled chapters are preserved for history but do not reserve the chapter number label for future replacement drafts. | Active draft |
+| BR-CH-002 | Chapter number labels must be unique among **all** chapters within the same series, **including cancelled ones**. A cancelled chapter's number label is preserved for history and is **not** freed for reuse by a new chapter, matching the non-filtered `uq_chapter_series_chapter_number` constraint. | Active draft |
 | BR-CH-003 | A chapter starts with `DRAFT` status when it is created. | Active draft |
 | BR-CH-004 | `Chapter.status_code` stores only the current workflow status of the chapter. | Active draft |
 | BR-CH-005 | A chapter may move through statuses such as `DRAFT`, `UNDER_REVIEW`, `REVISION_REQUESTED`, `APPROVED`, `SCHEDULED`, `RELEASED`, `ON_HOLD`, and `CANCELLED`. | Active draft |

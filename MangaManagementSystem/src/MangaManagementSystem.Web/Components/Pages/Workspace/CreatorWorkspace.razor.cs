@@ -21,6 +21,19 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     // in an unsaved state that blocks annotating.
     private bool CanManageContent => _currentRoleName == "Mangaka";
 
+    // Chapter management (create/rename/cancel) requires Mangaka AND a series that is not COMPLETED (BR-CH-020).
+    private bool CanManageChapters => CanManageContent && _seriesStatusCode != "COMPLETED";
+
+    // The user-facing number label of the currently open chapter (supports "2.5"); falls back to the UI key.
+    private string SelectedChapterLabel
+    {
+        get
+        {
+            var chap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
+            return chap != null && !string.IsNullOrWhiteSpace(chap.NumberLabel) ? chap.NumberLabel : SelectedChapter.ToString();
+        }
+    }
+
     // #4b — Tantou Editor chapter review decision (BR-CH-REV / BR-CP-018): editors submit APPROVED /
     // REVISION_REQUESTED / CANCELLED for a chapter that is UNDER_REVIEW, via the editor review API.
     private bool _showReviewDialog;
@@ -32,6 +45,11 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private IBrowserFile? _reviewMarkupFile;
 
     private void OnReviewMarkupSelected(InputFileChangeEventArgs e) => _reviewMarkupFile = e.File;
+
+    // Numeric sort key for a chapter number label; non-numeric/blank sinks to the end.
+    private static decimal ChapterSortKey(string? label)
+        => decimal.TryParse((label ?? "").Trim(), System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : decimal.MaxValue;
 
     private async Task SubmitEditorReview()
     {
@@ -100,6 +118,8 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private bool _isLoadingChapter = false;
     private string SeriesTitle { get; set; } = "Loading...";
     private string SeriesSubtitle { get; set; } = "";
+    // Parent series status: a COMPLETED series blocks content mutation for all its chapters (BR-CH-020).
+    private string _seriesStatusCode = "";
     private int SelectedChapter = 0;
     private int SelectedPage = 0;
 
@@ -715,6 +735,16 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             return;
         }
 
+        // Defense-in-depth role guard (mirrors the page's [Authorize(Roles=...)]): only the three
+        // workspace roles may load the workspace. If the cookie identity resolved to some other role
+        // — e.g. after switching accounts in the same browser and reloading — deny up front instead of
+        // rendering a workspace the current role isn't allowed to use.
+        if (_currentRoleName is not ("Mangaka" or "Tantou Editor" or "Assistant"))
+        {
+            _accessDenied = true;
+            return;
+        }
+
         try
         {
             var entry = await SeriesApiClient.GetWorkspaceEntryAsync(_currentUserId.Value, Slug);
@@ -762,6 +792,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             {
                 SeriesTitle = series.Title;
                 SeriesSubtitle = string.Join(", ", series.Genres.Select(g => g.GenreName));
+                _seriesStatusCode = series.StatusCode;
                 
                 var chapters = await MangakaChapterApi.GetSeriesChaptersAsync(_currentUserId!.Value, id);
                 if (chapters != null && chapters.Any())
@@ -770,15 +801,22 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                         // Editors/assistants only see chapters that have been submitted for review onward;
                         // DRAFT is the Mangaka's private work-in-progress. CANCELLED is hidden for everyone.
                         .Where(c => c.StatusCode != "CANCELLED" && (CanManageContent || c.StatusCode != "DRAFT"))
+                        // Order by the NUMERIC chapter value first (so "2.5" sits between 2 and 3), then
+                        // assign a positional, guaranteed-unique UI key. Id must NOT be derived from the
+                        // label: parsing "2.5" -> fallback collided with an integer chapter's Id and made
+                        // clicking one chapter select two.
+                        .OrderBy(c => ChapterSortKey(c.ChapterNumberLabel))
+                        .ThenBy(c => c.ChapterNumberLabel, StringComparer.OrdinalIgnoreCase)
                         .Select((c, i) => new ChapterModel
-                    { 
-                        Id = int.TryParse(c.ChapterNumberLabel, out int num) ? num : (i + 1), 
+                    {
+                        Id = i + 1,
+                        NumberLabel = c.ChapterNumberLabel ?? "",
                         ChapterId = c.ChapterId,
-                        PageCount = 0, 
+                        PageCount = 0,
                         IsCompleted = c.StatusCode == "PUBLISHED",
                         StatusCode = c.StatusCode,
                         Title = c.ChapterTitle ?? ""
-                    }).OrderBy(c => c.Id).ToList();
+                    }).ToList();
                     
                     var pageCountsDict = await MangakaPageApi.GetCountsAsync(_currentUserId!.Value, chapterModels.Select(c => c.ChapterId).ToList());
                     foreach(var cm in chapterModels)
@@ -1087,56 +1125,105 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         }
     }
 
+    // New-chapter dialog state: the chapter number label is user-chosen (supports "2.5"),
+    // not silently auto-incremented, so a Mangaka can insert interstitial chapters.
+    private bool _showNewChapterDialog;
+    private string _newChapterNumberLabel = "";
+    private List<string> _existingChapterLabels = new();   // ALL labels incl. hidden CANCELLED, for collision check
+
+    // Opens the new-chapter dialog with a suggested next number pre-filled. Blocked on COMPLETED series.
     private async Task AddNewChapter()
     {
         if (_isAddingChapter) return;
-        
+
+        // BR-CH-020: a COMPLETED series blocks new chapter creation (and all chapter mutation).
+        if (_seriesStatusCode == "COMPLETED")
+        {
+            Snackbar.Add("This series is completed; new chapters cannot be created.", Severity.Warning);
+            return;
+        }
+
+        if (!Guid.TryParse(SeriesId, out Guid seriesGuid))
+        {
+            Snackbar.Add("Could not create chapter: Invalid Series ID", Severity.Error);
+            return;
+        }
+
         try
         {
             _isAddingChapter = true;
             StateHasChanged();
-            
-            if (Guid.TryParse(SeriesId, out Guid seriesGuid))
-            {
-                // Chapter numbers must be unique across ALL chapters in the series,
-                // including CANCELLED ones: uq_chapter_series_chapter_number is NOT a
-                // filtered index, and the workspace hides cancelled chapters. Computing
-                // the next number from the visible list alone collided with a hidden
-                // cancelled chapter ("duplicate key (series, 1)"). Use the full list.
-                // Read-only number probe (no DB write): pick a display number that does not collide
-                // with existing chapters, including hidden CANCELLED ones. The authoritative
-                // chapter_number_label is re-checked at Save time in FlushPendingAsync.
-                var allChapters = await MangakaChapterApi.GetSeriesChaptersAsync(_currentUserId!.Value, seriesGuid);
-                int maxExisting = allChapters
-                    .Select(c => int.TryParse(c.ChapterNumberLabel, out var n) ? n : 0)
-                    .DefaultIfEmpty(0)
-                    .Max();
-                int newId = Math.Max(maxExisting, Chapters.Any() ? Chapters.Max(c => c.Id) : 0) + 1;
 
-                // MANUAL-SAVE: create the chapter in the in-memory buffer only (ChapterId stays
-                // Guid.Empty). It is persisted by SaveAllChangesAsync → FlushPendingAsync when the
-                // user clicks Save, so throwaway "test" chapters never hit the DB. IsPagesLoaded=true
-                // keeps SelectChapter from trying to load pages for an id that does not exist yet.
-                Chapters.Add(new ChapterModel { Id = newId, ChapterId = Guid.Empty, PageCount = 0, IsCompleted = false, Title = "", IsPagesLoaded = true });
-                await SelectChapter(newId);
-                _saveState = SaveStatus.Dirty;
-                _ = JS.InvokeVoidAsync("setUnsavedFlag", true);
-                Snackbar.Add($"Chapter {newId} added (unsaved). Click Save to persist.", Severity.Info);
-            }
-            else
-            {
-                Snackbar.Add("Could not create chapter: Invalid Series ID", Severity.Error);
-            }
+            // Chapter numbers must be unique across ALL chapters in the series, including hidden
+            // CANCELLED ones (uq_chapter_series_chapter_number is NOT a filtered index). Load the full
+            // list once so the dialog can pre-fill a safe suggestion and reject collisions client-side.
+            var allChapters = await MangakaChapterApi.GetSeriesChaptersAsync(_currentUserId!.Value, seriesGuid);
+            _existingChapterLabels = allChapters
+                .Select(c => (c.ChapterNumberLabel ?? "").Trim())
+                .Where(l => l.Length > 0)
+                .Concat(Chapters.Where(c => !string.IsNullOrWhiteSpace(c.NumberLabel)).Select(c => c.NumberLabel.Trim()))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            // Suggest next whole number after the highest existing integer label (as a convenience only;
+            // the user can change it to anything, e.g. "2.5").
+            int maxExisting = allChapters
+                .Select(c => int.TryParse(c.ChapterNumberLabel, out var n) ? n : 0)
+                .Concat(Chapters.Select(c => int.TryParse(c.NumberLabel, out var n) ? n : 0))
+                .DefaultIfEmpty(0)
+                .Max();
+            _newChapterNumberLabel = (maxExisting + 1).ToString();
+            _showNewChapterDialog = true;
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to create chapter: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Failed to prepare new chapter: {ex.Message}", Severity.Error);
         }
         finally
         {
             _isAddingChapter = false;
             StateHasChanged();
         }
+    }
+
+    // Validates the chosen chapter number label and adds the chapter to the in-memory buffer.
+    private async Task ConfirmNewChapter()
+    {
+        var label = (_newChapterNumberLabel ?? "").Trim();
+
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            Snackbar.Add("Please enter a chapter number.", Severity.Warning);
+            return;
+        }
+        // Positive number, optional decimals (e.g. 3, 2.5, 10.75). Keeps labels sortable and DB-friendly.
+        if (!System.Text.RegularExpressions.Regex.IsMatch(label, @"^\d{1,6}(\.\d{1,2})?$"))
+        {
+            Snackbar.Add("Chapter number must be a positive number like 3 or 2.5.", Severity.Warning);
+            return;
+        }
+        // Uniqueness across ALL chapters incl. hidden CANCELLED ones — a cancelled chapter's number
+        // cannot be reused because the DB unique constraint is not filtered by status.
+        if (_existingChapterLabels.Any(l => string.Equals(l, label, StringComparison.OrdinalIgnoreCase)))
+        {
+            Snackbar.Add($"Chapter number \"{label}\" is already used (including cancelled chapters). Choose another.", Severity.Warning);
+            return;
+        }
+
+        _showNewChapterDialog = false;
+
+        // MANUAL-SAVE: create the chapter in the in-memory buffer only (ChapterId stays Guid.Empty).
+        // It is persisted by SaveAllChangesAsync → FlushPendingAsync when the user clicks Save.
+        // IsPagesLoaded=true keeps SelectChapter from loading pages for an id that does not exist yet.
+        int newId = (Chapters.Any() ? Chapters.Max(c => c.Id) : 0) + 1;
+        var newChap = new ChapterModel { Id = newId, NumberLabel = label, ChapterId = Guid.Empty, PageCount = 0, IsCompleted = false, Title = "", IsPagesLoaded = true };
+        // Insert at the sorted position by numeric value so e.g. "2.5" lands between 2 and 3, not at the end.
+        int insertAt = Chapters.FindIndex(c => ChapterSortKey(c.NumberLabel) > ChapterSortKey(label));
+        if (insertAt < 0) Chapters.Add(newChap); else Chapters.Insert(insertAt, newChap);
+        await SelectChapter(newId);
+        _saveState = SaveStatus.Dirty;
+        _ = JS.InvokeVoidAsync("setUnsavedFlag", true);
+        Snackbar.Add($"Chapter {label} added (unsaved). Click Save to persist.", Severity.Info);
     }
 
     private async Task DeleteChapter(int chapterId)
@@ -1270,10 +1357,16 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     {
         get
         {
+            // BR-CH-020: a COMPLETED parent series blocks content mutation for ALL its chapters,
+            // regardless of individual chapter status. (HIATUS only blocks release, so editing stays open.)
+            if (_seriesStatusCode == "COMPLETED") return true;
             var chap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
             if (chap == null) return false;
             var code = chap.StatusCode;
-            return code == "UNDER_REVIEW" || code == "APPROVED" || code == "SCHEDULED" || code == "RELEASED" || code == "CANCELLED";
+            // ON_HOLD is a paused SCHEDULED chapter (post-approval); content must stay locked like
+            // SCHEDULED/APPROVED (BR-CH-016/018) — returning it to SCHEDULED only needs a new date, not edits.
+            return code == "UNDER_REVIEW" || code == "APPROVED" || code == "SCHEDULED"
+                || code == "ON_HOLD" || code == "RELEASED" || code == "CANCELLED";
         }
     }
 
@@ -1285,6 +1378,11 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     {
         get
         {
+            // BR-ANN-013: only active Mangaka and Tantou Editor contributors may create/resolve
+            // annotations in MVP. Assistants can now reach the workspace (WorkspaceRoles) but must not
+            // see annotation create/resolve controls. Fine-grained resolve-by-origin (BR-ANN-020/021)
+            // is still enforced server-side by the annotation stored procedures (BR-ANN-025).
+            if (_currentRoleName != "Mangaka" && _currentRoleName != "Tantou Editor") return false;
             var chap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
             var code = chap?.StatusCode;
             return code == "DRAFT" || code == "UNDER_REVIEW" || code == "REVISION_REQUESTED";

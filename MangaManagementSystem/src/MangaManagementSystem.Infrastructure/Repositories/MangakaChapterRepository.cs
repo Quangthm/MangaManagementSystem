@@ -30,6 +30,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         private const string ApprovedStatus = "APPROVED";
         private const string ScheduledStatus = "SCHEDULED";
         private const string CancelledStatus = "CANCELLED";
+        private const string CompletedSeriesStatus = "COMPLETED";
 
         private readonly ApplicationDbContext _context;
 
@@ -91,6 +92,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             try
             {
                 await EnsureActiveMangakaContributorAsync(actorUserId, seriesId, cancellationToken);
+                await EnsureSeriesAcceptsNewChapterAsync(seriesId, cancellationToken);
 
                 string normalizedLabel = NormalizeRequiredLabel(chapterNumberLabel);
                 string? normalizedTitle = NormalizeOptionalTitle(chapterTitle);
@@ -422,6 +424,19 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
             if (!isActiveContributor)
                 throw new InvalidOperationException("Only active Mangaka contributors of this series can manage chapter drafts.");
+        }
+
+        // BR-CH-020: a COMPLETED series blocks new chapter creation (and chapter mutation) for all its
+        // chapters. Server-side enforcement so the rule holds even if a client bypasses the UI guard.
+        private async Task EnsureSeriesAcceptsNewChapterAsync(Guid seriesId, CancellationToken cancellationToken)
+        {
+            string? status = await _context.Series
+                .Where(s => s.SeriesId == seriesId)
+                .Select(s => s.StatusCode)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (status == CompletedSeriesStatus)
+                throw new InvalidOperationException("This series is completed; new chapters cannot be created.");
         }
 
         private static void EnsureCanEditChapter(string statusCode)

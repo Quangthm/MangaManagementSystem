@@ -1453,7 +1453,12 @@
             case "PROPOSAL_DRAFT":
                 OpenDraftDetails(series);
                 break;
+            // SERIALIZED, HIATUS and COMPLETED all open the series page (read-only when finished/paused),
+            // matching SeriesNavigationPolicy.CanOpenSeriesSlugPage — a completed series is still viewable
+            // and its workspace can be opened (content is locked there, not hidden).
             case "SERIALIZED":
+            case "HIATUS":
+            case "COMPLETED":
                 if (!string.IsNullOrWhiteSpace(series.Slug))
                     Nav.NavigateTo($"/series/{series.Slug}?returnUrl={Uri.EscapeDataString("/mangaka")}");
                 else

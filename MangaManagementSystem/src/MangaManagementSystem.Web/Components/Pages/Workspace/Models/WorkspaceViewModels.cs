@@ -42,7 +42,8 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     /// <summary>A chapter row in the left sidebar (buffered until saved to the DB).</summary>
     public class ChapterModel
     {
-        public int Id { get; set; }
+        public int Id { get; set; }                     // internal UI selection key (unique per load), NOT the displayed number
+        public string NumberLabel { get; set; } = "";   // chapter_number_label as chosen by the user (supports "2.5"); shown in the UI
         public Guid ChapterId { get; set; }
         public int PageCount { get; set; }
         public bool IsCompleted { get; set; }
