@@ -11,6 +11,9 @@ namespace MangaManagementSystem.Application.Common
         public const string TaskAssignment =
             "TASK_ASSIGNMENT";
 
+        public const string TaskReview =
+            "TASK_REVIEW";
+
         public const string BoardPoll =
             "BOARD_POLL";
 

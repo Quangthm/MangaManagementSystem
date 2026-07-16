@@ -630,6 +630,20 @@
             return "/mangaka/chapters";
         }
 
+        if (string.Equals(
+                notification.NotificationTypeCode,
+                NotificationTypeCodes.TaskReview,
+                StringComparison.OrdinalIgnoreCase)
+            && string.Equals(
+                notification.RelatedEntityType,
+                NotificationRelatedEntityTypes.ChapterPageTask,
+                StringComparison.Ordinal)
+            && notification.RelatedEntityId.HasValue
+            && notification.RelatedEntityId.Value != Guid.Empty)
+        {
+            return "/mangaka/review-submissions";
+        }
+
         if (!string.Equals(
                 notification.NotificationTypeCode,
                 NotificationTypeCodes.TaskAssignment,
