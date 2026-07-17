@@ -13,7 +13,8 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         IReadOnlyList<PageRegionDto> PageRegions,
         DateTime? CreatedAtUtc = null,
         string? AnnotatedByDisplayName = null,
-        DateTime? ResolvedAtUtc = null
+        DateTime? ResolvedAtUtc = null,
+        string? AnnotatedByRoleName = null   // creator's role (Mangaka / Tantou Editor) for BR-ANN-021 gating
     );
 
     public record CreateChapterPageAnnotationDto(

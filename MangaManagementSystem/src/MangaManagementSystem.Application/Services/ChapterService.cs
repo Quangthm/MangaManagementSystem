@@ -173,5 +173,23 @@ namespace MangaManagementSystem.Application.Services
                     "Content editing is blocked while the chapter is UNDER_REVIEW, APPROVED, SCHEDULED, " +
                     "ON_HOLD, RELEASED, or CANCELLED.");
         }
+
+        public async Task EnsureChapterAllowsAssistantTaskSubmissionAsync(Guid chapterId)
+        {
+            var entity = await _unitOfWork.Chapters.GetByIdAsync(chapterId);
+            if (entity == null)
+                throw new InvalidOperationException("Chapter does not exist.");
+
+            var blockedStatuses = new[]
+            {
+                "APPROVED", "SCHEDULED", "ON_HOLD",
+                "RELEASED", "CANCELLED"
+            };
+
+            if (blockedStatuses.Contains(entity.StatusCode))
+                throw new InvalidOperationException(
+                    $"This task cannot be submitted because the chapter is {entity.StatusCode}. " +
+                    "Assistant submissions are allowed only while the chapter is DRAFT, REVISION_REQUESTED, or UNDER_REVIEW.");
+        }
     }
 }

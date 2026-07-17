@@ -143,31 +143,64 @@ namespace MangaManagementSystem.Web.Services.Api
                 throw new ArgumentException("Invalid task ID.", nameof(taskId));
             }
 
-            // Build multipart form data
-            using var content = new MultipartFormDataContent();
-            
-            // Add file -- use async CopyToAsync to avoid "Synchronous reads are not supported" on Blazor Server streams
             using var ms = new MemoryStream();
             await using (var stream = file.OpenReadStream(10 * 1024 * 1024))
             {
                 await stream.CopyToAsync(ms, cancellationToken);
             }
-            var fileContent = new ByteArrayContent(ms.ToArray());
-            fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse(file.ContentType);
-            content.Add(fileContent, "file", file.Name);
+            return await SubmitTaskWorkAsync(
+                actorUserId,
+                taskId,
+                ms.ToArray(),
+                file.Name,
+                file.ContentType,
+                versionNote,
+                cancellationToken);
+        }
 
-            // Add versionNote if provided
+        public async Task<AssistantTaskSubmitResultDto?> SubmitTaskWorkAsync(
+            Guid actorUserId,
+            Guid taskId,
+            byte[] fileBytes,
+            string fileName,
+            string contentType,
+            string? versionNote = null,
+            CancellationToken cancellationToken = default)
+        {
+            if (fileBytes == null || fileBytes.Length == 0)
+            {
+                throw new ArgumentException("A file is required for submission.", nameof(fileBytes));
+            }
+
+            if (taskId == Guid.Empty)
+            {
+                throw new ArgumentException("Invalid task ID.", nameof(taskId));
+            }
+
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                fileName = "submission.png";
+            }
+
+            if (string.IsNullOrWhiteSpace(contentType))
+            {
+                contentType = "image/png";
+            }
+
+            using var content = new MultipartFormDataContent();
+            var fileContent = new ByteArrayContent(fileBytes);
+            fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse(contentType);
+            content.Add(fileContent, "file", fileName);
+
             if (!string.IsNullOrWhiteSpace(versionNote))
             {
                 content.Add(new StringContent(versionNote, Encoding.UTF8, "text/plain"), "versionNote");
             }
 
-            // Build request with actor header
             using var request = new HttpRequestMessage(HttpMethod.Post, $"api/assistant/tasks/{taskId}/submit-work");
             request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
             request.Content = content;
 
-            // Post to API endpoint
             var response = await _httpClient.SendAsync(request, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
@@ -179,7 +212,6 @@ namespace MangaManagementSystem.Web.Services.Api
                     response.StatusCode);
             }
 
-            // Deserialize response
             var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
             var result = JsonSerializer.Deserialize<AssistantTaskSubmitResultDto>(responseContent, _jsonOptions);
 

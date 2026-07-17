@@ -78,6 +78,26 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             Guid annotationId,
             string? resolutionNote = null)
         {
+            // BR-ANN-021: an annotation created by a Tantou Editor may be resolved ONLY by a Tantou Editor;
+            // a Mangaka must not resolve it. (Mangaka-created annotations stay resolvable by either role,
+            // BR-ANN-020.) The resolve SP only checks active-contributor, so enforce the creator/actor role
+            // matrix here in the repository. Role is derived from the creator's current role (BR-ANN-025).
+            var creatorRoleName = await _context.ChapterPageAnnotations
+                .Where(a => a.ChapterPageAnnotationId == annotationId)
+                .Select(a => a.AnnotatedByUser != null && a.AnnotatedByUser.Role != null ? a.AnnotatedByUser.Role.RoleName : null)
+                .FirstOrDefaultAsync();
+
+            if (string.Equals(creatorRoleName, "Tantou Editor", StringComparison.Ordinal))
+            {
+                var actorRoleName = await _context.Users
+                    .Where(u => u.UserId == actorUserId)
+                    .Select(u => u.Role != null ? u.Role.RoleName : null)
+                    .FirstOrDefaultAsync();
+
+                if (!string.Equals(actorRoleName, "Tantou Editor", StringComparison.Ordinal))
+                    throw new InvalidOperationException("Only a Tantou Editor can resolve an annotation created by a Tantou Editor.");
+            }
+
             var conn = _context.Database.GetDbConnection();
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = "manga.usp_ChapterPageAnnotation_Resolve";
@@ -100,6 +120,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         {
             return await _context.ChapterPageAnnotations
                 .Include(a => a.PageRegions)
+                .Include(a => a.AnnotatedByUser)
+                    .ThenInclude(u => u!.Role)
                 .Where(a => a.PageRegions.Any(r => r.ChapterPageVersion != null && r.ChapterPageVersion.ChapterPageId == chapterPageId))
                 .ToListAsync();
         }

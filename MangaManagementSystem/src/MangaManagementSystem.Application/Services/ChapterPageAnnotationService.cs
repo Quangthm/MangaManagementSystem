@@ -137,7 +137,8 @@ namespace MangaManagementSystem.Application.Services
                 r.UpdatedByUserId)).ToList(),
             CreatedAtUtc: a.CreatedAtUtc,
             AnnotatedByDisplayName: a.AnnotatedByUser?.DisplayName,
-            ResolvedAtUtc: a.ResolvedAtUtc
+            ResolvedAtUtc: a.ResolvedAtUtc,
+            AnnotatedByRoleName: a.AnnotatedByUser?.Role?.RoleName
         );
     }
 }

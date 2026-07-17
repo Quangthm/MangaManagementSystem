@@ -11,7 +11,8 @@ namespace MangaManagementSystem.Web.Components.Pages.Publication
         string StatusCode,
         DateTime? PlannedReleaseDate,
         DateTime? ReleasedAtUtc,
-        string? SeriesCoverUrl);
+        string? SeriesCoverUrl,
+        bool CanRelease = false);
 
     public sealed record ScheduleChapterDialogResult(DateTime NewPlannedReleaseDate);
 

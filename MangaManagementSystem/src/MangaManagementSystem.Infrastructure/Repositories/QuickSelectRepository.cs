@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Domain.Entities;
+using MangaManagementSystem.Domain.Policies;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -123,7 +124,9 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
             return await strategy.ExecuteAsync(async () =>
             {
-                await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+                await using var transaction = await _context.Database.BeginTransactionAsync(
+                    IsolationLevel.RepeatableRead,
+                    cancellationToken);
 
                 try
                 {
@@ -285,35 +288,67 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         private async Task RecheckGuardsAsync(
             QuickSelectAssignmentPlan plan, CancellationToken ct)
         {
-            // Actor is still active Mangaka contributor
-            var actorActive = await _context.SeriesContributors
-                .AnyAsync(sc =>
-                    sc.SeriesId == plan.SeriesId &&
-                    sc.UserId == plan.ActorUserId &&
-                    sc.EndDate == null, ct);
+            var series = await _context.Series
+                .FirstOrDefaultAsync(item => item.SeriesId == plan.SeriesId, ct);
 
-            if (!actorActive)
+            var chapter = await _context.Chapters
+                .FirstOrDefaultAsync(item =>
+                    item.ChapterId == plan.ChapterId
+                    && item.SeriesId == plan.SeriesId,
+                    ct);
+
+            if (series == null || chapter == null)
+                throw new InvalidOperationException(
+                    "Selected chapter no longer belongs to this series.");
+
+            var actor = await _context.Users
+                .Include(user => user.Role)
+                .FirstOrDefaultAsync(user => user.UserId == plan.ActorUserId, ct);
+
+            if (actor == null
+                || !string.Equals(actor.StatusCode, "ACTIVE", StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(actor.Role?.RoleName, "Mangaka", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "You no longer have permission to assign tasks for this series.");
+            }
+
+            var assistant = await _context.Users
+                .Include(user => user.Role)
+                .FirstOrDefaultAsync(user => user.UserId == plan.AssignedToUserId, ct);
+
+            if (assistant == null
+                || !string.Equals(assistant.StatusCode, "ACTIVE", StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(assistant.Role?.RoleName, "Assistant", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "The assigned user must be an active Assistant contributor for this series.");
+            }
+
+            var contributorUserIds = await _context.SeriesContributors
+                .Where(contributor =>
+                    contributor.SeriesId == plan.SeriesId
+                    && contributor.EndDate == null
+                    && (contributor.UserId == plan.ActorUserId
+                        || contributor.UserId == plan.AssignedToUserId))
+                .Select(contributor => contributor.UserId)
+                .Distinct()
+                .ToListAsync(ct);
+
+            if (!contributorUserIds.Contains(plan.ActorUserId))
                 throw new InvalidOperationException(
                     "You no longer have permission to assign tasks for this series.");
 
-            // Assigned user is still ACTIVE Assistant contributor
-            var assistantActive = await _context.SeriesContributors
-                .AnyAsync(sc =>
-                    sc.SeriesId == plan.SeriesId &&
-                    sc.UserId == plan.AssignedToUserId &&
-                    sc.EndDate == null, ct);
-
-            if (!assistantActive)
+            if (!contributorUserIds.Contains(plan.AssignedToUserId))
                 throw new InvalidOperationException(
                     "Assistant is no longer an active contributor for this series.");
 
-            // Chapter still belongs to series
-            var chapterValid = await _context.Chapters
-                .AnyAsync(c => c.ChapterId == plan.ChapterId && c.SeriesId == plan.SeriesId, ct);
-
-            if (!chapterValid)
+            if (!SeriesProductionPolicy.AllowsNormalProduction(series.StatusCode)
+                || !ChapterPageTaskCreationPolicy.CanCreateTask(chapter.StatusCode))
+            {
                 throw new InvalidOperationException(
-                    "Selected chapter no longer belongs to this series.");
+                    "New tasks can only be created for DRAFT or REVISION_REQUESTED chapters in a SERIALIZED or HIATUS series.");
+            }
 
             foreach (var item in plan.Items)
             {

@@ -21,5 +21,14 @@ namespace MangaManagementSystem.Web.Services.Api
             IBrowserFile file,
             string? versionNote = null,
             CancellationToken cancellationToken = default);
+
+        Task<AssistantTaskSubmitResultDto?> SubmitTaskWorkAsync(
+            Guid actorUserId,
+            Guid taskId,
+            byte[] fileBytes,
+            string fileName,
+            string contentType,
+            string? versionNote = null,
+            CancellationToken cancellationToken = default);
     }
 }

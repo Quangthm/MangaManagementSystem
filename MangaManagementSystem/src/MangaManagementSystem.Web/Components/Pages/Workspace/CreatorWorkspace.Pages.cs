@@ -73,88 +73,96 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                             catch { }
                         }
 
-                        var dbTasks = await MangakaTaskApi.GetTasksByPageAsync(_currentUserId!.Value, page.ChapterPageId);
-                        int idCounter = 1;
-                        foreach (var t in dbTasks)
+                        if (IsAssistantWorkspace && _assistantWorkspaceTask is not null)
                         {
-                            var statusMap = t.StatusCode switch
+                            bool isAssignedTaskPage = !_taskTargetVersionId.HasValue
+                                || page.Versions.Any(v => v.ChapterPageVersionId == _taskTargetVersionId.Value);
+
+                            if (isAssignedTaskPage)
                             {
-                                "ASSIGNED" => "Assigned",
-                                "UNDER_REVIEW" => "In Review",
-                                "COMPLETED" => "Completed",
-                                "CANCELLED" => "Cancelled",
-                                _ => "Assigned"
-                            };
-                            var taskPanels = t.PageRegions?.Where(r => r.Width > 0.05m)
-                                .Select(r => canvasPanelNo.TryGetValue(r.PageRegionId, out var no)
-                                    ? $"Panel #{no}"
-                                    : $"Panel #{ParseRegionId(r.RegionLabel)}")
-                                .ToList() ?? new List<string>();
-                            string taskTarget = taskPanels.Any() ? string.Join(", ", taskPanels) : $"Page {SelectedPage}";
-                            newTasks.Add(new ProductionTask
-                            {
-                                Id = idCounter++,
-                                DbId = t.ChapterPageTaskId,
-                                Type = t.TypeCode,
-                                Assistant = t.AssignedUsername ?? t.AssignedToDisplayName ?? t.AssignedToUserId.ToString(),
-                                Target = taskTarget,
-                                Description = t.TaskDescription,
-                                Status = statusMap,
-                                DueAtUtc = t.DueAtUtc,
-                                VersionId = t.PageRegions?.FirstOrDefault()?.ChapterPageVersionId,
-                                Regions = t.PageRegions?.Select(r => new RegionModel {
-                                    Id = ParseRegionId(r.RegionLabel),
-                                    DbId = r.PageRegionId,
-                                    Type = r.TypeCode,
-                                    X = (double)r.X,
-                                    Y = (double)r.Y,
-                                    Width = (double)r.Width,
-                                    Height = (double)r.Height
-                                }).ToList() ?? new List<RegionModel>()
-                            });
+                                newTasks = BuildAssistantWorkspaceTasks(canvasPanelNo);
+                                newAnnotations = BuildAssistantWorkspaceAnnotations(canvasPanelNo);
+                            }
                         }
-
-                        var dbAnnotations = await MangakaAnnotationApi.GetByPageAsync(_currentUserId!.Value, page.ChapterPageId);
-                        int annIdCounter = 1;
-                        foreach (var a in dbAnnotations)
+                        else
                         {
-                              var pinRegion = a.PageRegions?.FirstOrDefault(r => r.Width <= 0.05m && r.Height <= 0.05m);
-                              var targetRegions = a.PageRegions?.Where(r => r.Width > 0.05m)
-                                  .Select(r => canvasPanelNo.TryGetValue(r.PageRegionId, out var no)
-                                      ? $"Panel #{no}"
-                                      : $"Panel #{ParseRegionId(r.RegionLabel)}")
-                                  .ToList() ?? new List<string>();
-
-                            string annTarget;
-                            if (pinRegion != null)
-                                annTarget = $"Pin at ({Math.Round(pinRegion.X)}, {Math.Round(pinRegion.Y)})";
-                            else if (targetRegions.Any())
-                                annTarget = string.Join(", ", targetRegions);
-                            else
-                                annTarget = $"Page {SelectedPage}";
-
-                            newAnnotations.Add(new AnnotationModel
+                            var dbTasks = await MangakaTaskApi.GetTasksByPageAsync(_currentUserId!.Value, page.ChapterPageId);
+                            int idCounter = 1;
+                            foreach (var t in dbTasks)
                             {
-                                Id = annIdCounter++,
-                                DbId = a.ChapterPageAnnotationId,
-                                Type = a.IssueTypeCode,
-                                Comment = a.AnnotationText ?? "",
-                                Target = annTarget,
-                                PageNumber = SelectedPage,
-                                PinX = pinRegion != null ? (double?)pinRegion.X : null,
-                                PinY = pinRegion != null ? (double?)pinRegion.Y : null,
-                                IsResolved = a.ResolvedByUserId != null,
-                                VersionId = a.PageRegions?.FirstOrDefault()?.ChapterPageVersionId,
-                                Regions = a.PageRegions?.Select(r => new RegionModel {
-                                    Id = ParseRegionId(r.RegionLabel),
-                                    DbId = r.PageRegionId,
-                                    Type = r.TypeCode,
-                                    X = (double)r.X,
-                                    Y = (double)r.Y,
-                                    Width = (double)r.Width,
-                                    Height = (double)r.Height
-                                }).ToList() ?? new List<RegionModel>()
-                            });
+                                var taskPanels = t.PageRegions?.Where(r => r.Width > 0.05m)
+                                    .Select(r => canvasPanelNo.TryGetValue(r.PageRegionId, out var no)
+                                        ? $"Panel #{no}"
+                                        : $"Panel #{ParseRegionId(r.RegionLabel)}")
+                                    .ToList() ?? new List<string>();
+                                string taskTarget = taskPanels.Any() ? string.Join(", ", taskPanels) : $"Page {SelectedPage}";
+                                newTasks.Add(new ProductionTask
+                                {
+                                    Id = idCounter++,
+                                    DbId = t.ChapterPageTaskId,
+                                    Type = t.TypeCode,
+                                    Assistant = t.AssignedUsername ?? t.AssignedToDisplayName ?? t.AssignedToUserId.ToString(),
+                                    Target = taskTarget,
+                                    Description = t.TaskDescription,
+                                    Status = MapTaskStatus(t.StatusCode),
+                                    DueAtUtc = t.DueAtUtc,
+                                    VersionId = t.PageRegions?.FirstOrDefault()?.ChapterPageVersionId,
+                                    Regions = t.PageRegions?.Select(r => new RegionModel {
+                                        Id = ParseRegionId(r.RegionLabel),
+                                        DbId = r.PageRegionId,
+                                        Type = r.TypeCode,
+                                        X = (double)r.X,
+                                        Y = (double)r.Y,
+                                        Width = (double)r.Width,
+                                        Height = (double)r.Height
+                                    }).ToList() ?? new List<RegionModel>()
+                                });
+                            }
+
+                            var dbAnnotations = await MangakaAnnotationApi.GetByPageAsync(_currentUserId!.Value, page.ChapterPageId);
+                            int annIdCounter = 1;
+                            foreach (var a in dbAnnotations)
+                            {
+                                var pinRegion = a.PageRegions?.FirstOrDefault(r => r.Width <= 0.05m && r.Height <= 0.05m);
+                                var targetRegions = a.PageRegions?.Where(r => r.Width > 0.05m)
+                                    .Select(r => canvasPanelNo.TryGetValue(r.PageRegionId, out var no)
+                                        ? $"Panel #{no}"
+                                        : $"Panel #{ParseRegionId(r.RegionLabel)}")
+                                    .ToList() ?? new List<string>();
+
+                                string annTarget;
+                                if (pinRegion != null)
+                                    annTarget = $"Pin at ({Math.Round(pinRegion.X)}, {Math.Round(pinRegion.Y)})";
+                                else if (targetRegions.Any())
+                                    annTarget = string.Join(", ", targetRegions);
+                                else
+                                    annTarget = $"Page {SelectedPage}";
+
+                                newAnnotations.Add(new AnnotationModel
+                                {
+                                    Id = annIdCounter++,
+                                    DbId = a.ChapterPageAnnotationId,
+                                    Type = a.IssueTypeCode,
+                                    Comment = a.AnnotationText ?? "",
+                                    Target = annTarget,
+                                    Author = a.AnnotatedByDisplayName ?? a.AnnotatedByRoleName ?? "Unknown",
+                                    PageNumber = SelectedPage,
+                                    PinX = pinRegion != null ? (double?)pinRegion.X : null,
+                                    PinY = pinRegion != null ? (double?)pinRegion.Y : null,
+                                    IsResolved = a.ResolvedByUserId != null,
+                                    CreatedByRoleName = a.AnnotatedByRoleName,
+                                    VersionId = a.PageRegions?.FirstOrDefault()?.ChapterPageVersionId,
+                                    Regions = a.PageRegions?.Select(r => new RegionModel {
+                                        Id = ParseRegionId(r.RegionLabel),
+                                        DbId = r.PageRegionId,
+                                        Type = r.TypeCode,
+                                        X = (double)r.X,
+                                        Y = (double)r.Y,
+                                        Width = (double)r.Width,
+                                        Height = (double)r.Height
+                                    }).ToList() ?? new List<RegionModel>()
+                                });
+                            }
                         }
                         loadedOk = true;
                     }
@@ -235,6 +243,109 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             return id;
         return 0;
     }
+
+    private List<ProductionTask> BuildAssistantWorkspaceTasks(Dictionary<Guid, int> canvasPanelNo)
+    {
+        if (_assistantWorkspaceTask is null)
+        {
+            return new List<ProductionTask>();
+        }
+
+        var taskPanels = _assistantWorkspaceTask.PageRegions?.Where(r => r.Width > 0.05m)
+            .Select(r => canvasPanelNo.TryGetValue(r.PageRegionId, out var no)
+                ? $"Panel #{no}"
+                : $"Panel #{ParseRegionId(r.RegionLabel)}")
+            .ToList() ?? new List<string>();
+
+        string taskTarget = taskPanels.Any()
+            ? string.Join(", ", taskPanels)
+            : $"Page {_assistantWorkspaceTask.PageNo ?? SelectedPage}";
+
+        return new List<ProductionTask>
+        {
+            new ProductionTask
+            {
+                Id = 1,
+                DbId = _assistantWorkspaceTask.ChapterPageTaskId,
+                Type = _assistantWorkspaceTask.TypeCode,
+                Assistant = _assistantWorkspaceTask.AssignedUsername ?? _assistantWorkspaceTask.AssignedToDisplayName ?? "You",
+                Target = taskTarget,
+                Description = _assistantWorkspaceTask.TaskDescription,
+                Status = MapTaskStatus(_assistantWorkspaceTask.StatusCode),
+                DueAtUtc = _assistantWorkspaceTask.DueAtUtc,
+                VersionId = _assistantWorkspaceTask.PageRegions?.FirstOrDefault()?.ChapterPageVersionId ?? _assistantWorkspaceTask.SourceChapterPageVersionId,
+                Regions = _assistantWorkspaceTask.PageRegions?.Select(r => new RegionModel
+                {
+                    Id = ParseRegionId(r.RegionLabel),
+                    DbId = r.PageRegionId,
+                    Type = r.TypeCode,
+                    X = (double)r.X,
+                    Y = (double)r.Y,
+                    Width = (double)r.Width,
+                    Height = (double)r.Height
+                }).ToList() ?? new List<RegionModel>()
+            }
+        };
+    }
+
+    private List<AnnotationModel> BuildAssistantWorkspaceAnnotations(Dictionary<Guid, int> canvasPanelNo)
+    {
+        int pageNumber = _assistantWorkspaceTask?.PageNo ?? SelectedPage;
+        int annIdCounter = 1;
+
+        return _assistantWorkspaceTaskAnnotations.Select(a =>
+        {
+            var pinRegion = a.PageRegions?.FirstOrDefault(r => r.Width <= 0.05m && r.Height <= 0.05m);
+            var targetRegions = a.PageRegions?.Where(r => r.Width > 0.05m)
+                .Select(r => canvasPanelNo.TryGetValue(r.PageRegionId, out var no)
+                    ? $"Panel #{no}"
+                    : $"Panel #{ParseRegionId(r.RegionLabel)}")
+                .ToList() ?? new List<string>();
+
+            string annTarget;
+            if (pinRegion != null)
+                annTarget = $"Pin at ({Math.Round(pinRegion.X)}, {Math.Round(pinRegion.Y)})";
+            else if (targetRegions.Any())
+                annTarget = string.Join(", ", targetRegions);
+            else
+                annTarget = $"Page {pageNumber}";
+
+            return new AnnotationModel
+            {
+                Id = annIdCounter++,
+                DbId = a.ChapterPageAnnotationId,
+                Type = a.IssueTypeCode,
+                Comment = a.AnnotationText ?? "",
+                Target = annTarget,
+                Author = a.AnnotatedByDisplayName ?? a.AnnotatedByRoleName ?? "Unknown",
+                CreatedByRoleName = a.AnnotatedByRoleName,
+                PageNumber = pageNumber,
+                PinX = pinRegion != null ? (double?)pinRegion.X : null,
+                PinY = pinRegion != null ? (double?)pinRegion.Y : null,
+                IsResolved = a.ResolvedByUserId != null,
+                VersionId = a.PageRegions?.FirstOrDefault()?.ChapterPageVersionId,
+                Regions = a.PageRegions?.Select(r => new RegionModel
+                {
+                    Id = ParseRegionId(r.RegionLabel),
+                    DbId = r.PageRegionId,
+                    Type = r.TypeCode,
+                    X = (double)r.X,
+                    Y = (double)r.Y,
+                    Width = (double)r.Width,
+                    Height = (double)r.Height
+                }).ToList() ?? new List<RegionModel>()
+            };
+        }).ToList();
+    }
+
+    private static string MapTaskStatus(string? statusCode) => statusCode switch
+    {
+        "ASSIGNED" => "Assigned",
+        "UNDER_REVIEW" => "In Review",
+        "COMPLETED" => "Completed",
+        "CANCELLED" => "Cancelled",
+        _ => "Assigned"
+    };
 
     }
 }

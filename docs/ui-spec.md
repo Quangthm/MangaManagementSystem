@@ -261,7 +261,7 @@ A unified series page that can later become the public reader-facing series URL.
 
 | Role | Possible actions |
 |---|---|
-| Mangaka contributor | Add chapter, manage chapters, open workspace, view ranking context, request frequency change after board decision, set/resume hiatus, and mark eligible own series as completed. |
+| Mangaka contributor | Add chapter, manage chapters, open workspace, view ranking context, set/resume hiatus, and mark eligible own series as completed. |
 | Assistant | Open assigned task or workspace context only for assigned work. |
 | Tantou Editor | Open review workspace, review chapter, view annotations, set/resume hiatus for contributed series. |
 | Editorial Board Member / Chief | View ranking and board context; no page workspace access by default unless explicitly granted. |

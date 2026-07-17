@@ -45,7 +45,7 @@ The MVP should stay focused and avoid unnecessary tables unless a table represen
 | Page annotations | Store annotation headers in `ChapterPageAnnotation` and link them to one or more `PageRegion` records through `ChapterPageAnnotationRegion`; do not store direct annotation coordinates. |
 | Page tasks | Use `ChapterPageTask` as the task header and `ChapterPageTaskRegion` to link one or more target regions; the task's page context is derived from linked `PageRegion` records, not from a direct `chapter_page_id` column on `ChapterPageTask`. |
 | Editorial review | Store final chapter-level review decisions in `ChapterEditorialReview`. Page annotations support the review but do not replace chapter-level decisions. |
-| Publication planning | Use chapter-level planned release dates and release timestamps. Mangaka may provide/update preferred publication frequency only while the series is in `PROPOSAL_DRAFT`; Editorial Board Chief specifies the official frequency in a `START_SERIALIZATION` poll, and an approved poll applies that frequency to `Series.publication_frequency_code`. After board decision, Mangaka may request a frequency change through in-app notification, but only Editorial Board Chief may directly change the official frequency with a required audit reason. |
+| Publication planning | Use chapter-level planned release dates and release timestamps. Mangaka may provide/update preferred publication frequency only while the series is in `PROPOSAL_DRAFT`; Editorial Board Chief specifies the official frequency in a `START_SERIALIZATION` poll, and an approved poll applies that frequency to `Series.publication_frequency_code`. After the series leaves `PROPOSAL_DRAFT`, Mangaka cannot directly change the official frequency. Editorial Board Chief may directly change the official frequency with a required audit reason. |
 | Ranking | Use `PublicationPeriod`, `SeriesVoteInput`, and a dynamic ranking view (`manga.vw_SeriesRanking`) based on simulated/manual series-level vote input entered by Editorial Board Members. No public reader module and no `SeriesRankingSnapshot` finalization table in MVP. |
 | Notifications | Use in-app notifications only. Notifications are not the audit trail. |
 | Auditability | Use current status on main records plus domain records and audit logs. Avoid separate status-history tables. |
@@ -455,7 +455,6 @@ The project uses **permission-based actor grouping** for shared features and rol
 - After the series leaves `PROPOSAL_DRAFT`, Mangaka cannot directly change the official `Series.publication_frequency_code`.
 - When opening a `START_SERIALIZATION` poll, the Editorial Board Chief must specify the publication frequency for the series as part of the poll setup.
 - If the `START_SERIALIZATION` poll is approved, the board-specified frequency overrides the Mangaka preference and becomes the official `Series.publication_frequency_code`.
-- After a board decision has set the official frequency, Mangaka may request a publication frequency change by sending an in-app notification to the Editorial Board Chief; MVP does not require a separate official frequency-change request table.
 - Editorial Board Chief may directly change `Series.publication_frequency_code` only after providing a required reason that must be written to the audit log.
 - The MVP does not store publication frequency history.
 - `Series.publication_frequency_code` is advisory for default date suggestions, calendar context, and warnings. It must not hard-block normal chapter scheduling.
@@ -524,7 +523,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 - Notifications may reference related entity type and ID.
 - If `related_entity_type` is set, `related_entity_id` must also be set, and vice versa.
 - Unread notification means `read_at_utc IS NULL`.
-- Notifications may be sent for ranking warnings, task assignments, review results, board polls, publication-frequency change requests, and other workflow events.
+- Notifications may be sent for ranking warnings, task assignments, review results, board polls, publication schedule updates, account events, and other workflow events.
 - Notifications are not the authoritative audit trail.
 - Important notification-triggering workflow actions should also be audit-logged when auditability is required.
 

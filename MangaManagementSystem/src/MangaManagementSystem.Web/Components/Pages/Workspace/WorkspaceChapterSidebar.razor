@@ -9,9 +9,9 @@
     when the visible chapter data actually changes (see BuildSignature).
 *@
 
-<aside class="mf-workspace-sidebar pt-2 pb-4 d-flex flex-column border-r-1 mud-border-lines-default" style="width: 250px; flex-shrink: 0; background-color: white; height: 100%; overflow: hidden;">
+<aside class="mf-workspace-sidebar pt-2 pb-4 d-flex flex-column border-r-1 mud-border-lines-default" style="width: var(--mf-sidebar-w, 250px); flex-shrink: 0; background-color: white; height: 100%; overflow: hidden;">
     <MudNavMenu Class="mud-width-full flex-grow-1" Style="overflow-y: auto;">
-        @if (CanManageChapters)
+        @if (CanCreateChapter && CanManageChapters)
         {
             <div class="px-4 mt-2 mb-2">
                 <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" StartIcon="@Icons.Material.Filled.Add" Class="rounded-lg" OnClick="OnAddChapter" Disabled="@IsAddingChapter">
@@ -46,21 +46,22 @@
                             <div class="d-flex align-center" style="min-width: 0; flex: 1 1 auto; overflow: hidden;">
                                 <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Small" Class="mr-3 mf-muted flex-shrink-0" />
                                 <div style="min-width: 0; display: flex; flex-direction: column; align-items: flex-start;">
-                                    <MudText Typo="Typo.body2" Class="font-weight-bold" Color="@textColor" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Chapter @chapter.Id</MudText>
+                                    <MudText Typo="Typo.body2" Class="font-weight-bold" Color="@textColor" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Chapter @(string.IsNullOrWhiteSpace(chapter.NumberLabel) ? chapter.Id.ToString() : chapter.NumberLabel)</MudText>
                                     @if (!string.IsNullOrWhiteSpace(chapter.Title))
                                     {
                                         <MudText Typo="Typo.caption" Class="mf-muted" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">@chapter.Title</MudText>
                                     }
                                     <MudText Typo="Typo.caption" Class="mf-muted">@chapter.PageCount pages</MudText>
-                                    @if (chapter.IsPending)
-                                    {
-                                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined" Class="mt-1" Style="margin-left: 0; height: 18px; font-size: 0.6rem;">Unsaved</MudChip>
-                                    }
+                                    <div class="d-flex align-center flex-wrap gap-1 mt-1">
+                                        <MudChip T="string" Size="Size.Small" Color="@StatusColor(chapter.StatusCode)" Variant="Variant.Filled" Class="ma-0" Style="height: 18px; font-size: 0.6rem;">@StatusLabel(chapter.StatusCode)</MudChip>
+                                        @if (chapter.IsPending)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined" Class="ma-0" Style="height: 18px; font-size: 0.6rem;">Unsaved</MudChip>
+                                        }
+                                    </div>
                                 </div>
                             </div>
                             <div class="d-flex align-center flex-shrink-0">
-                                <MudText Typo="Typo.caption" Class="@(isCurrent ? "mr-2 font-weight-bold" : "mf-muted mr-2")" Color="@(isCurrent ? Color.Primary : Color.Default)">@StatusLabel(chapter.StatusCode)</MudText>
-
                                 <div @onclick:stopPropagation="true">
                                     @if (chapter.StatusCode == "APPROVED" || chapter.StatusCode == "PUBLISHED" || chapter.StatusCode == "RELEASED" || chapter.StatusCode == "SCHEDULED")
                                     {
@@ -116,6 +117,7 @@
     [Parameter] public List<ChapterModel> Chapters { get; set; } = new();
     [Parameter] public int SelectedChapter { get; set; }
     [Parameter] public bool IsAddingChapter { get; set; }
+    [Parameter] public bool CanCreateChapter { get; set; } = true;
     [Parameter] public bool CanManageChapters { get; set; } = true;   // Mangaka only; editors get view-only
 
     [Parameter] public EventCallback OnAddChapter { get; set; }
@@ -141,6 +143,19 @@
         "RELEASED" => "Released",
         "CANCELLED" => "Cancelled",
         _ => "Draft"
+    };
+
+    // Status_code -> chip color so the state reads at a glance and never gets clipped by the narrow sidebar.
+    private static Color StatusColor(string? code) => code switch
+    {
+        "UNDER_REVIEW" => Color.Info,
+        "APPROVED" => Color.Success,
+        "REVISION_REQUESTED" => Color.Warning,
+        "SCHEDULED" => Color.Primary,
+        "PUBLISHED" => Color.Success,
+        "RELEASED" => Color.Success,
+        "CANCELLED" => Color.Error,
+        _ => Color.Default
     };
 
     private async Task HandleRenameKeyDown(KeyboardEventArgs e, ChapterModel chapter)
@@ -169,10 +184,12 @@
     private string BuildSignature()
     {
         var sb = new System.Text.StringBuilder();
-        sb.Append(SelectedChapter).Append('|').Append(IsAddingChapter).Append('|');
+        sb.Append(SelectedChapter).Append('|').Append(IsAddingChapter).Append('|')
+          .Append(CanCreateChapter).Append('|').Append(CanManageChapters).Append('|');
         foreach (var c in Chapters)
         {
             sb.Append(c.Id).Append(':')
+              .Append(c.NumberLabel).Append(':')
               .Append(c.StatusCode).Append(':')
               .Append(c.PageCount).Append(':')
               .Append(c.IsRenaming).Append(':')

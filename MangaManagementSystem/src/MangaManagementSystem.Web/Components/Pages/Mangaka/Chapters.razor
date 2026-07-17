@@ -4,6 +4,7 @@
 @using System.Security.Claims
 @using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Application.DTOs.Editor
+@using MangaManagementSystem.Domain.Policies
 @using MangaManagementSystem.Web.Services.Api
 @using MangaManagementSystem.Web.Helpers
 @attribute [Authorize(Roles = "Mangaka")]
@@ -67,12 +68,34 @@
                         </MudSelect>
                     </MudItem>
                     <MudItem xs="12" md="4" Style="display: flex; align-items: flex-end;">
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                                   StartIcon="@Icons.Material.Filled.Add"
-                                   OnClick="OpenCreateDialog">
-                            Create Chapter Draft
-                        </MudButton>
+                        <MudTooltip Text="New chapters require a serialized or hiatus series."
+                                    Disabled="@_eligibleSeries.Any()">
+                            <span style="width: 100%;">
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           StartIcon="@Icons.Material.Filled.Add"
+                                           Disabled="@(!_eligibleSeries.Any())"
+                                           FullWidth="true"
+                                           OnClick="OpenCreateDialog">
+                                    Create Chapter Draft
+                                </MudButton>
+                            </span>
+                        </MudTooltip>
                     </MudItem>
+
+                    @if (!_eligibleSeries.Any())
+                    {
+                        <MudItem xs="12">
+                            <MudAlert Severity="Severity.Info"
+                                      Variant="Variant.Outlined"
+                                      Dense="true"
+                                      Icon="@Icons.Material.Filled.Info"
+                                      Class="mt-2">
+                                No series is currently available for chapter creation.
+                                A series must be <strong>Serialized</strong> or <strong>On Hiatus</strong>.
+                            </MudAlert>
+                        </MudItem>
+                    }
                 </MudGrid>
             </MudPaper>
 
@@ -218,7 +241,7 @@
             <TitleContent>Create Chapter Draft</TitleContent>
             <DialogContent>
                 <MudSelect T="Guid" Label="Series" @bind-Value="_createSeriesId" Variant="Variant.Outlined" Required="true" Class="mb-3">
-                    @foreach (var series in _seriesList)
+                    @foreach (var series in _eligibleSeries)
                     {
                         <MudSelectItem T="Guid" Value="@series.SeriesId">@series.Title</MudSelectItem>
                     }
@@ -298,6 +321,8 @@
     private int _chapterCardsPage = 1;
 
     private IEnumerable<MangakaChapterListItemDto> _filteredChapters => ApplyFilters(_chapters);
+    private IEnumerable<SeriesDto> _eligibleSeries =>
+        _seriesList.Where(series => SeriesProductionPolicy.AllowsNormalProduction(series.StatusCode));
 
     protected override async Task OnInitializedAsync()
     {
@@ -367,7 +392,16 @@
 
     private void OpenCreateDialog()
     {
-        _createSeriesId = _seriesList.FirstOrDefault()?.SeriesId ?? Guid.Empty;
+        var firstEligibleSeries = _eligibleSeries.FirstOrDefault();
+        if (firstEligibleSeries == null)
+        {
+            Snackbar.Add(
+                "New chapters can only be created while a series is SERIALIZED or HIATUS.",
+                Severity.Info);
+            return;
+        }
+
+        _createSeriesId = firstEligibleSeries.SeriesId;
         _createChapterNumberLabel = string.Empty;
         _createChapterTitle = null;
         _showCreateDialog = true;
@@ -377,6 +411,14 @@
     {
         if (_createSeriesId == Guid.Empty || string.IsNullOrWhiteSpace(_createChapterNumberLabel))
             return;
+
+        if (!_eligibleSeries.Any(series => series.SeriesId == _createSeriesId))
+        {
+            Snackbar.Add(
+                "New chapters can only be created while the series is SERIALIZED or HIATUS.",
+                Severity.Error);
+            return;
+        }
 
         _actionInProgress = true;
         try

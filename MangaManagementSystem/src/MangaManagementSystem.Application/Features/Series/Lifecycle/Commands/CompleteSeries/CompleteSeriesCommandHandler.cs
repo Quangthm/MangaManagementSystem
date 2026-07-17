@@ -2,6 +2,7 @@ using System.Text.Json;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
+using MangaManagementSystem.Domain.Policies;
 using MediatR;
 
 namespace MangaManagementSystem.Application.Features.Series.Lifecycle.Commands.CompleteSeries
@@ -68,13 +69,8 @@ namespace MangaManagementSystem.Application.Features.Series.Lifecycle.Commands.C
                         SeriesLifecycleSupport.MangakaOnlyAllowedRoles,
                         cancellationToken);
 
-                bool canComplete =
-                    series.StatusCode ==
-                        SeriesLifecycleSupport.SerializedStatusCode
-                    || series.StatusCode ==
-                        SeriesLifecycleSupport.HiatusStatusCode;
-
-                if (!canComplete)
+                if (!SeriesLifecycleTransitionPolicy.CanCompleteSeries(
+                        series.StatusCode))
                 {
                     throw new InvalidOperationException(
                         $"Series '{command.SeriesId:D}' cannot be completed from status " +

@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.DTOs.Editor;
 using MangaManagementSystem.Domain.Entities;
+using MangaManagementSystem.Domain.Policies;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
@@ -30,6 +32,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         private const string ApprovedStatus = "APPROVED";
         private const string ScheduledStatus = "SCHEDULED";
         private const string CancelledStatus = "CANCELLED";
+        private const string CompletedSeriesStatus = "COMPLETED";
+        private const string AssistantRoleName = "Assistant";
 
         private readonly ApplicationDbContext _context;
 
@@ -66,8 +70,30 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             if (actorUserId == Guid.Empty || seriesId == Guid.Empty)
                 return Array.Empty<MangakaChapterListItemDto>();
 
-            var chapters = await QueryWorkspaceChapters(actorUserId)
-                .Where(c => c.SeriesId == seriesId)
+            var query = QueryWorkspaceChapters(actorUserId)
+                .Where(c => c.SeriesId == seriesId);
+
+            // Assistants normally do not see unrelated DRAFT chapters in the shared workspace,
+            // but they must still be able to open any chapter where they currently have work
+            // assigned (including completed / under-review task history) so task deep-links do
+            // not fall back to the first visible chapter.
+            if (await IsActiveAssistantContributorAsync(actorUserId, seriesId, cancellationToken))
+            {
+                var assistantAssignedChapterIds = _context.ChapterPageTasks
+                    .AsNoTracking()
+                    .Where(t =>
+                        t.AssignedToUserId == actorUserId &&
+                        t.StatusCode != CancelledStatus)
+                    .SelectMany(t => t.PageRegions
+                        .Select(r => r.ChapterPageVersion!.ChapterPage!.ChapterId))
+                    .Distinct();
+
+                query = query.Where(c =>
+                    c.StatusCode != CancelledStatus &&
+                    (c.StatusCode != DraftStatus || assistantAssignedChapterIds.Contains(c.ChapterId)));
+            }
+
+            var chapters = await query
                 .OrderBy(c => c.CreatedAtUtc)
                 .ToListAsync(cancellationToken);
 
@@ -86,14 +112,36 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             string? chapterTitle,
             CancellationToken cancellationToken = default)
         {
-            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            await using var transaction = await _context.Database.BeginTransactionAsync(
+                IsolationLevel.RepeatableRead,
+                cancellationToken);
 
             try
             {
+                var series = await _context.Series
+                    .FirstOrDefaultAsync(s => s.SeriesId == seriesId, cancellationToken);
+
+                if (series == null)
+                    throw new InvalidOperationException("Series does not exist.");
+
                 await EnsureActiveMangakaContributorAsync(actorUserId, seriesId, cancellationToken);
+                await EnsureSeriesAcceptsNewChapterAsync(seriesId, cancellationToken);
+
+                if (!SeriesProductionPolicy.AllowsNormalProduction(series.StatusCode))
+                {
+                    throw new InvalidOperationException(
+                        "New chapters can only be created while the series is SERIALIZED or HIATUS.");
+                }
 
                 string normalizedLabel = NormalizeRequiredLabel(chapterNumberLabel);
                 string? normalizedTitle = NormalizeOptionalTitle(chapterTitle);
+
+                // BR-CH-002: a CANCELLED chapter does NOT reserve its number. The DB uniqueness constraint
+                // is not filtered by status, so if a cancelled chapter still holds this exact label we free
+                // the number by relabelling that cancelled chapter (its original number is preserved in the
+                // CHAPTER_CANCELLED audit entry). At most one chapter can hold a given (series, label), so a
+                // single rename is enough. Saved BEFORE the insert so the constraint never sees a duplicate.
+                await FreeCancelledChapterNumberAsync(seriesId, normalizedLabel, cancellationToken);
 
                 var chapter = new Chapter
                 {
@@ -422,6 +470,67 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
             if (!isActiveContributor)
                 throw new InvalidOperationException("Only active Mangaka contributors of this series can manage chapter drafts.");
+        }
+
+        // BR-CH-020: a COMPLETED series blocks new chapter creation (and chapter mutation) for all its
+        // chapters. Server-side enforcement so the rule holds even if a client bypasses the UI guard.
+        private async Task EnsureSeriesAcceptsNewChapterAsync(Guid seriesId, CancellationToken cancellationToken)
+        {
+            string? status = await _context.Series
+                .Where(s => s.SeriesId == seriesId)
+                .Select(s => s.StatusCode)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (status == CompletedSeriesStatus)
+                throw new InvalidOperationException("This series is completed; new chapters cannot be created.");
+        }
+
+        // Frees a CANCELLED chapter's number so a new chapter can reuse it (BR-CH-002). Relabels the
+        // colliding cancelled chapter to "{original}~{8 hex}" and saves that change first, within the
+        // caller's open transaction, so the following insert does not violate uq_chapter_series_chapter_number.
+        private async Task FreeCancelledChapterNumberAsync(Guid seriesId, string label, CancellationToken cancellationToken)
+        {
+            var cancelledCollision = await _context.Chapters
+                .FirstOrDefaultAsync(c =>
+                    c.SeriesId == seriesId &&
+                    c.ChapterNumberLabel == label &&
+                    c.StatusCode == CancelledStatus,
+                    cancellationToken);
+
+            if (cancelledCollision == null)
+                return;
+
+            cancelledCollision.ChapterNumberLabel = BuildFreedCancelledLabel(label, cancelledCollision.ChapterId);
+            cancelledCollision.UpdatedAtUtc = DateTime.UtcNow;
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        // "{original}~{8 hex of chapter id}" truncated to fit chapter_number_label NVARCHAR(20). The GUID-
+        // derived suffix keeps the freed label unique; "~" cannot appear in a valid numeric label.
+        private static string BuildFreedCancelledLabel(string originalLabel, Guid chapterId)
+        {
+            string suffix = "~" + chapterId.ToString("N").Substring(0, 8); // 9 chars
+            int maxOriginal = 20 - suffix.Length;
+            string prefix = originalLabel.Length > maxOriginal ? originalLabel.Substring(0, maxOriginal) : originalLabel;
+            return prefix + suffix;
+        }
+
+        private async Task<bool> IsActiveAssistantContributorAsync(
+            Guid actorUserId,
+            Guid seriesId,
+            CancellationToken cancellationToken)
+        {
+            return await _context.SeriesContributors
+                .AsNoTracking()
+                .AnyAsync(sc =>
+                    sc.SeriesId == seriesId &&
+                    sc.UserId == actorUserId &&
+                    sc.EndDate == null &&
+                    sc.User != null &&
+                    sc.User.StatusCode == ActiveUserStatus &&
+                    sc.User.Role != null &&
+                    sc.User.Role.RoleName == AssistantRoleName,
+                    cancellationToken);
         }
 
         private static void EnsureCanEditChapter(string statusCode)

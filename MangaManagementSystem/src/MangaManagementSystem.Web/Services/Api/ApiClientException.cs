@@ -8,15 +8,23 @@ namespace MangaManagementSystem.Web.Services.Api
         public ApiClientException(
             string code,
             string message,
-            HttpStatusCode statusCode)
+            HttpStatusCode statusCode,
+            string requestMethod = "UNKNOWN",
+            string requestUri = "UNKNOWN")
             : base(message)
         {
             Code = code;
             StatusCode = statusCode;
+            RequestMethod = requestMethod;
+            RequestUri = requestUri;
         }
 
         public string Code { get; }
 
         public HttpStatusCode StatusCode { get; }
+
+        public string RequestMethod { get; }
+
+        public string RequestUri { get; }
     }
 }
