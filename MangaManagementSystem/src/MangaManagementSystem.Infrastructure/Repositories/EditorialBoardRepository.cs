@@ -258,6 +258,11 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 s.series_id,
                 s.slug,
                 s.title,
+                COALESCE(author_info.author_name, N'Unknown Author') AS author_name,
+                ISNULL(genres.genre_names, N'Unknown Genre') AS genre_display,
+                ISNULL(tags.tag_names, N'') AS tag_display,
+                COALESCE(latest_proposal.synopsis_snapshot, N'No synopsis provided.') AS synopsis,
+                s.publication_frequency_code,
                 s.status_code,
                 CASE
                     WHEN EXISTS
@@ -272,6 +277,40 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                     ELSE CAST(0 AS bit)
                 END AS has_open_cancel_poll
             FROM manga.Series s
+            OUTER APPLY
+            (
+                SELECT TOP (1)
+                    sp.synopsis_snapshot,
+                    sp.submitted_by_user_id
+                FROM manga.SeriesProposal sp
+                WHERE sp.series_id = s.series_id
+                ORDER BY sp.proposal_version_no DESC, sp.submitted_at_utc DESC
+            ) latest_proposal
+            OUTER APPLY
+            (
+                SELECT
+                    u.display_name AS author_name
+                FROM auth.Users u
+                WHERE u.user_id = latest_proposal.submitted_by_user_id
+            ) author_info
+            OUTER APPLY
+            (
+                SELECT
+                    STRING_AGG(CONVERT(NVARCHAR(MAX), g.genre_name), N' / ') AS genre_names
+                FROM manga.SeriesGenre sg
+                INNER JOIN manga.Genre g
+                    ON g.genre_id = sg.genre_id
+                WHERE sg.series_id = s.series_id
+            ) genres
+            OUTER APPLY
+            (
+                SELECT
+                    STRING_AGG(CONVERT(NVARCHAR(MAX), t.tag_name), N', ') AS tag_names
+                FROM manga.SeriesTag st
+                INNER JOIN manga.Tag t
+                    ON t.tag_id = st.tag_id
+                WHERE st.series_id = s.series_id
+            ) tags
             WHERE s.status_code IN (N'SERIALIZED', N'HIATUS')
             ORDER BY s.title;
             """;
@@ -286,8 +325,13 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 SeriesId: reader.GetGuid(0),
                 Code: GetStringOrDefault(reader, 1, "N/A"),
                 Title: GetStringOrDefault(reader, 2, "Untitled Series"),
-                StatusCode: GetStringOrDefault(reader, 3, "UNKNOWN"),
-                HasOpenCancelSerializationPoll: ToBoolean(reader, 4)));
+                Author: GetStringOrDefault(reader, 3, "Unknown Author"),
+                Genre: GetStringOrDefault(reader, 4, "Unknown Genre"),
+                TagsDisplay: GetStringOrDefault(reader, 5, string.Empty),
+                Synopsis: GetStringOrDefault(reader, 6, "No synopsis provided."),
+                PublicationFrequencyCode: reader.IsDBNull(7) ? null : reader.GetString(7),
+                StatusCode: GetStringOrDefault(reader, 8, "UNKNOWN"),
+                HasOpenCancelSerializationPoll: ToBoolean(reader, 9)));
         }
 
         return rows;
@@ -645,6 +689,16 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                     THROW 58601, 'Poll is not open or has expired.', 1;
                 END;
 
+                IF EXISTS (
+                    SELECT 1
+                    FROM manga.SeriesBoardVote
+                    WHERE series_board_poll_id = @pollId
+                      AND user_id = @voterUserId
+                )
+                BEGIN
+                    THROW 58602, 'You already voted. Your vote cannot be changed.', 1;
+                END;
+
                 DECLARE @result TABLE
                 (
                     series_board_vote_id UNIQUEIDENTIFIER,
@@ -653,44 +707,28 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                     voted_at_utc DATETIME2(0)
                 );
 
-                UPDATE manga.SeriesBoardVote
-                SET choice_code = @choiceCode,
-                    vote_reason = @voteReason,
-                    voted_at_utc = SYSUTCDATETIME()
+                INSERT INTO manga.SeriesBoardVote
+                (
+                    series_board_poll_id,
+                    user_id,
+                    choice_code,
+                    vote_reason,
+                    voted_at_utc
+                )
                 OUTPUT
                     inserted.series_board_vote_id,
                     inserted.choice_code,
                     inserted.vote_reason,
                     inserted.voted_at_utc
                 INTO @result
-                WHERE series_board_poll_id = @pollId
-                  AND user_id = @voterUserId;
-
-                IF @@ROWCOUNT = 0
-                BEGIN
-                    INSERT INTO manga.SeriesBoardVote
-                    (
-                        series_board_poll_id,
-                        user_id,
-                        choice_code,
-                        vote_reason,
-                        voted_at_utc
-                    )
-                    OUTPUT
-                        inserted.series_board_vote_id,
-                        inserted.choice_code,
-                        inserted.vote_reason,
-                        inserted.voted_at_utc
-                    INTO @result
-                    VALUES
-                    (
-                        @pollId,
-                        @voterUserId,
-                        @choiceCode,
-                        @voteReason,
-                        SYSUTCDATETIME()
-                    );
-                END;
+                VALUES
+                (
+                    @pollId,
+                    @voterUserId,
+                    @choiceCode,
+                    @voteReason,
+                    SYSUTCDATETIME()
+                );
 
                 SELECT
                     series_board_vote_id,
@@ -748,10 +786,10 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
 
             return result;
         }
-        catch (SqlException ex) when (ex.Number == 58601)
+        catch (SqlException ex) when (ex.Number is 58601 or 58602)
         {
             await TryRollbackAsync(transaction, cancellationToken);
-            throw new InvalidOperationException("Poll is not open or has expired.", ex);
+            throw new InvalidOperationException(ex.Message, ex);
         }
         catch
         {
@@ -759,6 +797,7 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             throw;
         }
     }
+
 
     public async Task<FinalizeBoardPollResultDto> FinalizeApprovalAsync(
         Guid pollId,
@@ -930,7 +969,8 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                     SET status_code = N'CANCELLED',
                         updated_at_utc = @endedAtUtc,
                         updated_by_user_id = @chiefUserId
-                    WHERE series_id = @seriesId;
+                    WHERE series_id = @seriesId
+                      AND status_code IN (N'SERIALIZED', N'HIATUS');
                 END;
 
                 DECLARE @seriesStatusCode NVARCHAR(50);
@@ -1527,27 +1567,19 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             throw new InvalidOperationException("Poll reason is required.");
         }
 
-        if (request.PollTypeCode is not "START_SERIALIZATION" and not "CANCEL_SERIALIZATION")
+        if (request.PollTypeCode != "START_SERIALIZATION")
         {
-            throw new InvalidOperationException("Invalid poll type.");
+            throw new InvalidOperationException(
+                "Proposal poll endpoint only supports START_SERIALIZATION. Use the series cancellation poll endpoint for CANCEL_SERIALIZATION.");
         }
 
-        if (request.PollTypeCode == "START_SERIALIZATION"
-            && string.IsNullOrWhiteSpace(request.PublicationFrequencyCode))
+        if (string.IsNullOrWhiteSpace(request.PublicationFrequencyCode))
         {
             throw new InvalidOperationException(
                 "Publication frequency is required for START_SERIALIZATION poll.");
         }
 
-        if (request.PollTypeCode == "CANCEL_SERIALIZATION"
-            && !string.IsNullOrWhiteSpace(request.PublicationFrequencyCode))
-        {
-            throw new InvalidOperationException(
-                "Publication frequency must be empty for CANCEL_SERIALIZATION poll.");
-        }
-
-        if (!string.IsNullOrWhiteSpace(request.PublicationFrequencyCode)
-            && request.PublicationFrequencyCode is not "WEEKLY" and not "MONTHLY" and not "IRREGULAR")
+        if (request.PublicationFrequencyCode is not "WEEKLY" and not "MONTHLY" and not "IRREGULAR")
         {
             throw new InvalidOperationException("Invalid publication frequency.");
         }
