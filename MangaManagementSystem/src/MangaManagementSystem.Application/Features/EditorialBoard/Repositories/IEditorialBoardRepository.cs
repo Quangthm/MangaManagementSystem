@@ -11,8 +11,21 @@ public interface IEditorialBoardRepository
         Guid currentUserId,
         CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<EditorialBoardPollDto>> GetPollHistoryAsync(
+        Guid currentUserId,
+        CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<CancellableBoardSeriesDto>> GetCancellableSeriesForCancelPollAsync(
+        CancellationToken cancellationToken);
+
     Task<OpenSeriesBoardPollResultDto> OpenPollAsync(
         OpenSeriesBoardPollRequestDto request,
+        Guid chiefUserId,
+        CancellationToken cancellationToken);
+
+    Task<OpenSeriesBoardPollResultDto> OpenCancelSerializationPollAsync(
+        Guid seriesId,
+        OpenCancelSerializationPollRequestDto request,
         Guid chiefUserId,
         CancellationToken cancellationToken);
 
@@ -30,8 +43,4 @@ public interface IEditorialBoardRepository
         Guid pollId,
         Guid chiefUserId,
         CancellationToken cancellationToken);
-
-    Task<IReadOnlyList<EditorialBoardPollDto>> GetPollHistoryAsync(
-    Guid currentUserId,
-    CancellationToken cancellationToken);
 }

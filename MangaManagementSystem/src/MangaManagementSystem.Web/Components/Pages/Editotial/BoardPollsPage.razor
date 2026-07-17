@@ -1,7 +1,10 @@
 @page "/demo/mangaflow/polls"
 
 @using System.Globalization
+@using System.Linq
+@using Microsoft.AspNetCore.Components
 @using MangaManagementSystem.Web.Services.EditorialBoard
+
 @inject IEditorialBoardApiClient EditorialBoardApiClient
 
 <MangaFlowShell Title="Board Polls"
@@ -22,7 +25,7 @@
                 <div class="mf-muted">@_errorMessage</div>
 
                 <button class="mf-btn mf-btn-primary mf-gap-small"
-                        @onclick="LoadPollsAsync">
+                        @onclick="LoadPageDataAsync">
                     Retry
                 </button>
             </section>
@@ -56,7 +59,7 @@
                 <section class="mf-card">
                     <div class="mf-strong">No open polls</div>
                     <div class="mf-muted">
-                        When Board Chief opens a poll from Proposal Review, it will appear here from SQL Server.
+                        When Board Chief opens a poll from D. Open Poll, it will appear here from SQL Server.
                     </div>
                 </section>
             }
@@ -220,8 +223,10 @@
 
     private IReadOnlyList<EditorialBoardPollDto> _polls = Array.Empty<EditorialBoardPollDto>();
     private EditorialBoardPollDto? _selectedPoll;
+
     private bool _isLoading = true;
     private bool _isSavingVote;
+
     private string? _errorMessage;
     private string? _voteMessage;
     private string _selectedChoice = string.Empty;
@@ -233,26 +238,32 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadPollsAsync();
+        await LoadPageDataAsync();
     }
 
-    private async Task LoadPollsAsync()
+    private async Task LoadPageDataAsync()
     {
         _isLoading = true;
         _errorMessage = null;
 
         try
         {
-            _polls = await EditorialBoardApiClient.GetOpenPollsAsync();
+            await LoadPollsAsync();
         }
         catch (Exception ex)
         {
             _errorMessage = ex.Message;
+            _polls = Array.Empty<EditorialBoardPollDto>();
         }
         finally
         {
             _isLoading = false;
         }
+    }
+
+    private async Task LoadPollsAsync()
+    {
+        _polls = await EditorialBoardApiClient.GetOpenPollsAsync();
     }
 
     private void OpenVotingCenter(EditorialBoardPollDto poll)
@@ -351,19 +362,28 @@
 
     private static string DeadlineText(EditorialBoardPollDto poll)
     {
-        if (poll.EndsAtUtc is null) return "No deadline";
-        var dateStr = poll.EndsAtUtc.Value.ToLocalTime().ToString("MMM dd, yyyy", CultureInfo.InvariantCulture);
+        if (poll.EndsAtUtc is null)
+        {
+            return "No deadline";
+        }
+
+        var dateStr = poll.EndsAtUtc.Value
+            .ToLocalTime()
+            .ToString("MMM dd, yyyy", CultureInfo.InvariantCulture);
+
         return $"Deadline: {dateStr}";
     }
 
     private RenderFragment RenderResultRow(string label, string tone, int count, int total) => __builder =>
     {
         var percent = total > 0 ? (int)Math.Round(count * 100.0 / total) : 0;
+
         <div class="mf-result-row @tone">
             <div>
                 <strong>@label</strong>
                 <span>@count (@percent%)</span>
             </div>
+
             <div class="mf-result-bar">
                 <div style="width: @percent%;"></div>
             </div>

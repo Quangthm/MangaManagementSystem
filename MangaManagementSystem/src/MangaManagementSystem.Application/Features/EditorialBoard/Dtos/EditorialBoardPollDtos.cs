@@ -53,3 +53,14 @@ public sealed record FinalizeBoardPollResultDto(
     string SeriesStatusCode,
     string? PublicationFrequencyCode,
     DateTime EndedAtUtc);
+
+public sealed record CancellableBoardSeriesDto(
+    Guid SeriesId,
+    string Code,
+    string Title,
+    string StatusCode,
+    bool HasOpenCancelSerializationPoll);
+
+public sealed record OpenCancelSerializationPollRequestDto(
+    string PollReason,
+    DateTime? EndsAtUtc);

@@ -320,18 +320,24 @@
 
                                         <div class="mf-open-poll-box">
                                             <div class="mf-panel-title">
-                                                Open poll for @SelectedProposal.Code
+                                                Open poll
                                             </div>
 
                                             <label class="mf-label">Poll type</label>
 
-                                            <select class="mf-input" @bind="PollType">
+                                            <select class="mf-input"
+                                                    value="@PollType"
+                                                    @onchange="OnPollTypeChanged">
                                                 <option value="START_SERIALIZATION">START_SERIALIZATION</option>
                                                 <option value="CANCEL_SERIALIZATION">CANCEL_SERIALIZATION</option>
                                             </select>
 
                                             @if (PollType == "START_SERIALIZATION")
                                             {
+                                                <div class="mf-muted mf-gap-small">
+                                                    Start serialization poll for <strong>@SelectedProposal.Code</strong>.
+                                                </div>
+
                                                 <label class="mf-label">Publication frequency</label>
 
                                                 <select class="mf-input" @bind="PublicationFrequencyCode">
@@ -339,73 +345,174 @@
                                                     <option value="MONTHLY">MONTHLY</option>
                                                     <option value="IRREGULAR">IRREGULAR</option>
                                                 </select>
-                                            }
 
-                                            @if (ShowDeadlinePicker)
-                                            {
-                                                <div class="mf-deadline-editor compact">
-                                                    <label>Set deadline <span>(optional)</span></label>
+                                                @if (ShowDeadlinePicker)
+                                                {
+                                                    <div class="mf-deadline-editor compact">
+                                                        <label>Set deadline <span>(optional)</span></label>
 
-                                                    <input class="mf-input"
-                                                           type="date"
-                                                           value="@OpenPollDeadlineDraftText"
-                                                           @onchange="OnDeadlineInputChanged" />
+                                                        <input class="mf-input"
+                                                               type="date"
+                                                               value="@OpenPollDeadlineDraftText"
+                                                               @onchange="OnDeadlineInputChanged" />
 
-                                                    <div class="mf-actions tight">
-                                                        <button type="button"
-                                                                class="mf-btn mf-btn-primary"
-                                                                @onclick="ConfirmDeadline">
-                                                            Save
-                                                        </button>
+                                                        <div class="mf-actions tight">
+                                                            <button type="button"
+                                                                    class="mf-btn mf-btn-primary"
+                                                                    @onclick="ConfirmDeadline">
+                                                                Save
+                                                            </button>
 
-                                                        <button type="button"
-                                                                class="mf-btn"
-                                                                @onclick="CancelDeadline">
-                                                            Cancel
-                                                        </button>
+                                                            <button type="button"
+                                                                    class="mf-btn"
+                                                                    @onclick="CancelDeadline">
+                                                                Cancel
+                                                            </button>
+                                                        </div>
                                                     </div>
+                                                }
+                                                else
+                                                {
+                                                    <button type="button"
+                                                            class="mf-btn mf-btn-soft full"
+                                                            disabled="@HasCurrentPollTypeConflict"
+                                                            @onclick="StartDeadlinePicker">
+                                                        @(ConfirmedOpenPollDeadline is null
+                                                            ? "Set deadline (optional)"
+                                                            : $"Deadline set: {FormatDate(ConfirmedOpenPollDeadline)}")
+                                                    </button>
+                                                }
+
+                                                <label class="mf-label">Poll reason</label>
+
+                                                <textarea class="mf-textarea"
+                                                          disabled="@HasCurrentPollTypeConflict"
+                                                          @bind="PollReason"
+                                                          placeholder="Explain why this proposal should go to board vote..."></textarea>
+
+                                                @if (HasCurrentPollTypeConflict)
+                                                {
+                                                    <div class="mf-alert warning">
+                                                        @CurrentOpenPollConflictMessage
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <button type="button"
+                                                            class="mf-btn mf-btn-primary full"
+                                                            disabled="@IsOpenPollDisabled"
+                                                            @onclick="ConfirmOpenPollAsync">
+                                                        @OpenPollButtonText
+                                                    </button>
+                                                }
+
+                                                @if (!string.IsNullOrWhiteSpace(OpenPollMessage))
+                                                {
+                                                    <div class="@OpenPollAlertClass">
+                                                        @OpenPollMessage
+                                                    </div>
+                                                }
+                                            }
+                                            else if (PollType == "CANCEL_SERIALIZATION")
+                                            {
+                                                <div class="mf-muted mf-gap-small">
+                                                    Open cancellation poll for a <strong>SERIALIZED</strong> or <strong>HIATUS</strong> series.
                                                 </div>
-                                            }
-                                            else
-                                            {
-                                                <button type="button"
-                                                        class="mf-btn mf-btn-soft full"
-                                                        disabled="@HasCurrentPollTypeConflict"
-                                                        @onclick="StartDeadlinePicker">
-                                                    @(ConfirmedOpenPollDeadline is null
-                                                        ? "Set deadline (optional)"
-                                                        : $"Deadline set: {FormatDate(ConfirmedOpenPollDeadline)}")
-                                                </button>
-                                            }
 
-                                            <label class="mf-label">Poll reason</label>
+                                                <label class="mf-label">Series</label>
 
-                                            <textarea class="mf-textarea"
-                                                      disabled="@HasCurrentPollTypeConflict"
-                                                      @bind="PollReason"
-                                                      placeholder="Explain why this proposal should go to board vote..."></textarea>
+                                                <select class="mf-input"
+                                                        @bind="SelectedCancelSeriesIdText">
+                                                    <option value="">Select series...</option>
 
-                                            @if (HasCurrentPollTypeConflict)
-                                            {
-                                                <div class="mf-alert warning">
-                                                    @CurrentOpenPollConflictMessage
-                                                </div>
-                                            }
-                                            else
-                                            {
+                                                    @foreach (var series in CancellableSeries)
+                                                    {
+                                                        <option value="@series.SeriesId"
+                                                                disabled="@series.HasOpenCancelSerializationPoll">
+                                                            @series.Title (@series.StatusCode)
+                                                            @(series.HasOpenCancelSerializationPoll ? " - Poll already open" : "")
+                                                        </option>
+                                                    }
+                                                </select>
+
+                                                @if (CancellableSeries.Count == 0)
+                                                {
+                                                    <div class="mf-alert info">
+                                                        No SERIALIZED or HIATUS series is available for cancellation poll.
+                                                    </div>
+                                                }
+
+                                                @if (SelectedCancelSeries is not null)
+                                                {
+                                                    <div class="mf-muted mf-gap-small">
+                                                        Selected: <strong>@SelectedCancelSeries.Title</strong>
+                                                        · Status: <strong>@SelectedCancelSeries.StatusCode</strong>
+                                                    </div>
+                                                }
+
+                                                @if (SelectedCancelSeries?.HasOpenCancelSerializationPoll == true)
+                                                {
+                                                    <div class="mf-alert warning">
+                                                        This series already has an open cancellation poll.
+                                                    </div>
+                                                }
+
+                                                @if (ShowDeadlinePicker)
+                                                {
+                                                    <div class="mf-deadline-editor compact">
+                                                        <label>Set deadline <span>(optional)</span></label>
+
+                                                        <input class="mf-input"
+                                                               type="date"
+                                                               value="@OpenPollDeadlineDraftText"
+                                                               @onchange="OnDeadlineInputChanged" />
+
+                                                        <div class="mf-actions tight">
+                                                            <button type="button"
+                                                                    class="mf-btn mf-btn-primary"
+                                                                    @onclick="ConfirmDeadline">
+                                                                Save
+                                                            </button>
+
+                                                            <button type="button"
+                                                                    class="mf-btn"
+                                                                    @onclick="CancelDeadline">
+                                                                Cancel
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <button type="button"
+                                                            class="mf-btn mf-btn-soft full"
+                                                            disabled="@(SelectedCancelSeries?.HasOpenCancelSerializationPoll == true)"
+                                                            @onclick="StartDeadlinePicker">
+                                                        @(ConfirmedOpenPollDeadline is null
+                                                            ? "Set deadline (optional)"
+                                                            : $"Deadline set: {FormatDate(ConfirmedOpenPollDeadline)}")
+                                                    </button>
+                                                }
+
+                                                <label class="mf-label">Poll reason</label>
+
+                                                <textarea class="mf-textarea"
+                                                          @bind="CancelPollReason"
+                                                          placeholder="Explain why this serialized/hiatus series should be considered for cancellation..."></textarea>
+
                                                 <button type="button"
                                                         class="mf-btn mf-btn-primary full"
-                                                        disabled="@IsOpenPollDisabled"
-                                                        @onclick="ConfirmOpenPollAsync">
-                                                    @OpenPollButtonText
+                                                        disabled="@IsOpenCancelPollDisabled"
+                                                        @onclick="OpenCancelPollAsync">
+                                                    @(IsOpeningCancelPoll ? "Opening..." : "Open Cancel Poll")
                                                 </button>
-                                            }
 
-                                            @if (!string.IsNullOrWhiteSpace(OpenPollMessage))
-                                            {
-                                                <div class="@OpenPollAlertClass">
-                                                    @OpenPollMessage
-                                                </div>
+                                                @if (!string.IsNullOrWhiteSpace(CancelPollMessage))
+                                                {
+                                                    <div class="@CancelPollAlertClass">
+                                                        @CancelPollMessage
+                                                    </div>
+                                                }
                                             }
                                         </div>
                                     </section>
@@ -435,10 +542,18 @@
     private string PublicationFrequencyCode { get; set; } = "WEEKLY";
     private string PollReason { get; set; } = string.Empty;
 
+    private IReadOnlyList<CancellableBoardSeriesDto> CancellableSeries { get; set; }
+        = Array.Empty<CancellableBoardSeriesDto>();
+
+    private string SelectedCancelSeriesIdText { get; set; } = string.Empty;
+    private string CancelPollReason { get; set; } = string.Empty;
+    private string? CancelPollMessage { get; set; }
+
     private bool ShowDeadlinePicker { get; set; }
     private bool ShowAllTags { get; set; }
     private bool ShowAllGenres { get; set; }
     private bool IsOpeningPoll { get; set; }
+    private bool IsOpeningCancelPoll { get; set; }
     private bool IsLoading { get; set; } = true;
 
     private string? OpenPollConflictType { get; set; }
@@ -447,12 +562,30 @@
     private DateTime? ConfirmedOpenPollDeadline { get; set; }
     private string? OpenPollMessage { get; set; }
     private bool OpenPollSucceeded { get; set; }
+    private bool CancelPollSucceeded { get; set; }
 
     private string? ErrorMessage { get; set; }
 
     private IReadOnlyList<ProposalItem> Proposals { get; set; } = Array.Empty<ProposalItem>();
 
     private HashSet<Guid> ExpandedGenreRows { get; } = new();
+
+    private CancellableBoardSeriesDto? SelectedCancelSeries =>
+        CancellableSeries.FirstOrDefault(series =>
+            series.SeriesId.ToString().Equals(
+                SelectedCancelSeriesIdText,
+                StringComparison.OrdinalIgnoreCase));
+
+    private bool IsOpenCancelPollDisabled =>
+        IsOpeningCancelPoll
+        || string.IsNullOrWhiteSpace(SelectedCancelSeriesIdText)
+        || string.IsNullOrWhiteSpace(CancelPollReason)
+        || SelectedCancelSeries?.HasOpenCancelSerializationPoll == true;
+
+    private string CancelPollAlertClass =>
+        CancelPollSucceeded
+            ? "mf-alert success"
+            : "mf-alert info";
 
     private IEnumerable<string> VisibleTags
     {
@@ -567,7 +700,8 @@
                 return true;
             }
 
-            if (SelectedProposal.HasGenericOpenPollConflict)
+            if (PollType == "START_SERIALIZATION"
+                && SelectedProposal.HasGenericOpenPollConflict)
             {
                 return true;
             }
@@ -636,6 +770,131 @@
         finally
         {
             IsLoading = false;
+        }
+    }
+
+    private async Task OnPollTypeChanged(ChangeEventArgs args)
+    {
+        PollType = args.Value?.ToString() ?? "START_SERIALIZATION";
+
+        ShowDeadlinePicker = false;
+        OpenPollDeadlineDraftText = string.Empty;
+        ConfirmedOpenPollDeadline = null;
+
+        OpenPollMessage = null;
+        OpenPollSucceeded = false;
+
+        CancelPollMessage = null;
+        CancelPollSucceeded = false;
+
+        if (PollType == "START_SERIALIZATION")
+        {
+            SelectedCancelSeriesIdText = string.Empty;
+            CancelPollReason = string.Empty;
+
+            if (SelectedProposal is not null)
+            {
+                PollReason = $"Board poll opened for {SelectedProposal.Title}.";
+            }
+        }
+
+        if (PollType == "CANCEL_SERIALIZATION")
+        {
+            PollReason = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(CancelPollReason))
+            {
+                CancelPollReason = "Board poll opened to consider cancelling serialization.";
+            }
+
+            await LoadCancellableSeriesAsync();
+        }
+    }
+
+    private async Task LoadCancellableSeriesAsync()
+    {
+        try
+        {
+            CancellableSeries = await EditorialBoardApiClient
+                .GetCancellableSeriesForCancelPollAsync();
+        }
+        catch (Exception ex)
+        {
+            CancelPollSucceeded = false;
+            CancelPollMessage = ex.Message;
+            CancellableSeries = Array.Empty<CancellableBoardSeriesDto>();
+        }
+    }
+
+    private async Task OpenCancelPollAsync()
+    {
+        if (IsOpeningCancelPoll)
+        {
+            return;
+        }
+
+        if (!Guid.TryParse(SelectedCancelSeriesIdText, out var seriesId))
+        {
+            CancelPollSucceeded = false;
+            CancelPollMessage = "Please select a valid series.";
+            return;
+        }
+
+        if (SelectedCancelSeries?.HasOpenCancelSerializationPoll == true)
+        {
+            CancelPollSucceeded = false;
+            CancelPollMessage = "This series already has an open cancellation poll.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(CancelPollReason))
+        {
+            CancelPollSucceeded = false;
+            CancelPollMessage = "Poll reason is required.";
+            return;
+        }
+
+        IsOpeningCancelPoll = true;
+        CancelPollMessage = null;
+        CancelPollSucceeded = false;
+
+        try
+        {
+            var request = new OpenCancelSerializationPollRequest(
+                PollReason: CancelPollReason.Trim(),
+                EndsAtUtc: ConfirmedOpenPollDeadline?.ToUniversalTime());
+
+            var result = await EditorialBoardApiClient.OpenCancelSerializationPollAsync(
+                seriesId,
+                request);
+
+            if (result is null)
+            {
+                CancelPollSucceeded = false;
+                CancelPollMessage = "API returned empty result.";
+                return;
+            }
+
+            CancelPollSucceeded = true;
+            CancelPollMessage = "Cancellation poll opened successfully. Redirecting to Board Polls...";
+
+            SelectedCancelSeriesIdText = string.Empty;
+            CancelPollReason = string.Empty;
+            OpenPollDeadlineDraftText = string.Empty;
+            ConfirmedOpenPollDeadline = null;
+
+            await LoadCancellableSeriesAsync();
+
+            NavigationManager.NavigateTo("/demo/mangaflow/polls");
+        }
+        catch (Exception ex)
+        {
+            CancelPollSucceeded = false;
+            CancelPollMessage = ex.Message;
+        }
+        finally
+        {
+            IsOpeningCancelPoll = false;
         }
     }
 
@@ -851,6 +1110,13 @@
         OpenPollMessage = null;
         OpenPollSucceeded = false;
         OpenPollConflictType = null;
+
+        SelectedCancelSeriesIdText = string.Empty;
+        CancelPollReason = string.Empty;
+        CancelPollMessage = null;
+        CancelPollSucceeded = false;
+        IsOpeningCancelPoll = false;
+
         PollReason = $"Board poll opened for {proposal.Title}.";
     }
 
@@ -862,11 +1128,23 @@
         OpenPollConflictType = null;
         ShowAllTags = false;
         ShowAllGenres = false;
+
+        SelectedCancelSeriesIdText = string.Empty;
+        CancelPollReason = string.Empty;
+        CancelPollMessage = null;
+        CancelPollSucceeded = false;
+        IsOpeningCancelPoll = false;
     }
 
     private void StartDeadlinePicker()
     {
-        if (HasCurrentPollTypeConflict)
+        if (PollType == "START_SERIALIZATION" && HasCurrentPollTypeConflict)
+        {
+            return;
+        }
+
+        if (PollType == "CANCEL_SERIALIZATION"
+            && SelectedCancelSeries?.HasOpenCancelSerializationPoll == true)
         {
             return;
         }
@@ -907,6 +1185,13 @@
             return;
         }
 
+        if (PollType != "START_SERIALIZATION")
+        {
+            OpenPollSucceeded = false;
+            OpenPollMessage = "Use the cancellation poll action for CANCEL_SERIALIZATION.";
+            return;
+        }
+
         if (HasCurrentPollTypeConflict)
         {
             OpenPollSucceeded = false;
@@ -928,8 +1213,7 @@
             return;
         }
 
-        if (PollType == "START_SERIALIZATION"
-            && string.IsNullOrWhiteSpace(PublicationFrequencyCode))
+        if (string.IsNullOrWhiteSpace(PublicationFrequencyCode))
         {
             OpenPollSucceeded = false;
             OpenPollMessage = "Publication frequency is required for START_SERIALIZATION.";
@@ -943,11 +1227,9 @@
         try
         {
             var request = new OpenPollRequest(
-                PollTypeCode: PollType,
+                PollTypeCode: "START_SERIALIZATION",
                 PollReason: PollReason,
-                PublicationFrequencyCode: PollType == "START_SERIALIZATION"
-                    ? PublicationFrequencyCode
-                    : null,
+                PublicationFrequencyCode: PublicationFrequencyCode,
                 EndsAtUtc: ConfirmedOpenPollDeadline?.ToUniversalTime());
 
             var result = await EditorialBoardApiClient.OpenPollAsync(

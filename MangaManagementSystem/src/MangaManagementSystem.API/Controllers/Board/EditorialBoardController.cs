@@ -54,6 +54,18 @@ public sealed class EditorialBoardController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("series/cancellable-for-cancel-poll")]
+    [Authorize(Roles = "Editorial Board Chief")]
+    public async Task<IActionResult> GetCancellableSeriesForCancelPoll(
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new GetCancellableBoardSeriesQuery(),
+            cancellationToken);
+
+        return Ok(result);
+    }
+
     [HttpPost("proposals/{proposalId:guid}/polls")]
     [Authorize(Roles = "Editorial Board Chief")]
     public async Task<IActionResult> OpenPoll(
@@ -74,6 +86,36 @@ public sealed class EditorialBoardController : ControllerBase
 
             var result = await _mediator.Send(
                 new OpenSeriesBoardPollCommand(
+                    ChiefUserId: chiefUserId,
+                    Request: commandRequest),
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
+    [HttpPost("series/{seriesId:guid}/cancel-poll")]
+    [Authorize(Roles = "Editorial Board Chief")]
+    public async Task<IActionResult> OpenCancelSerializationPoll(
+        Guid seriesId,
+        [FromBody] OpenCancelSerializationPollApiRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var chiefUserId = GetCurrentUserId();
+
+            var commandRequest = new OpenCancelSerializationPollRequestDto(
+                PollReason: request.PollReason,
+                EndsAtUtc: request.EndsAtUtc);
+
+            var result = await _mediator.Send(
+                new OpenCancelSerializationPollCommand(
+                    SeriesId: seriesId,
                     ChiefUserId: chiefUserId,
                     Request: commandRequest),
                 cancellationToken);
@@ -185,6 +227,10 @@ public sealed class EditorialBoardController : ControllerBase
         string PollTypeCode,
         string PollReason,
         string? PublicationFrequencyCode,
+        DateTime? EndsAtUtc);
+
+    public sealed record OpenCancelSerializationPollApiRequest(
+        string PollReason,
         DateTime? EndsAtUtc);
 
     public sealed record CastVoteApiRequest(
