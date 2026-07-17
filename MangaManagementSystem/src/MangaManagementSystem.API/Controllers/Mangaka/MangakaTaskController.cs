@@ -166,8 +166,16 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             }
             catch (Microsoft.Data.SqlClient.SqlException ex)
             {
-                _logger.LogWarning(ex, "SQL error creating task.");
-                return BadRequest(MapSqlException(ex));
+                if (ex.Number == 50002)
+                {
+                    _logger.LogWarning(ex, "Could not acquire the required audit lock while creating a task.");
+                    return BadRequest("Could not record the task audit right now. Please try again.");
+                }
+
+                _logger.LogError(ex, "Unexpected SQL error creating task.");
+                return Problem(
+                    detail: "Could not create the task right now. Please try again later.",
+                    statusCode: StatusCodes.Status500InternalServerError);
             }
             catch (Exception ex)
             {

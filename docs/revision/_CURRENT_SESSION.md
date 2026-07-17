@@ -1,4 +1,4 @@
-# Current Session — Create Chapter Production Eligibility
+# Current Session — Create Chapter Page Task Eligibility
 
 **Date:** 2026-07-16
 **Branch:** `feature/Mangaka`
@@ -6,44 +6,49 @@
 
 ## Goal
 
-Allow Mangaka chapter creation only when the parent series is `SERIALIZED` or `HIATUS`, while preserving existing authorization, input normalization, draft initialization, and database-owned duplicate handling.
+Enforce production-eligible series and task-creation-eligible chapter states for both single-task and Quick Select `ChapterPageTask` creation. Replace only the single-task `manga.usp_ChapterPageTask_Create` call with EF Core while preserving its required audit behavior.
 
 ## Production files changed
 
-- `MangaManagementSystem/src/MangaManagementSystem.Domain/Policies/SeriesProductionPolicy.cs`
-- `MangaManagementSystem/src/MangaManagementSystem.Infrastructure/Repositories/MangakaChapterRepository.cs`
-- `MangaManagementSystem/src/MangaManagementSystem.Web/Components/Pages/Mangaka/Chapters.razor`
+- `MangaManagementSystem/src/MangaManagementSystem.Domain/Policies/ChapterPageTaskCreationPolicy.cs`
+- `MangaManagementSystem/src/MangaManagementSystem.Application/Services/ChapterPageTaskService.cs`
+- `MangaManagementSystem/src/MangaManagementSystem.Infrastructure/Repositories/ChapterPageTaskRepository.cs`
+- `MangaManagementSystem/src/MangaManagementSystem.Infrastructure/Repositories/QuickSelectRepository.cs`
+- `MangaManagementSystem/src/MangaManagementSystem.API/Controllers/Mangaka/MangakaTaskController.cs`
 
-## Architecture flow
+## Result
 
-```text
-Chapters.razor
-→ typed chapter API client
-→ Mangaka Chapters API controller
-→ CreateChapterDraftCommand
-→ CreateChapterDraftCommandHandler
-→ MangakaChapterRepository
-→ EF Core / SQL Server
-```
+- `ChapterPageTaskCreationPolicy` permits task creation only for `DRAFT` and `REVISION_REQUESTED` chapters.
+- Both single-task and Quick Select writes reuse `SeriesProductionPolicy` and the new chapter policy inside `RepeatableRead` transactions.
+- Both paths authoritatively validate active Mangaka creator and active Assistant assignee roles and series memberships.
+- Single-task creation now uses EF Core for context lookup, task insertion, and region links.
+- `audit.usp_AuditEvent_Append` remains inside the active EF transaction, preserving role snapshot resolution, audit locking, and atomic rollback.
+- Quick Select retains its app lock, FULL_PAGE-region behavior, batch atomicity, and existing EF audit behavior.
+- Reload and notification remain after the single-task commit.
 
-No API, command, handler, client, DTO, task, workspace, SQL, migration, or configuration file was changed.
+## Constraint ownership
 
-## Implementation
+Application validation is limited to workflow inputs: nonempty IDs, nonempty effective region list, required normalized title/description, and existing null due-date/compensation defaults. Task type, priority, compensation range/precision, maximum lengths, FKs, status checks, and junction uniqueness remain database-owned.
 
-- Added `SeriesProductionPolicy.AllowsNormalProduction(string?)` with case-insensitive allow rules for `SERIALIZED` and `HIATUS` only.
-- Create Chapter now loads the exact parent series row inside the existing repository transaction, distinguishes a missing series, validates the existing active Mangaka contributor rule, and rejects ineligible series states.
-- Create Chapter uses `IsolationLevel.RepeatableRead`. The exact series-row read is retained through commit, so completion or board cancellation must wait for the chapter transaction; no phantom/range protection is needed.
-- The Chapters page retains all series for list filtering but exposes only production-eligible series in the create dialog, disables creation when none are eligible, and protects stale handler invocation.
-- Existing database-first duplicate-label handling remains unchanged; no pre-insert duplicate query was added.
+Only confirmed SQL constraint/conflict numbers are converted to a safe client message. Unexpected `DbUpdateException` failures are logged and rethrown for the generic 500 response.
 
-## Separate follow-up
+## Protected scope
 
-`ChapterConfiguration` declares an unfiltered unique index while `MangaManagementSystem_Schema.sql` defines the intended filtered index for non-cancelled chapters. This task intentionally did not modify EF metadata, SQL, schema, or migrations.
+No Creator Workspace, Quick Select UI/service/DTO/API/client, task DTO/interface, SQL, schema, migration, `SeriesProductionPolicy`, Create Chapter, or unrelated task-lifecycle file was changed.
 
 ## Verification boundary
 
-Only static checks are authorized: status/diff inspection, `git diff --check`, and targeted source searches. Restore, build, test, run, server, watcher, and migration commands were not run.
+Only static checks are authorized. Restore, build, test, run, servers, watchers, migrations, and SQL execution were not run.
+
+Completed static checks:
+
+- `git diff --check` passed; only working-copy LF/CRLF notices were emitted.
+- Source search found no application call to `manga.usp_ChapterPageTask_Create`; only its unchanged bootstrap definition remains.
+- Both task-writing repositories call both policies inside `RepeatableRead` transactions.
+- The single-task audit command is attached to the current EF transaction.
+- Quick Select still calls its existing application-lock helper.
+- Protected workspace, DTO, interface, SQL, schema, migration, and configuration paths have no diff.
 
 ## Final handoff
 
-`docs/revision/2026-07-16-create-chapter-production-eligibility.md`
+`docs/revision/Mangaka/2026-07-16-create-chapter-page-task-eligibility.md`
