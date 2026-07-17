@@ -515,12 +515,18 @@ function loadImage(dataUrl) {
     return new Promise((resolve) => {
         if (!dataUrl) {
             originalImg = null;
-            backgroundCanvas.width = 0;
-            backgroundCanvas.height = 0;
-            canvas.width = 0;
-            canvas.height = 0;
-            canvas.style.display = 'none'; // Hide when empty
-            redraw();
+            if (backgroundCanvas) {
+                backgroundCanvas.width = 0;
+                backgroundCanvas.height = 0;
+            }
+            // canvas is undefined until initCanvas runs; clearing a not-yet-initialised canvas is a
+            // no-op. This happens when selecting a 0-page chapter before its canvas element mounts.
+            if (canvas) {
+                canvas.width = 0;
+                canvas.height = 0;
+                canvas.style.display = 'none'; // Hide when empty
+                redraw();
+            }
             resolve();
             return;
         }

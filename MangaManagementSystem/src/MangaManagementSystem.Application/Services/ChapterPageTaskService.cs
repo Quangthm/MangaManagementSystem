@@ -1,4 +1,4 @@
-﻿using MangaManagementSystem.Application.Common;
+using MangaManagementSystem.Application.Common;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Domain.Entities;
@@ -19,26 +19,63 @@ namespace MangaManagementSystem.Application.Services
             _unitOfWork = unitOfWork;
         }
 
-        public async Task<ChapterPageTaskDto> CreateChapterPageTaskAsync(CreateChapterPageTaskDto dto)
+        public async Task<ChapterPageTaskDto> CreateChapterPageTaskAsync(
+            CreateChapterPageTaskDto dto)
         {
+            if (dto.ActorUserId == Guid.Empty)
+                throw new InvalidOperationException(
+                    "Actor user ID is required.");
+
+            if (dto.AssignedToUserId == Guid.Empty)
+                throw new InvalidOperationException(
+                    "Assigned user ID is required.");
+
+            var pageRegionIds =
+                (dto.PageRegionIds ?? Array.Empty<Guid>())
+                    .Distinct()
+                    .ToArray();
+
+            if (pageRegionIds.Length == 0)
+                throw new InvalidOperationException(
+                    "At least one page region is required.");
+
+            string taskTitle =
+                dto.TaskTitle?.Trim() ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(taskTitle))
+                throw new InvalidOperationException(
+                    "Task title is required.");
+
+            string taskDescription =
+                dto.TaskDescription?.Trim() ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(taskDescription))
+                throw new InvalidOperationException(
+                    "Task description is required.");
+
+            DateTime dueAtUtc =
+                dto.DueAtUtc ?? DateTime.UtcNow.AddDays(7);
+
+            decimal compensationAmount =
+                dto.CompensationAmount ?? 0m;
+
+            // Task creation and notification must commit or roll back together.
             await _unitOfWork.BeginTransactionAsync();
 
             try
             {
-                // SQL keeps the final workflow guards and audit logging.
-                // The outer EF transaction keeps task creation and notification atomic.
                 var newTaskId =
                     await _unitOfWork.ChapterPageTasks
                         .CreateChapterPageTaskAsync(
                             dto.ActorUserId,
                             dto.AssignedToUserId,
                             dto.TypeCode,
-                            dto.TaskTitle,
-                            dto.TaskDescription,
+                            taskTitle,
+                            taskDescription,
                             (byte)dto.PriorityLevel,
-                            dto.DueAtUtc ?? DateTime.UtcNow.AddDays(7),
-                            dto.CompensationAmount,
-                            dto.PageRegionIds);
+                            dueAtUtc,
+                            compensationAmount,
+                            pageRegionIds);
 
                 if (newTaskId == Guid.Empty)
                 {

@@ -86,7 +86,10 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 {
                     try
                     {
-                        var req = new CreateChapterDraftRequest(seriesGuid, chap.Id.ToString(), chap.Title);
+                        // Persist the user-chosen number label ("2.5" etc.), falling back to the UI key
+                        // only if somehow unset. The DB enforces uniqueness incl. cancelled chapters.
+                        var numberLabel = string.IsNullOrWhiteSpace(chap.NumberLabel) ? chap.Id.ToString() : chap.NumberLabel.Trim();
+                        var req = new CreateChapterDraftRequest(seriesGuid, numberLabel, chap.Title);
                         var createdDto = await MangakaChapterApi.CreateChapterDraftAsync(_currentUserId!.Value, req);
                         if (createdDto != null)
                         {
@@ -110,11 +113,14 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             {
                 try
                 {
+                    // Send the chapter's real number label ("2.5"), not the positional UI key Id — using
+                    // Id would collide with the integer chapter that happens to share that position.
+                    var numberLabel = string.IsNullOrWhiteSpace(chap.NumberLabel) ? chap.Id.ToString() : chap.NumberLabel.Trim();
                     await MangakaChapterApi.UpdateChapterDraftAsync(
                         _currentUserId!.Value,
                         chap.ChapterId,
                         new UpdateChapterDraftRequest(
-                            chap.Id.ToString(),
+                            numberLabel,
                             string.IsNullOrWhiteSpace(chap.Title) ? null : chap.Title));
                     chap.TitleDirty = false;
                     savedCount++;
@@ -122,8 +128,8 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 catch (Exception ex)
                 {
                     failedCount++;
-                    Console.WriteLine($"Error renaming chapter {chap.Id}: {ex.Message}");
-                    Snackbar.Add($"Failed to rename Chapter {chap.Id}: {ex.Message}", Severity.Error);
+                    Console.WriteLine($"Error renaming chapter {chap.NumberLabel}: {ex.Message}");
+                    Snackbar.Add($"Failed to rename Chapter {chap.NumberLabel}: {ex.Message}", Severity.Error);
                 }
             }
 
