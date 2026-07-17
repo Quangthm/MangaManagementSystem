@@ -13,8 +13,11 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Comm
     /// Orchestration:
     ///   1. Validate inputs (comments optional; markup optional).
     ///   2. If a markup file is supplied, upload it to Cloudinary via IFileStorageService.
-    ///   3. Call manga.usp_SeriesProposal_PassToBoard through the repository wrapper.
-    ///   4. If SQL fails after a Cloudinary upload, attempt best-effort cleanup.
+    ///   3. Open the shared Unit of Work transaction.
+    ///   4. Call manga.usp_SeriesProposal_PassToBoard through the repository wrapper.
+    ///   5. Add PROPOSAL_DECISION notifications for active Mangaka contributors.
+    ///   6. Save EF notifications and commit the shared transaction.
+    ///   7. If the workflow fails after a Cloudinary upload, roll back and attempt cleanup.
     ///
     /// The stored procedure transitions the proposal and series to UNDER_BOARD_REVIEW only —
     /// it never sets APPROVED.
@@ -23,16 +26,16 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Comm
         : IRequestHandler<PassProposalToBoardCommand, EditorReviewActionResultDto>
     {
         private readonly IFileStorageService _fileStorageService;
-        private readonly ISeriesProposalRepository _seriesProposalRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<PassProposalToBoardCommandHandler> _logger;
 
         public PassProposalToBoardCommandHandler(
             IFileStorageService fileStorageService,
-            ISeriesProposalRepository seriesProposalRepository,
+            IUnitOfWork unitOfWork,
             ILogger<PassProposalToBoardCommandHandler> logger)
         {
             _fileStorageService = fileStorageService;
-            _seriesProposalRepository = seriesProposalRepository;
+            _unitOfWork = unitOfWork;
             _logger = logger;
         }
 
@@ -51,11 +54,13 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Comm
                 throw new InvalidOperationException("A valid proposal must be selected.");
             }
 
-            // Comments are optional for Pass To Board.
-            string? comments = string.IsNullOrWhiteSpace(command.Comments) ? null : command.Comments.Trim();
+            string? comments =
+                string.IsNullOrWhiteSpace(command.Comments)
+                    ? null
+                    : command.Comments.Trim();
 
-            // Optional markup upload (Cloudinary, outside the SQL transaction).
             FileUploadResultDto? markup = null;
+
             if (command.MarkupFileBytes is { Length: > 0 })
             {
                 markup = await EditorialMarkupUploader.ValidateAndUploadAsync(
@@ -65,9 +70,22 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Comm
                     command.MarkupContentType);
             }
 
+            await _unitOfWork.BeginTransactionAsync(cancellationToken);
+
             try
             {
-                await _seriesProposalRepository.PassToBoardAsync(
+                var proposal =
+                    await _unitOfWork.SeriesProposals.GetByIdWithDetailsAsync(
+                        command.SeriesProposalId,
+                        cancellationToken);
+
+                if (proposal is null)
+                {
+                    throw new InvalidOperationException(
+                        "The selected proposal could not be found.");
+                }
+
+                await _unitOfWork.SeriesProposals.PassToBoardAsync(
                     command.SeriesProposalId,
                     command.ActorUserId,
                     comments,
@@ -78,25 +96,43 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Comm
                     markup?.FileSizeBytes,
                     markup?.Sha256Hash,
                     cancellationToken);
+
+                await ProposalDecisionNotificationSupport
+                    .AddForActiveMangakaContributorsAsync(
+                        _unitOfWork,
+                        proposal.SeriesId,
+                        command.SeriesProposalId,
+                        "Proposal Passed to Board",
+                        "Your proposal passed editorial review and is now under board review.");
+
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.CommitTransactionAsync(cancellationToken);
             }
             catch (Exception ex)
             {
-                // The repository maps known SQL errors to user-safe InvalidOperationException.
-                // Either way, clean up the orphaned Cloudinary upload before rethrowing.
+                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+
                 if (markup is not null)
                 {
                     await EditorialMarkupUploader.TryCleanupAsync(
-                        _fileStorageService, _logger, markup,
+                        _fileStorageService,
+                        _logger,
+                        markup,
                         $"Workflow failed after markup upload for proposal {command.SeriesProposalId} (pass to board).");
                 }
 
-                _logger.LogWarning(ex,
+                _logger.LogWarning(
+                    ex,
                     "Pass to board failed for proposal {SeriesProposalId} by actor {ActorUserId}.",
-                    command.SeriesProposalId, command.ActorUserId);
+                    command.SeriesProposalId,
+                    command.ActorUserId);
+
                 throw;
             }
 
-            return new EditorReviewActionResultDto(command.SeriesProposalId, "UNDER_BOARD_REVIEW");
+            return new EditorReviewActionResultDto(
+                command.SeriesProposalId,
+                "UNDER_BOARD_REVIEW");
         }
     }
 }

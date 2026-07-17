@@ -18,16 +18,13 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         private const string ActorUserIdHeader = "X-Actor-User-Id";
 
         private readonly IChapterPageTaskService _taskService;
-        private readonly INotificationService _notificationService;
         private readonly ILogger<MangakaTaskController> _logger;
 
         public MangakaTaskController(
             IChapterPageTaskService taskService,
-            INotificationService notificationService,
             ILogger<MangakaTaskController> logger)
         {
             _taskService = taskService;
-            _notificationService = notificationService;
             _logger = logger;
         }
 
@@ -155,8 +152,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 
                 var created = await _taskService.CreateChapterPageTaskAsync(dto);
 
-                await TryNotifyAssistantAsync(created.ChapterPageTaskId, actorUserId, "NEW_TASK_ASSIGNED",
-                    "New Task Assigned", "You have been assigned a new production task.");
+
 
                 return Ok(created);
             }
@@ -209,9 +205,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             {
                 await _taskService.ApproveTaskAsync(actorUserId, taskId, request?.Reason);
 
-                // Notify assistant
-                await TryNotifyAssistantAsync(taskId, actorUserId, "TASK_COMPLETED",
-                    "Task Approved", "Your submitted work has been approved.");
+
 
                 return Ok(new { taskId, statusCode = "COMPLETED" });
             }
@@ -261,8 +255,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             {
                 await _taskService.ReturnTaskForReworkAsync(actorUserId, taskId, request.Reason.Trim());
 
-                await TryNotifyAssistantAsync(taskId, actorUserId, "TASK_RETURNED_FOR_REWORK",
-                    "Task Returned for Rework", $"Your submission was returned for rework: {request.Reason.Trim()}");
+
 
                 return Ok(new { taskId, statusCode = "ASSIGNED" });
             }
@@ -312,8 +305,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             {
                 await _taskService.CancelTaskAsync(actorUserId, taskId, request.Reason.Trim());
 
-                await TryNotifyAssistantAsync(taskId, actorUserId, "TASK_CANCELLED",
-                    "Task Cancelled", $"Your task was cancelled: {request.Reason.Trim()}");
+
 
                 return Ok(new { taskId, statusCode = "CANCELLED" });
             }
@@ -408,10 +400,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             {
                 var result = await _taskService.ReassignTaskAsync(actorUserId, taskId, request);
 
-                // Notify new assistant about the assignment
-                await TryNotifyAssistantByUserIdAsync(request.NewAssignedToUserId, actorUserId,
-                    "TASK_ASSIGNED", "New Task Assignment",
-                    "A task has been reassigned to you.");
+
 
                 return Ok(result);
             }
@@ -430,53 +419,6 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return Problem(
                     detail: "Could not reassign task right now. Please try again later.",
                     statusCode: StatusCodes.Status500InternalServerError);
-            }
-        }
-
-        // --- Helpers ---
-
-        private async Task TryNotifyAssistantByUserIdAsync(Guid recipientUserId, Guid actorUserId, string typeCode, string title, string message)
-        {
-            try
-            {
-                if (recipientUserId != Guid.Empty)
-                {
-                    await _notificationService.CreateNotificationAsync(new CreateNotificationDto(
-                        RecipientUserId: recipientUserId,
-                        NotificationTypeCode: typeCode,
-                        Title: title,
-                        Message: message,
-                        RelatedEntityType: "ChapterPageTask",
-                        RelatedEntityId: Guid.Empty));
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to send notification to user {RecipientUserId}. Non-blocking.", recipientUserId);
-            }
-        }
-
-        private async Task TryNotifyAssistantAsync(Guid taskId, Guid actorUserId, string typeCode, string title, string message)
-        {
-            try
-            {
-                // Load task to get the assigned user
-                var tasks = await _taskService.GetTasksForReviewByCreatorAsync(actorUserId);
-                var task = tasks.FirstOrDefault(t => t.ChapterPageTaskId == taskId);
-                if (task != null && task.AssignedToUserId != Guid.Empty)
-                {
-                    await _notificationService.CreateNotificationAsync(new CreateNotificationDto(
-                        RecipientUserId: task.AssignedToUserId,
-                        NotificationTypeCode: typeCode,
-                        Title: title,
-                        Message: message,
-                        RelatedEntityType: "ChapterPageTask",
-                        RelatedEntityId: taskId));
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to send notification for task {TaskId}. Non-blocking.", taskId);
             }
         }
 
