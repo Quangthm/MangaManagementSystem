@@ -55,7 +55,7 @@ else
         <div class="d-flex align-center text-center mx-auto" style="position: absolute; left: 50%; transform: translateX(-50%);">
             @if (SelectedChapter > 0 && SelectedPage > 0 && UploadedPages != null && ActivePageIndex >= 0 && ActivePageIndex < UploadedPages.Count)
             {
-                <MudText Typo="Typo.h6" Class="font-weight-bold mr-4">Chapter @SelectedChapter - Page @SelectedPage</MudText>
+                <MudText Typo="Typo.h6" Class="font-weight-bold mr-4">Chapter @SelectedChapterLabel - Page @SelectedPage</MudText>
                 @if (_saveState == SaveStatus.Saving)
                 {
                     <MudText Typo="Typo.caption" Class="d-flex align-center mf-muted"><MudIcon Icon="@Icons.Material.Filled.Sync" Size="Size.Small" Class="mr-1" />@(string.IsNullOrEmpty(_saveProgress) ? "Saving…" : _saveProgress)</MudText>
@@ -75,7 +75,7 @@ else
             }
             else if (SelectedChapter > 0)
             {
-                <MudText Typo="Typo.h6" Class="font-weight-bold mf-muted">Chapter @SelectedChapter - No Pages Selected</MudText>
+                <MudText Typo="Typo.h6" Class="font-weight-bold mf-muted">Chapter @SelectedChapterLabel - No Pages Selected</MudText>
             }
             else
             {
@@ -126,11 +126,11 @@ else
     <div class="mf-workspace-body d-flex flex-grow-1 overflow-hidden">
         
         <!-- Left Sidebar (collapsible, mirrors the Task Panel) -->
-        <div style="width: @(_isLeftPanelOpen ? "250px" : "0px"); flex-shrink: 0; height: 100%; overflow: hidden; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);">
+        <div style="width: @(_isLeftPanelOpen ? "var(--mf-sidebar-w)" : "0px"); flex-shrink: 0; height: 100%; overflow: hidden; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);">
         <WorkspaceChapterSidebar Chapters="Chapters"
                                  SelectedChapter="SelectedChapter"
                                  IsAddingChapter="_isAddingChapter"
-                                 CanManageChapters="CanManageContent"
+                                 CanManageChapters="CanManageChapters"
                                  OnAddChapter="AddNewChapter"
                                  OnSelectChapter="SelectChapter"
                                  OnSubmitChapter="SubmitChapterForReview"
@@ -393,10 +393,11 @@ else
                     </div>
             </div>
 
-            <!-- Bottom Pagination -->
-            <div class="d-flex justify-center align-center py-2 bg-white border-t-1 mud-border-lines-default" style="gap: 16px;">
-                <!-- Left Pane Pagination -->
-                <div class="d-flex align-center">
+            <!-- Bottom Pagination: each pane's pager is centered under its own canvas half so they mirror
+                 the split. In single view the left block spans the whole bar (still centered). -->
+            <div class="d-flex align-center py-2 bg-white border-t-1 mud-border-lines-default" style="position: relative;">
+                <!-- Left Pane Pagination (centered in the left half) -->
+                <div class="d-flex justify-center align-center" style="flex: 1 1 0; min-width: 0;">
                     @if (_isSplitView)
                     {
                         <MudText Typo="Typo.caption" Class="mf-muted font-weight-bold mr-2">Left Pane:</MudText>
@@ -415,13 +416,20 @@ else
                     {
                         <MudText Typo="Typo.caption" Class="mf-muted">0 / 0</MudText>
                     }
+                    @if (!_isSplitView)
+                    {
+                        <MudDivider Vertical="true" FlexItem="true" Class="mx-2" />
+                        <MudTooltip Text="Delete Current Page">
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="DeleteCurrentPage" Disabled="@(IsChapterLocked || IsAssistantWorkspace)" />
+                        </MudTooltip>
+                    }
                 </div>
-                
+
                 @if (_isSplitView)
                 {
                     <MudDivider Vertical="true" FlexItem="true" />
-                    <!-- Right Pane Pagination -->
-                    <div class="d-flex align-center">
+                    <!-- Right Pane Pagination (centered in the right half) -->
+                    <div class="d-flex justify-center align-center" style="flex: 1 1 0; min-width: 0;">
                         <MudText Typo="Typo.caption" Class="mf-muted font-weight-bold mr-2">Right Pane:</MudText>
                         @if (_splitUploadedPages.Any())
                         {
@@ -432,12 +440,11 @@ else
                             <MudText Typo="Typo.caption" Class="mf-muted">0 / 0</MudText>
                         }
                     </div>
+                    <!-- Delete (acts on the left pane) pinned to the far right so both pagers stay centered. -->
+                    <MudTooltip Text="Delete Current Page (Left)">
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="DeleteCurrentPage" Disabled="@(IsChapterLocked || IsAssistantWorkspace)" Style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%);" />
+                    </MudTooltip>
                 }
-                
-                <MudDivider Vertical="true" FlexItem="true" />
-                <MudTooltip Text="Delete Current Page (Left)">
-                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="DeleteCurrentPage" Disabled="@(IsChapterLocked || IsAssistantWorkspace)" />
-                </MudTooltip>
             </div>
 
             <!-- Left Panel (Chapters) Toggle Button -->
@@ -464,8 +471,8 @@ else
         </main>
 
         <!-- Right Panel (Tasks) -->
-        <aside class="mf-workspace-right-panel border-l-1 mud-border-lines-default d-flex flex-column" style="width: @(_isRightPanelOpen ? "320px" : "0px"); flex-shrink: 0; background-color: white; height: 100%; overflow: hidden; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative;">
-            <div class="pt-2 pb-3 d-flex flex-column" style="width: 320px; height: 100%;">
+        <aside class="mf-workspace-right-panel border-l-1 mud-border-lines-default d-flex flex-column" style="width: @(_isRightPanelOpen ? "var(--mf-tools-w)" : "0px"); flex-shrink: 0; background-color: white; height: 100%; overflow: hidden; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative;">
+            <div class="pt-2 pb-3 d-flex flex-column" style="width: var(--mf-tools-w); height: 100%;">
             @if (IsAssistantWorkspace)
             {
                 <div class="px-4 d-flex flex-column gap-3" style="height: 100%; overflow-y: auto;">
@@ -713,15 +720,13 @@ else
 
                     <MudNumericField T="decimal" Label="Compensation" @bind-Value="TaskCompensation" Variant="Variant.Outlined"
                                      Margin="Margin.Dense" Class="mb-3" Min="0" Max="9999999999.99M" Format="0.##"
-                                     Pattern="^\d{0,10}(\.\d{0,2})?$" Step="1M"
-                                     HelperText="Whole or 2-decimal amount, 0–9,999,999,999.99 (metadata only; 0 = none)." />
+                                     Pattern="^\d{0,10}(\.\d{0,2})?$" HideSpinButtons="true" />
 
                     <MudDatePicker Label="Deadline" @bind-Date="_taskDueDate" Variant="Variant.Outlined"
                                    Margin="Margin.Dense" Class="mb-3" MinDate="DateTime.Today"
                                    HelperText="Due date for this task (defaults to 7 days from now)." />
 
                     <div class="d-flex flex-column mb-3">
-                        <MudText Typo="Typo.caption" Class="mf-muted mb-1">Panel Target (Hold Shift to select multiple)</MudText>
                         <div class="d-flex flex-wrap gap-1" style="max-height: 120px; overflow-y: auto;">
                             @if (SelectedRegions.Any())
                             {
@@ -788,16 +793,15 @@ else
                           var initials = string.Join("", task.Assistant.Split(' ').Select(n => n[0]));
                           var isTargetTask = _taskFilterId != null && task.DbId.HasValue && task.DbId.ToString() == _taskFilterId;
                           var isTaskOnActiveVersion = IsTaskOnActiveVersion(task);
-                          var locationChipColor = isTaskOnActiveVersion ? Color.Primary : Color.Default;
                           var locationChipText = isTaskOnActiveVersion ? "Current version" : "Other version";
                           
                           <MudPaper Elevation="0" Class="pa-3 border-1 mud-border-lines-default rounded-lg"
                                     Style="@($"cursor: pointer; {(isTargetTask ? "border-left: 3px solid #4f46e5; background: #eef2ff;" : (!isTaskOnActiveVersion ? "background: #f8fafc;" : ""))}")"
                                     @onclick="@(() => SelectTaskPanels(task))">
-                              <div class="d-flex justify-space-between">
-                                  <div class="d-flex">
-                                      <MudIcon Icon="@icon" Size="Size.Small" Color="@iconColor" Class="mr-2 mt-1" />
-                                      <div>
+                              <div class="d-flex justify-space-between" style="gap: 8px;">
+                                  <div class="d-flex" style="min-width: 0; flex: 1 1 auto;">
+                                      <MudIcon Icon="@icon" Size="Size.Small" Color="@iconColor" Class="mr-2 mt-1 flex-shrink-0" />
+                                      <div style="min-width: 0;">
                                           <MudTooltip Text="@task.Target">
                                               <MudText Typo="Typo.body2" Class="@(isTerminal ? "font-weight-bold text-decoration-line-through" : "font-weight-bold")">@task.Type &bull; @CompactTarget(task.Target)</MudText>
                                           </MudTooltip>
@@ -817,10 +821,7 @@ else
                                           }
                                       </div>
                                   </div>
-                                  <div class="d-flex align-center" @onclick:stopPropagation="true">
-                                      <MudTooltip Text="Tasks are shown for the whole page. This chip tells you whether the task belongs to the version currently open on the canvas.">
-                                          <MudChip T="string" Size="Size.Small" Color="@locationChipColor" Variant="Variant.Text" Class="mr-1">@locationChipText</MudChip>
-                                      </MudTooltip>
+                                  <div class="d-flex align-center flex-shrink-0" @onclick:stopPropagation="true">
                                       <MudTooltip Text="Status is set by the workflow (assistant submits / Mangaka reviews), not edited here.">
                                           <MudChip T="string" Size="Size.Small" Color="@chipColor" Variant="Variant.Outlined">@task.Status</MudChip>
                                       </MudTooltip>
@@ -936,13 +937,13 @@ else
                                             </div>
                                             <MudText Typo="Typo.body2" Class="mb-2">@ann.Comment</MudText>
                                             <MudText Typo="Typo.caption" Class="mf-muted d-flex align-center">
-                                                <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Class="mr-1" Style="font-size: 12px;"/> @ann.Author
+                                                <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Class="mr-1" Style="font-size: 12px;"/> @ann.Author@(!string.IsNullOrWhiteSpace(ann.CreatedByRoleName) && ann.CreatedByRoleName != ann.Author ? $" · {ann.CreatedByRoleName}" : "")
                                             </MudText>
                                         </div>
                                         <div @onclick:stopPropagation="true">
-                                            @if (!ann.IsResolved)
+                                            @if (!ann.IsResolved && CanResolveAnnotation(ann))
                                             {
-                                                <MudTooltip Text="Resolve Issue"><MudIconButton Icon="@Icons.Material.Filled.Check" Size="Size.Small" Color="Color.Success" OnClick="@(() => ResolveAnnotation(ann.Id))" Disabled="@(!CanAnnotate)" /></MudTooltip>
+                                                <MudTooltip Text="Resolve Issue"><MudIconButton Icon="@Icons.Material.Filled.Check" Size="Size.Small" Color="Color.Success" OnClick="@(() => ResolveAnnotation(ann.Id))" /></MudTooltip>
                                             }
                                         </div>
                                     </div>
@@ -1090,6 +1091,23 @@ else
         </div>
     }
 
+    @* Plain conditional overlay (NOT MudDialog): the inline MudDialog @bind-Visible pattern leaves a
+       second "ghost" layer after confirming in Blazor Server; a simple @if overlay vanishes cleanly. *@
+    @if (_showNewChapterDialog)
+    {
+        <div style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: flex; align-items: center; justify-content: center;" @onclick="@(() => _showNewChapterDialog = false)">
+            <div style="background: var(--mud-palette-surface); color: var(--mud-palette-text-primary); border-radius: 8px; width: 90%; max-width: 420px; padding: 24px; box-shadow: 0 8px 32px rgba(0,0,0,0.35);" @onclick:stopPropagation="true">
+                <MudText Typo="Typo.h6" Class="mb-3">New Chapter</MudText>
+                <MudTextField T="string" @bind-Value="_newChapterNumberLabel" Label="Chapter Number" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Immediate="true" HelperText="A positive number, e.g. 3 or 2.5. Must be unique among active chapters (a cancelled number can be reused)." />
+                <div class="d-flex justify-end gap-2 mt-4">
+                    <MudButton OnClick="@(() => _showNewChapterDialog = false)">Cancel</MudButton>
+                    <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="ConfirmNewChapter">Add Chapter</MudButton>
+                </div>
+            </div>
+        </div>
+    }
+
     <MudDialog @bind-Visible="_showReviewDialog" Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
         <TitleContent><MudText Typo="Typo.h6">Submit Editorial Review</MudText></TitleContent>
         <DialogContent>
@@ -1166,6 +1184,17 @@ else
         height: 100vh;
         width: 100vw;
         background-color: #ffffff;
+        /* Panel widths as variables so laptop breakpoints can shrink the side panels
+           (giving the canvas more room) without breaking the collapse toggle. */
+        --mf-sidebar-w: 250px;
+        --mf-tools-w: 320px;
+    }
+    /* Common laptops (~1440px and below): tighten the chrome so the workspace isn't cramped. */
+    @@media (max-width: 1440px) {
+        .mf-workspace-container { --mf-sidebar-w: 215px; --mf-tools-w: 285px; }
+    }
+    @@media (max-width: 1280px) {
+        .mf-workspace-container { --mf-sidebar-w: 195px; --mf-tools-w: 260px; }
     }
     .mud-pagination, .mud-pagination li {
         list-style-type: none !important;

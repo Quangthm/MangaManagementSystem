@@ -360,22 +360,31 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     sc.EndDate))
                 .ToListAsync(cancellationToken);
 
-            // Paginated chapters sorted by CreatedAtUtc.
-            int totalChapterCount = await _context.Chapters
-                .CountAsync(c => c.SeriesId == series.SeriesId, cancellationToken);
-
-            int skip = (chapterPage - 1) * chapterPageSize;
-
-            var chapters = await _context.Chapters
+            // Chapters ordered by NUMERIC chapter number so "2.5" sits between 2 and 3 and "10" after "9".
+            // Sorting a string label numerically in SQL is fragile (CAST fails on any non-numeric legacy
+            // label); chapter counts per series are bounded, so load all then sort + paginate in memory.
+            var allChapters = await _context.Chapters
                 .AsNoTracking()
                 .Where(c => c.SeriesId == series.SeriesId)
-                .OrderBy(c => c.CreatedAtUtc)
+                .ToListAsync(cancellationToken);
+
+            int totalChapterCount = allChapters.Count;
+            int skip = (chapterPage - 1) * chapterPageSize;
+
+            var chapters = allChapters
+                .OrderBy(c => ParseChapterNumber(c.ChapterNumberLabel))
+                .ThenBy(c => c.ChapterNumberLabel, StringComparer.OrdinalIgnoreCase)
                 .Skip(skip)
                 .Take(chapterPageSize)
-                .ToListAsync(cancellationToken);
+                .ToList();
 
             return (series, contributors, chapters, totalChapterCount);
         }
+
+        // Numeric sort key for a chapter number label; non-numeric/blank sinks to the end.
+        private static decimal ParseChapterNumber(string? label)
+            => decimal.TryParse((label ?? "").Trim(), System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : decimal.MaxValue;
 
         // ── Workspace entry access check (read model) ───────────────────────────────
 
