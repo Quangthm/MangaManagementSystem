@@ -1,7 +1,10 @@
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
+using MangaManagementSystem.Domain.Policies;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -14,8 +17,17 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 {
     public class ChapterPageTaskRepository : GenericRepository<ChapterPageTask>, IChapterPageTaskRepository
     {
-        public ChapterPageTaskRepository(ApplicationDbContext context) : base(context)
+        private const string ActiveUserStatusCode = "ACTIVE";
+        private const string MangakaRoleName = "Mangaka";
+        private const string AssistantRoleName = "Assistant";
+
+        private readonly ILogger<ChapterPageTaskRepository> _logger;
+
+        public ChapterPageTaskRepository(
+            ApplicationDbContext context,
+            ILogger<ChapterPageTaskRepository> logger) : base(context)
         {
+            _logger = logger;
         }
 
         public async Task<Guid> CreateChapterPageTaskAsync(
@@ -29,34 +41,189 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             decimal? compensationAmount,
             IReadOnlyList<Guid> pageRegionIds)
         {
-            var conn = _context.Database.GetDbConnection();
-            await using var cmd = conn.CreateCommand();
-            cmd.CommandText = "manga.usp_ChapterPageTask_Create";
-            cmd.CommandType = CommandType.StoredProcedure;
+            var normalizedRegionIds = (pageRegionIds ?? Array.Empty<Guid>())
+                .Distinct()
+                .ToArray();
 
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@actor_user_id", System.Data.SqlDbType.UniqueIdentifier) { Value = actorUserId });
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@assigned_to_user_id", System.Data.SqlDbType.UniqueIdentifier) { Value = assignedToUserId });
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@type_code", System.Data.SqlDbType.NVarChar, 50) { Value = typeCode });
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@task_title", System.Data.SqlDbType.NVarChar, 200) { Value = taskTitle });
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@task_description", System.Data.SqlDbType.NVarChar, -1) { Value = taskDescription });
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@priority_level", System.Data.SqlDbType.TinyInt) { Value = priorityLevel });
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@due_at_utc", System.Data.SqlDbType.DateTime2) { Value = dueAtUtc });
+            if (normalizedRegionIds.Length == 0)
+                throw new InvalidOperationException("At least one page region is required.");
 
-            var compParam = new Microsoft.Data.SqlClient.SqlParameter("@compensation_amount", System.Data.SqlDbType.Decimal) { Precision = 12, Scale = 2 };
-            if (compensationAmount.HasValue) compParam.Value = compensationAmount.Value; else compParam.Value = 0m;
-            cmd.Parameters.Add(compParam);
+            await using var transaction = await _context.Database.BeginTransactionAsync(
+                IsolationLevel.RepeatableRead);
 
-            cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@page_region_ids_json", System.Data.SqlDbType.NVarChar, -1) { Value = System.Text.Json.JsonSerializer.Serialize(pageRegionIds) });
+            try
+            {
+                var regions = await _context.PageRegions
+                    .Where(region => normalizedRegionIds.Contains(region.PageRegionId))
+                    .Include(region => region.ChapterPageVersion)
+                        .ThenInclude(version => version!.ChapterPage)
+                            .ThenInclude(page => page!.Chapter)
+                                .ThenInclude(chapter => chapter!.Series)
+                    .ToListAsync();
 
-            var newIdParam = new Microsoft.Data.SqlClient.SqlParameter("@new_chapter_page_task_id", System.Data.SqlDbType.UniqueIdentifier) { Direction = ParameterDirection.Output };
-            cmd.Parameters.Add(newIdParam);
+                if (regions.Count != normalizedRegionIds.Length)
+                {
+                    throw new InvalidOperationException(
+                        "All selected page regions must exist.");
+                }
 
-            if (conn.State != ConnectionState.Open)
-                await conn.OpenAsync();
+                if (regions.Select(region => region.ChapterPageVersionId).Distinct().Count() != 1)
+                {
+                    throw new InvalidOperationException(
+                        "All selected page regions must belong to the same chapter page version.");
+                }
 
-            await cmd.ExecuteNonQueryAsync();
+                var pageVersion = regions[0].ChapterPageVersion;
+                var page = pageVersion?.ChapterPage;
+                var chapter = page?.Chapter;
+                var series = chapter?.Series;
 
-            return (Guid)newIdParam.Value;
+                if (pageVersion == null || page == null || chapter == null || series == null)
+                {
+                    throw new InvalidOperationException(
+                        "The selected page-region context is no longer valid.");
+                }
+
+                var actor = await _context.Users
+                    .Include(user => user.Role)
+                    .FirstOrDefaultAsync(user => user.UserId == actorUserId);
+
+                if (actor == null
+                    || !string.Equals(actor.StatusCode, ActiveUserStatusCode, StringComparison.OrdinalIgnoreCase)
+                    || !string.Equals(actor.Role?.RoleName, MangakaRoleName, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException(
+                        "An active Mangaka account is required to create page tasks.");
+                }
+
+                var assignee = await _context.Users
+                    .Include(user => user.Role)
+                    .FirstOrDefaultAsync(user => user.UserId == assignedToUserId);
+
+                if (assignee == null
+                    || !string.Equals(assignee.StatusCode, ActiveUserStatusCode, StringComparison.OrdinalIgnoreCase)
+                    || !string.Equals(assignee.Role?.RoleName, AssistantRoleName, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException(
+                        "The assigned user must be an active Assistant.");
+                }
+
+                var contributorUserIds = await _context.SeriesContributors
+                    .Where(contributor =>
+                        contributor.SeriesId == series.SeriesId
+                        && contributor.EndDate == null
+                        && (contributor.UserId == actorUserId
+                            || contributor.UserId == assignedToUserId))
+                    .Select(contributor => contributor.UserId)
+                    .Distinct()
+                    .ToListAsync();
+
+                if (!contributorUserIds.Contains(actorUserId))
+                {
+                    throw new InvalidOperationException(
+                        "You must be an active Mangaka contributor of this series to create page tasks.");
+                }
+
+                if (!contributorUserIds.Contains(assignedToUserId))
+                {
+                    throw new InvalidOperationException(
+                        "The assigned Assistant must be an active contributor of this series.");
+                }
+
+                if (!SeriesProductionPolicy.AllowsNormalProduction(series.StatusCode)
+                    || !ChapterPageTaskCreationPolicy.CanCreateTask(chapter.StatusCode))
+                {
+                    throw new InvalidOperationException(
+                        "New tasks can only be created for DRAFT or REVISION_REQUESTED chapters in a SERIALIZED or HIATUS series.");
+                }
+
+                var createdAtUtc = DateTime.UtcNow;
+                var task = new ChapterPageTask
+                {
+                    AssignedToUserId = assignedToUserId,
+                    TypeCode = typeCode,
+                    StatusCode = "ASSIGNED",
+                    TaskTitle = taskTitle,
+                    TaskDescription = taskDescription,
+                    PriorityLevel = priorityLevel,
+                    DueAtUtc = dueAtUtc,
+                    CompensationAmount = compensationAmount ?? 0m,
+                    CompletedPageVersionId = null,
+                    CreatedAtUtc = createdAtUtc,
+                    CreatedByUserId = actorUserId,
+                    UpdatedAtUtc = null,
+                    PageRegions = regions
+                };
+
+                _context.ChapterPageTasks.Add(task);
+                await _context.SaveChangesAsync();
+
+                string detailJson = JsonSerializer.Serialize(new
+                {
+                    assigned_to_user_id = assignedToUserId,
+                    type_code = typeCode,
+                    task_title = taskTitle,
+                    priority_level = priorityLevel,
+                    due_at_utc = dueAtUtc,
+                    compensation_amount = compensationAmount ?? 0m,
+                    page_region_ids = normalizedRegionIds
+                });
+
+                await AppendTaskCreatedAuditAsync(
+                    actorUserId,
+                    task.ChapterPageTaskId,
+                    detailJson);
+
+                await transaction.CommitAsync();
+                return task.ChapterPageTaskId;
+            }
+            catch (DbUpdateException ex) when (IsExpectedTaskConstraintFailure(ex))
+            {
+                await transaction.RollbackAsync();
+                _logger.LogWarning(ex, "Expected database constraint failure while creating a chapter page task.");
+                throw new InvalidOperationException(
+                    "The task details conflict with the current data. Please review them and try again.");
+            }
+            catch (DbUpdateException ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Unexpected database failure while creating a chapter page task.");
+                throw;
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+        private async Task AppendTaskCreatedAuditAsync(
+            Guid actorUserId,
+            Guid taskId,
+            string detailJson)
+        {
+            var connection = _context.Database.GetDbConnection();
+            if (connection.State != ConnectionState.Open)
+                await connection.OpenAsync();
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = "audit.usp_AuditEvent_Append";
+            command.CommandType = CommandType.StoredProcedure;
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+
+            command.Parameters.Add(new SqlParameter("@actor_user_id", SqlDbType.UniqueIdentifier) { Value = actorUserId });
+            command.Parameters.Add(new SqlParameter("@action_code", SqlDbType.NVarChar, 64) { Value = "CHAPTER_PAGE_TASK_CREATED" });
+            command.Parameters.Add(new SqlParameter("@entity_type", SqlDbType.NVarChar, 128) { Value = "ChapterPageTask" });
+            command.Parameters.Add(new SqlParameter("@entity_id", SqlDbType.NVarChar, 100) { Value = taskId.ToString() });
+            command.Parameters.Add(new SqlParameter("@detail_json", SqlDbType.NVarChar, -1) { Value = detailJson });
+
+            await command.ExecuteNonQueryAsync();
+        }
+
+        private static bool IsExpectedTaskConstraintFailure(DbUpdateException ex)
+        {
+            return ex.InnerException is SqlException sqlException
+                && sqlException.Number is 547 or 2601 or 2627 or 2628 or 8115;
         }
 
         public async Task<ChapterPageTask?> GetByIdWithRegionsAsync(Guid id)

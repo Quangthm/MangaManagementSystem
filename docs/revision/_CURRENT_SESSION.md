@@ -1,105 +1,54 @@
-# _CURRENT_SESSION — Fix Publication Schedule Filter UI Bugs
+# Current Session — Create Chapter Page Task Eligibility
 
-**Started:** 2026-07-06T08:00:00Z
-**Agent:** OpenCode
-**Branch:** feature/Mangaka
-**Goal:** Fix 4 UI bugs + implement slug-based URL for Publication Schedule
-**Status:** DONE (both fixes)
+**Date:** 2026-07-16
+**Branch:** `feature/Mangaka`
+**Status:** Implemented; static verification only
 
----
+## Goal
 
-## 5. Slug URL + follow-up fixes (2026-07-06)
+Enforce production-eligible series and task-creation-eligible chapter states for both single-task and Quick Select `ChapterPageTask` creation. Replace only the single-task `manga.usp_ChapterPageTask_Create` call with EF Core while preserving its required audit behavior.
 
-**Changes:** 13 files across Domain/Infrastructure/API/Web layers
-**Build result:** 0 errors, 66 pre-existing warnings
-**Handoff:** `docs/revision/PublicationScheduling/2026-07-06-schedule-slug-filter-state-fixes.md`
+## Production files changed
 
-Backend additions:
-- `PublicationScheduleSeriesSuggestion.SeriesSlug` added
-- 2 lightweight EF resolution methods in `IPublicationScheduleRepository`
-- 2 new API endpoints: `by-slug/{slug}` and `by-id/{id}`
-- `MangakaChapterListItemDto.SeriesSlug` added
+- `MangaManagementSystem/src/MangaManagementSystem.Domain/Policies/ChapterPageTaskCreationPolicy.cs`
+- `MangaManagementSystem/src/MangaManagementSystem.Application/Services/ChapterPageTaskService.cs`
+- `MangaManagementSystem/src/MangaManagementSystem.Infrastructure/Repositories/ChapterPageTaskRepository.cs`
+- `MangaManagementSystem/src/MangaManagementSystem.Infrastructure/Repositories/QuickSelectRepository.cs`
+- `MangaManagementSystem/src/MangaManagementSystem.API/Controllers/Mangaka/MangakaTaskController.cs`
 
-Web fixes:
-- URL now uses `?series={slug}` (user-facing), internal filtering still uses `seriesId`
-- Legacy `?seriesId={guid}` supported with slug upgrade
-- All 4 bugs fixed (autocomplete label, drawer clear, chapter search scoping, stale chapter state)
-- Source navigation links updated
+## Result
 
-## 6. Phase 2 — Drag/Drop Scheduling UX (2026-07-06)
+- `ChapterPageTaskCreationPolicy` permits task creation only for `DRAFT` and `REVISION_REQUESTED` chapters.
+- Both single-task and Quick Select writes reuse `SeriesProductionPolicy` and the new chapter policy inside `RepeatableRead` transactions.
+- Both paths authoritatively validate active Mangaka creator and active Assistant assignee roles and series memberships.
+- Single-task creation now uses EF Core for context lookup, task insertion, and region links.
+- `audit.usp_AuditEvent_Append` remains inside the active EF transaction, preserving role snapshot resolution, audit locking, and atomic rollback.
+- Quick Select retains its app lock, FULL_PAGE-region behavior, batch atomicity, and existing EF audit behavior.
+- Reload and notification remain after the single-task commit.
 
-**Changes:** 2 files (Web-only)
-**Build result:** 0 errors, 66 pre-existing warnings
-**Handoff:** `docs/revision/PublicationScheduling/2026-07-06-schedule-drag-drop-ux.md`
+## Constraint ownership
 
-Added drag-and-drop scheduling: drawer chapter cards → calendar day cells.
-Uses existing `SetPlannedReleaseDateAsync` APIs. No backend changes.
-Calendar items not draggable (no-unschedule guarantee preserved).
+Application validation is limited to workflow inputs: nonempty IDs, nonempty effective region list, required normalized title/description, and existing null due-date/compensation defaults. Task type, priority, compensation range/precision, maximum lengths, FKs, status checks, and junction uniqueness remain database-owned.
 
----
+Only confirmed SQL constraint/conflict numbers are converted to a safe client message. Unexpected `DbUpdateException` failures are logged and rethrown for the generic 500 response.
 
-## 0. Context loaded
+## Protected scope
 
-- [x] `docs/agents/AGENTS.md`
-- [x] `docs/agents/AI_AGENT_SKILLS_GUIDE.md`
-- [x] `docs/agents/SESSION_RULE.md`
-- [x] `docs/agents/RESUME_PACK.md`
-- [x] `docs/context.md`
-- [x] `docs/revision/PublicationScheduling/2026-07-05-action-drawer-editor-endpoint-integration.md`
-- [x] `docs/revision/PublicationScheduling/2026-07-05-action-drawer-series-filter-and-mangaka-cover-polish.md`
-- [x] `docs/revision/PublicationScheduling/2026-07-05-advisory-scheduling-backend-update.md`
+No Creator Workspace, Quick Select UI/service/DTO/API/client, task DTO/interface, SQL, schema, migration, `SeriesProductionPolicy`, Create Chapter, or unrelated task-lifecycle file was changed.
 
----
+## Verification boundary
 
-## 1. Verified state at start
+Only static checks are authorized. Restore, build, test, run, servers, watchers, migrations, and SQL execution were not run.
 
-```text
-## feature/Mangaka...origin/feature/Mangaka
-```
-No dirty files.
+Completed static checks:
 
----
+- `git diff --check` passed; only working-copy LF/CRLF notices were emitted.
+- Source search found no application call to `manga.usp_ChapterPageTask_Create`; only its unchanged bootstrap definition remains.
+- Both task-writing repositories call both policies inside `RepeatableRead` transactions.
+- The single-task audit command is attached to the current EF transaction.
+- Quick Select still calls its existing application-lock helper.
+- Protected workspace, DTO, interface, SQL, schema, migration, and configuration paths have no diff.
 
-## 2. Task scope
+## Final handoff
 
-### In scope
-- Fix Bug 1: Initial series filter stuck in "Loading..."
-- Fix Bug 2: Clearing and reselecting same series does not apply filtering
-- Fix Bug 3: Editor clear series filter does not work like Mangaka
-- Fix Bug 4: Clearing chapter search does not unfilter chapter list
-- Refactor for maintainability (computed properties, separated methods)
-
-### Out of scope
-- API/Application/Infrastructure/Database changes
-- Scheduling business rule changes
-- New API endpoints
-
-### Architecture flow
-Web-only UI state/filter fix. No backend changes.
-
----
-
-## 3. Plan
-
-1. Add `OnClearSeriesRequested` EventCallback to drawer, wire in parent
-2. Add computed properties: `SeriesChipLabel`, `HasSeriesFilter`, `HasChapterFilter`
-3. Add `_resolvedSeriesTitle` field, `ResolveSeriesDisplayTitle()`, `ResetResolvedSeriesLabel()`
-4. Separate `LoadChaptersAsync` into `LoadMangakaChaptersAsync()` / `LoadEditorChaptersAsync()`
-5. Refactor `ClearSeriesFilter()` → `ClearSelectedSeriesAsync()` — invokes parent callback, resets local state
-6. Add `ClearChapterSearch()` method
-7. Rename `ApplyFilters()` → `ApplyChapterFilters()` at all call sites
-8. Fix Bug 4: `ResetValueOnEmptyText="true"` on chapter autocomplete
-9. Build and verify
-
----
-
-## 4. Build result
-
-```
-dotnet build .\MangaManagementSystem\MangaManagementSystem.slnx --no-incremental
-```
-Result: SUCCESS — 0 errors, 66 pre-existing warnings (none from changed files)
-
-## 5. Handoff
-
-`docs/revision/PublicationScheduling/2026-07-06-schedule-filter-clear-fixes.md`
+`docs/revision/Mangaka/2026-07-16-create-chapter-page-task-eligibility.md`

@@ -20,19 +20,40 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task<ChapterPageTaskDto> CreateChapterPageTaskAsync(CreateChapterPageTaskDto dto)
         {
-            // Workflow create goes through the stored procedure so permission checks,
-            // same-page-version validation, transaction handling, and audit logging
-            // are owned by SQL. The actor (task creator) is distinct from the assignee.
+            if (dto.ActorUserId == Guid.Empty)
+                throw new InvalidOperationException("Actor user ID is required.");
+
+            if (dto.AssignedToUserId == Guid.Empty)
+                throw new InvalidOperationException("Assigned user ID is required.");
+
+            var pageRegionIds = (dto.PageRegionIds ?? Array.Empty<Guid>())
+                .Distinct()
+                .ToArray();
+
+            if (pageRegionIds.Length == 0)
+                throw new InvalidOperationException("At least one page region is required.");
+
+            string taskTitle = dto.TaskTitle?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(taskTitle))
+                throw new InvalidOperationException("Task title is required.");
+
+            string taskDescription = dto.TaskDescription?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(taskDescription))
+                throw new InvalidOperationException("Task description is required.");
+
+            DateTime dueAtUtc = dto.DueAtUtc ?? DateTime.UtcNow.AddDays(7);
+            decimal compensationAmount = dto.CompensationAmount ?? 0m;
+
             var newTaskId = await _unitOfWork.ChapterPageTasks.CreateChapterPageTaskAsync(
                 dto.ActorUserId,
                 dto.AssignedToUserId,
                 dto.TypeCode,
-                dto.TaskTitle,
-                dto.TaskDescription,
+                taskTitle,
+                taskDescription,
                 (byte)dto.PriorityLevel,
-                dto.DueAtUtc ?? DateTime.UtcNow.AddDays(7),
-                dto.CompensationAmount,
-                dto.PageRegionIds);
+                dueAtUtc,
+                compensationAmount,
+                pageRegionIds);
 
             // Reload with regions
             var entity = await _unitOfWork.ChapterPageTasks.GetByIdWithRegionsAsync(newTaskId);
