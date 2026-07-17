@@ -3423,3 +3423,39 @@ a {
     .mf-genre-toggle:hover {
         background: #e0e7ff;
     }
+
+.mf-tab-card {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding: 8px;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    background: #ffffff;
+}
+
+.mf-tab {
+    border: none;
+    border-radius: 999px;
+    padding: 9px 16px;
+    background: #f1f5f9;
+    color: #334155;
+    font-size: 13px;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+    .mf-tab.active {
+        background: #6366f1;
+        color: #ffffff;
+    }
+
+    .mf-tab:hover {
+        background: #e0e7ff;
+        color: #4f46e5;
+    }
+
+    .mf-tab.active:hover {
+        background: #4f46e5;
+        color: #ffffff;
+    }

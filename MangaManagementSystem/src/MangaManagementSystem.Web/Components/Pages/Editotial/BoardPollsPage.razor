@@ -59,7 +59,7 @@
                 <section class="mf-card">
                     <div class="mf-strong">No open polls</div>
                     <div class="mf-muted">
-                        When Board Chief opens a poll from D. Open Poll, it will appear here from SQL Server.
+                        When Board Chief opens a serialization or cancellation poll, it will appear here from SQL Server.
                     </div>
                 </section>
             }
@@ -119,7 +119,11 @@
 
                             <div class="mf-voting-header-actions">
                                 <span class="mf-deadline-pill">@DeadlineText(_selectedPoll)</span>
-                                <button class="mf-icon-btn" @onclick="CloseVotingCenter">×</button>
+
+                                <button class="mf-icon-btn"
+                                        @onclick="CloseVotingCenter">
+                                    ×
+                                </button>
                             </div>
                         </div>
 
@@ -135,6 +139,7 @@
 
                                     <div class="mf-editor-recommendation">
                                         <strong>Current Vote</strong>
+
                                         <p>
                                             @if (string.IsNullOrWhiteSpace(_selectedPoll.CurrentUserChoiceCode))
                                             {
@@ -285,6 +290,7 @@
     private void SelectChoice(string choiceCode)
     {
         _selectedChoice = choiceCode;
+
         _voteMessage = choiceCode == "REJECT" && string.IsNullOrWhiteSpace(_voteReason)
             ? "Reject will be saved with a default reason if you leave the comment empty."
             : null;
@@ -376,7 +382,9 @@
 
     private RenderFragment RenderResultRow(string label, string tone, int count, int total) => __builder =>
     {
-        var percent = total > 0 ? (int)Math.Round(count * 100.0 / total) : 0;
+        var percent = total > 0
+            ? (int)Math.Round(count * 100.0 / total)
+            : 0;
 
         <div class="mf-result-row @tone">
             <div>

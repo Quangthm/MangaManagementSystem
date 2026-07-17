@@ -35,106 +35,248 @@
         }
         else
         {
-            <section class="mf-filter-card">
-                <input class="mf-input mf-search-input"
-                       placeholder="Search proposals..."
-                       @bind="SearchText" />
+            <section class="mf-tab-card">
+                <button type="button"
+                        class="@GetTabClass("PROPOSAL_REVIEW")"
+                        @onclick="ShowProposalReviewTab">
+                    Proposal Review
+                </button>
 
-                <button class='@GetFilterChipClass(null)' @onclick="ClearStatusFilter">All</button>
-                <button class='@GetFilterChipClass("Draft")' @onclick="SetDraftFilter">Draft</button>
-                <button class='@GetFilterChipClass("In Review")' @onclick="SetInReviewFilter">In Review</button>
-                <button class='@GetFilterChipClass("Approved")' @onclick="SetApprovedFilter">Approved</button>
-                <button class='@GetFilterChipClass("Rejected")' @onclick="SetRejectedFilter">Rejected</button>
+                <AuthorizeView Roles="Editorial Board Chief">
+                    <Authorized>
+                        <button type="button"
+                                class="@GetTabClass("CANCEL_SERIALIZATION")"
+                                @onclick="ShowCancelSerializationTab">
+                            Cancel Serialization
+                        </button>
+                    </Authorized>
+                </AuthorizeView>
             </section>
 
-            <section class="mf-card table-card">
-                <div class="mf-table-wrap">
-                    <table class="mf-table">
-                        <thead>
-                            <tr>
-                                <th>Series Code</th>
-                                <th>Proposal Title</th>
-                                <th>Author</th>
-                                <th>Genre</th>
-                                <th>Version</th>
-                                <th>Submitted From Editor</th>
-                                <th>Status</th>
-                                <th>Assigned Editor</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
+            @if (IsProposalReviewTab)
+            {
+                <section class="mf-filter-card">
+                    <input class="mf-input mf-search-input"
+                           placeholder="Search proposals..."
+                           @bind="SearchText" />
 
-                        <tbody>
-                            @if (!FilteredProposals.Any())
-                            {
+                    <button class='@GetFilterChipClass(null)' @onclick="ClearStatusFilter">All</button>
+                    <button class='@GetFilterChipClass("Draft")' @onclick="SetDraftFilter">Draft</button>
+                    <button class='@GetFilterChipClass("In Review")' @onclick="SetInReviewFilter">In Review</button>
+                    <button class='@GetFilterChipClass("Approved")' @onclick="SetApprovedFilter">Approved</button>
+                    <button class='@GetFilterChipClass("Rejected")' @onclick="SetRejectedFilter">Rejected</button>
+                </section>
+
+                <section class="mf-card table-card">
+                    <div class="mf-table-wrap">
+                        <table class="mf-table">
+                            <thead>
                                 <tr>
-                                    <td colspan="9">
-                                        <div class="mf-muted">No proposals found.</div>
-                                    </td>
+                                    <th>Series Code</th>
+                                    <th>Proposal Title</th>
+                                    <th>Author</th>
+                                    <th>Genre</th>
+                                    <th>Version</th>
+                                    <th>Submitted From Editor</th>
+                                    <th>Status</th>
+                                    <th>Assigned Editor</th>
+                                    <th>Actions</th>
                                 </tr>
-                            }
-                            else
-                            {
-                                @foreach (var proposal in FilteredProposals)
+                            </thead>
+
+                            <tbody>
+                                @if (!FilteredProposals.Any())
                                 {
                                     <tr>
-                                        <td>
-                                            <span class="mf-code">@proposal.Code</span>
-                                        </td>
-
-                                        <td class="mf-strong">@proposal.Title</td>
-                                        <td>@proposal.Author</td>
-
-                                        <td class="mf-genre-cell">
-                                            @if (proposal.GenreItems.Count == 0)
-                                            {
-                                                <span>Unknown Genre</span>
-                                            }
-                                            else
-                                            {
-                                                <div class="mf-genre-list table @(IsGenreRowExpanded(proposal) ? "expanded" : "collapsed")">
-                                                    @foreach (var genre in GetVisibleRowGenres(proposal))
-                                                    {
-                                                        <span class="mf-genre-pill">@genre</span>
-                                                    }
-                                                </div>
-
-                                                @if (proposal.GenreItems.Count > MaxTableVisibleGenres)
-                                                {
-                                                    <button type="button"
-                                                            class="mf-genre-toggle"
-                                                            @onclick="() => ToggleGenreRow(proposal)">
-                                                        @(IsGenreRowExpanded(proposal)
-                                                            ? "Show less"
-                                                            : $"+{proposal.GenreItems.Count - MaxTableVisibleGenres} more")
-                                                    </button>
-                                                }
-                                            }
-                                        </td>
-
-                                        <td class="mf-mono">@proposal.VersionLabel</td>
-                                        <td>@proposal.SubmittedFromEditor</td>
-
-                                        <td>
-                                            <StatusBadge Status="@proposal.Status" />
-                                        </td>
-
-                                        <td>@proposal.AssignedEditor</td>
-
-                                        <td>
-                                            <button type="button"
-                                                    class="mf-btn mf-btn-soft"
-                                                    @onclick="() => OpenDetails(proposal)">
-                                                View
-                                            </button>
+                                        <td colspan="9">
+                                            <div class="mf-muted">No proposals found.</div>
                                         </td>
                                     </tr>
                                 }
+                                else
+                                {
+                                    @foreach (var proposal in FilteredProposals)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <span class="mf-code">@proposal.Code</span>
+                                            </td>
+
+                                            <td class="mf-strong">@proposal.Title</td>
+                                            <td>@proposal.Author</td>
+
+                                            <td class="mf-genre-cell">
+                                                @if (proposal.GenreItems.Count == 0)
+                                                {
+                                                    <span>Unknown Genre</span>
+                                                }
+                                                else
+                                                {
+                                                    <div class="mf-genre-list table @(IsGenreRowExpanded(proposal) ? "expanded" : "collapsed")">
+                                                        @foreach (var genre in GetVisibleRowGenres(proposal))
+                                                        {
+                                                            <span class="mf-genre-pill">@genre</span>
+                                                        }
+                                                    </div>
+
+                                                    @if (proposal.GenreItems.Count > MaxTableVisibleGenres)
+                                                    {
+                                                        <button type="button"
+                                                                class="mf-genre-toggle"
+                                                                @onclick="() => ToggleGenreRow(proposal)">
+                                                            @(IsGenreRowExpanded(proposal)
+                                                                ? "Show less"
+                                                                : $"+{proposal.GenreItems.Count - MaxTableVisibleGenres} more")
+                                                        </button>
+                                                    }
+                                                }
+                                            </td>
+
+                                            <td class="mf-mono">@proposal.VersionLabel</td>
+                                            <td>@proposal.SubmittedFromEditor</td>
+
+                                            <td>
+                                                <StatusBadge Status="@proposal.Status" />
+                                            </td>
+
+                                            <td>@proposal.AssignedEditor</td>
+
+                                            <td>
+                                                <button type="button"
+                                                        class="mf-btn mf-btn-soft"
+                                                        @onclick="() => OpenDetails(proposal)">
+                                                    View
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            }
+
+            <AuthorizeView Roles="Editorial Board Chief">
+                <Authorized>
+                    @if (IsCancelSerializationTab)
+                    {
+                        <section class="mf-card">
+                            <div class="mf-row">
+                                <div>
+                                    <h3>Open Cancel Serialization Poll</h3>
+                                    <p class="mf-muted">
+                                        Open a CANCEL_SERIALIZATION vote for a SERIALIZED or HIATUS series.
+                                    </p>
+                                </div>
+
+                                <StatusBadge Status="Board Chief" />
+                            </div>
+
+                            <div class="mf-grid mf-grid-2 mf-gap-small">
+                                <div>
+                                    <label class="mf-label">Series</label>
+
+                                    <select class="mf-input"
+                                            @bind="SelectedCancelSeriesIdText">
+                                        <option value="">Select series...</option>
+
+                                        @foreach (var series in CancellableSeries)
+                                        {
+                                            <option value="@series.SeriesId"
+                                                    disabled="@series.HasOpenCancelSerializationPoll">
+                                                @series.Title (@series.StatusCode)
+                                                @(series.HasOpenCancelSerializationPoll ? " - Poll already open" : "")
+                                            </option>
+                                        }
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label class="mf-label">Deadline optional</label>
+
+                                    @if (ShowDeadlinePicker)
+                                    {
+                                        <div class="mf-deadline-editor compact">
+                                            <input class="mf-input"
+                                                   type="date"
+                                                   value="@OpenPollDeadlineDraftText"
+                                                   @onchange="OnDeadlineInputChanged" />
+
+                                            <div class="mf-actions tight">
+                                                <button type="button"
+                                                        class="mf-btn mf-btn-primary"
+                                                        @onclick="ConfirmDeadline">
+                                                    Save
+                                                </button>
+
+                                                <button type="button"
+                                                        class="mf-btn"
+                                                        @onclick="CancelDeadline">
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <button type="button"
+                                                class="mf-btn mf-btn-soft full"
+                                                disabled="@(SelectedCancelSeries?.HasOpenCancelSerializationPoll == true)"
+                                                @onclick="StartDeadlinePicker">
+                                            @(ConfirmedOpenPollDeadline is null
+                                                ? "Set deadline (optional)"
+                                                : $"Deadline set: {FormatDate(ConfirmedOpenPollDeadline)}")
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+
+                            @if (CancellableSeries.Count == 0)
+                            {
+                                <div class="mf-alert info">
+                                    No SERIALIZED or HIATUS series is available for cancellation poll.
+                                </div>
                             }
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+
+                            @if (SelectedCancelSeries is not null)
+                            {
+                                <div class="mf-muted mf-gap-small">
+                                    Selected: <strong>@SelectedCancelSeries.Title</strong>
+                                    · Status: <strong>@SelectedCancelSeries.StatusCode</strong>
+                                </div>
+                            }
+
+                            @if (SelectedCancelSeries?.HasOpenCancelSerializationPoll == true)
+                            {
+                                <div class="mf-alert warning">
+                                    This series already has an open cancellation poll.
+                                </div>
+                            }
+
+                            <label class="mf-label mf-gap-small">Poll reason</label>
+
+                            <textarea class="mf-textarea"
+                                      @bind="CancelPollReason"
+                                      placeholder="Explain why this serialized/hiatus series should be considered for cancellation..."></textarea>
+
+                            <button type="button"
+                                    class="mf-btn mf-btn-primary full mf-gap-small"
+                                    disabled="@IsOpenCancelPollDisabled"
+                                    @onclick="OpenCancelPollAsync">
+                                @(IsOpeningCancelPoll ? "Opening..." : "Open Cancel Poll")
+                            </button>
+
+                            @if (!string.IsNullOrWhiteSpace(CancelPollMessage))
+                            {
+                                <div class="@CancelPollAlertClass">
+                                    @CancelPollMessage
+                                </div>
+                            }
+                        </section>
+                    }
+                </Authorized>
+            </AuthorizeView>
         }
 
         @if (SelectedProposal is not null)
@@ -320,199 +462,88 @@
 
                                         <div class="mf-open-poll-box">
                                             <div class="mf-panel-title">
-                                                Open poll
+                                                Open poll for @SelectedProposal.Code
                                             </div>
 
                                             <label class="mf-label">Poll type</label>
 
-                                            <select class="mf-input"
-                                                    value="@PollType"
-                                                    @onchange="OnPollTypeChanged">
+                                            <select class="mf-input" @bind="PollType" disabled>
                                                 <option value="START_SERIALIZATION">START_SERIALIZATION</option>
-                                                <option value="CANCEL_SERIALIZATION">CANCEL_SERIALIZATION</option>
                                             </select>
 
-                                            @if (PollType == "START_SERIALIZATION")
+                                            <label class="mf-label">Publication frequency</label>
+
+                                            <select class="mf-input" @bind="PublicationFrequencyCode">
+                                                <option value="WEEKLY">WEEKLY</option>
+                                                <option value="MONTHLY">MONTHLY</option>
+                                                <option value="IRREGULAR">IRREGULAR</option>
+                                            </select>
+
+                                            @if (ShowDeadlinePicker)
                                             {
-                                                <div class="mf-muted mf-gap-small">
-                                                    Start serialization poll for <strong>@SelectedProposal.Code</strong>.
+                                                <div class="mf-deadline-editor compact">
+                                                    <label>Set deadline <span>(optional)</span></label>
+
+                                                    <input class="mf-input"
+                                                           type="date"
+                                                           value="@OpenPollDeadlineDraftText"
+                                                           @onchange="OnDeadlineInputChanged" />
+
+                                                    <div class="mf-actions tight">
+                                                        <button type="button"
+                                                                class="mf-btn mf-btn-primary"
+                                                                @onclick="ConfirmDeadline">
+                                                            Save
+                                                        </button>
+
+                                                        <button type="button"
+                                                                class="mf-btn"
+                                                                @onclick="CancelDeadline">
+                                                            Cancel
+                                                        </button>
+                                                    </div>
                                                 </div>
-
-                                                <label class="mf-label">Publication frequency</label>
-
-                                                <select class="mf-input" @bind="PublicationFrequencyCode">
-                                                    <option value="WEEKLY">WEEKLY</option>
-                                                    <option value="MONTHLY">MONTHLY</option>
-                                                    <option value="IRREGULAR">IRREGULAR</option>
-                                                </select>
-
-                                                @if (ShowDeadlinePicker)
-                                                {
-                                                    <div class="mf-deadline-editor compact">
-                                                        <label>Set deadline <span>(optional)</span></label>
-
-                                                        <input class="mf-input"
-                                                               type="date"
-                                                               value="@OpenPollDeadlineDraftText"
-                                                               @onchange="OnDeadlineInputChanged" />
-
-                                                        <div class="mf-actions tight">
-                                                            <button type="button"
-                                                                    class="mf-btn mf-btn-primary"
-                                                                    @onclick="ConfirmDeadline">
-                                                                Save
-                                                            </button>
-
-                                                            <button type="button"
-                                                                    class="mf-btn"
-                                                                    @onclick="CancelDeadline">
-                                                                Cancel
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                }
-                                                else
-                                                {
-                                                    <button type="button"
-                                                            class="mf-btn mf-btn-soft full"
-                                                            disabled="@HasCurrentPollTypeConflict"
-                                                            @onclick="StartDeadlinePicker">
-                                                        @(ConfirmedOpenPollDeadline is null
-                                                            ? "Set deadline (optional)"
-                                                            : $"Deadline set: {FormatDate(ConfirmedOpenPollDeadline)}")
-                                                    </button>
-                                                }
-
-                                                <label class="mf-label">Poll reason</label>
-
-                                                <textarea class="mf-textarea"
-                                                          disabled="@HasCurrentPollTypeConflict"
-                                                          @bind="PollReason"
-                                                          placeholder="Explain why this proposal should go to board vote..."></textarea>
-
-                                                @if (HasCurrentPollTypeConflict)
-                                                {
-                                                    <div class="mf-alert warning">
-                                                        @CurrentOpenPollConflictMessage
-                                                    </div>
-                                                }
-                                                else
-                                                {
-                                                    <button type="button"
-                                                            class="mf-btn mf-btn-primary full"
-                                                            disabled="@IsOpenPollDisabled"
-                                                            @onclick="ConfirmOpenPollAsync">
-                                                        @OpenPollButtonText
-                                                    </button>
-                                                }
-
-                                                @if (!string.IsNullOrWhiteSpace(OpenPollMessage))
-                                                {
-                                                    <div class="@OpenPollAlertClass">
-                                                        @OpenPollMessage
-                                                    </div>
-                                                }
                                             }
-                                            else if (PollType == "CANCEL_SERIALIZATION")
+                                            else
                                             {
-                                                <div class="mf-muted mf-gap-small">
-                                                    Open cancellation poll for a <strong>SERIALIZED</strong> or <strong>HIATUS</strong> series.
+                                                <button type="button"
+                                                        class="mf-btn mf-btn-soft full"
+                                                        disabled="@HasCurrentPollTypeConflict"
+                                                        @onclick="StartDeadlinePicker">
+                                                    @(ConfirmedOpenPollDeadline is null
+                                                        ? "Set deadline (optional)"
+                                                        : $"Deadline set: {FormatDate(ConfirmedOpenPollDeadline)}")
+                                                </button>
+                                            }
+
+                                            <label class="mf-label">Poll reason</label>
+
+                                            <textarea class="mf-textarea"
+                                                      disabled="@HasCurrentPollTypeConflict"
+                                                      @bind="PollReason"
+                                                      placeholder="Explain why this proposal should go to board vote..."></textarea>
+
+                                            @if (HasCurrentPollTypeConflict)
+                                            {
+                                                <div class="mf-alert warning">
+                                                    @CurrentOpenPollConflictMessage
                                                 </div>
-
-                                                <label class="mf-label">Series</label>
-
-                                                <select class="mf-input"
-                                                        @bind="SelectedCancelSeriesIdText">
-                                                    <option value="">Select series...</option>
-
-                                                    @foreach (var series in CancellableSeries)
-                                                    {
-                                                        <option value="@series.SeriesId"
-                                                                disabled="@series.HasOpenCancelSerializationPoll">
-                                                            @series.Title (@series.StatusCode)
-                                                            @(series.HasOpenCancelSerializationPoll ? " - Poll already open" : "")
-                                                        </option>
-                                                    }
-                                                </select>
-
-                                                @if (CancellableSeries.Count == 0)
-                                                {
-                                                    <div class="mf-alert info">
-                                                        No SERIALIZED or HIATUS series is available for cancellation poll.
-                                                    </div>
-                                                }
-
-                                                @if (SelectedCancelSeries is not null)
-                                                {
-                                                    <div class="mf-muted mf-gap-small">
-                                                        Selected: <strong>@SelectedCancelSeries.Title</strong>
-                                                        · Status: <strong>@SelectedCancelSeries.StatusCode</strong>
-                                                    </div>
-                                                }
-
-                                                @if (SelectedCancelSeries?.HasOpenCancelSerializationPoll == true)
-                                                {
-                                                    <div class="mf-alert warning">
-                                                        This series already has an open cancellation poll.
-                                                    </div>
-                                                }
-
-                                                @if (ShowDeadlinePicker)
-                                                {
-                                                    <div class="mf-deadline-editor compact">
-                                                        <label>Set deadline <span>(optional)</span></label>
-
-                                                        <input class="mf-input"
-                                                               type="date"
-                                                               value="@OpenPollDeadlineDraftText"
-                                                               @onchange="OnDeadlineInputChanged" />
-
-                                                        <div class="mf-actions tight">
-                                                            <button type="button"
-                                                                    class="mf-btn mf-btn-primary"
-                                                                    @onclick="ConfirmDeadline">
-                                                                Save
-                                                            </button>
-
-                                                            <button type="button"
-                                                                    class="mf-btn"
-                                                                    @onclick="CancelDeadline">
-                                                                Cancel
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                }
-                                                else
-                                                {
-                                                    <button type="button"
-                                                            class="mf-btn mf-btn-soft full"
-                                                            disabled="@(SelectedCancelSeries?.HasOpenCancelSerializationPoll == true)"
-                                                            @onclick="StartDeadlinePicker">
-                                                        @(ConfirmedOpenPollDeadline is null
-                                                            ? "Set deadline (optional)"
-                                                            : $"Deadline set: {FormatDate(ConfirmedOpenPollDeadline)}")
-                                                    </button>
-                                                }
-
-                                                <label class="mf-label">Poll reason</label>
-
-                                                <textarea class="mf-textarea"
-                                                          @bind="CancelPollReason"
-                                                          placeholder="Explain why this serialized/hiatus series should be considered for cancellation..."></textarea>
-
+                                            }
+                                            else
+                                            {
                                                 <button type="button"
                                                         class="mf-btn mf-btn-primary full"
-                                                        disabled="@IsOpenCancelPollDisabled"
-                                                        @onclick="OpenCancelPollAsync">
-                                                    @(IsOpeningCancelPoll ? "Opening..." : "Open Cancel Poll")
+                                                        disabled="@IsOpenPollDisabled"
+                                                        @onclick="ConfirmOpenPollAsync">
+                                                    @OpenPollButtonText
                                                 </button>
+                                            }
 
-                                                @if (!string.IsNullOrWhiteSpace(CancelPollMessage))
-                                                {
-                                                    <div class="@CancelPollAlertClass">
-                                                        @CancelPollMessage
-                                                    </div>
-                                                }
+                                            @if (!string.IsNullOrWhiteSpace(OpenPollMessage))
+                                            {
+                                                <div class="@OpenPollAlertClass">
+                                                    @OpenPollMessage
+                                                </div>
                                             }
                                         </div>
                                     </section>
@@ -533,6 +564,12 @@
     private const int MaxVisibleTags = 8;
     private const int MaxVisibleGenres = 4;
     private const int MaxTableVisibleGenres = 3;
+
+    private string ActiveTab { get; set; } = "PROPOSAL_REVIEW";
+
+    private bool IsProposalReviewTab => ActiveTab == "PROPOSAL_REVIEW";
+
+    private bool IsCancelSerializationTab => ActiveTab == "CANCEL_SERIALIZATION";
 
     private string SearchText { get; set; } = string.Empty;
     private string? StatusFilter { get; set; }
@@ -643,6 +680,44 @@
         }
     }
 
+    private void ShowProposalReviewTab()
+    {
+        ActiveTab = "PROPOSAL_REVIEW";
+
+        ShowDeadlinePicker = false;
+        OpenPollDeadlineDraftText = string.Empty;
+        ConfirmedOpenPollDeadline = null;
+        CancelPollMessage = null;
+        CancelPollSucceeded = false;
+    }
+
+    private async Task ShowCancelSerializationTab()
+    {
+        ActiveTab = "CANCEL_SERIALIZATION";
+
+        ShowDeadlinePicker = false;
+        OpenPollDeadlineDraftText = string.Empty;
+        ConfirmedOpenPollDeadline = null;
+        OpenPollMessage = null;
+        OpenPollSucceeded = false;
+        CancelPollMessage = null;
+        CancelPollSucceeded = false;
+
+        if (string.IsNullOrWhiteSpace(CancelPollReason))
+        {
+            CancelPollReason = "Board poll opened to consider cancelling serialization.";
+        }
+
+        await LoadCancellableSeriesAsync();
+    }
+
+    private string GetTabClass(string tabCode)
+    {
+        return ActiveTab == tabCode
+            ? "mf-tab active"
+            : "mf-tab";
+    }
+
     private void ToggleTags()
     {
         ShowAllTags = !ShowAllTags;
@@ -695,23 +770,17 @@
             }
 
             if (!string.IsNullOrWhiteSpace(OpenPollConflictType)
-                && OpenPollConflictType == PollType)
+                && OpenPollConflictType == "START_SERIALIZATION")
             {
                 return true;
             }
 
-            if (PollType == "START_SERIALIZATION"
-                && SelectedProposal.HasGenericOpenPollConflict)
+            if (SelectedProposal.HasGenericOpenPollConflict)
             {
                 return true;
             }
 
-            return PollType switch
-            {
-                "START_SERIALIZATION" => SelectedProposal.HasStartSerializationOpenPoll,
-                "CANCEL_SERIALIZATION" => SelectedProposal.HasCancelSerializationOpenPoll,
-                _ => false
-            };
+            return SelectedProposal.HasStartSerializationOpenPoll;
         }
     }
 
@@ -770,44 +839,6 @@
         finally
         {
             IsLoading = false;
-        }
-    }
-
-    private async Task OnPollTypeChanged(ChangeEventArgs args)
-    {
-        PollType = args.Value?.ToString() ?? "START_SERIALIZATION";
-
-        ShowDeadlinePicker = false;
-        OpenPollDeadlineDraftText = string.Empty;
-        ConfirmedOpenPollDeadline = null;
-
-        OpenPollMessage = null;
-        OpenPollSucceeded = false;
-
-        CancelPollMessage = null;
-        CancelPollSucceeded = false;
-
-        if (PollType == "START_SERIALIZATION")
-        {
-            SelectedCancelSeriesIdText = string.Empty;
-            CancelPollReason = string.Empty;
-
-            if (SelectedProposal is not null)
-            {
-                PollReason = $"Board poll opened for {SelectedProposal.Title}.";
-            }
-        }
-
-        if (PollType == "CANCEL_SERIALIZATION")
-        {
-            PollReason = string.Empty;
-
-            if (string.IsNullOrWhiteSpace(CancelPollReason))
-            {
-                CancelPollReason = "Board poll opened to consider cancelling serialization.";
-            }
-
-            await LoadCancellableSeriesAsync();
         }
     }
 
@@ -882,6 +913,7 @@
             CancelPollReason = string.Empty;
             OpenPollDeadlineDraftText = string.Empty;
             ConfirmedOpenPollDeadline = null;
+            ShowDeadlinePicker = false;
 
             await LoadCancellableSeriesAsync();
 
@@ -1138,12 +1170,12 @@
 
     private void StartDeadlinePicker()
     {
-        if (PollType == "START_SERIALIZATION" && HasCurrentPollTypeConflict)
+        if (ActiveTab == "PROPOSAL_REVIEW" && HasCurrentPollTypeConflict)
         {
             return;
         }
 
-        if (PollType == "CANCEL_SERIALIZATION"
+        if (ActiveTab == "CANCEL_SERIALIZATION"
             && SelectedCancelSeries?.HasOpenCancelSerializationPoll == true)
         {
             return;
@@ -1182,13 +1214,6 @@
     {
         if (SelectedProposal is null)
         {
-            return;
-        }
-
-        if (PollType != "START_SERIALIZATION")
-        {
-            OpenPollSucceeded = false;
-            OpenPollMessage = "Use the cancellation poll action for CANCEL_SERIALIZATION.";
             return;
         }
 
@@ -1254,7 +1279,7 @@
 
             if (IsDuplicateOpenPollMessage(ex.Message))
             {
-                OpenPollConflictType = PollType;
+                OpenPollConflictType = "START_SERIALIZATION";
             }
         }
         finally
