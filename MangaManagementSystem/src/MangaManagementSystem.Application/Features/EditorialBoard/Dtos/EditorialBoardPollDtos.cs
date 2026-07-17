@@ -66,6 +66,11 @@ public sealed record CancellableBoardSeriesDto(
     Guid SeriesId,
     string Code,
     string Title,
+    string Author,
+    string Genre,
+    string TagsDisplay,
+    string Synopsis,
+    string? PublicationFrequencyCode,
     string StatusCode,
     bool HasOpenCancelSerializationPoll);
 

@@ -47,7 +47,7 @@
                          Tone="blue" />
 
                 <KpiCard Label="My Pending Votes"
-                         Value="@_polls.Count(p => string.IsNullOrWhiteSpace(p.CurrentUserChoiceCode)).ToString(CultureInfo.InvariantCulture)"
+                         Value="@_polls.Count(p => !HasCurrentUserVoted(p)).ToString(CultureInfo.InvariantCulture)"
                          Description="Polls waiting for your vote"
                          Icon="U"
                          Tone="orange" />
@@ -87,7 +87,7 @@
                             <div class="mf-row mf-gap-small">
                                 <div class="mf-muted">@DeadlineText(poll)</div>
 
-                                @if (!string.IsNullOrWhiteSpace(poll.CurrentUserChoiceCode))
+                                @if (HasCurrentUserVoted(poll))
                                 {
                                     <StatusBadge Status="@($"Voted {poll.CurrentUserChoiceCode}")" />
                                 }
@@ -100,7 +100,7 @@
                             <div class="mf-actions end">
                                 <button class="mf-btn mf-btn-primary"
                                         @onclick="() => OpenVotingCenter(poll)">
-                                    Vote / View Poll
+                                    @(HasCurrentUserVoted(poll) ? "View Poll" : "Vote / View Poll")
                                 </button>
                             </div>
                         </article>
@@ -142,57 +142,79 @@
                                         <strong>Current Vote</strong>
 
                                         <p>
-                                            @if (string.IsNullOrWhiteSpace(_selectedPoll.CurrentUserChoiceCode))
+                                            @if (HasCurrentUserVoted(_selectedPoll))
                                             {
-                                                <span>You have not voted yet.</span>
+                                                <span>You voted @_selectedPoll.CurrentUserChoiceCode.</span>
                                             }
                                             else
                                             {
-                                                <span>You voted @_selectedPoll.CurrentUserChoiceCode.</span>
+                                                <span>You have not voted yet.</span>
                                             }
                                         </p>
                                     </div>
                                 </section>
 
-                                <section class="mf-card">
-                                    <h3>Cast Your Vote</h3>
+                                @if (HasCurrentUserVoted(_selectedPoll))
+                                {
+                                    <section class="mf-card">
+                                        <h3>Your Vote Status</h3>
 
-                                    <div class="mf-vote-options">
-                                        <button class="@VoteOptionClass("APPROVE")"
-                                                @onclick='() => SelectChoice("APPROVE")'>
-                                            <span>✓</span>
-                                            Approve
+                                        <div class="mf-alert info">
+                                            You already voted <strong>@GetCurrentVoteDisplay(_selectedPoll)</strong>.
+                                            Your vote cannot be changed.
+                                        </div>
+
+                                        @if (!string.IsNullOrWhiteSpace(_selectedPoll.CurrentUserVoteReason))
+                                        {
+                                            <div class="mf-proposal-summary-box">
+                                                <strong>Your Reason / Comment</strong>
+                                                <p>@_selectedPoll.CurrentUserVoteReason</p>
+                                            </div>
+                                        }
+                                    </section>
+                                }
+                                else
+                                {
+                                    <section class="mf-card">
+                                        <h3>Cast Your Vote</h3>
+
+                                        <div class="mf-vote-options">
+                                            <button class='@VoteOptionClass("APPROVE")'
+                                                    @onclick='() => SelectChoice("APPROVE")'>
+                                                <span>✓</span>
+                                                Approve
+                                            </button>
+
+                                            <button class='@VoteOptionClass("REJECT")'
+                                                    @onclick='() => SelectChoice("REJECT")'>
+                                                <span>×</span>
+                                                Reject
+                                            </button>
+
+                                            <button class='@VoteOptionClass("ABSTAIN")'
+                                                    @onclick='() => SelectChoice("ABSTAIN")'>
+                                                <span>–</span>
+                                                Abstain
+                                            </button>
+                                        </div>
+
+                                        <textarea class="mf-textarea"
+                                                  placeholder="@VoteReasonPlaceholder"
+                                                  @bind="_voteReason">
+                                        </textarea>
+
+                                        @if (!string.IsNullOrWhiteSpace(_voteMessage))
+                                        {
+                                            <div class="mf-alert info">@_voteMessage</div>
+                                        }
+
+                                        <button class="mf-btn mf-btn-primary full"
+                                                disabled="@_isSavingVote"
+                                                @onclick="SubmitVoteAsync">
+                                            @(_isSavingVote ? "Saving..." : "Submit Vote")
                                         </button>
-
-                                        <button class="@VoteOptionClass("REJECT")"
-                                                @onclick='() => SelectChoice("REJECT")'>
-                                            <span>×</span>
-                                            Reject
-                                        </button>
-
-                                        <button class="@VoteOptionClass("ABSTAIN")"
-                                                @onclick='() => SelectChoice("ABSTAIN")'>
-                                            <span>–</span>
-                                            Abstain
-                                        </button>
-                                    </div>
-
-                                    <textarea class="mf-textarea"
-                                              placeholder="@VoteReasonPlaceholder"
-                                              @bind="_voteReason">
-                                    </textarea>
-
-                                    @if (!string.IsNullOrWhiteSpace(_voteMessage))
-                                    {
-                                        <div class="mf-alert info">@_voteMessage</div>
-                                    }
-
-                                    <button class="mf-btn mf-btn-primary full"
-                                            disabled="@_isSavingVote"
-                                            @onclick="SubmitVoteAsync">
-                                        @(_isSavingVote ? "Saving..." : "Submit Vote")
-                                    </button>
-                                </section>
+                                    </section>
+                                }
                             </main>
 
                             <aside class="mf-voting-side">
@@ -313,6 +335,12 @@
             return;
         }
 
+        if (HasCurrentUserVoted(_selectedPoll))
+        {
+            _voteMessage = "You already voted. Your vote cannot be changed.";
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(_selectedChoice))
         {
             _voteMessage = "Please choose Approve, Reject, or Abstain.";
@@ -365,6 +393,18 @@
         return string.IsNullOrWhiteSpace(_voteReason)
             ? null
             : _voteReason.Trim();
+    }
+
+    private static bool HasCurrentUserVoted(EditorialBoardPollDto poll)
+    {
+        return !string.IsNullOrWhiteSpace(poll.CurrentUserChoiceCode);
+    }
+
+    private static string GetCurrentVoteDisplay(EditorialBoardPollDto poll)
+    {
+        return string.IsNullOrWhiteSpace(poll.CurrentUserChoiceCode)
+            ? "Not voted"
+            : poll.CurrentUserChoiceCode;
     }
 
     private static string DeadlineText(EditorialBoardPollDto poll)
