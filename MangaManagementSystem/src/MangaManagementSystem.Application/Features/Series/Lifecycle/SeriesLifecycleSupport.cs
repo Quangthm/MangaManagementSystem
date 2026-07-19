@@ -29,6 +29,16 @@ namespace MangaManagementSystem.Application.Features.Series.Lifecycle
                 MangakaRoleName
             };
 
+        internal static readonly string[] CompletionCancellationStatuses =
+        {
+            "DRAFT",
+            "REVISION_REQUESTED",
+            "UNDER_REVIEW",
+            "APPROVED",
+            "SCHEDULED",
+            "ON_HOLD"
+        };
+
         internal static async Task<string> ValidateActorAsync(
             IUnitOfWork unitOfWork,
             Guid seriesId,

@@ -23,6 +23,9 @@
             <MudText Typo="Typo.body2">
                 Affected chapters: <strong>@Impact.AffectedChapterCount</strong>
             </MudText>
+            <MudText Typo="Typo.body2">
+                Active production tasks: <strong>@Impact.AffectedActiveTaskCount</strong>
+            </MudText>
         </div>
 
         <div class="mb-2" style="font-size: 0.875rem; line-height: 1.5;">
@@ -30,7 +33,9 @@
                 <li>Existing <strong>RELEASED</strong> chapters remain unchanged.</li>
                 <li>Existing <strong>CANCELLED</strong> chapters remain unchanged.</li>
                 <li>Listed active unreleased chapters will be changed to <strong>CANCELLED</strong>.</li>
-                <li>Existing files, versions, tasks, annotations, and reviews are preserved.</li>
+                <li>Active tasks under affected chapters will be changed to <strong>CANCELLED</strong>.</li>
+                <li>Existing <strong>COMPLETED</strong> and <strong>CANCELLED</strong> tasks remain unchanged.</li>
+                <li>Tasks under unaffected chapters, including <strong>RELEASED</strong> chapters, remain unchanged.</li>
             </ul>
         </div>
 

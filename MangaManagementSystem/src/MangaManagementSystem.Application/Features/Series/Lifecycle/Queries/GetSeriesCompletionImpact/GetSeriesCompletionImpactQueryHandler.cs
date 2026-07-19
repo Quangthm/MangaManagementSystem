@@ -10,17 +10,6 @@ namespace MangaManagementSystem.Application.Features.Series.Lifecycle.Queries.Ge
             GetSeriesCompletionImpactQuery,
             SeriesCompletionImpactDto>
     {
-        private static readonly string[]
-            CompletionCancellationStatuses =
-            {
-                "DRAFT",
-                "REVISION_REQUESTED",
-                "UNDER_REVIEW",
-                "APPROVED",
-                "SCHEDULED",
-                "ON_HOLD"
-            };
-
         private readonly IUnitOfWork _unitOfWork;
 
         public GetSeriesCompletionImpactQueryHandler(
@@ -67,8 +56,9 @@ namespace MangaManagementSystem.Application.Features.Series.Lifecycle.Queries.Ge
             var affectedChapters =
                 await _unitOfWork.Chapters.FindAsync(chapter =>
                     chapter.SeriesId == query.SeriesId
-                    && CompletionCancellationStatuses.Contains(
-                        chapter.StatusCode));
+                    && SeriesLifecycleSupport
+                        .CompletionCancellationStatuses
+                        .Contains(chapter.StatusCode));
 
             var chapterDtos = affectedChapters
                 .OrderBy(chapter => chapter.CreatedAtUtc)
@@ -80,10 +70,27 @@ namespace MangaManagementSystem.Application.Features.Series.Lifecycle.Queries.Ge
                     chapter.StatusCode))
                 .ToList();
 
+            var affectedChapterIds = chapterDtos
+                .Select(chapter => chapter.ChapterId)
+                .ToHashSet();
+
+            var affectedTasks = await _unitOfWork.ChapterPageTasks
+                .GetByChapterIdsAsync(
+                    affectedChapterIds,
+                    cancellationToken);
+
+            int affectedActiveTaskCount = affectedTasks
+                .GroupBy(task => task.ChapterPageTaskId)
+                .Select(group => group.First())
+                .Count(task =>
+                    ChapterPageTaskLifecyclePolicy.CanCancel(
+                        task.StatusCode));
+
             return new SeriesCompletionImpactDto(
                 series.SeriesId,
                 series.StatusCode,
                 chapterDtos.Count,
+                affectedActiveTaskCount,
                 chapterDtos);
         }
     }
