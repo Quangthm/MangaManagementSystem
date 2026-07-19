@@ -4,7 +4,7 @@
 >
 > **Expansion note:** This file is meant to be continuously expanded when new workflows are agreed upon. Add new flows without rewriting unrelated existing flows.
 
-> **Latest series lifecycle alignment — 2026-07-11:** `HIATUS` means a paused series. Active Mangaka or Tantou Editor contributors may set a `SERIALIZED` series to `HIATUS` and resume it back to `SERIALIZED`. `HIATUS` blocks chapter release only. Only active Mangaka contributors may mark a `SERIALIZED` or `HIATUS` series as `COMPLETED`; completion blocks future mutations, cancels unreleased chapters after confirmation, preserves history, and completed series remain visible in rankings when ranking input exists.
+> **Latest series lifecycle alignment — 2026-07-19:** `HIATUS` means a paused series. Active Mangaka or Tantou Editor contributors may set a `SERIALIZED` series to `HIATUS` and resume it back to `SERIALIZED`. `HIATUS` blocks chapter release only. Only active Mangaka contributors may mark a `SERIALIZED` or `HIATUS` series as `COMPLETED`; completion blocks future mutations, cancels unreleased chapters and their distinct active `ASSIGNED`/`UNDER_REVIEW` page tasks after warning and confirmation, preserves released chapters and terminal task history, and completed series remain visible in rankings when ranking input exists.
 
 ---
 
@@ -705,24 +705,31 @@ Active Mangaka or Tantou Editor contributor opens a HIATUS series
 
 **Status:** Agreed  
 **Primary actor:** Mangaka contributor  
-**Goal:** Allow the author-side contributor to end a serialized or hiatus series and freeze future business changes.
+**Goal:** Allow the author-side contributor to end a serialized or hiatus series, cancel unfinished production work, and freeze future business changes.
 
 ### Main Flow
 
 ```text
 Active Mangaka contributor opens the series page
 → Mangaka chooses Mark Series as Completed
-→ UI loads a summary of unreleased chapters that will be cancelled
-→ UI warns that the completed series will become immutable and unreleased chapters will be cancelled
+→ UI requests authoritative completion impact
+→ Backend returns the unreleased chapters that would be cancelled and the count of distinct active tasks beneath those chapters
+→ UI warns that completion is final, shows the affected chapter count/list, and shows the active-task cancellation count
 → Mangaka confirms the action
+→ Backend starts the completion transaction and reloads authoritative state
 → Backend validates actor is an active Mangaka contributor of the series
 → Backend validates Series.status_code is SERIALIZED or HIATUS
-→ Backend changes Series.status_code to COMPLETED
+→ Backend recalculates affected unreleased chapters
+→ Backend recalculates distinct active tasks linked to those affected chapters
+→ Backend changes distinct ASSIGNED and UNDER_REVIEW tasks under affected chapters to CANCELLED
+→ Backend keeps COMPLETED and already CANCELLED tasks unchanged
+→ Backend keeps tasks belonging only to unaffected chapters unchanged
 → Backend keeps RELEASED chapters unchanged
-→ Backend changes unreleased active chapters to CANCELLED with a completion-related reason
-→ Backend preserves already CANCELLED chapters unchanged
-→ Backend/database writes SERIES_COMPLETED audit event and audit details for affected chapter cancellations
-→ Backend may notify active contributors and assigned editors
+→ Backend changes DRAFT, REVISION_REQUESTED, UNDER_REVIEW, APPROVED, SCHEDULED, and ON_HOLD chapters to CANCELLED
+→ Backend keeps already CANCELLED chapters unchanged
+→ Backend changes Series.status_code to COMPLETED
+→ Backend writes SERIES_COMPLETED audit, chapter-cancellation audits, and one CHAPTER_PAGE_TASK_CANCELLED audit per distinct cancelled task
+→ Backend saves and commits the series, chapter, task, and required audit changes atomically
 → UI refreshes the series page as read-only/completed
 ```
 
@@ -733,21 +740,27 @@ Active Mangaka contributor opens the series page
 - `COMPLETED` is different from `CANCELLED`, which represents board/business cancellation.
 - Completion is final and normally irreversible through normal workflow.
 - Completion blocks future business mutations under the series, including series profile/status changes, new chapters, page/page-version changes, region edits, task changes, review actions, scheduling, rescheduling, hold, and release actions.
+- Completion impact preview is advisory; the execution flow must reload/recalculate authoritative chapters and tasks after confirmation.
 - Released chapters remain released.
-- Unreleased active chapters are cancelled only after a clear warning and explicit confirmation.
-- Completion-cancelled chapters remain preserved as read-only historical records.
-- Existing files, page versions, annotations, tasks, reviews, notifications, and audit logs remain preserved for authorized viewing.
+- Unreleased active chapters cancelled by completion are `DRAFT`, `REVISION_REQUESTED`, `UNDER_REVIEW`, `APPROVED`, `SCHEDULED`, and `ON_HOLD`.
+- Active tasks cancelled by completion are distinct `ASSIGNED` and `UNDER_REVIEW` tasks linked to those affected chapters.
+- A task is counted, changed, and audited once even if it is linked to multiple matching `PageRegion` records.
+- `COMPLETED` tasks, already `CANCELLED` tasks, and tasks under unaffected chapters remain unchanged.
+- Completion-cancelled chapters and tasks remain preserved as historical records.
+- Existing files, page versions, regions, annotations, reviews, notifications, and audit logs remain preserved for authorized viewing.
+- Task, chapter, series, and required audit changes must commit as one transaction or roll back together.
 - Completed series remain visible in dynamic rankings when vote input exists for the selected publication period.
 
 ### System Should Try To
 
 - Make the completion action deliberate and hard to trigger accidentally.
+- Warn about both unreleased chapter impact and active assigned-task impact before confirmation.
 - Preserve history instead of deleting records.
+- Prevent a completed series from retaining active tasks beneath chapters cancelled by completion.
 - Keep `COMPLETED`, `HIATUS`, and `CANCELLED` clearly separated.
 - Avoid adding generic series status-history tables; use current status plus audit logs.
 
 ---
-
 ## BF-MANGAKA-001 — View My Series Dashboard
 
 **Status:** Agreed
@@ -1770,55 +1783,46 @@ User opens an editable chapter in the chapter/page workspace
 ## BF-PAGE-006 — Create Chapter Page Task Linked to Page Regions
 
 **Status:** Agreed
-**Primary actor:** Mangaka / authorized task creator
-**Goal:** Create a page task for an Assistant or contributor and link the task to one or more `PageRegion` records.
+**Primary actor:** Mangaka
+**Goal:** Create a page task for an active Assistant contributor and link the task to one or more `PageRegion` records while normal production is eligible.
 
 ### Main Flow
 
 ```text
-User opens the chapter/page workspace
-→ User selects one or more existing saved PageRegion records for the task target
+Mangaka opens the chapter/page workspace
+→ Mangaka selects one or more existing saved PageRegion records for the task target
 → If the task applies to the whole page, UI/backend uses a full-page PageRegion for the selected ChapterPageVersion
-→ User enters assigned user, task type, title, description, priority, due date, and compensation amount
-→ Backend prepares page_region_ids_json as a JSON array of PageRegion IDs
-→ Backend calls manga.usp_ChapterPageTask_Create
-→ Database validates page_region_ids_json is a valid JSON array
-→ Database verifies all referenced PageRegion rows exist
-→ Database verifies all referenced PageRegion rows belong to the same ChapterPageVersion
-→ Database derives the owning series through PageRegion → ChapterPageVersion → ChapterPage → Chapter
-→ Database verifies the actor is an active contributor for the owning series
-→ Database verifies the assigned user is ACTIVE and an active contributor for the owning series
-→ Database creates one manga.ChapterPageTask row
-→ Database creates one or more manga.ChapterPageTaskRegion rows
-→ Database writes CHAPTER_PAGE_TASK_CREATED audit event
+→ Mangaka enters assigned Assistant, task type, title, description, priority, due date, and compensation amount
+→ Backend normalizes and deduplicates the selected PageRegion IDs
+→ Backend loads authoritative PageRegion → ChapterPageVersion → ChapterPage → Chapter → Series context
+→ Backend verifies all referenced PageRegion rows exist and belong to the same ChapterPageVersion
+→ Application verifies the creator is an ACTIVE Mangaka and an active Mangaka contributor for the owning series
+→ Application verifies the assigned user is an ACTIVE Assistant and an active Assistant contributor for the owning series
+→ Application verifies the owning Series.status_code is SERIALIZED or HIATUS
+→ Application verifies the owning Chapter.status_code is DRAFT or REVISION_REQUESTED
+→ Backend creates one manga.ChapterPageTask row with status_code = ASSIGNED
+→ Backend creates one or more manga.ChapterPageTaskRegion rows
+→ Backend writes CHAPTER_PAGE_TASK_CREATED audit event in the same transaction
+→ Backend commits atomically
 → UI shows the new task with its linked target regions
 ```
 
-### Page Region ID JSON
+### Page Region IDs
 
-A task must always provide at least one page region ID:
+A task must always provide at least one page region ID. Duplicate IDs should be normalized so each task-region link is created once.
 
-```json
-[
-  "A2F98C3A-CE7D-44BD-85F2-B7C1525B4C41"
-]
-```
+Multiple linked regions are allowed, but every linked region must resolve to the same `ChapterPageVersion`.
 
-Multiple linked regions are allowed:
-
-```json
-[
-  "A2F98C3A-CE7D-44BD-85F2-B7C1525B4C41",
-  "46D8D55C-1174-4DA8-8E7E-6E49B5D6E53A"
-]
-```
-
-### Database Procedure(s)
+### Current Application Persistence Path
 
 ```text
-manga.usp_ChapterPageTask_Create
-audit.usp_AuditEvent_Append
+Application service validation/orchestration
+→ EF Core task + task-region persistence
+→ audit.usp_AuditEvent_Append
+→ one transaction / commit
 ```
+
+`manga.usp_ChapterPageTask_Create` may remain in legacy/bootstrap SQL, but it is not the current application path for single-task creation.
 
 ### Database Tables
 
@@ -1827,35 +1831,40 @@ manga.ChapterPageTask
 manga.ChapterPageTaskRegion
 manga.PageRegion
 manga.ChapterPageVersion
+manga.ChapterPage
+manga.Chapter
+manga.Series
 ```
 
 ### Important Notes
 
 - `ChapterPageTask` stores the task header: assigned user, task type, status, title, description, priority, due date, compensation amount, completion output, creator, and timestamps.
-- `ChapterPageTask` no longer stores `chapter_page_id` directly.
+- `ChapterPageTask` does not store `chapter_page_id` directly.
 - `ChapterPageTaskRegion` links one task to one or more `PageRegion` records.
 - Each task must link to at least one `PageRegion`.
 - A whole-page task must still link to a `PageRegion`; the system should create or reuse a full-page region covering the selected `ChapterPageVersion`.
 - All regions linked to the same task must belong to the same `ChapterPageVersion`.
 - The task page context is derived through `ChapterPageTaskRegion → PageRegion → ChapterPageVersion → ChapterPage`.
 - The task owning series is derived through `PageRegion → ChapterPageVersion → ChapterPage → Chapter → Series`.
-- The actor creating the task must be an active contributor for the owning series.
-- The assigned user must be an `ACTIVE` account and an active contributor for the owning series.
+- New task creation is allowed only when the parent series is `SERIALIZED` or `HIATUS`.
+- New task creation is allowed only when the parent chapter is `DRAFT` or `REVISION_REQUESTED`.
+- The creator must be an `ACTIVE` Mangaka account and an active Mangaka contributor for the owning series.
+- The assignee must be an `ACTIVE` Assistant account and an active Assistant contributor for the owning series.
 - `compensation_amount` is required, must be non-negative, and should use `0.00` when no compensation is paid.
 - Compensation amount is task metadata only and does not introduce payroll, salary calculation, payment processing, or accounting features.
-- The `type_code`, `status_code`, `priority_level`, compensation range, and foreign keys should be enforced by table constraints.
+- Database constraints remain authoritative for structural rules such as valid status/type/priority values, compensation range, foreign keys, required columns, and junction uniqueness.
 - When the task later reaches `UNDER_REVIEW` or `COMPLETED`, the completed page version must be checked against the same logical page derived from the task's linked regions.
 
 ### System Should Try To
 
 - Keep task creation tied to visible page regions instead of hidden page-level assumptions.
+- Reuse the same production-eligibility rules for single-task and Quick Select/batch task creation.
 - Support one-region, multi-region, and whole-page task targets consistently.
 - Avoid storing duplicate page context directly on `ChapterPageTask` when it can be derived through linked regions.
-- Keep permission checks based on the owning series derived from the selected regions.
+- Keep workflow validation in Domain/Application and persistence concerns in Infrastructure/database layers.
 - Keep the task assignment workflow traceable through audit.
 
 ---
-
 ## BF-TASK-007 — Quick Select Batch Task Assignment
 
 **Status:** Agreed
@@ -1881,7 +1890,11 @@ Mangaka opens the Quick Select dialog from the chapter workspace
 → Backend builds a validated assignment plan
 → Backend opens a SQL transaction
 → Backend acquires a session+series+chapter scoped SQL app lock
-→ Backend re-checks guards (actor, assistant, chapter, pages, versions, files)
+→ Backend re-checks authoritative guards (actor, assistant, contributor membership, series, chapter, pages, versions, files)
+→ Application verifies the creator is an ACTIVE Mangaka contributor
+→ Application verifies the selected Assistant is ACTIVE and an active Assistant contributor
+→ Application verifies the parent series is SERIALIZED or HIATUS
+→ Application verifies the parent chapter is DRAFT or REVISION_REQUESTED
 → Backend finds or creates one FULL_PAGE PageRegion per selected page version
 → Backend creates one ASSIGNED ChapterPageTask per selected page
 → Backend links each task to its FULL_PAGE PageRegion through ChapterPageTaskRegion
@@ -1909,6 +1922,7 @@ audit.AuditEvent
 - FileResource does not store image dimensions.
 - Each task links to its FULL_PAGE region.
 - Application validates the whole batch before persistence.
+- Quick Select uses the same creator, assignee, parent-series, and parent-chapter production-eligibility rules as single-task creation.
 - Infrastructure persists with EF batch insert and one SaveChangesAsync.
 - Transaction/app-lock prevents overlapping writes for the same actor+series+chapter.
 - Rollback prevents partial tasks, regions, or audit rows.
@@ -2021,6 +2035,43 @@ unique among non-cancelled chapters only
 - Preserve the cancelled attempt for traceability.
 - Make redo work explicit by creating a new chapter draft.
 - Avoid accidental edits to cancelled chapter materials.
+
+---
+
+## BF-CH-003 — Create Chapter Draft for an Eligible Production Series
+
+**Status:** Agreed
+**Primary actor:** Mangaka contributor
+**Goal:** Create a new chapter draft only while the parent series is in a normal production state.
+
+### Main Flow
+
+```text
+Active Mangaka contributor opens an eligible series
+→ Mangaka chooses Add Chapter
+→ Backend loads the authoritative parent series
+→ Application validates the actor is an ACTIVE Mangaka and an active Mangaka contributor for the series
+→ Application validates Series.status_code is SERIALIZED or HIATUS
+→ Backend validates the requested chapter data and database-backed uniqueness constraints
+→ Backend creates the Chapter with status_code = DRAFT
+→ Backend writes the required chapter-creation audit event
+→ Backend commits the chapter creation workflow
+→ UI refreshes the chapter list
+```
+
+### Important Notes
+
+- New chapter creation is allowed only for parent series in `SERIALIZED` or `HIATUS`.
+- Proposal/review states, `COMPLETED`, `CANCELLED`, null, or unknown series states do not allow normal chapter creation.
+- `HIATUS` still allows chapter creation; it blocks final chapter release only.
+- The actor must be an `ACTIVE` Mangaka account and an active Mangaka contributor for the parent series.
+- Database constraints remain authoritative for structural rules such as foreign keys, required fields, and chapter-number uniqueness.
+
+### System Should Try To
+
+- Keep chapter creation aligned with normal series production eligibility.
+- Keep business validation in Domain/Application and database structural integrity in the database.
+- Preserve existing chapter-number and cancellation-history behavior.
 
 ---
 

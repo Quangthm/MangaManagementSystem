@@ -6,7 +6,7 @@
 
 > **Latest alignment update — 2026-07-04:** This version replaces strict publication-period schedule validation with advisory chapter-level publication scheduling. `Series.publication_frequency_code` now provides default suggestions and warnings only. Authorized Mangaka and Tantou Editors may schedule/reschedule future planned release dates; Editors handle hold/release enforcement; held chapters require a new planned date to return to `SCHEDULED`; and auto-hold/release automation remain deferred.
 
-> **Latest series lifecycle alignment — 2026-07-11:** The system shall use `HIATUS` for paused series; active Mangaka or Tantou Editor contributors may pause/resume serialized series; `HIATUS` blocks release only. Only active Mangaka contributors may mark serialized or hiatus series as `COMPLETED`; completion blocks future business mutations, cancels unreleased chapters after confirmation, preserves history, and does not hide completed series from rankings.
+> **Latest series lifecycle alignment — 2026-07-19:** The system shall use `HIATUS` for paused series; active Mangaka or Tantou Editor contributors may pause/resume serialized series; `HIATUS` blocks release only. Only active Mangaka contributors may mark serialized or hiatus series as `COMPLETED`; completion blocks future business mutations, cancels unreleased chapters and their distinct active `ASSIGNED`/`UNDER_REVIEW` page tasks after warning and confirmation, preserves released chapters and terminal task history, and does not hide completed series from rankings.
 
 ---
 
@@ -193,6 +193,11 @@
 | FR-SERIES-040 | The system shall change unreleased active chapters under a newly completed series to `CANCELLED` with a completion-related reason after confirmation. | BR-SERIES-039, BR-SERIES-040 |
 | FR-SERIES-041 | The system shall preserve completion-cancelled chapters as read-only historical records. | BR-SERIES-041 |
 | FR-SERIES-042 | The system shall allow `CANCEL_SERIALIZATION` board polls for `SERIALIZED` or `HIATUS` series, but not for `COMPLETED` series through normal MVP workflow. | BR-SERIES-042 |
+| FR-SERIES-043 | The system shall show completion impact that includes affected unreleased chapters and the count of distinct active page tasks that would be cancelled, while recalculating authoritative impact during actual completion execution. | BR-SERIES-043 |
+| FR-SERIES-044 | The system shall change each distinct `ASSIGNED` or `UNDER_REVIEW` page task linked to a completion-cancelled chapter to `CANCELLED` when the parent series is completed. | BR-SERIES-044, BR-PGTASK-036 |
+| FR-SERIES-045 | The system shall preserve `COMPLETED` tasks, already `CANCELLED` tasks, and tasks linked only to unaffected chapters when a series is completed. | BR-SERIES-045, BR-PGTASK-036 |
+| FR-SERIES-046 | The system shall count, change, and cancellation-audit each page task affected by series completion at most once even when the task is linked to multiple matching page regions. | BR-SERIES-046 |
+| FR-SERIES-047 | The system shall apply required task cancellations, chapter cancellations, series completion, and required audit records atomically so that a failure rolls back the complete series-completion cascade. | BR-SERIES-047 |
 
 
 ---
@@ -341,6 +346,7 @@
 | FR-CH-018 | The system shall require a new future planned release date when returning a chapter from `ON_HOLD` to `SCHEDULED`. | BR-CH-018 |
 | FR-CH-019 | The system shall block chapter release when the parent series is `HIATUS`, `COMPLETED`, or `CANCELLED`. | BR-CH-019 |
 | FR-CH-020 | The system shall block normal chapter creation and mutation workflows when the parent series is `COMPLETED`. | BR-CH-020 |
+| FR-CH-021 | The system shall allow normal new chapter creation only when the parent series is `SERIALIZED` or `HIATUS` and the actor is an `ACTIVE` Mangaka account with an active Mangaka contributor relationship to that series. | BR-CH-021 |
 
 ---
 
@@ -437,8 +443,8 @@
 |---|---|---|
 | FR-PGTASK-001 | The system shall derive each page task's logical `ChapterPage` context from one or more linked `PageRegion` records instead of a direct `chapter_page_id` column on `ChapterPageTask`. | BR-PGTASK-001 |
 | FR-PGTASK-002 | The system shall allow a logical `ChapterPage` to have many tasks over time through linked `PageRegion` records. | BR-PGTASK-002 |
-| FR-PGTASK-003 | The system shall represent one page task as one assignment of work to one assistant or authorized user. | BR-PGTASK-003 |
-| FR-PGTASK-004 | The system shall require each page task to be assigned to exactly one assistant or authorized user. | BR-PGTASK-004 |
+| FR-PGTASK-003 | The system shall represent one page task as one assignment of work to one active Assistant contributor of the owning series. | BR-PGTASK-003 |
+| FR-PGTASK-004 | The system shall require each page task to be assigned to exactly one `ACTIVE` Assistant account that is an active Assistant contributor of the owning series. | BR-PGTASK-004 |
 | FR-PGTASK-005 | The system shall record the user who created each page task. | BR-PGTASK-005 |
 | FR-PGTASK-006 | The system shall support region-linked, page-derived task assignment in MVP. | BR-PGTASK-006 |
 | FR-PGTASK-007 | The system shall not require whole-chapter task assignment in MVP. | BR-PGTASK-006 |
@@ -469,6 +475,12 @@
 | FR-PGTASK-032 | The system shall preserve the original task record after cancellation. | BR-PGTASK-029 |
 | FR-PGTASK-033 | The system shall require cancelled work to be reassigned through a new task instead of changing the original assignee. | BR-PGTASK-030 |
 | FR-PGTASK-034 | The system shall record task creation, cancellation, completion, and status changes in the audit log. | BR-PGTASK-031 |
+| FR-PGTASK-035 | The system shall allow new page task creation only when the owning series is `SERIALIZED` or `HIATUS`. | BR-PGTASK-032 |
+| FR-PGTASK-036 | The system shall allow new page task creation only when the owning chapter is `DRAFT` or `REVISION_REQUESTED`. | BR-PGTASK-032 |
+| FR-PGTASK-037 | The system shall require the creator of a new page task to be an `ACTIVE` Mangaka account and an active Mangaka contributor of the owning series. | BR-PGTASK-033 |
+| FR-PGTASK-038 | The system shall require the assignee of a new page task to be an `ACTIVE` Assistant account and an active Assistant contributor of the owning series. | BR-PGTASK-034 |
+| FR-PGTASK-039 | The system shall enforce the same creator, assignee, parent-series, and parent-chapter production-eligibility rules for single-task creation and Quick Select/batch task creation. | BR-PGTASK-035 |
+| FR-PGTASK-040 | The system shall treat `ASSIGNED` and `UNDER_REVIEW` as active cancellable task statuses for the series-completion cascade and shall preserve `COMPLETED` and `CANCELLED` tasks. | BR-PGTASK-036 |
 
 ---
 
