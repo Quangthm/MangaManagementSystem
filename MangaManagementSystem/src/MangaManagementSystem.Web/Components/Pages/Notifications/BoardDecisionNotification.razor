@@ -1,0 +1,150 @@
+@page "/notifications/board-decision/{NotificationId:guid}"
+@using System.Linq
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components
+@using MangaManagementSystem.Application.Common
+@using MangaManagementSystem.Application.DTOs.Manga
+@using MangaManagementSystem.Web.Services.Api
+@attribute [Authorize]
+@inject INotificationApiClient NotificationApiClient
+@inject NavigationManager Navigation
+
+<PageTitle>Board Decision</PageTitle>
+
+<div style="min-height: 100vh; background: #f8fafc; padding: 40px 24px;">
+    <div style="max-width: 760px; margin: 0 auto;">
+        <button type="button"
+                style="border: 0; background: transparent; color: #4f46e5; cursor: pointer; margin-bottom: 20px;"
+                @onclick="GoBack">
+            ← Back
+        </button>
+
+        @if (_loading)
+        {
+            <MudPaper Class="pa-6" Elevation="0">
+                <MudProgressLinear Indeterminate="true" />
+                <MudText Class="mt-4">Loading board decision...</MudText>
+            </MudPaper>
+        }
+        else if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error">@_error</MudAlert>
+        }
+        else if (_notification is not null)
+        {
+            <MudPaper Class="pa-6" Elevation="0"
+                      Style="border: 1px solid #e2e8f0; border-radius: 16px;">
+                <MudText Typo="Typo.h4" Class="font-weight-bold mb-2">
+                    @BuildTitle(_notification)
+                </MudText>
+
+                <MudChip T="string"
+                         Color="Color.Primary"
+                         Variant="Variant.Outlined"
+                         Class="mb-5">
+                    BOARD_DECISION
+                </MudChip>
+
+                <MudText Typo="Typo.body1" Class="mb-5">
+                    @_notification.Message
+                </MudText>
+
+                <MudDivider Class="mb-4" />
+
+                <MudText Typo="Typo.body2">
+                    <strong>Board poll ID:</strong>
+                    @_notification.RelatedEntityId
+                </MudText>
+
+                <MudText Typo="Typo.body2" Class="mt-2">
+                    <strong>Created:</strong>
+                    @_notification.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")
+                </MudText>
+            </MudPaper>
+        }
+    </div>
+</div>
+
+@code {
+    private const int PageSize = 20;
+    private const int MaximumLookupCount = 200;
+
+    [Parameter]
+    public Guid NotificationId { get; set; }
+
+    private NotificationDto? _notification;
+    private bool _loading = true;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = null;
+        _notification = null;
+
+        if (NotificationId == Guid.Empty)
+        {
+            _error = "The board decision notification is invalid.";
+            _loading = false;
+            return;
+        }
+
+        try
+        {
+            for (var skip = 0;
+                 skip < MaximumLookupCount;
+                 skip += PageSize)
+            {
+                var page = await NotificationApiClient
+                    .GetNotificationsAsync(skip, PageSize);
+
+                _notification = page.FirstOrDefault(
+                    item =>
+                        item.NotificationId == NotificationId
+                        && string.Equals(
+                            item.NotificationTypeCode,
+                            NotificationTypeCodes.BoardDecision,
+                            StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(
+                            item.RelatedEntityType,
+                            NotificationRelatedEntityTypes.SeriesBoardPoll,
+                            StringComparison.Ordinal)
+                        && item.RelatedEntityId.HasValue);
+
+                if (_notification is not null
+                    || page.Count < PageSize)
+                {
+                    break;
+                }
+            }
+
+            if (_notification is null)
+            {
+                _error =
+                    "This board decision notification is unavailable or does not belong to the signed-in user.";
+            }
+        }
+        catch
+        {
+            _error =
+                "The board decision notification could not be loaded. Please try again.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string BuildTitle(
+        NotificationDto notification)
+    {
+        return string.IsNullOrWhiteSpace(notification.Title)
+            ? "Board Decision"
+            : notification.Title.Trim();
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/");
+    }
+}

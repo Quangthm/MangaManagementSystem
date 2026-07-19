@@ -1,5 +1,8 @@
+using System.Linq;
+using MangaManagementSystem.Application.Common;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Interfaces;
+using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -13,8 +16,10 @@ namespace MangaManagementSystem.Application.Features.Mangaka.SeriesProposals.Com
     ///   1. Validate command inputs.
     ///   2. Upload proposal file to Cloudinary via IFileStorageService (computes SHA-256).
     ///   3. Call manga.usp_SeriesProposal_Submit through ISeriesProposalRepository.
-    ///   4. If SQL fails after Cloudinary succeeds, attempt best-effort Cloudinary cleanup.
-    ///   5. Return SeriesProposalSubmittedDto on success.
+    ///   4. Notify active Tantou Editor contributors of the exact series.
+    ///   5. Commit the stored-procedure changes and EF notifications in one transaction.
+    ///   6. If the workflow fails after Cloudinary succeeds, roll back and clean up.
+    ///   7. Return SeriesProposalSubmittedDto on success.
     ///
     /// The stored procedure owns: FileResource creation (purpose SERIES_PROPOSAL),
     /// SeriesProposal row creation, Series status transition to UNDER_EDITORIAL_REVIEW,
@@ -47,15 +52,18 @@ namespace MangaManagementSystem.Application.Features.Mangaka.SeriesProposals.Com
 
         private readonly IFileStorageService _fileStorageService;
         private readonly ISeriesProposalRepository _seriesProposalRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<SubmitSeriesProposalCommandHandler> _logger;
 
         public SubmitSeriesProposalCommandHandler(
             IFileStorageService fileStorageService,
             ISeriesProposalRepository seriesProposalRepository,
+            IUnitOfWork unitOfWork,
             ILogger<SubmitSeriesProposalCommandHandler> logger)
         {
             _fileStorageService = fileStorageService;
             _seriesProposalRepository = seriesProposalRepository;
+            _unitOfWork = unitOfWork;
             _logger = logger;
         }
 
@@ -134,12 +142,26 @@ namespace MangaManagementSystem.Application.Features.Mangaka.SeriesProposals.Com
                     "The proposal file integrity check could not be completed. Please try again.");
             }
 
-            // ── 4. Call stored procedure through repository ──────────────────────────
+            // ── 4. Stored procedure + PROPOSAL_REVIEW notifications ─────────────────
             Guid seriesProposalId;
             short proposalVersionNo;
 
             try
             {
+                await _unitOfWork.BeginTransactionAsync(
+                    cancellationToken);
+
+                // Leader-confirmed recipient scope:
+                // active Tantou Editor contributors of this exact series.
+                var recipientUserIds =
+                    (await _seriesProposalRepository
+                        .GetActiveTantouEditorContributorsAsync(
+                            command.SeriesId,
+                            cancellationToken))
+                    .Select(editor => editor.UserId)
+                    .Distinct()
+                    .ToList();
+
                 (seriesProposalId, proposalVersionNo) =
                     await _seriesProposalRepository.SubmitSeriesProposalViaProcAsync(
                         seriesId: command.SeriesId,
@@ -151,15 +173,60 @@ namespace MangaManagementSystem.Application.Features.Mangaka.SeriesProposals.Com
                         fileSizeBytes: uploadResult.FileSizeBytes,
                         sha256Hash: uploadResult.Sha256Hash,
                         cancellationToken: cancellationToken);
+
+                var submittedAtUtc = DateTime.UtcNow;
+
+                foreach (var recipientUserId in recipientUserIds)
+                {
+                    await _unitOfWork.Notifications.AddAsync(
+                        new Notification
+                        {
+                            RecipientUserId = recipientUserId,
+                            NotificationTypeCode =
+                                NotificationTypeCodes.ProposalReview,
+                            Title =
+                                "Proposal Submitted for Review",
+                            Message =
+                                $"Proposal v{proposalVersionNo} was submitted "
+                                + "for editorial review for a series assigned to you.",
+                            RelatedEntityType =
+                                NotificationRelatedEntityTypes.SeriesProposal,
+                            RelatedEntityId =
+                                seriesProposalId,
+                            ReadAtUtc =
+                                null,
+                            CreatedAtUtc =
+                                submittedAtUtc
+                        });
+                }
+
+                if (recipientUserIds.Count == 0)
+                {
+                    _logger.LogWarning(
+                        "Proposal {SeriesProposalId} for series {SeriesId} was submitted without a PROPOSAL_REVIEW recipient because no active Tantou Editor contributor is assigned.",
+                        seriesProposalId,
+                        command.SeriesId);
+                }
+
+                await _unitOfWork.SaveChangesAsync(
+                    cancellationToken);
+
+                await _unitOfWork.CommitTransactionAsync(
+                    cancellationToken);
             }
             catch (Exception ex)
             {
+                await _unitOfWork.RollbackTransactionAsync(
+                    CancellationToken.None);
+
                 // Cloudinary upload already succeeded. Attempt best-effort cleanup
                 // so the file does not become an orphan in Cloudinary storage.
-                await TryCleanupCloudinaryAsync(uploadResult.PublicId,
-                    $"SQL workflow failed after Cloudinary upload for series {command.SeriesId}.");
+                await TryCleanupCloudinaryAsync(
+                    uploadResult.PublicId,
+                    $"Proposal submission workflow failed after Cloudinary upload for series {command.SeriesId}.");
 
-                _logger.LogError(ex,
+                _logger.LogError(
+                    ex,
                     "Failed to submit series proposal for series {SeriesId} by actor {ActorUserId}.",
                     command.SeriesId,
                     command.ActorUserId);

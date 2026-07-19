@@ -4,7 +4,6 @@
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Authorization
 
-@inject NavigationManager NavigationManager
 
 <div class="mf-app-shell mf-board-shell">
     <aside class="mf-sidebar mf-board-editor-sidebar">
@@ -143,6 +142,11 @@
             </div>
 
             <div class="mf-top-actions">
+                <AuthorizeView>
+                    <Authorized>
+                        <NotificationBell />
+                    </Authorized>
+                </AuthorizeView>
                 @if (Actions is not null)
                 {
                     @Actions

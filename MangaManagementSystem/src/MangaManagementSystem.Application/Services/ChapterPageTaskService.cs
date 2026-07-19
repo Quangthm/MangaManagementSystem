@@ -1,4 +1,5 @@
-﻿using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.Application.Common;
+using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
@@ -18,46 +19,97 @@ namespace MangaManagementSystem.Application.Services
             _unitOfWork = unitOfWork;
         }
 
-        public async Task<ChapterPageTaskDto> CreateChapterPageTaskAsync(CreateChapterPageTaskDto dto)
+        public async Task<ChapterPageTaskDto> CreateChapterPageTaskAsync(
+            CreateChapterPageTaskDto dto)
         {
             if (dto.ActorUserId == Guid.Empty)
-                throw new InvalidOperationException("Actor user ID is required.");
+                throw new InvalidOperationException(
+                    "Actor user ID is required.");
 
             if (dto.AssignedToUserId == Guid.Empty)
-                throw new InvalidOperationException("Assigned user ID is required.");
+                throw new InvalidOperationException(
+                    "Assigned user ID is required.");
 
-            var pageRegionIds = (dto.PageRegionIds ?? Array.Empty<Guid>())
-                .Distinct()
-                .ToArray();
+            var pageRegionIds =
+                (dto.PageRegionIds ?? Array.Empty<Guid>())
+                    .Distinct()
+                    .ToArray();
 
             if (pageRegionIds.Length == 0)
-                throw new InvalidOperationException("At least one page region is required.");
+                throw new InvalidOperationException(
+                    "At least one page region is required.");
 
-            string taskTitle = dto.TaskTitle?.Trim() ?? string.Empty;
+            string taskTitle =
+                dto.TaskTitle?.Trim() ?? string.Empty;
+
             if (string.IsNullOrWhiteSpace(taskTitle))
-                throw new InvalidOperationException("Task title is required.");
+                throw new InvalidOperationException(
+                    "Task title is required.");
 
-            string taskDescription = dto.TaskDescription?.Trim() ?? string.Empty;
+            string taskDescription =
+                dto.TaskDescription?.Trim() ?? string.Empty;
+
             if (string.IsNullOrWhiteSpace(taskDescription))
-                throw new InvalidOperationException("Task description is required.");
+                throw new InvalidOperationException(
+                    "Task description is required.");
 
-            DateTime dueAtUtc = dto.DueAtUtc ?? DateTime.UtcNow.AddDays(7);
-            decimal compensationAmount = dto.CompensationAmount ?? 0m;
+            DateTime dueAtUtc =
+                dto.DueAtUtc ?? DateTime.UtcNow.AddDays(7);
 
-            var newTaskId = await _unitOfWork.ChapterPageTasks.CreateChapterPageTaskAsync(
-                dto.ActorUserId,
-                dto.AssignedToUserId,
-                dto.TypeCode,
-                taskTitle,
-                taskDescription,
-                (byte)dto.PriorityLevel,
-                dueAtUtc,
-                compensationAmount,
-                pageRegionIds);
+            decimal compensationAmount =
+                dto.CompensationAmount ?? 0m;
 
-            // Reload with regions
-            var entity = await _unitOfWork.ChapterPageTasks.GetByIdWithRegionsAsync(newTaskId);
-            return entity == null ? throw new InvalidOperationException("Failed to create task") : MapToDto(entity);
+            // Task creation and notification must commit or roll back together.
+            await _unitOfWork.BeginTransactionAsync();
+
+            try
+            {
+                var newTaskId =
+                    await _unitOfWork.ChapterPageTasks
+                        .CreateChapterPageTaskAsync(
+                            dto.ActorUserId,
+                            dto.AssignedToUserId,
+                            dto.TypeCode,
+                            taskTitle,
+                            taskDescription,
+                            (byte)dto.PriorityLevel,
+                            dueAtUtc,
+                            compensationAmount,
+                            pageRegionIds);
+
+                if (newTaskId == Guid.Empty)
+                {
+                    throw new InvalidOperationException(
+                        "Failed to create task.");
+                }
+
+                await _unitOfWork.Notifications.AddAsync(
+                    CreateTaskAssignmentNotification(
+                        dto.AssignedToUserId,
+                        newTaskId,
+                        "You have been assigned a new production task."));
+
+                await _unitOfWork.SaveChangesAsync();
+
+                var entity =
+                    await _unitOfWork.ChapterPageTasks
+                        .GetByIdWithRegionsAsync(newTaskId);
+
+                if (entity == null)
+                {
+                    throw new InvalidOperationException(
+                        "Failed to load the created task.");
+                }
+
+                await _unitOfWork.CommitTransactionAsync();
+
+                return MapToDto(entity);
+            }
+            catch
+            {
+                await _unitOfWork.RollbackTransactionAsync();
+                throw;
+            }
         }
 
         public async Task<ChapterPageTaskDto?> GetChapterPageTaskByIdAsync(Guid id)
@@ -254,43 +306,97 @@ namespace MangaManagementSystem.Application.Services
                 throw new InvalidOperationException("New assigned user ID is required.");
             if (string.IsNullOrWhiteSpace(request.Reason))
                 throw new InvalidOperationException("A reason is required when reassigning a task.");
-            if (request.Reason.Trim().Length > 500)
+
+            var reassignmentReason = request.Reason.Trim();
+
+            if (reassignmentReason.Length > 500)
                 throw new InvalidOperationException("Reason must not exceed 500 characters.");
 
-            // Load task to validate status and ownership
-            var task = await _unitOfWork.ChapterPageTasks.GetByIdWithRegionsAsync(taskId);
+            // Load task to validate status and ownership.
+            var task = await _unitOfWork.ChapterPageTasks
+                .GetByIdWithRegionsAsync(taskId);
+
             if (task == null)
                 throw new InvalidOperationException("Task not found.");
 
-            // Verify actor created this task
+            // Verify actor created this task.
             if (task.CreatedByUserId != actorUserId)
-                throw new InvalidOperationException("You are not authorized to reassign this task.");
+                throw new InvalidOperationException(
+                    "You are not authorized to reassign this task.");
 
-            // Status check — only ASSIGNED and UNDER_REVIEW are reassignable
+            // Only ASSIGNED and UNDER_REVIEW tasks can be reassigned.
             if (task.StatusCode is "COMPLETED" or "CANCELLED")
-                throw new InvalidOperationException("Completed or cancelled tasks cannot be reassigned.");
+                throw new InvalidOperationException(
+                    "Completed or cancelled tasks cannot be reassigned.");
 
             if (task.StatusCode is not ("ASSIGNED" or "UNDER_REVIEW"))
-                throw new InvalidOperationException($"Task with status '{task.StatusCode}' cannot be reassigned.");
+                throw new InvalidOperationException(
+                    $"Task with status '{task.StatusCode}' cannot be reassigned.");
 
-            // Cannot reassign to the same user
+            // Reassignment must target a different Assistant.
             if (task.AssignedToUserId == request.NewAssignedToUserId)
-                throw new InvalidOperationException("New assigned user must be different from the current assignee.");
+                throw new InvalidOperationException(
+                    "New assigned user must be different from the current assignee.");
 
-            // Use the current task description if no updated description is provided
-            var updatedDescription = string.IsNullOrWhiteSpace(request.UpdatedTaskDescription)
-                ? task.TaskDescription
-                : request.UpdatedTaskDescription.Trim();
+            // Keep the current description unless Mangaka supplies updated instructions.
+            var updatedDescription =
+                string.IsNullOrWhiteSpace(request.UpdatedTaskDescription)
+                    ? task.TaskDescription
+                    : request.UpdatedTaskDescription.Trim();
 
-            // Call SP — final guards for contributor membership, locking, and audit happen in SQL
-            var newTaskId = await _unitOfWork.ChapterPageTasks.AssignToDifferentUserAsync(
-                actorUserId,
-                taskId,
-                request.NewAssignedToUserId,
-                request.Reason.Trim(),
-                updatedDescription);
+            await _unitOfWork.BeginTransactionAsync();
 
-            return new ReassignChapterPageTaskResult(taskId, newTaskId);
+            try
+            {
+                // SQL owns the final contributor guards, locking, cancellation
+                // of the original task, creation of the replacement task,
+                // Page Region links and Audit Events.
+                //
+                // EF adds both:
+                // 1. the original assistant's cancellation/reassignment notice;
+                // 2. the replacement assistant's new assignment notification.
+                //
+                // Both Notifications are saved before the shared transaction
+                // is committed.
+                var newTaskId =
+                    await _unitOfWork.ChapterPageTasks
+                        .AssignToDifferentUserAsync(
+                            actorUserId,
+                            taskId,
+                            request.NewAssignedToUserId,
+                            reassignmentReason,
+                            updatedDescription);
+
+                if (newTaskId == Guid.Empty)
+                {
+                    throw new InvalidOperationException(
+                        "Failed to create the replacement task.");
+                }
+
+                await _unitOfWork.Notifications.AddAsync(
+                    CreateTaskReassignmentNotification(
+                        task.AssignedToUserId,
+                        taskId,
+                        reassignmentReason));
+
+                await _unitOfWork.Notifications.AddAsync(
+                    CreateTaskAssignmentNotification(
+                        request.NewAssignedToUserId,
+                        newTaskId,
+                        "A production task has been reassigned to you."));
+
+                await _unitOfWork.SaveChangesAsync();
+                await _unitOfWork.CommitTransactionAsync();
+
+                return new ReassignChapterPageTaskResult(
+                    taskId,
+                    newTaskId);
+            }
+            catch
+            {
+                await _unitOfWork.RollbackTransactionAsync();
+                throw;
+            }
         }
 
         public async Task<IReadOnlyList<EligibleAssistantDto>> GetEligibleAssistantsForTaskAsync(
@@ -306,6 +412,45 @@ namespace MangaManagementSystem.Application.Services
             return rawAssistants
                 .Select(a => new EligibleAssistantDto(a.UserId, a.DisplayName, a.Username))
                 .ToList();
+        }
+
+        private static Notification CreateTaskReassignmentNotification(
+            Guid recipientUserId,
+            Guid originalTaskId,
+            string reason)
+        {
+            return new Notification
+            {
+                RecipientUserId = recipientUserId,
+                NotificationTypeCode =
+                    NotificationTypeCodes.TaskAssignment,
+                Title = "Task Reassigned",
+                Message =
+                    $"Your task was cancelled and reassigned to another assistant. Reason: {reason}",
+                RelatedEntityType =
+                    NotificationRelatedEntityTypes.ChapterPageTask,
+                RelatedEntityId = originalTaskId,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+        }
+
+        private static Notification CreateTaskAssignmentNotification(
+            Guid recipientUserId,
+            Guid taskId,
+            string message)
+        {
+            return new Notification
+            {
+                RecipientUserId = recipientUserId,
+                NotificationTypeCode =
+                    NotificationTypeCodes.TaskAssignment,
+                Title = "New Task Assignment",
+                Message = message,
+                RelatedEntityType =
+                    NotificationRelatedEntityTypes.ChapterPageTask,
+                RelatedEntityId = taskId,
+                CreatedAtUtc = DateTime.UtcNow
+            };
         }
 
         private static ChapterPageTaskDto MapToDtoWithFullContext(ChapterPageTask t)

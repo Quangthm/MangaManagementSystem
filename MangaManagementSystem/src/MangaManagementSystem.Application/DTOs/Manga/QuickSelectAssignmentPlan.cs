@@ -13,7 +13,8 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         byte PriorityLevel,
         DateTime DueAtUtc,
         decimal CompensationAmount,
-        IReadOnlyList<QuickSelectAssignmentPlanItem> Items
+        IReadOnlyList<QuickSelectAssignmentPlanItem> Items,
+        IReadOnlyList<CreateNotificationDto> Notifications
     );
 
     public sealed record QuickSelectAssignmentPlanItem(

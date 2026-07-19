@@ -13,8 +13,11 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Comm
     /// Orchestration:
     ///   1. Validate inputs (comments required; markup optional).
     ///   2. If a markup file is supplied, upload it to Cloudinary via IFileStorageService.
-    ///   3. Call manga.usp_SeriesProposal_RequestRevision through the repository wrapper.
-    ///   4. If SQL fails after a Cloudinary upload, attempt best-effort cleanup.
+    ///   3. Open the shared Unit of Work transaction.
+    ///   4. Call manga.usp_SeriesProposal_RequestRevision through the repository wrapper.
+    ///   5. Add PROPOSAL_DECISION notifications for active Mangaka contributors.
+    ///   6. Save EF notifications and commit the shared transaction.
+    ///   7. If the workflow fails after a Cloudinary upload, roll back and attempt cleanup.
     ///
     /// The stored procedure owns: comments-required guard, eligibility/contributor checks,
     /// optional EDITORIAL_ATTACHMENT FileResource creation, status transitions, and audit.
@@ -23,16 +26,16 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Comm
         : IRequestHandler<RequestProposalRevisionCommand, EditorReviewActionResultDto>
     {
         private readonly IFileStorageService _fileStorageService;
-        private readonly ISeriesProposalRepository _seriesProposalRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<RequestProposalRevisionCommandHandler> _logger;
 
         public RequestProposalRevisionCommandHandler(
             IFileStorageService fileStorageService,
-            ISeriesProposalRepository seriesProposalRepository,
+            IUnitOfWork unitOfWork,
             ILogger<RequestProposalRevisionCommandHandler> logger)
         {
             _fileStorageService = fileStorageService;
-            _seriesProposalRepository = seriesProposalRepository;
+            _unitOfWork = unitOfWork;
             _logger = logger;
         }
 
@@ -57,7 +60,6 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Comm
                     "Comments are required to request a revision.");
             }
 
-            // Optional markup upload (Cloudinary, outside the SQL transaction).
             FileUploadResultDto? markup = null;
             bool hasMarkup = command.MarkupFileBytes is { Length: > 0 };
 
@@ -70,9 +72,22 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Comm
                     command.MarkupContentType);
             }
 
+            await _unitOfWork.BeginTransactionAsync(cancellationToken);
+
             try
             {
-                await _seriesProposalRepository.RequestRevisionAsync(
+                var proposal =
+                    await _unitOfWork.SeriesProposals.GetByIdWithDetailsAsync(
+                        command.SeriesProposalId,
+                        cancellationToken);
+
+                if (proposal is null)
+                {
+                    throw new InvalidOperationException(
+                        "The selected proposal could not be found.");
+                }
+
+                await _unitOfWork.SeriesProposals.RequestRevisionAsync(
                     command.SeriesProposalId,
                     command.ActorUserId,
                     command.Comments.Trim(),
@@ -83,25 +98,43 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Comm
                     markup?.FileSizeBytes,
                     markup?.Sha256Hash,
                     cancellationToken);
+
+                await ProposalDecisionNotificationSupport
+                    .AddForActiveMangakaContributorsAsync(
+                        _unitOfWork,
+                        proposal.SeriesId,
+                        command.SeriesProposalId,
+                        "Proposal Revision Requested",
+                        "Your proposal requires revision. Open the proposal detail to review the editor feedback.");
+
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.CommitTransactionAsync(cancellationToken);
             }
             catch (Exception ex)
             {
-                // The repository maps known SQL errors to user-safe InvalidOperationException.
-                // Either way, clean up the orphaned Cloudinary upload before rethrowing.
+                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+
                 if (markup is not null)
                 {
                     await EditorialMarkupUploader.TryCleanupAsync(
-                        _fileStorageService, _logger, markup,
+                        _fileStorageService,
+                        _logger,
+                        markup,
                         $"Workflow failed after markup upload for proposal {command.SeriesProposalId} (request revision).");
                 }
 
-                _logger.LogWarning(ex,
+                _logger.LogWarning(
+                    ex,
                     "Request revision failed for proposal {SeriesProposalId} by actor {ActorUserId}.",
-                    command.SeriesProposalId, command.ActorUserId);
+                    command.SeriesProposalId,
+                    command.ActorUserId);
+
                 throw;
             }
 
-            return new EditorReviewActionResultDto(command.SeriesProposalId, "REVISION_REQUESTED");
+            return new EditorReviewActionResultDto(
+                command.SeriesProposalId,
+                "REVISION_REQUESTED");
         }
     }
 }

@@ -2,6 +2,7 @@ using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using MangaManagementSystem.Infrastructure.Persistence;
 using System;
 using System.Collections.Generic;
@@ -318,6 +319,15 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             await using DbCommand cmd = conn.CreateCommand();
             cmd.CommandText = "manga.usp_SeriesProposal_Submit";
             cmd.CommandType = CommandType.StoredProcedure;
+
+            var currentTransaction =
+                _dbContext.Database.CurrentTransaction;
+
+            if (currentTransaction != null)
+            {
+                cmd.Transaction =
+                    currentTransaction.GetDbTransaction();
+            }
 
             cmd.Parameters.Add(new SqlParameter("@series_id", SqlDbType.UniqueIdentifier) { Value = seriesId });
             cmd.Parameters.Add(new SqlParameter("@submitted_by_user_id", SqlDbType.UniqueIdentifier) { Value = submittedByUserId });

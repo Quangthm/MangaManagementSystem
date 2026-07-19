@@ -3,6 +3,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using MangaManagementSystem.Application.Common;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
 using MangaManagementSystem.Infrastructure.Persistence;
@@ -167,6 +168,38 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 };
 
                 _dbContext.AuditEvents.Add(auditEvent);
+
+                var recipientUserIds =
+                    await _dbContext.ActiveSeriesContributors
+                        .AsNoTracking()
+                        .Where(contributor =>
+                            contributor.SeriesId == chapter.SeriesId
+                            && contributor.RoleName == "Mangaka")
+                        .Select(contributor => contributor.UserId)
+                        .Distinct()
+                        .ToListAsync(ct);
+
+                var notificationContent =
+                    BuildChapterDecisionNotificationContent(
+                        decisionCode,
+                        newStatusCode);
+
+                foreach (var recipientUserId in recipientUserIds)
+                {
+                    _dbContext.Notifications.Add(
+                        new Notification
+                        {
+                            RecipientUserId = recipientUserId,
+                            NotificationTypeCode =
+                                NotificationTypeCodes.ChapterDecision,
+                            Title = notificationContent.Title,
+                            Message = notificationContent.Message,
+                            RelatedEntityType =
+                                NotificationRelatedEntityTypes.Chapter,
+                            RelatedEntityId = chapterId,
+                            CreatedAtUtc = reviewedAtUtc
+                        });
+                }
 
                 await _dbContext.SaveChangesAsync(ct);
                 await transaction.CommitAsync(ct);
@@ -396,6 +429,39 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 await transaction.RollbackAsync(ct);
                 throw;
             }
+        }
+
+        private static (string Title, string Message)
+            BuildChapterDecisionNotificationContent(
+                string decisionCode,
+                string newStatusCode)
+        {
+            return decisionCode switch
+            {
+                "APPROVED" when newStatusCode == StatusScheduledFull =>
+                    (
+                        "Chapter Approved and Scheduled",
+                        "Your chapter was approved and scheduled for release. Open chapter management to review the release plan."
+                    ),
+                "APPROVED" =>
+                    (
+                        "Chapter Approved",
+                        "Your chapter was approved. Open chapter management to review the decision."
+                    ),
+                "REVISION_REQUESTED" =>
+                    (
+                        "Chapter Revision Requested",
+                        "Your chapter requires revision. Open chapter management to review the editor feedback."
+                    ),
+                "CANCELLED" =>
+                    (
+                        "Chapter Cancelled",
+                        "Your chapter was cancelled during editorial review. Open chapter management to review the editor feedback."
+                    ),
+                _ =>
+                    throw new InvalidOperationException(
+                        $"Unknown decision code: {decisionCode}")
+            };
         }
 
         private static bool IsPlannableOrReschedulableChapter(string statusCode)

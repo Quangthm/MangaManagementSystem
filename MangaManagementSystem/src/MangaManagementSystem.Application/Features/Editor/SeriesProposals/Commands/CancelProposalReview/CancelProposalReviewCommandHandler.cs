@@ -13,8 +13,11 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Comm
     /// Orchestration:
     ///   1. Validate inputs (comments required; markup file required).
     ///   2. Upload the markup file to Cloudinary via IFileStorageService.
-    ///   3. Call manga.usp_SeriesProposal_CancelEditorialReview through the repository wrapper.
-    ///   4. If SQL fails after the Cloudinary upload, attempt best-effort cleanup.
+    ///   3. Open the shared Unit of Work transaction.
+    ///   4. Call manga.usp_SeriesProposal_CancelEditorialReview through the repository wrapper.
+    ///   5. Add PROPOSAL_DECISION notifications for active Mangaka contributors.
+    ///   6. Save EF notifications and commit the shared transaction.
+    ///   7. If the workflow fails, roll back and attempt Cloudinary cleanup.
     ///
     /// The stored procedure owns: comments-required guard, eligibility/contributor checks,
     /// required EDITORIAL_ATTACHMENT FileResource creation, status transitions, and audit.
@@ -24,16 +27,16 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Comm
         : IRequestHandler<CancelProposalReviewCommand, EditorReviewActionResultDto>
     {
         private readonly IFileStorageService _fileStorageService;
-        private readonly ISeriesProposalRepository _seriesProposalRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<CancelProposalReviewCommandHandler> _logger;
 
         public CancelProposalReviewCommandHandler(
             IFileStorageService fileStorageService,
-            ISeriesProposalRepository seriesProposalRepository,
+            IUnitOfWork unitOfWork,
             ILogger<CancelProposalReviewCommandHandler> logger)
         {
             _fileStorageService = fileStorageService;
-            _seriesProposalRepository = seriesProposalRepository;
+            _unitOfWork = unitOfWork;
             _logger = logger;
         }
 
@@ -64,16 +67,29 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Comm
                     "A markup file is required to cancel a proposal.");
             }
 
-            // Required markup upload (Cloudinary, outside the SQL transaction).
-            FileUploadResultDto markup = await EditorialMarkupUploader.ValidateAndUploadAsync(
-                _fileStorageService,
-                command.MarkupFileBytes,
-                command.MarkupFileName,
-                command.MarkupContentType);
+            FileUploadResultDto markup =
+                await EditorialMarkupUploader.ValidateAndUploadAsync(
+                    _fileStorageService,
+                    command.MarkupFileBytes,
+                    command.MarkupFileName,
+                    command.MarkupContentType);
+
+            await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
             try
             {
-                await _seriesProposalRepository.CancelProposalAsync(
+                var proposal =
+                    await _unitOfWork.SeriesProposals.GetByIdWithDetailsAsync(
+                        command.SeriesProposalId,
+                        cancellationToken);
+
+                if (proposal is null)
+                {
+                    throw new InvalidOperationException(
+                        "The selected proposal could not be found.");
+                }
+
+                await _unitOfWork.SeriesProposals.CancelProposalAsync(
                     command.SeriesProposalId,
                     command.ActorUserId,
                     command.Comments.Trim(),
@@ -84,23 +100,40 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Comm
                     markup.FileSizeBytes,
                     markup.Sha256Hash,
                     cancellationToken);
+
+                await ProposalDecisionNotificationSupport
+                    .AddForActiveMangakaContributorsAsync(
+                        _unitOfWork,
+                        proposal.SeriesId,
+                        command.SeriesProposalId,
+                        "Proposal Cancelled",
+                        "Your proposal was cancelled during editorial review. Open the proposal detail to review the editor feedback.");
+
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.CommitTransactionAsync(cancellationToken);
             }
             catch (Exception ex)
             {
-                // The repository maps known SQL business errors to user-safe
-                // InvalidOperationException messages. Whatever the failure, clean up the
-                // already-uploaded markup so it does not orphan in Cloudinary.
+                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+
                 await EditorialMarkupUploader.TryCleanupAsync(
-                    _fileStorageService, _logger, markup,
+                    _fileStorageService,
+                    _logger,
+                    markup,
                     $"Workflow failed after markup upload for proposal {command.SeriesProposalId} (cancel).");
 
-                _logger.LogError(ex,
+                _logger.LogError(
+                    ex,
                     "Failed to cancel proposal {SeriesProposalId} by actor {ActorUserId}.",
-                    command.SeriesProposalId, command.ActorUserId);
+                    command.SeriesProposalId,
+                    command.ActorUserId);
+
                 throw;
             }
 
-            return new EditorReviewActionResultDto(command.SeriesProposalId, "CANCELLED");
+            return new EditorReviewActionResultDto(
+                command.SeriesProposalId,
+                "CANCELLED");
         }
     }
 }

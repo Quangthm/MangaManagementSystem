@@ -1,11 +1,15 @@
+using MangaManagementSystem.Application.Common;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Interfaces;
+using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Data;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -41,9 +45,13 @@ namespace MangaManagementSystem.Infrastructure.Services
                 await conn.OpenAsync(cancellationToken);
             }
 
-            // All steps (derive page, create FileResource, create ChapterPageVersion,
-            // call usp_ChapterPageTask_SubmitForReview) run inside one transaction.
-            await using var transaction = await conn.BeginTransactionAsync(cancellationToken);
+            // All SQL commands and EF notifications share one transaction.
+            await using var efTransaction =
+                await _context.Database.BeginTransactionAsync(
+                    cancellationToken);
+
+            var transaction =
+                efTransaction.GetDbTransaction();
 
             try
             {
@@ -295,9 +303,115 @@ namespace MangaManagementSystem.Infrastructure.Services
                     request.ChapterPageTaskId, newPageVersionId, request.ActorUserId);
 
                 // ----------------------------------------------------------------
-                // 5. Commit transaction
+                // 5. Resolve the exact series and notify active Mangaka contributors.
                 // ----------------------------------------------------------------
-                await transaction.CommitAsync(cancellationToken);
+                var taskContext =
+                    await (
+                        from task in _context.ChapterPageTasks
+                            .AsNoTracking()
+                        where task.ChapterPageTaskId
+                            == request.ChapterPageTaskId
+                        from region in task.PageRegions
+                        join pageVersion in
+                            _context.ChapterPageVersions.AsNoTracking()
+                            on region.ChapterPageVersionId
+                            equals pageVersion.ChapterPageVersionId
+                        join page in
+                            _context.ChapterPages.AsNoTracking()
+                            on pageVersion.ChapterPageId
+                            equals page.ChapterPageId
+                        join chapter in
+                            _context.Chapters.AsNoTracking()
+                            on page.ChapterId
+                            equals chapter.ChapterId
+                        join series in
+                            _context.Series.AsNoTracking()
+                            on chapter.SeriesId
+                            equals series.SeriesId
+                        select new
+                        {
+                            series.SeriesId,
+                            SeriesTitle = series.Title,
+                            task.TaskTitle
+                        })
+                        .Distinct()
+                        .SingleOrDefaultAsync(cancellationToken);
+
+                if (taskContext == null)
+                {
+                    throw new InvalidOperationException(
+                        "Could not resolve the submitted task's series context.");
+                }
+
+                var recipientUserIds =
+                    await _context.ActiveSeriesContributors
+                        .AsNoTracking()
+                        .Where(contributor =>
+                            contributor.SeriesId
+                                == taskContext.SeriesId
+                            && contributor.RoleName
+                                == "Mangaka"
+                            && contributor.UserStatusCode
+                                == "ACTIVE"
+                            && contributor.EndDate == null)
+                        .Select(contributor =>
+                            contributor.UserId)
+                        .Distinct()
+                        .ToListAsync(cancellationToken);
+
+                if (recipientUserIds.Count > 0)
+                {
+                    var createdAtUtc =
+                        DateTime.UtcNow;
+
+                    var notifications =
+                        recipientUserIds
+                            .Select(recipientUserId =>
+                                new Notification
+                                {
+                                    RecipientUserId =
+                                        recipientUserId,
+                                    NotificationTypeCode =
+                                        NotificationTypeCodes.TaskReview,
+                                    Title =
+                                        "Assistant Task Submitted for Review",
+                                    Message =
+                                        $"Task '{taskContext.TaskTitle}' for "
+                                        + $"'{taskContext.SeriesTitle}' was "
+                                        + "submitted for your review.",
+                                    RelatedEntityType =
+                                        NotificationRelatedEntityTypes
+                                            .ChapterPageTask,
+                                    RelatedEntityId =
+                                        request.ChapterPageTaskId,
+                                    ReadAtUtc =
+                                        null,
+                                    CreatedAtUtc =
+                                        createdAtUtc
+                                })
+                            .ToList();
+
+                    await _context.Notifications
+                        .AddRangeAsync(
+                            notifications,
+                            cancellationToken);
+
+                    await _context.SaveChangesAsync(
+                        cancellationToken);
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "No active Mangaka contributor found for submitted task {TaskId} in series {SeriesId}.",
+                        request.ChapterPageTaskId,
+                        taskContext.SeriesId);
+                }
+
+                // ----------------------------------------------------------------
+                // 6. Commit transaction
+                // ----------------------------------------------------------------
+                await efTransaction.CommitAsync(
+                    cancellationToken);
 
                 return new AssistantTaskSubmitResultDto(
                     ChapterPageTaskId: request.ChapterPageTaskId,
@@ -313,7 +427,7 @@ namespace MangaManagementSystem.Infrastructure.Services
                     "SQL error during SubmitTaskWork. TaskId={TaskId}, ActorUserId={ActorUserId}, SqlErrorNumber={SqlErrorNumber}, SqlMessage={SqlMessage}",
                     request.ChapterPageTaskId, request.ActorUserId, ex.Number, ex.Message);
 
-                try { await transaction.RollbackAsync(cancellationToken); }
+                try { await efTransaction.RollbackAsync(CancellationToken.None); }
                 catch (Exception rollbackEx)
                 {
                     _logger.LogWarning(rollbackEx, "Rollback failed after SQL error for TaskId={TaskId}.", request.ChapterPageTaskId);
@@ -327,7 +441,7 @@ namespace MangaManagementSystem.Infrastructure.Services
                     "Error during SubmitTaskWork. TaskId={TaskId}, ActorUserId={ActorUserId}",
                     request.ChapterPageTaskId, request.ActorUserId);
 
-                try { await transaction.RollbackAsync(cancellationToken); }
+                try { await efTransaction.RollbackAsync(CancellationToken.None); }
                 catch (Exception rollbackEx)
                 {
                     _logger.LogWarning(rollbackEx, "Rollback failed after error for TaskId={TaskId}.", request.ChapterPageTaskId);

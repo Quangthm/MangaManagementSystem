@@ -1,8 +1,11 @@
+using MangaManagementSystem.Application.Common;
 using MangaManagementSystem.Application.Features.EditorialBoard.Dtos;
 using MangaManagementSystem.Application.Features.EditorialBoard.Repositories;
+using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using System.Data;
 using System.Data.Common;
 using System.Text.Json;
@@ -239,12 +242,129 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         return rows;
     }
 
-    public async Task<OpenSeriesBoardPollResultDto> OpenPollAsync(
-        OpenSeriesBoardPollRequestDto request,
+
+    public async Task<IReadOnlyList<CancellableBoardSeriesDto>> GetCancellableSeriesForCancelPollAsync(
+        CancellationToken cancellationToken)
+    {
+        var connection = _dbContext.Database.GetDbConnection();
+
+        if (connection.State != ConnectionState.Open)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        await using var command = connection.CreateCommand();
+
+        command.CommandText =
+            """
+            SELECT
+                s.series_id,
+                s.slug,
+                s.title,
+                COALESCE(author_info.author_name, N'Unknown Author') AS author_name,
+                ISNULL(genres.genre_names, N'Unknown Genre') AS genre_display,
+                ISNULL(tags.tag_names, N'') AS tag_display,
+                COALESCE(latest_proposal.synopsis_snapshot, N'No synopsis provided.') AS synopsis,
+                s.publication_frequency_code,
+                s.status_code,
+                CASE
+                    WHEN EXISTS
+                    (
+                        SELECT 1
+                        FROM manga.SeriesBoardPoll p
+                        WHERE p.series_id = s.series_id
+                          AND p.poll_type_code = N'CANCEL_SERIALIZATION'
+                          AND p.poll_status_code = N'OPEN'
+                    )
+                        THEN CAST(1 AS bit)
+                    ELSE CAST(0 AS bit)
+                END AS has_open_cancel_poll
+            FROM manga.Series s
+            OUTER APPLY
+            (
+                SELECT TOP (1)
+                    sp.synopsis_snapshot,
+                    sp.submitted_by_user_id
+                FROM manga.SeriesProposal sp
+                WHERE sp.series_id = s.series_id
+                ORDER BY sp.proposal_version_no DESC, sp.submitted_at_utc DESC
+            ) latest_proposal
+            OUTER APPLY
+            (
+                SELECT
+                    u.display_name AS author_name
+                FROM auth.Users u
+                WHERE u.user_id = latest_proposal.submitted_by_user_id
+            ) author_info
+            OUTER APPLY
+            (
+                SELECT
+                    STRING_AGG(CONVERT(NVARCHAR(MAX), g.genre_name), N' / ') AS genre_names
+                FROM manga.SeriesGenre sg
+                INNER JOIN manga.Genre g
+                    ON g.genre_id = sg.genre_id
+                WHERE sg.series_id = s.series_id
+            ) genres
+            OUTER APPLY
+            (
+                SELECT
+                    STRING_AGG(CONVERT(NVARCHAR(MAX), t.tag_name), N', ') AS tag_names
+                FROM manga.SeriesTag st
+                INNER JOIN manga.Tag t
+                    ON t.tag_id = st.tag_id
+                WHERE st.series_id = s.series_id
+            ) tags
+            WHERE s.status_code IN (N'SERIALIZED', N'HIATUS')
+            ORDER BY s.title;
+            """;
+
+        var rows = new List<CancellableBoardSeriesDto>();
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            rows.Add(new CancellableBoardSeriesDto(
+                SeriesId: reader.GetGuid(0),
+                Code: GetStringOrDefault(reader, 1, "N/A"),
+                Title: GetStringOrDefault(reader, 2, "Untitled Series"),
+                Author: GetStringOrDefault(reader, 3, "Unknown Author"),
+                Genre: GetStringOrDefault(reader, 4, "Unknown Genre"),
+                TagsDisplay: GetStringOrDefault(reader, 5, string.Empty),
+                Synopsis: GetStringOrDefault(reader, 6, "No synopsis provided."),
+                PublicationFrequencyCode: reader.IsDBNull(7) ? null : reader.GetString(7),
+                StatusCode: GetStringOrDefault(reader, 8, "UNKNOWN"),
+                HasOpenCancelSerializationPoll: ToBoolean(reader, 9)));
+        }
+
+        return rows;
+    }
+
+    public async Task<OpenSeriesBoardPollResultDto> OpenCancelSerializationPollAsync(
+        Guid seriesId,
+        OpenCancelSerializationPollRequestDto request,
         Guid chiefUserId,
         CancellationToken cancellationToken)
     {
-        ValidateOpenPollRequest(request);
+        if (seriesId == Guid.Empty)
+        {
+            throw new InvalidOperationException("SeriesId is required.");
+        }
+
+        if (chiefUserId == Guid.Empty)
+        {
+            throw new InvalidOperationException("ChiefUserId is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.PollReason))
+        {
+            throw new InvalidOperationException("Poll reason is required.");
+        }
+
+        if (request.EndsAtUtc is not null && request.EndsAtUtc <= DateTime.UtcNow)
+        {
+            throw new InvalidOperationException("Poll deadline must be in the future.");
+        }
 
         var connection = _dbContext.Database.GetDbConnection();
 
@@ -254,6 +374,158 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         }
 
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            await using var checkCommand = connection.CreateCommand();
+            checkCommand.Transaction = transaction;
+
+            checkCommand.CommandText =
+                """
+                SELECT
+                    series_id,
+                    status_code
+                FROM manga.Series WITH (UPDLOCK, ROWLOCK)
+                WHERE series_id = @seriesId
+                  AND status_code IN (N'SERIALIZED', N'HIATUS');
+                """;
+
+            AddGuidParameter(checkCommand, "@seriesId", seriesId);
+
+            string? statusCode = null;
+
+            await using (var reader = await checkCommand.ExecuteReaderAsync(cancellationToken))
+            {
+                if (await reader.ReadAsync(cancellationToken))
+                {
+                    statusCode = reader.GetString(1);
+                }
+            }
+
+            if (statusCode is null)
+            {
+                throw new InvalidOperationException(
+                    "Only SERIALIZED or HIATUS series can open a cancellation poll.");
+            }
+
+            var hasExistingOpenPoll = await HasExistingOpenPollAsync(
+                connection,
+                transaction,
+                seriesId,
+                "CANCEL_SERIALIZATION",
+                cancellationToken);
+
+            if (hasExistingOpenPoll)
+            {
+                throw new InvalidOperationException(
+                    "This series already has an open cancellation poll.");
+            }
+
+            await using var insertCommand = connection.CreateCommand();
+            insertCommand.Transaction = transaction;
+
+            insertCommand.CommandText =
+                """
+                INSERT INTO manga.SeriesBoardPoll
+                (
+                    series_id,
+                    poll_type_code,
+                    poll_reason,
+                    poll_status_code,
+                    board_publication_frequency_code,
+                    created_by_user_id,
+                    started_at_utc,
+                    ends_at_utc
+                )
+                OUTPUT inserted.series_board_poll_id
+                VALUES
+                (
+                    @seriesId,
+                    N'CANCEL_SERIALIZATION',
+                    @pollReason,
+                    N'OPEN',
+                    NULL,
+                    @chiefUserId,
+                    SYSUTCDATETIME(),
+                    @endsAtUtc
+                );
+                """;
+
+            AddGuidParameter(insertCommand, "@seriesId", seriesId);
+            AddStringParameter(insertCommand, "@pollReason", request.PollReason, -1);
+            AddGuidParameter(insertCommand, "@chiefUserId", chiefUserId);
+            AddNullableDateTimeParameter(insertCommand, "@endsAtUtc", request.EndsAtUtc);
+
+            var pollIdObj = await insertCommand.ExecuteScalarAsync(cancellationToken);
+
+            if (pollIdObj is not Guid pollId)
+            {
+                throw new InvalidOperationException("Could not create cancellation poll.");
+            }
+
+            var auditJson =
+                $$"""
+                {
+                  "poll_id": "{{pollId}}",
+                  "series_id": "{{seriesId}}",
+                  "poll_type_code": "CANCEL_SERIALIZATION",
+                  "series_status_code": "{{statusCode}}",
+                  "poll_reason": {{JsonSerializer.Serialize(request.PollReason)}},
+                  "ends_at_utc": {{JsonSerializer.Serialize(request.EndsAtUtc)}}
+                }
+                """;
+
+            await AppendAuditEventAsync(
+                connection,
+                transaction,
+                chiefUserId,
+                "SERIES_BOARD_POLL_OPENED",
+                "SeriesBoardPoll",
+                pollId,
+                auditJson,
+                cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+
+            return new OpenSeriesBoardPollResultDto(
+                PollId: pollId,
+                SeriesId: seriesId,
+                ProposalId: Guid.Empty,
+                PollStatusCode: "OPEN");
+        }
+        catch (SqlException ex) when (ex.Number is 2601 or 2627)
+        {
+            await TryRollbackAsync(transaction, cancellationToken);
+
+            throw new InvalidOperationException(
+                "This series already has an open cancellation poll.",
+                ex);
+        }
+        catch
+        {
+            await TryRollbackAsync(transaction, cancellationToken);
+            throw;
+        }
+    }
+
+    public async Task<OpenSeriesBoardPollResultDto> OpenPollAsync(
+        OpenSeriesBoardPollRequestDto request,
+        Guid chiefUserId,
+        BoardPollNotificationPlan notificationPlan,
+        CancellationToken cancellationToken)
+    {
+        ValidateOpenPollRequest(request);
+        ValidateBoardPollNotificationPlan(notificationPlan);
+
+        await using var efTransaction =
+            await _dbContext.Database.BeginTransactionAsync(
+                cancellationToken);
+
+        var connection =
+            _dbContext.Database.GetDbConnection();
+
+        var transaction =
+            efTransaction.GetDbTransaction();
 
         try
         {
@@ -361,7 +633,14 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 openPollAuditJson,
                 cancellationToken);
 
-            await transaction.CommitAsync(cancellationToken);
+            await CreateBoardPollNotificationsAsync(
+                notificationPlan,
+                chiefUserId,
+                pollId,
+                cancellationToken);
+
+            await efTransaction.CommitAsync(
+                cancellationToken);
 
             return new OpenSeriesBoardPollResultDto(
                 PollId: pollId,
@@ -382,6 +661,69 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             await TryRollbackAsync(transaction, cancellationToken);
             throw;
         }
+    }
+
+    private async Task CreateBoardPollNotificationsAsync(
+        BoardPollNotificationPlan plan,
+        Guid chiefUserId,
+        Guid pollId,
+        CancellationToken cancellationToken)
+    {
+        var recipientUserIds =
+            await _dbContext.Users
+                .AsNoTracking()
+                .Where(user =>
+                    user.UserId != chiefUserId
+                    && user.StatusCode ==
+                        plan.RecipientStatusCode
+                    && user.Role != null
+                    && user.Role.RoleName ==
+                        plan.RecipientRoleName)
+                .Select(user =>
+                    user.UserId)
+                .Distinct()
+                .ToListAsync(
+                    cancellationToken);
+
+        if (recipientUserIds.Count == 0)
+        {
+            return;
+        }
+
+        var createdAtUtc =
+            DateTime.UtcNow;
+
+        var notifications =
+            recipientUserIds
+                .Select(recipientUserId =>
+                    new Notification
+                    {
+                        RecipientUserId =
+                            recipientUserId,
+                        NotificationTypeCode =
+                            plan.NotificationTypeCode,
+                        Title =
+                            plan.Title,
+                        Message =
+                            plan.Message,
+                        RelatedEntityType =
+                            plan.RelatedEntityType,
+                        RelatedEntityId =
+                            pollId,
+                        ReadAtUtc =
+                            null,
+                        CreatedAtUtc =
+                            createdAtUtc
+                    })
+                .ToList();
+
+        await _dbContext.Notifications
+            .AddRangeAsync(
+                notifications,
+                cancellationToken);
+
+        await _dbContext.SaveChangesAsync(
+            cancellationToken);
     }
 
     public async Task<CastSeriesBoardVoteResultDto> CastVoteAsync(
@@ -423,6 +765,16 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                     THROW 58601, 'Poll is not open or has expired.', 1;
                 END;
 
+                IF EXISTS (
+                    SELECT 1
+                    FROM manga.SeriesBoardVote
+                    WHERE series_board_poll_id = @pollId
+                      AND user_id = @voterUserId
+                )
+                BEGIN
+                    THROW 58602, 'You already voted. Your vote cannot be changed.', 1;
+                END;
+
                 DECLARE @result TABLE
                 (
                     series_board_vote_id UNIQUEIDENTIFIER,
@@ -431,44 +783,28 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                     voted_at_utc DATETIME2(0)
                 );
 
-                UPDATE manga.SeriesBoardVote
-                SET choice_code = @choiceCode,
-                    vote_reason = @voteReason,
-                    voted_at_utc = SYSUTCDATETIME()
+                INSERT INTO manga.SeriesBoardVote
+                (
+                    series_board_poll_id,
+                    user_id,
+                    choice_code,
+                    vote_reason,
+                    voted_at_utc
+                )
                 OUTPUT
                     inserted.series_board_vote_id,
                     inserted.choice_code,
                     inserted.vote_reason,
                     inserted.voted_at_utc
                 INTO @result
-                WHERE series_board_poll_id = @pollId
-                  AND user_id = @voterUserId;
-
-                IF @@ROWCOUNT = 0
-                BEGIN
-                    INSERT INTO manga.SeriesBoardVote
-                    (
-                        series_board_poll_id,
-                        user_id,
-                        choice_code,
-                        vote_reason,
-                        voted_at_utc
-                    )
-                    OUTPUT
-                        inserted.series_board_vote_id,
-                        inserted.choice_code,
-                        inserted.vote_reason,
-                        inserted.voted_at_utc
-                    INTO @result
-                    VALUES
-                    (
-                        @pollId,
-                        @voterUserId,
-                        @choiceCode,
-                        @voteReason,
-                        SYSUTCDATETIME()
-                    );
-                END;
+                VALUES
+                (
+                    @pollId,
+                    @voterUserId,
+                    @choiceCode,
+                    @voteReason,
+                    SYSUTCDATETIME()
+                );
 
                 SELECT
                     series_board_vote_id,
@@ -526,10 +862,10 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
 
             return result;
         }
-        catch (SqlException ex) when (ex.Number == 58601)
+        catch (SqlException ex) when (ex.Number is 58601 or 58602)
         {
             await TryRollbackAsync(transaction, cancellationToken);
-            throw new InvalidOperationException("Poll is not open or has expired.", ex);
+            throw new InvalidOperationException(ex.Message, ex);
         }
         catch
         {
@@ -537,6 +873,7 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             throw;
         }
     }
+
 
     public async Task<FinalizeBoardPollResultDto> FinalizeApprovalAsync(
         Guid pollId,
@@ -560,7 +897,12 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             await connection.OpenAsync(cancellationToken);
         }
 
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await using var efTransaction =
+            await _dbContext.Database.BeginTransactionAsync(
+                cancellationToken);
+
+        var transaction =
+            efTransaction.GetDbTransaction();
 
         try
         {
@@ -708,7 +1050,8 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                     SET status_code = N'CANCELLED',
                         updated_at_utc = @endedAtUtc,
                         updated_by_user_id = @chiefUserId
-                    WHERE series_id = @seriesId;
+                    WHERE series_id = @seriesId
+                      AND status_code IN (N'SERIALIZED', N'HIATUS');
                 END;
 
                 DECLARE @seriesStatusCode NVARCHAR(50);
@@ -723,13 +1066,17 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                     @finalPollStatusCode AS poll_status_code,
                     ISNULL(@seriesStatusCode, N'UNKNOWN') AS series_status_code,
                     @publicationFrequencyCode AS publication_frequency_code,
-                    @endedAtUtc AS ended_at_utc;
+                    @endedAtUtc AS ended_at_utc,
+                    @computedResultCode AS computed_result_code,
+                    @pollTypeCode AS poll_type_code;
                 """;
 
             AddGuidParameter(command, "@pollId", pollId);
             AddGuidParameter(command, "@chiefUserId", chiefUserId);
 
             FinalizeBoardPollResultDto result;
+            string computedResultCode;
+            string pollTypeCode;
 
             await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
             {
@@ -745,6 +1092,12 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                     SeriesStatusCode: reader.GetString(3),
                     PublicationFrequencyCode: reader.IsDBNull(4) ? null : reader.GetString(4),
                     EndedAtUtc: reader.GetDateTime(5));
+
+                computedResultCode =
+                    reader.GetString(6);
+
+                pollTypeCode =
+                    reader.GetString(7);
             }
 
             var closePollAuditJson =
@@ -754,6 +1107,8 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                   "series_id": "{{result.SeriesId}}",
                   "poll_status_code": "{{result.PollStatusCode}}",
                   "series_status_code": "{{result.SeriesStatusCode}}",
+                  "poll_type_code": "{{pollTypeCode}}",
+                  "computed_result_code": "{{computedResultCode}}",
                   "publication_frequency_code": {{JsonSerializer.Serialize(result.PublicationFrequencyCode)}},
                   "ended_at_utc": "{{result.EndedAtUtc:O}}"
                 }
@@ -769,7 +1124,87 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 closePollAuditJson,
                 cancellationToken);
 
-            await transaction.CommitAsync(cancellationToken);
+            var recipientUserIds =
+                await _dbContext.ActiveSeriesContributors
+                    .AsNoTracking()
+                    .Where(contributor =>
+                        contributor.SeriesId == result.SeriesId
+                        && contributor.EndDate == null
+                        && contributor.UserStatusCode == "ACTIVE")
+                    .Select(contributor => contributor.UserId)
+                    .Distinct()
+                    .ToListAsync(cancellationToken);
+
+            var seriesTitle =
+                await _dbContext.Series
+                    .AsNoTracking()
+                    .Where(series =>
+                        series.SeriesId == result.SeriesId)
+                    .Select(series => series.Title)
+                    .FirstOrDefaultAsync(cancellationToken)
+                ?? "this series";
+
+            var notificationTitle =
+                computedResultCode switch
+                {
+                    "APPROVED" =>
+                        "Board Decision Approved",
+                    "REJECTED" =>
+                        "Board Decision Rejected",
+                    _ =>
+                        "Board Poll Closed Without Decision"
+                };
+
+            var decisionLabel =
+                computedResultCode.Replace(
+                    '_',
+                    ' ');
+
+            var notificationMessage =
+                $"The {MapPollType(pollTypeCode)} poll for "
+                + $"'{seriesTitle}' closed with result "
+                + $"{decisionLabel}.";
+
+            if (recipientUserIds.Count > 0)
+            {
+                var createdAtUtc =
+                    DateTime.UtcNow;
+
+                var notifications =
+                    recipientUserIds
+                        .Select(recipientUserId =>
+                            new Notification
+                            {
+                                RecipientUserId =
+                                    recipientUserId,
+                                NotificationTypeCode =
+                                    NotificationTypeCodes.BoardDecision,
+                                Title =
+                                    notificationTitle,
+                                Message =
+                                    notificationMessage,
+                                RelatedEntityType =
+                                    NotificationRelatedEntityTypes.SeriesBoardPoll,
+                                RelatedEntityId =
+                                    result.PollId,
+                                ReadAtUtc =
+                                    null,
+                                CreatedAtUtc =
+                                    createdAtUtc
+                            })
+                        .ToList();
+
+                await _dbContext.Notifications
+                    .AddRangeAsync(
+                        notifications,
+                        cancellationToken);
+
+                await _dbContext.SaveChangesAsync(
+                    cancellationToken);
+            }
+
+            await efTransaction.CommitAsync(
+                cancellationToken);
 
             return result;
         }
@@ -1293,6 +1728,54 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    private static void ValidateBoardPollNotificationPlan(
+        BoardPollNotificationPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        if (string.IsNullOrWhiteSpace(
+                plan.RecipientRoleName))
+        {
+            throw new InvalidOperationException(
+                "Notification recipient role is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                plan.RecipientStatusCode))
+        {
+            throw new InvalidOperationException(
+                "Notification recipient status is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                plan.NotificationTypeCode))
+        {
+            throw new InvalidOperationException(
+                "Notification type is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                plan.Title))
+        {
+            throw new InvalidOperationException(
+                "Notification title is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                plan.Message))
+        {
+            throw new InvalidOperationException(
+                "Notification message is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                plan.RelatedEntityType))
+        {
+            throw new InvalidOperationException(
+                "Notification related entity type is required.");
+        }
+    }
+
     private static void ValidateOpenPollRequest(OpenSeriesBoardPollRequestDto request)
     {
         if (request.ProposalId == Guid.Empty)
@@ -1305,27 +1788,19 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             throw new InvalidOperationException("Poll reason is required.");
         }
 
-        if (request.PollTypeCode is not "START_SERIALIZATION" and not "CANCEL_SERIALIZATION")
+        if (request.PollTypeCode != "START_SERIALIZATION")
         {
-            throw new InvalidOperationException("Invalid poll type.");
+            throw new InvalidOperationException(
+                "Proposal poll endpoint only supports START_SERIALIZATION. Use the series cancellation poll endpoint for CANCEL_SERIALIZATION.");
         }
 
-        if (request.PollTypeCode == "START_SERIALIZATION"
-            && string.IsNullOrWhiteSpace(request.PublicationFrequencyCode))
+        if (string.IsNullOrWhiteSpace(request.PublicationFrequencyCode))
         {
             throw new InvalidOperationException(
                 "Publication frequency is required for START_SERIALIZATION poll.");
         }
 
-        if (request.PollTypeCode == "CANCEL_SERIALIZATION"
-            && !string.IsNullOrWhiteSpace(request.PublicationFrequencyCode))
-        {
-            throw new InvalidOperationException(
-                "Publication frequency must be empty for CANCEL_SERIALIZATION poll.");
-        }
-
-        if (!string.IsNullOrWhiteSpace(request.PublicationFrequencyCode)
-            && request.PublicationFrequencyCode is not "WEEKLY" and not "MONTHLY" and not "IRREGULAR")
+        if (request.PublicationFrequencyCode is not "WEEKLY" and not "MONTHLY" and not "IRREGULAR")
         {
             throw new InvalidOperationException("Invalid publication frequency.");
         }

@@ -4,6 +4,7 @@ using System.Data;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using MangaManagementSystem.Application.Common;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.DTOs.Editor;
 using MangaManagementSystem.Domain.Entities;
@@ -26,6 +27,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
     {
         private const string MangakaRoleName = "Mangaka";
         private const string ActiveUserStatus = "ACTIVE";
+        private const string TantouEditorRoleName = "Tantou Editor";
         private const string DraftStatus = "DRAFT";
         private const string UnderReviewStatus = "UNDER_REVIEW";
         private const string RevisionRequestedStatus = "REVISION_REQUESTED";
@@ -211,61 +213,160 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             Guid chapterId,
             CancellationToken cancellationToken = default)
         {
-            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            var chapter = await _context.Chapters
+                .Include(c => c.Series)
+                .FirstOrDefaultAsync(
+                    c => c.ChapterId == chapterId,
+                    cancellationToken);
 
-            try
+            if (chapter == null)
             {
-                var chapter = await _context.Chapters
-                    .Include(c => c.Series)
-                    .FirstOrDefaultAsync(c => c.ChapterId == chapterId, cancellationToken);
+                throw new InvalidOperationException(
+                    "Chapter does not exist.");
+            }
 
-                if (chapter == null)
-                    throw new InvalidOperationException("Chapter does not exist.");
+            await EnsureActiveMangakaContributorAsync(
+                actorUserId,
+                chapter.SeriesId,
+                cancellationToken);
 
-                await EnsureActiveMangakaContributorAsync(actorUserId, chapter.SeriesId, cancellationToken);
+            if (chapter.StatusCode != DraftStatus
+                && chapter.StatusCode != RevisionRequestedStatus)
+            {
+                throw new InvalidOperationException(
+                    "Only DRAFT or REVISION_REQUESTED chapters can be submitted for editorial review.");
+            }
 
-                if (chapter.StatusCode != DraftStatus && chapter.StatusCode != RevisionRequestedStatus)
-                    throw new InvalidOperationException("Only DRAFT or REVISION_REQUESTED chapters can be submitted for editorial review.");
+            var recipientUserIds = await _context
+                .ActiveSeriesContributors
+                .AsNoTracking()
+                .Where(contributor =>
+                    contributor.SeriesId == chapter.SeriesId
+                    && contributor.EndDate == null
+                    && contributor.UserStatusCode == ActiveUserStatus
+                    && contributor.RoleName == TantouEditorRoleName)
+                .Select(contributor =>
+                    contributor.UserId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
 
-                string oldStatusCode = chapter.StatusCode;
-                var submittedAtUtc = DateTime.UtcNow;
+            if (recipientUserIds.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    "No active Tantou Editor contributor is assigned to this series.");
+            }
 
-                chapter.StatusCode = UnderReviewStatus;
-                chapter.UpdatedAtUtc = submittedAtUtc;
+            var oldStatusCode = chapter.StatusCode;
+            var submittedAtUtc = DateTime.UtcNow;
+            var seriesTitle =
+                chapter.Series?.Title
+                ?? "Unknown Series";
 
-                var detailJson = JsonSerializer.Serialize(new
+            chapter.StatusCode = UnderReviewStatus;
+            chapter.UpdatedAtUtc = submittedAtUtc;
+
+            var notificationMessage =
+                $"Chapter {chapter.ChapterNumberLabel}"
+                + (
+                    string.IsNullOrWhiteSpace(chapter.ChapterTitle)
+                        ? string.Empty
+                        : $" - {chapter.ChapterTitle.Trim()}"
+                )
+                + $" from series '{seriesTitle}' was submitted for editorial review.";
+
+            var notifications =
+                recipientUserIds
+                    .Select(recipientUserId =>
+                        new Notification
+                        {
+                            RecipientUserId =
+                                recipientUserId,
+                            NotificationTypeCode =
+                                NotificationTypeCodes
+                                    .ChapterReview,
+                            Title =
+                                "Chapter Submitted for Review",
+                            Message =
+                                notificationMessage,
+                            RelatedEntityType =
+                                NotificationRelatedEntityTypes
+                                    .Chapter,
+                            RelatedEntityId =
+                                chapter.ChapterId,
+                            ReadAtUtc =
+                                null,
+                            CreatedAtUtc =
+                                submittedAtUtc
+                        })
+                    .ToList();
+
+            var detailJson = JsonSerializer.Serialize(
+                new
                 {
-                    chapter_id = chapterId,
-                    series_id = chapter.SeriesId,
-                    old_status_code = oldStatusCode,
-                    new_status_code = UnderReviewStatus,
-                    submitted_by_user_id = actorUserId,
-                    submitted_at_utc = submittedAtUtc
+                    chapter_id =
+                        chapterId,
+                    series_id =
+                        chapter.SeriesId,
+                    series_title =
+                        seriesTitle,
+                    chapter_number_label =
+                        chapter.ChapterNumberLabel,
+                    chapter_title =
+                        chapter.ChapterTitle,
+                    old_status_code =
+                        oldStatusCode,
+                    new_status_code =
+                        UnderReviewStatus,
+                    submitted_by_user_id =
+                        actorUserId,
+                    submitted_at_utc =
+                        submittedAtUtc,
+                    notification_type_code =
+                        NotificationTypeCodes
+                            .ChapterReview,
+                    recipient_role_name =
+                        TantouEditorRoleName,
+                    recipient_scope =
+                        "ACTIVE_SERIES_CONTRIBUTOR",
+                    recipient_count =
+                        recipientUserIds.Count
                 });
 
-                var auditEvent = new AuditEvent
-                {
-                    OccurredAtUtc = submittedAtUtc,
-                    ActorUserId = actorUserId,
-                    ActorRoleName = MangakaRoleName,
-                    ActionCode = "CHAPTER_SUBMITTED_FOR_EDITORIAL_REVIEW",
-                    EntityType = "Chapter",
-                    EntityId = chapterId.ToString(),
-                    DetailJson = detailJson
-                };
-
-                _context.AuditEvents.Add(auditEvent);
-
-                await _context.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-
-                return await GetChapterByIdForActorAsync(actorUserId, chapter.ChapterId, cancellationToken);
-            }
-            catch
+            var auditEvent = new AuditEvent
             {
-                await transaction.RollbackAsync(cancellationToken);
-                throw;
-            }
+                OccurredAtUtc =
+                    submittedAtUtc,
+                ActorUserId =
+                    actorUserId,
+                ActorRoleName =
+                    MangakaRoleName,
+                ActionCode =
+                    "CHAPTER_SUBMITTED_FOR_EDITORIAL_REVIEW",
+                EntityType =
+                    "Chapter",
+                EntityId =
+                    chapterId.ToString(),
+                DetailJson =
+                    detailJson
+            };
+
+            await _context.Notifications.AddRangeAsync(
+                notifications,
+                cancellationToken);
+
+            await _context.AuditEvents.AddAsync(
+                auditEvent,
+                cancellationToken);
+
+            // Chapter status, audit event and notifications are
+            // persisted atomically by this single SaveChangesAsync.
+            await _context.SaveChangesAsync(
+                cancellationToken);
+
+            return await GetChapterByIdForActorAsync(
+                actorUserId,
+                chapter.ChapterId,
+                cancellationToken);
         }
 
         public async Task<MangakaChapterListItemDto> CancelChapterSubmissionAsync(

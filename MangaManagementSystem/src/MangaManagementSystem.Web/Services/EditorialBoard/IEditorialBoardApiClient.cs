@@ -28,4 +28,11 @@ public interface IEditorialBoardApiClient
 
     Task<IReadOnlyList<EditorialBoardPollDto>> GetPollHistoryAsync(
     CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<CancellableBoardSeriesDto>> GetCancellableSeriesForCancelPollAsync(
+    CancellationToken cancellationToken = default);
+
+    Task<OpenPollResult?> OpenCancelSerializationPollAsync(
+        Guid seriesId,
+        OpenCancelSerializationPollRequest request,
+        CancellationToken cancellationToken = default);
 }

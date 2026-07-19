@@ -33,6 +33,14 @@ public sealed record OpenSeriesBoardPollResultDto(
     Guid ProposalId,
     string PollStatusCode);
 
+public sealed record BoardPollNotificationPlan(
+    string RecipientRoleName,
+    string RecipientStatusCode,
+    string NotificationTypeCode,
+    string Title,
+    string Message,
+    string RelatedEntityType);
+
 public sealed record CastSeriesBoardVoteRequestDto(
     Guid PollId,
     string ChoiceCode,
@@ -53,3 +61,19 @@ public sealed record FinalizeBoardPollResultDto(
     string SeriesStatusCode,
     string? PublicationFrequencyCode,
     DateTime EndedAtUtc);
+
+public sealed record CancellableBoardSeriesDto(
+    Guid SeriesId,
+    string Code,
+    string Title,
+    string Author,
+    string Genre,
+    string TagsDisplay,
+    string Synopsis,
+    string? PublicationFrequencyCode,
+    string StatusCode,
+    bool HasOpenCancelSerializationPoll);
+
+public sealed record OpenCancelSerializationPollRequestDto(
+    string PollReason,
+    DateTime? EndsAtUtc);
