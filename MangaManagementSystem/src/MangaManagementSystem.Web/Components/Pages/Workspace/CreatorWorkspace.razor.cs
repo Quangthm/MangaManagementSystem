@@ -23,8 +23,39 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private IBrowserFile? _assistantSelectedFile;
     private string _assistantSelectedFileDisplay = string.Empty;
     private string _assistantFileValidationError = string.Empty;
-    private const long AssistantWorkspaceMaxFileSizeBytes = 10 * 1024 * 1024;
-    private static readonly string[] AssistantWorkspaceAllowedFileTypes = new[] { "image/png", "image/jpeg", "image/jpg", "image/webp" };
+    // Upload limits shared by every workspace image upload (pages, page versions, double-page splits
+    // and assistant submissions). Blazor Server buffers uploads in the server-side circuit, so an
+    // unbounded selection is a server memory risk, not just a client one: the caps below are what keeps
+    // a single user from staging gigabytes into their circuit.
+    private const long WorkspaceMaxFileSizeBytes = 10 * 1024 * 1024;
+    private const int WorkspaceMaxPagesPerUpload = 30;
+    private static readonly string[] WorkspaceAllowedFileTypes = new[] { "image/png", "image/jpeg", "image/jpg", "image/webp" };
+
+    /// <summary>
+    /// Checks a selected image against the workspace upload limits, using only the metadata
+    /// <see cref="IBrowserFile"/> exposes without opening the stream — so a rejected file costs no
+    /// memory and callers can skip it individually instead of letting OpenReadStream throw and abort a
+    /// whole batch. The browser's accept="image/*" attribute is a client-side hint only, so the content
+    /// type is re-checked here.
+    /// </summary>
+    private static bool IsAllowedWorkspaceImage(IBrowserFile file, out string error)
+    {
+        if (file.Size > WorkspaceMaxFileSizeBytes)
+        {
+            error = $"{file.Name}: too large (maximum {WorkspaceMaxFileSizeBytes / (1024 * 1024)} MB).";
+            return false;
+        }
+
+        var contentType = file.ContentType?.ToLowerInvariant() ?? string.Empty;
+        if (!WorkspaceAllowedFileTypes.Contains(contentType))
+        {
+            error = $"{file.Name}: unsupported file type. Allowed: PNG, JPEG, WebP.";
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
+    }
 
     // BR-WORKSPACE-007: only Mangaka may mutate chapter/page content (create/rename chapters, upload
     // pages/versions, assign tasks, edit regions). Tantou Editors get a view + review-annotations mode
@@ -1869,15 +1900,15 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             return;
         }
 
-        if (_assistantSelectedFile.Size > AssistantWorkspaceMaxFileSizeBytes)
+        if (_assistantSelectedFile.Size > WorkspaceMaxFileSizeBytes)
         {
-            _assistantFileValidationError = $"File is too large. Maximum allowed is {AssistantWorkspaceMaxFileSizeBytes / (1024 * 1024)} MB.";
+            _assistantFileValidationError = $"File is too large. Maximum allowed is {WorkspaceMaxFileSizeBytes / (1024 * 1024)} MB.";
             _assistantSelectedFile = null;
             return;
         }
 
         var contentType = _assistantSelectedFile.ContentType?.ToLowerInvariant() ?? string.Empty;
-        if (!AssistantWorkspaceAllowedFileTypes.Contains(contentType))
+        if (!WorkspaceAllowedFileTypes.Contains(contentType))
         {
             _assistantFileValidationError = "Unsupported file type. Allowed: PNG, JPEG, WebP.";
             _assistantSelectedFile = null;
@@ -2042,9 +2073,15 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         var file = e.File;
         if (file == null) return;
 
+        if (!IsAllowedWorkspaceImage(file, out var fileError))
+        {
+            Snackbar.Add(fileError, Severity.Warning);
+            return;
+        }
+
         try
         {
-            using var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 20);
+            using var stream = file.OpenReadStream(maxAllowedSize: WorkspaceMaxFileSizeBytes);
             using var ms = new MemoryStream();
             await stream.CopyToAsync(ms);
             _doublePageSourceDataUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(ms.ToArray())}";
@@ -2167,7 +2204,21 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 }
             }
 
-            var files = e.GetMultipleFiles(100);
+            IReadOnlyList<IBrowserFile> files;
+            try
+            {
+                files = e.GetMultipleFiles(WorkspaceMaxPagesPerUpload);
+            }
+            catch (InvalidOperationException)
+            {
+                // GetMultipleFiles throws when the selection exceeds the cap; translate it into a clear
+                // message instead of surfacing the raw framework exception.
+                Snackbar.Add(
+                    $"Too many files selected. Please add at most {WorkspaceMaxPagesPerUpload} pages at a time.",
+                    Severity.Warning);
+                return;
+            }
+
             if (files.Any())
             {
                 var activeChap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
@@ -2181,9 +2232,19 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 // the user REVIEW + confirm before buffering. On Add the images are held in the
                 // in-memory buffer (manual-save) — nothing hits Cloudinary/DB until the user clicks Save.
                 var staged = new List<StagedImage>();
+                var rejected = new List<string>();
                 foreach (var file in files)
                 {
-                    using var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 20);
+                    // Validate BEFORE opening the stream: an oversized/wrong-type file is skipped with a
+                    // message while the rest of the selection still goes through, instead of
+                    // OpenReadStream throwing mid-loop and discarding every already-staged page.
+                    if (!IsAllowedWorkspaceImage(file, out var fileError))
+                    {
+                        rejected.Add(fileError);
+                        continue;
+                    }
+
+                    using var stream = file.OpenReadStream(maxAllowedSize: WorkspaceMaxFileSizeBytes);
                     using var memoryStream = new MemoryStream();
                     await stream.CopyToAsync(memoryStream);
                     var bytes = memoryStream.ToArray();
@@ -2195,6 +2256,16 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                         ContentType = contentType,
                         DataUrl = $"data:{contentType};base64,{Convert.ToBase64String(bytes)}"
                     });
+                }
+
+                foreach (var rejection in rejected)
+                {
+                    Snackbar.Add(rejection, Severity.Warning);
+                }
+
+                if (staged.Count == 0)
+                {
+                    return;
                 }
 
                 // Hold the staged images in a field so each one can be individually cropped/resized from the
@@ -2674,7 +2745,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             {
                 return JsonSerializer.Serialize(result);
             }
-            return JsonSerializer.Serialize(new { status = "error", message = "AI returned null" });
+            return JsonSerializer.Serialize(new { status = "error", message = "AI service returned an empty result. Please try again." });
         }
         catch (Exception ex)
         {
@@ -2695,7 +2766,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             {
                 return JsonSerializer.Serialize(result);
             }
-            return JsonSerializer.Serialize(new { status = "error", message = "AI returned null" });
+            return JsonSerializer.Serialize(new { status = "error", message = "AI service returned an empty result. Please try again." });
         }
         catch (Exception ex)
         {

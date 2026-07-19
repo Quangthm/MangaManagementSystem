@@ -213,9 +213,15 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         var file = e.File;
         if (file == null) return;
 
+        if (!IsAllowedWorkspaceImage(file, out var fileError))
+        {
+            Snackbar.Add(fileError, Severity.Warning);
+            return;
+        }
+
         try
         {
-            using var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 20);
+            using var stream = file.OpenReadStream(maxAllowedSize: WorkspaceMaxFileSizeBytes);
             using var memoryStream = new MemoryStream();
             await stream.CopyToAsync(memoryStream);
             var bytes = memoryStream.ToArray();
