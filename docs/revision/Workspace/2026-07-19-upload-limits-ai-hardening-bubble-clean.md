@@ -95,6 +95,37 @@ Chỉ **2 bảng** có soft-delete: `manga.FileResource`, `manga.ChapterPage` (c
 
 > Chỗ duy nhất cleanup job có giá trị: schema đã có code `CLEANUP_REQUIRED`/`CLEANUP` (dòng 835, 917) để **đối soát file Cloudinary mồ côi** (upload xong nhưng SQL fail) — reconcile Cloudinary, KHÔNG phải purge row SQL.
 
+## 5b. Fix UI: task/annotation không hiện dữ liệu tới khi reload
+
+Hai lỗi user báo, cùng một dạng: sau khi tạo, UI dựng view-model cục bộ nên thiếu dữ liệu chỉ có từ server.
+
+### (a) Task full-page không highlight vùng tới khi reload
+
+**Nguyên nhân kép:**
+1. Region `FULL_PAGE` được tạo **server-side** lúc bấm Create → canvas chưa có object nào mang `PageRegionId` đó. `SelectPanelsByRegions` khớp theo `DbId` với object trên canvas → rỗng → báo *"No panel target to highlight on this page."*
+2. Card task lưu `Regions = regionsToSave`, mà biến này **đang rỗng** — rỗng chính là điều kiện vào nhánh full-page.
+
+**Sửa:** helper dùng chung `ResolveFullPageRegionAsync()` (`CreatorWorkspace.razor.cs`) — tạo region, dựng `RegionModel`, **merge vào canvas**, và append vào `regionsToSave` để card mang theo.
+
+> Cân nhắc: có thể gọi `BuildRegionsJsonFromDbAsync` nạp lại toàn bộ region cho gọn, nhưng **sẽ xóa region người dùng đang sửa chưa lưu**. Nên chọn: export region hiện có trên canvas → chèn thêm → `loadRegions(..., silent: true)`.
+
+> Lỗi này có ở **cả annotation** full-page (cùng nhánh code), user chỉ báo ở task. Đã sửa cả hai bằng cùng helper để không còn 2 bản sao lệch nhau.
+
+### (b) Annotation không hiện username người tạo tới khi reload
+
+**Nguyên nhân ở BACKEND, không phải UI.** Trong `ChapterPageAnnotationRepository`:
+- `GetByPageRegionIdsAsync` (đọc list, chạy lúc reload) có `.Include(a => a.AnnotatedByUser)` ✅
+- `GetByIdWithRegionsAsync` (**chạy sau khi tạo**) chỉ `.Include(a => a.PageRegions)` ❌
+
+→ response lúc tạo trả `AnnotatedByDisplayName = null`, nên Web đành gán `Author = _currentRoleName` (chỉ role). Comment cũ trong code ghi thẳng *"shown until reload replaces it with name · role"* — tức là đã có người biết nhưng vá tạm ở UI thay vì sửa gốc.
+
+**Sửa:** thêm `.Include(a => a.AnnotatedByUser).ThenInclude(u => u!.Role)` vào `GetByIdWithRegionsAsync`; Web lấy thẳng từ response đúng như đường reload:
+```csharp
+Author = dbAnn.AnnotatedByDisplayName ?? dbAnn.AnnotatedByRoleName ?? _currentRoleName,
+```
+
+> ⚠️ **Bài học vận hành:** fix (b) nằm ở Infrastructure → do **process API** nạp, không phải Web. Lần test đầu chỉ restart Web nên tưởng fix không ăn. **Sửa Domain/Application/Infrastructure thì phải restart CẢ HAI host**; sửa `Web/Components` thì chỉ Web.
+
 ## 6. Kiểm chứng
 
 - **Build:** API `0 error / 27 warning`, Web `0 error / 67 warning` — đều baseline, **0 warning mới**. (Build ra thư mục riêng vì app đang chạy khóa `bin`, và ổ C: đầy.)

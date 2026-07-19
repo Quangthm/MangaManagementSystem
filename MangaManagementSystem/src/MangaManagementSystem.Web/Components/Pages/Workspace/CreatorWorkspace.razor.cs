@@ -423,22 +423,11 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             // #8 / BR-REG-031: with no explicit panel selection, anchor the task to the page's
             // whole-page (FULL_PAGE) region — found-or-created server-side from Cloudinary dimensions —
             // instead of refusing. Restores the full-page default without fabricating phantom (0,0) pins.
-            var fullPageVersionId = GetActiveVersionId();
-            if (fullPageVersionId == Guid.Empty)
-            {
-                Snackbar.Add("Please open a saved page version first.", Severity.Warning);
-                return;
-            }
-            try
-            {
-                var fullPage = await MangakaRegionApi.EnsureFullPageRegionAsync(_currentUserId.Value, fullPageVersionId);
-                regionIds = new List<Guid> { fullPage.PageRegionId };
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add($"Could not prepare a full-page target: {ex.Message}", Severity.Error);
-                return;
-            }
+            var fullPageRegion = await ResolveFullPageRegionAsync();
+            if (fullPageRegion == null) return;
+            regionIds = new List<Guid> { fullPageRegion.DbId!.Value };
+            // Carry it on the card too, so clicking the new task highlights the page right away.
+            regionsToSave.Add(fullPageRegion);
             target = "Full page";
         }
         else
@@ -662,22 +651,11 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         {
             // #8 / BR-REG-031: no panel selected and no pin placed → anchor the annotation to the
             // page's whole-page (FULL_PAGE) region (found-or-created server-side) instead of refusing.
-            var fullPageVersionId = GetActiveVersionId();
-            if (fullPageVersionId == Guid.Empty)
-            {
-                Snackbar.Add("Please open a saved page version first.", Severity.Warning);
-                return;
-            }
-            try
-            {
-                var fullPage = await MangakaRegionApi.EnsureFullPageRegionAsync(_currentUserId.Value, fullPageVersionId);
-                regionIds = new List<Guid> { fullPage.PageRegionId };
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add($"Could not prepare a full-page target: {ex.Message}", Severity.Error);
-                return;
-            }
+            var fullPageRegion = await ResolveFullPageRegionAsync();
+            if (fullPageRegion == null) return;
+            regionIds = new List<Guid> { fullPageRegion.DbId!.Value };
+            // Carry it on the card too, so clicking the new annotation highlights the page right away.
+            regionsToSave.Add(fullPageRegion);
         }
         else
         {
@@ -710,8 +688,11 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 Type = AnnotationType,
                 Comment = AnnotationComment,
                 Target = target,
-                Author = _currentRoleName,              // shown until reload replaces it with name · role
-                CreatedByRoleName = _currentRoleName,   // creator is the current user
+                // Take the author straight from the create response, exactly as the reload path does
+                // (see LoadAnnotationsForPage), so the card shows "name · role" immediately instead of
+                // only the role until the page is reloaded.
+                Author = dbAnn.AnnotatedByDisplayName ?? dbAnn.AnnotatedByRoleName ?? _currentRoleName,
+                CreatedByRoleName = dbAnn.AnnotatedByRoleName ?? _currentRoleName,
                 PageNumber = SelectedPage,
                 PinX = PendingPinX,
                 PinY = PendingPinY,
@@ -1651,6 +1632,85 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     }
     
     private IJSObjectReference? GetActiveCanvas() => _activePane == "Left" ? _leftCanvasRef : _rightCanvasRef;
+
+    /// <summary>
+    /// Resolves the page's whole-page (FULL_PAGE) region for a task/annotation that targets no specific
+    /// panel, and makes sure the canvas knows about it. Returns null — after showing a message — when it
+    /// cannot be resolved.
+    /// </summary>
+    /// <remarks>
+    /// The region is found-or-created server-side, so the first time a page uses it the canvas has no
+    /// object with that PageRegionId. SelectPanelsByRegions matches on DbId against canvas objects, so
+    /// clicking the new card reported "No panel target to highlight on this page." until a reload pulled
+    /// the region in. The new region is MERGED into the canvas rather than re-fetching every region from
+    /// the DB, because a re-fetch would discard region edits the user has not saved yet.
+    /// </remarks>
+    private async Task<RegionModel?> ResolveFullPageRegionAsync()
+    {
+        var versionId = GetActiveVersionId();
+        if (versionId == Guid.Empty || !_currentUserId.HasValue)
+        {
+            Snackbar.Add("Please open a saved page version first.", Severity.Warning);
+            return null;
+        }
+
+        MangaManagementSystem.Application.DTOs.Manga.PageRegionDto fullPage;
+        try
+        {
+            fullPage = await MangakaRegionApi.EnsureFullPageRegionAsync(_currentUserId.Value, versionId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not prepare a full-page target: {ex.Message}", Severity.Error);
+            return null;
+        }
+
+        var model = new RegionModel
+        {
+            DbId = fullPage.PageRegionId,
+            Label = fullPage.RegionLabel,
+            Type = fullPage.TypeCode,
+            X = (double)fullPage.X,
+            Y = (double)fullPage.Y,
+            Width = (double)fullPage.Width,
+            Height = (double)fullPage.Height
+        };
+
+        var canvas = GetActiveCanvas();
+        if (canvas != null)
+        {
+            // Best-effort: the card is still created correctly if the canvas cannot be updated, it just
+            // will not highlight until the next reload.
+            try
+            {
+                var readOptions = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var currentJson = await canvas.InvokeAsync<string>("exportRegions");
+                var current = System.Text.Json.JsonSerializer.Deserialize<List<RegionModel>>(currentJson, readOptions)
+                              ?? new List<RegionModel>();
+
+                var existing = current.FirstOrDefault(r => r.DbId == model.DbId);
+                if (existing != null)
+                {
+                    model.Id = existing.Id;
+                }
+                else
+                {
+                    model.Id = current.Any() ? current.Max(r => r.Id) + 1 : 1;
+                    current.Add(model);
+                    var camelOptions = new System.Text.Json.JsonSerializerOptions
+                    {
+                        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+                    };
+                    // silent=true: adding the target must not mark the page dirty or write a draft.
+                    await canvas.InvokeVoidAsync("loadRegions",
+                        System.Text.Json.JsonSerializer.Serialize(current, camelOptions), true);
+                }
+            }
+            catch { }
+        }
+
+        return model;
+    }
 
     // Clicking a task/annotation card highlights its panels on the page: select on the canvas the
     // regions whose PageRegionId matches the card's linked regions (pins are skipped — they are not
