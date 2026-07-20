@@ -6,6 +6,7 @@
 @using MangaManagementSystem.Web.Components.Pages.Mangaka
 @using MangaManagementSystem.Web.Services.Api
 @using MangaManagementSystem.Web.Services
+@using MangaManagementSystem.Web.Components.Pages.Series
 @attribute [Authorize]
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
@@ -61,10 +62,10 @@
             <div class="@(_series.Contributors.Count > 0 ? "series-page-grid" : null)" style="margin-bottom: 24px;">
                 @* ── Series header card: cover + metadata ── *@
                 <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; margin-bottom: 24px;">
-                    <div style="display: flex; gap: 0; align-items: stretch;">
+                    <div style="display: flex; gap: 0; align-items: flex-start;">
 
                         @* ── Cover ── *@
-                        <div style="width: 220px; flex-shrink: 0; background: #f1f5f9; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                        <div style="width: 220px; flex-shrink: 0; height: 310px; background: #f1f5f9; display: flex; align-items: center; justify-content: center; overflow: hidden;">
                             @if (!string.IsNullOrWhiteSpace(_series.CoverUrl))
                             {
                                 <img src="@_series.CoverUrl" alt="Cover"
@@ -106,17 +107,17 @@
                             @* Genres *@
                             @if (_series.Genres.Count > 0)
                             {
-                                <div style="margin-bottom: 14px;">
-                                    <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; display: block; margin-bottom: 4px;">Genres</span>
-                                    <div style="display: flex; gap: 4px; flex-wrap: wrap;">
-                                        @foreach (var g in _series.Genres)
-                                        {
-                                            <span style="background: #f1f5f9; color: #475569; font-size: 0.72rem; padding: 3px 10px; border-radius: 12px; font-weight: 500;">
-                                                @g.GenreName
-                                            </span>
-                                        }
-                                    </div>
-                                </div>
+                                <ExpandableChipList
+                                    Title="Genres"
+                                    Items="@(_series.Genres.Select(g => g.GenreName).ToList())" />
+                            }
+
+                            @* Tags *@
+                            @if (_series.Tags.Count > 0)
+                            {
+                                <ExpandableChipList
+                                    Title="Tags"
+                                    Items="@(_series.Tags.Select(t => t.TagName).ToList())" />
                             }
 
                             @* Mangaka (active Mangaka contributors only) *@
