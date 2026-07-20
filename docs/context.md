@@ -8,6 +8,8 @@
 
 > **Latest series lifecycle alignment — 2026-07-19:** `HIATUS` is the schema status for a paused series. Active Mangaka or Tantou Editor contributors may set a `SERIALIZED` series to `HIATUS` and resume it back to `SERIALIZED`; `HIATUS` blocks chapter release only. Only active Mangaka contributors may mark a `SERIALIZED` or `HIATUS` series as `COMPLETED`; completed series are immutable for normal business changes, cancel unreleased chapters and their distinct active `ASSIGNED`/`UNDER_REVIEW` page tasks after warning and confirmation, preserve released chapters and terminal task history, and remain visible in rankings when ranking input exists.
 
+> **Latest notification alignment — 2026-07-20:** The project context now records the approved notification contracts for proposal, board, task, chapter, publication scheduling, and account approval. Manual board-poll cancellation produces `BOARD_DECISION`; publication scheduling notifies other active series contributors except the actor; account approval produces both `ACCOUNT_APPROVED` and an approval email. `RANKING_WARNING` remains pending final definition.
+
 ---
 
 ## 1. Project Summary
@@ -47,7 +49,7 @@ The MVP should stay focused and avoid unnecessary tables unless a table represen
 | Editorial review | Store final chapter-level review decisions in `ChapterEditorialReview`. Page annotations support the review but do not replace chapter-level decisions. |
 | Publication planning | Use chapter-level planned release dates and release timestamps. Mangaka may provide/update preferred publication frequency only while the series is in `PROPOSAL_DRAFT`; Editorial Board Chief specifies the official frequency in a `START_SERIALIZATION` poll, and an approved poll applies that frequency to `Series.publication_frequency_code`. After the series leaves `PROPOSAL_DRAFT`, Mangaka cannot directly change the official frequency. Editorial Board Chief may directly change the official frequency with a required audit reason. |
 | Ranking | Use `PublicationPeriod`, `SeriesVoteInput`, and a dynamic ranking view (`manga.vw_SeriesRanking`) based on simulated/manual series-level vote input entered by Editorial Board Members. No public reader module and no `SeriesRankingSnapshot` finalization table in MVP. |
-| Notifications | Use in-app notifications only. Notifications are not the audit trail. |
+| Notifications | Use `manga.Notification` for in-app awareness records; notifications are not the audit trail. Approved account activation also sends a separate approval email in addition to `ACCOUNT_APPROVED`. `RANKING_WARNING` remains pending final trigger/threshold/cadence definition. |
 | Auditability | Use current status on main records plus domain records and audit logs. Avoid separate status-history tables. |
 | AI support | AI suggestions are advisory and human-reviewed. Accepted region output is saved as `PageRegion`; final translated pages are saved as `ChapterPageVersion`. |
 
@@ -527,14 +529,23 @@ The project uses **permission-based actor grouping** for shared features and rol
 
 ## 4.14 Notifications
 
-- Notifications are in-app only for MVP.
-- Each notification has exactly one recipient.
-- Notifications may reference related entity type and ID.
-- If `related_entity_type` is set, `related_entity_id` must also be set, and vice versa.
-- Unread notification means `read_at_utc IS NULL`.
-- Notifications may be sent for ranking warnings, task assignments, review results, board polls, publication schedule updates, account events, and other workflow events.
-- Notifications are not the authoritative audit trail.
-- Important notification-triggering workflow actions should also be audit-logged when auditability is required.
+- `manga.Notification` is the in-app notification mechanism for MVP awareness messages; notifications are not authoritative audit history.
+- Each notification has exactly one recipient. When recipient rules use series contributors, recipients must be distinct active contributors of the exact affected series with active user accounts.
+- `related_entity_type` and `related_entity_id` are optional, but they must either both be present or both be null.
+- A notification is unread when `read_at_utc IS NULL`; reading it records `read_at_utc`.
+- `PROPOSAL_REVIEW`: created when a Mangaka submits a proposal; notify distinct active Tantou Editor contributors of the exact series.
+- `PROPOSAL_DECISION`: created for Request Revision, Pass To Board, or Cancel Proposal; notify distinct active Mangaka contributors of the affected series.
+- `BOARD_POLL`: created when the Editorial Board Chief opens a real board poll; notify active Editorial Board Members, exclude the initiating Chief, and deduplicate recipients.
+- `BOARD_DECISION`: created when a poll closes with `APPROVED`, `REJECTED`, or `NO_DECISION`, and when the Editorial Board Chief manually cancels the poll; notify all distinct active contributors of the exact affected series.
+- `TASK_ASSIGNMENT`: created for normal/Quick Select task assignment. Reassignment also uses this type: the original Assistant receives a reassignment/cancellation message including the required reason and linked to the original task, while the replacement Assistant receives the new assignment linked to the replacement task.
+- `TASK_REVIEW`: created when an Assistant submits work and the task changes from `ASSIGNED` to `UNDER_REVIEW`; notify distinct active Mangaka contributors of the exact series.
+- `CHAPTER_REVIEW`: created when a `DRAFT` or `REVISION_REQUESTED` chapter is submitted and becomes `UNDER_REVIEW`; notify distinct active Tantou Editor contributors of the exact series.
+- `CHAPTER_DECISION`: created for Approved, Revision Requested, or Cancelled chapter editorial decisions; notify distinct active Mangaka contributors of the affected series.
+- `PUBLICATION_SCHEDULE`: created only when a chapter enters `SCHEDULED`, or when an already `SCHEDULED` chapter moves to a different normalized planned release date. Do not create it for planned-date-only changes while `DRAFT`, `REVISION_REQUESTED`, or `UNDER_REVIEW`, or for a same-date scheduled save. Notify all other distinct active contributors of the exact series and exclude the initiating actor.
+- `ACCOUNT_APPROVED`: when an Admin approves/activates a pending account, create the in-app notification for that user and also send an approval email to the approved user's email address.
+- `RANKING_WARNING`: the exact trigger/threshold, cadence, deduplication behavior, related entity, and recipient contract are still being finalized; do not infer an automatic warning rule yet.
+- `SYSTEM_MESSAGE`: remains a generic/reserved type and should not replace a more specific notification type when one exists.
+- Important workflow actions that create notifications should still be audit-logged when auditability is required.
 
 ## 4.15 Status History and Auditability
 
