@@ -47,12 +47,6 @@ namespace MangaManagementSystem.Web.Services.Api
             Guid chapterId,
             CancellationToken cancellationToken = default);
 
-        Task<MangakaChapterListItemDto> ScheduleApprovedChapterAsync(
-            Guid actorUserId,
-            Guid chapterId,
-            ScheduleApprovedChapterRequest request,
-            CancellationToken cancellationToken = default);
-
         Task<SetChapterPlannedReleaseDateResponse> SetPlannedReleaseDateAsync(
             Guid actorUserId,
             Guid chapterId,

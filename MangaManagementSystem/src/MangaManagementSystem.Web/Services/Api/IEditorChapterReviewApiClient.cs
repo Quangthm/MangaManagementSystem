@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Editor;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.ReleaseChapter;
-using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.RescheduleChapter;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.PutScheduledChapterOnHold;
 using Microsoft.AspNetCore.Components.Forms;
 
@@ -57,13 +56,6 @@ namespace MangaManagementSystem.Web.Services.Api
             string decisionCode,
             string? comments,
             IBrowserFile? markupFile,
-            CancellationToken cancellationToken = default);
-
-        Task<RescheduleChapterResponse> ReschedulePlannedReleaseDateAsync(
-            Guid actorUserId,
-            Guid chapterId,
-            DateTime newPlannedReleaseDate,
-            string reason,
             CancellationToken cancellationToken = default);
 
         Task<PutScheduledChapterOnHoldResponse> PutChapterOnHoldAsync(

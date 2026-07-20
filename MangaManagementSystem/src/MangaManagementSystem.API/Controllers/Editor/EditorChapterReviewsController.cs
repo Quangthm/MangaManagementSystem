@@ -5,7 +5,6 @@ using MangaManagementSystem.API.Contracts;
 using MangaManagementSystem.Application.DTOs.Editor;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.PutScheduledChapterOnHold;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.ReleaseChapter;
-using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.RescheduleChapter;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.SetChapterPlannedReleaseDate;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.SubmitChapterEditorialReview;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queries.GetEditorActionableChapters;
@@ -263,40 +262,6 @@ namespace MangaManagementSystem.API.Controllers.Editor
                 _logger.LogError(ex, "Unexpected error setting planned release date for chapter {ChapterId}.", chapterId);
                 return Problem(
                     detail: "We could not set the planned release date right now. Please try again later.",
-                    statusCode: StatusCodes.Status500InternalServerError);
-            }
-        }
-
-        [HttpPut("{chapterId:guid}/reschedule")]
-        public async Task<IActionResult> ReschedulePlannedReleaseDateAsync(
-            Guid chapterId,
-            [FromBody] EditorRescheduleChapterRequest request,
-            CancellationToken cancellationToken)
-        {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
-
-            if (string.IsNullOrWhiteSpace(request.Reason))
-                return BadRequest(new ApiErrorResponse("A reason is required for rescheduling."));
-
-            try
-            {
-                var result = await _mediator.Send(
-                    new RescheduleChapterPlannedReleaseDateCommand(
-                        actorUserId, chapterId, request.NewPlannedReleaseDate, request.Reason),
-                    cancellationToken);
-                return Ok(result);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new ApiErrorResponse(ex.Message));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unexpected error rescheduling chapter {ChapterId}.", chapterId);
-                return Problem(
-                    detail: "We could not reschedule the chapter right now. Please try again later.",
                     statusCode: StatusCodes.Status500InternalServerError);
             }
         }

@@ -26,12 +26,6 @@ namespace MangaManagementSystem.API.Contracts
         public string? ChapterTitle { get; set; }
     }
 
-    public sealed class ScheduleApprovedChapterApiRequest
-    {
-        [Required]
-        public DateTime PlannedReleaseDate { get; set; }
-    }
-
     public sealed class SetPlannedReleaseDateApiRequest
     {
         [Required]

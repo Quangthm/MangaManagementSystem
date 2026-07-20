@@ -455,47 +455,6 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             }
         }
 
-        public async Task<MangakaChapterListItemDto> ScheduleApprovedChapterAsync(
-            Guid actorUserId,
-            Guid chapterId,
-            DateTime plannedReleaseDate,
-            CancellationToken cancellationToken = default)
-        {
-            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
-
-            try
-            {
-                var chapter = await _context.Chapters
-                    .FirstOrDefaultAsync(c => c.ChapterId == chapterId, cancellationToken);
-
-                if (chapter == null)
-                    throw new InvalidOperationException("Chapter does not exist.");
-
-                await EnsureActiveMangakaContributorAsync(actorUserId, chapter.SeriesId, cancellationToken);
-
-                if (chapter.StatusCode != ApprovedStatus)
-                    throw new InvalidOperationException("Only APPROVED chapters can be scheduled.");
-
-                var normalizedDate = plannedReleaseDate.Date;
-                if (normalizedDate < DateTime.UtcNow.Date)
-                    throw new InvalidOperationException("Planned release date cannot be in the past.");
-
-                chapter.PlannedReleaseDate = normalizedDate;
-                chapter.StatusCode = ScheduledStatus;
-                chapter.UpdatedAtUtc = DateTime.UtcNow;
-
-                await _context.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-
-                return await GetChapterByIdForActorAsync(actorUserId, chapter.ChapterId, cancellationToken);
-            }
-            catch
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                throw;
-            }
-        }
-
         private IQueryable<Chapter> QueryAccessibleChapters(Guid actorUserId)
         {
             return _context.Chapters

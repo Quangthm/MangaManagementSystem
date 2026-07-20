@@ -7,7 +7,6 @@ using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Features.Mangaka.Chapters.Commands.CancelChapter;
 using MangaManagementSystem.Application.Features.Mangaka.Chapters.Commands.CancelChapterSubmission;
 using MangaManagementSystem.Application.Features.Mangaka.Chapters.Commands.CreateChapterDraft;
-using MangaManagementSystem.Application.Features.Mangaka.Chapters.Commands.ScheduleApprovedChapter;
 using MangaManagementSystem.Application.Features.Mangaka.Chapters.Commands.SetChapterPlannedReleaseDate;
 using MangaManagementSystem.Application.Features.Mangaka.Chapters.Commands.SubmitChapterForReview;
 using MangaManagementSystem.Application.Features.Mangaka.Chapters.Commands.UpdateChapterDraft;
@@ -328,48 +327,6 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 _logger.LogError(ex, "Unexpected error setting planned release date for chapter {ChapterId}.", chapterId);
                 return Problem(
                     detail: "We could not set the planned release date right now. Please try again later.",
-                    statusCode: StatusCodes.Status500InternalServerError);
-            }
-        }
-
-        [HttpPost("chapters/{chapterId:guid}/schedule")]
-        public async Task<IActionResult> ScheduleApprovedChapterAsync(
-            Guid chapterId,
-            [FromBody] ScheduleApprovedChapterApiRequest? request,
-            CancellationToken cancellationToken)
-        {
-            if (chapterId == Guid.Empty)
-            {
-                return BadRequest(new ApiErrorResponse("Invalid chapter ID."));
-            }
-
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
-            }
-
-            if (request == null)
-            {
-                return BadRequest(new ApiErrorResponse("Request body is required."));
-            }
-
-            try
-            {
-                MangakaChapterListItemDto result = await _mediator.Send(
-                    new ScheduleApprovedChapterCommand(actorUserId, chapterId, request.PlannedReleaseDate),
-                    cancellationToken);
-                return Ok(result);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new ApiErrorResponse(ex.Message));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unexpected error scheduling approved chapter {ChapterId}.", chapterId);
-                return Problem(
-                    detail: "We could not schedule the chapter right now. Please try again later.",
                     statusCode: StatusCodes.Status500InternalServerError);
             }
         }
