@@ -50,10 +50,5 @@ namespace MangaManagementSystem.Application.Interfaces
             Guid chapterId,
             CancellationToken cancellationToken = default);
 
-        Task<MangakaChapterListItemDto> ScheduleApprovedChapterAsync(
-            Guid actorUserId,
-            Guid chapterId,
-            DateTime plannedReleaseDate,
-            CancellationToken cancellationToken = default);
     }
 }

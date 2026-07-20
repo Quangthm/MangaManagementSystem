@@ -24,7 +24,21 @@
                     @item.Label
                 </NavLink>
             }
+            @foreach (var item in SharedNavItems)
+            {
+                <NavLink href="@item.Href"
+                         class="mf-nav-link"
+                         Match="@(item.MatchAll ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+                    @if (!string.IsNullOrWhiteSpace(item.Icon))
+                    {
+                        <MudIcon Icon="@item.Icon"
+                                 Size="Size.Small"
+                                 Class="mf-nav-icon" />
+                    }
 
+                    @item.Label
+                </NavLink>
+            }
             @if (ExtraNavContent is not null)
             {
                 @ExtraNavContent
@@ -57,6 +71,14 @@
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
     public record RoleSidebarNavItem(string Href, string Label, string Icon = "", bool MatchAll = false);
+
+    private static readonly IReadOnlyList<RoleSidebarNavItem> SharedNavItems =
+[
+    new(
+        "/publication/schedule",
+        "Publication Schedule",
+        Icons.Material.Filled.CalendarMonth)
+];
 }
 
 <style>

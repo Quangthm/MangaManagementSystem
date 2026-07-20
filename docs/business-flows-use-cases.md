@@ -6,6 +6,8 @@
 
 > **Latest series lifecycle alignment — 2026-07-19:** `HIATUS` means a paused series. Active Mangaka or Tantou Editor contributors may set a `SERIALIZED` series to `HIATUS` and resume it back to `SERIALIZED`. `HIATUS` blocks chapter release only. Only active Mangaka contributors may mark a `SERIALIZED` or `HIATUS` series as `COMPLETED`; completion blocks future mutations, cancels unreleased chapters and their distinct active `ASSIGNED`/`UNDER_REVIEW` page tasks after warning and confirmation, preserves released chapters and terminal task history, and completed series remain visible in rankings when ranking input exists.
 
+> **Latest notification alignment — 2026-07-20:** Approved notification flows are documented for proposal review/decision, board poll/decision, task assignment/review, chapter review/decision, publication scheduling, and account approval. Manual Board Chief poll cancellation creates `BOARD_DECISION`. `PUBLICATION_SCHEDULE` excludes the initiating actor and does not fire for non-scheduled date-only edits or same-date resaves. Account approval creates `ACCOUNT_APPROVED` and sends an approval email. `RANKING_WARNING` remains pending final definition.
+
 ---
 
 ## 1. Document Conventions
@@ -204,6 +206,8 @@ Admin opens account management screen
 → Database reads old status
 → Database updates status_code
 → Database writes USER_STATUS_CHANGED audit event
+→ If a PENDING_APPROVAL account is approved/activated to ACTIVE, backend creates an in-app ACCOUNT_APPROVED notification for the approved user
+→ After successful approval processing, backend sends an account-approval email to the approved user's email address
 → UI refreshes account list/status
 ```
 
@@ -2096,6 +2100,8 @@ User opens a chapter planning/review/schedule screen
 → If the chapter was APPROVED, backend changes Chapter.status_code to SCHEDULED
 → If the chapter is still DRAFT or REVISION_REQUESTED, backend keeps the current editable/plannable status
 → Backend writes an audit event for planned date set/rescheduled and status change when applicable
+→ If the chapter newly enters SCHEDULED, or was already SCHEDULED and its normalized planned date changed, backend creates PUBLICATION_SCHEDULE notifications for all other distinct active contributors of the exact series except the initiating actor
+→ If the chapter remains DRAFT, REVISION_REQUESTED, or UNDER_REVIEW after only setting/changing the planned date, or if a SCHEDULED chapter keeps the same normalized date, backend creates no PUBLICATION_SCHEDULE notification
 → UI refreshes the schedule display
 ```
 
@@ -2313,7 +2319,264 @@ ranking_score = average_rating * LOG10(1 + rating_count) + reading_count * 0.001
 
 ---
 
-# 7. Workflow Template for Future Additions
+
+# 7. Notification Flows
+
+> **Alignment status — 2026-07-20:** The following flows record the approved notification contracts. `RANKING_WARNING` remains pending final threshold/cadence/recipient definition and must not be inferred.
+
+## BF-NOTIF-001 — Account Approved Notification and Email
+
+**Status:** Agreed  
+**Primary actor:** Admin  
+**Goal:** Inform a pending user when their account is approved.
+
+```text
+Admin approves/activates a PENDING_APPROVAL user
+→ Account status becomes ACTIVE
+→ System creates ACCOUNT_APPROVED for the approved user
+→ System sends an approval email to the approved user's email address
+→ Account status/audit/notification follow the established approval persistence path
+→ Email is a separate delivery channel in addition to the in-app notification
+```
+
+---
+
+## BF-NOTIF-002 — Proposal Submitted for Editorial Review
+
+**Status:** Agreed  
+**Primary actor:** Mangaka  
+**Goal:** Notify only the Tantou Editors who actively contribute to the submitted proposal's series.
+
+```text
+Mangaka submits proposal
+→ Proposal enters editorial review workflow
+→ System creates PROPOSAL_REVIEW
+→ Recipients = distinct active Tantou Editor contributors of the exact series
+→ Unrelated Tantou Editors do not receive it
+→ Related entity = submitted SeriesProposal
+```
+
+---
+
+## BF-NOTIF-003 — Proposal Editorial Decision
+
+**Status:** Agreed  
+**Primary actor:** Tantou Editor  
+**Goal:** Inform the affected series' Mangaka contributors of a proposal decision.
+
+```text
+Tantou Editor records Request Revision / Pass To Board / Cancel Proposal
+→ System creates PROPOSAL_DECISION
+→ Recipients = distinct active Mangaka contributors of the affected series
+→ Related entity = affected SeriesProposal
+→ Notification content reflects the decision
+```
+
+---
+
+## BF-NOTIF-004 — New Board Poll
+
+**Status:** Agreed  
+**Primary actor:** Editorial Board Chief  
+**Goal:** Inform board voters when a real poll opens.
+
+```text
+Editorial Board Chief opens a real board poll
+→ System creates BOARD_POLL
+→ Recipients = all active users whose exact role is Editorial Board Member
+→ Initiating Chief is excluded
+→ Duplicate recipient IDs are removed
+→ Related entity = new SeriesBoardPoll
+```
+
+---
+
+## BF-NOTIF-005 — Board Decision / Poll Cancellation
+
+**Status:** Agreed  
+**Primary actor:** Editorial Board Chief  
+**Goal:** Inform the affected production team when a poll ends or is manually cancelled.
+
+```text
+Board poll closes with APPROVED / REJECTED / NO_DECISION
+OR Editorial Board Chief manually cancels the poll
+→ System creates BOARD_DECISION
+→ Recipients = all distinct active contributors of the exact affected series
+→ Related entity = affected SeriesBoardPoll
+→ Notification content reflects approved / rejected / no-decision / cancelled outcome
+```
+
+Manual cancellation invalidates the poll for workflow-result application, but it still creates the user-facing `BOARD_DECISION` notification so active contributors know that the poll was cancelled.
+
+---
+
+## BF-NOTIF-006 — Task Assignment and Reassignment
+
+**Status:** Agreed  
+**Primary actor:** Mangaka  
+**Goal:** Keep Assistants aware of new assignments and reassignment changes.
+
+```text
+Single task created
+→ TASK_ASSIGNMENT to assigned Assistant
+
+Quick Select creates N tasks
+→ One TASK_ASSIGNMENT per created task to that task's assigned Assistant
+
+Task reassigned
+→ Original task becomes CANCELLED
+→ Replacement task becomes ASSIGNED
+→ Original Assistant receives TASK_ASSIGNMENT titled as Task Reassigned
+→ Original Assistant message includes required reassignment reason
+→ Original Assistant notification links to original task
+→ Replacement Assistant receives TASK_ASSIGNMENT for replacement task
+→ Replacement Assistant notification links to replacement task
+→ Task changes, required audit events, and both notifications share the established transaction boundary
+```
+
+---
+
+## BF-NOTIF-007 — Assistant Task Submitted for Review
+
+**Status:** Agreed  
+**Primary actor:** Assistant  
+**Goal:** Tell the series' Mangaka contributors that submitted Assistant work is ready for review.
+
+```text
+Assistant submits task work
+→ Task transitions ASSIGNED → UNDER_REVIEW
+→ System creates TASK_REVIEW
+→ Recipients = distinct active Mangaka contributors of the exact series
+→ Related entity = submitted ChapterPageTask
+```
+
+`TASK_REVIEW` means that Assistant work needs Mangaka review; it is not the notification type for Mangaka approval/rework results.
+
+---
+
+## BF-NOTIF-008 — Chapter Submitted for Editorial Review
+
+**Status:** Agreed  
+**Primary actor:** Mangaka  
+**Goal:** Notify the correct series-scoped editors when a chapter needs review.
+
+```text
+Mangaka submits chapter from DRAFT or REVISION_REQUESTED
+→ Chapter transitions to UNDER_REVIEW
+→ System creates CHAPTER_REVIEW
+→ Recipients = distinct active Tantou Editor contributors of the exact series
+→ Unrelated Tantou Editors do not receive it
+→ Related entity = Chapter
+```
+
+---
+
+## BF-NOTIF-009 — Chapter Editorial Decision
+
+**Status:** Agreed  
+**Primary actor:** Tantou Editor  
+**Goal:** Inform the affected series' Mangaka contributors of the chapter decision.
+
+```text
+Tantou Editor records Approved / Revision Requested / Cancelled
+→ System creates CHAPTER_DECISION
+→ Recipients = distinct active Mangaka contributors of the affected series
+→ Related entity = Chapter
+→ Notification content reflects the decision
+```
+
+If approval also moves the chapter into `SCHEDULED`, the same business action may also satisfy the separate `PUBLICATION_SCHEDULE` trigger; each notification represents a different business event and must follow its own recipient rule.
+
+---
+
+## BF-NOTIF-010 — Publication Scheduled or Rescheduled
+
+**Status:** Agreed  
+**Primary actor:** Mangaka / Tantou Editor  
+**Goal:** Inform the rest of the active series team when a chapter becomes scheduled or an existing schedule changes.
+
+### Notify
+
+```text
+Old status != SCHEDULED
+AND new status == SCHEDULED
+→ Create PUBLICATION_SCHEDULE
+
+OR
+
+Old status == SCHEDULED
+AND new status == SCHEDULED
+AND old normalized planned_release_date != new normalized planned_release_date
+→ Create PUBLICATION_SCHEDULE
+```
+
+Recipients:
+
+```text
+Distinct active contributors of the exact affected series
+MINUS the initiating actor
+```
+
+### Do Not Notify
+
+```text
+DRAFT receives/changes planned date and remains DRAFT
+→ No PUBLICATION_SCHEDULE
+
+REVISION_REQUESTED receives/changes planned date and remains REVISION_REQUESTED
+→ No PUBLICATION_SCHEDULE
+
+UNDER_REVIEW receives/changes planned date and remains UNDER_REVIEW
+→ No PUBLICATION_SCHEDULE
+
+SCHEDULED is saved with the same normalized planned date
+→ No PUBLICATION_SCHEDULE
+```
+
+This includes real transitions such as `APPROVED → SCHEDULED`, `ON_HOLD → SCHEDULED`, and editorial approval that moves `UNDER_REVIEW → SCHEDULED` because a valid planned date already exists.
+
+---
+
+## BF-NOTIF-011 — Ranking Warning Contract
+
+**Status:** Draft / Pending decision  
+**Primary actor:** To be finalized  
+**Goal:** Avoid inventing an automatic cancellation-risk notification rule before the ranking-warning contract is approved.
+
+The following remain pending:
+
+- exact high-risk trigger/threshold;
+- evaluation timing/cadence;
+- duplicate/cooldown behavior;
+- recipient scope;
+- authoritative related entity;
+- Bell destination.
+
+Until finalized, ranking evidence may be displayed for decision support but must not automatically create `RANKING_WARNING` from an inferred threshold.
+
+---
+
+## BF-NOTIF-012 — Read / Unread Notification Behavior
+
+**Status:** Agreed  
+**Primary actor:** General System User  
+**Goal:** Let users track notification awareness without treating notifications as audit history.
+
+```text
+Notification created
+→ read_at_utc = NULL
+→ Bell shows unread state
+
+User opens/marks notification as read
+→ System records read_at_utc
+→ Bell refreshes unread state
+```
+
+`SYSTEM_MESSAGE` remains generic/reserved and must not replace a more specific approved notification type.
+
+---
+
+# 8. Workflow Template for Future Additions
 
 Use this template when adding new flows.
 
@@ -2353,7 +2616,7 @@ schema.procedure_name
 
 ---
 
-# 8. Backlog: Flows To Add Later
+# 9. Backlog: Flows To Add Later
 
 Add detailed flows for these when the team finalizes them:
 
@@ -2369,5 +2632,4 @@ Add detailed flows for these when the team finalizes them:
 - Board vote flow
 - Cancel serialization poll flow
 - Series vote input and dynamic ranking view flow
-- Notification read/unread flow
 - Cloudinary cleanup failure handling flow

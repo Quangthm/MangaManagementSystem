@@ -9,7 +9,6 @@ using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Editor;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.ReleaseChapter;
-using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.RescheduleChapter;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.PutScheduledChapterOnHold;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.Logging;
@@ -199,36 +198,6 @@ namespace MangaManagementSystem.Web.Services.Api
             _logger.LogWarning(
                 "Submit review decision for chapter {ChapterId} failed: {StatusCode} {ReasonPhrase}",
                 chapterId, (int)response.StatusCode, response.ReasonPhrase);
-            throw new InvalidOperationException(message);
-        }
-
-        public async Task<RescheduleChapterResponse> ReschedulePlannedReleaseDateAsync(
-            Guid actorUserId,
-            Guid chapterId,
-            DateTime newPlannedReleaseDate,
-            string reason,
-            CancellationToken cancellationToken = default)
-        {
-            var request = new { newPlannedReleaseDate, reason };
-            using var requestMessage = new HttpRequestMessage(
-                HttpMethod.Put, $"api/editor/chapters/{chapterId}/reschedule")
-            {
-                Content = JsonContent.Create(request)
-            };
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
-
-            var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
-
-            if (response.IsSuccessStatusCode)
-            {
-                var result = await response.Content.ReadFromJsonAsync<RescheduleChapterResponse>(
-                    cancellationToken: cancellationToken);
-                if (result is null)
-                    throw new InvalidOperationException("No confirmation was returned. Please refresh and verify.");
-                return result;
-            }
-
-            var message = await ExtractErrorMessageAsync(response);
             throw new InvalidOperationException(message);
         }
 

@@ -2,9 +2,11 @@
 
 **Project:** Manga Creation Workflow and Publishing Management System  
 **Target UI:** Blazor Server / MudBlazor MVP  
-**Last updated:** 2026-07-19
+**Last updated:** 2026-07-20
 
 **Latest lifecycle update:** `HIATUS` is the paused-series status. Active Mangaka or Tantou Editor contributors may pause/resume serialized series. Only active Mangaka contributors may mark serialized/hiatus series as `COMPLETED`. `HIATUS` blocks release only; `COMPLETED` makes the series read-only/immutable for normal business actions, cancels unreleased chapters and distinct active `ASSIGNED`/`UNDER_REVIEW` tasks under those chapters after warning and confirmation, and remains ranking-visible.  
+
+**Latest notification update:** Approved Bell behavior now includes series-scoped proposal/chapter/task notifications, board-decision notifications for both closure and manual cancellation, publication-schedule notifications that exclude the initiating actor, and `ACCOUNT_APPROVED` paired with a separate approval email. `RANKING_WARNING` remains pending final definition.  
 **Purpose:** Define the UI behavior for Mangaka-owned series drafting, slug usage, stable series URLs, and the centralized chapter-level workspace.
 
 ---
@@ -1278,6 +1280,47 @@ The UI should ask for confirmation before:
 - No unschedule-by-drag or drawer-drop unscheduling behavior.
 - No bulk scheduling/holding/releasing unless implemented later.
 - No loading of actionable/unscheduled chapter data for read-only schedule roles.
+
+
+## 9A. Notification Bell and Approved Notification Behavior
+
+### General behavior
+
+- The shared Notification Bell displays unread in-app notifications for authenticated users in the layouts available to their role.
+- Opening or marking a notification as read records `read_at_utc` and refreshes the unread badge.
+- Notifications are awareness/navigation aids and are not the authoritative audit trail.
+- When a specific notification type has a dedicated destination, the Bell should reuse that destination rather than inventing a parallel workflow page.
+- When recipient rules are series-contributor-scoped, only distinct active contributors of the exact affected series are eligible.
+
+### Approved notification UI mapping
+
+| Type | User-facing behavior / destination |
+|---|---|
+| `PROPOSAL_REVIEW` | Active Tantou Editor contributors of the exact series receive the submitted proposal notification. Bell opens `/editor/proposals/{seriesProposalId}`. |
+| `PROPOSAL_DECISION` | Active Mangaka contributors of the affected series receive decision-specific content for Request Revision, Pass To Board, or Cancel Proposal. Bell opens `/mangaka/proposals/{proposalId}`. |
+| `BOARD_POLL` | Active Editorial Board Members receive a new-poll notification; the initiating Chief is excluded. Bell reuses the existing board-poll workflow destination. |
+| `BOARD_DECISION` | All active contributors of the exact series receive outcome-specific content when the poll closes with approved/rejected/no-decision or when the Chief manually cancels it. Bell opens the existing Board Decision notification detail route when available. |
+| `TASK_ASSIGNMENT` | Assigned Assistant receives new assignment. On reassignment, the original Assistant sees a `Task Reassigned` notice with the reason linked to the original task; the replacement Assistant sees the replacement assignment. Bell opens `/assistant/task/{taskId}` for the related task. |
+| `TASK_REVIEW` | Active Mangaka contributors of the exact series are notified when Assistant work enters `UNDER_REVIEW`. Bell opens `/mangaka/review-submissions`. |
+| `CHAPTER_REVIEW` | Active Tantou Editor contributors of the exact series are notified when a chapter enters `UNDER_REVIEW`. Bell opens `/editor/chapters`. |
+| `CHAPTER_DECISION` | Active Mangaka contributors of the affected series receive Approved / Revision Requested / Cancelled decision content. Bell opens `/mangaka/chapters`. |
+| `PUBLICATION_SCHEDULE` | All other active contributors of the exact series, excluding the initiating actor, are notified when a chapter enters `SCHEDULED` or an already scheduled chapter moves to a different normalized planned date. The Bell should open the relevant chapter/publication-schedule context using the existing scheduling navigation pattern; no new parallel scheduling page is required. |
+| `ACCOUNT_APPROVED` | The approved user receives the in-app approval notification; the approval workflow also sends a separate email to the user's registered email address. |
+| `RANKING_WARNING` | Automatic Bell behavior remains pending until trigger/threshold/cadence/recipient rules are finalized. |
+| `SYSTEM_MESSAGE` | Generic/reserved only; do not use it when a more specific approved notification type applies. |
+
+### Publication schedule notification exclusions
+
+Do not show a new `PUBLICATION_SCHEDULE` notification when:
+
+- a `DRAFT` chapter only receives or changes a planned release date and remains `DRAFT`;
+- a `REVISION_REQUESTED` chapter only receives or changes a planned release date and remains `REVISION_REQUESTED`;
+- an `UNDER_REVIEW` chapter only receives or changes a planned release date and remains `UNDER_REVIEW`;
+- a `SCHEDULED` chapter is saved with the same normalized planned release date.
+
+The scheduling/rescheduling actor is excluded from `PUBLICATION_SCHEDULE` recipients.
+
+---
 
 ## 10. Series Ranking UI
 

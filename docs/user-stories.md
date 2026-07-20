@@ -7,6 +7,8 @@ Basis: Verified MVP business rules, updated PageRegion segmentation rules, and p
 
 > **Latest series lifecycle alignment — 2026-07-19:** `HIATUS` is the paused-series status. Active Mangaka and Tantou Editor contributors may pause/resume serialized series. Only active Mangaka contributors may mark a serialized or hiatus series as `COMPLETED`; completion cancels unreleased chapters and their distinct active `ASSIGNED`/`UNDER_REVIEW` page tasks after warning and confirmation, freezes future business mutations, preserves released chapters and terminal task history, and keeps completed series visible in rankings.
 
+> **Latest notification alignment — 2026-07-20:** User stories now reflect exact-series notification scoping, task reassignment notices, board decision notifications for both closure and manual cancellation, publication-schedule notifications that exclude the initiating actor, and account approval through both in-app notification and email. `RANKING_WARNING` remains pending final behavior definition.
+
 ## Actor Consolidation and Shared Actor Groups Applied
 
 | Previous Actor Group / Issue | Final Actor Group | Handling |
@@ -43,6 +45,7 @@ Basis: Verified MVP business rules, updated PageRegion segmentation rules, and p
 | US-NEW-001 | BR-USER-002, BR-USER-003, BR-USER-011, BR-USER-012 | As a New User, I want to register an account and receive pending approval or rejection status, so that I understand why I cannot access protected workspace functions immediately or create another account with the same email/username after rejection. |
 | US-NEW-002 | BR-USER-007, BR-USER-008, BR-USER-009 | As a New User, I want to optionally attach an avatar or portfolio file during account setup, so that my profile can support identity display and admin review. |
 | US-NEW-003 | BR-USER-013, BR-USER-017 | As a New User, I want the system to create a display name for me during registration or external login, so that my account has a readable name in the system even if I do not provide one manually. |
+| US-NEW-004 | BR-NOTIF-023, BR-NOTIF-024 | As a pending user whose account is approved by an Admin, I want to receive an in-app account-approval notification and an approval email, so that I know I can access the protected system. |
 
 ---
 
@@ -60,6 +63,8 @@ Basis: Verified MVP business rules, updated PageRegion segmentation rules, and p
 | US-USER-008 | BR-USER-018, BR-USER-019, BR-USER-021 | As a General System User, I want to update my display name without entering my password, so that I can adjust my visible profile name without changing my login identity or account security settings. |
 | US-USER-009 | BR-FILE-011, BR-FILE-012, BR-FILE-013, BR-FILE-014, BR-FILE-015, BR-FILE-016 | As a General System User, I may receive an optional warning when I upload a file that appears identical to an existing active file, so that I can avoid accidental duplicate uploads when the MVP UI supports this warning. |
 | US-USER-010 | BR-FILE-017, BR-FILE-018, BR-FILE-019, BR-FILE-020 | As a General System User, I want the system to accept only the approved file formats for each file purpose, so that proposal documents, covers, page versions, portfolios, attachments, and avatars are stored consistently and safely. |
+| US-USER-011 | BR-NOTIF-018, BR-NOTIF-019, BR-NOTIF-026 | As an active contributor of a series, I want to receive a board-decision notification when that series' poll closes with an outcome or is manually cancelled by the Editorial Board Chief, so that I know the board workflow result or cancellation. |
+| US-USER-012 | BR-NOTIF-020, BR-NOTIF-021, BR-NOTIF-022, BR-NOTIF-026 | As an active contributor of a series, I want to receive publication-schedule notifications when another contributor causes a chapter to enter `SCHEDULED` or changes an existing scheduled date, while avoiding self-notifications and non-scheduled date-only noise, so that I stay aware of real publication-plan changes. |
 
 ### File Upload Acceptance Note
 
@@ -126,7 +131,7 @@ Uploaded business files should follow the MVP file-purpose acceptance matrix in 
 | US-MANGAKA-019 | BR-CH-SUB-003, BR-CH-SUB-004, BR-CH-CANCEL-006, BR-CH-016, BR-PUB-SCHEDULED-001, BR-PUB-SCHEDULED-002 | As a Mangaka, I want chapter pages to lock during review, approved, scheduled, on-hold, released, and cancelled states, but become editable again when revision is requested, so that scheduled and terminal work stays stable while fixable work can be corrected. |
 | US-MANGAKA-020 | BR-CH-REV-003, BR-CH-REV-010, BR-CH-REV-011, BR-CH-REV-012, BR-CH-REV-013 | As a Mangaka, I want to view chapter review history and final decisions, so that I understand whether the chapter was approved, requires revision, or was cancelled. |
 | US-MANGAKA-021 | BR-CH-REV-007, BR-CH-CANCEL-003, BR-CH-CANCEL-004, BR-CH-CANCEL-006, BR-CH-CANCEL-007, BR-CH-CANCEL-008, BR-CH-CANCEL-009, BR-CH-CANCEL-010 | As a Mangaka, I want cancellation feedback and preserved chapter materials to remain available, and I want to create a new replacement draft with the same chapter number when a chapter is cancelled, so that previous work is not lost while redo work starts cleanly. |
-| US-MANGAKA-022 | BR-RANK-005, BR-RANK-008, BR-RANK-009, BR-NOTIF-007, BR-NOTIF-008 | As a Mangaka, I want to track ranking trends, including completed series when ranking input exists, and receive cancellation-risk notifications, so that I can respond to series performance issues while historical performance remains visible. |
+| US-MANGAKA-022 | BR-RANK-005, BR-RANK-008, BR-RANK-009 | As a Mangaka, I want to track ranking trends and cancellation-risk evidence, including completed series when ranking input exists, so that I can respond to series performance issues while historical performance remains visible. Automatic `RANKING_WARNING` notification behavior remains pending final definition. |
 | US-MANGAKA-023 | BR-PUB-001, BR-PUB-006, BR-PUB-009, BR-PUB-DATE-001, BR-PUB-DATE-002, BR-PUB-DATE-003, BR-CH-013, BR-CH-015 | As a Mangaka, I want to view chapter-level release planning, scheduled status, publication business dates, and derived delays, so that I understand when my approved chapters are planned for release. |
 | US-MANGAKA-024 | BR-PUB-005, BR-PUB-011, BR-PUB-012, BR-PUB-013 | As a Mangaka, I want to provide or update `publication_frequency_code` while my series is still in `PROPOSAL_DRAFT`, so that the board can consider my proposed frequency before the board-approved frequency overrides it. |
 | US-MANGAKA-026 | BR-PUB-SCHEDULE-001, BR-PUB-SCHEDULE-002, BR-PUB-SCHEDULE-003, BR-PUB-SCHEDULE-004, BR-PUB-SCHEDULE-005, BR-PUB-SCHEDULE-006, BR-PUB-SCHEDULE-007, BR-PUB-SCHEDULE-010 | As a Mangaka, I want frequency-based suggested dates and warnings while still being allowed to choose any future planned release date, so that I can coordinate realistic release timing with my editor. |
@@ -135,6 +140,8 @@ Uploaded business files should follow the MVP file-purpose acceptance matrix in 
 | US-MANGAKA-029 | BR-SERIES-027, BR-SERIES-028, BR-SERIES-029, BR-SERIES-030, BR-SERIES-031, BR-SERIES-032, BR-PUB-SCHEDULED-012, BR-PUB-SCHEDULED-013 | As a Mangaka contributor, I want to set my serialized series to `HIATUS` and later resume it to `SERIALIZED`, so that chapter release can pause without blocking drafting, review, scheduling, or rescheduling work. |
 | US-MANGAKA-030 | BR-SERIES-033, BR-SERIES-034, BR-SERIES-035, BR-SERIES-036, BR-SERIES-037, BR-SERIES-038, BR-SERIES-039, BR-SERIES-040, BR-SERIES-041, BR-SERIES-043, BR-SERIES-044, BR-SERIES-045, BR-SERIES-046, BR-SERIES-047, BR-RANK-009 | As a Mangaka contributor, I want to mark my serialized or hiatus series as `COMPLETED` only after seeing a warning about unreleased chapters and their active tasks, so that unfinished chapter/task work is cancelled atomically while released chapters, terminal task history, historical records, and ranking visibility are preserved. |
 | US-MANGAKA-031 | BR-CH-021, BR-SERIES-030 | As a Mangaka contributor, I want to create new chapter drafts only for my `SERIALIZED` or `HIATUS` series, so that proposal/review, completed, cancelled, null, or unknown series states cannot start new normal production chapters. |
+| US-MANGAKA-032 | BR-NOTIF-010, BR-NOTIF-017, BR-NOTIF-026 | As an active Mangaka contributor, I want to receive proposal-decision and chapter-decision notifications for my exact series, so that I know when editorial review requests revision, passes a proposal to board review, cancels a proposal, or approves/revises/cancels a chapter. |
+| US-MANGAKA-033 | BR-NOTIF-016, BR-NOTIF-026 | As an active Mangaka contributor, I want to receive a `TASK_REVIEW` notification when an Assistant submits assigned work for review on my exact series, so that I can review the submission promptly. |
 
 
 ---
@@ -149,6 +156,7 @@ Uploaded business files should follow the MVP file-purpose acceptance matrix in 
 | US-ASSISTANT-004 | BR-PGTASK-027, BR-PGTASK-029 | As an Assistant, I want completed and cancelled task records to remain under my account history, so that my contribution history is preserved. |
 | US-ASSISTANT-005 | BR-ANN-001, BR-ANN-004, BR-ANN-005, BR-ANN-018 | As an Assistant, I want to view annotations through their linked page regions, including annotations linked to multiple regions, so that I understand which feedback applies to the page version used in my assigned work. |
 | US-ASSISTANT-006 | BR-NOTIF-009 | As an Assistant, I want to receive an in-app notification when a page task is assigned to me, so that I know what work I need to do. |
+| US-ASSISTANT-007 | BR-NOTIF-009 | As an Assistant, I want task reassignment notifications to tell me whether my original task was cancelled and reassigned, including the reason, or whether a replacement task was newly assigned to me, so that I understand exactly which task record and responsibility now applies. |
 
 ---
 
@@ -177,6 +185,7 @@ Uploaded business files should follow the MVP file-purpose acceptance matrix in 
 | US-EDITOR-013 | BR-PGTASK-020, BR-PGTASK-021, BR-PGTASK-022 | As a Tantou Editor, I want to review submitted task page versions when acting as an authorized reviewer, so that submitted page-version output is accepted before completion. |
 | US-EDITOR-016 | BR-RANK-001, BR-RANK-002, BR-RANK-007, BR-RANK-008, BR-RANK-009 | As a Tantou Editor, I want to view dynamic ranking and cancellation-risk evidence, including completed series when ranking input exists, so that editorial decisions and historical review can consider series performance without automatic cancellation. |
 | US-EDITOR-018 | BR-SERIES-027, BR-SERIES-028, BR-SERIES-029, BR-SERIES-030, BR-SERIES-031, BR-SERIES-032, BR-PUB-SCHEDULED-012, BR-PUB-SCHEDULED-013 | As a Tantou Editor contributor, I want to set a serialized series to `HIATUS` and resume it to `SERIALIZED`, so that release can be paused or restarted while normal drafting, review, scheduling, and rescheduling remain available when allowed. |
+| US-EDITOR-019 | BR-NOTIF-012, BR-NOTIF-013, BR-NOTIF-026 | As an active Tantou Editor contributor, I want to receive proposal-review and chapter-review notifications only for my exact series, so that I see review work I am actually responsible for without notifications from unrelated series. |
 
 
 ---
@@ -209,6 +218,7 @@ Uploaded business files should follow the MVP file-purpose acceptance matrix in 
 | US-BOARDCHIEF-006 | BR-BOARD-POLL-013, BR-BOARD-POLL-015, BR-BOARD-POLL-017, BR-BOARD-RESULT-017 | As an Editorial Board Chief, I want board polls, cancelled polls, votes, and result applications to remain audit-visible, so that board-driven status changes are traceable. |
 | US-BOARDCHIEF-007 | BR-PUB-015 | As an Editorial Board Chief, I want to directly change a series publication frequency only with a required audit reason, so that frequency changes remain controlled and traceable. |
 | US-BOARDCHIEF-008 | BR-RANK-001, BR-RANK-002, BR-RANK-007, BR-RANK-008, BR-RANK-009 | As an Editorial Board Chief, I want to view dynamic ranking and cancellation-risk evidence, including completed series when ranking input exists, so that board oversight can use performance context without automatic cancellation. |
+| US-BOARDCHIEF-009 | BR-NOTIF-018, BR-NOTIF-019, BR-NOTIF-026 | As an Editorial Board Chief, I want closing a poll or manually cancelling it to notify all active contributors of the exact affected series, so that the production team knows the board outcome or cancellation. |
 
 
 ---
@@ -230,5 +240,6 @@ Uploaded business files should follow the MVP file-purpose acceptance matrix in 
 | US-ADMIN-019 | BR-NOTIF-014, BR-NOTIF-015, BR-HIST-004 | As an Admin, I want important notification-triggering workflow actions to also be audit-logged when required, so that user awareness does not replace traceability. |
 | US-ADMIN-020 | BR-HIST-001, BR-HIST-002, BR-HIST-003, BR-HIST-005, BR-HIST-006, BR-HIST-008 | As an Admin, I want domain records and audit logs to serve as workflow evidence instead of separate status-history tables, so that the MVP stays simple while preserving traceability. |
 | US-ADMIN-021 | BR-USER-020 | As an Admin, I want display name changes to be visible in audit logs, so that user-facing identity changes remain traceable. |
+| US-ADMIN-022 | BR-USER-004, BR-NOTIF-023, BR-NOTIF-024 | As an Admin, I want approving a pending account to create an in-app `ACCOUNT_APPROVED` notification and send an approval email to that user's registered email address, so that the approved user is clearly informed through both supported channels. |
 
 ---

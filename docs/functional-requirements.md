@@ -8,6 +8,8 @@
 
 > **Latest series lifecycle alignment — 2026-07-19:** The system shall use `HIATUS` for paused series; active Mangaka or Tantou Editor contributors may pause/resume serialized series; `HIATUS` blocks release only. Only active Mangaka contributors may mark serialized or hiatus series as `COMPLETED`; completion blocks future business mutations, cancels unreleased chapters and their distinct active `ASSIGNED`/`UNDER_REVIEW` page tasks after warning and confirmation, preserves released chapters and terminal task history, and does not hide completed series from rankings.
 
+> **Latest notification alignment — 2026-07-20:** Notification requirements are aligned with the approved proposal, board, task, chapter, publication-schedule, and account-approval behaviors. `PUBLICATION_SCHEDULE` excludes the initiating actor and date-only edits that do not make the chapter scheduled. `BOARD_DECISION` includes manual poll cancellation by the Editorial Board Chief. `ACCOUNT_APPROVED` includes both an in-app notification and a separate approval email. `RANKING_WARNING` remains pending final definition.
+
 ---
 
 ## 3. Functional Requirements
@@ -636,19 +638,31 @@
 | ID | Functional Requirement | Source Business Rules |
 |---|---|---|
 | FR-NOTIF-001 | The system shall address each notification to exactly one recipient user. | BR-NOTIF-001 |
-| FR-NOTIF-002 | The system shall provide notifications as in-app MVP messages. | BR-NOTIF-002 |
-| FR-NOTIF-003 | The system shall not require email or push notifications in MVP. | BR-NOTIF-002 |
+| FR-NOTIF-002 | The system shall store `manga.Notification` records as in-app MVP messages. | BR-NOTIF-002 |
+| FR-NOTIF-003 | The system shall allow explicitly defined workflows to send separate email messages in addition to in-app notifications; account approval shall send an approval email in addition to `ACCOUNT_APPROVED`. | BR-NOTIF-002, BR-NOTIF-024 |
 | FR-NOTIF-004 | The system shall allow a notification to optionally reference a related business entity such as a series, chapter, page task, proposal, board poll, or ranking result. | BR-NOTIF-003 |
 | FR-NOTIF-005 | The system shall require `related_entity_type` and `related_entity_id` to both be present or both be null. | BR-NOTIF-004 |
 | FR-NOTIF-006 | The system shall treat a notification as unread when `read_at_utc IS NULL`. | BR-NOTIF-005 |
 | FR-NOTIF-007 | The system shall record `read_at_utc` when a user reads a notification. | BR-NOTIF-006 |
-| FR-NOTIF-008 | The system shall create ranking warning notifications when a ranking result shows high cancellation risk for a series. | BR-NOTIF-007 |
-| FR-NOTIF-009 | The system shall send ranking warning notifications to active Mangaka contributors of the affected series. | BR-NOTIF-008 |
-| FR-NOTIF-010 | The system shall send task assignment notifications to assigned users when page tasks are created. | BR-NOTIF-009 |
-| FR-NOTIF-011 | The system shall send review result notifications to relevant contributors when proposal or chapter review decisions are recorded. | BR-NOTIF-010 |
-| FR-NOTIF-012 | The system shall allow board poll notifications to be sent to Editorial Board Members when a new board poll is opened. | BR-NOTIF-011 |
+| FR-NOTIF-008 | The system shall not automatically create `RANKING_WARNING` notifications until the cancellation-risk trigger/threshold, cadence, deduplication, related entity, and recipient contract are finalized. | BR-NOTIF-007, BR-NOTIF-008 |
+| FR-NOTIF-009 | The system shall not infer a `RANKING_WARNING` threshold or recipient scope from ranking data or other notification types while that contract remains pending. | BR-NOTIF-007, BR-NOTIF-008 |
+| FR-NOTIF-010 | The system shall create `TASK_ASSIGNMENT` notifications for assigned Assistants when page tasks are created, including one notification per created Quick Select task. On reassignment, the system shall notify the original Assistant of cancellation/reassignment with the required reason linked to the original task and notify the replacement Assistant of the replacement assignment linked to the replacement task. | BR-NOTIF-009 |
+| FR-NOTIF-011 | The system shall create `PROPOSAL_DECISION` notifications for Request Revision, Pass To Board, and Cancel Proposal decisions and send them to the distinct active Mangaka contributors of the affected series. | BR-NOTIF-010, BR-NOTIF-026 |
+| FR-NOTIF-012 | The system shall create `BOARD_POLL` notifications when an Editorial Board Chief opens a real board poll and send one notification to each active Editorial Board Member while excluding the initiating Chief and duplicate recipients. | BR-NOTIF-011 |
+| FR-NOTIF-013 | The system shall create `PROPOSAL_REVIEW` notifications when a Mangaka submits a proposal and send them only to distinct active Tantou Editor contributors of the exact affected series. | BR-NOTIF-012, BR-NOTIF-026 |
+| FR-NOTIF-014 | The system shall create `CHAPTER_REVIEW` notifications when a `DRAFT` or `REVISION_REQUESTED` chapter is submitted and transitions to `UNDER_REVIEW`, and send them only to distinct active Tantou Editor contributors of the exact affected series. | BR-NOTIF-013, BR-NOTIF-026 |
 | FR-NOTIF-015 | The system shall not treat notifications as the authoritative audit trail. | BR-NOTIF-014 |
 | FR-NOTIF-016 | The system shall audit-log important workflow actions that also create notifications when auditability is required. | BR-NOTIF-015 |
+| FR-NOTIF-017 | The system shall create `TASK_REVIEW` notifications when an Assistant submits task work and the task transitions from `ASSIGNED` to `UNDER_REVIEW`, and send them to distinct active Mangaka contributors of the exact affected series. | BR-NOTIF-016, BR-NOTIF-026 |
+| FR-NOTIF-018 | The system shall create `CHAPTER_DECISION` notifications for Approved, Revision Requested, and Cancelled editorial chapter decisions and send them to distinct active Mangaka contributors of the affected series. | BR-NOTIF-017, BR-NOTIF-026 |
+| FR-NOTIF-019 | The system shall create a `BOARD_DECISION` notification when a board poll closes with `APPROVED`, `REJECTED`, or `NO_DECISION`, and when the Editorial Board Chief manually cancels the poll. | BR-NOTIF-018 |
+| FR-NOTIF-020 | The system shall send each `BOARD_DECISION` notification to all distinct active contributors of the exact affected series. | BR-NOTIF-019, BR-NOTIF-026 |
+| FR-NOTIF-021 | The system shall create a `PUBLICATION_SCHEDULE` notification when a chapter transitions from a non-`SCHEDULED` status into `SCHEDULED`, or when an already `SCHEDULED` chapter is rescheduled to a different normalized `planned_release_date`. | BR-NOTIF-020 |
+| FR-NOTIF-022 | The system shall not create `PUBLICATION_SCHEDULE` when a `DRAFT`, `REVISION_REQUESTED`, or `UNDER_REVIEW` chapter only receives or changes a planned release date while remaining non-`SCHEDULED`, or when a `SCHEDULED` chapter is saved with the same normalized planned release date. | BR-NOTIF-021 |
+| FR-NOTIF-023 | The system shall send `PUBLICATION_SCHEDULE` to all other distinct active contributors of the exact affected series and shall exclude the initiating actor. | BR-NOTIF-022, BR-NOTIF-026 |
+| FR-NOTIF-024 | The system shall create an in-app `ACCOUNT_APPROVED` notification for a pending user when an Admin approves/activates the account. | BR-NOTIF-023 |
+| FR-NOTIF-025 | The system shall send an account-approval email to the approved user's email address when an Admin approves/activates a pending account. | BR-NOTIF-024 |
+| FR-NOTIF-026 | The system shall reserve `SYSTEM_MESSAGE` for explicitly defined generic system-message workflows and shall use a more specific notification type whenever one applies. | BR-NOTIF-025 |
 
 ---
 

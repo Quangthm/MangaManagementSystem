@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.Application.Features.Publication.Schedule;
 using MangaManagementSystem.Application.Services;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Infrastructure.Persistence;
@@ -59,7 +60,14 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     newStatusCode = previousStatusCode;
                 }
 
-                chapter.UpdatedAtUtc = DateTime.UtcNow;
+                var changedAtUtc = DateTime.UtcNow;
+                chapter.UpdatedAtUtc = changedAtUtc;
+
+                var notificationEvent = PublicationScheduleNotificationSupport.Classify(
+                    previousStatusCode,
+                    newStatusCode,
+                    previousPlanned,
+                    normalizedDate);
 
                 var actionCode = previousPlanned.HasValue && previousStatusCode == ScheduledStatus
                     ? "CHAPTER_RESCHEDULED"
@@ -79,7 +87,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
                 _context.AuditEvents.Add(new AuditEvent
                 {
-                    OccurredAtUtc = DateTime.UtcNow,
+                    OccurredAtUtc = changedAtUtc,
                     ActorUserId = actorUserId,
                     ActorRoleName = MangakaRoleName,
                     ActionCode = actionCode,
@@ -87,6 +95,14 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     EntityId = chapterId.ToString(),
                     DetailJson = detailJson
                 });
+
+                await PublicationScheduleNotificationPersistence.AddNotificationsAsync(
+                    _context,
+                    actorUserId,
+                    chapter,
+                    notificationEvent,
+                    changedAtUtc,
+                    cancellationToken);
 
                 await _context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);

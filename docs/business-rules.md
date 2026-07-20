@@ -8,6 +8,8 @@
 
 > **Latest series lifecycle alignment — 2026-07-19:** `HIATUS` is the schema term for a paused series. Active Mangaka or Tantou Editor contributors may move a `SERIALIZED` series to `HIATUS` and resume it back to `SERIALIZED`. `HIATUS` blocks chapter release only; drafting, editing, review, scheduling, and rescheduling remain allowed when normal chapter rules allow them. Only active Mangaka contributors may mark their `SERIALIZED` or `HIATUS` series as `COMPLETED`. A completed series is final, immutable for normal business changes, cancels unreleased chapters and their distinct active `ASSIGNED`/`UNDER_REVIEW` page tasks after warning and confirmation, preserves released chapters and terminal task history, and remains visible in rankings when ranking input exists.
 
+> **Latest notification alignment — 2026-07-20:** Approved notification behavior now explicitly covers `PROPOSAL_REVIEW`, `PROPOSAL_DECISION`, `BOARD_POLL`, `BOARD_DECISION`, `TASK_ASSIGNMENT`, `TASK_REVIEW`, `CHAPTER_REVIEW`, `CHAPTER_DECISION`, `PUBLICATION_SCHEDULE`, and `ACCOUNT_APPROVED`. `BOARD_DECISION` also fires when the Editorial Board Chief manually cancels a poll. `PUBLICATION_SCHEDULE` fires only when a chapter enters `SCHEDULED` or an already scheduled chapter moves to a different normalized planned date, and it notifies other active contributors of the exact series while excluding the initiating actor. `ACCOUNT_APPROVED` creates an in-app notification and sends an approval email. The exact `RANKING_WARNING` contract remains pending.
+
 ---
 
 ## 1. AI-Assisted Translation
@@ -651,18 +653,31 @@
 | Rule ID | Business Rule | Review Status |
 |---|---|---|
 | BR-NOTIF-001 | A notification must be addressed to exactly one recipient user. | Active draft |
-| BR-NOTIF-002 | Notifications are used for in-app MVP messages, not email or push notifications. | Active draft |
+| BR-NOTIF-002 | `manga.Notification` records are in-app MVP messages. A workflow may also send a separate email when explicitly required; account approval is the current approved case where an in-app `ACCOUNT_APPROVED` notification and an approval email are both sent. | Active draft |
 | BR-NOTIF-003 | A notification may optionally reference a related business entity such as a series, chapter, page task, proposal, board poll, or ranking result. | Active draft |
 | BR-NOTIF-004 | If `related_entity_type` is provided, `related_entity_id` must also be provided, and vice versa. | Active draft |
 | BR-NOTIF-005 | A notification is considered unread when `read_at_utc IS NULL`. | Active draft |
 | BR-NOTIF-006 | When a user reads a notification, the system records `read_at_utc`. | Active draft |
-| BR-NOTIF-007 | Ranking warning notifications should be created when a ranking evidence indicates high cancellation risk for a series. | Active draft |
-| BR-NOTIF-008 | Ranking warning notifications should be sent to active Mangaka contributors of the affected series. | Active draft |
-| BR-NOTIF-009 | Task assignment notifications should be sent to the assigned user when a page task is created. | Active draft |
-| BR-NOTIF-010 | Review result notifications should be sent to relevant contributors when a proposal or chapter review decision is recorded. | Active draft |
-| BR-NOTIF-011 | Board poll notifications may be sent to Editorial Board Members when a new board poll is opened. | Active draft |
-| BR-NOTIF-014 | Notifications are user-facing awareness records and should not be treated as the authoritative audit trail. | Active draft |
+| BR-NOTIF-007 | The exact automatic trigger/threshold, cadence, deduplication behavior, related entity, and recipient contract for `RANKING_WARNING` are still being finalized and must not be invented from ranking data alone. | Pending decision |
+| BR-NOTIF-008 | Until the `RANKING_WARNING` contract is finalized, ranking evidence may be displayed for decision support but must not automatically generate a new warning notification based on an inferred threshold or cadence. | Pending decision |
+| BR-NOTIF-009 | `TASK_ASSIGNMENT` is sent to the assigned Assistant when a page task is created. Quick Select creates one assignment notification per created task. On reassignment, the original Assistant receives a `TASK_ASSIGNMENT` notification titled as a reassignment/cancellation notice, including the required reassignment reason and linked to the original task, while the replacement Assistant receives a `TASK_ASSIGNMENT` notification linked to the replacement task. | Active draft |
+| BR-NOTIF-010 | `PROPOSAL_DECISION` is created when a Tantou Editor records Request Revision, Pass To Board, or Cancel Proposal. Recipients are the distinct active Mangaka contributors of the affected series, and the notification relates to the affected `SeriesProposal`. | Active draft |
+| BR-NOTIF-011 | `BOARD_POLL` is created when an Editorial Board Chief opens a real board poll. Each active user whose exact role is Editorial Board Member receives one notification; the initiating Chief is excluded and duplicate recipient IDs must be removed. | Active draft |
+| BR-NOTIF-012 | `PROPOSAL_REVIEW` is created when a Mangaka submits a proposal for editorial review. Recipients are the distinct active Tantou Editor contributors of that exact series; unrelated Tantou Editors must not receive it. The notification relates to the submitted `SeriesProposal`. | Active draft |
+| BR-NOTIF-013 | `CHAPTER_REVIEW` is created when a Mangaka submits a `DRAFT` or `REVISION_REQUESTED` chapter and the chapter transitions to `UNDER_REVIEW`. Recipients are the distinct active Tantou Editor contributors of that exact series; unrelated Tantou Editors must not receive it. The notification relates to the submitted `Chapter`. | Active draft |
+| BR-NOTIF-014 | Notifications are user-facing awareness records and must not be treated as the authoritative audit trail. | Active draft |
 | BR-NOTIF-015 | Important workflow actions that create notifications should still be recorded in the audit log when auditability is required. | Active draft |
+| BR-NOTIF-016 | `TASK_REVIEW` is created when an Assistant submits task work and the task transitions from `ASSIGNED` to `UNDER_REVIEW`. Recipients are the distinct active Mangaka contributors of that exact series, and the notification relates to the submitted `ChapterPageTask`. | Active draft |
+| BR-NOTIF-017 | `CHAPTER_DECISION` is created when a Tantou Editor records an Approved, Revision Requested, or Cancelled chapter editorial decision. Recipients are the distinct active Mangaka contributors of the affected series, and the notification relates to the affected `Chapter`. | Active draft |
+| BR-NOTIF-018 | `BOARD_DECISION` is created when a board poll is closed with an `APPROVED`, `REJECTED`, or `NO_DECISION` outcome, and also when the Editorial Board Chief manually cancels the poll. The notification content must reflect the actual closed/no-decision/cancelled outcome and relate to the affected `SeriesBoardPoll`. | Active draft |
+| BR-NOTIF-019 | `BOARD_DECISION` recipients are all distinct active contributors of the exact affected series, regardless of contributor role. Unrelated users must not receive the notification. | Active draft |
+| BR-NOTIF-020 | `PUBLICATION_SCHEDULE` is created when a chapter transitions from a non-`SCHEDULED` status into `SCHEDULED`, or when a chapter already in `SCHEDULED` is rescheduled to a different normalized `planned_release_date`. | Active draft |
+| BR-NOTIF-021 | `PUBLICATION_SCHEDULE` must not be created when a `DRAFT`, `REVISION_REQUESTED`, or `UNDER_REVIEW` chapter only receives or changes a planned release date while remaining in that non-`SCHEDULED` status, or when a `SCHEDULED` chapter is saved with the same normalized planned release date. | Active draft |
+| BR-NOTIF-022 | `PUBLICATION_SCHEDULE` recipients are all other distinct active contributors of the exact affected series, excluding the initiating actor who performed the scheduling or rescheduling action. | Active draft |
+| BR-NOTIF-023 | `ACCOUNT_APPROVED` is created for the approved user when an Admin approves/activates a pending account. | Active draft |
+| BR-NOTIF-024 | When an Admin approves/activates a pending account, the system also sends an account-approval email to the approved user's email address in addition to the in-app `ACCOUNT_APPROVED` notification. | Active draft |
+| BR-NOTIF-025 | `SYSTEM_MESSAGE` is a generic/reserved notification type and must not be used as a substitute when a more specific approved notification type applies. No new automatic `SYSTEM_MESSAGE` trigger should be inferred without an explicitly defined workflow. | Active draft |
+| BR-NOTIF-026 | When a notification rule uses active series contributors, recipients must belong to the exact affected series, have an active contributor relationship (`end_date IS NULL`), have user status `ACTIVE`, and be deduplicated by user ID. | Active draft |
 
 ---
 

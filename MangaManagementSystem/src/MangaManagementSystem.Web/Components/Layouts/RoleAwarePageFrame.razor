@@ -1,0 +1,119 @@
+﻿@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+
+@if (_loading)
+{
+    <MudStack AlignItems="AlignItems.Center"
+              Justify="Justify.Center"
+              Class="pa-8">
+        <MudProgressCircular Indeterminate="true"
+                             Color="Color.Primary" />
+
+        <MudText Color="Color.Secondary">
+            Loading...
+        </MudText>
+    </MudStack>
+}
+else if (IsBoardRole)
+{
+    <MangaFlowShell Title="@BoardTitle"
+                    Subtitle="@BoardSubtitle"
+                    ActiveMenu="@BoardActiveMenu">
+        <ChildContent>
+            @ChildContent
+        </ChildContent>
+    </MangaFlowShell>
+}
+else if (IsMangaka)
+{
+    <MangakaLayout>
+        @ChildContent
+    </MangakaLayout>
+}
+else if (IsAssistant)
+{
+    <AssistantLayout>
+        @ChildContent
+    </AssistantLayout>
+}
+else if (IsEditor)
+{
+    <EditorLayout>
+        @ChildContent
+    </EditorLayout>
+}
+else if (IsAdmin)
+{
+    <AdminLayout>
+        @ChildContent
+    </AdminLayout>
+}
+else
+{
+    <DashboardLayout>
+        @ChildContent
+    </DashboardLayout>
+}
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public string BoardTitle { get; set; } = string.Empty;
+
+    [Parameter]
+    public string BoardSubtitle { get; set; } = string.Empty;
+
+    [Parameter]
+    public string BoardActiveMenu { get; set; } = string.Empty;
+
+    private ClaimsPrincipal? _user;
+    private bool _loading = true;
+
+    private bool IsBoardRole =>
+        HasRole("Editorial Board Chief")
+        || HasRole("Editorial Board Member")
+        || HasRole("Board Chief")
+        || HasRole("Board Member");
+
+    private bool IsMangaka => HasRole("Mangaka");
+
+    private bool IsAssistant => HasRole("Assistant");
+
+    private bool IsEditor => HasRole("Tantou Editor");
+
+    private bool IsAdmin => HasRole("Admin");
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthenticationStateTask is not null)
+        {
+            var authState = await AuthenticationStateTask;
+            _user = authState.User;
+        }
+
+        _loading = false;
+    }
+
+    private bool HasRole(string roleName)
+    {
+        return _user?.IsInRole(roleName) == true
+               || string.Equals(
+                   GetRoleClaim(),
+                   roleName,
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string? GetRoleClaim()
+    {
+        return _user?.FindFirst(ClaimTypes.Role)?.Value
+               ?? _user?.FindFirst("role")?.Value
+               ?? _user?.FindFirst("role_name")?.Value
+               ?? _user?.FindFirst("Role")?.Value
+               ?? _user?.FindFirst("RoleName")?.Value;
+    }
+}
