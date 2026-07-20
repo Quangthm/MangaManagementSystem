@@ -13,15 +13,8 @@ namespace MangaManagementSystem.Application.Features.Series.Lifecycle.Commands.C
         private const string ChapterCancellationReason =
             "Parent series was marked as completed.";
 
-        private static readonly string[] CompletionCancellationStatuses =
-        {
-            "DRAFT",
-            "REVISION_REQUESTED",
-            "UNDER_REVIEW",
-            "APPROVED",
-            "SCHEDULED",
-            "ON_HOLD"
-        };
+        private const string TaskCancellationReason =
+            "Parent series was marked as completed.";
 
         private readonly IUnitOfWork _unitOfWork;
 
@@ -51,8 +44,9 @@ namespace MangaManagementSystem.Application.Features.Series.Lifecycle.Commands.C
             {
                 await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
-                var series = await _unitOfWork.Series.GetByIdAsync(
-                    command.SeriesId);
+                var series = await _unitOfWork.Series.GetByIdForUpdateAsync(
+                    command.SeriesId,
+                    cancellationToken);
 
                 if (series is null)
                 {
@@ -80,14 +74,37 @@ namespace MangaManagementSystem.Application.Features.Series.Lifecycle.Commands.C
                 var affectedChapters =
                     await _unitOfWork.Chapters.FindAsync(chapter =>
                         chapter.SeriesId == command.SeriesId
-                        && CompletionCancellationStatuses.Contains(
-                            chapter.StatusCode));
+                        && SeriesLifecycleSupport
+                            .CompletionCancellationStatuses
+                            .Contains(chapter.StatusCode));
 
                 var chapterTransitions = affectedChapters
                     .Select(chapter => new
                     {
                         Chapter = chapter,
                         OldStatusCode = chapter.StatusCode
+                    })
+                    .ToArray();
+
+                var affectedChapterIds = chapterTransitions
+                    .Select(transition => transition.Chapter.ChapterId)
+                    .ToHashSet();
+
+                var affectedTasks = await _unitOfWork.ChapterPageTasks
+                    .GetByChapterIdsAsync(
+                        affectedChapterIds,
+                        cancellationToken);
+
+                var taskTransitions = affectedTasks
+                    .GroupBy(task => task.ChapterPageTaskId)
+                    .Select(group => group.First())
+                    .Where(task =>
+                        ChapterPageTaskLifecyclePolicy.CanCancel(
+                            task.StatusCode))
+                    .Select(task => new
+                    {
+                        Task = task,
+                        OldStatusCode = task.StatusCode
                     })
                     .ToArray();
 
@@ -106,6 +123,13 @@ namespace MangaManagementSystem.Application.Features.Series.Lifecycle.Commands.C
                     transition.Chapter.UpdatedAtUtc = occurredAtUtc;
                 }
 
+                foreach (var transition in taskTransitions)
+                {
+                    transition.Task.StatusCode =
+                        SeriesLifecycleSupport.CancelledStatusCode;
+                    transition.Task.UpdatedAtUtc = occurredAtUtc;
+                }
+
                 await _unitOfWork.AuditEvents.AddAsync(
                     new AuditEvent
                     {
@@ -121,7 +145,9 @@ namespace MangaManagementSystem.Application.Features.Series.Lifecycle.Commands.C
                             new_status_code =
                                 SeriesLifecycleSupport.CompletedStatusCode,
                             cancelled_chapter_count =
-                                chapterTransitions.Length
+                                chapterTransitions.Length,
+                            cancelled_task_count =
+                                taskTransitions.Length
                         })
                     },
                     cancellationToken);
@@ -147,6 +173,34 @@ namespace MangaManagementSystem.Application.Features.Series.Lifecycle.Commands.C
                                 new_status_code =
                                     SeriesLifecycleSupport.CancelledStatusCode,
                                 reason = ChapterCancellationReason
+                            })
+                        },
+                        cancellationToken);
+                }
+
+                foreach (var transition in taskTransitions)
+                {
+                    await _unitOfWork.AuditEvents.AddAsync(
+                        new AuditEvent
+                        {
+                            OccurredAtUtc = occurredAtUtc,
+                            ActorUserId = command.ActorUserId,
+                            ActorRoleName = verifiedRole,
+                            ActionCode = "CHAPTER_PAGE_TASK_CANCELLED",
+                            EntityType = "ChapterPageTask",
+                            EntityId = transition.Task.ChapterPageTaskId
+                                .ToString("D"),
+                            DetailJson = JsonSerializer.Serialize(new
+                            {
+                                old_status_code = transition.OldStatusCode,
+                                new_status_code =
+                                    SeriesLifecycleSupport.CancelledStatusCode,
+                                assigned_to_user_id =
+                                    transition.Task.AssignedToUserId,
+                                completed_page_version_id =
+                                    transition.Task.CompletedPageVersionId,
+                                reason = TaskCancellationReason,
+                                series_id = series.SeriesId.ToString("D")
                             })
                         },
                         cancellationToken);

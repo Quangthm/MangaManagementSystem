@@ -2,9 +2,9 @@
 
 **Project:** Manga Creation Workflow and Publishing Management System  
 **Target UI:** Blazor Server / MudBlazor MVP  
-**Last updated:** 2026-07-11
+**Last updated:** 2026-07-19
 
-**Latest lifecycle update:** `HIATUS` is the paused-series status. Active Mangaka or Tantou Editor contributors may pause/resume serialized series. Only active Mangaka contributors may mark serialized/hiatus series as `COMPLETED`. `HIATUS` blocks release only; `COMPLETED` makes the series read-only/immutable for normal business actions, cancels unreleased chapters after confirmation, and remains ranking-visible.  
+**Latest lifecycle update:** `HIATUS` is the paused-series status. Active Mangaka or Tantou Editor contributors may pause/resume serialized series. Only active Mangaka contributors may mark serialized/hiatus series as `COMPLETED`. `HIATUS` blocks release only; `COMPLETED` makes the series read-only/immutable for normal business actions, cancels unreleased chapters and distinct active `ASSIGNED`/`UNDER_REVIEW` tasks under those chapters after warning and confirmation, and remains ranking-visible.  
 **Purpose:** Define the UI behavior for Mangaka-owned series drafting, slug usage, stable series URLs, and the centralized chapter-level workspace.
 
 ---
@@ -20,7 +20,7 @@
 | Stable series URL | `/series/{slug}` becomes the main stable series URL, especially after the series becomes `SERIALIZED`. |
 | Series profile editing | Normal Mangaka edits are allowed only while `status_code = PROPOSAL_DRAFT`. |
 | Series hiatus | Active Mangaka or Tantou Editor contributors may set `SERIALIZED` series to `HIATUS` and resume `HIATUS` series to `SERIALIZED`; hiatus blocks release only. |
-| Series completion | Only active Mangaka contributors may mark a `SERIALIZED` or `HIATUS` series as `COMPLETED`; completion requires warning/confirmation, cancels unreleased chapters, and makes the series read-only. |
+| Series completion | Only active Mangaka contributors may mark a `SERIALIZED` or `HIATUS` series as `COMPLETED`; completion requires warning/confirmation, shows affected unreleased chapters and distinct active-task impact, cancels both within the completion cascade, and makes the series read-only. |
 | Publication frequency | Mangaka may set `publication_frequency_code` during draft as a proposed/preferred frequency; board serialization workflow may override it later. |
 | Workspace level | The centralized authorized workspace is chapter-level, not page-level. |
 | Workspace AI tools | AI segmentation and AI/OCR translation tools are available to all Authorized Page Workspace Users who have access to the relevant workspace. |
@@ -252,7 +252,7 @@ A unified series page that can later become the public reader-facing series URL.
 
 | Section | Content |
 |---|---|
-| Header | Current cover, title, status badge, genres, tags, language, publication frequency. |
+| Header | Current cover, title, status badge, genres, tags, language, publication frequency. The `SERIALIZED` status badge must display **Serialized**, not **Active**. |
 | Synopsis panel | Current series synopsis. |
 | Chapter list | Chapters under the series with status and planned/released dates. |
 | Role action panel | Buttons shown based on current user role and permission. |
@@ -348,6 +348,7 @@ Rules:
 
   * `PROPOSAL_DRAFT`: show draft details/edit flow.
   * `SERIALIZED` and allowed statuses: navigate to `/series/{slug}`.
+  * The user-facing label for `SERIALIZED` is **Serialized**; do not display **Active** as the lifecycle status label.
   * review/locked statuses: show review/status modal or disabled state.
 
 ---
@@ -690,7 +691,7 @@ Define the UI behavior for changing a serialized series to `HIATUS`, resuming it
 
 | Series status | UI meaning |
 |---|---|
-| `SERIALIZED` | Active production/publication series. |
+| `SERIALIZED` | Display label: **Serialized**. Meaning: active production/publication series. |
 | `HIATUS` | Paused series. Production and scheduling may continue, but chapter release is blocked until the series returns to `SERIALIZED`. |
 | `COMPLETED` | Author-ended final series. The series and related production records are read-only for normal business actions. |
 | `CANCELLED` | Board/business-cancelled final series. |
@@ -713,13 +714,23 @@ Hiatus UI rules:
 
 | Action | Actor | Availability | UI behavior |
 |---|---|---|---|
-| Mark as Completed | Active Mangaka contributor only | Series status is `SERIALIZED` or `HIATUS` | Show a strong confirmation dialog listing unreleased chapters that will be cancelled. On success, show `COMPLETED` badge and read-only state. |
+| Mark as Completed | Active Mangaka contributor only | Series status is `SERIALIZED` or `HIATUS` | Show a strong confirmation dialog with the affected unreleased chapter list/count and the count of distinct active tasks that will be cancelled. On success, show `COMPLETED` badge and read-only state. |
 
-Completion confirmation dialog should explain:
+Completion confirmation dialog should explain the current backend-provided impact, for example:
 
 ```text
-This will mark the series as completed. All unreleased chapters will be cancelled and become read-only. Released chapters and historical records will be preserved. This action cannot be undone through normal workflow.
+This will mark the series as completed.
+
+Affected unreleased chapters: X
+Active tasks that will be cancelled: Y
+
+Unreleased DRAFT, REVISION_REQUESTED, UNDER_REVIEW, APPROVED, SCHEDULED, and ON_HOLD chapters will be cancelled.
+Distinct ASSIGNED and UNDER_REVIEW tasks under those affected chapters will also be cancelled.
+Released chapters, completed/cancelled tasks, and tasks under unaffected chapters will be preserved.
+This action cannot be undone through normal workflow.
 ```
+
+The preview is advisory. The backend must revalidate and recalculate authoritative completion impact when the user confirms.
 
 Completion UI rules:
 
@@ -727,6 +738,8 @@ Completion UI rules:
 - `COMPLETED` series should hide or disable normal business mutation actions, including edit series details/status, add chapter, edit chapter/page content, upload page versions, edit regions, create/update tasks, review, schedule, reschedule, hold, and release.
 - Released chapters remain visible as released.
 - Completion-cancelled chapters remain visible as cancelled/read-only historical records.
+- `ASSIGNED` and `UNDER_REVIEW` tasks under completion-cancelled chapters become `CANCELLED` and remain visible as historical task records where authorized.
+- `COMPLETED` and already `CANCELLED` tasks remain unchanged, and tasks under unaffected chapters remain unchanged.
 - Completed series remain visible in the ranking UI when ranking input exists.
 
 ---

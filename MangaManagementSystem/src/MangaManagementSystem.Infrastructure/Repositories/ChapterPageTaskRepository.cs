@@ -418,6 +418,29 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .ToListAsync();
         }
 
+        public async Task<IReadOnlyList<ChapterPageTask>> GetByChapterIdsAsync(
+            IReadOnlyCollection<Guid> chapterIds,
+            CancellationToken cancellationToken = default)
+        {
+            var distinctChapterIds = chapterIds
+                .Distinct()
+                .ToArray();
+
+            if (distinctChapterIds.Length == 0)
+            {
+                return Array.Empty<ChapterPageTask>();
+            }
+
+            return await _context.ChapterPageTasks
+                .Where(task => task.PageRegions.Any(region =>
+                    region.ChapterPageVersion != null
+                    && region.ChapterPageVersion.ChapterPage != null
+                    && region.ChapterPageVersion.ChapterPage.Chapter != null
+                    && distinctChapterIds.Contains(
+                        region.ChapterPageVersion.ChapterPage.Chapter.ChapterId)))
+                .ToListAsync(cancellationToken);
+        }
+
         // --- Mangaka task lifecycle SPs ---
 
         public async Task CancelTaskAsync(Guid actorUserId, Guid taskId, string reason)

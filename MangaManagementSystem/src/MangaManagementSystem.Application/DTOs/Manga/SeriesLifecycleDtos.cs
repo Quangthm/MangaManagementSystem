@@ -22,4 +22,5 @@ public sealed record SeriesCompletionImpactDto(
     Guid SeriesId,
     string SeriesStatusCode,
     int AffectedChapterCount,
+    int AffectedActiveTaskCount,
     IReadOnlyList<SeriesCompletionChapterDto> AffectedChapters);

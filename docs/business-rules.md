@@ -6,7 +6,7 @@
 
 > **Latest alignment update — 2026-07-04:** This version replaces strict publication-period scheduling enforcement with the finalized advisory scheduling direction. Publication scheduling remains chapter-level: planned release dates belong to `Chapter`, `SCHEDULED` applies to `Chapter.status_code`, and page/content workflows remain locked for scheduled/on-hold chapters. `Series.publication_frequency_code` now drives default suggestions and warnings only; Mangaka and Tantou Editors may choose any future planned release date when permissions/status allow it. Editors remain the final release enforcer, on-hold recovery requires a new planned date, and auto-hold for overdue scheduled chapters is deferred.
 
-> **Latest series lifecycle alignment — 2026-07-11:** `HIATUS` is the schema term for a paused series. Active Mangaka or Tantou Editor contributors may move a `SERIALIZED` series to `HIATUS` and may resume it back to `SERIALIZED`. `HIATUS` blocks chapter release only; drafting, editing, review, scheduling, and rescheduling remain allowed when normal chapter rules allow them. Only active Mangaka contributors may mark a `SERIALIZED` or `HIATUS` series as `COMPLETED`. A completed series is final, immutable for normal business changes, cancels unreleased chapters after warning and confirmation, preserves released and historical records, and remains visible in rankings when ranking input exists.
+> **Latest series lifecycle alignment — 2026-07-19:** `HIATUS` is the schema term for a paused series. Active Mangaka or Tantou Editor contributors may move a `SERIALIZED` series to `HIATUS` and resume it back to `SERIALIZED`. `HIATUS` blocks chapter release only; drafting, editing, review, scheduling, and rescheduling remain allowed when normal chapter rules allow them. Only active Mangaka contributors may mark their `SERIALIZED` or `HIATUS` series as `COMPLETED`. A completed series is final, immutable for normal business changes, cancels unreleased chapters and their distinct active `ASSIGNED`/`UNDER_REVIEW` page tasks after warning and confirmation, preserves released chapters and terminal task history, and remains visible in rankings when ranking input exists.
 
 ---
 
@@ -188,6 +188,11 @@
 | BR-SERIES-040 | Unreleased active chapters for completion cancellation include `DRAFT`, `REVISION_REQUESTED`, `UNDER_REVIEW`, `APPROVED`, `SCHEDULED`, and `ON_HOLD` chapters; already `RELEASED` chapters and already `CANCELLED` chapters must not be changed. | Active draft |
 | BR-SERIES-041 | Completion-cancelled chapters remain preserved as read-only historical records and must follow the normal terminal behavior of cancelled chapters. | Active draft |
 | BR-SERIES-042 | A `CANCEL_SERIALIZATION` board poll may target a `SERIALIZED` or `HIATUS` series, but not a `COMPLETED` series through normal MVP workflow. | Active draft |
+| BR-SERIES-043 | Before confirming series completion, the system should show the affected unreleased chapters and the count of distinct active page tasks that will be cancelled; execution must recalculate authoritative impact rather than trusting the preview. | Active draft |
+| BR-SERIES-044 | When a series is completed, each distinct `ASSIGNED` or `UNDER_REVIEW` page task linked to a completion-cancelled chapter must be changed to `CANCELLED`. | Active draft |
+| BR-SERIES-045 | Series completion must preserve `COMPLETED` tasks, already `CANCELLED` tasks, and tasks linked only to unaffected chapters such as `RELEASED` chapters. | Active draft |
+| BR-SERIES-046 | A page task affected by series completion must be counted, changed, and cancellation-audited at most once even when the task is linked to multiple `PageRegion` records under affected chapters. | Active draft |
+| BR-SERIES-047 | Series completion must apply required task cancellations, chapter cancellations, the `Series.status_code = COMPLETED` change, and required audit records atomically so that a failure rolls back the entire cascade. | Active draft |
 
 ### Future Information
 
@@ -335,6 +340,7 @@
 | BR-CH-018 | When a chapter is `SCHEDULED`, a Tantou Editor may move the chapter to `ON_HOLD` with a required reason; returning from `ON_HOLD` to `SCHEDULED` requires setting a new future planned release date. | Active draft |
 | BR-CH-019 | A chapter cannot be released while its parent series is `HIATUS`, `COMPLETED`, or `CANCELLED`. | Active draft |
 | BR-CH-020 | If the parent series is `COMPLETED`, normal chapter creation and mutation workflows must be blocked for all chapters under that series. | Active draft |
+| BR-CH-021 | Normal new chapter creation is allowed only when the parent series is `SERIALIZED` or `HIATUS` and the creator is an `ACTIVE` Mangaka account with an active Mangaka contributor relationship to that series. Proposal/review states, `COMPLETED`, `CANCELLED`, null, and unknown series states must not allow normal chapter creation. | Active draft |
 
 ---
 
@@ -428,8 +434,8 @@
 |---|---|---|
 | BR-PGTASK-001 | Each page task derives its logical `ChapterPage` context from one or more linked `PageRegion` records; `ChapterPageTask` does not store `chapter_page_id` directly. | Active draft |
 | BR-PGTASK-002 | A logical `ChapterPage` may have many tasks over time through linked `PageRegion` records. | Active draft |
-| BR-PGTASK-003 | A page task represents one assignment of work to one assistant or authorized user. | Active draft |
-| BR-PGTASK-004 | Each page task must be assigned to exactly one assistant or authorized user. | Active draft |
+| BR-PGTASK-003 | A page task represents one assignment of work to one active Assistant contributor of the owning series. | Active draft |
+| BR-PGTASK-004 | Each page task must be assigned to exactly one `ACTIVE` Assistant account that is an active Assistant contributor of the owning series. | Active draft |
 | BR-PGTASK-005 | Each page task must record the user who created it. | Active draft |
 | BR-PGTASK-006 | Task assignment is region-linked and page-derived in the MVP; whole-chapter task assignment is future scope. | Active draft |
 | BR-PGTASK-007 | A page task may target one or more `PageRegion` records through the `ChapterPageTaskRegion` junction table. | Active draft |
@@ -457,6 +463,11 @@
 | BR-PGTASK-029 | The system should preserve the original task record after cancellation for traceability. | Active draft |
 | BR-PGTASK-030 | If cancelled work needs to be reassigned, the Mangaka should create a new task for the same page instead of changing the original assignee. | Active draft |
 | BR-PGTASK-031 | Audit logging should record task creation, cancellation, completion, and status changes. | Active draft |
+| BR-PGTASK-032 | New page task creation is allowed only when the owning series is `SERIALIZED` or `HIATUS` and the owning chapter is `DRAFT` or `REVISION_REQUESTED`. Later chapter states, proposal/review series states, `COMPLETED`, `CANCELLED`, null, and unknown states must not allow new task creation. | Active draft |
+| BR-PGTASK-033 | The creator of a new page task must be an `ACTIVE` Mangaka account and an active Mangaka contributor of the owning series. | Active draft |
+| BR-PGTASK-034 | The assignee of a new page task must be an `ACTIVE` Assistant account and an active Assistant contributor of the owning series. | Active draft |
+| BR-PGTASK-035 | Single-task creation and Quick Select/batch task creation must enforce the same creator, assignee, parent-series, and parent-chapter production-eligibility rules. | Active draft |
+| BR-PGTASK-036 | For series-completion cascade purposes, `ASSIGNED` and `UNDER_REVIEW` are active cancellable task statuses; `COMPLETED` and `CANCELLED` tasks are terminal and must be preserved. | Active draft |
 
 ---
 
