@@ -1165,7 +1165,9 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                                   Width = (double)r.Width,
                                   Height = (double)r.Height,
                                   OriginalText = origText,
-                                  TranslatedText = transText
+                                  TranslatedText = transText,
+                                  SourceType = r.SourceType,
+                                  ConfidenceScore = r.ConfidenceScore.HasValue ? (double)r.ConfidenceScore.Value : null
                               });
                           }
 
@@ -2538,7 +2540,9 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 Width = (double)r.Width,
                 Height = (double)r.Height,
                 OriginalText = origText,
-                TranslatedText = transText
+                TranslatedText = transText,
+                SourceType = r.SourceType,
+                ConfidenceScore = r.ConfidenceScore.HasValue ? (double)r.ConfidenceScore.Value : null
             });
         }
 

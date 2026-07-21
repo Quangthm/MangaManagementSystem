@@ -314,6 +314,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                                     });
 
                                     string label = !string.IsNullOrEmpty(r.Label) ? r.Label : $"Region_{r.Id}";
+                                    var (sourceType, confidence) = NormalizeRegionProvenance(r);
                                     return new MangaManagementSystem.Application.DTOs.Manga.CreatePageRegionDto(
                                         currentVersion.ChapterPageVersionId,
                                         (r.Type ?? "OTHER").ToUpper(),
@@ -322,8 +323,8 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                                         (decimal)r.Y,
                                         (decimal)r.Width,
                                         (decimal)r.Height,
-                                        null,
-                                        "MANUAL",
+                                        confidence,
+                                        sourceType,
                                         textJson,
                                         r.DbId,
                                         _currentUserId
@@ -455,6 +456,26 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         }
 
         return false;
+    }
+
+    // A bulk save rewrites every region of the version, so it must carry each box's own provenance
+    // back — sending a flat "MANUAL" would silently downgrade AI-detected regions and drop their
+    // confidence score on the first save of an untouched page.
+    // manga.PageRegion.ck_page_region_confidence_source only accepts AI + a score, or MANUAL + no
+    // score, so a region claiming AI without a usable score is stored as MANUAL instead of failing
+    // the whole save.
+    private static (string SourceType, decimal? ConfidenceScore) NormalizeRegionProvenance(RegionModel region)
+    {
+        var sourceType = (region.SourceType ?? string.Empty).Trim().ToUpperInvariant();
+        if (sourceType != "AI") return ("MANUAL", null);
+
+        // ck_page_region_confidence: 0 <= confidence_score <= 1.
+        if (region.ConfidenceScore is not double score || double.IsNaN(score) || score < 0 || score > 1)
+        {
+            return ("MANUAL", null);
+        }
+
+        return ("AI", (decimal)score);
     }
 
     }
