@@ -76,6 +76,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             .SelectMany(c => c.Pages ?? new List<PageModel>())
             .Count(p => p.Versions.Any() && p.Versions[p.ActiveVersionIndex].PendingBytes != null);
         int pagesUploaded = 0;
+        _uploadRetryCount = 0;
         _saveProgress = totalPendingPages > 0 ? $"Uploading pages… (0/{totalPendingPages})" : "Saving…";
         await _dbSemaphore.WaitAsync();
         try
@@ -161,12 +162,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                     await uploadGate.WaitAsync();
                     try
                     {
-                        var res = await FileStorageService.UploadFileAsync(
-                            v.PendingBytes!,
-                            v.PendingFileName ?? "page.png",
-                            v.PendingContentType ?? "image/png",
-                            "CHAPTER_PAGE_VERSION");
-                        uploadResults[v] = res;
+                        uploadResults[v] = await UploadPageImageWithRetryAsync(v);
                     }
                     catch (Exception ex)
                     {
@@ -368,7 +364,14 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 _saveState = SaveStatus.Saved;
                 _imageDirty = false;
                 _ = JS.InvokeVoidAsync("setUnsavedFlag", false);
-                if (savedCount > 0) Snackbar.Add("Changes saved successfully.", Severity.Success);
+                if (savedCount > 0)
+                {
+                    Snackbar.Add(
+                        _uploadRetryCount > 0
+                            ? $"Changes saved successfully (after {_uploadRetryCount} upload retry/retries)."
+                            : "Changes saved successfully.",
+                        Severity.Success);
+                }
             }
             else
             {
@@ -386,6 +389,72 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             _dbSemaphore.Release();
             StateHasChanged();
         }
+    }
+
+    // --- Upload retry -------------------------------------------------------------------------
+    // A Cloudinary upload can fail on a transient network hiccup / timeout while the bytes and the
+    // DB row are both still fine. Retrying the whole Save in that case re-uploads every page, so
+    // each page image gets its own bounded retry with exponential backoff first.
+    private const int UploadMaxAttempts = 3;
+
+    // Number of retried upload attempts in the current save (for the summary snackbar).
+    private int _uploadRetryCount;
+
+    private async Task<FileUploadResultDto> UploadPageImageWithRetryAsync(PageVersionModel version)
+    {
+        Exception? lastError = null;
+        for (int attempt = 1; attempt <= UploadMaxAttempts; attempt++)
+        {
+            try
+            {
+                return await FileStorageService.UploadFileAsync(
+                    version.PendingBytes!,
+                    version.PendingFileName ?? "page.png",
+                    version.PendingContentType ?? "image/png",
+                    "CHAPTER_PAGE_VERSION");
+            }
+            catch (Exception ex) when (attempt < UploadMaxAttempts && IsTransientUploadError(ex))
+            {
+                lastError = ex;
+                System.Threading.Interlocked.Increment(ref _uploadRetryCount);
+                Console.WriteLine($"Upload attempt {attempt}/{UploadMaxAttempts} failed for " +
+                                  $"{version.PendingFileName}: {ex.Message}");
+                _saveProgress = $"Upload failed — retrying ({attempt + 1}/{UploadMaxAttempts})…";
+                await InvokeAsync(StateHasChanged);
+                // 400ms, 800ms — short enough that a save does not feel hung.
+                await Task.Delay(TimeSpan.FromMilliseconds(400 * Math.Pow(2, attempt - 1)));
+            }
+        }
+
+        throw lastError ?? new InvalidOperationException("Upload failed.");
+    }
+
+    // Only network-shaped failures are worth retrying; a rejected/invalid file would fail again.
+    private static bool IsTransientUploadError(Exception ex)
+    {
+        for (Exception? e = ex; e != null; e = e.InnerException)
+        {
+            if (e is HttpRequestException
+                || e is TaskCanceledException
+                || e is TimeoutException
+                || e is System.IO.IOException
+                || e is System.Net.Sockets.SocketException)
+            {
+                return true;
+            }
+
+            var msg = e.Message;
+            if (!string.IsNullOrEmpty(msg)
+                && (msg.Contains("timeout", StringComparison.OrdinalIgnoreCase)
+                    || msg.Contains("timed out", StringComparison.OrdinalIgnoreCase)
+                    || msg.Contains("temporarily", StringComparison.OrdinalIgnoreCase)
+                    || msg.Contains("Service Unavailable", StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     }
