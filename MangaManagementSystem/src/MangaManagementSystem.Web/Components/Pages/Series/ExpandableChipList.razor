@@ -1,0 +1,55 @@
+@namespace MangaManagementSystem.Web.Components.Pages.Series
+
+@if (Items.Count == 0)
+{
+    return;
+}
+
+<div style="margin-bottom: 14px;">
+    <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; display: block; margin-bottom: 4px;">@Title</span>
+
+    <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+        @foreach (var item in VisibleItems)
+        {
+            <span style="display:inline-block; max-width:100%; white-space:normal; overflow-wrap:break-word; background:#f1f5f9; color:#475569; font-size:0.72rem; padding:3px 10px; border-radius:12px; font-weight:500;">
+                @item
+            </span>
+        }
+    </div>
+
+    @if (_expanded)
+    {
+        <button type="button" style="background:none; border:none; color:#6366f1; font-size:0.75rem; font-weight:600; cursor:pointer; padding:4px 0; display:block;" @onclick="Collapse">
+            Show less
+        </button>
+    }
+    else if (Items.Count > EffectivePreviewCount)
+    {
+        <button type="button" style="background:none; border:none; color:#6366f1; font-size:0.75rem; font-weight:600; cursor:pointer; padding:4px 0; display:block;" @onclick="Expand">
+            Show all (@Items.Count)
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public IReadOnlyList<string> Items { get; set; } = [];
+    [Parameter] public int PreviewCount { get; set; } = 6;
+
+    private bool _expanded;
+
+    private int EffectivePreviewCount => Math.Max(1, PreviewCount);
+
+    private IEnumerable<string> VisibleItems =>
+        _expanded ? Items : Items.Take(EffectivePreviewCount);
+
+    private void Expand()
+    {
+        _expanded = true;
+    }
+
+    private void Collapse()
+    {
+        _expanded = false;
+    }
+}
