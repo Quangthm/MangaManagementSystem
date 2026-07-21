@@ -8,7 +8,7 @@
 
 > **Latest series lifecycle alignment — 2026-07-19:** `HIATUS` is the schema term for a paused series. Active Mangaka or Tantou Editor contributors may move a `SERIALIZED` series to `HIATUS` and resume it back to `SERIALIZED`. `HIATUS` blocks chapter release only; drafting, editing, review, scheduling, and rescheduling remain allowed when normal chapter rules allow them. Only active Mangaka contributors may mark their `SERIALIZED` or `HIATUS` series as `COMPLETED`. A completed series is final, immutable for normal business changes, cancels unreleased chapters and their distinct active `ASSIGNED`/`UNDER_REVIEW` page tasks after warning and confirmation, preserves released chapters and terminal task history, and remains visible in rankings when ranking input exists.
 
-> **Latest notification alignment — 2026-07-20:** Approved notification behavior now explicitly covers `PROPOSAL_REVIEW`, `PROPOSAL_DECISION`, `BOARD_POLL`, `BOARD_DECISION`, `TASK_ASSIGNMENT`, `TASK_REVIEW`, `CHAPTER_REVIEW`, `CHAPTER_DECISION`, `PUBLICATION_SCHEDULE`, and `ACCOUNT_APPROVED`. `BOARD_DECISION` also fires when the Editorial Board Chief manually cancels a poll. `PUBLICATION_SCHEDULE` fires only when a chapter enters `SCHEDULED` or an already scheduled chapter moves to a different normalized planned date, and it notifies other active contributors of the exact series while excluding the initiating actor. `ACCOUNT_APPROVED` creates an in-app notification and sends an approval email. The exact `RANKING_WARNING` contract remains pending.
+> **Latest ranking and notification alignment — 2026-07-21:** Existing approved notification behavior for proposal, board, task, chapter, publication scheduling, and account approval remains unchanged. Dynamic ranking now uses the weighted formula `ranking_score = (v / (v + m)) * R + (m / (v + m)) * C`; `reading_count` is no longer a direct score boost. The `RANKING_WARNING` contract is finalized: a weekly result fails only when both the weighted score is below the approved `6.5` baseline and the series is in the bottom 25% for that completed week; high risk requires failure in at least 2 of the latest 3 consecutive completed weekly periods including the latest. Recipients are all distinct active contributors of the exact affected series.
 
 ---
 
@@ -628,6 +628,7 @@
 | BR-SERIES-VOTE-013 | Series vote input should record the Editorial Board Member who entered the simulated/aggregated vote data and the UTC entry timestamp. | Active draft |
 | BR-SERIES-VOTE-014 | Only Editorial Board Members or Editorial Board Chief users may enter simulated or aggregated series vote input in MVP. | Active draft |
 | BR-SERIES-VOTE-015 | `data_source_note` may describe the report, tracking website, internal spreadsheet, or other evidence used to enter the series vote input. | Active draft |
+| BR-SERIES-VOTE-016 | Manual MVP `SeriesVoteInput` creation/update is allowed for `WEEKLY` publication periods only. Monthly, yearly, or all-time ranking results are derived from weekly source evidence and must not require separately persisted manual aggregate `SeriesVoteInput` rows. | Active draft |
 
 ### 18.2 Dynamic Series Ranking
 
@@ -636,12 +637,15 @@
 | BR-RANK-001 | Series ranking is calculated dynamically from `SeriesVoteInput` records joined to `PublicationPeriod` and `Series`; the MVP does not require `SeriesRankingSnapshot`. | Active draft |
 | BR-RANK-002 | Ranking is partitioned by `publication_period_id`, so each publication period has its own rank list. | Active draft |
 | BR-RANK-003 | The dynamic ranking view should expose period details, series identity, title/slug when needed for navigation, rating count, average rating, reading count, ranking score, and rank position. | Active draft |
-| BR-RANK-004 | The MVP ranking score is calculated as `average_rating * LOG10(1 + rating_count) + reading_count * 0.001`. | Active draft |
+| BR-RANK-004 | The MVP ranking score uses a weighted rating: `ranking_score = (v / (v + m)) * R + (m / (v + m)) * C`, where `R` is the series average rating, `v` is its rating count, `C` is the rating-count-weighted average rating of all eligible ranked series in the same effective ranking scope, and `m` is the median rating count of those eligible ranked series. | Active draft |
 | BR-RANK-005 | Rank position is computed using `DENSE_RANK()` ordered by ranking score, average rating, rating count, reading count, and `series_id` as a deterministic tie-breaker. | Active draft |
 | BR-RANK-006 | `ranking_score` and `rank_position` are derived values and should not be stored as normal duplicated columns unless later performance profiling proves caching is required. | Active draft |
 | BR-RANK-007 | Ranking results do not automatically cancel a series. | Active draft |
 | BR-RANK-008 | Ranking and cancellation-risk evidence may support board review, but any cancellation still requires the applicable board/editorial workflow decision. | Active draft |
 | BR-RANK-009 | Completed series remain visible in dynamic rankings when `SeriesVoteInput` exists for the selected publication period; ranking views must not hide a series only because `Series.status_code = COMPLETED`. | Active draft |
+| BR-RANK-010 | For a direct publication-period ranking, `C` must be calculated as `SUM(average_rating * rating_count) / SUM(rating_count)` across eligible ranked series in that same period, and `m` must be the median `rating_count` across those eligible ranked series. | Active draft |
+| BR-RANK-011 | `reading_count` is popularity/readership evidence and must not directly increase the weighted `ranking_score`; it may remain visible and may be used as a deterministic tie-breaker after ranking score, average rating, and rating count. | Active draft |
+| BR-RANK-012 | When a broader ranking scope such as monthly, yearly, or all-time is derived from weekly inputs, the system must first aggregate weekly source evidence by series, then recalculate that broader scope's own `R`, `v`, `C`, and `m`; it must not average weekly `ranking_score` values or reuse weekly `C`/`m`. | Active draft |
 
 
 ---
@@ -658,8 +662,8 @@
 | BR-NOTIF-004 | If `related_entity_type` is provided, `related_entity_id` must also be provided, and vice versa. | Active draft |
 | BR-NOTIF-005 | A notification is considered unread when `read_at_utc IS NULL`. | Active draft |
 | BR-NOTIF-006 | When a user reads a notification, the system records `read_at_utc`. | Active draft |
-| BR-NOTIF-007 | The exact automatic trigger/threshold, cadence, deduplication behavior, related entity, and recipient contract for `RANKING_WARNING` are still being finalized and must not be invented from ranking data alone. | Pending decision |
-| BR-NOTIF-008 | Until the `RANKING_WARNING` contract is finalized, ranking evidence may be displayed for decision support but must not automatically generate a new warning notification based on an inferred threshold or cadence. | Pending decision |
+| BR-NOTIF-007 | A completed weekly ranking result is a failed ranking week for `RANKING_WARNING` only when **both** conditions are true: `ranking_score < 6.5` and the series is in the bottom 25% of ranked series for that same weekly period. The bottom group size is `CEILING(total_ranked_series * 0.25)`, and each evaluated week must contain at least 4 ranked series. The `6.5` value is the approved MVP low-score baseline for warning evaluation, not a statistical guarantee of cancellation. | Active draft |
+| BR-NOTIF-008 | A `RANKING_WARNING` high-risk condition exists only when a `SERIALIZED` or `HIATUS` series has a failed ranking week in at least 2 of its latest 3 consecutive completed weekly publication periods, the latest completed week is also a failed ranking week, the series has ranking input in all 3 periods, and each evaluated period contains at least 4 ranked series. | Active draft |
 | BR-NOTIF-009 | `TASK_ASSIGNMENT` is sent to the assigned Assistant when a page task is created. Quick Select creates one assignment notification per created task. On reassignment, the original Assistant receives a `TASK_ASSIGNMENT` notification titled as a reassignment/cancellation notice, including the required reassignment reason and linked to the original task, while the replacement Assistant receives a `TASK_ASSIGNMENT` notification linked to the replacement task. | Active draft |
 | BR-NOTIF-010 | `PROPOSAL_DECISION` is created when a Tantou Editor records Request Revision, Pass To Board, or Cancel Proposal. Recipients are the distinct active Mangaka contributors of the affected series, and the notification relates to the affected `SeriesProposal`. | Active draft |
 | BR-NOTIF-011 | `BOARD_POLL` is created when an Editorial Board Chief opens a real board poll. Each active user whose exact role is Editorial Board Member receives one notification; the initiating Chief is excluded and duplicate recipient IDs must be removed. | Active draft |
@@ -678,6 +682,12 @@
 | BR-NOTIF-024 | When an Admin approves/activates a pending account, the system also sends an account-approval email to the approved user's email address in addition to the in-app `ACCOUNT_APPROVED` notification. | Active draft |
 | BR-NOTIF-025 | `SYSTEM_MESSAGE` is a generic/reserved notification type and must not be used as a substitute when a more specific approved notification type applies. No new automatic `SYSTEM_MESSAGE` trigger should be inferred without an explicitly defined workflow. | Active draft |
 | BR-NOTIF-026 | When a notification rule uses active series contributors, recipients must belong to the exact affected series, have an active contributor relationship (`end_date IS NULL`), have user status `ACTIVE`, and be deduplicated by user ID. | Active draft |
+| BR-NOTIF-027 | `RANKING_WARNING` recipients are all distinct active contributors of the exact affected series, regardless of contributor role, using the active-contributor definition in BR-NOTIF-026. | Active draft |
+| BR-NOTIF-028 | `RANKING_WARNING` is evaluated from completed `WEEKLY` periods only. Current/incomplete weeks must not trigger it, and monthly/yearly/all-time reporting views must not independently create additional ranking warnings. | Active draft |
+| BR-NOTIF-029 | Re-evaluating the same affected series and latest completed weekly period must be idempotent: the system must not create more than one `RANKING_WARNING` per recipient for that series/evaluated week. | Active draft |
+| BR-NOTIF-030 | A `RANKING_WARNING` is advisory only and must not automatically change series status, pause/cancel a series, or open a `CANCEL_SERIALIZATION` poll. Normal board workflow remains required for cancellation. | Active draft |
+| BR-NOTIF-031 | Because ranking risk is derived from multiple weekly periods, `RANKING_WARNING` should relate to the affected `Series`; Bell navigation should open the existing ranking/series context for that series. | Active draft |
+| BR-NOTIF-032 | Completed or cancelled series may remain visible in ranking history, but new cancellation-risk warnings apply only while the series is currently `SERIALIZED` or `HIATUS`. | Active draft |
 
 ---
 

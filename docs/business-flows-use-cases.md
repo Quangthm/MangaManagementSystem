@@ -6,7 +6,7 @@
 
 > **Latest series lifecycle alignment — 2026-07-19:** `HIATUS` means a paused series. Active Mangaka or Tantou Editor contributors may set a `SERIALIZED` series to `HIATUS` and resume it back to `SERIALIZED`. `HIATUS` blocks chapter release only. Only active Mangaka contributors may mark a `SERIALIZED` or `HIATUS` series as `COMPLETED`; completion blocks future mutations, cancels unreleased chapters and their distinct active `ASSIGNED`/`UNDER_REVIEW` page tasks after warning and confirmation, preserves released chapters and terminal task history, and completed series remain visible in rankings when ranking input exists.
 
-> **Latest notification alignment — 2026-07-20:** Approved notification flows are documented for proposal review/decision, board poll/decision, task assignment/review, chapter review/decision, publication scheduling, and account approval. Manual Board Chief poll cancellation creates `BOARD_DECISION`. `PUBLICATION_SCHEDULE` excludes the initiating actor and does not fire for non-scheduled date-only edits or same-date resaves. Account approval creates `ACCOUNT_APPROVED` and sends an approval email. `RANKING_WARNING` remains pending final definition.
+> **Latest ranking and notification alignment — 2026-07-21:** Existing approved notification flows for proposal review/decision, board poll/decision, task assignment/review, chapter review/decision, publication scheduling, and account approval remain unchanged. Ranking now uses a MAL-style weighted rating: `ranking_score = (v / (v + m)) * R + (m / (v + m)) * C`, where `R` is the series average rating, `v` is its rating count, `C` is the rating-count-weighted average rating of the effective ranking scope, and `m` is the median rating count of that scope. `reading_count` remains popularity evidence and a tie-breaker, not a direct score boost. `RANKING_WARNING` is finalized as a hybrid weekly rule: a week fails only when both `ranking_score < 6.5` and the series is in the bottom 25% for that week; high risk requires failure in at least 2 of the latest 3 consecutive completed weekly periods including the latest. Recipients are all distinct active contributors of the exact affected series.
 
 ---
 
@@ -2233,17 +2233,17 @@ Tantou Editor opens a publication schedule or chapter review screen
 
 ---
 
-## BF-RANK-001 — Enter Series Vote Input for a Publication Period
+## BF-RANK-001 — Enter Series Vote Input for a Weekly Publication Period
 
 **Status:** Agreed  
 **Primary actor:** Editorial Board Member / Editorial Board Chief  
-**Goal:** Enter simulated or manually aggregated series-level performance data for a completed publication period.
+**Goal:** Enter simulated or manually aggregated series-level performance data for a completed weekly publication period.
 
 ### Main Flow
 
 ```text
 Board user opens Ranking Input screen
-→ User selects a PublicationPeriod
+→ User selects a WEEKLY PublicationPeriod
 → UI lists eligible series
 → User selects a series
 → User enters rating_count, average_rating, reading_count, and optional data_source_note
@@ -2268,6 +2268,7 @@ manga.vw_SeriesRanking
 - `rating_count` and `reading_count` must be greater than zero.
 - `average_rating` must be between 0 and 10.
 - `rating_count` must not exceed `reading_count`.
+- Manual MVP `SeriesVoteInput` is entered for `WEEKLY` publication periods only. Monthly/yearly/all-time ranking views are derived from weekly source evidence and do not require separately persisted manual aggregate input rows.
 - Vote input is period-only. Later weekly input must not include earlier weekly input.
 - `data_source_note` should explain the report or source used for the manual input when relevant.
 
@@ -2299,12 +2300,26 @@ User opens ranking screen
 ### Ranking Formula
 
 ```text
-ranking_score = average_rating * LOG10(1 + rating_count) + reading_count * 0.001
+ranking_score =
+    (v / (v + m)) * R
+    +
+    (m / (v + m)) * C
+
+R = series average_rating for the effective ranking scope
+v = series rating_count for the effective ranking scope
+C = SUM(average_rating * rating_count) / SUM(rating_count)
+    across all eligible ranked series in the same effective ranking scope
+m = median rating_count across all eligible ranked series
+    in the same effective ranking scope
 ```
 
 ### Important Notes
 
 - Ranking is dynamic and reflects the latest `SeriesVoteInput` data.
+- `reading_count` does not directly increase `ranking_score`; it remains popularity/readership evidence and may remain a deterministic tie-breaker after score, average rating, and rating count.
+- The weighted score stays on the same 0-to-10 rating scale because it is a weighted combination of `R` and `C`.
+- For a direct weekly ranking, `C` and `m` are recalculated within that weekly `publication_period_id`.
+- For broader derived scopes such as monthly or all-time/yearly reporting, weekly source evidence must be aggregated by series first; then the broader scope must recalculate its own `R`, `v`, `C`, and `m`. Do not average weekly `ranking_score` values and do not reuse weekly `C` or `m`.
 - The MVP does not use `SeriesRankingSnapshot` because there is no ranking finalization workflow.
 - The ranking view should keep technical IDs available for backend filtering and navigation even if the UI hides them.
 - Ranking evidence may support board/editorial review but does not automatically cancel a series.
@@ -2312,8 +2327,9 @@ ranking_score = average_rating * LOG10(1 + rating_count) + reading_count * 0.001
 
 ### System Should Try To
 
-- Query ranking by `publication_period_id`, not by period name.
-- Keep ranking score calculation centralized in SQL view/query logic.
+- Query direct weekly ranking by `publication_period_id`, not by period name.
+- Keep one authoritative weighted-score formula across SQL and any broader-scope application/C# aggregation.
+- Recalculate broader-scope statistics after aggregation rather than averaging lower-level ranking scores.
 - Avoid storing duplicated ranking score or rank position unless later performance profiling proves caching is required.
 
 
@@ -2322,7 +2338,7 @@ ranking_score = average_rating * LOG10(1 + rating_count) + reading_count * 0.001
 
 # 7. Notification Flows
 
-> **Alignment status — 2026-07-20:** The following flows record the approved notification contracts. `RANKING_WARNING` remains pending final threshold/cadence/recipient definition and must not be inferred.
+> **Alignment status — 2026-07-21:** The following flows record the approved notification contracts. `RANKING_WARNING` is finalized as a hybrid, persistence-based weekly warning rule using the documented `6.5` weighted-score baseline together with bottom-25% relative performance.
 
 ## BF-NOTIF-001 — Account Approved Notification and Email
 
@@ -2539,20 +2555,80 @@ This includes real transitions such as `APPROVED → SCHEDULED`, `ON_HOLD → SC
 
 ## BF-NOTIF-011 — Ranking Warning Contract
 
-**Status:** Draft / Pending decision  
-**Primary actor:** To be finalized  
-**Goal:** Avoid inventing an automatic cancellation-risk notification rule before the ranking-warning contract is approved.
+**Status:** Agreed  
+**Primary actor:** System  
+**Recipients:** All distinct active contributors of the exact affected series  
+**Goal:** Warn the active production team when a currently cancellable series shows persistent low weekly ranking performance without treating relative rank alone as failure.
 
-The following remain pending:
+### Weekly Failure Checks
 
-- exact high-risk trigger/threshold;
-- evaluation timing/cadence;
-- duplicate/cooldown behavior;
-- recipient scope;
-- authoritative related entity;
-- Bell destination.
+A weekly ranking result counts as a **failed ranking week** only when **both** checks fail:
 
-Until finalized, ranking evidence may be displayed for decision support but must not automatically create `RANKING_WARNING` from an inferred threshold.
+```text
+Check 1 — Absolute weighted-score check
+ranking_score < 6.5
+
+AND
+
+Check 2 — Relative rank check
+series is in the bottom 25% of ranked series
+for that same completed weekly publication period
+```
+
+For the bottom-25% check:
+
+```text
+low_group_size = CEILING(total_ranked_series * 0.25)
+
+series is in the low group when:
+rank_position > total_ranked_series - low_group_size
+```
+
+Each evaluated week must contain at least 4 ranked series. The `6.5` value is the approved MVP low-score baseline for warning evaluation; it is an editorial warning threshold, not a statistical prediction that cancellation will occur.
+
+### Persistent High-Risk Rule
+
+```text
+System evaluates the latest 3 consecutive completed WEEKLY publication periods
+→ Series must have ranking input in all 3 periods
+→ Each period must have at least 4 ranked series
+→ Determine whether the series failed both weekly checks in each period
+→ High ranking risk exists only when:
+     failed ranking week count >= 2 of the latest 3
+     AND the latest completed week is itself a failed ranking week
+→ If high ranking risk exists and the series is currently SERIALIZED or HIATUS:
+     resolve all distinct active contributors of that exact series
+     create one RANKING_WARNING per recipient for the evaluated latest week
+```
+
+### Recipient Rule
+
+Recipients are **all distinct active contributors of the exact affected series, regardless of contributor role**. A recipient must:
+
+- have an active `SeriesContributor` relationship (`end_date IS NULL`);
+- have user status `ACTIVE`;
+- belong to the exact affected series;
+- be deduplicated by user ID.
+
+### Evaluation / Deduplication
+
+- Only completed weekly periods are authoritative for automatic warning evaluation; the current/incomplete week must not trigger a warning.
+- Monthly, yearly, and all-time views are reporting/aggregation views and must not independently create additional `RANKING_WARNING` notifications.
+- Re-evaluating the same series and latest completed weekly period must be idempotent: at most one `RANKING_WARNING` may be created per recipient for that series/evaluated week.
+- Missing ranking input in any of the latest 3 consecutive completed weekly periods is insufficient evidence and must not be treated as failure.
+- Completed or cancelled series may remain visible in ranking history but must not receive a new cancellation-risk warning; the warning applies to series that are currently `SERIALIZED` or `HIATUS`.
+
+### Related Entity / Bell Behavior
+
+The warning is series-scoped because the risk condition is derived from multiple weekly periods. The notification should relate to the affected `Series`, and Bell navigation should open the existing ranking/series context for that series without creating a parallel ranking workflow.
+
+### Important Notes
+
+- `RANKING_WARNING` is advisory only.
+- It must not automatically change `Series.status_code`.
+- It must not automatically open a `CANCEL_SERIALIZATION` poll.
+- It must not automatically cancel or pause a series.
+- Ranking-risk evidence may support a later board cancellation discussion, but normal board rules still control any cancellation decision.
 
 ---
 
