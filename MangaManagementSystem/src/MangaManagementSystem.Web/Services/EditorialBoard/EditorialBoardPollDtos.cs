@@ -1,4 +1,6 @@
-﻿namespace MangaManagementSystem.Web.Services.EditorialBoard;
+﻿using System;
+
+namespace MangaManagementSystem.Web.Services.EditorialBoard;
 
 public sealed record EditorialBoardPollDto(
     Guid PollId,
@@ -18,7 +20,12 @@ public sealed record EditorialBoardPollDto(
     int TotalVotes,
     string ComputedResultCode,
     string? CurrentUserChoiceCode,
-    string? CurrentUserVoteReason);
+    string? CurrentUserVoteReason,
+    string Author,
+    string Genre,
+    string TagsDisplay,
+    string Synopsis,
+    string? CoverImageUrl);
 
 public sealed record OpenPollRequest(
     string PollTypeCode,
@@ -62,6 +69,7 @@ public sealed record CancellableBoardSeriesDto(
     string Synopsis,
     string? PublicationFrequencyCode,
     string StatusCode,
+    string? CoverImageUrl,
     bool HasOpenCancelSerializationPoll);
 
 public sealed record OpenCancelSerializationPollRequest(

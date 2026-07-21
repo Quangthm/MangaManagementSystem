@@ -106,10 +106,52 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 ISNULL(vs.total_vote_count, 0) AS total_vote_count,
                 ISNULL(vs.computed_result_code, N'PENDING') AS computed_result_code,
                 my_vote.choice_code AS current_user_choice_code,
-                my_vote.vote_reason AS current_user_vote_reason
+                my_vote.vote_reason AS current_user_vote_reason,
+                COALESCE(author_info.author_name, N'Unknown Author') AS author_name,
+                ISNULL(genres.genre_names, N'Unknown Genre') AS genre_display,
+                ISNULL(tags.tag_names, N'') AS tag_display,
+                COALESCE(latest_proposal.synopsis_snapshot, N'No synopsis provided.') AS synopsis,
+                cover_file.cloudinary_secure_url AS cover_image_url
             FROM manga.SeriesBoardPoll p
             INNER JOIN manga.Series s
                 ON s.series_id = p.series_id
+            LEFT JOIN manga.FileResource cover_file
+                ON cover_file.file_resource_id = s.cover_file_id
+               AND cover_file.deleted_at_utc IS NULL
+            OUTER APPLY
+            (
+                SELECT TOP (1)
+                    sp.synopsis_snapshot,
+                    sp.submitted_by_user_id
+                FROM manga.SeriesProposal sp
+                WHERE sp.series_id = s.series_id
+                ORDER BY sp.proposal_version_no DESC, sp.submitted_at_utc DESC
+            ) latest_proposal
+            OUTER APPLY
+            (
+                SELECT
+                    u.display_name AS author_name
+                FROM auth.Users u
+                WHERE u.user_id = latest_proposal.submitted_by_user_id
+            ) author_info
+            OUTER APPLY
+            (
+                SELECT
+                    STRING_AGG(CONVERT(NVARCHAR(MAX), g.genre_name), N' / ') AS genre_names
+                FROM manga.SeriesGenre sg
+                INNER JOIN manga.Genre g
+                    ON g.genre_id = sg.genre_id
+                WHERE sg.series_id = s.series_id
+            ) genres
+            OUTER APPLY
+            (
+                SELECT
+                    STRING_AGG(CONVERT(NVARCHAR(MAX), t.tag_name), N', ') AS tag_names
+                FROM manga.SeriesTag st
+                INNER JOIN manga.Tag t
+                    ON t.tag_id = st.tag_id
+                WHERE st.series_id = s.series_id
+            ) tags
             LEFT JOIN manga.vw_SeriesBoardPollVoteSummary vs
                 ON vs.series_board_poll_id = p.series_board_poll_id
             LEFT JOIN manga.SeriesBoardVote my_vote
@@ -148,7 +190,12 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 TotalVotes: ToInt32(reader, 13),
                 ComputedResultCode: GetStringOrDefault(reader, 14, "PENDING"),
                 CurrentUserChoiceCode: reader.IsDBNull(15) ? null : reader.GetString(15),
-                CurrentUserVoteReason: reader.IsDBNull(16) ? null : reader.GetString(16)));
+                CurrentUserVoteReason: reader.IsDBNull(16) ? null : reader.GetString(16),
+                Author: GetStringOrDefault(reader, 17, "Unknown Author"),
+                Genre: GetStringOrDefault(reader, 18, "Unknown Genre"),
+                TagsDisplay: GetStringOrDefault(reader, 19, string.Empty),
+                Synopsis: GetStringOrDefault(reader, 20, "No synopsis provided."),
+                CoverImageUrl: reader.IsDBNull(21) ? null : reader.GetString(21)));
         }
 
         return rows;
@@ -236,7 +283,12 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 TotalVotes: ToInt32(reader, 13),
                 ComputedResultCode: GetStringOrDefault(reader, 14, "PENDING"),
                 CurrentUserChoiceCode: reader.IsDBNull(15) ? null : reader.GetString(15),
-                CurrentUserVoteReason: reader.IsDBNull(16) ? null : reader.GetString(16)));
+                CurrentUserVoteReason: reader.IsDBNull(16) ? null : reader.GetString(16),
+                Author: "Unknown Author",
+                Genre: "Unknown Genre",
+                TagsDisplay: string.Empty,
+                Synopsis: "No synopsis provided.",
+                CoverImageUrl: null));
         }
 
         return rows;
@@ -267,6 +319,7 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 COALESCE(latest_proposal.synopsis_snapshot, N'No synopsis provided.') AS synopsis,
                 s.publication_frequency_code,
                 s.status_code,
+                cover_file.cloudinary_secure_url AS cover_image_url,
                 CASE
                     WHEN EXISTS
                     (
@@ -280,6 +333,9 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                     ELSE CAST(0 AS bit)
                 END AS has_open_cancel_poll
             FROM manga.Series s
+            LEFT JOIN manga.FileResource cover_file
+                ON cover_file.file_resource_id = s.cover_file_id
+               AND cover_file.deleted_at_utc IS NULL
             OUTER APPLY
             (
                 SELECT TOP (1)
@@ -334,7 +390,8 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 Synopsis: GetStringOrDefault(reader, 6, "No synopsis provided."),
                 PublicationFrequencyCode: reader.IsDBNull(7) ? null : reader.GetString(7),
                 StatusCode: GetStringOrDefault(reader, 8, "UNKNOWN"),
-                HasOpenCancelSerializationPoll: ToBoolean(reader, 9)));
+                CoverImageUrl: reader.IsDBNull(9) ? null : reader.GetString(9),
+                HasOpenCancelSerializationPoll: ToBoolean(reader, 10)));
         }
 
         return rows;
@@ -1416,6 +1473,7 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 sp.synopsis_snapshot,
                 COALESCE(reviewed_by.display_name, N'Editorial Team') AS submitted_by_editor_name,
                 COALESCE(reviewed_by.display_name, N'Editorial Team') AS assigned_editor_name,
+                cover_file.cloudinary_secure_url AS cover_image_url,
                 proposal_file.original_file_name AS proposal_file_name,
                 proposal_file.cloudinary_secure_url AS proposal_file_url,
                 markup_file.original_file_name AS markup_file_name,
@@ -1451,6 +1509,9 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 ON submitted_by.user_id = sp.submitted_by_user_id
             LEFT JOIN auth.Users reviewed_by
                 ON reviewed_by.user_id = sp.reviewed_by_user_id
+            LEFT JOIN manga.FileResource cover_file
+                ON cover_file.file_resource_id = s.cover_file_id
+               AND cover_file.deleted_at_utc IS NULL
             LEFT JOIN manga.FileResource proposal_file
                 ON proposal_file.file_resource_id = sp.proposal_file_id
                AND proposal_file.deleted_at_utc IS NULL
@@ -1505,12 +1566,13 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
                 Synopsis: GetStringOrDefault(reader, 9, "No synopsis provided."),
                 SubmittedByEditorName: GetStringOrDefault(reader, 10, "Editorial Team"),
                 AssignedEditor: GetStringOrDefault(reader, 11, "Editorial Team"),
-                ProposalFileName: reader.IsDBNull(12) ? null : reader.GetString(12),
-                ProposalFileUrl: reader.IsDBNull(13) ? null : reader.GetString(13),
-                MarkupFileName: reader.IsDBNull(14) ? null : reader.GetString(14),
-                MarkupFileUrl: reader.IsDBNull(15) ? null : reader.GetString(15),
-                HasStartSerializationOpenPoll: ToBoolean(reader, 16),
-                HasCancelSerializationOpenPoll: ToBoolean(reader, 17)));
+                CoverImageUrl: reader.IsDBNull(12) ? null : reader.GetString(12),
+                ProposalFileName: reader.IsDBNull(13) ? null : reader.GetString(13),
+                ProposalFileUrl: reader.IsDBNull(14) ? null : reader.GetString(14),
+                MarkupFileName: reader.IsDBNull(15) ? null : reader.GetString(15),
+                MarkupFileUrl: reader.IsDBNull(16) ? null : reader.GetString(16),
+                HasStartSerializationOpenPoll: ToBoolean(reader, 17),
+                HasCancelSerializationOpenPoll: ToBoolean(reader, 18)));
         }
 
         return rows;
