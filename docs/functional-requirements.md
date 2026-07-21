@@ -10,6 +10,8 @@
 
 > **Latest ranking and notification alignment — 2026-07-21:** Existing approved notification requirements for proposal, board, task, chapter, publication scheduling, and account approval remain unchanged. The system shall use the weighted ranking formula `ranking_score = (v / (v + m)) * R + (m / (v + m)) * C`, where `C` is the rating-count-weighted scope average and `m` is the scope median rating count; `reading_count` is not a direct score boost. `RANKING_WARNING` is finalized as a hybrid completed-week rule using the documented `6.5` baseline together with bottom-25% relative rank, with persistence across at least 2 of the latest 3 consecutive completed weekly periods including the latest. Recipients are all distinct active contributors of the exact affected series.
 
+> **Latest chapter submission validation — 2026-07-21:** The system shall allow chapter submission only from `DRAFT` or `REVISION_REQUESTED` by an active Mangaka contributor and only when zero distinct associated page tasks are `ASSIGNED` or `UNDER_REVIEW`. `COMPLETED` and `CANCELLED` tasks shall not block. Blocking validation shall be backend-authoritative, deduplicate by task ID through the existing region/page relationship, produce a clean error with no chapter/audit/notification/task mutation, and be concurrency-safe against same-chapter task creation.
+
 ---
 
 ## 3. Functional Requirements
@@ -497,6 +499,13 @@
 | FR-CH-SUB-005 | The system shall allow chapter pages and page versions to become editable again when the chapter status becomes `REVISION_REQUESTED`. | BR-CH-SUB-004 |
 | FR-CH-SUB-006 | The system shall store chapter content as page-level assets through `ChapterPageVersion`. | BR-CH-SUB-005 |
 | FR-CH-SUB-007 | The system shall not require one chapter-level submission file or generated PDF for MVP. | BR-CH-SUB-006 |
+| FR-CH-SUB-008 | The system shall allow chapter submission for editorial review only when the actor is an `ACTIVE` Mangaka and active Mangaka contributor of the owning series, the chapter is `DRAFT` or `REVISION_REQUESTED`, and zero distinct active page tasks are associated with that chapter. | BR-CH-SUB-007 |
+| FR-CH-SUB-009 | The system shall treat `ASSIGNED` and `UNDER_REVIEW` page tasks as blocking chapter submission and shall treat `COMPLETED` and `CANCELLED` page tasks as non-blocking. | BR-CH-SUB-008 |
+| FR-CH-SUB-010 | The system shall derive task-to-chapter association through linked task regions, page regions, page versions, and logical chapter pages, and shall deduplicate by `ChapterPageTaskId` so one task linked to multiple regions is counted once. | BR-CH-SUB-009 |
+| FR-CH-SUB-011 | When at least one distinct active page task exists, the system shall reject chapter submission before changing chapter status, writing the successful submission audit, or creating `CHAPTER_REVIEW`, and shall not automatically mutate the blocking tasks. | BR-CH-SUB-010 |
+| FR-CH-SUB-012 | The system shall return a clean user-facing validation response explaining that active page tasks must be completed or cancelled before chapter submission can proceed. | BR-CH-SUB-011 |
+| FR-CH-SUB-013 | The system shall concurrency-coordinate task creation and chapter submission for the same chapter so an active task cannot be created concurrently with the chapter transition to `UNDER_REVIEW`. | BR-CH-SUB-012 |
+| FR-CH-SUB-014 | When chapter-submission validation succeeds, the system shall preserve the existing successful behavior by changing the chapter to `UNDER_REVIEW`, writing the normal chapter-submission audit, and creating `CHAPTER_REVIEW` notifications for the correct distinct active Tantou Editor contributors of the exact series. | BR-CH-SUB-013 |
 | FR-CH-REV-001 | The system shall record editorial reviews directly against `Chapter`. | BR-CH-REV-001 |
 | FR-CH-REV-002 | The system shall require each `ChapterEditorialReview` record to belong to exactly one chapter. | BR-CH-REV-002 |
 | FR-CH-REV-003 | The system shall allow a chapter to have multiple editorial review records over time across revision cycles. | BR-CH-REV-003 |

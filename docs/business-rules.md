@@ -10,6 +10,8 @@
 
 > **Latest ranking and notification alignment — 2026-07-21:** Existing approved notification behavior for proposal, board, task, chapter, publication scheduling, and account approval remains unchanged. Dynamic ranking now uses the weighted formula `ranking_score = (v / (v + m)) * R + (m / (v + m)) * C`; `reading_count` is no longer a direct score boost. The `RANKING_WARNING` contract is finalized: a weekly result fails only when both the weighted score is below the approved `6.5` baseline and the series is in the bottom 25% for that completed week; high risk requires failure in at least 2 of the latest 3 consecutive completed weekly periods including the latest. Recipients are all distinct active contributors of the exact affected series.
 
+> **Latest chapter submission validation — 2026-07-21:** Chapter submission is allowed only for an active Mangaka contributor, from `DRAFT` or `REVISION_REQUESTED`, when zero distinct associated page tasks are still `ASSIGNED` or `UNDER_REVIEW`. `COMPLETED` and `CANCELLED` tasks do not block. Association is derived through task-region/page-region/page-version/page/chapter links and deduplicated by `ChapterPageTaskId`. A blocked submission performs no chapter transition, successful-submission audit, `CHAPTER_REVIEW` notification, or automatic task mutation; same-chapter task creation and submission must be concurrency-safe.
+
 ---
 
 ## 1. AI-Assisted Translation
@@ -483,6 +485,13 @@
 | BR-CH-SUB-004 | When revision is requested, the chapter becomes editable again and new page versions may be uploaded. | Active draft |
 | BR-CH-SUB-005 | Chapter content is stored as page-level assets through `ChapterPageVersion`, not as one required chapter-level submission file. | Active draft |
 | BR-CH-SUB-006 | A chapter-level submission file or generated PDF is a future enhancement, not required for MVP. | Active draft |
+| BR-CH-SUB-007 | Only an `ACTIVE` Mangaka who is an active Mangaka contributor of the owning series may submit a chapter for editorial review, and the chapter must be in `DRAFT` or `REVISION_REQUESTED` with zero distinct active page tasks associated with that chapter. | Active draft |
+| BR-CH-SUB-008 | For chapter-submission validation, page tasks in `ASSIGNED` or `UNDER_REVIEW` are active and block submission; `COMPLETED` and `CANCELLED` tasks do not block submission. | Active draft |
+| BR-CH-SUB-009 | Chapter-submission task validation must derive chapter association through `ChapterPageTask` → linked `PageRegion` → `ChapterPageVersion` → `ChapterPage` → `Chapter`, and must deduplicate by `ChapterPageTaskId` so one task linked to multiple regions counts only once. | Active draft |
+| BR-CH-SUB-010 | If any distinct active page task exists for the chapter, the backend must reject submission before changing chapter status, writing the successful chapter-submission audit event, or creating `CHAPTER_REVIEW`; the rejection must not automatically complete, cancel, reassign, delete, or otherwise mutate those tasks. | Active draft |
+| BR-CH-SUB-011 | A blocked chapter submission must return a clean user-facing business validation message explaining that active page tasks must be completed or cancelled before the chapter can be submitted. | Active draft |
+| BR-CH-SUB-012 | Same-chapter task creation and chapter submission must be concurrency-coordinated so a new `ASSIGNED`/`UNDER_REVIEW` task cannot commit concurrently with the chapter transition to `UNDER_REVIEW`. | Active draft |
+| BR-CH-SUB-013 | After all chapter-submission validations pass, the existing successful flow remains unchanged: the chapter transitions to `UNDER_REVIEW`, the normal submission audit is written, and `CHAPTER_REVIEW` is created for the correct distinct active Tantou Editor contributors of the exact series. | Active draft |
 | BR-CH-REV-001 | Editorial reviews are recorded directly against `Chapter` in the MVP. | Active draft |
 | BR-CH-REV-002 | Each `ChapterEditorialReview` record must belong to exactly one chapter. | Active draft |
 | BR-CH-REV-003 | A chapter may have multiple editorial review records over time, especially across revision cycles. | Active draft |

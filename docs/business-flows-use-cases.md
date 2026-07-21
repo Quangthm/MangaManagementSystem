@@ -8,6 +8,8 @@
 
 > **Latest ranking and notification alignment — 2026-07-21:** Existing approved notification flows for proposal review/decision, board poll/decision, task assignment/review, chapter review/decision, publication scheduling, and account approval remain unchanged. Ranking now uses a MAL-style weighted rating: `ranking_score = (v / (v + m)) * R + (m / (v + m)) * C`, where `R` is the series average rating, `v` is its rating count, `C` is the rating-count-weighted average rating of the effective ranking scope, and `m` is the median rating count of that scope. `reading_count` remains popularity evidence and a tie-breaker, not a direct score boost. `RANKING_WARNING` is finalized as a hybrid weekly rule: a week fails only when both `ranking_score < 6.5` and the series is in the bottom 25% for that week; high risk requires failure in at least 2 of the latest 3 consecutive completed weekly periods including the latest. Recipients are all distinct active contributors of the exact affected series.
 
+> **Latest chapter submission validation — 2026-07-21:** A Mangaka may submit a chapter for editorial review only from `DRAFT` or `REVISION_REQUESTED` and only when zero distinct active page tasks are associated with that chapter. `ASSIGNED` and `UNDER_REVIEW` tasks block submission; `COMPLETED` and `CANCELLED` tasks do not. Task association is derived through the existing task-region/page-region/page-version/page/chapter relationship and deduplicated by `ChapterPageTaskId`. A blocked submission leaves the chapter unchanged, creates no successful submission audit or `CHAPTER_REVIEW` notification, does not mutate tasks, and returns a clean user-facing validation response. Task creation and chapter submission must be concurrency-coordinated for the same chapter so they cannot commit an invalid state.
+
 ---
 
 ## 1. Document Conventions
@@ -2079,6 +2081,68 @@ Active Mangaka contributor opens an eligible series
 
 ---
 
+## BF-CH-004 — Submit Chapter for Editorial Review With Active-Task Gate
+
+**Status:** Agreed  
+**Primary actor:** Mangaka contributor  
+**Goal:** Submit a stable chapter for Tantou Editor review only after all active Assistant page-task work for that chapter has been resolved.
+
+### Main Flow
+
+```text
+Active Mangaka contributor opens a chapter in DRAFT or REVISION_REQUESTED
+→ Mangaka chooses Submit for Editorial Review
+→ Backend enters the chapter-scoped concurrency-safe mutation path
+→ Backend loads the authoritative chapter state
+→ Backend validates the actor is an ACTIVE Mangaka and an active Mangaka contributor of the owning series
+→ Backend validates Chapter.status_code is DRAFT or REVISION_REQUESTED
+→ Backend resolves page tasks associated with this chapter through:
+   ChapterPageTask → PageRegions → ChapterPageVersion → ChapterPage → Chapter
+→ Backend deduplicates by ChapterPageTaskId
+→ Backend treats ASSIGNED and UNDER_REVIEW as active/blocking task statuses
+→ If one or more distinct active tasks exist:
+   → Backend rejects submission with a clean user-facing validation response
+   → Chapter.status_code remains unchanged
+   → No successful chapter-submission audit event is written
+   → No CHAPTER_REVIEW notification is created
+   → No task is automatically completed, cancelled, reassigned, or otherwise mutated
+→ If zero distinct active tasks exist:
+   → Backend continues the existing submission validations
+   → Backend validates the required active Tantou Editor review recipients/context
+   → Chapter.status_code changes to UNDER_REVIEW
+   → Backend writes the normal chapter-submission audit event
+   → Backend creates CHAPTER_REVIEW notifications for the correct distinct active Tantou Editor contributors of the exact series
+   → Backend commits the submission workflow
+→ UI refreshes the chapter state or shows the clean validation message returned by the backend
+```
+
+### Blocking Task Statuses
+
+| Task status | Blocks chapter submission? |
+|---|---|
+| `ASSIGNED` | Yes |
+| `UNDER_REVIEW` | Yes |
+| `COMPLETED` | No |
+| `CANCELLED` | No |
+
+### Important Notes
+
+- The backend is authoritative for this validation even if the UI already has task information loaded.
+- One task linked to multiple `PageRegion` rows still counts as one task because validation is distinct by `ChapterPageTaskId`.
+- `ChapterPageTask` has no direct `ChapterId` or `ChapterPageId`; chapter association is derived through linked regions and page versions.
+- This flow blocks submission only; it must not automatically resolve active tasks.
+- The Mangaka must complete, cancel, or otherwise resolve active tasks through the existing task-management workflow before retrying chapter submission.
+- Task creation and chapter submission for the same chapter must use a concurrency-safe coordination rule so a new `ASSIGNED` task cannot commit concurrently with the chapter entering `UNDER_REVIEW`.
+
+### System Should Try To
+
+- Prevent Tantou Editors from receiving chapters whose Assistant production work is still active.
+- Give the Mangaka a clear reason when submission is blocked.
+- Preserve task history instead of changing task state automatically.
+- Keep successful submission audit and notification behavior unchanged.
+
+---
+
 ## BF-PUB-001 — Plan or Reschedule Chapter Release Date
 
 **Status:** Agreed  
@@ -2477,8 +2541,10 @@ Assistant submits task work
 **Goal:** Notify the correct series-scoped editors when a chapter needs review.
 
 ```text
-Mangaka submits chapter from DRAFT or REVISION_REQUESTED
-→ Chapter transitions to UNDER_REVIEW
+Mangaka attempts to submit chapter from DRAFT or REVISION_REQUESTED
+→ Backend first validates that zero distinct ASSIGNED/UNDER_REVIEW page tasks are associated with that chapter
+→ If active tasks exist, submission is blocked and no CHAPTER_REVIEW notification is created
+→ If validation passes, Chapter transitions to UNDER_REVIEW
 → System creates CHAPTER_REVIEW
 → Recipients = distinct active Tantou Editor contributors of the exact series
 → Unrelated Tantou Editors do not receive it

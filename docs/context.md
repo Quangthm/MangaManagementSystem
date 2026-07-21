@@ -10,6 +10,8 @@
 
 > **Latest ranking and notification alignment — 2026-07-21:** Existing approved notification contracts for proposal, board, task, chapter, publication scheduling, and account approval remain unchanged. Ranking now uses the weighted formula `ranking_score = (v / (v + m)) * R + (m / (v + m)) * C`, with `C` as the rating-count-weighted scope average and `m` as the scope median rating count; `reading_count` is no longer a direct score boost. `RANKING_WARNING` is finalized as a hybrid weekly rule: a completed week fails only when both `ranking_score < 6.5` and bottom-25% rank are true, and high risk requires at least 2 failed weeks among the latest 3 consecutive completed weeks including the latest. All distinct active contributors of the exact affected series receive the warning.
 
+> **Latest chapter submission validation — 2026-07-21:** A chapter may enter `UNDER_REVIEW` only when an active Mangaka contributor submits it from `DRAFT` or `REVISION_REQUESTED` and zero distinct associated page tasks remain `ASSIGNED` or `UNDER_REVIEW`. `COMPLETED`/`CANCELLED` tasks are non-blocking. The backend derives association through linked task regions/page versions/pages, deduplicates by task ID, blocks cleanly without status/audit/notification/task mutation when active work remains, and coordinates same-chapter task creation/submission to prevent concurrent invalid states.
+
 ---
 
 ## 1. Project Summary
@@ -42,7 +44,7 @@ The MVP should stay focused and avoid unnecessary tables unless a table represen
 | Series proposals | Store formal submitted proposal versions in `SeriesProposal`; revisions create new proposal rows. |
 | Board workflow | Use `SeriesBoardPoll` and `SeriesBoardVote`; Editorial Board Chief opens, closes, and cancels board polls, specifies publication frequency when opening `START_SERIALIZATION` polls, may also vote, and board results are computed from votes. Do **not** use a separate `SeriesBoardDecision` table. |
 | Chapters and pages | Use `Chapter`, `ChapterPage`, and `ChapterPageVersion`. `ChapterPage` is a logical page slot that may be soft-deleted from active drafts; `ChapterPageVersion` stores explicitly saved uploaded/revised files and cannot be deleted by normal users in the current MVP. |
-| Chapter submission | Submit a chapter by changing `Chapter.status_code` to `UNDER_REVIEW`; do **not** create a `ChapterSubmission` table. |
+| Chapter submission | Submit a chapter by changing `Chapter.status_code` to `UNDER_REVIEW`; do **not** create a `ChapterSubmission` table. Submission is allowed only from `DRAFT` or `REVISION_REQUESTED` by an active Mangaka contributor and only when zero distinct associated page tasks are still `ASSIGNED` or `UNDER_REVIEW`. `COMPLETED` and `CANCELLED` tasks do not block. |
 | Page regions | Store accepted AI/manual regions directly as `PageRegion` records linked to `ChapterPageVersion`. |
 | Page annotations | Store annotation headers in `ChapterPageAnnotation` and link them to one or more `PageRegion` records through `ChapterPageAnnotationRegion`; do not store direct annotation coordinates. |
 | Page tasks | Use `ChapterPageTask` as the task header and `ChapterPageTaskRegion` to link one or more target regions; the task's page context is derived from linked `PageRegion` records, not from a direct `chapter_page_id` column on `ChapterPageTask`. |
@@ -422,6 +424,15 @@ The project uses **permission-based actor grouping** for shared features and rol
 ### Submission by Status
 
 - MVP chapter submission is represented by changing `Chapter.status_code` to `UNDER_REVIEW`.
+- Only an `ACTIVE` Mangaka who is an active Mangaka contributor of the owning series may submit the chapter.
+- The chapter must be in `DRAFT` or `REVISION_REQUESTED` when submission is attempted.
+- Submission requires zero distinct active page tasks associated with the target chapter.
+- For this validation, `ASSIGNED` and `UNDER_REVIEW` are active/blocking task statuses; `COMPLETED` and `CANCELLED` do not block.
+- Task-to-chapter association is derived through `ChapterPageTask` → linked `PageRegion` → `ChapterPageVersion` → `ChapterPage` → `Chapter`; there is no direct task `chapter_id`/`chapter_page_id` assumption.
+- Validation deduplicates by `ChapterPageTaskId`, so a task linked to multiple page regions still counts once.
+- If an active task exists, the backend rejects the submission with a clean business message; chapter status stays unchanged, no successful submission audit is written, no `CHAPTER_REVIEW` notification is created, and no task is automatically mutated.
+- Same-chapter task creation and chapter submission are concurrency-coordinated so a new active task cannot commit concurrently with the chapter entering `UNDER_REVIEW`.
+- After validation succeeds, the normal successful submission path continues: chapter becomes `UNDER_REVIEW`, the submission audit is written, and the correct active Tantou Editor contributors receive `CHAPTER_REVIEW`.
 - A submitted chapter consists of current active page versions of non-deleted chapter pages.
 - Page creation, deletion, page-version upload, assistant task output submission that creates or changes page content, and other saved page/content mutation workflows are blocked while the chapter is `UNDER_REVIEW`, `APPROVED`, `SCHEDULED`, `ON_HOLD`, `RELEASED`, or `CANCELLED`.
 - When revision is requested, the chapter becomes editable again.

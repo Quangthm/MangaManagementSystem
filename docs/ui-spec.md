@@ -7,6 +7,8 @@
 **Latest lifecycle update:** `HIATUS` is the paused-series status. Active Mangaka or Tantou Editor contributors may pause/resume serialized series. Only active Mangaka contributors may mark serialized/hiatus series as `COMPLETED`. `HIATUS` blocks release only; `COMPLETED` makes the series read-only/immutable for normal business actions, cancels unreleased chapters and distinct active `ASSIGNED`/`UNDER_REVIEW` tasks under those chapters after warning and confirmation, and remains ranking-visible.  
 
 **Latest ranking/notification update — 2026-07-21:** Existing Bell behavior for proposal/chapter/task notifications, board decisions, publication scheduling, and account approval remains unchanged. Ranking uses the weighted score `(v / (v + m)) * R + (m / (v + m)) * C`; `reading_count` remains popularity evidence rather than a direct score boost. `RANKING_WARNING` uses the finalized hybrid weekly rule: both `ranking_score < 6.5` and bottom-25% rank must fail in the same completed week, with failure in at least 2 of the latest 3 consecutive completed weeks including the latest. All distinct active contributors of the exact affected series receive the warning.  
+
+**Latest chapter submission validation — 2026-07-21:** The chapter workspace must surface the backend-authoritative submission gate: a Mangaka may submit only from `DRAFT` or `REVISION_REQUESTED` when zero distinct associated page tasks remain `ASSIGNED` or `UNDER_REVIEW`. If blocked, keep the chapter unchanged and show the clean backend message directing the Mangaka to complete or cancel active tasks; do not auto-cancel tasks or show a successful submission state.
 **Purpose:** Define the UI behavior for Mangaka-owned series drafting, slug usage, stable series URLs, and the centralized chapter-level workspace.
 
 ---
@@ -28,6 +30,7 @@
 | Workspace level | The centralized authorized workspace is chapter-level, not page-level. |
 | Workspace AI tools | AI segmentation and AI/OCR translation tools are available to all Authorized Page Workspace Users who have access to the relevant workspace. |
 | Workspace permissions | AI tools are shared; business actions remain role-specific and permission-gated. |
+| Chapter submission gate | Mangaka chapter submission is backend-authoritative and allowed only from `DRAFT`/`REVISION_REQUESTED` when zero distinct associated tasks are `ASSIGNED` or `UNDER_REVIEW`; blocked attempts must show a clean error and must not change chapter/task state. |
 | Publication schedule page | `/publication/schedule` is a shared weekly calendar. Read-only roles load only scheduled/released schedule data; scheduling actors may open a role-gated action drawer. |
 | Publication action drawer | Mangaka and Tantou Editor scheduling actions use a restricted actionable chapter feed, full-card drag/drop, and confirmation dialogs. Assistant, Board, Admin, and future public viewers must not load unscheduled/actionable drawer data. |
 
@@ -1006,6 +1009,32 @@ Display selected content.
 | Editorial Board Chief | No workspace access by default unless future permission grants it. |
 | Admin | No manga production actions. |
 
+### Chapter submission validation UI behavior
+
+The **Submit Chapter for Review** action is available only within the existing Mangaka chapter workflow, but the backend remains authoritative for final eligibility.
+
+| Condition | UI / system behavior |
+|---|---|
+| Chapter is `DRAFT` or `REVISION_REQUESTED` and zero distinct associated tasks are `ASSIGNED`/`UNDER_REVIEW` | Allow the existing submit action. On success, refresh the chapter as `UNDER_REVIEW`. |
+| One or more associated tasks are `ASSIGNED` or `UNDER_REVIEW` | Backend blocks submission. Keep the current chapter status and show the clean validation response. |
+| Associated tasks are only `COMPLETED` and/or `CANCELLED` | These tasks do not block submission; continue with the normal remaining validations. |
+| UI already has active-task information loaded | The UI may disable or warn proactively for convenience, but it must still call/rely on backend validation as the authoritative rule. |
+| Backend rejects submission | Do not show success state, do not navigate as though submission succeeded, and do not mutate task state locally. |
+
+Recommended blocked-submission message:
+
+```text
+This chapter cannot be submitted for editorial review while active page tasks are still assigned or under review. Complete or cancel those tasks before submitting the chapter.
+```
+
+Additional UI rules:
+
+- Do not add previous/parallel client-side logic that attempts to derive the authoritative chapter/task relationship independently from the backend.
+- Do not automatically complete, cancel, reassign, or delete tasks when submission is blocked.
+- A blocked attempt must not display a successful `UNDER_REVIEW` state or imply that Tantou Editors were notified.
+- `CHAPTER_REVIEW` is created only after the backend successfully transitions the chapter to `UNDER_REVIEW`.
+- If the submit API returns the approved user-safe business validation message, surface that message cleanly to the Mangaka.
+
 ### Page, version, and region retention UI behavior
 
 | UI action | MVP behavior |
@@ -1118,7 +1147,7 @@ For MVP, symbolic `returnContext` is safer and easier to avoid open-redirect mis
 | Create annotation | Yes, as production-tracking annotation when active contributor | No | Yes, as editorial-review annotation when active contributor | No | No | No |
 | Update annotation text | Mangaka-created unresolved annotations only | No | Mangaka-created or Tantou Editor-created unresolved annotations | No | No | No |
 | Resolve annotation | Mangaka-created annotations only | No | Mangaka-created or Tantou Editor-created annotations | No | No | No |
-| Submit chapter for review | Yes | No | No | No | No | No |
+| Submit chapter for review | Yes, if active Mangaka contributor, chapter is `DRAFT`/`REVISION_REQUESTED`, and zero distinct associated tasks are `ASSIGNED`/`UNDER_REVIEW` | No | No | No | No | No |
 | Create replacement draft for cancelled chapter | Yes, if contributor | No | No | No | No | No |
 | Final chapter review decision | No | No | Yes | No | No | No |
 
@@ -1148,6 +1177,9 @@ For MVP, symbolic `returnContext` is safer and easier to avoid open-redirect mis
 - Workspace has right tools/actions panel.
 - AI tools are available to all Authorized Page Workspace Users with access.
 - Role-specific actions remain permission-gated.
+- Mangaka chapter submission is blocked when any distinct associated page task is `ASSIGNED` or `UNDER_REVIEW`; `COMPLETED` and `CANCELLED` tasks do not block.
+- A blocked chapter submission leaves chapter/task state unchanged and shows a clean user-facing validation message instead of a success state.
+- Successful chapter submission still transitions the chapter to `UNDER_REVIEW` and triggers the existing successful audit/notification behavior.
 - Mangaka can create production-tracking annotations and update/resolve Mangaka-created annotations.
 - Mangaka cannot update or resolve Tantou Editor-created annotations.
 - Tantou Editors can create editorial-review annotations and update/resolve both Mangaka-created and Tantou Editor-created annotations when they are active contributors for the series.
