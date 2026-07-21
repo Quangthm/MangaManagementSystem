@@ -84,8 +84,14 @@ namespace MangaManagementSystem.Infrastructure
             // Assistant task submission
             services.AddScoped<MangaManagementSystem.Application.Interfaces.IAssistantTaskSubmissionService, Services.AssistantTaskSubmissionService>();
 
-            // AI Service
-            services.AddHttpClient<IAiService, AiService>();
+            // AI Service. The default HttpClient timeout is 100s, which is far too long to hold a
+            // Blazor Server circuit (and the page image it buffered) waiting on a stuck service. 60s is
+            // still generous for a real YOLO + manga-OCR pass, including the slow first call that loads
+            // the ~400MB OCR model.
+            services.AddHttpClient<IAiService, AiService>(client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(60);
+            });
             services.AddScoped<IImageMetadataProvider, CloudinaryImageMetadataProvider>();
 
             services.AddScoped<IEditorialBoardRepository, EditorialBoardRepository>();

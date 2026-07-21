@@ -1,6 +1,27 @@
 # Handoff — Mangaka Workspace: manual-save + full API migration (2026-07-01)
 
-> ## ▶️ BẮT ĐẦU SESSION SAU TỪ ĐÂY (2026-07-13) — editor workspace round 2/3
+> ## ▶️ BẮT ĐẦU SESSION SAU TỪ ĐÂY (2026-07-19) — upload limits + AI hardening + clean_bubble v3
+>
+> **Đọc:** [`2026-07-19-upload-limits-ai-hardening-bubble-clean.md`](2026-07-19-upload-limits-ai-hardening-bubble-clean.md) — session note đầy đủ.
+>
+> **Branch:** `feature/workspace-v3` (PR #78). Đã merge `origin/main` (task eligibility) và **đã push**.
+>
+> **Tóm tắt đợt này (đã smoke test, user xác nhận OK):**
+> 1. **Giới hạn upload** (`CreatorWorkspace.razor.cs`, `.Versions.cs`): 10MB/file, 30 trang/lần, whitelist png/jpeg/webp, validate TRƯỚC khi mở stream nên file lỗi bị bỏ qua thay vì hủy cả batch. Lý do: Blazor Server buffer upload **trên server** → 100×20MB là rủi ro OOM circuit.
+> 2. **AI timeout + lỗi rõ nghĩa** (`DependencyInjection.cs`, `AiService.cs`): timeout 60s, 4 loại lỗi riêng thay cho `return null` → hết `"AI returned null"`. Không retry khi timeout.
+> 3. **`clean_bubble` v2 → v3** (`MangaAI_Service/main.py`): đổi từ dò nét CHỮ sang xác định LÒNG bong bóng rồi tô sạch. Tô lố ra artwork **11 → 4** (bộ 55); ca chữ to không tô được **4 → 1** (bộ 262). Bỏ hẳn `fill(255)` fallback — chế độ hỏng nặng nhất của v2.
+>
+> **⚠️ ĐỌC DOCSTRING `clean_bubble` TRƯỚC KHI SỬA NÓ.** Đã ghi 4 hướng ĐÃ THỬ VÀ THẤT BẠI kèm số đo (MORPH_CLOSE, guard coverage 0.92, convex hull, phân cấp contour). Đừng thử lại nếu chưa đo damage artwork trên trang thật.
+>
+> **Known deviation (hoãn CÓ CHỦ ĐÍCH, không phải quên):**
+> - **AI base URL hardcode** trong `AiService.cs`, còn `Web/appsettings.json:37` có key `AiService:BaseUrl` **không bao giờ được đọc** → bẫy config. (~20 phút)
+> - **`CreatorWorkspace.razor:27` `@inject IAiService`** — Web gọi thẳng Application/Infrastructure, **không có AI controller**. Sai CLAUDE.md §3.1/§4.6. Fix đúng ~3–4h → **PR riêng**.
+>
+> **Hạn chế đã chốt:** bong bóng kề nhau vẫn sót ~1 chữ ở góc bị viền bong bóng bên cạnh cắt (~1.4%). Mọi cách xóa triệt để đều đánh đổi bằng phá artwork → chọn giữ, mangaka tô tay bằng brush.
+>
+> ---
+
+> ## (2026-07-13) — editor workspace round 2/3
 >
 > **Branch:** `feature/workspace-v3`. **4 commit local CHƯA PUSH** (ahead 4 of origin): `dc77446` (gate Notes/Versions cho editor + fix pin split-view) · `e2992cd` (handoff) · `0b25133` (editor duyệt chapter #4b) · `28ee732` (Cancel cần markup + ẩn DRAFT với editor). PR đang mở = **#78** (`feature/workspace-v3 → main`); push branch là PR tự cập nhật.
 >
