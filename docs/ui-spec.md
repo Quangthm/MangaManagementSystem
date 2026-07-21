@@ -2,11 +2,11 @@
 
 **Project:** Manga Creation Workflow and Publishing Management System  
 **Target UI:** Blazor Server / MudBlazor MVP  
-**Last updated:** 2026-07-20
+**Last updated:** 2026-07-21
 
 **Latest lifecycle update:** `HIATUS` is the paused-series status. Active Mangaka or Tantou Editor contributors may pause/resume serialized series. Only active Mangaka contributors may mark serialized/hiatus series as `COMPLETED`. `HIATUS` blocks release only; `COMPLETED` makes the series read-only/immutable for normal business actions, cancels unreleased chapters and distinct active `ASSIGNED`/`UNDER_REVIEW` tasks under those chapters after warning and confirmation, and remains ranking-visible.  
 
-**Latest notification update:** Approved Bell behavior now includes series-scoped proposal/chapter/task notifications, board-decision notifications for both closure and manual cancellation, publication-schedule notifications that exclude the initiating actor, and `ACCOUNT_APPROVED` paired with a separate approval email. `RANKING_WARNING` remains pending final definition.  
+**Latest ranking/notification update — 2026-07-21:** Existing Bell behavior for proposal/chapter/task notifications, board decisions, publication scheduling, and account approval remains unchanged. Ranking uses the weighted score `(v / (v + m)) * R + (m / (v + m)) * C`; `reading_count` remains popularity evidence rather than a direct score boost. `RANKING_WARNING` uses the finalized hybrid weekly rule: both `ranking_score < 6.5` and bottom-25% rank must fail in the same completed week, with failure in at least 2 of the latest 3 consecutive completed weeks including the latest. All distinct active contributors of the exact affected series receive the warning.  
 **Purpose:** Define the UI behavior for Mangaka-owned series drafting, slug usage, stable series URLs, and the centralized chapter-level workspace.
 
 ---
@@ -20,6 +20,7 @@
 | Separate business identifier | No separate human-readable business identifier is used; `series_id` is the backend identity and `slug` is the URL identity. |
 | Slug behavior | Backend generates slug from title during `PROPOSAL_DRAFT`; slug may auto-update when title changes during draft; slug locks after the series leaves `PROPOSAL_DRAFT`. |
 | Stable series URL | `/series/{slug}` becomes the main stable series URL, especially after the series becomes `SERIALIZED`. |
+| Series slug presentation | `/series/{slug}` uses an independent responsive cover column beside a separate metadata card; Genres and Tags use a 6-item preview with `Show all (N)` / `Show less` instead of arrow/page-number pagination. |
 | Series profile editing | Normal Mangaka edits are allowed only while `status_code = PROPOSAL_DRAFT`. |
 | Series hiatus | Active Mangaka or Tantou Editor contributors may set `SERIALIZED` series to `HIATUS` and resume `HIATUS` series to `SERIALIZED`; hiatus blocks release only. |
 | Series completion | Only active Mangaka contributors may mark a `SERIALIZED` or `HIATUS` series as `COMPLETED`; completion requires warning/confirmation, shows affected unreleased chapters and distinct active-task impact, cancels both within the completion cascade, and makes the series read-only. |
@@ -258,6 +259,59 @@ A unified series page that can later become the public reader-facing series URL.
 | Synopsis panel | Current series synopsis. |
 | Chapter list | Chapters under the series with status and planned/released dates. |
 | Role action panel | Buttons shown based on current user role and permission. |
+
+### Series header layout
+
+The `/series/{slug}` page uses an independent cover-and-metadata layout.
+
+```text
+Series header area
+├── Independent cover column
+│   └── Series cover or portrait placeholder
+│
+└── Series metadata card
+    ├── Title
+    ├── Status / language / publication frequency
+    ├── Genres
+    ├── Tags
+    ├── Active Mangaka display
+    ├── Synopsis
+    ├── Workspace action
+    └── Role-gated lifecycle actions
+```
+
+#### Cover behavior
+
+- The cover is visually separate from the white metadata card.
+- On wider screens, the cover appears to the left of the metadata card.
+- The cover column grows responsively when horizontal space allows, while preserving sufficient width for metadata.
+- The real cover image preserves the full stored artwork using responsive width and natural image height; it must not stretch to match the metadata-card height.
+- Cover height is independent from Genre/Tag expansion, synopsis length, lifecycle actions, and other metadata-card content.
+- Real cover images must not use dynamic full-card-height cropping.
+- When no cover exists, show a stable portrait placeholder with the existing neutral background and centered book icon.
+- On narrow screens, the cover stacks above the metadata card.
+- The cover and metadata card remain siblings in the page layout; the cover must not be placed back inside the metadata card.
+
+### Genre and Tag display behavior
+
+Genres and Tags are displayed as compact pill/chip metadata inside the series metadata card.
+
+| State | Behavior |
+|---|---|
+| No items | Do not render the corresponding Genres or Tags section. |
+| 1–6 items | Show all available chips and no expand control. |
+| More than 6 items, collapsed | Show the first 6 chips and a `Show all (N)` action. |
+| Expanded | Show all chips and replace the expand action with `Show less`. |
+| Show less | Return the corresponding section to its 6-item preview state. |
+
+Additional rules:
+
+- Genres and Tags have independent expand/collapse state.
+- Expanding Genres must not change the Tags state.
+- Expanding Tags must not change the Genres state.
+- Do not show previous/next arrows, page numbers, or pagination indicators for Genres or Tags.
+- Genre and Tag chips should preserve the established pill styling and wrap normally within the metadata card.
+- Genre/Tag expansion is client-side presentation behavior only and must not trigger additional API requests.
 
 ### Role-based actions
 
@@ -799,9 +853,18 @@ Show contributors on `/series/{slug}` without using a slide-out drawer.
 Use a page-level two-column grid when contributors exist:
 
 ```text
-Left: series detail card + chapter list
-Right: contributor sidebar card
+Left:
+  series header area
+  ├── independent cover
+  └── series metadata card
+  +
+  chapter list
+
+Right:
+  contributor sidebar card
 ```
+
+The cover is part of the left-side series header area but remains visually separate from the metadata card.
 
 ### Behavior
 
@@ -1078,6 +1141,8 @@ For MVP, symbolic `returnContext` is safer and easier to avoid open-redirect mis
 - Backend generates slug on create and on title change during draft.
 - Slug is locked after the series leaves `PROPOSAL_DRAFT`.
 - `/series/{slug}` works as main series URL after serialization.
+- `/series/{slug}` displays the series cover independently from the metadata card; metadata height must not stretch or crop the cover.
+- Genres and Tags on `/series/{slug}` use a 6-item preview with `Show all (N)` / `Show less`, with independent expand state and no arrow/page-number pagination.
 - Chapter workspace route uses internal chapter/page/version IDs.
 - Workspace has left navigation for chapters/pages/versions.
 - Workspace has right tools/actions panel.
@@ -1306,7 +1371,7 @@ The UI should ask for confirmation before:
 | `CHAPTER_DECISION` | Active Mangaka contributors of the affected series receive Approved / Revision Requested / Cancelled decision content. Bell opens `/mangaka/chapters`. |
 | `PUBLICATION_SCHEDULE` | All other active contributors of the exact series, excluding the initiating actor, are notified when a chapter enters `SCHEDULED` or an already scheduled chapter moves to a different normalized planned date. The Bell should open the relevant chapter/publication-schedule context using the existing scheduling navigation pattern; no new parallel scheduling page is required. |
 | `ACCOUNT_APPROVED` | The approved user receives the in-app approval notification; the approval workflow also sends a separate email to the user's registered email address. |
-| `RANKING_WARNING` | Automatic Bell behavior remains pending until trigger/threshold/cadence/recipient rules are finalized. |
+| `RANKING_WARNING` | All distinct active contributors of the exact affected `SERIALIZED` or `HIATUS` series receive the warning when the hybrid ranking-risk rule is met. Bell opens the existing ranking/series context. The warning should identify the latest evaluated week, current weighted score, rank/total, and that the series failed both the `< 6.5` score baseline and bottom-25% check; it is advisory and must not imply automatic cancellation. |
 | `SYSTEM_MESSAGE` | Generic/reserved only; do not use it when a more specific approved notification type applies. |
 
 ### Publication schedule notification exclusions
@@ -1338,7 +1403,32 @@ Display dynamic series rankings from `manga.vw_SeriesRanking` for a selected `Pu
 | Average rating | Score from period vote input. |
 | Rating count | Number of rating/vote submissions in the period. |
 | Reading count | Number of readers/views/follows in the period. |
-| Ranking score | Computed score from the ranking formula. |
+| Ranking score | Weighted score computed from the ranking formula. |
+
+### Ranking score behavior
+
+```text
+ranking_score =
+    (v / (v + m)) * R
+    +
+    (m / (v + m)) * C
+```
+
+- `R` = series average rating for the effective ranking scope.
+- `v` = series rating count for the effective ranking scope.
+- `C` = rating-count-weighted average rating across eligible ranked series in that same scope.
+- `m` = median rating count across eligible ranked series in that same scope.
+- `reading_count` is displayed as popularity/readership evidence and is not directly added to `ranking_score`.
+- The UI does not need to expose `C` or `m`; they are calculation inputs.
+- For monthly/yearly/all-time derived views, aggregate weekly source evidence by series first, then recalculate the broader scope's own `R`, `v`, `C`, `m`, and weighted score. Do not average weekly ranking scores.
+
+### Ranking warning UI behavior
+
+- A completed weekly result fails the warning checks only when **both** `ranking_score < 6.5` and bottom-25% rank are true.
+- High ranking risk requires failed checks in at least 2 of the latest 3 consecutive completed weekly periods, including the latest.
+- The series must have ranking input in all 3 evaluated weeks and each week must contain at least 4 ranked series.
+- Current/incomplete weeks and monthly/yearly/all-time reporting views do not independently generate warnings.
+- The Bell warning is sent to all distinct active contributors of the exact affected series and is advisory only.
 
 ### Filtering behavior
 
@@ -1349,7 +1439,7 @@ Display dynamic series rankings from `manga.vw_SeriesRanking` for a selected `Pu
 
 ### Vote input management behavior
 
-- Editorial Board Members and Editorial Board Chiefs may enter or update `SeriesVoteInput` when allowed.
+- Editorial Board Members and Editorial Board Chiefs may enter or update `SeriesVoteInput` for `WEEKLY` publication periods when allowed; monthly/yearly/all-time views are derived from weekly source evidence and do not accept separate manual aggregate input.
 - Input fields are `rating_count`, `average_rating`, `reading_count`, and optional `data_source_note`.
 - Validation should reject non-positive counts, `average_rating` outside 0 to 10, and `rating_count > reading_count`.
 - The vote input screen should explain that weekly input is period-only and must not include earlier weeks.

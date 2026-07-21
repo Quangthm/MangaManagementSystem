@@ -8,7 +8,7 @@
 
 > **Latest series lifecycle alignment — 2026-07-19:** `HIATUS` is the schema status for a paused series. Active Mangaka or Tantou Editor contributors may set a `SERIALIZED` series to `HIATUS` and resume it back to `SERIALIZED`; `HIATUS` blocks chapter release only. Only active Mangaka contributors may mark a `SERIALIZED` or `HIATUS` series as `COMPLETED`; completed series are immutable for normal business changes, cancel unreleased chapters and their distinct active `ASSIGNED`/`UNDER_REVIEW` page tasks after warning and confirmation, preserve released chapters and terminal task history, and remain visible in rankings when ranking input exists.
 
-> **Latest notification alignment — 2026-07-20:** The project context now records the approved notification contracts for proposal, board, task, chapter, publication scheduling, and account approval. Manual board-poll cancellation produces `BOARD_DECISION`; publication scheduling notifies other active series contributors except the actor; account approval produces both `ACCOUNT_APPROVED` and an approval email. `RANKING_WARNING` remains pending final definition.
+> **Latest ranking and notification alignment — 2026-07-21:** Existing approved notification contracts for proposal, board, task, chapter, publication scheduling, and account approval remain unchanged. Ranking now uses the weighted formula `ranking_score = (v / (v + m)) * R + (m / (v + m)) * C`, with `C` as the rating-count-weighted scope average and `m` as the scope median rating count; `reading_count` is no longer a direct score boost. `RANKING_WARNING` is finalized as a hybrid weekly rule: a completed week fails only when both `ranking_score < 6.5` and bottom-25% rank are true, and high risk requires at least 2 failed weeks among the latest 3 consecutive completed weeks including the latest. All distinct active contributors of the exact affected series receive the warning.
 
 ---
 
@@ -49,7 +49,7 @@ The MVP should stay focused and avoid unnecessary tables unless a table represen
 | Editorial review | Store final chapter-level review decisions in `ChapterEditorialReview`. Page annotations support the review but do not replace chapter-level decisions. |
 | Publication planning | Use chapter-level planned release dates and release timestamps. Mangaka may provide/update preferred publication frequency only while the series is in `PROPOSAL_DRAFT`; Editorial Board Chief specifies the official frequency in a `START_SERIALIZATION` poll, and an approved poll applies that frequency to `Series.publication_frequency_code`. After the series leaves `PROPOSAL_DRAFT`, Mangaka cannot directly change the official frequency. Editorial Board Chief may directly change the official frequency with a required audit reason. |
 | Ranking | Use `PublicationPeriod`, `SeriesVoteInput`, and a dynamic ranking view (`manga.vw_SeriesRanking`) based on simulated/manual series-level vote input entered by Editorial Board Members. No public reader module and no `SeriesRankingSnapshot` finalization table in MVP. |
-| Notifications | Use `manga.Notification` for in-app awareness records; notifications are not the audit trail. Approved account activation also sends a separate approval email in addition to `ACCOUNT_APPROVED`. `RANKING_WARNING` remains pending final trigger/threshold/cadence definition. |
+| Notifications | Use `manga.Notification` for in-app awareness records; notifications are not the audit trail. Approved account activation also sends a separate approval email in addition to `ACCOUNT_APPROVED`. `RANKING_WARNING` uses the finalized hybrid weekly rule: weighted score below `6.5` **and** bottom-25% rank in the same completed week, persisted in at least 2 of the latest 3 consecutive completed weeks including the latest; recipients are all distinct active contributors of the exact affected series. |
 | Auditability | Use current status on main records plus domain records and audit logs. Avoid separate status-history tables. |
 | AI support | AI suggestions are advisory and human-reviewed. Accepted region output is saved as `PageRegion`; final translated pages are saved as `ChapterPageVersion`. |
 
@@ -506,7 +506,8 @@ The project uses **permission-based actor grouping** for shared features and rol
 ### Series Vote Input
 
 - There is no public reader voting module in MVP.
-- Editorial Board Members may enter simulated or aggregated series-level vote input for demo/reporting purposes.
+- Editorial Board Members or Editorial Board Chiefs may enter simulated or aggregated series-level vote input for demo/reporting purposes.
+- Manual MVP `SeriesVoteInput` is entered for `WEEKLY` publication periods only; monthly/yearly/all-time results are derived from weekly source evidence rather than separately persisted manual aggregate input rows.
 - Vote input is tied to one `PublicationPeriod` and one `Series`.
 - One series may have only one `SeriesVoteInput` row per publication period.
 - `rating_count` is the number of rating/vote submissions in that period.
@@ -520,8 +521,12 @@ The project uses **permission-based actor grouping** for shared features and rol
 
 - Ranking is calculated dynamically from `SeriesVoteInput`, `PublicationPeriod`, and `Series`.
 - The MVP does not use `SeriesRankingSnapshot` because there is no ranking finalization workflow.
-- `manga.vw_SeriesRanking` computes `ranking_score = average_rating * LOG10(1 + rating_count) + reading_count * 0.001`.
-- Rank position is computed with `DENSE_RANK()` partitioned by `publication_period_id`.
+- `manga.vw_SeriesRanking` uses `ranking_score = (v / (v + m)) * R + (m / (v + m)) * C`.
+- `R` is the series `average_rating`; `v` is the series `rating_count`; `C` is the rating-count-weighted average rating of all eligible ranked series in the same effective ranking scope; `m` is the median `rating_count` of those eligible ranked series.
+- `reading_count` remains popularity/readership evidence and is not directly added to `ranking_score`.
+- For direct weekly ranking, `C` and `m` are recalculated within the selected weekly period.
+- For broader derived scopes such as monthly/yearly/all-time, weekly source evidence is aggregated by series first and the broader scope then recalculates its own `R`, `v`, `C`, and `m`; weekly ranking scores or weekly `C`/`m` values must not be averaged/reused.
+- Rank position is computed with `DENSE_RANK()` partitioned by the effective ranking period/scope, ordered by ranking score and the approved deterministic tie-breakers.
 - `ranking_score` and `rank_position` are derived values and should not be stored as duplicated `Series` attributes unless later profiling proves caching is necessary.
 - Ranking results do not automatically cancel a series.
 - Ranking evidence may support board or editorial review, but cancellation still requires the applicable workflow decision.
@@ -543,7 +548,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 - `CHAPTER_DECISION`: created for Approved, Revision Requested, or Cancelled chapter editorial decisions; notify distinct active Mangaka contributors of the affected series.
 - `PUBLICATION_SCHEDULE`: created only when a chapter enters `SCHEDULED`, or when an already `SCHEDULED` chapter moves to a different normalized planned release date. Do not create it for planned-date-only changes while `DRAFT`, `REVISION_REQUESTED`, or `UNDER_REVIEW`, or for a same-date scheduled save. Notify all other distinct active contributors of the exact series and exclude the initiating actor.
 - `ACCOUNT_APPROVED`: when an Admin approves/activates a pending account, create the in-app notification for that user and also send an approval email to the approved user's email address.
-- `RANKING_WARNING`: the exact trigger/threshold, cadence, deduplication behavior, related entity, and recipient contract are still being finalized; do not infer an automatic warning rule yet.
+- `RANKING_WARNING`: evaluate completed weekly periods only. A week fails only when both `ranking_score < 6.5` and bottom-25% rank are true. High risk requires failure in at least 2 of the latest 3 consecutive completed weekly periods, including the latest; the series must have ranking input in all 3 periods and each period must contain at least 4 ranked series. Recipients are all distinct active contributors of the exact affected `SERIALIZED` or `HIATUS` series. Re-evaluation of the same series/latest week must be idempotent, monthly/yearly/all-time views do not create separate warnings, and the warning is advisory only.
 - `SYSTEM_MESSAGE`: remains a generic/reserved type and should not replace a more specific notification type when one exists.
 - Important workflow actions that create notifications should still be audit-logged when auditability is required.
 
