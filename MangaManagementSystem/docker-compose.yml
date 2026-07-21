@@ -72,6 +72,9 @@ services:
       # Adjust this key to match your actual appsettings key.
       # Some projects use ApiSettings__BaseUrl, ApiBaseUrl, BackendApi, etc.
       ApiSettings__BaseUrl: "http://manga-api:8080"
+      
+      Authentication__Google__ClientId: "${GOOGLE_CLIENT_ID}"
+      Authentication__Google__ClientSecret: "${GOOGLE_CLIENT_SECRET}"
 
       Recaptcha__SiteKey: "${RECAPTCHA_SITE_KEY}"
       Recaptcha__SecretKey: "${RECAPTCHA_SECRET_KEY}"

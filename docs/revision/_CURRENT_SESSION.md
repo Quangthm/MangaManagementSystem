@@ -1,4 +1,4 @@
-# Current Session — Genre/Tag UI Simplified Expandable Chip List
+# Current Session — Series Cover / Header Layout Refactor
 
 **Date:** 2026-07-20
 **Branch:** `feature/Mangaka`
@@ -6,42 +6,38 @@
 
 ## Goal
 
-Simplify the Genres and Tags metadata UI on the `/series/{slug}` page. Remove page-based pagination (Prev/Next arrows, page indicator). Replace with a clean first-6 preview + "Show all (N)" / "Show less" pattern.
+Detach the series cover from the white metadata card on the `/series/{slug}` page. The cover is now an independent visual element outside the card. Responsive sizing (200-280px) and natural image height preserve the full cover artwork.
 
 ## Files changed
 
-### New
-
-- `Components/Pages/Series/ExpandableChipList.razor`
-
-### Deleted
-
-- `Components/Pages/Series/ExpandablePaginatedChipList.razor`
-
 ### Modified
 
-- `Components/Pages/Series/SeriesPage.razor` (component name references only)
+- `Components/Pages/Series/SeriesPage.razor` (major structural change)
 
 ## Result
 
-- Genres and Tags each render as an `ExpandableChipList` with independent `_expanded` state.
-- Collapsed: first 6 chips + "Show all (N)" when count > 6.
-- Expanded: all chips + "Show less".
-- No pagination state, arrows, or page numbers.
-- Chip styling matches original pill design.
+- Cover is in its own grid column, completely outside the white metadata card.
+- Metadata card is an independent white card with existing border/radius/padding.
+- Cover width: `minmax(200px, 280px)` — grows on wider desktops.
+- Cover image: `width:100%; height:auto; display:block` — full cover visible, no cropping.
+- Cover fallback: `aspect-ratio:2/3` placeholder with centered MenuBook icon.
+- Inner header breakpoint: 680px — stacks cover above metadata on narrow screens.
+- Title-based alt text: `@_series.Title cover`.
+- `series-header-row` at `grid-column:1` preserves outer grid placement.
+- No changes to chapter list, contributor sidebar, Genres/Tags, lifecycle, or backend.
 
 ## Backend impact
 
-None. No SeriesDetailDto, handler, repository, API, or database changes.
+None.
 
 ## Build
 
 ```
 0 Error(s)
 68 Warning(s) — all pre-existing
-git diff --check → clean
+git diff --check → clean (SeriesPage.razor only)
 ```
 
 ## Final handoff
 
-`docs/revision/Mangaka/2026-07-20-genre-tag-simplified-expandable-chips.md`
+`docs/revision/Mangaka/2026-07-20-series-cover-header-layout-refactor.md`

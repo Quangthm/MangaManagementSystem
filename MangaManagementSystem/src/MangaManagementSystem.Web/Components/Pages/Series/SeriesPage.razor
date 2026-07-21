@@ -26,6 +26,55 @@
             grid-template-columns: 1fr;
         }
     }
+
+    .series-header-row {
+        grid-column: 1;
+        display: grid;
+        grid-template-columns: minmax(200px, 280px) minmax(0, 1fr);
+        gap: 24px;
+        align-items: start;
+        margin-bottom: 24px;
+    }
+
+    @@media (max-width: 680px) {
+        .series-header-row {
+            grid-template-columns: 1fr;
+        }
+        .series-cover-column {
+            max-width: 280px;
+        }
+    }
+
+    .series-cover-column {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .series-cover-image {
+        width: 100%;
+        height: auto;
+        display: block;
+        border-radius: 14px;
+    }
+
+    .series-cover-placeholder {
+        width: 100%;
+        aspect-ratio: 2 / 3;
+        background: #f1f5f9;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .series-metadata-card {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 28px 28px;
+        display: flex;
+        flex-direction: column;
+    }
 </style>
 
 <div style="min-height: 100vh; background: #f8fafc; padding: 40px 32px;">
@@ -60,26 +109,26 @@
             </MudButton>
 
             <div class="@(_series.Contributors.Count > 0 ? "series-page-grid" : null)" style="margin-bottom: 24px;">
-                @* ── Series header card: cover + metadata ── *@
-                <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; margin-bottom: 24px;">
-                    <div style="display: flex; gap: 0; align-items: flex-start;">
+                @* ── Series header: independent cover + metadata card ── *@
+                <div class="series-header-row">
 
-                        @* ── Cover ── *@
-                        <div style="width: 220px; flex-shrink: 0; height: 310px; background: #f1f5f9; display: flex; align-items: center; justify-content: center; overflow: hidden;">
-                            @if (!string.IsNullOrWhiteSpace(_series.CoverUrl))
-                            {
-                                <img src="@_series.CoverUrl" alt="Cover"
-                                     style="width: 220px; height: 310px; object-fit: cover; display: block;" />
-                            }
-                            else
-                            {
+                    @* ── Cover column (independent, no white card) ── *@
+                    <div class="series-cover-column">
+                        @if (!string.IsNullOrWhiteSpace(_series.CoverUrl))
+                        {
+                            <img src="@_series.CoverUrl" alt="@_series.Title cover" class="series-cover-image" />
+                        }
+                        else
+                        {
+                            <div class="series-cover-placeholder">
                                 <MudIcon Icon="@Icons.Material.Filled.MenuBook"
                                          Style="font-size: 72px; color: #cbd5e1;" />
-                            }
-                        </div>
+                            </div>
+                        }
+                    </div>
 
-                        @* ── Main info ── *@
-                        <div style="flex: 1; padding: 28px 28px; display: flex; flex-direction: column;">
+                    @* ── Metadata card (white card, independent) ── *@
+                    <div class="series-metadata-card">
                             @* Title *@
                             <div style="font-weight: 800; font-size: 1.5rem; color: #111827; margin-bottom: 10px; line-height: 1.2;">
                                 @_series.Title
@@ -240,7 +289,6 @@
                                 </MudAlert>
                             }
                         </div>
-                    </div>
                 </div>
 
                 @* ── Chapter list ── *@
