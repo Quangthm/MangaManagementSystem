@@ -74,17 +74,12 @@ namespace MangaManagementSystem.Application.Features.Series.Lifecycle.Queries.Ge
                 .Select(chapter => chapter.ChapterId)
                 .ToHashSet();
 
-            var affectedTasks = await _unitOfWork.ChapterPageTasks
-                .GetByChapterIdsAsync(
+            var activeTasks = await _unitOfWork.ChapterPageTasks
+                .GetDistinctActiveTasksByChapterIdsAsync(
                     affectedChapterIds,
                     cancellationToken);
 
-            int affectedActiveTaskCount = affectedTasks
-                .GroupBy(task => task.ChapterPageTaskId)
-                .Select(group => group.First())
-                .Count(task =>
-                    ChapterPageTaskLifecyclePolicy.CanCancel(
-                        task.StatusCode));
+            int affectedActiveTaskCount = activeTasks.Count;
 
             return new SeriesCompletionImpactDto(
                 series.SeriesId,
