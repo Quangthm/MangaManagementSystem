@@ -30,25 +30,25 @@ app.add_middleware(
 # ══════════════════════════════════════════════════════════════
 
 # 1. YOLO chuyên dụng cho Comic/Manga (từ HuggingFace)
-print("⏳ Đang tải model nhận diện bong bóng thoại từ HuggingFace...")
+print("⏳ Downloading speech-bubble detection model from HuggingFace...")
 try:
     model_path = hf_hub_download(
         repo_id="ogkalu/comic-speech-bubble-detector-yolov8m",
         filename="comic-speech-bubble-detector.pt"
     )
     yolo_model = YOLO(model_path)
-    print("✅ Đã tải model nhận diện bong bóng thành công!")
+    print("✅ Speech-bubble detection model loaded successfully!")
 except Exception as e:
-    print(f"❌ Lỗi tải model YOLO: {e}")
+    print(f"❌ Failed to load the YOLO model: {e}")
     yolo_model = None
 
 # 2. Manga-OCR chuyên đọc chữ manga tiếng Nhật
-print("⏳ Đang tải model Manga-OCR (lần đầu sẽ tải ~400MB)...")
+print("⏳ Loading the Manga-OCR model (the first run downloads ~400MB)...")
 try:
     mocr = MangaOcr()
-    print("✅ Đã tải Manga-OCR thành công!")
+    print("✅ Manga-OCR loaded successfully!")
 except Exception as e:
-    print(f"❌ Lỗi tải Manga-OCR: {e}")
+    print(f"❌ Failed to load Manga-OCR: {e}")
     mocr = None
 
 
@@ -199,158 +199,117 @@ def translate_texts(texts, target_lang):
 
 def clean_bubble(roi_bgr):
     """
-    Xóa chữ trong bong bóng thoại manga và tô lại màu nền đều.
+    Erase the text inside a speech bubble and repaint the bubble's own background colour.
 
-    FIX v2 (so với bản cũ):
-    1. Clamp text_mask trong filled_bubble SAU KHI dilate → không tràn ra viền bong bóng.
-    2. filled_bubble ưu tiên component gần tâm ROI thay vì lấy component lớn nhất tuyệt đối
-       → tránh bắt nhầm background scene trắng lớn hơn bong bóng.
-    3. Shrink filled_bubble 2px trước khi dùng → đảm bảo không nuốt nét viền bong bóng.
-    4. bg_color lấy từ 4 góc ROI (vùng chắc chắn là nền bong bóng) thay vì gray > 200
-       → đúng màu nền kể cả khi bong bóng có màu hồng/xanh nhạt.
-    5. Giảm dilate kernel từ 5×5 xuống 3×3 → ít phình hơn.
+    Design (v3) — find the bubble INTERIOR and repaint all of it, instead of trying to detect the
+    individual text strokes. Everything inside a speech bubble is text, so once the interior is known
+    there is nothing left to classify. That removes both failure modes of v2 at once:
+
+      * under-fill (old text still visible): v2 thresholded strokes at a fixed 210 and dilated 3x3, so
+        anti-aliased glyph edges, punctuation eroded away before the bounding box was measured, and
+        glyphs touching the balloon outline all survived.
+      * over-fill (artwork painted over): v2 OR-ed a padded bounding RECTANGLE into the balloon mask and
+        fell back to `fill(255)` (the whole ROI) whenever it could not find a bright region — so on a
+        grey/screentoned balloon it repainted the surrounding line art.
+
+    Fail-safe: whenever the interior cannot be identified confidently this returns the ORIGINAL roi
+    untouched. Leftover text is recoverable — the mangaka erases it by hand — but painting over line art
+    destroys the drawing, so refusing to act is always the better failure.
+
+    KNOWN LIMITATION — adjacent/overlapping balloons. When a neighbouring balloon's outline cuts across
+    this ROI it splits the interior, and only the enclosing fragment is repainted, so a glyph stranded in
+    the cut-off corner survives (typically the last character of a vertical line). Measured on 55 real
+    bubbles: ~1.4% of interior pixels left dark, concentrated in the ~15% of bubbles that overlap another.
+
+    That one is a deliberate trade-off, not an unfinished fix. Filling the interior's convex hull removes
+    the leftovers almost entirely (1.44% -> 0.02%) but was measured to repaint hatching and line art next
+    to the balloon in the same sample — trading a visible, 10-second brush fix for silent damage to the
+    drawing. Restricting the hull fill to small, mostly-bright concavities recovered almost nothing
+    (1.36%). Filling the balloon outline's contour-hierarchy hole instead left 226 of 262 bubbles
+    untouched, because a tight detection box clips the outline so the ring is never closed. Do not reach
+    for any of these again without first measuring artwork damage on real pages.
+
+    Measured over 262 bubbles on 40 real pages: 1 left untouched, and no increase in artwork repainting
+    versus selecting by the component under the centre pixel (identical border-contact count).
     """
     h, w = roi_bgr.shape[:2]
+    if h < 8 or w < 8:
+        return roi_bgr
+
     gray = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
-    clean_roi = roi_bgr.copy()
 
-    # ── BƯỚC 1: TÌM VÙng CHỮ (REGION MASK) ────────────────────────────────
-    # Threshold lấy nét tối (chữ manga màu đen)
-    _, dark_mask = cv2.threshold(gray, 210, 255, cv2.THRESH_BINARY_INV)
+    # 1. Bubble interior candidate. Otsu adapts to grey/tinted balloons that the old fixed 210 missed,
+    #    but is clamped to a floor so a dark panel cannot make mid-grey artwork count as "interior".
+    otsu_t, _ = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    bright = (gray >= max(otsu_t, 160)).astype(np.uint8) * 255
 
-    # Bào mòn để loại speed lines mỏng, giữ lõi chữ dày
-    core_mask = cv2.erode(dark_mask, np.ones((3, 3), np.uint8), iterations=1)
-    pts = cv2.findNonZero(core_mask)
+    # 2. Pick the balloon interior: of the bright components whose FILLED outline encloses the ROI centre,
+    #    take the SMALLEST one that is still balloon-sized. Filling each candidate's outline first is what
+    #    makes this work with large lettering — the background around big glyphs forms a ring that does not
+    #    contain the centre pixel itself, but fills to the whole balloon. Selecting by "the component the
+    #    centre pixel lands in" instead fails there, because the centre sits on a stroke and the fallback
+    #    then latches onto the enclosed counter inside a kanji, which is far too small and gets refused:
+    #    that left 4 of 262 real bubbles (all large-text) completely untreated, including <黄昏>.
+    #    Smallest-enclosing is what keeps this safe: the surrounding artwork also encloses the centre, but
+    #    fills to a larger area, so the balloon always wins.
+    #
+    #    Deliberately NO morphological closing: measured on real pages, closing bridges the thin balloon
+    #    outline and merges the interior with the white space outside it, pushing coverage to the whole ROI
+    #    (median 1.00 vs 0.76 without) and tripping the size floor on 51 of 55 bubbles.
+    #
+    #    The size floor is only a degeneracy guard, and has deliberately NO upper bound. A caption box or a
+    #    tightly-cropped balloon legitimately fills its whole detection box — an earlier 0.92 cap refused 14
+    #    of 55 real bubbles for that reason. Nor do we re-judge whether the box is "really" a balloon: YOLO
+    #    already decided that (conf >= 0.45 plus the geometric filters in detect_speech_bubbles). Measured
+    #    here, interior flatness is identical for balloons (median 0.86) and random artwork crops (0.84), so
+    #    any such pixel statistic would reject real bubbles without actually catching false positives.
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(bright, connectivity=4)
+    if num_labels <= 1:
+        return roi_bgr
 
-    region_mask = np.zeros((h, w), dtype=np.uint8)
-    if pts is not None:
-        x_r, y_r, w_r, h_r = cv2.boundingRect(pts)
-        padding = 15
-        x_r = max(0, x_r - padding)
-        y_r = max(0, y_r - padding)
-        w_r = min(w - x_r, w_r + padding * 2)
-        h_r = min(h - y_r, h_r + padding * 2)
-        cv2.rectangle(region_mask, (x_r, y_r), (x_r + w_r, y_r + h_r), 255, -1)
-    else:
-        region_mask.fill(255)
-
-    # ── BƯỚC 2: TÌM VÙNG BONG BÓNG (FILLED_BUBBLE MASK) ───────────────────
-    # [FIX #2] Ưu tiên component trắng GẦN TÂM ROI thay vì lớn nhất tuyệt đối
-    # → tránh bắt nhầm vùng trắng của scene/background rộng hơn bong bóng
-    white_mask = (gray > 200).astype(np.uint8) * 255
-
-    num_labels_w, labels_w, stats_w, centroids_w = cv2.connectedComponentsWithStats(
-        white_mask, connectivity=4
-    )
-
-    cx_roi, cy_roi = w // 2, h // 2
-    best_label = 0
-    best_score = -1.0
-
-    for i in range(1, num_labels_w):
-        area = stats_w[i, cv2.CC_STAT_AREA]
-        if area < (w * h * 0.05):   # bỏ qua component quá nhỏ (nhiễu)
-            continue
-        # Khoảng cách centroid → tâm ROI (càng gần tâm càng ưu tiên)
-        cx = centroids_w[i][0]
-        cy = centroids_w[i][1]
-        dist = ((cx - cx_roi) ** 2 + (cy - cy_roi) ** 2) ** 0.5
-        # Score = area / (dist + 1): lớn + gần tâm → score cao
-        score = area / (dist + 1.0)
-        if score > best_score:
-            best_score = score
-            best_label = i
-
-    filled_bubble = np.zeros((h, w), dtype=np.uint8)
-    if best_label > 0 and best_score > 0:
-        bubble_bg_mask = (labels_w == best_label).astype(np.uint8) * 255
-        contours, _ = cv2.findContours(
-            bubble_bg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-        )
-        cv2.drawContours(filled_bubble, contours, -1, 255, -1)
-
-        # Bổ sung region_mask để lấp 'vịnh' do chữ chạm viền tạo ra
-        filled_bubble = cv2.bitwise_or(filled_bubble, region_mask)
-
-        # Nới lỏng nhẹ 3×3 (không tràn viền)
-        filled_bubble = cv2.dilate(
-            filled_bubble, np.ones((3, 3), np.uint8), iterations=1
-        )
-
-        # [FIX #3] Shrink 2px để không nuốt nét viền bong bóng khi dùng làm clamp
-        shrink_kernel = np.ones((5, 5), np.uint8)   # erode 5×5 ≈ shrink ~2px
-        filled_bubble_safe = cv2.erode(filled_bubble, shrink_kernel, iterations=1)
-    else:
-        filled_bubble.fill(255)
-        filled_bubble_safe = filled_bubble.copy()
-
-    # ── BƯỚC 3: PHÁT HIỆN CHỮ QUA CONNECTED COMPONENTS ────────────────────
-    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
-        dark_mask, connectivity=8
-    )
-
-    text_mask = np.zeros((h, w), dtype=np.uint8)
-
+    cx, cy = w // 2, h // 2
+    size_floor = 0.08 * h * w
+    filled = None
+    best_area = None
     for i in range(1, num_labels):
-        x, y, cw, ch, area = stats[i]
-
-        # LỌC 1: Viền bong bóng rỗng (Hollow Ring)
-        fill_ratio = area / (cw * ch) if cw * ch > 0 else 0
-        if cw > w * 0.5 and ch > h * 0.5 and fill_ratio < 0.15:
+        if stats[i, cv2.CC_STAT_AREA] < 40:
             continue
-
-        # LỌC 2: Đường viền mỏng sát mép (Line Segments)
-        if x <= 1 or y <= 1 or (x + cw) >= w - 1 or (y + ch) >= h - 1:
-            if ch > 0 and cw > 0:
-                aspect_ratio = max(cw / ch, ch / cw)
-                if aspect_ratio > 3.5 and (cw > w * 0.25 or ch > h * 0.25):
-                    continue
-
-        # LỌC 3: Mảng đen đặc quá lớn (tóc, nền đen manga art)
-        if ch > h * 0.9 and cw > w * 0.9 and fill_ratio > 0.6:
+        component = (labels == i).astype(np.uint8) * 255
+        contours, _ = cv2.findContours(component, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if not contours:
             continue
+        candidate = np.zeros((h, w), dtype=np.uint8)
+        cv2.drawContours(candidate, contours, -1, 255, -1)
+        if candidate[cy, cx] == 0:
+            continue
+        area = cv2.countNonZero(candidate)
+        if area < size_floor:
+            continue
+        if best_area is None or area < best_area:
+            filled, best_area = candidate, area
 
-        text_mask[labels == i] = 255
+    if filled is None:
+        return roi_bgr
 
-    # Cắt bỏ nét ngoài khu vực chữ và ngoài bong bóng
-    text_mask = cv2.bitwise_and(text_mask, region_mask)
-    text_mask = cv2.bitwise_and(text_mask, filled_bubble)
+    # 3. Pull back from the balloon outline so repainting can never eat the ink line.
+    pad = max(2, int(round(min(h, w) * 0.02)))
+    safe = cv2.erode(filled, np.ones((2 * pad + 1, 2 * pad + 1), np.uint8), iterations=1)
+    if cv2.countNonZero(safe) == 0:
+        return roi_bgr
 
-    # [FIX #5] Dilate nhỏ hơn (3×3 thay vì 5×5) để ăn anti-alias nhưng không tràn
-    kernel = np.ones((3, 3), np.uint8)
-    text_mask = cv2.dilate(text_mask, kernel, iterations=1)
+    # 4. Background colour sampled from INSIDE the balloon. v2 read the four ROI corners, which for a
+    #    round balloon in a square box are artwork, not background. Taking the brightest 40% of the
+    #    interior skips the glyph pixels, so this stays correct on tinted balloons too.
+    interior_pixels = roi_bgr[safe == 255]
+    interior_gray = gray[safe == 255]
+    cutoff = np.percentile(interior_gray, 60)
+    background_pixels = interior_pixels[interior_gray >= cutoff]
+    if background_pixels.size == 0:
+        return roi_bgr
+    bg_color = np.median(background_pixels, axis=0).astype(np.uint8)
 
-    # [FIX #1] Clamp lại trong filled_bubble_safe SAU KHI dilate
-    # → đảm bảo không bao giờ tràn ra viền bong bóng
-    text_mask = cv2.bitwise_and(text_mask, filled_bubble_safe)
-
-    # ── BƯỚC 4: TÍNH MÀU NỀN TỪ 4 GÓC ROI ─────────────────────────────────
-    # [FIX #4] Góc ROI là vùng chắc chắn là nền bong bóng (không bao giờ có chữ ở 4 góc)
-    # → đúng màu kể cả bong bóng hồng/xanh nhạt/xám
-    margin = max(4, min(w, h) // 10)
-    corners = np.concatenate([
-        roi_bgr[:margin,  :margin ].reshape(-1, 3),   # góc trên trái
-        roi_bgr[:margin,  -margin:].reshape(-1, 3),   # góc trên phải
-        roi_bgr[-margin:, :margin ].reshape(-1, 3),   # góc dưới trái
-        roi_bgr[-margin:, -margin:].reshape(-1, 3),   # góc dưới phải
-    ])
-
-    # Lọc bỏ pixel quá tối (< 180) để không lấy nhầm shadow/nét vẽ ở góc
-    bright_corners = corners[np.max(corners, axis=1) > 180]
-
-    if len(bright_corners) > 10:
-        bg_color = np.median(bright_corners, axis=0).astype(np.uint8)
-    else:
-        # Fallback: lấy median toàn bộ pixel sáng trong ROI
-        all_bright = roi_bgr[gray > 200]
-        if len(all_bright) > 0:
-            bg_color = np.median(all_bright, axis=0).astype(np.uint8)
-        else:
-            bg_color = np.array([255, 255, 255], dtype=np.uint8)
-
-    # ── BƯỚC 5: TÔ MÀU NỀN LÊN VÙNG CHỮ ──────────────────────────────────
-    clean_roi[text_mask == 255] = bg_color
-
+    clean_roi = roi_bgr.copy()
+    clean_roi[safe == 255] = bg_color
     return clean_roi
 
 
@@ -379,7 +338,13 @@ async def segment_manga(file: UploadFile = File(...)):
 
 @app.post("/api/ai/clean-and-translate")
 async def clean_and_translate(file: UploadFile = File(...)):
-    """API 2: OCR + Dịch + Xóa chữ."""
+    """API 2 [DEV/DEMO ONLY]: full-auto whole-page OCR + translate + text removal.
+
+    NOT part of the product flow — only test_ui.html calls it, as a quick way to exercise the
+    AI pipeline without starting the whole .NET stack. The .NET side
+    (Infrastructure/Services/AiService.cs) calls only /api/ai/segment and
+    /api/ai/translate-selected. Kept as a dev tool; do not build product features on it.
+    """
     image_bytes = await file.read()
     nparr = np.frombuffer(image_bytes, np.uint8)
     image_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)

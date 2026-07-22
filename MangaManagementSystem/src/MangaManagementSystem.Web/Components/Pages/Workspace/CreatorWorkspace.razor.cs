@@ -23,8 +23,39 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private IBrowserFile? _assistantSelectedFile;
     private string _assistantSelectedFileDisplay = string.Empty;
     private string _assistantFileValidationError = string.Empty;
-    private const long AssistantWorkspaceMaxFileSizeBytes = 10 * 1024 * 1024;
-    private static readonly string[] AssistantWorkspaceAllowedFileTypes = new[] { "image/png", "image/jpeg", "image/jpg", "image/webp" };
+    // Upload limits shared by every workspace image upload (pages, page versions, double-page splits
+    // and assistant submissions). Blazor Server buffers uploads in the server-side circuit, so an
+    // unbounded selection is a server memory risk, not just a client one: the caps below are what keeps
+    // a single user from staging gigabytes into their circuit.
+    private const long WorkspaceMaxFileSizeBytes = 10 * 1024 * 1024;
+    private const int WorkspaceMaxPagesPerUpload = 30;
+    private static readonly string[] WorkspaceAllowedFileTypes = new[] { "image/png", "image/jpeg", "image/jpg", "image/webp" };
+
+    /// <summary>
+    /// Checks a selected image against the workspace upload limits, using only the metadata
+    /// <see cref="IBrowserFile"/> exposes without opening the stream — so a rejected file costs no
+    /// memory and callers can skip it individually instead of letting OpenReadStream throw and abort a
+    /// whole batch. The browser's accept="image/*" attribute is a client-side hint only, so the content
+    /// type is re-checked here.
+    /// </summary>
+    private static bool IsAllowedWorkspaceImage(IBrowserFile file, out string error)
+    {
+        if (file.Size > WorkspaceMaxFileSizeBytes)
+        {
+            error = $"{file.Name}: too large (maximum {WorkspaceMaxFileSizeBytes / (1024 * 1024)} MB).";
+            return false;
+        }
+
+        var contentType = file.ContentType?.ToLowerInvariant() ?? string.Empty;
+        if (!WorkspaceAllowedFileTypes.Contains(contentType))
+        {
+            error = $"{file.Name}: unsupported file type. Allowed: PNG, JPEG, WebP.";
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
+    }
 
     // BR-WORKSPACE-007: only Mangaka may mutate chapter/page content (create/rename chapters, upload
     // pages/versions, assign tasks, edit regions). Tantou Editors get a view + review-annotations mode
@@ -392,22 +423,11 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             // #8 / BR-REG-031: with no explicit panel selection, anchor the task to the page's
             // whole-page (FULL_PAGE) region — found-or-created server-side from Cloudinary dimensions —
             // instead of refusing. Restores the full-page default without fabricating phantom (0,0) pins.
-            var fullPageVersionId = GetActiveVersionId();
-            if (fullPageVersionId == Guid.Empty)
-            {
-                Snackbar.Add("Please open a saved page version first.", Severity.Warning);
-                return;
-            }
-            try
-            {
-                var fullPage = await MangakaRegionApi.EnsureFullPageRegionAsync(_currentUserId.Value, fullPageVersionId);
-                regionIds = new List<Guid> { fullPage.PageRegionId };
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add($"Could not prepare a full-page target: {ex.Message}", Severity.Error);
-                return;
-            }
+            var fullPageRegion = await ResolveFullPageRegionAsync();
+            if (fullPageRegion == null) return;
+            regionIds = new List<Guid> { fullPageRegion.DbId!.Value };
+            // Carry it on the card too, so clicking the new task highlights the page right away.
+            regionsToSave.Add(fullPageRegion);
             target = "Full page";
         }
         else
@@ -631,22 +651,11 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         {
             // #8 / BR-REG-031: no panel selected and no pin placed → anchor the annotation to the
             // page's whole-page (FULL_PAGE) region (found-or-created server-side) instead of refusing.
-            var fullPageVersionId = GetActiveVersionId();
-            if (fullPageVersionId == Guid.Empty)
-            {
-                Snackbar.Add("Please open a saved page version first.", Severity.Warning);
-                return;
-            }
-            try
-            {
-                var fullPage = await MangakaRegionApi.EnsureFullPageRegionAsync(_currentUserId.Value, fullPageVersionId);
-                regionIds = new List<Guid> { fullPage.PageRegionId };
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add($"Could not prepare a full-page target: {ex.Message}", Severity.Error);
-                return;
-            }
+            var fullPageRegion = await ResolveFullPageRegionAsync();
+            if (fullPageRegion == null) return;
+            regionIds = new List<Guid> { fullPageRegion.DbId!.Value };
+            // Carry it on the card too, so clicking the new annotation highlights the page right away.
+            regionsToSave.Add(fullPageRegion);
         }
         else
         {
@@ -679,8 +688,11 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 Type = AnnotationType,
                 Comment = AnnotationComment,
                 Target = target,
-                Author = _currentRoleName,              // shown until reload replaces it with name · role
-                CreatedByRoleName = _currentRoleName,   // creator is the current user
+                // Take the author straight from the create response, exactly as the reload path does
+                // (see LoadAnnotationsForPage), so the card shows "name · role" immediately instead of
+                // only the role until the page is reloaded.
+                Author = dbAnn.AnnotatedByDisplayName ?? dbAnn.AnnotatedByRoleName ?? _currentRoleName,
+                CreatedByRoleName = dbAnn.AnnotatedByRoleName ?? _currentRoleName,
                 PageNumber = SelectedPage,
                 PinX = PendingPinX,
                 PinY = PendingPinY,
@@ -1621,6 +1633,85 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     
     private IJSObjectReference? GetActiveCanvas() => _activePane == "Left" ? _leftCanvasRef : _rightCanvasRef;
 
+    /// <summary>
+    /// Resolves the page's whole-page (FULL_PAGE) region for a task/annotation that targets no specific
+    /// panel, and makes sure the canvas knows about it. Returns null — after showing a message — when it
+    /// cannot be resolved.
+    /// </summary>
+    /// <remarks>
+    /// The region is found-or-created server-side, so the first time a page uses it the canvas has no
+    /// object with that PageRegionId. SelectPanelsByRegions matches on DbId against canvas objects, so
+    /// clicking the new card reported "No panel target to highlight on this page." until a reload pulled
+    /// the region in. The new region is MERGED into the canvas rather than re-fetching every region from
+    /// the DB, because a re-fetch would discard region edits the user has not saved yet.
+    /// </remarks>
+    private async Task<RegionModel?> ResolveFullPageRegionAsync()
+    {
+        var versionId = GetActiveVersionId();
+        if (versionId == Guid.Empty || !_currentUserId.HasValue)
+        {
+            Snackbar.Add("Please open a saved page version first.", Severity.Warning);
+            return null;
+        }
+
+        MangaManagementSystem.Application.DTOs.Manga.PageRegionDto fullPage;
+        try
+        {
+            fullPage = await MangakaRegionApi.EnsureFullPageRegionAsync(_currentUserId.Value, versionId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not prepare a full-page target: {ex.Message}", Severity.Error);
+            return null;
+        }
+
+        var model = new RegionModel
+        {
+            DbId = fullPage.PageRegionId,
+            Label = fullPage.RegionLabel,
+            Type = fullPage.TypeCode,
+            X = (double)fullPage.X,
+            Y = (double)fullPage.Y,
+            Width = (double)fullPage.Width,
+            Height = (double)fullPage.Height
+        };
+
+        var canvas = GetActiveCanvas();
+        if (canvas != null)
+        {
+            // Best-effort: the card is still created correctly if the canvas cannot be updated, it just
+            // will not highlight until the next reload.
+            try
+            {
+                var readOptions = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var currentJson = await canvas.InvokeAsync<string>("exportRegions");
+                var current = System.Text.Json.JsonSerializer.Deserialize<List<RegionModel>>(currentJson, readOptions)
+                              ?? new List<RegionModel>();
+
+                var existing = current.FirstOrDefault(r => r.DbId == model.DbId);
+                if (existing != null)
+                {
+                    model.Id = existing.Id;
+                }
+                else
+                {
+                    model.Id = current.Any() ? current.Max(r => r.Id) + 1 : 1;
+                    current.Add(model);
+                    var camelOptions = new System.Text.Json.JsonSerializerOptions
+                    {
+                        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+                    };
+                    // silent=true: adding the target must not mark the page dirty or write a draft.
+                    await canvas.InvokeVoidAsync("loadRegions",
+                        System.Text.Json.JsonSerializer.Serialize(current, camelOptions), true);
+                }
+            }
+            catch { }
+        }
+
+        return model;
+    }
+
     // Clicking a task/annotation card highlights its panels on the page: select on the canvas the
     // regions whose PageRegionId matches the card's linked regions (pins are skipped — they are not
     // drawn as selectable boxes). Only active-version cards are shown, so their regions are on canvas.
@@ -1869,15 +1960,15 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             return;
         }
 
-        if (_assistantSelectedFile.Size > AssistantWorkspaceMaxFileSizeBytes)
+        if (_assistantSelectedFile.Size > WorkspaceMaxFileSizeBytes)
         {
-            _assistantFileValidationError = $"File is too large. Maximum allowed is {AssistantWorkspaceMaxFileSizeBytes / (1024 * 1024)} MB.";
+            _assistantFileValidationError = $"File is too large. Maximum allowed is {WorkspaceMaxFileSizeBytes / (1024 * 1024)} MB.";
             _assistantSelectedFile = null;
             return;
         }
 
         var contentType = _assistantSelectedFile.ContentType?.ToLowerInvariant() ?? string.Empty;
-        if (!AssistantWorkspaceAllowedFileTypes.Contains(contentType))
+        if (!WorkspaceAllowedFileTypes.Contains(contentType))
         {
             _assistantFileValidationError = "Unsupported file type. Allowed: PNG, JPEG, WebP.";
             _assistantSelectedFile = null;
@@ -2042,9 +2133,15 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         var file = e.File;
         if (file == null) return;
 
+        if (!IsAllowedWorkspaceImage(file, out var fileError))
+        {
+            Snackbar.Add(fileError, Severity.Warning);
+            return;
+        }
+
         try
         {
-            using var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 20);
+            using var stream = file.OpenReadStream(maxAllowedSize: WorkspaceMaxFileSizeBytes);
             using var ms = new MemoryStream();
             await stream.CopyToAsync(ms);
             _doublePageSourceDataUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(ms.ToArray())}";
@@ -2167,7 +2264,21 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 }
             }
 
-            var files = e.GetMultipleFiles(100);
+            IReadOnlyList<IBrowserFile> files;
+            try
+            {
+                files = e.GetMultipleFiles(WorkspaceMaxPagesPerUpload);
+            }
+            catch (InvalidOperationException)
+            {
+                // GetMultipleFiles throws when the selection exceeds the cap; translate it into a clear
+                // message instead of surfacing the raw framework exception.
+                Snackbar.Add(
+                    $"Too many files selected. Please add at most {WorkspaceMaxPagesPerUpload} pages at a time.",
+                    Severity.Warning);
+                return;
+            }
+
             if (files.Any())
             {
                 var activeChap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
@@ -2181,9 +2292,19 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 // the user REVIEW + confirm before buffering. On Add the images are held in the
                 // in-memory buffer (manual-save) — nothing hits Cloudinary/DB until the user clicks Save.
                 var staged = new List<StagedImage>();
+                var rejected = new List<string>();
                 foreach (var file in files)
                 {
-                    using var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 20);
+                    // Validate BEFORE opening the stream: an oversized/wrong-type file is skipped with a
+                    // message while the rest of the selection still goes through, instead of
+                    // OpenReadStream throwing mid-loop and discarding every already-staged page.
+                    if (!IsAllowedWorkspaceImage(file, out var fileError))
+                    {
+                        rejected.Add(fileError);
+                        continue;
+                    }
+
+                    using var stream = file.OpenReadStream(maxAllowedSize: WorkspaceMaxFileSizeBytes);
                     using var memoryStream = new MemoryStream();
                     await stream.CopyToAsync(memoryStream);
                     var bytes = memoryStream.ToArray();
@@ -2195,6 +2316,16 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                         ContentType = contentType,
                         DataUrl = $"data:{contentType};base64,{Convert.ToBase64String(bytes)}"
                     });
+                }
+
+                foreach (var rejection in rejected)
+                {
+                    Snackbar.Add(rejection, Severity.Warning);
+                }
+
+                if (staged.Count == 0)
+                {
+                    return;
                 }
 
                 // Hold the staged images in a field so each one can be individually cropped/resized from the
@@ -2674,7 +2805,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             {
                 return JsonSerializer.Serialize(result);
             }
-            return JsonSerializer.Serialize(new { status = "error", message = "AI returned null" });
+            return JsonSerializer.Serialize(new { status = "error", message = "AI service returned an empty result. Please try again." });
         }
         catch (Exception ex)
         {
@@ -2695,7 +2826,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             {
                 return JsonSerializer.Serialize(result);
             }
-            return JsonSerializer.Serialize(new { status = "error", message = "AI returned null" });
+            return JsonSerializer.Serialize(new { status = "error", message = "AI service returned an empty result. Please try again." });
         }
         catch (Exception ex)
         {

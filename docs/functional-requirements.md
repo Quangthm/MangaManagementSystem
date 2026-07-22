@@ -8,7 +8,9 @@
 
 > **Latest series lifecycle alignment — 2026-07-19:** The system shall use `HIATUS` for paused series; active Mangaka or Tantou Editor contributors may pause/resume serialized series; `HIATUS` blocks release only. Only active Mangaka contributors may mark serialized or hiatus series as `COMPLETED`; completion blocks future business mutations, cancels unreleased chapters and their distinct active `ASSIGNED`/`UNDER_REVIEW` page tasks after warning and confirmation, preserves released chapters and terminal task history, and does not hide completed series from rankings.
 
-> **Latest notification alignment — 2026-07-20:** Notification requirements are aligned with the approved proposal, board, task, chapter, publication-schedule, and account-approval behaviors. `PUBLICATION_SCHEDULE` excludes the initiating actor and date-only edits that do not make the chapter scheduled. `BOARD_DECISION` includes manual poll cancellation by the Editorial Board Chief. `ACCOUNT_APPROVED` includes both an in-app notification and a separate approval email. `RANKING_WARNING` remains pending final definition.
+> **Latest ranking and notification alignment — 2026-07-21:** Existing approved notification requirements for proposal, board, task, chapter, publication scheduling, and account approval remain unchanged. The system shall use the weighted ranking formula `ranking_score = (v / (v + m)) * R + (m / (v + m)) * C`, where `C` is the rating-count-weighted scope average and `m` is the scope median rating count; `reading_count` is not a direct score boost. `RANKING_WARNING` is finalized as a hybrid completed-week rule using the documented `6.5` baseline together with bottom-25% relative rank, with persistence across at least 2 of the latest 3 consecutive completed weekly periods including the latest. Recipients are all distinct active contributors of the exact affected series.
+
+> **Latest chapter submission validation — 2026-07-21:** The system shall allow chapter submission only from `DRAFT` or `REVISION_REQUESTED` by an active Mangaka contributor and only when zero distinct associated page tasks are `ASSIGNED` or `UNDER_REVIEW`. `COMPLETED` and `CANCELLED` tasks shall not block. Blocking validation shall be backend-authoritative, deduplicate by task ID through the existing region/page relationship, produce a clean error with no chapter/audit/notification/task mutation, and be concurrency-safe against same-chapter task creation.
 
 ---
 
@@ -497,6 +499,13 @@
 | FR-CH-SUB-005 | The system shall allow chapter pages and page versions to become editable again when the chapter status becomes `REVISION_REQUESTED`. | BR-CH-SUB-004 |
 | FR-CH-SUB-006 | The system shall store chapter content as page-level assets through `ChapterPageVersion`. | BR-CH-SUB-005 |
 | FR-CH-SUB-007 | The system shall not require one chapter-level submission file or generated PDF for MVP. | BR-CH-SUB-006 |
+| FR-CH-SUB-008 | The system shall allow chapter submission for editorial review only when the actor is an `ACTIVE` Mangaka and active Mangaka contributor of the owning series, the chapter is `DRAFT` or `REVISION_REQUESTED`, and zero distinct active page tasks are associated with that chapter. | BR-CH-SUB-007 |
+| FR-CH-SUB-009 | The system shall treat `ASSIGNED` and `UNDER_REVIEW` page tasks as blocking chapter submission and shall treat `COMPLETED` and `CANCELLED` page tasks as non-blocking. | BR-CH-SUB-008 |
+| FR-CH-SUB-010 | The system shall derive task-to-chapter association through linked task regions, page regions, page versions, and logical chapter pages, and shall deduplicate by `ChapterPageTaskId` so one task linked to multiple regions is counted once. | BR-CH-SUB-009 |
+| FR-CH-SUB-011 | When at least one distinct active page task exists, the system shall reject chapter submission before changing chapter status, writing the successful submission audit, or creating `CHAPTER_REVIEW`, and shall not automatically mutate the blocking tasks. | BR-CH-SUB-010 |
+| FR-CH-SUB-012 | The system shall return a clean user-facing validation response explaining that active page tasks must be completed or cancelled before chapter submission can proceed. | BR-CH-SUB-011 |
+| FR-CH-SUB-013 | The system shall concurrency-coordinate task creation and chapter submission for the same chapter so an active task cannot be created concurrently with the chapter transition to `UNDER_REVIEW`. | BR-CH-SUB-012 |
+| FR-CH-SUB-014 | When chapter-submission validation succeeds, the system shall preserve the existing successful behavior by changing the chapter to `UNDER_REVIEW`, writing the normal chapter-submission audit, and creating `CHAPTER_REVIEW` notifications for the correct distinct active Tantou Editor contributors of the exact series. | BR-CH-SUB-013 |
 | FR-CH-REV-001 | The system shall record editorial reviews directly against `Chapter`. | BR-CH-REV-001 |
 | FR-CH-REV-002 | The system shall require each `ChapterEditorialReview` record to belong to exactly one chapter. | BR-CH-REV-002 |
 | FR-CH-REV-003 | The system shall allow a chapter to have multiple editorial review records over time across revision cycles. | BR-CH-REV-003 |
@@ -612,6 +621,7 @@
 | FR-SERIES-VOTE-011 | The system shall record the user and UTC timestamp when series vote input is entered or updated. | BR-SERIES-VOTE-013 |
 | FR-SERIES-VOTE-012 | The system shall restrict simulated or aggregated series vote input to Editorial Board Members or Editorial Board Chief users in MVP. | BR-SERIES-VOTE-014 |
 | FR-SERIES-VOTE-013 | The system shall allow a source note to explain the external report, manual report, spreadsheet, or tracking evidence used for series vote input. | BR-SERIES-VOTE-015 |
+| FR-SERIES-VOTE-014 | The system shall allow manual MVP `SeriesVoteInput` creation/update for `WEEKLY` publication periods only and shall derive monthly/yearly/all-time ranking results from weekly source evidence instead of requiring separately persisted manual aggregate input rows. | BR-SERIES-VOTE-016 |
 
 ### 3.18.2 Dynamic Series Ranking
 
@@ -621,12 +631,15 @@
 | FR-RANK-002 | The system shall not require `SeriesRankingSnapshot` in MVP because there is no ranking finalization workflow. | BR-RANK-001 |
 | FR-RANK-003 | The system shall compute ranking separately for each `publication_period_id`. | BR-RANK-002 |
 | FR-RANK-004 | The system shall expose ranking output through a dynamic view such as `manga.vw_SeriesRanking`. | BR-RANK-003 |
-| FR-RANK-005 | The system shall compute `ranking_score` using `average_rating * LOG10(1 + rating_count) + reading_count * 0.001`. | BR-RANK-004 |
+| FR-RANK-005 | The system shall compute `ranking_score` using the weighted formula `(v / (v + m)) * R + (m / (v + m)) * C`, where `R` is the series average rating, `v` is its rating count, `C` is the rating-count-weighted average rating of eligible ranked series in the same effective ranking scope, and `m` is the median rating count of those eligible ranked series. | BR-RANK-004 |
 | FR-RANK-006 | The system shall compute rank position using dense ranking ordered by ranking score, average rating, rating count, reading count, and series ID. | BR-RANK-005 |
 | FR-RANK-007 | The system shall avoid storing `ranking_score` and `rank_position` as duplicated normal columns unless later performance profiling proves caching is required. | BR-RANK-006 |
 | FR-RANK-008 | The system shall prevent ranking results from automatically cancelling a series. | BR-RANK-007 |
 | FR-RANK-009 | The system shall allow ranking evidence to support board review while still requiring the applicable workflow decision for cancellation. | BR-RANK-008 |
 | FR-RANK-010 | The system shall keep completed series visible in dynamic rankings when `SeriesVoteInput` exists for the selected publication period. | BR-RANK-009 |
+| FR-RANK-011 | The system shall calculate `C` for a direct ranking scope as `SUM(average_rating * rating_count) / SUM(rating_count)` across eligible ranked series in that scope and shall calculate `m` as the median `rating_count` across those series. | BR-RANK-010 |
+| FR-RANK-012 | The system shall keep `reading_count` as popularity/readership evidence and shall not directly add it to `ranking_score`; it may remain visible and may be used as a deterministic tie-breaker. | BR-RANK-011 |
+| FR-RANK-013 | When deriving monthly, yearly, or all-time ranking from weekly inputs, the system shall aggregate weekly source evidence by series first and then recalculate that broader scope's own `R`, `v`, `C`, and `m`; it shall not average weekly ranking scores or reuse weekly `C`/`m`. | BR-RANK-012 |
 
 
 ---
@@ -644,8 +657,8 @@
 | FR-NOTIF-005 | The system shall require `related_entity_type` and `related_entity_id` to both be present or both be null. | BR-NOTIF-004 |
 | FR-NOTIF-006 | The system shall treat a notification as unread when `read_at_utc IS NULL`. | BR-NOTIF-005 |
 | FR-NOTIF-007 | The system shall record `read_at_utc` when a user reads a notification. | BR-NOTIF-006 |
-| FR-NOTIF-008 | The system shall not automatically create `RANKING_WARNING` notifications until the cancellation-risk trigger/threshold, cadence, deduplication, related entity, and recipient contract are finalized. | BR-NOTIF-007, BR-NOTIF-008 |
-| FR-NOTIF-009 | The system shall not infer a `RANKING_WARNING` threshold or recipient scope from ranking data or other notification types while that contract remains pending. | BR-NOTIF-007, BR-NOTIF-008 |
+| FR-NOTIF-008 | The system shall classify a completed weekly ranking result as a failed ranking week for `RANKING_WARNING` only when **both** `ranking_score < 6.5` and bottom-25% rank are true for the same weekly period. The bottom group shall use `CEILING(total_ranked_series * 0.25)`, and the evaluated week shall contain at least 4 ranked series. | BR-NOTIF-007 |
+| FR-NOTIF-009 | The system shall create `RANKING_WARNING` only when a currently `SERIALIZED` or `HIATUS` series fails the weekly checks in at least 2 of its latest 3 consecutive completed weekly publication periods, the latest completed period is also a failed week, ranking input exists for the series in all 3 periods, and each evaluated period contains at least 4 ranked series. | BR-NOTIF-008, BR-NOTIF-032 |
 | FR-NOTIF-010 | The system shall create `TASK_ASSIGNMENT` notifications for assigned Assistants when page tasks are created, including one notification per created Quick Select task. On reassignment, the system shall notify the original Assistant of cancellation/reassignment with the required reason linked to the original task and notify the replacement Assistant of the replacement assignment linked to the replacement task. | BR-NOTIF-009 |
 | FR-NOTIF-011 | The system shall create `PROPOSAL_DECISION` notifications for Request Revision, Pass To Board, and Cancel Proposal decisions and send them to the distinct active Mangaka contributors of the affected series. | BR-NOTIF-010, BR-NOTIF-026 |
 | FR-NOTIF-012 | The system shall create `BOARD_POLL` notifications when an Editorial Board Chief opens a real board poll and send one notification to each active Editorial Board Member while excluding the initiating Chief and duplicate recipients. | BR-NOTIF-011 |
@@ -663,6 +676,11 @@
 | FR-NOTIF-024 | The system shall create an in-app `ACCOUNT_APPROVED` notification for a pending user when an Admin approves/activates the account. | BR-NOTIF-023 |
 | FR-NOTIF-025 | The system shall send an account-approval email to the approved user's email address when an Admin approves/activates a pending account. | BR-NOTIF-024 |
 | FR-NOTIF-026 | The system shall reserve `SYSTEM_MESSAGE` for explicitly defined generic system-message workflows and shall use a more specific notification type whenever one applies. | BR-NOTIF-025 |
+| FR-NOTIF-027 | The system shall send each `RANKING_WARNING` to all distinct active contributors of the exact affected series, regardless of contributor role, while requiring `end_date IS NULL`, user status `ACTIVE`, and recipient deduplication by user ID. | BR-NOTIF-027, BR-NOTIF-026 |
+| FR-NOTIF-028 | The system shall evaluate automatic `RANKING_WARNING` conditions from completed weekly periods only and shall not let the current/incomplete week or monthly/yearly/all-time reporting views independently create additional warnings. | BR-NOTIF-028 |
+| FR-NOTIF-029 | The system shall make `RANKING_WARNING` evaluation idempotent so re-evaluating the same affected series and latest completed weekly period creates at most one warning per recipient for that series/evaluated week. | BR-NOTIF-029 |
+| FR-NOTIF-030 | The system shall treat `RANKING_WARNING` as advisory evidence only and shall not automatically change series status, pause/cancel a series, or open a `CANCEL_SERIALIZATION` poll. | BR-NOTIF-030 |
+| FR-NOTIF-031 | The system shall relate `RANKING_WARNING` to the affected `Series` and shall navigate the Bell to the existing ranking/series context rather than creating a separate ranking workflow. | BR-NOTIF-031 |
 
 ---
 

@@ -33,6 +33,10 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<IReadOnlyList<ChapterPageTask>> GetByChapterIdsAsync(
             IReadOnlyCollection<Guid> chapterIds,
             CancellationToken cancellationToken = default);
+
+        Task<IReadOnlyList<ChapterPageTask>> GetDistinctActiveTasksByChapterIdsAsync(
+            IReadOnlyCollection<Guid> chapterIds,
+            CancellationToken cancellationToken = default);
         // Mangaka task lifecycle SPs
         Task CancelTaskAsync(Guid actorUserId, Guid taskId, string reason);
         Task MarkTaskCompletedAsync(Guid actorUserId, Guid taskId, string? completionNote);

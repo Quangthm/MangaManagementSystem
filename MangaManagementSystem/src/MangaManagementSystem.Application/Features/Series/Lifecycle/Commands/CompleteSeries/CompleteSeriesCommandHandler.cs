@@ -90,23 +90,18 @@ namespace MangaManagementSystem.Application.Features.Series.Lifecycle.Commands.C
                     .Select(transition => transition.Chapter.ChapterId)
                     .ToHashSet();
 
-                var affectedTasks = await _unitOfWork.ChapterPageTasks
-                    .GetByChapterIdsAsync(
-                        affectedChapterIds,
-                        cancellationToken);
+            var activeTasks = await _unitOfWork.ChapterPageTasks
+                .GetDistinctActiveTasksByChapterIdsAsync(
+                    affectedChapterIds,
+                    cancellationToken);
 
-                var taskTransitions = affectedTasks
-                    .GroupBy(task => task.ChapterPageTaskId)
-                    .Select(group => group.First())
-                    .Where(task =>
-                        ChapterPageTaskLifecyclePolicy.CanCancel(
-                            task.StatusCode))
-                    .Select(task => new
-                    {
-                        Task = task,
-                        OldStatusCode = task.StatusCode
-                    })
-                    .ToArray();
+            var taskTransitions = activeTasks
+                .Select(task => new
+                {
+                    Task = task,
+                    OldStatusCode = task.StatusCode
+                })
+                .ToArray();
 
                 string oldSeriesStatusCode = series.StatusCode;
                 DateTime occurredAtUtc = DateTime.UtcNow;
