@@ -104,5 +104,11 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         public bool Selected { get; set; }
         public string? OriginalText { get; set; }
         public string? TranslatedText { get; set; }
+        // Provenance, carried through the canvas round-trip so a bulk save does not rewrite an
+        // AI-detected region into a MANUAL one (and drop its confidence). A box drawn by hand on
+        // the canvas leaves these null and is persisted as MANUAL. See manga.PageRegion
+        // ck_page_region_confidence_source: AI requires a score, MANUAL requires none.
+        public string? SourceType { get; set; }
+        public double? ConfidenceScore { get; set; }
     }
 }
