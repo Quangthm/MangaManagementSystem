@@ -1,7 +1,6 @@
 @page "/editor/series"
 @using System
 @using Microsoft.AspNetCore.Authorization
-@using System.Security.Claims
 @using MangaManagementSystem.Application.DTOs.Editor
 @using MangaManagementSystem.Web.Services
 @using MangaManagementSystem.Web.Services.Api
@@ -9,7 +8,6 @@
 @inject IEditorSeriesApiClient EditorSeriesApiClient
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
-@inject AuthenticationStateProvider AuthStateProvider
 
 <EditorLayout>
     <div class="mf-page">
@@ -92,8 +90,6 @@
     private bool _loading = true;
     private string? _error;
     private IReadOnlyList<EditorSeriesDto>? _series;
-    private Guid _currentUserId;
-
     private const string StatusUnderEditorialReview = "UNDER_EDITORIAL_REVIEW";
 
     private static bool CanReview(EditorSeriesDto s) =>
@@ -114,17 +110,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-        var user = authState.User;
-        if (user.Identity?.IsAuthenticated == true)
-        {
-            var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (Guid.TryParse(idClaim, out var userId))
-            {
-                _currentUserId = userId;
-            }
-        }
-
         await LoadSeriesAsync();
     }
 
@@ -134,7 +119,7 @@
         _error = null;
         try
         {
-            var result = await EditorSeriesApiClient.GetSeriesAsync(_currentUserId);
+            var result = await EditorSeriesApiClient.GetSeriesAsync();
             _series = result.Series;
         }
         catch (Exception ex)

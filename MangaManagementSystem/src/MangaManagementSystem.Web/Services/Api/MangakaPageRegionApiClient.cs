@@ -6,8 +6,6 @@ namespace MangaManagementSystem.Web.Services.Api
 {
     public class MangakaPageRegionApiClient : IMangakaPageRegionApiClient
     {
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
-
         private readonly HttpClient _httpClient;
         private readonly JsonSerializerOptions _jsonOptions;
 
@@ -21,10 +19,9 @@ namespace MangaManagementSystem.Web.Services.Api
             };
         }
 
-        public async Task<PageRegionDto> CreateAsync(Guid actorUserId, CreatePageRegionDto dto, CancellationToken cancellationToken = default)
+        public async Task<PageRegionDto> CreateAsync(CreatePageRegionDto dto, CancellationToken cancellationToken = default)
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, "api/mangaka/regions");
-            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
             request.Content = new StringContent(JsonSerializer.Serialize(dto, _jsonOptions), Encoding.UTF8, "application/json");
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
@@ -35,10 +32,9 @@ namespace MangaManagementSystem.Web.Services.Api
                 ?? throw new InvalidOperationException("The region was created but no confirmation was returned.");
         }
 
-        public async Task<PageRegionDto> EnsureFullPageRegionAsync(Guid actorUserId, Guid versionId, CancellationToken cancellationToken = default)
+        public async Task<PageRegionDto> EnsureFullPageRegionAsync(Guid versionId, CancellationToken cancellationToken = default)
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, $"api/mangaka/regions/version/{versionId}/ensure-full-page");
-            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
             await EnsureSuccessAsync(response, cancellationToken);
@@ -48,10 +44,9 @@ namespace MangaManagementSystem.Web.Services.Api
                 ?? throw new InvalidOperationException("The full-page region was created but no confirmation was returned.");
         }
 
-        public async Task BulkReplaceAsync(Guid actorUserId, Guid versionId, IReadOnlyList<CreatePageRegionDto> regions, CancellationToken cancellationToken = default)
+        public async Task BulkReplaceAsync(Guid versionId, IReadOnlyList<CreatePageRegionDto> regions, CancellationToken cancellationToken = default)
         {
             using var request = new HttpRequestMessage(HttpMethod.Put, $"api/mangaka/regions/version/{versionId}/bulk-replace");
-            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
             request.Content = new StringContent(
                 JsonSerializer.Serialize(new BulkReplaceRegionsRequest(regions), _jsonOptions),
                 Encoding.UTF8, "application/json");
@@ -60,10 +55,9 @@ namespace MangaManagementSystem.Web.Services.Api
             await EnsureSuccessAsync(response, cancellationToken);
         }
 
-        public async Task<IReadOnlyList<PageRegionDto>> GetByVersionsAsync(Guid actorUserId, IReadOnlyList<Guid> versionIds, CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyList<PageRegionDto>> GetByVersionsAsync(IReadOnlyList<Guid> versionIds, CancellationToken cancellationToken = default)
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, "api/mangaka/regions/by-versions");
-            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
             request.Content = new StringContent(
                 JsonSerializer.Serialize(new VersionIdsRequest(versionIds), _jsonOptions),
                 Encoding.UTF8, "application/json");
@@ -75,10 +69,9 @@ namespace MangaManagementSystem.Web.Services.Api
             return JsonSerializer.Deserialize<List<PageRegionDto>>(content, _jsonOptions) ?? new List<PageRegionDto>();
         }
 
-        public async Task<IReadOnlyDictionary<Guid, int>> GetCountsAsync(Guid actorUserId, IReadOnlyList<Guid> versionIds, CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyDictionary<Guid, int>> GetCountsAsync(IReadOnlyList<Guid> versionIds, CancellationToken cancellationToken = default)
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, "api/mangaka/regions/counts");
-            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
             request.Content = new StringContent(
                 JsonSerializer.Serialize(new VersionIdsRequest(versionIds), _jsonOptions),
                 Encoding.UTF8, "application/json");

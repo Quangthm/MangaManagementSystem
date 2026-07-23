@@ -1,5 +1,8 @@
 using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.API.Contracts;
+using MangaManagementSystem.API.Security;
 using MangaManagementSystem.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -9,22 +12,29 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
     /// <summary>
     /// Thin HTTP boundary for Mangaka task-review workflows. Allows Mangaka to view
     /// submitted task output, approve/complete tasks, return for rework, and cancel.
-    /// Uses the transitional X-Actor-User-Id header.
+    /// Uses the authenticated JWT actor and preserves existing task authorization.
     /// </summary>
     [ApiController]
+    [Authorize]
     [Route("api/mangaka/tasks")]
     public class MangakaTaskController : ControllerBase
     {
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
+        private const string MangakaRoleName = "Mangaka";
 
         private readonly IChapterPageTaskService _taskService;
+        private readonly IAuthenticatedActorResolver _actorResolver;
+        private readonly IWorkspaceResourceAuthorizationService _workspaceAccess;
         private readonly ILogger<MangakaTaskController> _logger;
 
         public MangakaTaskController(
             IChapterPageTaskService taskService,
+            IAuthenticatedActorResolver actorResolver,
+            IWorkspaceResourceAuthorizationService workspaceAccess,
             ILogger<MangakaTaskController> logger)
         {
             _taskService = taskService;
+            _actorResolver = actorResolver;
+            _workspaceAccess = workspaceAccess;
             _logger = logger;
         }
 
@@ -33,12 +43,12 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         /// Route: GET /api/mangaka/tasks
         /// </summary>
         [HttpGet]
+        [Authorize(Roles = MangakaRoleName)]
         public async Task<IActionResult> GetTasksForReviewAsync()
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest("Could not identify the requesting user. Please sign in again.");
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             try
             {
@@ -59,6 +69,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         /// Route: GET /api/mangaka/tasks/{taskId}
         /// </summary>
         [HttpGet("{taskId:guid}")]
+        [Authorize(Roles = MangakaRoleName)]
         public async Task<IActionResult> GetTaskDetailAsync(Guid taskId)
         {
             if (taskId == Guid.Empty)
@@ -66,10 +77,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return BadRequest("Invalid task ID.");
             }
 
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest("Could not identify the requesting user. Please sign in again.");
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             try
             {
@@ -97,12 +107,19 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         /// Route: GET /api/mangaka/tasks/by-page/{chapterPageId}
         /// </summary>
         [HttpGet("by-page/{chapterPageId:guid}")]
+        [Authorize(Roles = "Mangaka,Tantou Editor")]
         public async Task<IActionResult> GetTasksByPageAsync(Guid chapterPageId)
         {
+            var (actorUserId, actorFailure) = await ResolveActorAsync("Mangaka", "Tantou Editor");
+            if (actorFailure is not null)
+                return actorFailure;
+
             if (chapterPageId == Guid.Empty)
             {
                 return BadRequest("Invalid page ID.");
             }
+            if (!await _workspaceAccess.CanAccessPagesAsync(actorUserId, new[] { chapterPageId }, HttpContext.RequestAborted))
+                return Forbid();
 
             try
             {
@@ -123,6 +140,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         /// Route: POST /api/mangaka/tasks
         /// </summary>
         [HttpPost]
+        [Authorize(Roles = MangakaRoleName)]
         public async Task<IActionResult> CreateTaskAsync([FromBody] CreateMangakaTaskRequest? request)
         {
             if (request == null)
@@ -130,10 +148,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return BadRequest("Task details are required.");
             }
 
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest("Could not identify the requesting user. Please sign in again.");
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             try
             {
@@ -187,6 +204,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         /// Route: POST /api/mangaka/tasks/{taskId}/approve
         /// </summary>
         [HttpPost("{taskId:guid}/approve")]
+        [Authorize(Roles = MangakaRoleName)]
         public async Task<IActionResult> ApproveTaskAsync(
             Guid taskId,
             [FromBody] MangakaTaskActionRequest? request)
@@ -196,10 +214,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return BadRequest("Invalid task ID.");
             }
 
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest("Could not identify the requesting user. Please sign in again.");
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             try
             {
@@ -232,6 +249,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         /// Route: POST /api/mangaka/tasks/{taskId}/return-for-rework
         /// </summary>
         [HttpPost("{taskId:guid}/return-for-rework")]
+        [Authorize(Roles = MangakaRoleName)]
         public async Task<IActionResult> ReturnForReworkAsync(
             Guid taskId,
             [FromBody] MangakaTaskActionRequest? request)
@@ -241,10 +259,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return BadRequest("Invalid task ID.");
             }
 
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest("Could not identify the requesting user. Please sign in again.");
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             if (string.IsNullOrWhiteSpace(request?.Reason))
             {
@@ -282,6 +299,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         /// Route: POST /api/mangaka/tasks/{taskId}/cancel
         /// </summary>
         [HttpPost("{taskId:guid}/cancel")]
+        [Authorize(Roles = MangakaRoleName)]
         public async Task<IActionResult> CancelTaskAsync(
             Guid taskId,
             [FromBody] MangakaTaskActionRequest? request)
@@ -291,10 +309,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return BadRequest("Invalid task ID.");
             }
 
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest("Could not identify the requesting user. Please sign in again.");
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             if (string.IsNullOrWhiteSpace(request?.Reason))
             {
@@ -332,6 +349,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         /// Route: GET /api/mangaka/tasks/{taskId}/eligible-assistants
         /// </summary>
         [HttpGet("{taskId:guid}/eligible-assistants")]
+        [Authorize(Roles = MangakaRoleName)]
         public async Task<IActionResult> GetEligibleAssistantsAsync(Guid taskId)
         {
             if (taskId == Guid.Empty)
@@ -339,10 +357,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return BadRequest("Invalid task ID.");
             }
 
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest("Could not identify the requesting user. Please sign in again.");
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             try
             {
@@ -367,6 +384,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         /// Route: POST /api/mangaka/tasks/{taskId}/reassign
         /// </summary>
         [HttpPost("{taskId:guid}/reassign")]
+        [Authorize(Roles = MangakaRoleName)]
         public async Task<IActionResult> ReassignTaskAsync(
             Guid taskId,
             [FromBody] ReassignChapterPageTaskRequest? request)
@@ -376,10 +394,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return BadRequest("Invalid task ID.");
             }
 
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest("Could not identify the requesting user. Please sign in again.");
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             if (request == null)
             {
@@ -441,20 +458,28 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             };
         }
 
-        private bool TryResolveActorUserId(out Guid actorUserId)
+        private async Task<(Guid ActorUserId, IActionResult? Failure)> ResolveActorAsync(
+            params string[] allowedRoles)
         {
-            actorUserId = Guid.Empty;
-
-            if (Request.Headers.TryGetValue(ActorUserIdHeader, out var headerValues))
+            var result = await _actorResolver.ResolveAsync(
+                User,
+                allowedRoles.Length == 0 ? new[] { MangakaRoleName } : allowedRoles);
+            if (result.Succeeded)
             {
-                string? raw = headerValues.ToString();
-                if (Guid.TryParse(raw, out actorUserId) && actorUserId != Guid.Empty)
-                {
-                    return true;
-                }
+                return (result.ActorUserId, null);
             }
 
-            return false;
+            var response = new ApiErrorResponse(
+                result.FailureKind == AuthenticatedActorFailureKind.UserNotFound
+                    ? "Authenticated Mangaka account was not found."
+                    : result.FailureKind == AuthenticatedActorFailureKind.InvalidIdentity
+                        ? "Authenticated Mangaka information is invalid."
+                        : "The current account is not an active Mangaka.");
+
+            return result.FailureKind is AuthenticatedActorFailureKind.InvalidIdentity
+                or AuthenticatedActorFailureKind.UserNotFound
+                ? (Guid.Empty, Unauthorized(response))
+                : (Guid.Empty, StatusCode(StatusCodes.Status403Forbidden, response));
         }
     }
 

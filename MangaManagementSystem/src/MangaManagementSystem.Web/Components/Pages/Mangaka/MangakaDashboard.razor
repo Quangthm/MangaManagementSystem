@@ -1387,7 +1387,6 @@
         try
         {
             await MangakaSeriesApiClient.CancelDraftAsync(
-                actorUserId: _currentUserId.Value,
                 seriesId: _cancelDraftSeriesId,
                 reason: string.IsNullOrWhiteSpace(_cancelDraftReason) ? null : _cancelDraftReason.Trim(),
                 cancellationToken: default);
@@ -1683,7 +1682,6 @@
         try
         {
             var result = await MangakaSeriesApiClient.UpdateDraftAsync(
-                actorUserId: _currentUserId.Value,
                 seriesId: _detailSeries.Id,
                 title: _editTitle.Trim(),
                 synopsis: _editSynopsis.Trim(),
@@ -1704,7 +1702,7 @@
                 try
                 {
                     var freshDto = await MangakaSeriesApiClient.GetMySeriesCardByIdAsync(
-                        _currentUserId.Value, _detailSeries.Id);
+                        _detailSeries.Id);
 
                     if (freshDto is not null)
                     {
@@ -1852,7 +1850,6 @@
         try
         {
             var result = await MangakaSeriesApiClient.SubmitProposalAsync(
-                actorUserId: _currentUserId.Value,
                 seriesId: _submitProposalSeriesId,
                 proposalFileBytes: _proposalFileBytes,
                 proposalFileName: _proposalFileName,
@@ -2029,7 +2026,7 @@
 
         try
         {
-            var dtos = await MangakaSeriesApiClient.GetMySeriesAsync(_currentUserId.Value);
+            var dtos = await MangakaSeriesApiClient.GetMySeriesAsync();
             _seriesData = dtos.Select(s => new SeriesCardData(
                 Id: s.SeriesId,
                 Title: s.Title,
@@ -2070,7 +2067,6 @@
             // Series (PROPOSAL_DRAFT), the optional SERIES_COVER FileResource, the creator
             // contributor, and the audit event. No SeriesProposal is created here.
             var created = await MangakaSeriesApiClient.CreateDraftAsync(
-                actorUserId: _currentUserId.Value,
                 title: _newDraftTitle.Trim(),
                 synopsis: string.IsNullOrWhiteSpace(_newDraftSynopsis) ? _newDraftTitle.Trim() : _newDraftSynopsis.Trim(),
                 genreIds: _newDraftGenreIds.ToList(),

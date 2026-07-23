@@ -363,8 +363,8 @@
     {
         try
         {
-            _seriesList = await SeriesClient.GetMySeriesAsync(_currentUserId);
-            _chapters = await ChapterClient.GetMyChaptersAsync(_currentUserId);
+            _seriesList = await SeriesClient.GetMySeriesAsync();
+            _chapters = await ChapterClient.GetMyChaptersAsync();
         }
         catch (Exception ex)
         {
@@ -449,7 +449,7 @@
                 _createChapterNumberLabel.Trim(),
                 string.IsNullOrWhiteSpace(_createChapterTitle) ? null : _createChapterTitle.Trim());
 
-            await ChapterClient.CreateChapterDraftAsync(_currentUserId, request);
+            await ChapterClient.CreateChapterDraftAsync(request);
             _showCreateDialog = false;
             Snackbar.Add("Chapter draft created successfully.", Severity.Success);
             await RefreshAfterMutation();
@@ -484,7 +484,7 @@
                 _editChapterNumberLabel.Trim(),
                 string.IsNullOrWhiteSpace(_editChapterTitle) ? null : _editChapterTitle.Trim());
 
-            await ChapterClient.UpdateChapterDraftAsync(_currentUserId, _editChapter.ChapterId, request);
+            await ChapterClient.UpdateChapterDraftAsync(_editChapter.ChapterId, request);
             _showEditDialog = false;
             Snackbar.Add("Chapter draft updated successfully.", Severity.Success);
             await RefreshAfterMutation();
@@ -504,7 +504,7 @@
         _actionInProgress = true;
         try
         {
-            await ChapterClient.SubmitChapterForReviewAsync(_currentUserId, chapterId);
+            await ChapterClient.SubmitChapterForReviewAsync(chapterId);
             Snackbar.Add("Chapter submitted for review.", Severity.Success);
             await RefreshAfterMutation();
         }
@@ -522,7 +522,7 @@
     {
         try
         {
-            _chapters = await ChapterClient.GetMyChaptersAsync(_currentUserId);
+            _chapters = await ChapterClient.GetMyChaptersAsync();
             ResetChapterCardsPage();
         }
         catch (Exception ex)

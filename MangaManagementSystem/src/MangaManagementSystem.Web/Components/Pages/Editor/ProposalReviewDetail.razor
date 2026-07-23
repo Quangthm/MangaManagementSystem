@@ -311,7 +311,7 @@
         _error = null;
         try
         {
-            _proposal = await EditorProposalApiClient.GetDetailAsync(_currentUserId, ProposalId);
+            _proposal = await EditorProposalApiClient.GetDetailAsync(ProposalId);
             if (_proposal == null)
             {
                 _error = "Proposal not found.";
@@ -434,7 +434,7 @@
         _claimAdditionalDialogOpen = false;
         try
         {
-            await EditorProposalApiClient.ClaimAsync(_currentUserId, ProposalId, "Claimed via Editor UI");
+            await EditorProposalApiClient.ClaimAsync(ProposalId, "Claimed via Editor UI");
             Snackbar.Add("Proposal claimed for review.", Severity.Success);
             await LoadProposal();
         }
@@ -457,7 +457,7 @@
         try
         {
             await EditorProposalApiClient.RequestRevisionAsync(
-                _currentUserId, ProposalId, _comments,
+                ProposalId, _comments,
                 _markupBytes, _markupFile?.Name, _markupFile?.ContentType);
             Snackbar.Add("Revision requested.", Severity.Success);
             CloseDialogs();
@@ -479,7 +479,7 @@
         try
         {
             await EditorProposalApiClient.PassToBoardAsync(
-                _currentUserId, ProposalId,
+                ProposalId,
                 string.IsNullOrWhiteSpace(_comments) ? null : _comments,
                 _markupBytes, _markupFile?.Name, _markupFile?.ContentType);
             Snackbar.Add("Proposal passed to board review.", Severity.Success);
@@ -506,7 +506,7 @@
         try
         {
             await EditorProposalApiClient.CancelAsync(
-                _currentUserId, ProposalId, _comments,
+                ProposalId, _comments,
                 _markupBytes!, _markupFile!.Name, _markupFile!.ContentType);
             Snackbar.Add("Proposal cancelled.", Severity.Success);
             CloseDialogs();

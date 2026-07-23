@@ -1,5 +1,8 @@
 using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.API.Contracts;
+using MangaManagementSystem.API.Security;
 using MangaManagementSystem.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -8,31 +11,48 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 {
     /// <summary>
     /// Thin HTTP boundary for Mangaka page annotations: create, resolve, and list by page. Author is
-    /// the X-Actor-User-Id header actor (BR-ANN-011/013). Uses the transitional actor header.
+    /// the authenticated JWT actor (BR-ANN-011/013).
     /// </summary>
     [ApiController]
+    [Authorize]
     [Route("api/mangaka/annotations")]
     public class MangakaAnnotationController : ControllerBase
     {
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
+        private const string MangakaRoleName = "Mangaka";
+        private const string AnnotationRoles = "Mangaka,Tantou Editor";
 
         private readonly IChapterPageAnnotationService _annotationService;
+        private readonly IAuthenticatedActorResolver _actorResolver;
+        private readonly IWorkspaceResourceAuthorizationService _workspaceAccess;
         private readonly ILogger<MangakaAnnotationController> _logger;
 
-        public MangakaAnnotationController(IChapterPageAnnotationService annotationService, ILogger<MangakaAnnotationController> logger)
+        public MangakaAnnotationController(
+            IChapterPageAnnotationService annotationService,
+            IAuthenticatedActorResolver actorResolver,
+            IWorkspaceResourceAuthorizationService workspaceAccess,
+            ILogger<MangakaAnnotationController> logger)
         {
             _annotationService = annotationService;
+            _actorResolver = actorResolver;
+            _workspaceAccess = workspaceAccess;
             _logger = logger;
         }
 
         /// <summary>GET /api/mangaka/annotations/by-page/{chapterPageId}</summary>
         [HttpGet("by-page/{chapterPageId:guid}")]
+        [Authorize(Roles = AnnotationRoles)]
         public async Task<IActionResult> GetByPageAsync(Guid chapterPageId)
         {
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
+
             if (chapterPageId == Guid.Empty)
             {
                 return BadRequest("Invalid page ID.");
             }
+            if (!await _workspaceAccess.CanAccessPagesAsync(actorUserId, new[] { chapterPageId }, HttpContext.RequestAborted))
+                return Forbid();
 
             try
             {
@@ -50,6 +70,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 
         /// <summary>POST /api/mangaka/annotations — create an annotation anchored to page region(s).</summary>
         [HttpPost]
+        [Authorize(Roles = AnnotationRoles)]
         public async Task<IActionResult> CreateAsync([FromBody] CreateMangakaAnnotationRequest? request)
         {
             if (request == null || request.PageRegionIds == null || request.PageRegionIds.Count == 0)
@@ -57,10 +78,11 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return BadRequest("An annotation must be anchored to at least one page region.");
             }
 
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest("Could not identify the requesting user. Please sign in again.");
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
+            if (!await _workspaceAccess.CanAccessRegionsAsync(actorUserId, request.PageRegionIds, HttpContext.RequestAborted))
+                return Forbid();
 
             try
             {
@@ -92,6 +114,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 
         /// <summary>POST /api/mangaka/annotations/{annotationId}/resolve</summary>
         [HttpPost("{annotationId:guid}/resolve")]
+        [Authorize(Roles = AnnotationRoles)]
         public async Task<IActionResult> ResolveAsync(Guid annotationId, [FromBody] ResolveAnnotationRequest? request)
         {
             if (annotationId == Guid.Empty)
@@ -99,10 +122,11 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return BadRequest("Invalid annotation ID.");
             }
 
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest("Could not identify the requesting user. Please sign in again.");
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
+            if (!await _workspaceAccess.CanAccessAnnotationAsync(actorUserId, annotationId, HttpContext.RequestAborted))
+                return Forbid();
 
             try
             {
@@ -122,20 +146,25 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             }
         }
 
-        private bool TryResolveActorUserId(out Guid actorUserId)
+        private async Task<(Guid ActorUserId, IActionResult? Failure)> ResolveActorAsync()
         {
-            actorUserId = Guid.Empty;
-
-            if (Request.Headers.TryGetValue(ActorUserIdHeader, out var headerValues))
+            var result = await _actorResolver.ResolveAsync(User, MangakaRoleName, "Tantou Editor");
+            if (result.Succeeded)
             {
-                string? raw = headerValues.ToString();
-                if (Guid.TryParse(raw, out actorUserId) && actorUserId != Guid.Empty)
-                {
-                    return true;
-                }
+                return (result.ActorUserId, null);
             }
 
-            return false;
+            var response = new ApiErrorResponse(
+                result.FailureKind == AuthenticatedActorFailureKind.UserNotFound
+                    ? "Authenticated Mangaka account was not found."
+                    : result.FailureKind == AuthenticatedActorFailureKind.InvalidIdentity
+                        ? "Authenticated Mangaka information is invalid."
+                        : "The current account is not an active Mangaka.");
+
+            return result.FailureKind is AuthenticatedActorFailureKind.InvalidIdentity
+                or AuthenticatedActorFailureKind.UserNotFound
+                ? (Guid.Empty, Unauthorized(response))
+                : (Guid.Empty, StatusCode(StatusCodes.Status403Forbidden, response));
         }
     }
 }
