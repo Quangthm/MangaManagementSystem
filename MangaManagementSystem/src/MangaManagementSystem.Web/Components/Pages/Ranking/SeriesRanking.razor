@@ -591,35 +591,29 @@
     private static List<RankingRow> ApplyDenseRanks(IReadOnlyList<RankingRow> sortedRows)
     {
         var result = new List<RankingRow>();
-        var rank = 0;
-        var index = 0;
+        var currentRank = 0;
 
         decimal? previousScore = null;
-        decimal? previousAverageRating = null;
-        int? previousRatingCount = null;
-        int? previousReadingCount = null;
-        Guid? previousSeriesId = null;
 
         foreach (var row in sortedRows)
         {
-            index++;
-
-            var isNewRank =
-                previousScore != row.Score
-                || previousAverageRating != row.AverageRating
-                || previousRatingCount != row.RatingCount
-                || previousReadingCount != row.ReadingCount
-                || previousSeriesId != row.SeriesId;
-
-            if (isNewRank)
+            /*
+                Ranking rule:
+                - Rank is DENSE_RANK by ranking_score DESC only.
+                - average_rating, rating_count, reading_count, and series_id
+                  are deterministic display ordering fields only.
+                - Equal ranking_score values must share the same rank.
+            */
+            if (previousScore is null || row.Score != previousScore.Value)
             {
-                rank = index;
+                currentRank++;
+                previousScore = row.Score;
             }
 
             result.Add(new RankingRow
             {
                 SeriesId = row.SeriesId,
-                Rank = rank,
+                Rank = currentRank,
                 PreviousRank = 0,
                 Title = row.Title,
                 CoverUrl = row.CoverUrl,
@@ -628,12 +622,6 @@
                 AverageRating = row.AverageRating,
                 Score = row.Score
             });
-
-            previousScore = row.Score;
-            previousAverageRating = row.AverageRating;
-            previousRatingCount = row.RatingCount;
-            previousReadingCount = row.ReadingCount;
-            previousSeriesId = row.SeriesId;
         }
 
         return result;
