@@ -6,9 +6,11 @@
 
 > **Latest series lifecycle alignment — 2026-07-19:** `HIATUS` means a paused series. Active Mangaka or Tantou Editor contributors may set a `SERIALIZED` series to `HIATUS` and resume it back to `SERIALIZED`. `HIATUS` blocks chapter release only. Only active Mangaka contributors may mark a `SERIALIZED` or `HIATUS` series as `COMPLETED`; completion blocks future mutations, cancels unreleased chapters and their distinct active `ASSIGNED`/`UNDER_REVIEW` page tasks after warning and confirmation, preserves released chapters and terminal task history, and completed series remain visible in rankings when ranking input exists.
 
-> **Latest ranking and notification alignment — 2026-07-21:** Existing approved notification flows for proposal review/decision, board poll/decision, task assignment/review, chapter review/decision, publication scheduling, and account approval remain unchanged. Ranking now uses a MAL-style weighted rating: `ranking_score = (v / (v + m)) * R + (m / (v + m)) * C`, where `R` is the series average rating, `v` is its rating count, `C` is the rating-count-weighted average rating of the effective ranking scope, and `m` is the median rating count of that scope. `reading_count` remains popularity evidence and a tie-breaker, not a direct score boost. `RANKING_WARNING` is finalized as a hybrid weekly rule: a week fails only when both `ranking_score < 6.5` and the series is in the bottom 25% for that week; high risk requires failure in at least 2 of the latest 3 consecutive completed weekly periods including the latest. Recipients are all distinct active contributors of the exact affected series.
+> **Latest ranking and notification alignment — 2026-07-21:** Existing approved notification flows for proposal review/decision, board poll/decision, task assignment/review, chapter review/decision, publication scheduling, and account approval remain unchanged. Ranking now uses a MAL-style weighted rating: `ranking_score = (v / (v + m)) * R + (m / (v + m)) * C`, where `R` is the series average rating, `v` is its rating count, `C` is the rating-count-weighted average rating of the effective ranking scope, and `m` is the median rating count of that scope. `reading_count` remains popularity evidence and is not a direct score boost; it may be used only for deterministic display ordering inside an already tied rank. `RANKING_WARNING` is finalized as a hybrid weekly rule: a week fails only when both `ranking_score < 6.5` and the series is in the bottom 25% for that week; high risk requires failure in at least 2 of the latest 3 consecutive completed weekly periods including the latest. Recipients are all distinct active contributors of the exact affected series.
 
 > **Latest chapter submission validation — 2026-07-21:** A Mangaka may submit a chapter for editorial review only from `DRAFT` or `REVISION_REQUESTED` and only when zero distinct active page tasks are associated with that chapter. `ASSIGNED` and `UNDER_REVIEW` tasks block submission; `COMPLETED` and `CANCELLED` tasks do not. Task association is derived through the existing task-region/page-region/page-version/page/chapter relationship and deduplicated by `ChapterPageTaskId`. A blocked submission leaves the chapter unchanged, creates no successful submission audit or `CHAPTER_REVIEW` notification, does not mutate tasks, and returns a clean user-facing validation response. Task creation and chapter submission must be concurrency-coordinated for the same chapter so they cannot commit an invalid state.
+
+> **Latest implementation-alignment decisions — 2026-07-23:** Email/password self-registration follows the current repository flow: the user must pass reCAPTCHA before a 6-digit email OTP is sent, and the pending account is created only after successful OTP verification; Google sign-up remains a separate verified-identity path and still creates `PENDING_APPROVAL`. The current MVP has no Mangaka proposal-withdrawal workflow. Assistants are allowed to view dynamic rankings, while manual ranking input remains restricted to Editorial Board Member/Chief roles. A `CANCELLED` chapter does not reserve its chapter number label: a new non-cancelled chapter may reuse the same label while the cancelled row keeps its original label, enforced by uniqueness among non-cancelled chapters only. Scheduling accepts `planned_release_date >=` the current publication business date (today in the configured publication timezone); past dates are invalid. `PageRegion` geometry supports either a DOT (`width = 0` and `height = 0`) or an area rectangle (`width > 0` and `height > 0`), and mixed zero/non-zero dimensions are invalid. Ranking preserves true ties: equal `ranking_score` values share the same `DENSE_RANK`; deterministic secondary ordering may be used only to display rows within the same rank and must not change `rank_position`.
 
 ---
 
@@ -53,21 +55,28 @@
 
 **Status:** Agreed
 **Primary actor:** New User
-**Goal:** Create a pending account without uploading a portfolio file.
+**Goal:** Create a pending account without uploading a portfolio file, following the current repository reCAPTCHA + email OTP verification flow.
 
 ### Main Flow
 
 ```text
-UI register form
-→ Backend API receives username/email/password/display_name/role_name
-→ Backend hashes password using BCrypt
+User opens the email/password registration form
+→ User enters username/email/password/display_name/role_name
+→ Web UI requires the user to complete reCAPTCHA
+→ Web verifies the reCAPTCHA token
+→ If reCAPTCHA succeeds, Web/API requests a registration OTP
+→ Backend sends a 6-digit verification code to the entered email
+→ UI switches to the OTP verification step
+→ User enters the 6-digit verification code
+→ Backend verifies the OTP
+→ Only after successful OTP verification, backend hashes the password using BCrypt
 → Backend calls auth.usp_User_Create
 → Database resolves role_name into role_id
 → Database creates auth.Users row with status_code = PENDING_APPROVAL
 → Database defaults display_name to username if display_name is empty/null
 → Database writes USER_REGISTERED audit event
-→ Backend returns registration success / pending approval response
-→ UI shows pending approval message
+→ Backend returns registration success
+→ UI navigates to the pending-approval state
 ```
 
 ### Database Procedure
@@ -78,6 +87,10 @@ auth.usp_User_Create
 
 ### Important Notes
 
+- Email/password registration must not create the user account before the OTP is successfully verified.
+- reCAPTCHA is required before requesting/sending the registration OTP in the current Web implementation.
+- The registration OTP is a 6-digit code sent to the entered email address.
+- Successful OTP verification does not approve the account; the new account remains `PENDING_APPROVAL`.
 - `created_by_user_id` should be `NULL` for public self-registration.
 - The user cannot access protected workspace functions while `status_code = PENDING_APPROVAL`.
 - Rejected/disabled users cannot log in.
@@ -87,8 +100,8 @@ auth.usp_User_Create
 
 ### System Should Try To
 
-- Keep registration simple.
-- Keep account approval explicit.
+- Keep the reCAPTCHA/OTP verification steps clear and retry-safe.
+- Keep account approval explicit after successful registration verification.
 - Avoid duplicate username/email accounts.
 - Avoid using `display_name` as a login identifier.
 
@@ -98,54 +111,65 @@ auth.usp_User_Create
 
 **Status:** Agreed
 **Primary actor:** New User
-**Goal:** Create a pending account and attach an optional portfolio file for admin review.
+**Goal:** Create a pending account and attach an optional portfolio file for admin review, using the same current reCAPTCHA + email OTP verification flow.
 
-### Recommended Main Flow
+### Main Flow
 
 ```text
-UI register form
+User opens the email/password registration form
 → User enters username/email/password/display_name/role_name
-→ User optionally selects portfolio file
-→ Backend API receives form data + optional portfolio file
-→ Backend uploads portfolio file to Cloudinary
-→ Cloudinary returns public_id, secure_url, content_type, file size, and other metadata
-→ Backend starts database workflow
-→ Database creates auth.Users row with portfolio_file_id = NULL
-→ Database creates manga.FileResource row with file_purpose_code = REGISTRATION_PORTFOLIO
+→ User optionally selects an approved portfolio file
+→ Web UI requires the user to complete reCAPTCHA
+→ Web verifies the reCAPTCHA token
+→ If reCAPTCHA succeeds, Web/API requests a registration OTP
+→ Backend sends a 6-digit verification code to the entered email
+→ UI switches to the OTP verification step
+→ User enters the 6-digit verification code
+→ Backend verifies the OTP
+→ Only after successful OTP verification, backend continues registration
+→ Backend validates the optional portfolio file
+→ Backend uploads the portfolio file to Cloudinary when one was selected
+→ Backend hashes the password using BCrypt
+→ Backend starts the database workflow
+→ Database creates auth.Users row with status_code = PENDING_APPROVAL and portfolio_file_id = NULL
+→ If a portfolio exists, database creates manga.FileResource with file_purpose_code = REGISTRATION_PORTFOLIO
 → Database links manga.FileResource.file_resource_id to auth.Users.portfolio_file_id
 → Database writes USER_REGISTERED audit event
 → Database may write REGISTRATION_PORTFOLIO_ATTACHED audit event
-→ Backend returns registration success / pending approval response
-→ UI shows pending approval message
+→ Backend returns registration success
+→ UI navigates to the pending-approval state
 ```
 
 ### Recommended Implementation Shape
 
-Use a wrapper workflow in the backend or a database wrapper procedure so the database part is transactionally consistent:
-
 ```text
-BEGIN TRAN
+reCAPTCHA verified
+→ 6-digit email OTP sent
+→ OTP verified
+→ optional Cloudinary upload
+→ BEGIN TRAN
     EXEC auth.usp_User_Create with @portfolio_file_id = NULL
     IF portfolio file metadata exists:
         EXEC manga.usp_FileResource_Create with @file_purpose_code = REGISTRATION_PORTFOLIO
         UPDATE auth.Users SET portfolio_file_id = @portfolio_file_resource_id
         EXEC audit.usp_AuditEvent_Append for REGISTRATION_PORTFOLIO_ATTACHED
-COMMIT
+  COMMIT
 ```
 
 ### Important Notes
 
+- The account must not be created before successful OTP verification.
+- Selecting a portfolio before OTP verification does not make it an official business file; it becomes official only when the verified registration completes successfully.
 - The UI should not directly own Cloudinary upload unless the team implements secure signed upload.
-- For MVP, backend-managed Cloudinary upload is cleaner and easier to control.
 - Cloudinary upload and SQL transaction cannot be perfectly atomic together.
-- If Cloudinary upload succeeds but the SQL transaction fails, the backend should try to delete the uploaded Cloudinary asset as cleanup.
-- `auth.usp_User_Create` should keep `@portfolio_file_id` because it may be useful for future workflows or imports.
-- Normal public registration should usually pass `@portfolio_file_id = NULL`, then attach portfolio after the user row exists.
+- If Cloudinary upload succeeds but the later SQL workflow fails, the backend should try to delete the uploaded Cloudinary asset as cleanup.
+- Registration with or without a portfolio always creates `PENDING_APPROVAL`; OTP verification does not bypass Admin approval.
+- `auth.usp_User_Create` may keep `@portfolio_file_id` for future/import workflows, while normal public registration may create the user first and attach the portfolio in the same verified registration workflow.
 
 ### System Should Try To
 
 - Avoid orphaned Cloudinary files.
-- Avoid creating `FileResource` rows without a clear user/account relationship.
+- Keep reCAPTCHA/OTP verification consistent with registration without a portfolio.
 - Keep portfolio upload optional.
 - Keep user account status as `PENDING_APPROVAL` after registration.
 - Let Admin review portfolio later during account approval.
@@ -176,6 +200,7 @@ User signs in with Google
 ### Important Notes
 
 - Google signup should not automatically activate the account unless the team changes the approval rule.
+- Google sign-up uses Google's verified identity callback instead of the email/password reCAPTCHA + 6-digit OTP sequence; it still follows the same `PENDING_APPROVAL` rule.
 - `created_by_user_id` should be `NULL`.
 - If no display name is provided, the database procedure defaults it to username.
 - If the email already exists, the flow should not create a duplicate account.
@@ -1968,7 +1993,7 @@ Tantou Editor opens the submitted chapter review queue
 → Backend creates manga.ChapterEditorialReview
 → Backend updates manga.Chapter.status_code according to the decision
 → If APPROVED and Chapter.planned_release_date is empty, Chapter.status_code becomes APPROVED
-→ If APPROVED and Chapter.planned_release_date already exists and is not in the past, Chapter.status_code becomes SCHEDULED
+→ If APPROVED and Chapter.planned_release_date already exists and is on or after the current publication business date, Chapter.status_code becomes SCHEDULED
 → Backend writes the chapter review audit event and the scheduling audit detail when approval moves the chapter to SCHEDULED
 → UI refreshes the chapter status and review history
 ```
@@ -1978,7 +2003,7 @@ Tantou Editor opens the submitted chapter review queue
 | Decision | Chapter status after review | Meaning |
 |---|---|---|
 | `APPROVED` with no planned release date | `APPROVED` | The chapter is accepted but not yet scheduled. |
-| `APPROVED` with a future planned release date | `SCHEDULED` | The chapter is accepted and locked for planned release. |
+| `APPROVED` with a planned release date of today or later | `SCHEDULED` | The chapter is accepted and locked for planned release. |
 | `REVISION_REQUESTED` | `REVISION_REQUESTED` | The same chapter attempt can be edited and resubmitted with new page versions. |
 | `CANCELLED` | `CANCELLED` | The current chapter attempt is a hard stop and becomes read-only historical reference. |
 
@@ -2033,6 +2058,7 @@ unique among non-cancelled chapters only
 
 - No `replacement_of_chapter_id` relationship is required in MVP.
 - A cancelled chapter does not reserve its chapter number label.
+- The cancelled row keeps its original label. For example, a historical `CANCELLED` Chapter 3 and a new non-cancelled Chapter 3 may coexist; the filtered unique index applies only to non-cancelled rows.
 - Page number uniqueness remains scoped to each chapter, so the replacement chapter can create its own pages starting from page 1.
 - The old cancelled chapter should not be edited, resubmitted, approved, scheduled, or released.
 
@@ -2158,7 +2184,7 @@ User opens a chapter planning/review/schedule screen
 → User chooses a planned release date
 → UI asks for confirmation before changing the schedule
 → Backend validates actor permission and chapter status
-→ Backend validates the planned release date is not in the past
+→ Backend validates the planned release date is on the current publication business date or later
 → Backend may produce a warning if the date does not match the advisory frequency pattern
 → Backend saves Chapter.planned_release_date
 → If the chapter was APPROVED, backend changes Chapter.status_code to SCHEDULED
@@ -2175,14 +2201,14 @@ User opens a chapter planning/review/schedule screen
 |---|---|
 | `WEEKLY` | Same weekday in the next week when a useful reference date exists. |
 | `MONTHLY` | Same day number in the next month when possible; otherwise the last valid day of the next month. |
-| `IRREGULAR` | No strict default is required; UI may suggest a convenient future date. |
+| `IRREGULAR` | No strict default is required; UI may suggest today or a convenient later date. |
 | `NULL` | No strict default is required; UI may show that the official release approach is not decided. |
 
 ### Hard Validation Rules
 
 | Rule | Behavior |
 |---|---|
-| Planned release date is in the past | Block. |
+| Planned release date is earlier than the current publication business date | Block. |
 | Chapter is `CANCELLED` or `RELEASED` | Block schedule/reschedule. |
 | Actor lacks permission | Block. |
 | Date does not match `Series.publication_frequency_code` suggestion | Warn only; allow authorized user to continue. |
@@ -2222,7 +2248,7 @@ Tantou Editor opens a chapter with status SCHEDULED
 → UI asks for confirmation
 → Backend validates actor permission, Chapter.status_code = SCHEDULED, and non-blank reason
 → Backend changes Chapter.status_code to ON_HOLD
-→ Backend suspends the active release plan and requires a new future planned_release_date before the chapter can return to SCHEDULED
+→ Backend suspends the active release plan and requires a new planned_release_date on the current publication business date or later before the chapter can return to SCHEDULED
 → Backend preserves the old planned date in audit details
 → Backend writes CHAPTER_PUT_ON_HOLD audit detail with reason and old/new status/date values
 → UI refreshes the chapter as read-only/on-hold
@@ -2233,9 +2259,9 @@ Tantou Editor opens a chapter with status SCHEDULED
 ```text
 Tantou Editor opens a chapter with status ON_HOLD
 → Editor chooses Return to Schedule / Schedule Again
-→ Editor selects a new planned release date that is not in the past
+→ Editor selects a new planned release date on the current publication business date or later
 → UI asks for confirmation
-→ Backend validates actor permission, Chapter.status_code = ON_HOLD, and future planned release date
+→ Backend validates actor permission, Chapter.status_code = ON_HOLD, and planned release date on the current publication business date or later
 → Backend sets Chapter.planned_release_date to the new date
 → Backend changes Chapter.status_code to SCHEDULED
 → Backend writes audit detail with old/new status and date values
@@ -2245,7 +2271,7 @@ Tantou Editor opens a chapter with status ON_HOLD
 ### Important Notes
 
 - `ON_HOLD` means the previous release plan is suspended.
-- A chapter returning from `ON_HOLD` to `SCHEDULED` must receive a new future planned release date.
+- A chapter returning from `ON_HOLD` to `SCHEDULED` must receive a new planned release date on the current publication business date or later.
 - Mangaka users cannot edit chapter content or perform page/content mutation workflows while the chapter is `SCHEDULED` or `ON_HOLD`.
 - Blocked workflows include page creation, page deletion, page-version upload, assistant task output submission that creates or changes page content, and other saved page/content mutations.
 - Automatic movement of overdue scheduled chapters to `ON_HOLD` is deferred. The MVP may show an overdue warning, but it should not auto-hold chapters unless a later workflow explicitly implements it.
@@ -2347,7 +2373,7 @@ manga.vw_SeriesRanking
 ## BF-RANK-002 — View Dynamic Series Ranking
 
 **Status:** Agreed  
-**Primary actor:** Editorial Board Member / Editorial Board Chief / Tantou Editor / Mangaka  
+**Primary actor:** General System User (all `ACTIVE` authenticated roles, including Assistant)  
 **Goal:** View the current dynamic ranking for a selected publication period without using finalized ranking storage.
 
 ### Main Flow
@@ -2356,7 +2382,7 @@ manga.vw_SeriesRanking
 User opens ranking screen
 → UI selects or filters by PublicationPeriod
 → Backend queries manga.vw_SeriesRanking for the selected publication_period_id
-→ Database computes ranking_score and DENSE_RANK by publication_period_id
+→ Database computes ranking_score and tie-preserving DENSE_RANK by publication_period_id
 → Backend returns ranked series rows
 → UI displays rank, title, rating count, average rating, reading count, and ranking score
 ```
@@ -2380,7 +2406,10 @@ m = median rating_count across all eligible ranked series
 ### Important Notes
 
 - Ranking is dynamic and reflects the latest `SeriesVoteInput` data.
-- `reading_count` does not directly increase `ranking_score`; it remains popularity/readership evidence and may remain a deterministic tie-breaker after score, average rating, and rating count.
+- All `ACTIVE` authenticated roles, including Assistants, may view ranking results; only Editorial Board Member/Chief roles may create or update manual ranking input.
+- `reading_count` does not directly increase `ranking_score`; it remains popularity/readership evidence.
+- Equal `ranking_score` values share the same `rank_position`; `DENSE_RANK()` is based on `ranking_score DESC` only.
+- For stable display within a tied rank, rows may be secondarily ordered by `average_rating DESC`, `rating_count DESC`, `reading_count DESC`, and `series_id ASC`; these fields do not break the tie or change `rank_position`.
 - The weighted score stays on the same 0-to-10 rating scale because it is a weighted combination of `R` and `C`.
 - For a direct weekly ranking, `C` and `m` are recalculated within that weekly `publication_period_id`.
 - For broader derived scopes such as monthly or all-time/yearly reporting, weekly source evidence must be aggregated by series first; then the broader scope must recalculate its own `R`, `v`, `C`, and `m`. Do not average weekly `ranking_score` values and do not reuse weekly `C` or `m`.

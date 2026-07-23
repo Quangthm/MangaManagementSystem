@@ -129,7 +129,6 @@ namespace MangaManagementSystem.Application.Services
             p.StatusCode,
             p.SubmittedByUserId,
             p.SubmittedAtUtc,
-            p.WithdrawnAtUtc,
             p.ReviewedByUserId,
             p.ReviewedAtUtc,
             p.Comments,

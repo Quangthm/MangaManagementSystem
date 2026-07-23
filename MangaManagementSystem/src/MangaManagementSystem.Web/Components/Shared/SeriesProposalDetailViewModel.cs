@@ -30,7 +30,6 @@ namespace MangaManagementSystem.Web.Components.Shared
         string? ProposalFileUrl,
         string? MarkupFileName,
         string? MarkupFileUrl,
-        DateTime? WithdrawnAtUtc,
         bool HasEditorialDecision
     );
 }
