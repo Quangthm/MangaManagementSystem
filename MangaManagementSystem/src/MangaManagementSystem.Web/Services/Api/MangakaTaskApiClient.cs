@@ -7,8 +7,6 @@ namespace MangaManagementSystem.Web.Services.Api
 {
     public class MangakaTaskApiClient : IMangakaTaskApiClient
     {
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
-
         private readonly HttpClient _httpClient;
         private readonly JsonSerializerOptions _jsonOptions;
 
@@ -22,10 +20,9 @@ namespace MangaManagementSystem.Web.Services.Api
             };
         }
 
-        public async Task<IReadOnlyList<ChapterPageTaskDto>> GetTasksForReviewAsync(Guid actorUserId, CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyList<ChapterPageTaskDto>> GetTasksForReviewAsync(CancellationToken cancellationToken = default)
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, "api/mangaka/tasks");
-            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
             await EnsureSuccessAsync(response, cancellationToken);
@@ -34,10 +31,9 @@ namespace MangaManagementSystem.Web.Services.Api
             return JsonSerializer.Deserialize<List<ChapterPageTaskDto>>(content, _jsonOptions) ?? new List<ChapterPageTaskDto>();
         }
 
-        public async Task<ChapterPageTaskDto?> GetTaskDetailAsync(Guid actorUserId, Guid taskId, CancellationToken cancellationToken = default)
+        public async Task<ChapterPageTaskDto?> GetTaskDetailAsync(Guid taskId, CancellationToken cancellationToken = default)
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, $"api/mangaka/tasks/{taskId}");
-            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
 
@@ -50,10 +46,9 @@ namespace MangaManagementSystem.Web.Services.Api
             return JsonSerializer.Deserialize<ChapterPageTaskDto>(content, _jsonOptions);
         }
 
-        public async Task ApproveTaskAsync(Guid actorUserId, Guid taskId, string? reason = null, CancellationToken cancellationToken = default)
+        public async Task ApproveTaskAsync(Guid taskId, string? reason = null, CancellationToken cancellationToken = default)
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, $"api/mangaka/tasks/{taskId}/approve");
-            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
             request.Content = new StringContent(
                 JsonSerializer.Serialize(new { reason }, _jsonOptions),
                 Encoding.UTF8, "application/json");
@@ -62,10 +57,9 @@ namespace MangaManagementSystem.Web.Services.Api
             await EnsureSuccessAsync(response, cancellationToken);
         }
 
-        public async Task ReturnTaskForReworkAsync(Guid actorUserId, Guid taskId, string reason, CancellationToken cancellationToken = default)
+        public async Task ReturnTaskForReworkAsync(Guid taskId, string reason, CancellationToken cancellationToken = default)
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, $"api/mangaka/tasks/{taskId}/return-for-rework");
-            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
             request.Content = new StringContent(
                 JsonSerializer.Serialize(new { reason }, _jsonOptions),
                 Encoding.UTF8, "application/json");
@@ -74,10 +68,9 @@ namespace MangaManagementSystem.Web.Services.Api
             await EnsureSuccessAsync(response, cancellationToken);
         }
 
-        public async Task CancelTaskAsync(Guid actorUserId, Guid taskId, string reason, CancellationToken cancellationToken = default)
+        public async Task CancelTaskAsync(Guid taskId, string reason, CancellationToken cancellationToken = default)
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, $"api/mangaka/tasks/{taskId}/cancel");
-            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
             request.Content = new StringContent(
                 JsonSerializer.Serialize(new { reason }, _jsonOptions),
                 Encoding.UTF8, "application/json");
@@ -86,10 +79,9 @@ namespace MangaManagementSystem.Web.Services.Api
             await EnsureSuccessAsync(response, cancellationToken);
         }
 
-        public async Task<ChapterPageTaskDto> CreateTaskAsync(Guid actorUserId, CreateMangakaTaskRequest request, CancellationToken cancellationToken = default)
+        public async Task<ChapterPageTaskDto> CreateTaskAsync(CreateMangakaTaskRequest request, CancellationToken cancellationToken = default)
         {
             using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "api/mangaka/tasks");
-            httpRequest.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
             httpRequest.Content = new StringContent(
                 JsonSerializer.Serialize(request, _jsonOptions),
                 Encoding.UTF8, "application/json");
@@ -103,10 +95,9 @@ namespace MangaManagementSystem.Web.Services.Api
                     "The task was created but no confirmation was returned. Please refresh and verify.");
         }
 
-        public async Task<IReadOnlyList<ChapterPageTaskDto>> GetTasksByPageAsync(Guid actorUserId, Guid chapterPageId, CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyList<ChapterPageTaskDto>> GetTasksByPageAsync(Guid chapterPageId, CancellationToken cancellationToken = default)
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, $"api/mangaka/tasks/by-page/{chapterPageId}");
-            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
             await EnsureSuccessAsync(response, cancellationToken);
@@ -115,10 +106,9 @@ namespace MangaManagementSystem.Web.Services.Api
             return JsonSerializer.Deserialize<List<ChapterPageTaskDto>>(content, _jsonOptions) ?? new List<ChapterPageTaskDto>();
         }
 
-        public async Task<IReadOnlyList<EligibleAssistantDto>> GetEligibleAssistantsAsync(Guid actorUserId, Guid taskId, CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyList<EligibleAssistantDto>> GetEligibleAssistantsAsync(Guid taskId, CancellationToken cancellationToken = default)
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, $"api/mangaka/tasks/{taskId}/eligible-assistants");
-            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
             await EnsureSuccessAsync(response, cancellationToken);
@@ -127,10 +117,9 @@ namespace MangaManagementSystem.Web.Services.Api
             return JsonSerializer.Deserialize<List<EligibleAssistantDto>>(content, _jsonOptions) ?? new List<EligibleAssistantDto>();
         }
 
-        public async Task<ReassignChapterPageTaskResult> ReassignTaskAsync(Guid actorUserId, Guid taskId, ReassignChapterPageTaskRequest reassignRequest, CancellationToken cancellationToken = default)
+        public async Task<ReassignChapterPageTaskResult> ReassignTaskAsync(Guid taskId, ReassignChapterPageTaskRequest reassignRequest, CancellationToken cancellationToken = default)
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, $"api/mangaka/tasks/{taskId}/reassign");
-            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
             request.Content = new StringContent(
                 JsonSerializer.Serialize(new
                 {
@@ -162,10 +151,9 @@ namespace MangaManagementSystem.Web.Services.Api
 
         // --- Quick Select ---
 
-        public async Task<IReadOnlyList<QuickSelectChapterDto>> GetQuickSelectChaptersAsync(Guid actorUserId, Guid seriesId, CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyList<QuickSelectChapterDto>> GetQuickSelectChaptersAsync(Guid seriesId, CancellationToken cancellationToken = default)
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, $"api/mangaka/series/{seriesId}/chapters/quick-select");
-            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
             await EnsureSuccessAsync(response, cancellationToken);
@@ -185,10 +173,9 @@ namespace MangaManagementSystem.Web.Services.Api
             return JsonSerializer.Deserialize<List<QuickSelectPageDto>>(content, _jsonOptions) ?? new List<QuickSelectPageDto>();
         }
 
-        public async Task<IReadOnlyList<QuickSelectAssistantDto>> GetQuickSelectAssistantsAsync(Guid actorUserId, Guid seriesId, CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyList<QuickSelectAssistantDto>> GetQuickSelectAssistantsAsync(Guid seriesId, CancellationToken cancellationToken = default)
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, $"api/mangaka/series/{seriesId}/assistants/quick-select");
-            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
             await EnsureSuccessAsync(response, cancellationToken);
@@ -197,10 +184,9 @@ namespace MangaManagementSystem.Web.Services.Api
             return JsonSerializer.Deserialize<List<QuickSelectAssistantDto>>(content, _jsonOptions) ?? new List<QuickSelectAssistantDto>();
         }
 
-        public async Task<QuickSelectTaskAssignmentResult> QuickSelectAssignAsync(Guid actorUserId, QuickSelectTaskAssignmentRequest quickSelectRequest, CancellationToken cancellationToken = default)
+        public async Task<QuickSelectTaskAssignmentResult> QuickSelectAssignAsync(QuickSelectTaskAssignmentRequest quickSelectRequest, CancellationToken cancellationToken = default)
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, "api/mangaka/tasks/quick-select");
-            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
             request.Content = new StringContent(
                 JsonSerializer.Serialize(quickSelectRequest, _jsonOptions),
                 Encoding.UTF8, "application/json");

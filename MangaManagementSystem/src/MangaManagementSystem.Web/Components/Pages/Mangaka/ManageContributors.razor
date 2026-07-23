@@ -10,7 +10,6 @@
 @inject IMangakaSeriesContributorApiClient ContributorApiClient
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
-@inject AuthenticationStateProvider AuthStateProvider
 
 <MangakaLayout>
     <div class="mf-page">
@@ -217,7 +216,6 @@
 @code {
     private readonly DialogOptions _dialogOptions = new() { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
 
-    private Guid _actorUserId;
     private bool _loading = true;
     private bool _dialogLoading;
     private string? _error;
@@ -247,7 +245,6 @@
     {
         try
         {
-            _actorUserId = await ResolveActorUserIdAsync();
             await LoadSeriesAsync();
 
             if (_series.Count > 0)
@@ -267,20 +264,6 @@
         }
     }
 
-    private async Task<Guid> ResolveActorUserIdAsync()
-    {
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-        var user = authState.User;
-        var raw = user.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!Guid.TryParse(raw, out var actorUserId) || actorUserId == Guid.Empty)
-        {
-            throw new InvalidOperationException("Could not identify the current user. Please sign in again.");
-        }
-
-        return actorUserId;
-    }
-
     private async Task LoadSeriesAsync()
     {
         _series = (await MangakaSeriesApiClient.GetMySeriesAsync()).ToList();
@@ -294,7 +277,7 @@
             return;
         }
 
-        _contributors = (await ContributorApiClient.GetContributorsAsync(_actorUserId, _selectedSeriesId.Value)).ToList();
+        _contributors = (await ContributorApiClient.GetContributorsAsync(_selectedSeriesId.Value)).ToList();
     }
 
     private async Task OnSeriesChanged(Guid? seriesId)
@@ -410,7 +393,7 @@
         try
         {
             return await ContributorApiClient.SearchEligibleAssistantsAsync(
-                _actorUserId, _selectedSeriesId.Value, value, cancellationToken);
+                _selectedSeriesId.Value, value, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -434,7 +417,6 @@
         try
         {
             await ContributorApiClient.AddAssistantAsync(
-                _actorUserId,
                 _selectedSeriesId.Value,
                 new AddAssistantContributorRequest(_selectedAssistantCandidate.UserId));
 
@@ -478,7 +460,6 @@
         try
         {
             await ContributorApiClient.EndAssistantAsync(
-                _actorUserId,
                 _selectedSeriesId.Value,
                 _assistantToEnd.UserId,
                 new EndAssistantContributorRequest(_endReason.Trim()));

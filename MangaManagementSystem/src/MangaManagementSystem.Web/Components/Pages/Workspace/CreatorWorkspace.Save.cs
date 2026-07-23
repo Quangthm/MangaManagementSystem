@@ -224,7 +224,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                                             fileDto,
                                             ver.Note ?? "Original Upload");
 
-                                        var createdRes = await MangakaPageApi.CreatePageWithVersionAsync(_currentUserId!.Value, createReq);
+                                        var createdRes = await MangakaPageApi.CreatePageWithVersionAsync(createReq);
                                         if (createdRes != null)
                                         {
                                             page.ChapterPageId = createdRes.Page.ChapterPageId;
@@ -249,7 +249,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                                             Regions: BuildRegionDtosForSave(ver.Regions),
                                             SetAsCurrent: true);
 
-                                        var versionDto = await MangakaPageApi.CreateVersionWithFileAndRegionsAsync(_currentUserId!.Value, req);
+                                        var versionDto = await MangakaPageApi.CreateVersionWithFileAndRegionsAsync(req);
                                         if (versionDto != null)
                                         {
                                             ver.ChapterPageVersionId = versionDto.ChapterPageVersionId;
@@ -330,7 +330,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                                     );
                                 }).ToList();
 
-                                await MangakaRegionApi.BulkReplaceAsync(_currentUserId ?? Guid.Empty, currentVersion.ChapterPageVersionId, dtos);
+                                await MangakaRegionApi.BulkReplaceAsync(currentVersion.ChapterPageVersionId, dtos);
                                 currentVersion.IsDirty = false;
                                 savedCount++;
                             }

@@ -1,5 +1,8 @@
 using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.API.Contracts;
+using MangaManagementSystem.API.Security;
 using MangaManagementSystem.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -8,21 +11,27 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 {
     /// <summary>
     /// Thin HTTP boundary for Mangaka page-region reads/writes: create a region, bulk-replace a
-    /// version's regions, and read regions/counts for a set of versions. Actor from X-Actor-User-Id
-    /// header (used as created-by; the request body's created-by is ignored to prevent spoofing).
+    /// version's regions, and read regions/counts for a set of versions. The authenticated JWT
+    /// actor is used as created-by; the request body's created-by is ignored to prevent spoofing.
     /// </summary>
     [ApiController]
+    [Authorize(Roles = MangakaRoleName)]
     [Route("api/mangaka/regions")]
     public class MangakaPageRegionController : ControllerBase
     {
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
+        private const string MangakaRoleName = "Mangaka";
 
         private readonly IPageRegionService _regionService;
+        private readonly IAuthenticatedActorResolver _actorResolver;
         private readonly ILogger<MangakaPageRegionController> _logger;
 
-        public MangakaPageRegionController(IPageRegionService regionService, ILogger<MangakaPageRegionController> logger)
+        public MangakaPageRegionController(
+            IPageRegionService regionService,
+            IAuthenticatedActorResolver actorResolver,
+            ILogger<MangakaPageRegionController> logger)
         {
             _regionService = regionService;
+            _actorResolver = actorResolver;
             _logger = logger;
         }
 
@@ -35,10 +44,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return BadRequest("A valid region on a valid version is required.");
             }
 
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest("Could not identify the requesting user. Please sign in again.");
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             try
             {
@@ -63,10 +71,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return BadRequest("Invalid version ID.");
             }
 
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest("Could not identify the requesting user. Please sign in again.");
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             try
             {
@@ -95,10 +102,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return BadRequest("Invalid version ID.");
             }
 
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest("Could not identify the requesting user. Please sign in again.");
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             try
             {
@@ -122,6 +128,10 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         [HttpPost("by-versions")]
         public async Task<IActionResult> GetByVersionsAsync([FromBody] VersionIdsRequest? request)
         {
+            var (_, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
+
             if (request?.VersionIds == null)
             {
                 return BadRequest("Version IDs are required.");
@@ -145,6 +155,10 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         [HttpPost("counts")]
         public async Task<IActionResult> GetCountsAsync([FromBody] VersionIdsRequest? request)
         {
+            var (_, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
+
             if (request?.VersionIds == null)
             {
                 return BadRequest("Version IDs are required.");
@@ -164,20 +178,25 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             }
         }
 
-        private bool TryResolveActorUserId(out Guid actorUserId)
+        private async Task<(Guid ActorUserId, IActionResult? Failure)> ResolveActorAsync()
         {
-            actorUserId = Guid.Empty;
-
-            if (Request.Headers.TryGetValue(ActorUserIdHeader, out var headerValues))
+            var result = await _actorResolver.ResolveAsync(User, MangakaRoleName);
+            if (result.Succeeded)
             {
-                string? raw = headerValues.ToString();
-                if (Guid.TryParse(raw, out actorUserId) && actorUserId != Guid.Empty)
-                {
-                    return true;
-                }
+                return (result.ActorUserId, null);
             }
 
-            return false;
+            var response = new ApiErrorResponse(
+                result.FailureKind == AuthenticatedActorFailureKind.UserNotFound
+                    ? "Authenticated Mangaka account was not found."
+                    : result.FailureKind == AuthenticatedActorFailureKind.InvalidIdentity
+                        ? "Authenticated Mangaka information is invalid."
+                        : "The current account is not an active Mangaka.");
+
+            return result.FailureKind is AuthenticatedActorFailureKind.InvalidIdentity
+                or AuthenticatedActorFailureKind.UserNotFound
+                ? (Guid.Empty, Unauthorized(response))
+                : (Guid.Empty, StatusCode(StatusCodes.Status403Forbidden, response));
         }
     }
 }

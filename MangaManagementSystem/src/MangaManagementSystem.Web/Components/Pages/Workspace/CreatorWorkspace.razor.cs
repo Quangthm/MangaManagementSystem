@@ -347,7 +347,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                     CreatedByUserId: _currentUserId
                 );
 
-                var dbRegion = await MangakaRegionApi.CreateAsync(_currentUserId ?? Guid.Empty, newRegionDto);
+                var dbRegion = await MangakaRegionApi.CreateAsync(newRegionDto);
                 region.DbId = dbRegion.PageRegionId;
                 updatedAny = true;
             }
@@ -442,7 +442,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         try
         {
             // Architecture: create the task via the typed API client (→ controller → service → SP).
-            var dbTask = await MangakaTaskApi.CreateTaskAsync(_currentUserId.Value, new CreateMangakaTaskRequest(
+            var dbTask = await MangakaTaskApi.CreateTaskAsync(new CreateMangakaTaskRequest(
                 AssignedToUserId: AssignedAssistantId.Value,
                 TypeCode: TaskType,
                 TaskTitle: $"{TaskType} Task for {target}",
@@ -515,7 +515,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             if (task.DbId.HasValue && _currentUserId.HasValue)
             {
                 // Architecture: cancel via the typed API client (→ controller → MediatR/service → SP).
-                await MangakaTaskApi.CancelTaskAsync(_currentUserId.Value, task.DbId.Value, _cancelTaskReason.Trim());
+                await MangakaTaskApi.CancelTaskAsync(task.DbId.Value, _cancelTaskReason.Trim());
                 task.Status = "Cancelled";   // kept in the list (greyed out), not removed — for traceability
             }
             else
@@ -580,7 +580,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         try
         {
             // Architecture: update the page note via the typed API client (the server keeps chapter/page_no).
-            await MangakaPageApi.UpdateNotesAsync(_currentUserId.Value, activePage.ChapterPageId, activePage.PageNotes);
+            await MangakaPageApi.UpdateNotesAsync(activePage.ChapterPageId, activePage.PageNotes);
             Snackbar.Add("Page note saved.", Severity.Success);
         }
         catch (Exception ex)
@@ -600,10 +600,10 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
         try
         {
-            var dbVer = await MangakaPageApi.GetVersionByIdAsync(_currentUserId!.Value, activeVer.ChapterPageVersionId);
+            var dbVer = await MangakaPageApi.GetVersionByIdAsync(activeVer.ChapterPageVersionId);
             if (dbVer != null)
             {
-                await MangakaPageApi.UpdateVersionAsync(_currentUserId!.Value, new UpdateChapterPageVersionDto(
+                await MangakaPageApi.UpdateVersionAsync(new UpdateChapterPageVersionDto(
                     ChapterPageVersionId: dbVer.ChapterPageVersionId,
                     ChapterPageId: dbVer.ChapterPageId,
                     VersionNo: dbVer.VersionNo,
@@ -675,8 +675,8 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
         try
         {
-            // Architecture: create the annotation via the typed API client (author from actor header).
-            var dbAnn = await MangakaAnnotationApi.CreateAsync(_currentUserId.Value, new CreateMangakaAnnotationRequest(
+            // Architecture: create the annotation via the typed API client (author from JWT actor).
+            var dbAnn = await MangakaAnnotationApi.CreateAsync(new CreateMangakaAnnotationRequest(
                 IssueTypeCode: AnnotationType,
                 AnnotationText: AnnotationComment,
                 PageRegionIds: regionIds));
@@ -764,7 +764,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             {
                 try
                 {
-                    await MangakaAnnotationApi.ResolveAsync(_currentUserId.Value, ann.DbId.Value);
+                    await MangakaAnnotationApi.ResolveAsync(ann.DbId.Value);
                     Snackbar.Add("Issue resolved.", Severity.Success);
                 }
                 catch (Exception ex)
@@ -870,7 +870,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         {
             if (Guid.TryParse(SeriesId, out var sId) && _currentUserId.HasValue)
             {
-                var contributors = await MangakaContributorApi.GetContributorsAsync(_currentUserId.Value, sId);
+                var contributors = await MangakaContributorApi.GetContributorsAsync(sId);
                 var assistantList = new List<Application.DTOs.Auth.UserDto>();
                 foreach (var c in contributors.Where(c => c.IsActive && string.Equals(c.RoleName, "Assistant", StringComparison.OrdinalIgnoreCase)))
                 {
@@ -921,7 +921,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                         Title = c.ChapterTitle ?? ""
                     }).ToList();
                     
-                    var pageCountsDict = await MangakaPageApi.GetCountsAsync(_currentUserId!.Value, chapterModels.Select(c => c.ChapterId).ToList());
+                    var pageCountsDict = await MangakaPageApi.GetCountsAsync(chapterModels.Select(c => c.ChapterId).ToList());
                     foreach(var cm in chapterModels)
                     {
                         if (pageCountsDict.TryGetValue(cm.ChapterId, out int cnt))
@@ -1001,7 +1001,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             return await AssistantTaskApi.GetTaskDetailAsync(actorUserId, parsedTaskId);
         }
 
-        return await MangakaTaskApi.GetTaskDetailAsync(actorUserId, parsedTaskId);
+        return await MangakaTaskApi.GetTaskDetailAsync(parsedTaskId);
     }
 
     private async Task<bool> TrySelectInitialWorkspaceChapterAsync()
@@ -1091,12 +1091,12 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             {
                 _isLoadingChapter = true;
                 StateHasChanged();
-                var pages = (await MangakaPageApi.GetByChapterAsync(_currentUserId!.Value, chapter.ChapterId)).ToList();
+                var pages = (await MangakaPageApi.GetByChapterAsync(chapter.ChapterId)).ToList();
                 var pageIds = pages.Select(p => p.ChapterPageId).Distinct().ToList();
-                var allVersions = (await MangakaPageApi.GetVersionsByPageIdsAsync(_currentUserId!.Value, pageIds)).ToList();
+                var allVersions = (await MangakaPageApi.GetVersionsByPageIdsAsync(pageIds)).ToList();
                 
                 var fileIds = allVersions.Select(v => v.PageFileId).Where(fid => fid != Guid.Empty).Distinct().ToList();
-                var filesDict = (await MangakaPageApi.GetFileResourcesByIdsAsync(_currentUserId!.Value, fileIds)).ToDictionary(f => f.FileResourceId);
+                var filesDict = (await MangakaPageApi.GetFileResourcesByIdsAsync(fileIds)).ToDictionary(f => f.FileResourceId);
                 
                 var verIds = allVersions.Select(v => v.ChapterPageVersionId).Distinct().ToList();
 
@@ -1106,12 +1106,12 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 // entire chapter load. Over-cap versions load with no regions but remain
                 // viewable and deletable.
                 const int MaxRegionsPerVersion = 2000;
-                var regionCounts = await MangakaRegionApi.GetCountsAsync(_currentUserId ?? Guid.Empty, verIds);
+                var regionCounts = await MangakaRegionApi.GetCountsAsync(verIds);
                 var safeVerIds = verIds
                     .Where(vid => !regionCounts.TryGetValue(vid, out var cnt) || cnt <= MaxRegionsPerVersion)
                     .ToList();
                 bool anyVersionCapped = safeVerIds.Count < verIds.Count;
-                var regionsGrouped = (await MangakaRegionApi.GetByVersionsAsync(_currentUserId ?? Guid.Empty, safeVerIds)).ToLookup(r => r.ChapterPageVersionId);
+                var regionsGrouped = (await MangakaRegionApi.GetByVersionsAsync(safeVerIds)).ToLookup(r => r.ChapterPageVersionId);
                 
                 var versionsGrouped = allVersions.ToLookup(v => v.ChapterPageId);
 
@@ -1659,7 +1659,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         MangaManagementSystem.Application.DTOs.Manga.PageRegionDto fullPage;
         try
         {
-            fullPage = await MangakaRegionApi.EnsureFullPageRegionAsync(_currentUserId.Value, versionId);
+            fullPage = await MangakaRegionApi.EnsureFullPageRegionAsync(versionId);
         }
         catch (Exception ex)
         {
@@ -2506,7 +2506,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     // session that produced a newer version. Mirrors the mapping used by the initial load.
     private async Task<string> BuildRegionsJsonFromDbAsync(Guid versionId)
     {
-        var dbRegions = await MangakaRegionApi.GetByVersionsAsync(_currentUserId ?? Guid.Empty, new[] { versionId });
+        var dbRegions = await MangakaRegionApi.GetByVersionsAsync(new[] { versionId });
         var mapped = new List<RegionModel>();
         int idx = 1;
         foreach (var r in dbRegions)

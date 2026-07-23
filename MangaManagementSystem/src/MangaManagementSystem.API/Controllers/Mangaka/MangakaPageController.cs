@@ -1,5 +1,8 @@
 using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.API.Contracts;
+using MangaManagementSystem.API.Security;
 using MangaManagementSystem.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -9,18 +12,20 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
     /// <summary>
     /// Thin HTTP boundary for Mangaka chapter-page reads and simple edits (list, detail, counts,
     /// page-note update, soft-delete). Page CREATION is part of the page+version+file workflow and is
-    /// handled elsewhere. Uses the transitional X-Actor-User-Id header.
+    /// handled elsewhere. Uses the authenticated JWT Mangaka actor.
     /// </summary>
     [ApiController]
+    [Authorize(Roles = MangakaRoleName)]
     [Route("api/mangaka/pages")]
     public class MangakaPageController : ControllerBase
     {
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
+        private const string MangakaRoleName = "Mangaka";
 
         private readonly IChapterPageService _pageService;
         private readonly IChapterPageVersionService _versionService;
         private readonly IFileResourceService _fileResourceService;
         private readonly IChapterService _chapterService;
+        private readonly IAuthenticatedActorResolver _actorResolver;
         private readonly ILogger<MangakaPageController> _logger;
 
         public MangakaPageController(
@@ -28,12 +33,14 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             IChapterPageVersionService versionService,
             IFileResourceService fileResourceService,
             IChapterService chapterService,
+            IAuthenticatedActorResolver actorResolver,
             ILogger<MangakaPageController> logger)
         {
             _pageService = pageService;
             _versionService = versionService;
             _fileResourceService = fileResourceService;
             _chapterService = chapterService;
+            _actorResolver = actorResolver;
             _logger = logger;
         }
 
@@ -42,6 +49,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         [HttpGet("by-chapter/{chapterId:guid}")]
         public async Task<IActionResult> GetByChapterAsync(Guid chapterId)
         {
+            var (_, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null) return actorFailure;
+
             if (chapterId == Guid.Empty)
             {
                 return BadRequest("Invalid chapter ID.");
@@ -65,6 +75,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         [HttpGet("{pageId:guid}")]
         public async Task<IActionResult> GetByIdAsync(Guid pageId)
         {
+            var (_, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null) return actorFailure;
+
             if (pageId == Guid.Empty)
             {
                 return BadRequest("Invalid page ID.");
@@ -88,6 +101,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         [HttpPost("counts")]
         public async Task<IActionResult> GetCountsAsync([FromBody] PageCountsRequest? request)
         {
+            var (_, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null) return actorFailure;
+
             if (request?.ChapterIds == null)
             {
                 return BadRequest("Chapter IDs are required.");
@@ -116,10 +132,8 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return BadRequest("Invalid page ID.");
             }
 
-            if (!TryResolveActorUserId(out _))
-            {
-                return BadRequest("Could not identify the requesting user. Please sign in again.");
-            }
+            var (_, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null) return actorFailure;
 
             try
             {
@@ -155,10 +169,8 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return BadRequest("Invalid page ID.");
             }
 
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest("Could not identify the requesting user. Please sign in again.");
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null) return actorFailure;
 
             try
             {
@@ -189,7 +201,8 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         public async Task<IActionResult> CreatePageWithVersionAsync([FromBody] CreatePageWithVersionRequestDto? request)
         {
             if (request == null) return BadRequest("Request body is required.");
-            if (!TryResolveActorUserId(out Guid actorUserId)) return BadRequest("Could not identify the requesting user. Please sign in again.");
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null) return actorFailure;
 
             try
             {
@@ -212,6 +225,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         [HttpPost("versions/by-page-ids")]
         public async Task<IActionResult> GetVersionsByPageIdsAsync([FromBody] GetVersionsByPageIdsRequest? request)
         {
+            var (_, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null) return actorFailure;
+
             if (request?.PageIds == null) return BadRequest("Page IDs are required.");
             try
             {
@@ -229,6 +245,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         [HttpGet("versions/{versionId:guid}")]
         public async Task<IActionResult> GetVersionByIdAsync(Guid versionId)
         {
+            var (_, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null) return actorFailure;
+
             if (versionId == Guid.Empty) return BadRequest("Invalid version ID.");
             try
             {
@@ -247,7 +266,8 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         public async Task<IActionResult> CreateVersionWithFileAndRegionsAsync([FromBody] CreateVersionWithFileAndRegionsRequestDto? request)
         {
             if (request == null) return BadRequest("Request body is required.");
-            if (!TryResolveActorUserId(out Guid actorUserId)) return BadRequest("Could not identify the requesting user. Please sign in again.");
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null) return actorFailure;
 
             try
             {
@@ -282,7 +302,8 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         public async Task<IActionResult> UpdateVersionAsync([FromBody] UpdateChapterPageVersionDto? request)
         {
             if (request == null) return BadRequest("Request body is required.");
-            if (!TryResolveActorUserId(out _)) return BadRequest("Could not identify the requesting user. Please sign in again.");
+            var (_, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null) return actorFailure;
 
             try
             {
@@ -301,7 +322,8 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         public async Task<IActionResult> SetCurrentVersionAsync(Guid pageId, [FromBody] SetCurrentVersionRequest? request)
         {
             if (pageId == Guid.Empty || request == null) return BadRequest("Invalid request.");
-            if (!TryResolveActorUserId(out _)) return BadRequest("Could not identify the requesting user. Please sign in again.");
+            var (_, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null) return actorFailure;
 
             try
             {
@@ -328,7 +350,8 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         public async Task<IActionResult> DeleteVersionImageAsync(Guid versionId)
         {
             if (versionId == Guid.Empty) return BadRequest("Invalid version ID.");
-            if (!TryResolveActorUserId(out Guid actorUserId)) return BadRequest("Could not identify the requesting user. Please sign in again.");
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null) return actorFailure;
 
             try
             {
@@ -346,6 +369,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         [HttpPost("files/by-ids")]
         public async Task<IActionResult> GetFileResourcesByIdsAsync([FromBody] GetFileResourcesByIdsRequest? request)
         {
+            var (_, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null) return actorFailure;
+
             if (request?.FileIds == null) return BadRequest("File IDs are required.");
             try
             {
@@ -359,20 +385,25 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             }
         }
 
-        private bool TryResolveActorUserId(out Guid actorUserId)
+        private async Task<(Guid ActorUserId, IActionResult? Failure)> ResolveActorAsync()
         {
-            actorUserId = Guid.Empty;
-
-            if (Request.Headers.TryGetValue(ActorUserIdHeader, out var headerValues))
+            var result = await _actorResolver.ResolveAsync(User, MangakaRoleName);
+            if (result.Succeeded)
             {
-                string? raw = headerValues.ToString();
-                if (Guid.TryParse(raw, out actorUserId) && actorUserId != Guid.Empty)
-                {
-                    return true;
-                }
+                return (result.ActorUserId, null);
             }
 
-            return false;
+            var response = new ApiErrorResponse(
+                result.FailureKind == AuthenticatedActorFailureKind.UserNotFound
+                    ? "Authenticated Mangaka account was not found."
+                    : result.FailureKind == AuthenticatedActorFailureKind.InvalidIdentity
+                        ? "Authenticated Mangaka information is invalid."
+                        : "The current account is not an active Mangaka.");
+
+            return result.FailureKind is AuthenticatedActorFailureKind.InvalidIdentity
+                or AuthenticatedActorFailureKind.UserNotFound
+                ? (Guid.Empty, Unauthorized(response))
+                : (Guid.Empty, StatusCode(StatusCodes.Status403Forbidden, response));
         }
     }
 }
