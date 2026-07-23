@@ -120,7 +120,7 @@
     ];
 
     private readonly Dictionary<Guid, IReadOnlyList<Guid>> _monthWeekPeriodIds = [];
-    private readonly Dictionary<Guid, IReadOnlyList<RankingRow>> _weeklyRankingCache = [];
+    private readonly Dictionary<Guid, IReadOnlyList<SeriesInputRow>> _weeklyVoteInputCache = [];
 
     private List<PublicationPeriodOption> _weeklyPublicationPeriods = [];
     private List<PublicationPeriodOption> _periodOptions = [];
@@ -381,14 +381,10 @@
             return;
         }
 
-        var rankingRows = await RankingApiClient.GetRankingAsync(
-            _selectedPeriodOptionId,
-            _rankingSearch,
-            _rankingSort);
+        var voteInputRows = await LoadVoteInputRowsForRankingAsync(
+            [_selectedPeriodOptionId]);
 
-        _rankingRows = rankingRows
-            .Select(RankingUiHelper.ToRankingRow)
-            .ToList();
+        _rankingRows = BuildRankingRowsFromVoteInputs(voteInputRows);
     }
 
     private async Task LoadInputRowsForCurrentScopeAsync()
@@ -453,8 +449,9 @@
             return;
         }
 
-        var weeklyRows = await LoadWeeklyRankingRowsAsync(weekPeriodIds);
-        _rankingRows = AggregateRankingRows(weeklyRows);
+        var voteInputRows = await LoadVoteInputRowsForRankingAsync(weekPeriodIds);
+
+        _rankingRows = BuildRankingRowsFromVoteInputs(voteInputRows);
     }
 
     private async Task LoadAllTimeRowsAsync()
@@ -463,28 +460,30 @@
             .Select(period => period.PublicationPeriodId)
             .ToList();
 
-        var weeklyRows = await LoadWeeklyRankingRowsAsync(weekPeriodIds);
-        _rankingRows = AggregateRankingRows(weeklyRows);
+        var voteInputRows = await LoadVoteInputRowsForRankingAsync(weekPeriodIds);
+
+        _rankingRows = BuildRankingRowsFromVoteInputs(voteInputRows);
     }
 
-    private async Task<List<RankingRow>> LoadWeeklyRankingRowsAsync(IEnumerable<Guid> weekPeriodIds)
+    private async Task<List<SeriesInputRow>> LoadVoteInputRowsForRankingAsync(
+        IEnumerable<Guid> weekPeriodIds)
     {
-        var result = new List<RankingRow>();
+        var result = new List<SeriesInputRow>();
 
         foreach (var periodId in weekPeriodIds.Distinct())
         {
-            if (!_weeklyRankingCache.TryGetValue(periodId, out var cachedRows))
+            if (!_weeklyVoteInputCache.TryGetValue(periodId, out var cachedRows))
             {
-                var apiRows = await RankingApiClient.GetRankingAsync(
+                var apiRows = await RankingApiClient.GetVoteInputsAsync(
                     periodId,
                     searchText: null,
-                    sort: "rank_asc");
+                    sort: "updated_desc");
 
                 cachedRows = apiRows
-                    .Select(RankingUiHelper.ToRankingRow)
+                    .Select(RankingUiHelper.ToInputRow)
                     .ToList();
 
-                _weeklyRankingCache[periodId] = cachedRows;
+                _weeklyVoteInputCache[periodId] = cachedRows;
             }
 
             result.AddRange(cachedRows);
@@ -493,15 +492,15 @@
         return result;
     }
 
-    private List<RankingRow> AggregateRankingRows(IEnumerable<RankingRow> sourceRows)
+    private List<RankingRow> BuildRankingRowsFromVoteInputs(
+        IEnumerable<SeriesInputRow> sourceRows)
     {
-        var normalizedSearch = _rankingSearch.Trim();
-
-        var groupedRows = sourceRows
+        var aggregatedRows = sourceRows
             .GroupBy(row => row.SeriesId)
             .Select(group =>
             {
                 var first = group.First();
+
                 var ratingCount = group.Sum(row => row.RatingCount);
                 var readingCount = group.Sum(row => row.ReadingCount);
 
@@ -509,48 +508,72 @@
                     ? 0m
                     : group.Sum(row => row.AverageRating * row.RatingCount) / ratingCount;
 
-                var score = CalculateRankingScore(
-                    averageRating,
+                return new AggregatedRankingRow(
+                    first.SeriesId,
+                    first.Title,
+                    first.CoverUrl,
                     ratingCount,
-                    readingCount);
+                    readingCount,
+                    averageRating);
+            })
+            .ToList();
 
-                return new RankingRow
-                {
-                    SeriesId = first.SeriesId,
-                    Rank = 0,
-                    PreviousRank = 0,
-                    Title = first.Title,
-                    CoverUrl = first.CoverUrl,
-                    ReadingCount = readingCount,
-                    RatingCount = ratingCount,
-                    AverageRating = Math.Round(averageRating, 2),
-                    Score = score
-                };
-            });
+        if (aggregatedRows.Count == 0)
+        {
+            return [];
+        }
+
+        var scopeWeightedAverageRating = CalculateScopeWeightedAverageRating(aggregatedRows);
+        var medianRatingCount = CalculateMedianRatingCount(aggregatedRows);
+
+        var scoredRows = aggregatedRows
+            .Select(row => new RankingRow
+            {
+                SeriesId = row.SeriesId,
+                Rank = 0,
+                PreviousRank = 0,
+                Title = row.Title,
+                CoverUrl = row.CoverUrl,
+                ReadingCount = row.ReadingCount,
+                RatingCount = row.RatingCount,
+                AverageRating = Math.Round(row.AverageRating, 2),
+                Score = CalculateRankingScore(
+                    row.AverageRating,
+                    row.RatingCount,
+                    scopeWeightedAverageRating,
+                    medianRatingCount)
+            })
+            .ToList();
+
+        var officialSortedRows = scoredRows
+            .OrderByDescending(row => row.Score)
+            .ThenByDescending(row => row.AverageRating)
+            .ThenByDescending(row => row.RatingCount)
+            .ThenByDescending(row => row.ReadingCount)
+            .ThenBy(row => row.SeriesId)
+            .ToList();
+
+        var rankedRows = ApplyDenseRanks(officialSortedRows);
+
+        var normalizedSearch = _rankingSearch.Trim();
+
+        IEnumerable<RankingRow> displayRows = rankedRows;
 
         if (!string.IsNullOrWhiteSpace(normalizedSearch))
         {
-            groupedRows = groupedRows.Where(row =>
+            displayRows = displayRows.Where(row =>
                 row.Title.Contains(normalizedSearch, StringComparison.OrdinalIgnoreCase));
         }
 
-        var sortedRows = ApplyRankingSort(groupedRows)
-            .ToList();
-
-        return ApplyDenseRanks(sortedRows);
+        return ApplyRankingDisplaySort(displayRows).ToList();
     }
 
-    private IEnumerable<RankingRow> ApplyRankingSort(IEnumerable<RankingRow> rows)
+    private IEnumerable<RankingRow> ApplyRankingDisplaySort(
+        IEnumerable<RankingRow> rows)
     {
         return _rankingSort switch
         {
-            "rank_desc" => rows
-                .OrderBy(row => row.Score)
-                .ThenBy(row => row.AverageRating)
-                .ThenBy(row => row.RatingCount)
-                .ThenBy(row => row.ReadingCount)
-                .ThenByDescending(row => row.SeriesId),
-
+            "rank_desc" => rows.OrderByDescending(row => row.Rank),
             "title_asc" => rows.OrderBy(row => row.Title),
             "title_desc" => rows.OrderByDescending(row => row.Title),
             "score_desc" => rows.OrderByDescending(row => row.Score),
@@ -561,13 +584,7 @@
             "reading_count_asc" => rows.OrderBy(row => row.ReadingCount),
             "rating_count_desc" => rows.OrderByDescending(row => row.RatingCount),
             "rating_count_asc" => rows.OrderBy(row => row.RatingCount),
-
-            _ => rows
-                .OrderByDescending(row => row.Score)
-                .ThenByDescending(row => row.AverageRating)
-                .ThenByDescending(row => row.RatingCount)
-                .ThenByDescending(row => row.ReadingCount)
-                .ThenBy(row => row.SeriesId)
+            _ => rows.OrderBy(row => row.Rank)
         };
     }
 
@@ -625,12 +642,57 @@
     private static decimal CalculateRankingScore(
         decimal averageRating,
         int ratingCount,
-        int readingCount)
+        decimal scopeWeightedAverageRating,
+        decimal medianRatingCount)
     {
-        var weightedRating = averageRating * (decimal)Math.Log10(1 + ratingCount);
-        var readingBoost = readingCount * 0.001m;
+        var denominator = ratingCount + medianRatingCount;
 
-        return Math.Round(weightedRating + readingBoost, 4);
+        if (denominator <= 0)
+        {
+            return 0m;
+        }
+
+        var score =
+            (ratingCount * averageRating + medianRatingCount * scopeWeightedAverageRating)
+            / denominator;
+
+        return Math.Round(score, 4);
+    }
+
+    private static decimal CalculateScopeWeightedAverageRating(
+        IReadOnlyList<AggregatedRankingRow> rows)
+    {
+        var totalRatingCount = rows.Sum(row => row.RatingCount);
+
+        if (totalRatingCount <= 0)
+        {
+            return 0m;
+        }
+
+        return rows.Sum(row => row.AverageRating * row.RatingCount) / totalRatingCount;
+    }
+
+    private static decimal CalculateMedianRatingCount(
+        IReadOnlyList<AggregatedRankingRow> rows)
+    {
+        if (rows.Count == 0)
+        {
+            return 0m;
+        }
+
+        var orderedCounts = rows
+            .Select(row => row.RatingCount)
+            .OrderBy(count => count)
+            .ToList();
+
+        var middleIndex = orderedCounts.Count / 2;
+
+        if (orderedCounts.Count % 2 == 1)
+        {
+            return orderedCounts[middleIndex];
+        }
+
+        return (orderedCounts[middleIndex - 1] + orderedCounts[middleIndex]) / 2m;
     }
 
     private async Task OnRankingScopeChangedAsync(string value)
@@ -716,9 +778,9 @@
     }
 
     private async Task<IEnumerable<CatalogEntry>> SearchSeriesAsync(
-    Guid publicationPeriodId,
-    string searchText,
-    CancellationToken cancellationToken)
+        Guid publicationPeriodId,
+        string? searchText,
+        CancellationToken cancellationToken)
     {
         if (!_canManageRankingInput || publicationPeriodId == Guid.Empty)
         {
@@ -767,7 +829,7 @@
 
             _insertDialogOpen = false;
 
-            _weeklyRankingCache.Clear();
+            _weeklyVoteInputCache.Clear();
 
             Snackbar.Add(
                 $"{form.Series.Title} vote input saved to database.",
@@ -805,7 +867,7 @@
                 request.ReadingCount,
                 request.DataSourceNote);
 
-            _weeklyRankingCache.Clear();
+            _weeklyVoteInputCache.Clear();
 
             Snackbar.Add(
                 "Series vote input updated in database.",
@@ -836,6 +898,14 @@
         var bytes = MD5.HashData(Encoding.UTF8.GetBytes(key));
         return new Guid(bytes);
     }
+
+    private sealed record AggregatedRankingRow(
+        Guid SeriesId,
+        string Title,
+        string? CoverUrl,
+        int RatingCount,
+        int ReadingCount,
+        decimal AverageRating);
 
     private static bool IsRankingInputRole(ClaimsPrincipal user)
     {
