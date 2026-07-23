@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.API.Contracts;
+using MangaManagementSystem.API.Security;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Features.Mangaka.Series.Commands.CancelSeriesDraft;
 using MangaManagementSystem.Application.Features.Mangaka.Series.Commands.CreateSeriesDraft;
@@ -14,6 +15,7 @@ using MangaManagementSystem.Application.Features.Mangaka.SeriesProposals.Command
 using MangaManagementSystem.Application.Features.Mangaka.SeriesProposals.Queries.GetMySeriesProposalDetail;
 using MangaManagementSystem.Application.Features.Mangaka.SeriesProposals.Queries.GetMySeriesProposals;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
@@ -31,22 +33,23 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
     ///   CancelDraftAsync       → CancelSeriesDraftCommand
     /// </summary>
     [ApiController]
+    [Authorize(Roles = MangakaRoleName)]
     [Route("api/mangaka/series")]
     public class MangakaSeriesController : ControllerBase
     {
-        // Transitional actor header. The API does not yet own authentication; the Web host
-        // owns the Blazor cookie/session and forwards the logged-in user's id here. This is a
-        // documented temporary server-to-server pattern, not a final auth design.
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
+        private const string MangakaRoleName = "Mangaka";
 
         private readonly IMediator _mediator;
+        private readonly IAuthenticatedActorResolver _actorResolver;
         private readonly ILogger<MangakaSeriesController> _logger;
 
         public MangakaSeriesController(
             IMediator mediator,
+            IAuthenticatedActorResolver actorResolver,
             ILogger<MangakaSeriesController> logger)
         {
             _mediator = mediator;
+            _actorResolver = actorResolver;
             _logger   = logger;
         }
 
@@ -69,11 +72,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return ValidationProblem(ModelState);
             }
 
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             byte[]? coverBytes       = null;
             string? coverFileName    = null;
@@ -137,11 +138,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             [FromForm] SubmitSeriesProposalForm request,
             CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             if (request.ProposalFile is not { Length: > 0 })
             {
@@ -195,11 +194,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             [FromForm] UpdateSeriesDraftForm request,
             CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             if (string.IsNullOrWhiteSpace(request.Title))
             {
@@ -276,11 +273,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             [FromBody] CancelSeriesDraftRequest? request,
             CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             string? reason = string.IsNullOrWhiteSpace(request?.Reason)
                 ? null
@@ -327,11 +322,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         public async Task<IActionResult> GetMySeriesAsync(
             CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             var query = new GetMyMangakaSeriesQuery(actorUserId);
 
@@ -362,11 +355,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             Guid seriesId,
             CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             var query = new GetMyMangakaSeriesCardByIdQuery(actorUserId, seriesId);
 
@@ -402,11 +393,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         public async Task<IActionResult> GetMySeriesProposalsAsync(
             CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             var query = new GetMySeriesProposalsQuery(actorUserId);
 
@@ -436,11 +425,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             Guid proposalId,
             CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             var query = new GetMySeriesProposalDetailQuery(actorUserId, proposalId);
 
@@ -462,20 +449,32 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             }
         }
 
-        private bool TryResolveActorUserId(out Guid actorUserId)
+        private async Task<(Guid ActorUserId, IActionResult? Failure)>
+            ResolveActorAsync()
         {
-            actorUserId = Guid.Empty;
+            var result = await _actorResolver.ResolveAsync(
+                User,
+                MangakaRoleName);
 
-            if (Request.Headers.TryGetValue(ActorUserIdHeader, out var headerValues))
+            if (result.Succeeded)
             {
-                string? raw = headerValues.ToString();
-                if (Guid.TryParse(raw, out actorUserId) && actorUserId != Guid.Empty)
-                {
-                    return true;
-                }
+                return (result.ActorUserId, null);
             }
 
-            return false;
+            var response = new ApiErrorResponse(
+                result.FailureKind == AuthenticatedActorFailureKind.UserNotFound
+                    ? "Authenticated Mangaka account was not found."
+                    : result.FailureKind == AuthenticatedActorFailureKind.InvalidIdentity
+                        ? "Authenticated Mangaka information is invalid."
+                        : "The current account is not an active Mangaka.");
+
+            return result.FailureKind is
+                AuthenticatedActorFailureKind.InvalidIdentity
+                or AuthenticatedActorFailureKind.UserNotFound
+                ? (Guid.Empty, Unauthorized(response))
+                : (Guid.Empty, StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    response));
         }
     }
 }

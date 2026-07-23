@@ -70,7 +70,7 @@
 
         try
         {
-            _proposalData = await MangakaSeriesApiClient.GetMySeriesProposalsAsync(_currentUserId.Value);
+            _proposalData = await MangakaSeriesApiClient.GetMySeriesProposalsAsync();
             _mappedItems = _proposalData.Select(MapToListItem).ToList().AsReadOnly();
             _availableGenres = _proposalData
                 .SelectMany(p => p.Genres)

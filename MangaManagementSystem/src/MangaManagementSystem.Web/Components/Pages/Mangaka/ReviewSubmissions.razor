@@ -726,7 +726,7 @@
         _quickSelectLoadingSeries = true;
         try
         {
-            _quickSelectSeries = await MangakaSeriesClient.GetMySeriesAsync(_currentUserId);
+            _quickSelectSeries = await MangakaSeriesClient.GetMySeriesAsync();
         }
         catch (Exception ex)
         {

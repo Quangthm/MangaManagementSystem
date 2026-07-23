@@ -17,14 +17,12 @@ namespace MangaManagementSystem.Web.Services.Api
         /// Server-side scoped — only series the actor contributes to are returned.
         /// </summary>
         Task<IReadOnlyList<SeriesDto>> GetMySeriesAsync(
-            Guid actorUserId,
             CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Creates a new series draft (status PROPOSAL_DRAFT) with an optional cover image.
         /// </summary>
         Task<SeriesDraftCreatedDto> CreateDraftAsync(
-            Guid actorUserId,
             string title,
             string synopsis,
             IReadOnlyList<Guid> genreIds,
@@ -45,7 +43,6 @@ namespace MangaManagementSystem.Web.Services.Api
         /// editing is locked. Returns the created SeriesProposal identifiers and status codes.
         /// </summary>
         Task<SeriesProposalSubmittedDto> SubmitProposalAsync(
-            Guid actorUserId,
             Guid seriesId,
             byte[] proposalFileBytes,
             string proposalFileName,
@@ -59,7 +56,6 @@ namespace MangaManagementSystem.Web.Services.Api
         /// Returns the updated profile data including the new cover URL if a cover was replaced.
         /// </summary>
         Task<SeriesDraftUpdatedDto> UpdateDraftAsync(
-            Guid actorUserId,
             Guid seriesId,
             string title,
             string synopsis,
@@ -79,7 +75,6 @@ namespace MangaManagementSystem.Web.Services.Api
         /// Reason is optional; pass null to cancel without a reason.
         /// </summary>
         Task<SeriesDraftCancelledDto> CancelDraftAsync(
-            Guid actorUserId,
             Guid seriesId,
             string? reason = null,
             CancellationToken cancellationToken = default);
@@ -89,7 +84,6 @@ namespace MangaManagementSystem.Web.Services.Api
         /// memberships. Read-only tracking — no mutations. Server-side scoped.
         /// </summary>
         Task<IReadOnlyList<MangakaSeriesProposalDto>> GetMySeriesProposalsAsync(
-            Guid actorUserId,
             CancellationToken cancellationToken = default);
 
         /// <summary>
@@ -97,7 +91,6 @@ namespace MangaManagementSystem.Web.Services.Api
         /// memberships. Returns null when not found or not authorized. Read-only.
         /// </summary>
         Task<MangakaSeriesProposalDto?> GetMySeriesProposalDetailAsync(
-            Guid actorUserId,
             Guid proposalId,
             CancellationToken cancellationToken = default);
 
@@ -106,7 +99,6 @@ namespace MangaManagementSystem.Web.Services.Api
         /// Same scoping as GetMySeriesAsync but targeted. Returns null when not found or not authorized.
         /// </summary>
         Task<SeriesDto?> GetMySeriesCardByIdAsync(
-            Guid actorUserId,
             Guid seriesId,
             CancellationToken cancellationToken = default);
     }

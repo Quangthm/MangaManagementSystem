@@ -897,7 +897,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 SeriesSubtitle = string.Join(", ", series.Genres.Select(g => g.GenreName));
                 _seriesStatusCode = series.StatusCode;
                 
-                var chapters = await MangakaChapterApi.GetSeriesChaptersAsync(_currentUserId!.Value, id);
+                var chapters = await MangakaChapterApi.GetSeriesChaptersAsync(id);
                 if (chapters != null && chapters.Any())
                 {
                     var chapterModels = chapters
@@ -1285,7 +1285,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         {
             // Architecture: route through the typed API client (Razor → API client → controller →
             // MediatR → handler → SP), not a direct Application service call.
-            var result = await MangakaChapterApi.SubmitChapterForReviewAsync(_currentUserId.Value, chapter.ChapterId);
+            var result = await MangakaChapterApi.SubmitChapterForReviewAsync(chapter.ChapterId);
             chapter.StatusCode = result.StatusCode;   // authoritative status from the server (UNDER_REVIEW)
             chapter.IsCompleted = false;
             StateHasChanged();
@@ -1305,7 +1305,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         try
         {
             // Architecture: route through the typed API client (→ controller → MediatR → handler → EF).
-            var result = await MangakaChapterApi.CancelChapterSubmissionAsync(_currentUserId.Value, chapterId);
+            var result = await MangakaChapterApi.CancelChapterSubmissionAsync(chapterId);
             chapter.StatusCode = result.StatusCode;   // authoritative status from the server (DRAFT)
             StateHasChanged();
             Snackbar.Add("Submission cancelled. Chapter is now back to DRAFT.", Severity.Info);
@@ -1348,7 +1348,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             // A number only needs to be unique among NON-cancelled chapters: a cancelled chapter does not
             // reserve its number (BR-CH-002), and the server frees the number by relabelling the cancelled
             // chapter on create. So the client only blocks collisions with active (non-cancelled) chapters.
-            var allChapters = await MangakaChapterApi.GetSeriesChaptersAsync(_currentUserId!.Value, seriesGuid);
+            var allChapters = await MangakaChapterApi.GetSeriesChaptersAsync(seriesGuid);
             _existingChapterLabels = allChapters
                 .Where(c => !string.Equals(c.StatusCode, "CANCELLED", StringComparison.OrdinalIgnoreCase))
                 .Select(c => (c.ChapterNumberLabel ?? "").Trim())
@@ -1471,7 +1471,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         {
             // Architecture: cancel via the typed API client (→ controller → MediatR → handler → EF,
             // which sets CANCELLED + writes the CHAPTER_CANCELLED audit event). Content preserved.
-            var dto = await MangakaChapterApi.CancelChapterAsync(_currentUserId.Value, chapter.ChapterId);
+            var dto = await MangakaChapterApi.CancelChapterAsync(chapter.ChapterId);
             chapter.StatusCode = dto.StatusCode;   // authoritative (CANCELLED)
         }
         catch (Exception ex)

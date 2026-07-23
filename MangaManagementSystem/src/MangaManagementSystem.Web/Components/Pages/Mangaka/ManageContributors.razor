@@ -283,7 +283,7 @@
 
     private async Task LoadSeriesAsync()
     {
-        _series = (await MangakaSeriesApiClient.GetMySeriesAsync(_actorUserId)).ToList();
+        _series = (await MangakaSeriesApiClient.GetMySeriesAsync()).ToList();
     }
 
     private async Task LoadContributorsAsync()

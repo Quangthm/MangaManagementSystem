@@ -538,7 +538,7 @@
 
             if (_isMangaka)
             {
-                var chapters = await MangakaChapterApi.GetMyChaptersAsync(_currentUserId);
+                var chapters = await MangakaChapterApi.GetMyChaptersAsync();
                 items = chapters.Select(c => MapMangakaChapterToActionableItem(c));
             }
             else if (_isEditor)
@@ -749,7 +749,7 @@
             if (_isMangaka)
             {
                 response = await MangakaChapterApi.SetPlannedReleaseDateAsync(
-                    _currentUserId, chapter.ChapterId, request);
+                    chapter.ChapterId, request);
             }
             else if (_isEditor)
             {

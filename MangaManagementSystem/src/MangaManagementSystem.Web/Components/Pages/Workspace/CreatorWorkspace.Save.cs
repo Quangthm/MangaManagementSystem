@@ -91,7 +91,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                         // only if somehow unset. The DB enforces uniqueness incl. cancelled chapters.
                         var numberLabel = string.IsNullOrWhiteSpace(chap.NumberLabel) ? chap.Id.ToString() : chap.NumberLabel.Trim();
                         var req = new CreateChapterDraftRequest(seriesGuid, numberLabel, chap.Title);
-                        var createdDto = await MangakaChapterApi.CreateChapterDraftAsync(_currentUserId!.Value, req);
+                        var createdDto = await MangakaChapterApi.CreateChapterDraftAsync(req);
                         if (createdDto != null)
                         {
                             chap.ChapterId = createdDto.ChapterId;
@@ -118,7 +118,6 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                     // Id would collide with the integer chapter that happens to share that position.
                     var numberLabel = string.IsNullOrWhiteSpace(chap.NumberLabel) ? chap.Id.ToString() : chap.NumberLabel.Trim();
                     await MangakaChapterApi.UpdateChapterDraftAsync(
-                        _currentUserId!.Value,
                         chap.ChapterId,
                         new UpdateChapterDraftRequest(
                             numberLabel,
