@@ -13,6 +13,7 @@ using MangaManagementSystem.Application.Features.Mangaka.Chapters.Commands.Submi
 using MangaManagementSystem.Application.Features.Mangaka.Chapters.Commands.UpdateChapterDraft;
 using MangaManagementSystem.Application.Features.Mangaka.Chapters.Queries.GetMangakaSeriesChapters;
 using MangaManagementSystem.Application.Features.Mangaka.Chapters.Queries.GetMyMangakaChapters;
+using MangaManagementSystem.Application.Interfaces;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -26,33 +27,37 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
     /// failures to safe HTTP responses. No business logic or persistence lives here.
     /// </summary>
     [ApiController]
-    [Authorize(Roles = MangakaRoleName)]
+    [Authorize]
     [Route("api/mangaka")]
     public sealed class MangakaChaptersController : ControllerBase
     {
         private const string MangakaRoleName = "Mangaka";
+        private const string SharedReadRoles = "Mangaka,Tantou Editor,Assistant";
 
         private readonly IMediator _mediator;
         private readonly IAuthenticatedActorResolver _actorResolver;
+        private readonly IWorkspaceResourceAuthorizationService _workspaceAccess;
         private readonly ILogger<MangakaChaptersController> _logger;
 
         public MangakaChaptersController(
             IMediator mediator,
             IAuthenticatedActorResolver actorResolver,
+            IWorkspaceResourceAuthorizationService workspaceAccess,
             ILogger<MangakaChaptersController> logger)
         {
             _mediator = mediator;
             _actorResolver = actorResolver;
+            _workspaceAccess = workspaceAccess;
             _logger = logger;
         }
 
         [HttpGet("chapters")]
+        [Authorize(Roles = MangakaRoleName)]
         public async Task<IActionResult> GetMyChaptersAsync(CancellationToken cancellationToken)
         {
             var (actorUserId, actorFailure) = await ResolveActorAsync();
             if (actorFailure is not null)
                 return actorFailure;
-
             try
             {
                 IReadOnlyList<MangakaChapterListItemDto> result = await _mediator.Send(
@@ -69,6 +74,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         }
 
         [HttpGet("series/{seriesId:guid}/chapters")]
+        [Authorize(Roles = SharedReadRoles)]
         public async Task<IActionResult> GetSeriesChaptersAsync(Guid seriesId, CancellationToken cancellationToken)
         {
             if (seriesId == Guid.Empty)
@@ -76,9 +82,12 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return BadRequest(new ApiErrorResponse("Invalid series ID."));
             }
 
-            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            var (actorUserId, actorFailure) = await ResolveActorAsync(
+                "Mangaka", "Tantou Editor", "Assistant");
             if (actorFailure is not null)
                 return actorFailure;
+            if (!await _workspaceAccess.CanAccessSeriesAsync(actorUserId, seriesId, cancellationToken))
+                return Forbid();
 
             try
             {
@@ -100,6 +109,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         }
 
         [HttpPost("chapters")]
+        [Authorize(Roles = MangakaRoleName)]
         public async Task<IActionResult> CreateChapterDraftAsync(
             [FromBody] CreateChapterDraftApiRequest? request,
             CancellationToken cancellationToken)
@@ -138,6 +148,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         }
 
         [HttpPut("chapters/{chapterId:guid}")]
+        [Authorize(Roles = MangakaRoleName)]
         public async Task<IActionResult> UpdateChapterDraftAsync(
             Guid chapterId,
             [FromBody] UpdateChapterDraftApiRequest? request,
@@ -182,6 +193,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         }
 
         [HttpPost("chapters/{chapterId:guid}/submit-review")]
+        [Authorize(Roles = MangakaRoleName)]
         public async Task<IActionResult> SubmitChapterForReviewAsync(
             Guid chapterId,
             CancellationToken cancellationToken)
@@ -215,6 +227,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         }
 
         [HttpPost("chapters/{chapterId:guid}/cancel-submission")]
+        [Authorize(Roles = MangakaRoleName)]
         public async Task<IActionResult> CancelChapterSubmissionAsync(
             Guid chapterId,
             CancellationToken cancellationToken)
@@ -248,6 +261,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         }
 
         [HttpPost("chapters/{chapterId:guid}/cancel")]
+        [Authorize(Roles = MangakaRoleName)]
         public async Task<IActionResult> CancelChapterAsync(
             Guid chapterId,
             CancellationToken cancellationToken)
@@ -281,6 +295,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         }
 
         [HttpPut("chapters/{chapterId:guid}/planned-release-date")]
+        [Authorize(Roles = MangakaRoleName)]
         public async Task<IActionResult> SetPlannedReleaseDateAsync(
             Guid chapterId,
             [FromBody] SetPlannedReleaseDateApiRequest? request,
@@ -324,11 +339,11 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         }
 
         private async Task<(Guid ActorUserId, IActionResult? Failure)>
-            ResolveActorAsync()
+            ResolveActorAsync(params string[] allowedRoles)
         {
             var result = await _actorResolver.ResolveAsync(
                 User,
-                MangakaRoleName);
+                allowedRoles.Length == 0 ? new[] { MangakaRoleName } : allowedRoles);
 
             if (result.Succeeded)
             {

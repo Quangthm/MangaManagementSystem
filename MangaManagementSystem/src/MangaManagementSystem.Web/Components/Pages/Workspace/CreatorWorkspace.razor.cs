@@ -12,6 +12,8 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
     private string? SeriesId { get; set; }
     private bool _accessDenied = false;
+    private bool _isWorkspaceInitializing = true;
+    private string? _workspaceLoadError;
     private Guid? _currentUserId;
     private string _currentRoleName = "";
     private MangaManagementSystem.Application.DTOs.Manga.ChapterPageTaskDto? _assistantWorkspaceTask;
@@ -84,9 +86,8 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             return false;
         }
 
-        // Mangaka and Tantou Editor see all non-cancelled chapters, INCLUDING drafts, so the editor
-        // has full production context on the series. Assistant chapter visibility is scoped by the
-        // backend chapter query (task-linked drafts only), so the workspace trusts that result.
+        // All three workspace roles see non-cancelled chapters in an accessible series. Assistant
+        // task scope still governs task operations, not ordinary chapter/page navigation.
         return true;
     }
 
@@ -833,6 +834,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         if (string.IsNullOrWhiteSpace(Slug) || !_currentUserId.HasValue)
         {
             _accessDenied = true;
+            _isWorkspaceInitializing = false;
             return;
         }
 
@@ -843,6 +845,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         if (_currentRoleName is not ("Mangaka" or "Tantou Editor" or "Assistant"))
         {
             _accessDenied = true;
+            _isWorkspaceInitializing = false;
             return;
         }
 
@@ -852,6 +855,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             if (entry is null || !entry.CanAccess)
             {
                 _accessDenied = true;
+                _isWorkspaceInitializing = false;
                 return;
             }
 
@@ -860,15 +864,20 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         catch
         {
             _accessDenied = true;
+            _isWorkspaceInitializing = false;
             return;
         }
 
+        try
+        {
         await LoadWorkspaceTaskContextAsync();
 
         // Fetch assistant users for the dropdown from Series Contributors
         try
         {
-            if (Guid.TryParse(SeriesId, out var sId) && _currentUserId.HasValue)
+            if (_currentRoleName == "Mangaka"
+                && Guid.TryParse(SeriesId, out var sId)
+                && _currentUserId.HasValue)
             {
                 var contributors = await MangakaContributorApi.GetContributorsAsync(sId);
                 var assistantList = new List<Application.DTOs.Auth.UserDto>();
@@ -948,7 +957,18 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             }
         }
         _seriesNotFound = true;
+        }
+        catch (Exception ex)
+        {
+            _workspaceLoadError = $"The workspace data could not be loaded. {ex.Message}";
+        }
+        finally
+        {
+            _isWorkspaceInitializing = false;
+        }
     }
+
+    private void RetryWorkspaceLoad() => Nav.NavigateTo(Nav.Uri, forceLoad: true);
 
     private async Task LoadWorkspaceTaskContextAsync()
     {
@@ -1599,6 +1619,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private IJSObjectReference _rightCanvasRef = null!;
     private DotNetObjectReference<CanvasInterop>? _objRefLeft;
     private DotNetObjectReference<CanvasInterop>? _objRefRight;
+    private bool _canvasInitialized;
     private string _activePane = "Left";
     
     private void SetActivePane(string pane)
@@ -2090,7 +2111,16 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
+        var canvasDomAvailable = !_isWorkspaceInitializing
+            && !_accessDenied
+            && string.IsNullOrWhiteSpace(_workspaceLoadError);
+
+        if (!canvasDomAvailable || _canvasInitialized)
+        {
+            return;
+        }
+
+        try
         {
             var version = DateTime.Now.Ticks;
             _moduleFactory = await JS.InvokeAsync<IJSObjectReference>("import", $"/js/mangaAiCanvas.js?v={version}");
@@ -2100,16 +2130,31 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             _objRefRight = DotNetObjectReference.Create(new CanvasInterop(this, "Right"));
             await _leftCanvasRef.InvokeVoidAsync("initCanvas", "ai-canvas-left", "ai-canvas-container-left", _objRefLeft);
             await _rightCanvasRef.InvokeVoidAsync("initCanvas", "ai-canvas-right", "ai-canvas-container-right", _objRefRight);
-            
-            // If a chapter's pages were already loaded by OnInitializedAsync before this first render,
-            // paint the page now that the canvas exists. Do NOT show a "please upload" prompt here:
-            // at first render the page list may still be loading (SelectChapter runs during init),
-            // which previously surfaced a spurious prompt even for chapters that have pages. The
-            // genuine "no pages" hint is shown by SelectChapter once the list has loaded.
+
+            _canvasInitialized = true;
+
+            // OnInitializedAsync may finish before the first render containing the canvas DOM.
+            // Paint the selected page after delayed canvas initialization succeeds. Do NOT show a
+            // "please upload" prompt here:
+            // the genuine "no pages" hint is shown by SelectChapter once the list has loaded.
             if (UploadedPages.Any())
             {
                 await LoadPage(ActivePageIndex);
             }
+        }
+        catch (Microsoft.JSInterop.JSException ex)
+        {
+            _canvasInitialized = false;
+            _workspaceLoadError = $"The workspace canvas could not be initialized. {ex.Message}";
+            Console.Error.WriteLine(ex);
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _canvasInitialized = false;
+            _workspaceLoadError = $"The workspace canvas could not be initialized. {ex.Message}";
+            Console.Error.WriteLine(ex);
+            await InvokeAsync(StateHasChanged);
         }
     }
 

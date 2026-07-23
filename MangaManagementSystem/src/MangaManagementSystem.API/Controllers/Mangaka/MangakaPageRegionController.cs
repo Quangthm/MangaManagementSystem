@@ -15,28 +15,34 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
     /// actor is used as created-by; the request body's created-by is ignored to prevent spoofing.
     /// </summary>
     [ApiController]
-    [Authorize(Roles = MangakaRoleName)]
+    [Authorize]
     [Route("api/mangaka/regions")]
     public class MangakaPageRegionController : ControllerBase
     {
         private const string MangakaRoleName = "Mangaka";
+        private const string SharedReadRoles = "Mangaka,Tantou Editor,Assistant";
+        private const string RegionCreateRoles = "Mangaka,Tantou Editor";
 
         private readonly IPageRegionService _regionService;
         private readonly IAuthenticatedActorResolver _actorResolver;
+        private readonly IWorkspaceResourceAuthorizationService _workspaceAccess;
         private readonly ILogger<MangakaPageRegionController> _logger;
 
         public MangakaPageRegionController(
             IPageRegionService regionService,
             IAuthenticatedActorResolver actorResolver,
+            IWorkspaceResourceAuthorizationService workspaceAccess,
             ILogger<MangakaPageRegionController> logger)
         {
             _regionService = regionService;
             _actorResolver = actorResolver;
+            _workspaceAccess = workspaceAccess;
             _logger = logger;
         }
 
         /// <summary>POST /api/mangaka/regions — create a single region on a version.</summary>
         [HttpPost]
+        [Authorize(Roles = RegionCreateRoles)]
         public async Task<IActionResult> CreateAsync([FromBody] CreatePageRegionDto? dto)
         {
             if (dto == null || dto.ChapterPageVersionId == Guid.Empty)
@@ -44,9 +50,11 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return BadRequest("A valid region on a valid version is required.");
             }
 
-            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            var (actorUserId, actorFailure) = await ResolveActorAsync("Mangaka", "Tantou Editor");
             if (actorFailure is not null)
                 return actorFailure;
+            if (!await _workspaceAccess.CanAccessVersionsAsync(actorUserId, new[] { dto.ChapterPageVersionId }, HttpContext.RequestAborted))
+                return Forbid();
 
             try
             {
@@ -64,6 +72,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 
         /// <summary>POST /api/mangaka/regions/version/{versionId}/ensure-full-page — find or create the whole-page region.</summary>
         [HttpPost("version/{versionId:guid}/ensure-full-page")]
+        [Authorize(Roles = RegionCreateRoles)]
         public async Task<IActionResult> EnsureFullPageRegionAsync(Guid versionId)
         {
             if (versionId == Guid.Empty)
@@ -71,9 +80,11 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return BadRequest("Invalid version ID.");
             }
 
-            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            var (actorUserId, actorFailure) = await ResolveActorAsync("Mangaka", "Tantou Editor");
             if (actorFailure is not null)
                 return actorFailure;
+            if (!await _workspaceAccess.CanAccessVersionsAsync(actorUserId, new[] { versionId }, HttpContext.RequestAborted))
+                return Forbid();
 
             try
             {
@@ -95,6 +106,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 
         /// <summary>PUT /api/mangaka/regions/version/{versionId}/bulk-replace — replace all regions of a version.</summary>
         [HttpPut("version/{versionId:guid}/bulk-replace")]
+        [Authorize(Roles = MangakaRoleName)]
         public async Task<IActionResult> BulkReplaceAsync(Guid versionId, [FromBody] BulkReplaceRegionsRequest? request)
         {
             if (versionId == Guid.Empty)
@@ -126,9 +138,10 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 
         /// <summary>POST /api/mangaka/regions/by-versions — regions for a set of versions.</summary>
         [HttpPost("by-versions")]
+        [Authorize(Roles = SharedReadRoles)]
         public async Task<IActionResult> GetByVersionsAsync([FromBody] VersionIdsRequest? request)
         {
-            var (_, actorFailure) = await ResolveActorAsync();
+            var (actorUserId, actorFailure) = await ResolveActorAsync("Mangaka", "Tantou Editor", "Assistant");
             if (actorFailure is not null)
                 return actorFailure;
 
@@ -136,6 +149,8 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             {
                 return BadRequest("Version IDs are required.");
             }
+            if (!await _workspaceAccess.CanAccessVersionsAsync(actorUserId, request.VersionIds, HttpContext.RequestAborted))
+                return Forbid();
 
             try
             {
@@ -153,9 +168,10 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 
         /// <summary>POST /api/mangaka/regions/counts — region counts for a set of versions.</summary>
         [HttpPost("counts")]
+        [Authorize(Roles = SharedReadRoles)]
         public async Task<IActionResult> GetCountsAsync([FromBody] VersionIdsRequest? request)
         {
-            var (_, actorFailure) = await ResolveActorAsync();
+            var (actorUserId, actorFailure) = await ResolveActorAsync("Mangaka", "Tantou Editor", "Assistant");
             if (actorFailure is not null)
                 return actorFailure;
 
@@ -163,6 +179,8 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             {
                 return BadRequest("Version IDs are required.");
             }
+            if (!await _workspaceAccess.CanAccessVersionsAsync(actorUserId, request.VersionIds, HttpContext.RequestAborted))
+                return Forbid();
 
             try
             {
@@ -178,9 +196,12 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             }
         }
 
-        private async Task<(Guid ActorUserId, IActionResult? Failure)> ResolveActorAsync()
+        private async Task<(Guid ActorUserId, IActionResult? Failure)> ResolveActorAsync(
+            params string[] allowedRoles)
         {
-            var result = await _actorResolver.ResolveAsync(User, MangakaRoleName);
+            var result = await _actorResolver.ResolveAsync(
+                User,
+                allowedRoles.Length == 0 ? new[] { MangakaRoleName } : allowedRoles);
             if (result.Succeeded)
             {
                 return (result.ActorUserId, null);

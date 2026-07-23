@@ -41,6 +41,24 @@
         </div>
     </div>
 }
+else if (_isWorkspaceInitializing)
+{
+    <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center;">
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+    </div>
+}
+else if (!string.IsNullOrWhiteSpace(_workspaceLoadError))
+{
+    <div style="min-height: 100vh; background: #f8fafc; display: flex; align-items: center; justify-content: center;">
+        <div style="max-width: 520px; text-align: center; padding: 40px 24px;">
+            <MudIcon Icon="@Icons.Material.Filled.ErrorOutline" Style="font-size: 56px; color: #ef4444; margin-bottom: 16px;" />
+            <div style="font-weight: 700; font-size: 1.2rem; color: #111827; margin-bottom: 8px;">Workspace Could Not Load</div>
+            <div style="color: #64748b; font-size: 0.9rem; margin-bottom: 24px;">@_workspaceLoadError</div>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@RetryWorkspaceLoad" Class="mr-2">Retry</MudButton>
+            <MudButton Variant="Variant.Outlined" OnClick="@(() => Nav.NavigateTo(BackHref))">Back</MudButton>
+        </div>
+    </div>
+}
 else
 {
 <div class="mf-workspace-container">
@@ -166,9 +184,12 @@ else
 
                     <!-- Drawing Tools -->
                     <MudTooltip Text="Select Tool"><MudIconButton Icon="@Icons.Material.Filled.NearMe" Color="@(CurrentTool == "select" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("select"))" Size="Size.Small" Disabled="@(!CanAnnotate)" /></MudTooltip>
+                    @if (CanAnnotate)
+                    {
+                        <MudTooltip Text="Region Tool"><MudIconButton Icon="@Icons.Material.Filled.Crop" Color="@(CurrentTool == "draw" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("draw"))" Size="Size.Small" Disabled="@(!CanAnnotate)" /></MudTooltip>
+                    }
                     @if (CanManageContent)
                     {
-                        <MudTooltip Text="Region Tool"><MudIconButton Icon="@Icons.Material.Filled.Crop" Color="@(CurrentTool == "draw" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("draw"))" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
                         <MudTooltip Text="Brush Tool"><MudIconButton Icon="@Icons.Material.Filled.Brush" Color="@(CurrentTool == "brush" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("brush"))" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
                     }
                     <MudTooltip Text="Pin Tool"><MudIconButton Icon="@Icons.Material.Filled.PushPin" Color="@(CurrentTool == "pin" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("pin"))" Size="Size.Small" Disabled="@(!CanAnnotate)" /></MudTooltip>

@@ -30,6 +30,10 @@ public interface IAuthenticatedActorResolver
     Task<AuthenticatedActorResult> ResolveAsync(
         ClaimsPrincipal principal,
         string requiredRole);
+
+    Task<AuthenticatedActorResult> ResolveAsync(
+        ClaimsPrincipal principal,
+        params string[] allowedRoles);
 }
 
 public sealed class AuthenticatedActorResolver : IAuthenticatedActorResolver
@@ -46,6 +50,16 @@ public sealed class AuthenticatedActorResolver : IAuthenticatedActorResolver
     public async Task<AuthenticatedActorResult> ResolveAsync(
         ClaimsPrincipal principal,
         string requiredRole)
+        => await ResolveCoreAsync(principal, new[] { requiredRole });
+
+    public async Task<AuthenticatedActorResult> ResolveAsync(
+        ClaimsPrincipal principal,
+        params string[] allowedRoles)
+        => await ResolveCoreAsync(principal, allowedRoles);
+
+    private async Task<AuthenticatedActorResult> ResolveCoreAsync(
+        ClaimsPrincipal principal,
+        IReadOnlyCollection<string> allowedRoles)
     {
         var actorUserIdValue =
             principal.FindFirst(ClaimTypes.NameIdentifier)?.Value
@@ -76,10 +90,11 @@ public sealed class AuthenticatedActorResolver : IAuthenticatedActorResolver
                 AuthenticatedActorFailureKind.InactiveAccount);
         }
 
-        if (!string.Equals(
+        if (allowedRoles.Count == 0
+            || !allowedRoles.Any(role => string.Equals(
                 actor.RoleName,
-                requiredRole,
-                StringComparison.OrdinalIgnoreCase))
+                role,
+                StringComparison.OrdinalIgnoreCase)))
         {
             return AuthenticatedActorResult.Failure(
                 AuthenticatedActorFailureKind.WrongRole);

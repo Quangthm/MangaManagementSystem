@@ -14,31 +14,36 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
     /// the authenticated JWT actor (BR-ANN-011/013).
     /// </summary>
     [ApiController]
-    [Authorize(Roles = MangakaRoleName)]
+    [Authorize]
     [Route("api/mangaka/annotations")]
     public class MangakaAnnotationController : ControllerBase
     {
         private const string MangakaRoleName = "Mangaka";
+        private const string AnnotationRoles = "Mangaka,Tantou Editor";
 
         private readonly IChapterPageAnnotationService _annotationService;
         private readonly IAuthenticatedActorResolver _actorResolver;
+        private readonly IWorkspaceResourceAuthorizationService _workspaceAccess;
         private readonly ILogger<MangakaAnnotationController> _logger;
 
         public MangakaAnnotationController(
             IChapterPageAnnotationService annotationService,
             IAuthenticatedActorResolver actorResolver,
+            IWorkspaceResourceAuthorizationService workspaceAccess,
             ILogger<MangakaAnnotationController> logger)
         {
             _annotationService = annotationService;
             _actorResolver = actorResolver;
+            _workspaceAccess = workspaceAccess;
             _logger = logger;
         }
 
         /// <summary>GET /api/mangaka/annotations/by-page/{chapterPageId}</summary>
         [HttpGet("by-page/{chapterPageId:guid}")]
+        [Authorize(Roles = AnnotationRoles)]
         public async Task<IActionResult> GetByPageAsync(Guid chapterPageId)
         {
-            var (_, actorFailure) = await ResolveActorAsync();
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
             if (actorFailure is not null)
                 return actorFailure;
 
@@ -46,6 +51,8 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             {
                 return BadRequest("Invalid page ID.");
             }
+            if (!await _workspaceAccess.CanAccessPagesAsync(actorUserId, new[] { chapterPageId }, HttpContext.RequestAborted))
+                return Forbid();
 
             try
             {
@@ -63,6 +70,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 
         /// <summary>POST /api/mangaka/annotations — create an annotation anchored to page region(s).</summary>
         [HttpPost]
+        [Authorize(Roles = AnnotationRoles)]
         public async Task<IActionResult> CreateAsync([FromBody] CreateMangakaAnnotationRequest? request)
         {
             if (request == null || request.PageRegionIds == null || request.PageRegionIds.Count == 0)
@@ -73,6 +81,8 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             var (actorUserId, actorFailure) = await ResolveActorAsync();
             if (actorFailure is not null)
                 return actorFailure;
+            if (!await _workspaceAccess.CanAccessRegionsAsync(actorUserId, request.PageRegionIds, HttpContext.RequestAborted))
+                return Forbid();
 
             try
             {
@@ -104,6 +114,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 
         /// <summary>POST /api/mangaka/annotations/{annotationId}/resolve</summary>
         [HttpPost("{annotationId:guid}/resolve")]
+        [Authorize(Roles = AnnotationRoles)]
         public async Task<IActionResult> ResolveAsync(Guid annotationId, [FromBody] ResolveAnnotationRequest? request)
         {
             if (annotationId == Guid.Empty)
@@ -114,6 +125,8 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             var (actorUserId, actorFailure) = await ResolveActorAsync();
             if (actorFailure is not null)
                 return actorFailure;
+            if (!await _workspaceAccess.CanAccessAnnotationAsync(actorUserId, annotationId, HttpContext.RequestAborted))
+                return Forbid();
 
             try
             {
@@ -135,7 +148,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 
         private async Task<(Guid ActorUserId, IActionResult? Failure)> ResolveActorAsync()
         {
-            var result = await _actorResolver.ResolveAsync(User, MangakaRoleName);
+            var result = await _actorResolver.ResolveAsync(User, MangakaRoleName, "Tantou Editor");
             if (result.Succeeded)
             {
                 return (result.ActorUserId, null);

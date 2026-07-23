@@ -73,15 +73,18 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                             catch { }
                         }
 
-                        if (IsAssistantWorkspace && _assistantWorkspaceTask is not null)
+                        if (string.Equals(_currentRoleName, "Assistant", StringComparison.OrdinalIgnoreCase))
                         {
-                            bool isAssignedTaskPage = !_taskTargetVersionId.HasValue
-                                || page.Versions.Any(v => v.ChapterPageVersionId == _taskTargetVersionId.Value);
-
-                            if (isAssignedTaskPage)
+                            if (_assistantWorkspaceTask is not null)
                             {
-                                newTasks = BuildAssistantWorkspaceTasks(canvasPanelNo);
-                                newAnnotations = BuildAssistantWorkspaceAnnotations(canvasPanelNo);
+                                bool isAssignedTaskPage = !_taskTargetVersionId.HasValue
+                                    || page.Versions.Any(v => v.ChapterPageVersionId == _taskTargetVersionId.Value);
+
+                                if (isAssignedTaskPage)
+                                {
+                                    newTasks = BuildAssistantWorkspaceTasks(canvasPanelNo);
+                                    newAnnotations = BuildAssistantWorkspaceAnnotations(canvasPanelNo);
+                                }
                             }
                         }
                         else

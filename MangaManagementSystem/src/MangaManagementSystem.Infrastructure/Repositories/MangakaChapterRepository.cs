@@ -39,7 +39,6 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         private const string ScheduledStatus = "SCHEDULED";
         private const string CancelledStatus = "CANCELLED";
         private const string CompletedSeriesStatus = "COMPLETED";
-        private const string AssistantRoleName = "Assistant";
 
         private readonly ApplicationDbContext _context;
         private readonly IChapterPageTaskRepository _chapterPageTaskRepository;
@@ -85,26 +84,6 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
             var query = QueryWorkspaceChapters(actorUserId)
                 .Where(c => c.SeriesId == seriesId);
-
-            // Assistants normally do not see unrelated DRAFT chapters in the shared workspace,
-            // but they must still be able to open any chapter where they currently have work
-            // assigned (including completed / under-review task history) so task deep-links do
-            // not fall back to the first visible chapter.
-            if (await IsActiveAssistantContributorAsync(actorUserId, seriesId, cancellationToken))
-            {
-                var assistantAssignedChapterIds = _context.ChapterPageTasks
-                    .AsNoTracking()
-                    .Where(t =>
-                        t.AssignedToUserId == actorUserId &&
-                        t.StatusCode != CancelledStatus)
-                    .SelectMany(t => t.PageRegions
-                        .Select(r => r.ChapterPageVersion!.ChapterPage!.ChapterId))
-                    .Distinct();
-
-                query = query.Where(c =>
-                    c.StatusCode != CancelledStatus &&
-                    (c.StatusCode != DraftStatus || assistantAssignedChapterIds.Contains(c.ChapterId)));
-            }
 
             var chapters = await query
                 .OrderBy(c => c.CreatedAtUtc)
@@ -670,24 +649,6 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             int maxOriginal = 20 - suffix.Length;
             string prefix = originalLabel.Length > maxOriginal ? originalLabel.Substring(0, maxOriginal) : originalLabel;
             return prefix + suffix;
-        }
-
-        private async Task<bool> IsActiveAssistantContributorAsync(
-            Guid actorUserId,
-            Guid seriesId,
-            CancellationToken cancellationToken)
-        {
-            return await _context.SeriesContributors
-                .AsNoTracking()
-                .AnyAsync(sc =>
-                    sc.SeriesId == seriesId &&
-                    sc.UserId == actorUserId &&
-                    sc.EndDate == null &&
-                    sc.User != null &&
-                    sc.User.StatusCode == ActiveUserStatus &&
-                    sc.User.Role != null &&
-                    sc.User.Role.RoleName == AssistantRoleName,
-                    cancellationToken);
         }
 
         private static void EnsureCanEditChapter(string statusCode)
