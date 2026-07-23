@@ -1,137 +1,28 @@
 @namespace MangaManagementSystem.Web.Components.Layouts
 
-@using System.Security.Claims
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Authorization
 
-
-<div class="mf-app-shell mf-board-shell">
-    <aside class="mf-sidebar mf-board-editor-sidebar">
-        <AuthorizeView>
-            <Authorized Context="sideAuth">
-                @{
-                    var sideUser = sideAuth.User;
-                    var sideDisplayName = GetDisplayName(sideUser);
-                    var sideRoleName = GetRoleDisplayName(sideUser);
-                    var sideInitials = GetInitials(sideDisplayName);
-                }
-
-                <div class="mf-board-profile-area">
-                    <input id="mf-board-profile-toggle"
-                           class="mf-board-profile-toggle"
-                           type="checkbox" />
-
-                    <label class="mf-board-profile-card"
-                           for="mf-board-profile-toggle">
-                        <span class="mf-board-profile-avatar">@sideInitials</span>
-
-                        <span class="mf-board-profile-text">
-                            <span class="mf-board-profile-name" title="@sideDisplayName">
-                                @sideDisplayName
-                            </span>
-
-                            <span class="mf-board-profile-role">
-                                @sideRoleName
-                            </span>
-                        </span>
-
-                        <span class="mf-board-profile-more-btn"
-                              title="Account menu">
-                            ⋮
-                        </span>
-                    </label>
-
-                    <div class="mf-board-profile-dropdown">
-                        <a class="mf-board-profile-dropdown-item"
-                           href="/profile/settings">
-                            <span class="mf-board-menu-icon">⚙</span>
-
-                            <span>
-                                <span class="mf-board-menu-title">Profile Settings</span>
-                                <span class="mf-board-menu-subtitle">Profile, portfolio and security</span>
-                            </span>
-                        </a>
-
-                        <div class="mf-board-profile-dropdown-divider"></div>
-
-                        <button type="submit"
-                                form="global-logout-form"
-                                class="mf-board-profile-dropdown-item logout">
-                            Logout
-                        </button>
-                    </div>
-                </div>
+<RoleSidebarLayout SidebarCssClass="mf-ranking-sidebar"
+                   NavTitle="Editorial Board"
+                   OverviewHref="/dashboard"
+                   NavItems="_navItems">
+    <ExtraNavContent>
+        <AuthorizeView Roles="Editorial Board Chief,Board Chief">
+            <Authorized>
+                <NavLink href="/demo/mangaflow/decisions"
+                         class="mf-nav-link"
+                         Match="NavLinkMatch.Prefix">
+                    <MudIcon Icon="@Icons.Material.Filled.HowToVote"
+                             Size="Size.Small"
+                             Class="mf-nav-icon" />
+                    Decision Center
+                </NavLink>
             </Authorized>
-
-            <NotAuthorized>
-                <div class="mf-board-profile-area">
-                    <input id="mf-board-profile-toggle"
-                           class="mf-board-profile-toggle"
-                           type="checkbox" />
-
-                    <label class="mf-board-profile-card"
-                           for="mf-board-profile-toggle">
-                        <span class="mf-board-profile-avatar">?</span>
-
-                        <span class="mf-board-profile-text">
-                            <span class="mf-board-profile-name">Guest</span>
-                            <span class="mf-board-profile-role">Not signed in</span>
-                        </span>
-
-                        <span class="mf-board-profile-more-btn"
-                              title="Account menu">
-                            ⋮
-                        </span>
-                    </label>
-
-                    <div class="mf-board-profile-dropdown">
-                        <a class="mf-board-profile-dropdown-item"
-                           href="/login">
-                            Sign in
-                        </a>
-                    </div>
-                </div>
-            </NotAuthorized>
         </AuthorizeView>
+    </ExtraNavContent>
 
-        <nav class="mf-board-nav">
-            <a class="@MenuClass("dashboard")" href="/demo/mangaflow/editorial">
-                Editorial Dashboard
-            </a>
-
-            <a class="@MenuClass("proposals")" href="/demo/mangaflow/proposals">
-                Proposal Reviews
-            </a>
-
-            <a class="@MenuClass("polls")" href="/demo/mangaflow/polls">
-                Board Polls
-            </a>
-
-            <AuthorizeView Roles="Editorial Board Chief,Board Chief">
-                <Authorized>
-                    <a class="@MenuClass("decisions")" href="/demo/mangaflow/decisions">
-                        Decision Center
-                    </a>
-                </Authorized>
-            </AuthorizeView>
-
-            <div class="mf-board-nav-section">
-                Ranking
-            </div>
-
-            <a class="@MenuClass("ranking")" href="/ranking">
-                Ranking
-            </a>
-        </nav>
-
-        <div class="mf-board-sidebar-footer">
-            <a class="mf-board-back-btn" href="/dashboard">
-                Back to Overview
-            </a>
-        </div>
-    </aside>
-
-    <main class="mf-main">
+    <ChildContent>
         <header class="mf-topbar">
             <div class="mf-breadcrumb">
                 <span>MangaFlow</span>
@@ -147,6 +38,7 @@
                         <NotificationBell />
                     </Authorized>
                 </AuthorizeView>
+
                 @if (Actions is not null)
                 {
                     @Actions
@@ -175,8 +67,8 @@
         <section class="mf-content">
             @ChildContent
         </section>
-    </main>
-</div>
+    </ChildContent>
+</RoleSidebarLayout>
 
 @code {
     [Parameter]
@@ -197,69 +89,11 @@
     [Parameter]
     public RenderFragment? ChildContent { get; set; }
 
-    private string MenuClass(string key)
-    {
-        return ActiveMenu.Equals(key, StringComparison.OrdinalIgnoreCase)
-            ? "mf-board-nav-link active"
-            : "mf-board-nav-link";
-    }
-
-    private static string GetDisplayName(ClaimsPrincipal user)
-    {
-        return user.FindFirst("display_name")?.Value
-            ?? user.FindFirst("DisplayName")?.Value
-            ?? user.FindFirst(ClaimTypes.Name)?.Value
-            ?? user.FindFirst("name")?.Value
-            ?? user.Identity?.Name
-            ?? "Board Member";
-    }
-
-    private static string GetRoleDisplayName(ClaimsPrincipal user)
-    {
-        var role = user.FindFirst(ClaimTypes.Role)?.Value
-            ?? user.FindFirst("role")?.Value
-            ?? user.FindFirst("role_name")?.Value
-            ?? user.FindFirst("Role")?.Value
-            ?? user.FindFirst("RoleName")?.Value
-            ?? "Viewer";
-
-        return role switch
-        {
-            "Editorial Board Chief" => "Board Chief",
-            "EditorialBoardChief" => "Board Chief",
-            "Board Chief" => "Board Chief",
-
-            "Editorial Board Member" => "Board Member",
-            "EditorialBoardMember" => "Board Member",
-            "Board Member" => "Board Member",
-
-            "Tantou Editor" => "Tantou Editor",
-            "Mangaka" => "Mangaka",
-            "Assistant" => "Assistant",
-            "Admin" => "Admin",
-
-            _ => role
-        };
-    }
-
-    private static string GetInitials(string displayName)
-    {
-        if (string.IsNullOrWhiteSpace(displayName))
-        {
-            return "?";
-        }
-
-        var parts = displayName.Split(
-            ' ',
-            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-        if (parts.Length == 1)
-        {
-            return parts[0].Length >= 2
-                ? parts[0][..2].ToUpperInvariant()
-                : parts[0].ToUpperInvariant();
-        }
-
-        return $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
-    }
+    private static readonly IReadOnlyList<RoleSidebarLayout.RoleSidebarNavItem> _navItems =
+    [
+        new("/demo/mangaflow/editorial", "Editorial Dashboard", Icons.Material.Filled.Dashboard, true),
+        new("/demo/mangaflow/proposals", "Proposal Reviews", Icons.Material.Filled.Article),
+        new("/demo/mangaflow/polls", "Board Polls", Icons.Material.Filled.Poll),
+        new("/ranking", "Ranking", Icons.Material.Filled.Leaderboard),
+    ];
 }

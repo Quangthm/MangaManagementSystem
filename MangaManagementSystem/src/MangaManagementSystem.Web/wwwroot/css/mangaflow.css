@@ -3546,3 +3546,112 @@ a {
     .mf-frequency-editor .mf-textarea {
         min-height: 90px;
     }
+
+/* Dashboard polish: clean section icons and action buttons */
+.mf-dashboard-panel .mf-section-head {
+    align-items: center;
+}
+
+.mf-section-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.mf-section-icon {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 950;
+    line-height: 1;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .5);
+}
+
+    .mf-section-icon.proposal {
+        color: #4f46e5;
+        background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+    }
+
+    .mf-section-icon.polls {
+        color: #047857;
+        background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+    }
+
+    .mf-section-icon.decision {
+        color: #c2410c;
+        background: linear-gradient(135deg, #fff7ed, #fed7aa);
+    }
+
+.mf-dashboard-action {
+    min-height: 38px;
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 12px;
+    border: 1px solid transparent;
+    font-size: 13px;
+    font-weight: 950;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease, background .15s ease;
+}
+
+    .mf-dashboard-action.primary {
+        color: #ffffff;
+        background: linear-gradient(135deg, #6366f1, #7c3aed);
+        box-shadow: 0 8px 18px rgba(99, 102, 241, .22);
+    }
+
+    .mf-dashboard-action.outline {
+        color: #334155;
+        background: #ffffff;
+        border-color: #cbd5e1;
+    }
+
+    .mf-dashboard-action:hover {
+        transform: translateY(-1px);
+        text-decoration: none;
+    }
+
+    .mf-dashboard-action.primary:hover {
+        color: #ffffff;
+        box-shadow: 0 12px 24px rgba(99, 102, 241, .28);
+    }
+
+    .mf-dashboard-action.outline:hover {
+        color: #4f46e5;
+        border-color: #a5b4fc;
+        background: #f8fbff;
+    }
+
+.mf-action-chevron {
+    font-size: 15px;
+    line-height: 1;
+}
+
+.mf-dashboard-panel .mf-list-row {
+    align-items: center;
+}
+
+    .mf-dashboard-panel .mf-list-row > div:first-child {
+        min-width: 0;
+    }
+
+@media (max-width: 900px) {
+    .mf-dashboard-panel .mf-section-head {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .mf-dashboard-action {
+        width: 100%;
+    }
+}
