@@ -24,8 +24,7 @@
             <MudDivider />
 
             <MudStack Spacing="3" Class="pa-4">
-                <div @onmousedown="ClearPublicationPeriodPickerAsync"
-                     @onfocusin="ClearPublicationPeriodPickerAsync">
+                <div @onmousedown="ClearPublicationPeriodPickerAsync">
                     <MudAutocomplete T="PublicationPeriodOption"
                                      Label="Publication Week"
                                      Placeholder="Type dd/mm/yyyy, month, year, or week name"
@@ -270,18 +269,22 @@
             return;
         }
 
-        if (_form.PublicationPeriodId == Guid.Empty)
+        if (string.IsNullOrWhiteSpace(_publicationPeriodSearchText))
         {
             return;
         }
 
-        _form.PublicationPeriodId = Guid.Empty;
-        _form.Series = null;
+        /*
+            Important:
+            Only clear the visible search text.
+            Do NOT clear _form.PublicationPeriodId here.
+
+            If we clear PublicationPeriodId, the Series dropdown cannot
+            search series for the currently selected week.
+        */
         _publicationPeriodSearchText = string.Empty;
-        _seriesSearchMessage = null;
 
         ClearError(nameof(InsertFormState.PublicationPeriodId));
-        ClearError(nameof(InsertFormState.Series));
 
         await InvokeAsync(StateHasChanged);
     }
