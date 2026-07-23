@@ -41,4 +41,9 @@ public interface IEditorialBoardApiClient
         Guid pollId,
         UpdateBoardPollDeadlineRequest request,
         CancellationToken cancellationToken = default);
+    
+    Task<UpdateSeriesPublicationFrequencyResult?> UpdateSeriesPublicationFrequencyAsync(
+        Guid seriesId,
+        UpdateSeriesPublicationFrequencyRequest request,
+        CancellationToken cancellationToken = default);
 }

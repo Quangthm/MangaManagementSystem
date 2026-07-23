@@ -50,4 +50,10 @@ public interface IEditorialBoardRepository
         UpdateBoardPollDeadlineRequestDto request,
         Guid chiefUserId,
         CancellationToken cancellationToken);
+
+    Task<UpdateSeriesPublicationFrequencyResultDto> UpdateSeriesPublicationFrequencyAsync(
+        Guid seriesId,
+        UpdateSeriesPublicationFrequencyRequestDto request,
+        Guid chiefUserId,
+        CancellationToken cancellationToken);
 }

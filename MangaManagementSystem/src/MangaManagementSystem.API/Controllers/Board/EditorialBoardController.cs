@@ -157,6 +157,36 @@ public sealed class EditorialBoardController : ControllerBase
         }
     }
 
+    [HttpPatch("series/{seriesId:guid}/publication-frequency")]
+    [Authorize(Roles = "Editorial Board Chief")]
+    public async Task<IActionResult> UpdateSeriesPublicationFrequency(
+        Guid seriesId,
+        [FromBody] UpdateSeriesPublicationFrequencyApiRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var chiefUserId = GetCurrentUserId();
+
+            var commandRequest = new UpdateSeriesPublicationFrequencyRequestDto(
+                PublicationFrequencyCode: request.PublicationFrequencyCode,
+                Reason: request.Reason);
+
+            var result = await _mediator.Send(
+                new UpdateSeriesPublicationFrequencyCommand(
+                    SeriesId: seriesId,
+                    ChiefUserId: chiefUserId,
+                    Request: commandRequest),
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
     [HttpPost("polls/{pollId:guid}/votes")]
     [Authorize(Roles = "Editorial Board Chief,Editorial Board Member")]
     public async Task<IActionResult> CastVote(
@@ -264,6 +294,10 @@ public sealed class EditorialBoardController : ControllerBase
 
     public sealed record UpdateBoardPollDeadlineApiRequest(
         DateTime? EndsAtUtc);
+
+    public sealed record UpdateSeriesPublicationFrequencyApiRequest(
+        string PublicationFrequencyCode,
+        string Reason);
 
     public sealed record CastVoteApiRequest(
         string ChoiceCode,

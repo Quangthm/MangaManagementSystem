@@ -94,3 +94,13 @@ public sealed record UpdateBoardPollDeadlineResultDto(
     Guid SeriesId,
     string PollStatusCode,
     DateTime? EndsAtUtc);
+public sealed record UpdateSeriesPublicationFrequencyRequestDto(
+    string PublicationFrequencyCode,
+    string Reason);
+
+public sealed record UpdateSeriesPublicationFrequencyResultDto(
+    Guid SeriesId,
+    string Title,
+    string? OldPublicationFrequencyCode,
+    string NewPublicationFrequencyCode,
+    DateTime UpdatedAtUtc);

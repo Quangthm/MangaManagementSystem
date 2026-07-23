@@ -1538,6 +1538,163 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         }
     }
 
+
+    public async Task<UpdateSeriesPublicationFrequencyResultDto> UpdateSeriesPublicationFrequencyAsync(
+        Guid seriesId,
+        UpdateSeriesPublicationFrequencyRequestDto request,
+        Guid chiefUserId,
+        CancellationToken cancellationToken)
+    {
+        if (seriesId == Guid.Empty)
+        {
+            throw new InvalidOperationException("SeriesId is required.");
+        }
+
+        if (chiefUserId == Guid.Empty)
+        {
+            throw new InvalidOperationException("ChiefUserId is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.PublicationFrequencyCode))
+        {
+            throw new InvalidOperationException("Publication frequency is required.");
+        }
+
+        var frequencyCode = request.PublicationFrequencyCode
+            .Trim()
+            .ToUpperInvariant();
+
+        if (frequencyCode is not "WEEKLY" and not "MONTHLY" and not "IRREGULAR")
+        {
+            throw new InvalidOperationException("Invalid publication frequency.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Reason))
+        {
+            throw new InvalidOperationException(
+                "Frequency change reason is required.");
+        }
+
+        var reason = request.Reason.Trim();
+
+        var connection = _dbContext.Database.GetDbConnection();
+
+        if (connection.State != ConnectionState.Open)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        await using var transaction =
+            await connection.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+
+            command.CommandText =
+                """
+                DECLARE @result TABLE
+                (
+                    series_id UNIQUEIDENTIFIER,
+                    title NVARCHAR(300),
+                    old_publication_frequency_code NVARCHAR(50) NULL,
+                    new_publication_frequency_code NVARCHAR(50),
+                    updated_at_utc DATETIME2(0)
+                );
+
+                UPDATE s
+                SET publication_frequency_code = @publicationFrequencyCode,
+                    updated_at_utc = SYSUTCDATETIME(),
+                    updated_by_user_id = @chiefUserId
+                OUTPUT
+                    inserted.series_id,
+                    inserted.title,
+                    deleted.publication_frequency_code,
+                    inserted.publication_frequency_code,
+                    inserted.updated_at_utc
+                INTO @result
+                FROM manga.Series s
+                WHERE s.series_id = @seriesId
+                  AND s.status_code IN (N'SERIALIZED', N'HIATUS');
+
+                IF NOT EXISTS (SELECT 1 FROM @result)
+                BEGIN
+                    THROW 58641, 'Only SERIALIZED or HIATUS series can have official publication frequency changed by Board Chief.', 1;
+                END;
+
+                SELECT
+                    series_id,
+                    title,
+                    old_publication_frequency_code,
+                    new_publication_frequency_code,
+                    updated_at_utc
+                FROM @result;
+                """;
+
+            AddGuidParameter(command, "@seriesId", seriesId);
+            AddStringParameter(command, "@publicationFrequencyCode", frequencyCode, 50);
+            AddGuidParameter(command, "@chiefUserId", chiefUserId);
+
+            UpdateSeriesPublicationFrequencyResultDto result;
+
+            await using (var reader =
+                await command.ExecuteReaderAsync(cancellationToken))
+            {
+                if (!await reader.ReadAsync(cancellationToken))
+                {
+                    throw new InvalidOperationException(
+                        "Could not update series publication frequency.");
+                }
+
+                result = new UpdateSeriesPublicationFrequencyResultDto(
+                    SeriesId: reader.GetGuid(0),
+                    Title: GetStringOrDefault(reader, 1, "Untitled Series"),
+                    OldPublicationFrequencyCode: reader.IsDBNull(2)
+                        ? null
+                        : reader.GetString(2),
+                    NewPublicationFrequencyCode: reader.GetString(3),
+                    UpdatedAtUtc: reader.GetDateTime(4));
+            }
+
+            var auditJson =
+                $$"""
+                {
+                  "series_id": "{{result.SeriesId}}",
+                  "title": {{JsonSerializer.Serialize(result.Title)}},
+                  "old_publication_frequency_code": {{JsonSerializer.Serialize(result.OldPublicationFrequencyCode)}},
+                  "new_publication_frequency_code": {{JsonSerializer.Serialize(result.NewPublicationFrequencyCode)}},
+                  "reason": {{JsonSerializer.Serialize(reason)}},
+                  "updated_at_utc": "{{result.UpdatedAtUtc:O}}"
+                }
+                """;
+
+            await AppendAuditEventAsync(
+                connection,
+                transaction,
+                chiefUserId,
+                "SERIES_PUBLICATION_FREQUENCY_CHANGED",
+                "Series",
+                result.SeriesId,
+                auditJson,
+                cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+
+            return result;
+        }
+        catch (SqlException ex) when (ex.Number == 58641)
+        {
+            await TryRollbackAsync(transaction, cancellationToken);
+            throw new InvalidOperationException(ex.Message, ex);
+        }
+        catch
+        {
+            await TryRollbackAsync(transaction, cancellationToken);
+            throw;
+        }
+    }
+
     private static async Task AppendAuditEventAsync(
         DbConnection connection,
         DbTransaction transaction,

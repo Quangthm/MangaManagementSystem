@@ -708,9 +708,65 @@
                                         }
                                     </div>
 
-                                    <div class="mf-info-tile">
+                                    <div class="mf-info-tile wide">
                                         <span>Publication Frequency</span>
                                         <strong>@(SelectedCancelSeriesForView.PublicationFrequencyCode ?? "N/A")</strong>
+
+                                        <AuthorizeView Roles="Editorial Board Chief">
+                                            <Authorized>
+                                                @if (!IsChangingFrequency)
+                                                {
+                                                    <button type="button"
+                                                            class="mf-btn mf-btn-soft mf-gap-small"
+                                                            @onclick="StartFrequencyChange">
+                                                        Change Frequency
+                                                    </button>
+                                                }
+                                                else
+                                                {
+                                                    <div class="mf-frequency-editor">
+                                                        <label>New Frequency</label>
+
+                                                        <select class="mf-input"
+                                                                @bind="ChangeFrequencyCode">
+                                                            <option value="WEEKLY">WEEKLY</option>
+                                                            <option value="MONTHLY">MONTHLY</option>
+                                                            <option value="IRREGULAR">IRREGULAR</option>
+                                                        </select>
+
+                                                        <label>Reason</label>
+
+                                                        <textarea class="mf-textarea"
+                                                                  placeholder="Required reason for audit log"
+                                                                  @bind="ChangeFrequencyReason">
+                                                        </textarea>
+
+                                                        <div class="mf-actions tight">
+                                                            <button type="button"
+                                                                    class="mf-btn mf-btn-primary"
+                                                                    disabled="@IsSavingFrequency"
+                                                                    @onclick="SaveFrequencyChangeAsync">
+                                                                @(IsSavingFrequency ? "Saving..." : "Save")
+                                                            </button>
+
+                                                            <button type="button"
+                                                                    class="mf-btn"
+                                                                    disabled="@IsSavingFrequency"
+                                                                    @onclick="CancelFrequencyChange">
+                                                                Cancel
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            </Authorized>
+                                        </AuthorizeView>
+
+                                        @if (!string.IsNullOrWhiteSpace(ChangeFrequencyMessage))
+                                        {
+                                            <div class="mf-alert info">
+                                                @ChangeFrequencyMessage
+                                            </div>
+                                        }
                                     </div>
 
                                     <div class="mf-info-tile">
@@ -893,6 +949,12 @@
     private string CancelPollReason { get; set; } = string.Empty;
     private string? CancelPollMessage { get; set; }
 
+    private bool IsChangingFrequency { get; set; }
+    private bool IsSavingFrequency { get; set; }
+    private string ChangeFrequencyCode { get; set; } = "WEEKLY";
+    private string ChangeFrequencyReason { get; set; } = string.Empty;
+    private string? ChangeFrequencyMessage { get; set; }
+
     private IReadOnlyList<CancellableBoardSeriesDto> CancellableSeries { get; set; }
         = Array.Empty<CancellableBoardSeriesDto>();
 
@@ -1013,6 +1075,7 @@
         CancelPollMessage = null;
         CancelPollSucceeded = false;
         SelectedCancelSeriesForView = null;
+        CancelFrequencyChange();
     }
 
     private async Task ShowCancelSerializationTab()
@@ -1027,6 +1090,7 @@
         CancelPollMessage = null;
         CancelPollSucceeded = false;
         SelectedProposal = null;
+        CancelFrequencyChange();
 
         await LoadCancellableSeriesAsync();
     }
@@ -1221,6 +1285,7 @@
         CancelPollMessage = null;
         CancelPollSucceeded = false;
         IsOpeningCancelPoll = false;
+        CancelFrequencyChange();
         CancelPollReason = $"Board poll opened to consider cancelling serialization for {series.Title}.";
     }
 
@@ -1235,6 +1300,78 @@
         CancelPollSucceeded = false;
         IsOpeningCancelPoll = false;
         CancelPollReason = string.Empty;
+        CancelFrequencyChange();
+    }
+
+    private void StartFrequencyChange()
+    {
+        if (SelectedCancelSeriesForView is null)
+        {
+            return;
+        }
+
+        ChangeFrequencyCode = string.IsNullOrWhiteSpace(
+                SelectedCancelSeriesForView.PublicationFrequencyCode)
+            ? "WEEKLY"
+            : SelectedCancelSeriesForView.PublicationFrequencyCode;
+
+        ChangeFrequencyReason = string.Empty;
+        ChangeFrequencyMessage = null;
+        IsChangingFrequency = true;
+    }
+
+    private void CancelFrequencyChange()
+    {
+        IsChangingFrequency = false;
+        IsSavingFrequency = false;
+        ChangeFrequencyCode = "WEEKLY";
+        ChangeFrequencyReason = string.Empty;
+        ChangeFrequencyMessage = null;
+    }
+
+    private async Task SaveFrequencyChangeAsync()
+    {
+        if (SelectedCancelSeriesForView is null || IsSavingFrequency)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(ChangeFrequencyReason))
+        {
+            ChangeFrequencyMessage = "Reason is required and will be written to audit log.";
+            return;
+        }
+
+        IsSavingFrequency = true;
+        ChangeFrequencyMessage = null;
+
+        var seriesId = SelectedCancelSeriesForView.SeriesId;
+
+        try
+        {
+            await EditorialBoardApiClient.UpdateSeriesPublicationFrequencyAsync(
+                seriesId,
+                new UpdateSeriesPublicationFrequencyRequest(
+                    PublicationFrequencyCode: ChangeFrequencyCode,
+                    Reason: ChangeFrequencyReason.Trim()));
+
+            await LoadCancellableSeriesAsync();
+
+            SelectedCancelSeriesForView =
+                CancellableSeries.FirstOrDefault(series => series.SeriesId == seriesId);
+
+            IsChangingFrequency = false;
+            ChangeFrequencyReason = string.Empty;
+            ChangeFrequencyMessage = "Publication frequency updated successfully.";
+        }
+        catch (Exception ex)
+        {
+            ChangeFrequencyMessage = ex.Message;
+        }
+        finally
+        {
+            IsSavingFrequency = false;
+        }
     }
 
     private async Task OpenCancelPollAsync()

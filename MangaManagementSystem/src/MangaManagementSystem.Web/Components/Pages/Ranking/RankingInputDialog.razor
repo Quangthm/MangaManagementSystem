@@ -27,7 +27,7 @@
                 <div @onmousedown="ClearPublicationPeriodPickerAsync">
                     <MudAutocomplete T="PublicationPeriodOption"
                                      Label="Publication Week"
-                                     Placeholder="Type dd/mm/yyyy, month, year, or week name"
+                                     Placeholder="Type dd/mm/yyyy, month, year, or completed week name"
                                      Required="true"
                                      Value="@SelectedPublicationPeriod"
                                      ValueChanged="OnPublicationPeriodSelected"
@@ -63,7 +63,7 @@
 
                         <NoItemsTemplate>
                             <MudText Typo="Typo.caption" Color="Color.Secondary" Class="pa-2">
-                                No matching weekly publication period found.
+                                No completed weekly publication period found.
                             </MudText>
                         </NoItemsTemplate>
                     </MudAutocomplete>
@@ -222,8 +222,14 @@
     [Parameter]
     public bool Saving { get; set; }
 
+    private IReadOnlyList<PublicationPeriodOption> EligibleCompletedWeeklyPeriods =>
+        PublicationPeriods
+            .Where(IsEligibleCompletedWeeklyPeriod)
+            .OrderByDescending(period => period.PeriodStartDate)
+            .ToList();
+
     private PublicationPeriodOption? SelectedPublicationPeriod =>
-        PublicationPeriods.FirstOrDefault(period =>
+        EligibleCompletedWeeklyPeriods.FirstOrDefault(period =>
             period.PublicationPeriodId == _form.PublicationPeriodId);
 
     protected override void OnParametersSet()
@@ -235,21 +241,46 @@
 
             _form = new InsertFormState
             {
-                PublicationPeriodId = SelectedPublicationPeriodId
+                PublicationPeriodId = GetInitialPublicationPeriodId()
             };
 
             _publicationPeriodSearchText = FormatPublicationPeriod(SelectedPublicationPeriod);
         }
 
-        if (Open
-            && _form.PublicationPeriodId == Guid.Empty
-            && SelectedPublicationPeriodId != Guid.Empty)
+        if (Open && _form.PublicationPeriodId == Guid.Empty)
         {
-            _form.PublicationPeriodId = SelectedPublicationPeriodId;
+            _form.PublicationPeriodId = GetInitialPublicationPeriodId();
             _publicationPeriodSearchText = FormatPublicationPeriod(SelectedPublicationPeriod);
         }
 
         _wasOpen = Open;
+    }
+
+    private Guid GetInitialPublicationPeriodId()
+    {
+        if (SelectedPublicationPeriodId != Guid.Empty
+            && IsEligibleCompletedWeeklyPeriod(SelectedPublicationPeriodId))
+        {
+            return SelectedPublicationPeriodId;
+        }
+
+        return EligibleCompletedWeeklyPeriods.FirstOrDefault()?.PublicationPeriodId ?? Guid.Empty;
+    }
+
+    private bool IsEligibleCompletedWeeklyPeriod(Guid publicationPeriodId)
+    {
+        return EligibleCompletedWeeklyPeriods.Any(period =>
+            period.PublicationPeriodId == publicationPeriodId);
+    }
+
+    private static bool IsEligibleCompletedWeeklyPeriod(PublicationPeriodOption period)
+    {
+        /*
+            Manual ranking input is allowed only for completed WEEKLY periods.
+            PublicationPeriods passed into this dialog are already weekly.
+            A period is treated as completed only after its end date has passed.
+        */
+        return period.PeriodEndDate.Date < DateTime.Today;
     }
 
     private async Task CloseAsync()
@@ -275,12 +306,11 @@
         }
 
         /*
-            Important:
             Only clear the visible search text.
             Do NOT clear _form.PublicationPeriodId here.
 
             If we clear PublicationPeriodId, the Series dropdown cannot
-            search series for the currently selected week.
+            search series for the currently selected completed week.
         */
         _publicationPeriodSearchText = string.Empty;
 
@@ -298,6 +328,18 @@
     {
         if (value is null)
         {
+            return;
+        }
+
+        if (!IsEligibleCompletedWeeklyPeriod(value))
+        {
+            _form.PublicationPeriodId = Guid.Empty;
+            _form.Series = null;
+            _publicationPeriodSearchText = string.Empty;
+
+            _errors[nameof(InsertFormState.PublicationPeriodId)] =
+                "Only completed weekly publication periods can be used for ranking input.";
+
             return;
         }
 
@@ -345,20 +387,18 @@
         CancellationToken cancellationToken)
     {
         var normalizedSearch = searchText?.Trim();
+        var source = EligibleCompletedWeeklyPeriods.AsEnumerable();
 
         if (string.IsNullOrWhiteSpace(normalizedSearch))
         {
-            return Task.FromResult(
-                PublicationPeriods
-                    .OrderByDescending(period => period.PeriodStartDate)
-                    .AsEnumerable());
+            return Task.FromResult(source);
         }
 
         if (TryParseSearchDate(normalizedSearch, out var parsedDate))
         {
             var date = parsedDate.Date;
 
-            var result = PublicationPeriods
+            var result = source
                 .Select(period => new
                 {
                     Period = period,
@@ -368,14 +408,14 @@
                 .Where(item => item.ContainsDate || item.DistanceDays <= 28)
                 .OrderByDescending(item => item.ContainsDate)
                 .ThenBy(item => item.DistanceDays)
-                .ThenBy(item => item.Period.PeriodStartDate)
+                .ThenByDescending(item => item.Period.PeriodStartDate)
                 .Select(item => item.Period)
                 .AsEnumerable();
 
             return Task.FromResult(result);
         }
 
-        var textResult = PublicationPeriods
+        var textResult = source
             .Where(period => MatchesPeriodText(period, normalizedSearch))
             .OrderByDescending(period => period.PeriodStartDate)
             .AsEnumerable();
@@ -389,7 +429,13 @@
     {
         if (_form.PublicationPeriodId == Guid.Empty)
         {
-            _seriesSearchMessage = "Please select a publication week first.";
+            _seriesSearchMessage = "Please select a completed publication week first.";
+            return [];
+        }
+
+        if (!IsEligibleCompletedWeeklyPeriod(_form.PublicationPeriodId))
+        {
+            _seriesSearchMessage = "Only completed weekly publication periods can be used for ranking input.";
             return [];
         }
 
@@ -439,6 +485,11 @@
         {
             errors[nameof(InsertFormState.PublicationPeriodId)] =
                 "Publication week is required.";
+        }
+        else if (!IsEligibleCompletedWeeklyPeriod(_form.PublicationPeriodId))
+        {
+            errors[nameof(InsertFormState.PublicationPeriodId)] =
+                "Only completed weekly publication periods can be used for ranking input.";
         }
 
         if (_form.Series is null)
