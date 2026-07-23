@@ -105,18 +105,20 @@
                                 <MudText Typo="Typo.h6" Class="font-weight-bold mb-2" Color="Color.Primary">
                                     Series: @group.SeriesTitle
                                 </MudText>
-                                <MudTable Items="@group.Chapters" Hover="true" Dense="true" RowsPerPage="15">
+                                <MudTable Items="@group.Chapters" Hover="true" Dense="true" RowsPerPage="15" Class="chapter-review-table">
                                     <HeaderContent>
-                                        <MudTh>Chapter</MudTh>
-                                        <MudTh>Title</MudTh>
-                                        <MudTh>Pages</MudTh>
-                                        <MudTh>Created</MudTh>
-                                        <MudTh>Status</MudTh>
-                                        <MudTh>Actions</MudTh>
+                                        <MudTh Style="width: 10%;">Chapter</MudTh>
+                                        <MudTh Style="width: 30%;">Title</MudTh>
+                                        <MudTh Style="width: 8%;">Pages</MudTh>
+                                        <MudTh Style="width: 13%;">Created</MudTh>
+                                        <MudTh Style="width: 14%;">Status</MudTh>
+                                        <MudTh Style="width: 25%;">Actions</MudTh>
                                     </HeaderContent>
                                     <RowTemplate>
                                         <MudTd DataLabel="Chapter">@context.ChapterNumberLabel</MudTd>
-                                        <MudTd DataLabel="Title">@(context.ChapterTitle ?? "—")</MudTd>
+                                        <MudTd DataLabel="Title" Style="min-width: 0; overflow: hidden;">
+                                            <span class="chapter-title-text" title="@context.ChapterTitle">@(context.ChapterTitle ?? "—")</span>
+                                        </MudTd>
                                         <MudTd DataLabel="Pages">@context.PageCount pages</MudTd>
                                         <MudTd DataLabel="Created">@context.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</MudTd>
                                         <MudTd DataLabel="Status">
@@ -147,6 +149,21 @@
         }
     </div>
 </EditorLayout>
+
+<style>
+    .chapter-review-table .mud-table-root {
+        table-layout: fixed;
+        width: 100%;
+    }
+
+    .chapter-title-text {
+        display: block;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+</style>
 
 @code {
     private EditorChapterReviewQueueDto? _queue;
