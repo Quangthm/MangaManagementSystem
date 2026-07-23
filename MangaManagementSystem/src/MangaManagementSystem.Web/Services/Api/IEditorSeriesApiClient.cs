@@ -7,6 +7,6 @@ namespace MangaManagementSystem.Web.Services.Api
 {
     public interface IEditorSeriesApiClient
     {
-        Task<EditorSeriesListDto> GetSeriesAsync(Guid actorUserId, CancellationToken cancellationToken = default);
+        Task<EditorSeriesListDto> GetSeriesAsync(CancellationToken cancellationToken = default);
     }
 }

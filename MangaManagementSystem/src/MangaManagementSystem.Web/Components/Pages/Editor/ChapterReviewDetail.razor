@@ -1,14 +1,12 @@
 @page "/editor/chapters/{ChapterId:guid}"
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Forms
-@using System.Security.Claims
 @using MangaManagementSystem.Application.DTOs.Editor
 @using MangaManagementSystem.Web.Services.Api
 @using MangaManagementSystem.Web.Helpers
 @attribute [Authorize(Roles = "Tantou Editor")]
 @inject IEditorChapterReviewApiClient ChapterReviewApiClient
 @inject NavigationManager Nav
-@inject AuthenticationStateProvider AuthStateProvider
 @inject ISnackbar Snackbar
 
 <EditorLayout>
@@ -400,8 +398,6 @@
     private bool _loading = true;
     private bool _accessDenied;
     private string? _error;
-    private Guid _currentUserId;
-
     private bool _dialogVisible;
     private string? _selectedDecision;
     private string? _dialogComments;
@@ -423,17 +419,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-        var user = authState.User;
-        if (user.Identity?.IsAuthenticated == true)
-        {
-            var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (Guid.TryParse(idClaim, out var userId))
-            {
-                _currentUserId = userId;
-            }
-        }
-
         await LoadDetail();
     }
 
@@ -445,7 +430,7 @@
         _annotationsPage = 1;
         try
         {
-            var result = await ChapterReviewApiClient.GetReviewDetailAsync(_currentUserId, ChapterId);
+            var result = await ChapterReviewApiClient.GetReviewDetailAsync(ChapterId);
             if (result.AccessDenied)
             {
                 _accessDenied = true;
@@ -587,7 +572,7 @@
             if (_dialogMarkupFile is not null)
             {
                 await ChapterReviewApiClient.SubmitReviewDecisionWithMarkupAsync(
-                    _currentUserId, ChapterId, _selectedDecision!,
+                    ChapterId, _selectedDecision!,
                     !string.IsNullOrWhiteSpace(comments) ? comments : null,
                     _dialogMarkupFile);
             }
@@ -599,7 +584,7 @@
                     null);
 
                 await ChapterReviewApiClient.SubmitReviewDecisionAsync(
-                    _currentUserId, ChapterId, request);
+                    ChapterId, request);
             }
 
             CloseDialog();

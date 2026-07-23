@@ -543,7 +543,7 @@
             }
             else if (_isEditor)
             {
-                var chapters = await EditorChapterReviewApi.GetActionableChaptersAsync(_currentUserId);
+                var chapters = await EditorChapterReviewApi.GetActionableChaptersAsync();
                 items = chapters.Select(c => MapEditorChapterToActionableItem(c));
             }
             else
@@ -754,7 +754,7 @@
             else if (_isEditor)
             {
                 response = await EditorChapterReviewApi.SetPlannedReleaseDateAsync(
-                    _currentUserId, chapter.ChapterId, request);
+                    chapter.ChapterId, request);
             }
             else
             {

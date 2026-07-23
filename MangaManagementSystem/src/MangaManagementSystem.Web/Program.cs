@@ -238,7 +238,8 @@ builder.Services.AddHttpClient<IAdminFileApiClient, AdminFileApiClient>((sp, cli
             {
                 var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
                 client.BaseAddress = new Uri(settings.Value.BaseUrl);
-            });
+            })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
             builder.Services.AddHttpClient<Services.Api.IMangakaTaskApiClient, Services.Api.MangakaTaskApiClient>((sp, client) =>
             {
                 var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
@@ -249,22 +250,26 @@ builder.Services.AddHttpClient<IAdminFileApiClient, AdminFileApiClient>((sp, cli
             {
                 var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
                 client.BaseAddress = new Uri(settings.Value.BaseUrl);
-            });
+            })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
             builder.Services.AddHttpClient<Services.Api.IEditorChapterReviewApiClient, Services.Api.EditorChapterReviewApiClient>((sp, client) =>
             {
                 var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
                 client.BaseAddress = new Uri(settings.Value.BaseUrl);
-            });
+            })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
             builder.Services.AddHttpClient<Services.Api.IEditorAnnotationApiClient, Services.Api.EditorAnnotationApiClient>((sp, client) =>
             {
                 var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
                 client.BaseAddress = new Uri(settings.Value.BaseUrl);
-            });
+            })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
             builder.Services.AddHttpClient<Services.Api.IEditorSeriesApiClient, Services.Api.EditorSeriesApiClient>((sp, client) =>
             {
                 var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
                 client.BaseAddress = new Uri(settings.Value.BaseUrl);
-            });
+            })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
             builder.Services.AddHttpClient<Services.Api.IMangakaChapterApiClient, Services.Api.MangakaChapterApiClient>((sp, client) =>
             {
                 var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();

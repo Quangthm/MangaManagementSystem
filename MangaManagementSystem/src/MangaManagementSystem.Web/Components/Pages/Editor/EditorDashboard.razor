@@ -175,23 +175,8 @@
     private EditorDashboardDto? _dashboard;
     private bool _loading = true;
     private string? _error;
-    private Guid _currentUserId;
-
-    [CascadingParameter]
-    private Task<AuthenticationState>? AuthState { get; set; }
-
     protected override async Task OnInitializedAsync()
     {
-        if (AuthState != null)
-        {
-            var authState = await AuthState;
-            var idClaim = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (Guid.TryParse(idClaim, out var userId))
-            {
-                _currentUserId = userId;
-            }
-        }
-
         await LoadDashboard();
     }
 
@@ -201,7 +186,7 @@
         _error = null;
         try
         {
-            _dashboard = await EditorDashboardApiClient.GetDashboardAsync(_currentUserId);
+            _dashboard = await EditorDashboardApiClient.GetDashboardAsync();
         }
         catch (Exception ex)
         {

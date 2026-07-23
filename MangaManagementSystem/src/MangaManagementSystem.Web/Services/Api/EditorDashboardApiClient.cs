@@ -10,13 +10,11 @@ using Microsoft.Extensions.Logging;
 namespace MangaManagementSystem.Web.Services.Api
 {
     /// <summary>
-    /// HttpClient-backed implementation of <see cref="IEditorDashboardApiClient"/>. Sends the
-    /// transitional X-Actor-User-Id header and parses safe error messages for UI display.
+    /// HttpClient-backed implementation of <see cref="IEditorDashboardApiClient"/>. Parses
+    /// safe error messages for UI display.
     /// </summary>
     public class EditorDashboardApiClient : IEditorDashboardApiClient
     {
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
-
         private readonly HttpClient _httpClient;
         private readonly ILogger<EditorDashboardApiClient> _logger;
 
@@ -27,10 +25,9 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<EditorDashboardDto> GetDashboardAsync(
-            Guid actorUserId, CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default)
         {
             using var requestMessage = new HttpRequestMessage(HttpMethod.Get, "api/editor/dashboard");
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 

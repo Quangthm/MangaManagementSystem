@@ -131,9 +131,9 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             var comments = string.IsNullOrWhiteSpace(_reviewComment) ? null : _reviewComment.Trim();
             var res = _reviewMarkupFile != null
                 ? await EditorReviewApi.SubmitReviewDecisionWithMarkupAsync(
-                    _currentUserId.Value, chap.ChapterId, _reviewDecision, comments, _reviewMarkupFile)
+                    chap.ChapterId, _reviewDecision, comments, _reviewMarkupFile)
                 : await EditorReviewApi.SubmitReviewDecisionAsync(
-                    _currentUserId.Value, chap.ChapterId,
+                    chap.ChapterId,
                     new MangaManagementSystem.Application.DTOs.Editor.SubmitChapterEditorialReviewRequest(_reviewDecision, comments));
 
             chap.StatusCode = res.StatusCode;

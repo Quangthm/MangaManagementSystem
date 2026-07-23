@@ -18,11 +18,9 @@ namespace MangaManagementSystem.Web.Services.Api
     {
         /// <summary>
         /// Loads the chapter review queue (KPI counts + filtered chapter list). Optional
-        /// status filter (e.g. "UNDER_REVIEW", "all"). Sends the transitional X-Actor-User-Id
-        /// header.
+        /// status filter (e.g. "UNDER_REVIEW", "all").
         /// </summary>
         Task<EditorChapterReviewQueueDto> GetReviewQueueAsync(
-            Guid actorUserId,
             string? statusFilter = null,
             CancellationToken cancellationToken = default);
 
@@ -32,7 +30,6 @@ namespace MangaManagementSystem.Web.Services.Api
         /// state without leaking chapter details.
         /// </summary>
         Task<EditorChapterReviewDetailResult> GetReviewDetailAsync(
-            Guid actorUserId,
             Guid chapterId,
             CancellationToken cancellationToken = default);
 
@@ -41,7 +38,6 @@ namespace MangaManagementSystem.Web.Services.Api
         /// chapter currently UNDER_REVIEW.
         /// </summary>
         Task<SubmitChapterEditorialReviewResponse> SubmitReviewDecisionAsync(
-            Guid actorUserId,
             Guid chapterId,
             SubmitChapterEditorialReviewRequest request,
             CancellationToken cancellationToken = default);
@@ -51,7 +47,6 @@ namespace MangaManagementSystem.Web.Services.Api
         /// multipart/form-data.
         /// </summary>
         Task<SubmitChapterEditorialReviewResponse> SubmitReviewDecisionWithMarkupAsync(
-            Guid actorUserId,
             Guid chapterId,
             string decisionCode,
             string? comments,
@@ -59,25 +54,21 @@ namespace MangaManagementSystem.Web.Services.Api
             CancellationToken cancellationToken = default);
 
         Task<PutScheduledChapterOnHoldResponse> PutChapterOnHoldAsync(
-            Guid actorUserId,
             Guid chapterId,
             string reason,
             CancellationToken cancellationToken = default);
 
         Task<SetChapterPlannedReleaseDateResponse> SetPlannedReleaseDateAsync(
-            Guid actorUserId,
             Guid chapterId,
             SetPlannedReleaseDateRequest request,
             CancellationToken cancellationToken = default);
 
         Task<ReleaseChapterResponse> ReleaseChapterAsync(
-            Guid actorUserId,
             Guid chapterId,
             bool confirmRelease,
             CancellationToken cancellationToken = default);
 
         Task<IReadOnlyList<EditorActionableChapterDto>> GetActionableChaptersAsync(
-            Guid actorUserId,
             Guid? seriesId = null,
             string? searchText = null,
             string? statusCode = null,
