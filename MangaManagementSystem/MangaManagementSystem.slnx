@@ -4,4 +4,5 @@
   <Project Path="src/MangaManagementSystem.Domain/MangaManagementSystem.Domain.csproj" />
   <Project Path="src/MangaManagementSystem.Infrastructure/MangaManagementSystem.Infrastructure.csproj" />
   <Project Path="src/MangaManagementSystem.Web/MangaManagementSystem.Web.csproj" Id="680cc25f-c939-448e-8401-fca2f0b314b2" />
+  <Project Path="tests/MangaManagementSystem.Application.Tests/MangaManagementSystem.Application.Tests.csproj" />
 </Solution>

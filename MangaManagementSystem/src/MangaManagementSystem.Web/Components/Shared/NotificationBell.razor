@@ -559,6 +559,20 @@
     {
         if (string.Equals(
                 notification.NotificationTypeCode,
+                NotificationTypeCodes.RankingWarning,
+                StringComparison.OrdinalIgnoreCase)
+            && string.Equals(
+                notification.RelatedEntityType,
+                NotificationRelatedEntityTypes.Series,
+                StringComparison.Ordinal)
+            && notification.RelatedEntityId.HasValue
+            && notification.RelatedEntityId.Value != Guid.Empty)
+        {
+            return "/ranking";
+        }
+
+        if (string.Equals(
+                notification.NotificationTypeCode,
                 NotificationTypeCodes.PublicationSchedule,
                 StringComparison.OrdinalIgnoreCase)
             && string.Equals(

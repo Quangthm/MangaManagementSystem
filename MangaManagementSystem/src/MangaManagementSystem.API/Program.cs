@@ -1,5 +1,8 @@
-﻿using System.Text;
+using System.Text;
 using MangaManagementSystem.Application;
+using MangaManagementSystem.Application.Features.Ranking.Warnings;
+using MangaManagementSystem.API.Endpoints;
+using MangaManagementSystem.API.HostedServices;
 using MangaManagementSystem.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -11,12 +14,34 @@ namespace MangaManagementSystem.API
         public static void Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
+
+            var rankingWarningOptions =
+                builder.Configuration
+                    .GetSection(RankingWarningOptions.SectionName)
+                    .Get<RankingWarningOptions>()
+                ?? new RankingWarningOptions();
+
+            builder.Services.AddSingleton(rankingWarningOptions);
+
+            if (builder.Environment.IsDevelopment())
+            {
+                builder.Services.AddSingleton<DevelopmentTimeProvider>();
+                builder.Services.AddSingleton<TimeProvider>(serviceProvider =>
+                    serviceProvider.GetRequiredService<DevelopmentTimeProvider>());
+            }
+            else
+            {
+                builder.Services.AddSingleton(TimeProvider.System);
+            }
+
 // Application use-case services and Infrastructure (EF Core,
             // stored procedure wrappers, Cloudinary, OTP cache) are reused
             // as-is. The API only owns the HTTP boundary; it does not contain
             // business logic or SQL details.
             builder.Services.AddApplicationServices();
             builder.Services.AddInfrastructure(builder.Configuration);
+
+            builder.Services.AddHostedService<RankingWarningEvaluationHostedService>();
 
             builder.Services.AddControllers();
             builder.Services.AddEndpointsApiExplorer();
@@ -57,6 +82,7 @@ namespace MangaManagementSystem.API
             {
                 app.UseSwagger();
                 app.UseSwaggerUI();
+                app.MapDevelopmentRankingWarningEndpoints();
             }
 
             app.UseHttpsRedirection();

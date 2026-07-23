@@ -9,10 +9,14 @@ namespace MangaManagementSystem.Infrastructure.Repositories;
 public sealed class SeriesRankingRepository : ISeriesRankingRepository
 {
     private readonly ApplicationDbContext _context;
+    private readonly TimeProvider _timeProvider;
 
-    public SeriesRankingRepository(ApplicationDbContext context)
+    public SeriesRankingRepository(
+        ApplicationDbContext context,
+        TimeProvider timeProvider)
     {
         _context = context;
+        _timeProvider = timeProvider;
     }
 
     public async Task<IReadOnlyList<PublicationPeriodDto>>
@@ -358,7 +362,7 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
             ReadingCount = readingCount,
             DataSourceNote = dataSourceNote,
             EnteredByUserId = actorUserId,
-            EnteredAtUtc = DateTime.UtcNow
+            EnteredAtUtc = _timeProvider.GetUtcNow().UtcDateTime
         };
 
         _context.Set<SeriesVoteInput>().Add(input);
@@ -397,7 +401,7 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
         input.ReadingCount = readingCount;
         input.DataSourceNote = dataSourceNote;
         input.UpdatedByUserId = actorUserId;
-        input.UpdatedAtUtc = DateTime.UtcNow;
+        input.UpdatedAtUtc = _timeProvider.GetUtcNow().UtcDateTime;
 
         await _context.SaveChangesAsync(cancellationToken);
 

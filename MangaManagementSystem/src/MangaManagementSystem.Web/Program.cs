@@ -32,6 +32,17 @@ namespace MangaManagementSystem.Web
 
             builder.Services.AddMemoryCache();
             builder.Services.Configure<ApiSettings>(builder.Configuration.GetSection(ApiSettings.SectionName));
+
+            if (builder.Environment.IsDevelopment())
+            {
+                builder.Services
+                    .AddHttpClient<IDevelopmentRankingWarningApiClient, DevelopmentRankingWarningApiClient>((sp, client) =>
+                    {
+                        var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                        client.BaseAddress = new Uri(settings.Value.BaseUrl);
+                    })
+                    .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
+            }
             builder.Services.AddScoped<ApiAuthorizationMessageHandler>();
 builder.Services.AddHttpClient<IRegistrationApiClient, RegistrationApiClient>((sp, client) =>
             {
@@ -298,7 +309,7 @@ builder.Services.AddHttpClient<IAdminFileApiClient, AdminFileApiClient>((sp, cli
                 app.UseHsts();
             }
 
-            app.UseHttpsRedirection();  
+            app.UseHttpsRedirection();
             app.UseStaticFiles();
 
             app.UseAuthentication();

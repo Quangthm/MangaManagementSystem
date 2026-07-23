@@ -1,4 +1,5 @@
 @namespace MangaManagementSystem.Web.Components.Layouts
+@inject IWebHostEnvironment Environment
 
 <RoleSidebarLayout SidebarCssClass="mf-admin-sidebar"
                    NavTitle="Main Navigation"
@@ -40,6 +41,19 @@
         </NavLink>
 
         <div class="mf-nav-title mt-3">System</div>
+
+        @if (Environment.IsDevelopment())
+        {
+            <AuthorizeView Roles="Admin,Editorial Board Chief,EditorialBoardChief,Board Chief">
+                <Authorized>
+                    <NavLink href="/development/ranking-warning"
+                             class="mf-nav-link"
+                             Match="NavLinkMatch.Prefix">
+                        Development Ranking Warning Console
+                    </NavLink>
+                </Authorized>
+            </AuthorizeView>
+        }
 
         <div class="mf-nav-link disabled">
             Role &amp; Permissions (Not available)
