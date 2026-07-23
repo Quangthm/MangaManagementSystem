@@ -957,18 +957,13 @@ CREATE TABLE manga.ChapterEditorialReview (
 CHECK
 (
     decision_code = N'APPROVED'
-
     OR
     (
-        decision_code = N'REVISION_REQUESTED'
+        decision_code IN (
+            N'REVISION_REQUESTED',
+            N'CANCELLED'
+        )
         AND NULLIF(LTRIM(RTRIM(comments)), N'') IS NOT NULL
-    )
-
-    OR
-    (
-        decision_code = N'CANCELLED'
-        AND NULLIF(LTRIM(RTRIM(comments)), N'') IS NOT NULL
-        AND markup_file_id IS NOT NULL
     )
 ),
 	CONSTRAINT fk_chapter_editorial_review_chapter FOREIGN KEY (chapter_id) REFERENCES manga.Chapter(chapter_id),

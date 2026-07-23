@@ -45,14 +45,16 @@ else
 {
 <div class="mf-workspace-container">
     <!-- Header -->
-    <header class="mf-workspace-header px-4 py-2 d-flex justify-space-between align-center" style="position: relative;">
-        <div class="d-flex align-center">
+    <header class="mf-workspace-header px-4 py-2 d-flex align-center">
+        <!-- 3 vùng flex (trái/giữa/phải) thay cho absolute-center: series nhiều genre không còn
+             đè lên phần "Chapter … - Page …" ở giữa; title/genre tự cắt bằng ellipsis. -->
+        <div class="d-flex align-center mf-header-side">
             <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="HandleBackClick" Class="mr-2" />
-            <MudText Typo="Typo.h6" Class="font-weight-bold">@SeriesTitle</MudText>
-            <MudText Typo="Typo.caption" Class="mf-muted ml-2 mt-1">@SeriesSubtitle</MudText>
+            <MudText Typo="Typo.h6" Class="font-weight-bold mf-header-title" title="@SeriesTitle">@SeriesTitle</MudText>
+            <MudText Typo="Typo.caption" Class="mf-muted ml-2 mt-1 mf-header-subtitle" title="@SeriesSubtitle">@SeriesSubtitle</MudText>
         </div>
-        
-        <div class="d-flex align-center text-center mx-auto" style="position: absolute; left: 50%; transform: translateX(-50%);">
+
+        <div class="d-flex align-center text-center mf-header-center">
             @if (SelectedChapter > 0 && SelectedPage > 0 && UploadedPages != null && ActivePageIndex >= 0 && ActivePageIndex < UploadedPages.Count)
             {
                 <MudText Typo="Typo.h6" Class="font-weight-bold mr-4">Chapter @SelectedChapterLabel - Page @SelectedPage</MudText>
@@ -83,7 +85,7 @@ else
             }
         </div>
 
-        <div class="d-flex align-center gap-2">
+        <div class="d-flex align-center gap-2 mf-header-side justify-end">
 
             @{
                 var _headerChap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
@@ -1205,6 +1207,42 @@ else
     }
     .mf-workspace-header {
         border-bottom: 1px solid var(--mud-palette-lines-default);
+        gap: 12px;
+        flex-wrap: nowrap;
+        overflow: hidden;
+    }
+    /* Hai bên co giãn bằng nhau => khối giữa nằm giữa mà không cần position:absolute,
+       nên không bao giờ bị đè bởi tên series / danh sách genre dài. */
+    .mf-workspace-header .mf-header-side {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+    .mf-workspace-header .mf-header-center {
+        flex: 0 1 auto;
+        min-width: 0;
+        white-space: nowrap;
+    }
+    .mf-workspace-header .mf-header-title {
+        max-width: 34ch;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .mf-workspace-header .mf-header-subtitle {
+        flex: 0 1 auto;
+        min-width: 0;
+        max-width: 30ch;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    /* Màn hẹp: ưu tiên phần "Chapter … - Page …" ở giữa, ẩn bớt genre. */
+    @@media (max-width: 1440px) {
+        .mf-workspace-header .mf-header-title { max-width: 24ch; }
+        .mf-workspace-header .mf-header-subtitle { max-width: 18ch; }
+    }
+    @@media (max-width: 1280px) {
+        .mf-workspace-header .mf-header-subtitle { display: none; }
     }
     .workspace-tabs {
         flex-grow: 1;
