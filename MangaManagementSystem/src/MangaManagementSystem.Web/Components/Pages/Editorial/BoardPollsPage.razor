@@ -4,6 +4,7 @@
 @using System.Globalization
 @using System.Linq
 @using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Authorization
 @using MangaManagementSystem.Web.Services.EditorialBoard
 
 @inject IEditorialBoardApiClient EditorialBoardApiClient
@@ -130,12 +131,72 @@
                             <div class="mf-voting-header-actions">
                                 <span class="mf-deadline-pill">@DeadlineText(_selectedPoll)</span>
 
+                                <AuthorizeView Roles="Editorial Board Chief">
+                                    <Authorized>
+                                        @if (!IsEditingDeadline(_selectedPoll))
+                                        {
+                                            <button type="button"
+                                                    class="mf-btn mf-btn-soft mf-deadline-header-btn"
+                                                    @onclick="() => StartDeadlineEditor(_selectedPoll)">
+                                                Update Deadline
+                                            </button>
+                                        }
+                                    </Authorized>
+                                </AuthorizeView>
+
                                 <button class="mf-icon-btn"
                                         @onclick="CloseVotingCenter">
                                     ×
                                 </button>
                             </div>
                         </div>
+
+                        <AuthorizeView Roles="Editorial Board Chief">
+                            <Authorized>
+                                @if (IsEditingDeadline(_selectedPoll))
+                                {
+                                    <div class="mf-deadline-editor mf-deadline-editor-header">
+                                        <label>Update deadline</label>
+
+                                        <input class="mf-input"
+                                               type="date"
+                                               value="@_deadlineDraftText"
+                                               @onchange="OnDeadlineDateChanged" />
+
+                                        <div class="mf-actions tight">
+                                            <button type="button"
+                                                    class="mf-btn mf-btn-primary"
+                                                    disabled="@_isSavingDeadline"
+                                                    @onclick="() => SaveDeadlineAsync(_selectedPoll)">
+                                                @(_isSavingDeadline ? "Saving..." : "Save")
+                                            </button>
+
+                                            <button type="button"
+                                                    class="mf-btn"
+                                                    disabled="@_isSavingDeadline"
+                                                    @onclick="() => ClearDeadlineAsync(_selectedPoll)">
+                                                Clear
+                                            </button>
+
+                                            <button type="button"
+                                                    class="mf-btn"
+                                                    disabled="@_isSavingDeadline"
+                                                    @onclick="CancelDeadlineEditor">
+                                                Cancel
+                                            </button>
+                                        </div>
+
+                                        @if (!string.IsNullOrWhiteSpace(_deadlineMessage)
+                                            && _deadlineEditorPollId == _selectedPoll.PollId)
+                                        {
+                                            <div class="mf-alert info">
+                                                @_deadlineMessage
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </Authorized>
+                        </AuthorizeView>
 
                         <div class="mf-voting-body">
                             <main class="mf-voting-main">
@@ -418,6 +479,11 @@
     private string _selectedChoice = string.Empty;
     private string? _voteReason;
 
+    private Guid? _deadlineEditorPollId;
+    private string _deadlineDraftText = string.Empty;
+    private string? _deadlineMessage;
+    private bool _isSavingDeadline;
+
     private bool _showAllInformationGenres;
     private bool _showAllInformationTags;
 
@@ -471,6 +537,7 @@
         _selectedChoice = string.Empty;
         _voteReason = null;
         _voteMessage = null;
+        CancelDeadlineEditor();
     }
 
     private void OpenSeriesInformation(EditorialBoardPollDto poll)
@@ -642,6 +709,108 @@
     private void ToggleInformationTags()
     {
         _showAllInformationTags = !_showAllInformationTags;
+    }
+
+    private bool IsEditingDeadline(EditorialBoardPollDto poll)
+    {
+        return _deadlineEditorPollId == poll.PollId;
+    }
+
+    private void StartDeadlineEditor(EditorialBoardPollDto poll)
+    {
+        _deadlineEditorPollId = poll.PollId;
+        _deadlineDraftText = poll.EndsAtUtc?.ToLocalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            ?? DateTime.Today.AddDays(7).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        _deadlineMessage = null;
+    }
+
+    private void CancelDeadlineEditor()
+    {
+        _deadlineEditorPollId = null;
+        _deadlineDraftText = string.Empty;
+        _deadlineMessage = null;
+    }
+
+    private void OnDeadlineDateChanged(ChangeEventArgs args)
+    {
+        _deadlineDraftText = args.Value?.ToString() ?? string.Empty;
+        _deadlineMessage = null;
+    }
+
+    private async Task SaveDeadlineAsync(EditorialBoardPollDto poll)
+    {
+        if (_isSavingDeadline)
+        {
+            return;
+        }
+
+        if (!DateTime.TryParse(
+                _deadlineDraftText,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var parsedDate))
+        {
+            _deadlineMessage = "Please choose a valid deadline date.";
+            return;
+        }
+
+        var localDeadline = parsedDate.Date
+            .AddHours(23)
+            .AddMinutes(59)
+            .AddSeconds(59);
+
+        await UpdateDeadlineAsync(
+            poll,
+            localDeadline.ToUniversalTime());
+    }
+
+    private async Task ClearDeadlineAsync(EditorialBoardPollDto poll)
+    {
+        await UpdateDeadlineAsync(poll, null);
+    }
+
+    private async Task UpdateDeadlineAsync(
+        EditorialBoardPollDto poll,
+        DateTime? endsAtUtc)
+    {
+        if (_isSavingDeadline)
+        {
+            return;
+        }
+
+        _isSavingDeadline = true;
+        _deadlineMessage = null;
+
+        try
+        {
+            await EditorialBoardApiClient.UpdatePollDeadlineAsync(
+                poll.PollId,
+                new UpdateBoardPollDeadlineRequest(endsAtUtc));
+
+            await LoadPollsAsync();
+
+            if (_selectedPoll is not null && _selectedPoll.PollId == poll.PollId)
+            {
+                _selectedPoll = _polls.FirstOrDefault(item => item.PollId == poll.PollId);
+            }
+
+            if (_informationPoll is not null && _informationPoll.PollId == poll.PollId)
+            {
+                _informationPoll = _polls.FirstOrDefault(item => item.PollId == poll.PollId);
+            }
+
+            _deadlineEditorPollId = null;
+            _deadlineDraftText = string.Empty;
+            _deadlineMessage = "Deadline updated successfully.";
+        }
+        catch (Exception ex)
+        {
+            _deadlineMessage = ex.Message;
+        }
+        finally
+        {
+            _isSavingDeadline = false;
+        }
     }
 
     private static IReadOnlyList<string> SplitGenreDisplay(string? genreDisplay)

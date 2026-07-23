@@ -1413,6 +1413,131 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
         }
     }
 
+
+    public async Task<UpdateBoardPollDeadlineResultDto> UpdatePollDeadlineAsync(
+        Guid pollId,
+        UpdateBoardPollDeadlineRequestDto request,
+        Guid chiefUserId,
+        CancellationToken cancellationToken)
+    {
+        if (pollId == Guid.Empty)
+        {
+            throw new InvalidOperationException("PollId is required.");
+        }
+
+        if (chiefUserId == Guid.Empty)
+        {
+            throw new InvalidOperationException("ChiefUserId is required.");
+        }
+
+        if (request.EndsAtUtc is not null && request.EndsAtUtc <= DateTime.UtcNow)
+        {
+            throw new InvalidOperationException("Poll deadline must be in the future.");
+        }
+
+        var connection = _dbContext.Database.GetDbConnection();
+
+        if (connection.State != ConnectionState.Open)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+
+            command.CommandText =
+                """
+                DECLARE @result TABLE
+                (
+                    poll_id UNIQUEIDENTIFIER,
+                    series_id UNIQUEIDENTIFIER,
+                    poll_status_code NVARCHAR(50),
+                    ends_at_utc DATETIME2(0) NULL
+                );
+
+                UPDATE manga.SeriesBoardPoll
+                SET ends_at_utc = @endsAtUtc
+                OUTPUT
+                    inserted.series_board_poll_id,
+                    inserted.series_id,
+                    inserted.poll_status_code,
+                    inserted.ends_at_utc
+                INTO @result
+                WHERE series_board_poll_id = @pollId
+                  AND poll_status_code = N'OPEN';
+
+                IF NOT EXISTS (SELECT 1 FROM @result)
+                BEGIN
+                    THROW 58631, 'Open poll was not found or cannot be updated.', 1;
+                END;
+
+                SELECT
+                    poll_id,
+                    series_id,
+                    poll_status_code,
+                    ends_at_utc
+                FROM @result;
+                """;
+
+            AddGuidParameter(command, "@pollId", pollId);
+            AddNullableDateTimeParameter(command, "@endsAtUtc", request.EndsAtUtc);
+
+            UpdateBoardPollDeadlineResultDto result;
+
+            await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+            {
+                if (!await reader.ReadAsync(cancellationToken))
+                {
+                    throw new InvalidOperationException("Could not update poll deadline.");
+                }
+
+                result = new UpdateBoardPollDeadlineResultDto(
+                    PollId: reader.GetGuid(0),
+                    SeriesId: reader.GetGuid(1),
+                    PollStatusCode: reader.GetString(2),
+                    EndsAtUtc: reader.IsDBNull(3) ? null : reader.GetDateTime(3));
+            }
+
+            var deadlineAuditJson =
+                $$"""
+                {
+                  "poll_id": "{{result.PollId}}",
+                  "series_id": "{{result.SeriesId}}",
+                  "poll_status_code": "{{result.PollStatusCode}}",
+                  "ends_at_utc": {{JsonSerializer.Serialize(result.EndsAtUtc)}}
+                }
+                """;
+
+            await AppendAuditEventAsync(
+                connection,
+                transaction,
+                chiefUserId,
+                "SERIES_BOARD_POLL_DEADLINE_UPDATED",
+                "SeriesBoardPoll",
+                result.PollId,
+                deadlineAuditJson,
+                cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+
+            return result;
+        }
+        catch (SqlException ex) when (ex.Number == 58631)
+        {
+            await TryRollbackAsync(transaction, cancellationToken);
+            throw new InvalidOperationException(ex.Message, ex);
+        }
+        catch
+        {
+            await TryRollbackAsync(transaction, cancellationToken);
+            throw;
+        }
+    }
+
     private static async Task AppendAuditEventAsync(
         DbConnection connection,
         DbTransaction transaction,

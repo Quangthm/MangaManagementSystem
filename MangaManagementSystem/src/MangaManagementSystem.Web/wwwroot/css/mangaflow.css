@@ -3487,3 +3487,30 @@ a {
         color: var(--mf-primary-dark);
         text-decoration: underline;
     }
+
+.mf-deadline-editor.compact {
+    margin-top: 14px;
+}
+
+    .mf-deadline-editor.compact .mf-actions {
+        flex-wrap: wrap;
+    }
+
+.mf-deadline-header-btn {
+    padding: 8px 12px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.mf-deadline-editor-header {
+    margin: 0 24px 18px;
+    padding: 14px;
+    border: 1px solid #dbeafe;
+    border-radius: 14px;
+    background: #f8fbff;
+}
+
+    .mf-deadline-editor-header .mf-actions {
+        margin-top: 10px;
+        flex-wrap: wrap;
+    }

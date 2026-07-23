@@ -44,4 +44,10 @@ public interface IEditorialBoardRepository
         Guid pollId,
         Guid chiefUserId,
         CancellationToken cancellationToken);
+
+    Task<UpdateBoardPollDeadlineResultDto> UpdatePollDeadlineAsync(
+        Guid pollId,
+        UpdateBoardPollDeadlineRequestDto request,
+        Guid chiefUserId,
+        CancellationToken cancellationToken);
 }

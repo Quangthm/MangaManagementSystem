@@ -128,6 +128,35 @@ public sealed class EditorialBoardController : ControllerBase
         }
     }
 
+    [HttpPatch("polls/{pollId:guid}/deadline")]
+    [Authorize(Roles = "Editorial Board Chief")]
+    public async Task<IActionResult> UpdatePollDeadline(
+        Guid pollId,
+        [FromBody] UpdateBoardPollDeadlineApiRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var chiefUserId = GetCurrentUserId();
+
+            var commandRequest = new UpdateBoardPollDeadlineRequestDto(
+                EndsAtUtc: request.EndsAtUtc);
+
+            var result = await _mediator.Send(
+                new UpdateBoardPollDeadlineCommand(
+                    PollId: pollId,
+                    ChiefUserId: chiefUserId,
+                    Request: commandRequest),
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
     [HttpPost("polls/{pollId:guid}/votes")]
     [Authorize(Roles = "Editorial Board Chief,Editorial Board Member")]
     public async Task<IActionResult> CastVote(
@@ -231,6 +260,9 @@ public sealed class EditorialBoardController : ControllerBase
 
     public sealed record OpenCancelSerializationPollApiRequest(
         string PollReason,
+        DateTime? EndsAtUtc);
+
+    public sealed record UpdateBoardPollDeadlineApiRequest(
         DateTime? EndsAtUtc);
 
     public sealed record CastVoteApiRequest(

@@ -75,3 +75,12 @@ public sealed record CancellableBoardSeriesDto(
 public sealed record OpenCancelSerializationPollRequest(
     string PollReason,
     DateTime? EndsAtUtc);
+
+public sealed record UpdateBoardPollDeadlineRequest(
+    DateTime? EndsAtUtc);
+
+public sealed record UpdateBoardPollDeadlineResult(
+    Guid PollId,
+    Guid SeriesId,
+    string PollStatusCode,
+    DateTime? EndsAtUtc);
