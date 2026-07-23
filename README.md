@@ -43,20 +43,20 @@ Do **not** treat this repository as production-ready.
 
 | Area | MVP Direction |
 |---|---|
-| Users and accounts | One MVP role per account. New users start as `PENDING_APPROVAL`. Admin can activate, reject, or disable accounts. Rejected accounts cannot log in and keep their email/username reserved in MVP. Users have a display name for readable UI identity. |
+| Users and accounts | One MVP role per account. Email/password registration follows the current repository flow: reCAPTCHA is validated before a 6-digit email OTP is requested, the OTP must be verified before account creation, and successful self-registration still creates a `PENDING_APPROVAL` account. Google sign-up remains supported and also creates a pending account unless approval policy changes. Admin can activate, reject, or disable accounts. Rejected accounts cannot log in and keep their email/username reserved in MVP. Users have a display name for readable UI identity. |
 | File management | Store actual media in Cloudinary and store file references/metadata in the system. Uploaded files keep a content fingerprint to support traceability, integrity checks, and optional duplicate-file warnings. |
 | Series management | Manage series profile, unique slug, lifecycle status, primary language, cover image, normalized genres, normalized tags, publication frequency, and optional source series reference. Genres are stored through `Genre`/`SeriesGenre`; tags are stored through `Tag`/`SeriesTag`. `series_id` is the internal identity; `slug` is the URL identity. No separate `series_code` is used in MVP. |
 | Series contributors | Manage team membership through `SeriesContributor`, not a direct lead Mangaka field on `Series`. |
 | Series proposals | Store formal submitted proposal versions in `SeriesProposal`. Revisions create new proposal rows. Proposal history keeps important submitted proposal content such as proposal title, synopsis, proposal file, version number, status, and submission metadata; it does not snapshot genres, tags, or cover file. Review screens read current genres, tags, and cover from the locked series metadata. |
 | Board workflow | Use `SeriesBoardPoll` and `SeriesBoardVote`. Editorial Board Chief opens, closes, and cancels board polls, specifies publication frequency when opening `START_SERIALIZATION` polls, can also vote, and board results are computed from votes. |
-| Chapters and pages | Use `Chapter`, `ChapterPage`, and `ChapterPageVersion`. |
+| Chapters and pages | Use `Chapter`, `ChapterPage`, and `ChapterPageVersion`. Chapter number uniqueness applies only to non-cancelled chapters: a `CANCELLED` chapter does not reserve its chapter number, so a new non-cancelled chapter may reuse the same number while the cancelled record remains preserved for history. |
 | Chapter submission | Submit chapters by changing `Chapter.status_code` to `UNDER_REVIEW`; do not create a separate `ChapterSubmission` table. |
-| Page regions | Store accepted AI/manual regions as `PageRegion` records linked to `ChapterPageVersion`. |
+| Page regions | Store accepted AI/manual regions as `PageRegion` records linked to `ChapterPageVersion`. A DOT region is represented by `width = 0` and `height = 0`; a rectangular area requires both values to be greater than `0`; mixed zero/non-zero width/height is invalid. |
 | Annotations | Store annotations through linked `PageRegion` records, not direct annotation coordinates. |
 | Page tasks | Use `ChapterPageTask` as the task header and `ChapterPageTaskRegion` to link one or more target regions; page context is derived from linked regions. |
 | Editorial review | Store final chapter-level review decisions in `ChapterEditorialReview`. |
-| Publication planning | Use `PublicationPeriod` for weekly, monthly, and yearly business calendar periods. Chapter scheduling remains chapter-level through `Chapter.planned_release_date` and release timestamps. Mangaka may provide/update preferred publication frequency only while the series is in `PROPOSAL_DRAFT`; Editorial Board Chief specifies official frequency in a `START_SERIALIZATION` poll, and an approved poll applies that frequency. After board decision, Mangaka may request a change through in-app notification, but only Editorial Board Chief may directly change the official frequency with a required audit reason. |
-| Ranking | Use series-level simulated/manual vote input entered by Editorial Board Members in `SeriesVoteInput`, tied to `PublicationPeriod`. Rankings are calculated dynamically through `vw_SeriesRanking`; no `SeriesRankingSnapshot` table is used in the current MVP workflow. |
+| Publication planning | Use `PublicationPeriod` for weekly, monthly, and yearly business calendar/reporting periods. Chapter scheduling remains chapter-level through `Chapter.planned_release_date` and release timestamps. An authorized schedule/reschedule date is valid when it is on or after the current publication business date (`planned_release_date >= today`); publication frequency supplies suggestions/warnings only and does not hard-block an otherwise valid date. Mangaka may provide/update preferred publication frequency only while the series is in `PROPOSAL_DRAFT`; Editorial Board Chief specifies official frequency in a `START_SERIALIZATION` poll, and an approved poll applies that frequency. After board decision, Mangaka may request a change through in-app notification, but only Editorial Board Chief may directly change the official frequency with a required audit reason. |
+| Ranking | Use series-level simulated/manual vote input entered by Editorial Board Members / Editorial Board Chief in `SeriesVoteInput` for completed weekly periods, tied to `PublicationPeriod`. All authenticated roles, including Assistants, may view ranking results subject to normal authorization. Rankings are calculated dynamically through `vw_SeriesRanking`; equal `ranking_score` values share the same rank, while secondary fields only stabilize display order inside a tied rank. No `SeriesRankingSnapshot` table is used in the current MVP workflow. |
 | Notifications | Use in-app notifications only. Notifications are not the audit trail. |
 | Auditability | Use current status on main records plus domain records and audit logs. Avoid generic status-history tables. |
 | AI support | AI suggestions are advisory and human-reviewed. Accepted regions are saved as `PageRegion`; final translated pages are saved as `ChapterPageVersion`. |
@@ -91,9 +91,9 @@ The project uses both role-based actors and shared permission-based actor groups
 | Authorized Workflow Participant | Views workflow lists, queues, dashboards, or records allowed for their role. |
 | Authorized Page Workspace User | Accesses page-level editing, annotation, segmentation, translation-support, or page-version feedback tools when permitted. Editorial Board Members are excluded unless explicitly granted page workspace permissions. |
 | Mangaka | Creates and manages series, proposals, chapters, pages, page versions, production regions, assistant tasks, task review, chapter submission, ranking monitoring, and responses to editorial feedback. |
-| Assistant | Views assigned page tasks, sees linked regions, uploads completed output as a new page version, and tracks assigned task history. |
+| Assistant | Views assigned page tasks, sees linked regions, uploads completed output as a new page version, tracks assigned task history, and may view system ranking results. Assistants cannot create or modify ranking input. |
 | Tantou Editor | Reviews proposals and chapters, creates page-region annotations, records chapter-level editorial decisions, reviews translation-related issues, and monitors publication/ranking context. |
-| Editorial Board Member | Views board polls, votes `APPROVE`, `REJECT`, or `ABSTAIN`, provides rejection reasons, enters simulated/aggregated reader vote input, and reviews ranking/cancellation-risk evidence. |
+| Editorial Board Member | Views board polls, votes `APPROVE`, `REJECT`, or `ABSTAIN`, provides rejection reasons, enters simulated/aggregated reader vote input for completed weekly periods, and reviews ranking/cancellation-risk evidence. |
 | Editorial Board Chief | Opens, closes, and cancels board polls; specifies publication frequency when opening `START_SERIALIZATION` polls; may directly change official series publication frequency with a required audit reason; may also vote `APPROVE`, `REJECT`, or `ABSTAIN`; provides rejection reasons when voting `REJECT`; and reviews ranking/cancellation-risk evidence. |
 | Admin | Manages accounts, including activation, rejection, and disabling; also manages file deletion workflow, audit visibility, traceability, and system-level management. Admin does not own chapter cancellation overrides, publication scheduling, board poll control, official publication-frequency changes, or simulated reader vote input in MVP. |
 
@@ -112,11 +112,13 @@ The project uses both role-based actors and shared permission-based actor groups
 
 ### 5.1 Account and File Setup
 
-1. New users register and wait for Admin approval.
-2. Users may provide a display name; if not provided, the system can use the username as the display name.
-3. Users may optionally attach profile files such as avatars or registration portfolios.
-4. Uploaded files are stored through the system file workflow, with Cloudinary holding the actual file and the system keeping file metadata.
-5. File fingerprints help support integrity checks, traceability, and optional duplicate-file warnings when the MVP UI supports them.
+1. For email/password registration, the current Web flow validates reCAPTCHA before allowing the user to request an email OTP.
+2. The system sends a 6-digit OTP to the registration email; the user must verify that OTP before the registration request is submitted.
+3. After successful verification and account creation, the new account remains `PENDING_APPROVAL` until Admin approval. Google sign-up follows the same pending-approval policy.
+4. Users may provide a display name; if not provided, the system can use the username as the display name.
+5. Users may optionally attach profile files such as avatars or registration portfolios.
+6. Uploaded files are stored through the system file workflow, with Cloudinary holding the actual file and the system keeping file metadata.
+7. File fingerprints help support integrity checks, traceability, and optional duplicate-file warnings when the MVP UI supports them.
 
 ### 5.2 Series and Proposal Workflow
 
@@ -139,25 +141,27 @@ The project uses both role-based actors and shared permission-based actor groups
 ### 5.3 Chapter and Page Workflow
 
 1. Mangaka creates chapters under a series.
-2. Mangaka creates logical pages under chapters.
-3. Each page file upload or revision creates a `ChapterPageVersion`.
-4. Only one page version should be current per logical page.
-5. Old page versions remain available for traceability and comparison.
-6. A chapter is submitted for review by changing `Chapter.status_code` to `UNDER_REVIEW` after required active page versions exist.
-7. Page creation, page deletion, and page-version upload are locked while the chapter is under review, approved, scheduled, or released.
-8. If revision is requested, the chapter becomes editable again.
+2. Chapter number uniqueness applies only to non-cancelled chapter attempts. A `CANCELLED` chapter remains stored for history but no longer reserves its chapter number, so a new active chapter may reuse that number.
+3. Mangaka creates logical pages under chapters.
+4. Each page file upload or revision creates a `ChapterPageVersion`.
+5. Only one page version should be current per logical page.
+6. Old page versions remain available for traceability and comparison.
+7. A chapter is submitted for review by changing `Chapter.status_code` to `UNDER_REVIEW` after required active page versions exist and all submission gates pass.
+8. Page creation, page deletion, and page-version upload are locked while the chapter is under review, approved, scheduled, or released.
+9. If revision is requested, the chapter becomes editable again.
 
 ### 5.4 Page Region, Annotation, and Task Workflow
 
 1. Authorized page workspace users can create page regions manually or use AI-assisted segmentation suggestions.
 2. Saved regions are stored as `PageRegion` records linked to a specific `ChapterPageVersion`.
-3. AI suggestions are temporary until a user chooses which regions to save.
-4. New AI regions should be compared against existing saved regions to reduce duplicates.
-5. Annotations are linked to `PageRegion`, not stored as direct annotation coordinates.
-6. Whole-page feedback is represented by a manually created full-page region.
-7. Page tasks are created through `ChapterPageTask` and target one or more regions through `ChapterPageTaskRegion`.
-8. Assistants submit task output as a new page version.
-9. Mangaka or a Tantou Editor, when permitted by workflow rules, reviews the submitted page version before the task is completed.
+3. Region geometry permits either a DOT (`width = 0` and `height = 0`) or a rectangle (`width > 0` and `height > 0`); mixed zero/non-zero dimensions are invalid.
+4. AI suggestions are temporary until a user chooses which regions to save.
+5. New AI regions should be compared against existing saved regions to reduce duplicates.
+6. Annotations are linked to `PageRegion`, not stored as direct annotation coordinates.
+7. Whole-page feedback is represented by a manually created full-page region.
+8. Page tasks are created through `ChapterPageTask` and target one or more regions through `ChapterPageTaskRegion`.
+9. Assistants submit task output as a new page version.
+10. Mangaka or a Tantou Editor, when permitted by workflow rules, reviews the submitted page version before the task is completed.
 
 ### 5.5 Editorial Review Workflow
 
@@ -172,7 +176,7 @@ The project uses both role-based actors and shared permission-based actor groups
 
 1. Editorial Board Chief may open board polls for `START_SERIALIZATION` or `CANCEL_SERIALIZATION`.
 2. `START_SERIALIZATION` polls require the Editorial Board Chief to specify the publication frequency to apply if approved.
-3. Polls require a non-empty reason and may have an optional end time.
+3. Polls require a non-empty reason and may have an optional scheduled end time; the Chief may also close them manually.
 4. Editorial Board Chief and Editorial Board Members vote only while the poll is open.
 5. Votes are preserved after the poll closes or is cancelled.
 6. Board results are computed from approve/reject vote counts.
@@ -180,15 +184,17 @@ The project uses both role-based actors and shared permission-based actor groups
 8. Approved `START_SERIALIZATION` poll results apply the board-specified publication frequency as the official series frequency.
 9. After board decision, Mangaka may request a publication frequency change through in-app notification to the Editorial Board Chief.
 10. Editorial Board Chief may directly change official publication frequency only with a required audit reason.
-11. `PublicationPeriod` defines weekly, monthly, and yearly business calendar buckets used for release planning and ranking reports.
+11. `PublicationPeriod` defines weekly, monthly, and yearly business calendar buckets used for ranking, reporting, and publication guidance.
 12. Weekly publication periods start on Monday and end on Sunday, and the owning month is the month with at least four days in that week.
 13. Monthly and yearly publication periods follow normal calendar start and end dates.
-14. For `WEEKLY` series, the next chapter's `planned_release_date` must be inside the next weekly `PublicationPeriod` after the previous planned chapter's period.
-15. For `MONTHLY` series, the next chapter's `planned_release_date` must be inside the next monthly `PublicationPeriod` after the previous planned chapter's month.
-16. For `IRREGULAR` series, the system does not enforce next-week or next-month planned release date rules.
-17. Publication period membership uses the publication business date, not the raw UTC date. Scheduled chapters normally use `Chapter.planned_release_date`; released chapters use `released_at_utc` converted to Vietnam publication time and then cast to a date.
-18. Editorial Board Members enter series-level simulated/manual vote input in `SeriesVoteInput` for a selected `PublicationPeriod`.
+14. Authorized Mangaka and Tantou Editors may schedule or reschedule an otherwise eligible chapter for any date on or after the current publication business date (`planned_release_date >= today`).
+15. `Series.publication_frequency_code` is advisory for scheduling: it may provide default date suggestions and warnings, but it must not reject an otherwise valid date merely because the date is outside a suggested weekly/monthly cadence.
+16. Publication-period membership uses the publication business date, not the raw UTC date. Scheduled chapters normally use `Chapter.planned_release_date`; released chapters use `released_at_utc` converted to Vietnam publication time and then cast to a date.
+17. Editorial Board Members and the Editorial Board Chief may enter series-level simulated/manual ranking input only for eligible completed weekly publication periods.
+18. All authenticated roles, including Assistants, may view ranking results subject to normal authorization.
 19. Rankings are calculated dynamically from `SeriesVoteInput` through `vw_SeriesRanking`; the current MVP does not use `SeriesRankingSnapshot` because there is no ranking-finalization workflow.
+20. Ranking position is tie-preserving: series with the same weighted `ranking_score` receive the same rank. Secondary ordering such as `average_rating`, `rating_count`, `reading_count`, and stable `series_id` ordering may be used to make the display deterministic inside a tied rank, but those fields must not split equal-score ranks.
+
 
 ---
 
@@ -232,7 +238,9 @@ Handles registration, account status, role-based access, login restrictions, pro
 Key rules:
 
 - Each account has exactly one MVP system role.
-- New accounts start as `PENDING_APPROVAL`.
+- Email/password registration validates reCAPTCHA, then requires verification of a 6-digit email OTP before account creation.
+- Google sign-up remains supported as a separate external-identity registration path.
+- New accounts created through either registration path start as `PENDING_APPROVAL`.
 - Pending users cannot access protected workspace functions.
 - Admin can activate, reject, or disable accounts.
 - Rejected and disabled accounts cannot log in.
@@ -282,8 +290,10 @@ Handles logical pages, page uploads, page revisions, segmentation regions, annot
 Key rules:
 
 - `ChapterPage` is a logical page slot.
+- A cancelled chapter attempt remains stored but does not reserve its chapter number; uniqueness is enforced among non-cancelled chapters so a new chapter may reuse the number of a cancelled attempt.
 - `ChapterPageVersion` stores uploaded/revised page files.
 - `PageRegion` belongs to exactly one `ChapterPageVersion`.
+- `PageRegion` geometry supports DOT regions (`width = 0`, `height = 0`) and rectangular regions (both dimensions greater than `0`); mixed zero/non-zero dimensions are invalid.
 - Annotations reference `PageRegion`.
 - Final translated or edited pages are saved as new `ChapterPageVersion` records.
 
@@ -328,7 +338,7 @@ Key rules:
 
 ### 7.8 Publication Periods, Ranking, Notifications, and Auditability
 
-Handles publication-period buckets, chapter release planning support, Editorial Board Member-entered series vote input, dynamic ranking, in-app notifications, and audit evidence.
+Handles publication-period buckets, chapter release planning support, board-entered ranking evidence, dynamic ranking, in-app notifications, and audit evidence.
 
 Key rules:
 
@@ -338,15 +348,19 @@ Key rules:
 - Publication period membership is determined by the publication business date, not by the raw UTC date.
 - Scheduled chapters normally use `Chapter.planned_release_date` as their publication business date.
 - Released chapters use `released_at_utc` converted to Vietnam publication time, then cast to the date part.
-- `WEEKLY` and `MONTHLY` publication frequencies constrain the next chapter's `planned_release_date` to the next matching `PublicationPeriod`.
-- `IRREGULAR` publication frequency does not enforce a fixed weekly or monthly scheduling bucket.
-- Ranking uses series-level simulated/manual aggregated vote input entered by Editorial Board Members in `SeriesVoteInput`.
-- `SeriesVoteInput` stores one row per series and publication period, including rating count, average rating, reading count, data source note, and entry metadata.
+- Authorized scheduling accepts `planned_release_date >= current publication business date`; a past date is invalid.
+- `Series.publication_frequency_code` provides scheduling suggestions and warnings only. It does not hard-enforce weekly/monthly buckets.
+- Ranking input is series-level simulated/manual aggregated evidence entered by Editorial Board Members or the Editorial Board Chief for completed weekly publication periods.
+- Assistants and the other authenticated roles may view ranking results but cannot create or update ranking input unless separately authorized as a board role.
+- `SeriesVoteInput` stores one row per series and input publication period, including rating count, average rating, reading count, data source note, and entry metadata.
+- Ranking uses the MAL-style weighted score `(v / (v + m)) * R + (m / (v + m)) * C`; `reading_count` is popularity evidence/tie-break context and is not a direct score boost.
+- Rank values preserve equal-score ties. `DENSE_RANK()` should rank by weighted `ranking_score` only; secondary ordering fields may stabilize display order within a tied rank but must not make tied scores receive different ranks.
 - `vw_SeriesRanking` calculates ranking score and rank position dynamically from `SeriesVoteInput`.
 - The current MVP does not use `SeriesRankingSnapshot` because there is no ranking-finalization workflow.
 - Notifications help users notice workflow events, including publication-frequency change requests, but are not the audit trail.
 - Important workflow actions are audit-logged.
 - Avoid separate status-history tables unless a future requirement needs them.
+
 
 ---
 
@@ -382,18 +396,19 @@ AI must **not**:
 | Decision | MVP Direction |
 |---|---|
 | Status history | Store current status on main records and use audit/domain records for important events. Do not create generic status-history tables for every entity. |
-| User account decision | New accounts start as `PENDING_APPROVAL`; Admin may change them to `ACTIVE`, `REJECTED`, or `DISABLED`. `REJECTED` and `DISABLED` accounts cannot log in; rejected accounts keep email/username reserved in MVP. |
+| User account decision | Email/password self-registration follows reCAPTCHA → 6-digit email OTP verification → account creation. Google sign-up remains supported. Both paths create `PENDING_APPROVAL` accounts unless the approval policy changes. Admin may change accounts to `ACTIVE`, `REJECTED`, or `DISABLED`. `REJECTED` and `DISABLED` accounts cannot log in; rejected accounts keep email/username reserved in MVP. |
 | Display identity | Use `display_name` for readable UI display while keeping `username` as the login/system identifier. |
 | File references | Business tables reference system file records; Cloudinary details stay inside file metadata. |
 | File fingerprints | Store a file fingerprint for uploaded business files to support traceability, integrity checks, and optional duplicate warnings without globally blocking file reuse. |
 | Series genres and tags | Use normalized current metadata: `Genre`/`SeriesGenre` for broad story categories and `Tag`/`SeriesTag` for specific tropes, themes, settings, character traits, source labels, or story elements. Do not store genre/tag text as proposal history tables in MVP. |
 | Proposal snapshots | `SeriesProposal` snapshots important submitted proposal content, not derived/current metadata. It does not snapshot genre, tag, or cover file; review screens load current locked series metadata for those values. |
-| Chapter submission | Use `Chapter.status_code = UNDER_REVIEW`; do not create `ChapterSubmission`. |
+| Chapter numbering and submission | A `CANCELLED` chapter does not reserve its chapter number; uniqueness applies to non-cancelled chapters, allowing a new active chapter to reuse a cancelled chapter's number while preserving the cancelled record. Submit review by setting `Chapter.status_code = UNDER_REVIEW`; do not create `ChapterSubmission`. |
 | Board decision and publication frequency | Editorial Board Chief owns normal board poll opening, closing, and cancellation; must specify publication frequency for `START_SERIALIZATION`; approved `START_SERIALIZATION` results apply that frequency; compute result from `SeriesBoardPoll` and `SeriesBoardVote`; do not create `SeriesBoardDecision`. |
-| Publication periods | Use `PublicationPeriod` for weekly, monthly, and yearly business calendar buckets. Weekly periods are Monday-Sunday and belong to the month with at least four days in that week. Publication period membership uses publication business date, not raw UTC date. |
-| Dynamic ranking | Use `SeriesVoteInput` plus `vw_SeriesRanking`; do not create `SeriesRankingSnapshot` unless a future finalized-ranking workflow is introduced. |
+| Publication periods / scheduling | Use `PublicationPeriod` for weekly, monthly, and yearly business calendar/reporting buckets. Weekly periods are Monday-Sunday and belong to the month with at least four days in that week. Publication period membership uses publication business date, not raw UTC date. Chapter scheduling accepts dates on or after the current publication business date; frequency is advisory and must not hard-enforce a weekly/monthly bucket. |
+| Dynamic ranking | Use completed-week `SeriesVoteInput` plus `vw_SeriesRanking`; do not create `SeriesRankingSnapshot` unless a future finalized-ranking workflow is introduced. Equal weighted scores share a rank; `DENSE_RANK()` ranks by `ranking_score`, with secondary fields used only for deterministic display ordering inside a tie. Ranking results are viewable by authenticated roles including Assistants; input remains board-role controlled. |
 | Translation | Do not create structured translation tables for MVP; save final edited/translated page as `ChapterPageVersion`. |
 | AI history | Do not store persistent AI job history if accepted AI output as `PageRegion` is enough. |
+| PageRegion geometry | Support either DOT regions (`width = 0`, `height = 0`) or rectangle regions (both dimensions `> 0`). Mixed zero/non-zero dimensions are invalid. |
 | Annotation coordinates | Do not store direct annotation coordinates; derive location from linked `PageRegion`. |
 | Contributor ownership | Use `SeriesContributor`; do not store direct lead Mangaka ownership on `Series`. |
 | Reader module | No public reader module in MVP; ranking uses series-level simulated/manual aggregated input entered by Editorial Board Members. |
@@ -426,6 +441,9 @@ When one of these files changes, update the others if the change affects scope, 
 - Keep file upload behavior traceable without making duplicate warnings mandatory on every screen.
 - Enforce access control in the backend, not only by hiding frontend buttons.
 - Preserve workflow history through domain records and audit logs.
+- Treat cancelled chapter attempts as historical records that do not reserve their chapter number.
+- Reject planned release dates before the current publication business date; allow today or later.
+- Preserve equal-score ranking ties; do not use unique IDs inside the rank expression to break them.
 - Do not delete important workflow evidence when status changes or revisions occur.
 
 ---

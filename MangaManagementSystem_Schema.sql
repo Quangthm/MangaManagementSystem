@@ -1290,15 +1290,8 @@ SELECT
 
     DENSE_RANK() OVER
     (
-        PARTITION BY
-            publication_period_id
-
-        ORDER BY
-            ranking_score DESC,
-            average_rating DESC,
-            rating_count DESC,
-            reading_count DESC,
-            series_id ASC
+        PARTITION BY publication_period_id
+        ORDER BY ranking_score DESC
     ) AS rank_position
 
 FROM ScoreBase;
