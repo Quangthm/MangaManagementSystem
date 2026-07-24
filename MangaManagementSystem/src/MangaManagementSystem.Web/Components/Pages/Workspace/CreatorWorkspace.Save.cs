@@ -320,9 +320,41 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             // DIFFERENT chapter earlier in the session was otherwise never persisted and left a permanent
             // "dirty" flag -> the phantom "some changes could not be saved (0 failed)" that only a reload
             // cleared. Split-view pages reference the same PageModel objects, so Distinct() de-dupes them.
+            // ...but NEVER for a chapter this actor may not edit. Saving walks every loaded chapter, so a
+            // region nudged on a locked chapter (e.g. one already UNDER_REVIEW / APPROVED) would be flushed
+            // the moment Save was pressed while standing on a different, editable chapter — silently
+            // rewriting content that was submitted for review. Drop those buffered edits instead: restore
+            // the version's regions from the DB and clear the dirty flag, so nothing is written AND no
+            // permanent "dirty" flag is left behind (which is the phantom-unsaved bug the loop below fixed).
+            var blockedPages = Chapters
+                .Where(c => c.Pages != null && !CanEditRegionsForStatus(c.StatusCode))
+                .SelectMany(c => c.Pages)
+                .Distinct()
+                .ToList();
+            foreach (var blocked in blockedPages)
+            {
+                if (blocked?.Versions == null || !blocked.Versions.Any()) continue;
+                var blockedVersion = blocked.Versions[blocked.ActiveVersionIndex];
+                if (!blockedVersion.IsDirty) continue;
+                if (blockedVersion.ChapterPageVersionId != Guid.Empty)
+                {
+                    try
+                    {
+                        blockedVersion.Regions = await BuildRegionsJsonFromDbAsync(blockedVersion.ChapterPageVersionId);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Keep going: the important part is that the edit is not persisted.
+                        Console.WriteLine($"Could not restore regions for locked version {blockedVersion.ChapterPageVersionId}: {ex.Message}");
+                    }
+                }
+                blockedVersion.IsDirty = false;
+            }
+
             var allRegionPages = Chapters.Where(c => c.Pages != null).SelectMany(c => c.Pages)
                 .Concat(_isSplitView && _splitUploadedPages != null ? _splitUploadedPages : Enumerable.Empty<PageModel>())
                 .Distinct()
+                .Except(blockedPages)
                 .ToList();
             foreach (var page in allRegionPages)
             {

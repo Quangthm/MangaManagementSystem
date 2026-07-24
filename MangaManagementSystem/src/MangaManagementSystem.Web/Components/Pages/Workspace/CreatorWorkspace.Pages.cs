@@ -38,6 +38,11 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 SelectedRegions.Clear();
                 await _leftCanvasRef.InvokeVoidAsync("clearSelection");
                 await _leftCanvasRef.InvokeVoidAsync("setTool", "select");
+                // Region MUTATION gate for the canvas itself. The toolbar buttons were already disabled on
+                // a locked chapter, but dragging a box straight on the canvas bypassed them: it marked the
+                // version dirty, and a Save pressed later on a DIFFERENT (editable) chapter flushed that
+                // edit — silently rewriting a chapter that was under review / approved.
+                await _leftCanvasRef.InvokeVoidAsync("setRegionsEditable", CanEditRegions);
                 CanUndo = false;
                 CanRedo = false;
 

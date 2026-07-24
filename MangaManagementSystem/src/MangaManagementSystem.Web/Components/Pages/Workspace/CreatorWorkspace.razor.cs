@@ -1623,13 +1623,14 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             if (_seriesStatusCode == "COMPLETED") return true;
             var chap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
             if (chap == null) return false;
-            var code = chap.StatusCode;
-            // ON_HOLD is a paused SCHEDULED chapter (post-approval); content must stay locked like
-            // SCHEDULED/APPROVED (BR-CH-016/018) — returning it to SCHEDULED only needs a new date, not edits.
-            return code == "UNDER_REVIEW" || code == "APPROVED" || code == "SCHEDULED"
-                || code == "ON_HOLD" || code == "RELEASED" || code == "CANCELLED";
+            return IsStatusContentLocked(chap.StatusCode);
         }
     }
+
+    // ON_HOLD is a paused SCHEDULED chapter (post-approval); content must stay locked like
+    // SCHEDULED/APPROVED (BR-CH-016/018) — returning it to SCHEDULED only needs a new date, not edits.
+    private static bool IsStatusContentLocked(string? code) =>
+        code is "UNDER_REVIEW" or "APPROVED" or "SCHEDULED" or "ON_HOLD" or "RELEASED" or "CANCELLED";
 
     // PageRegion editing for a Tantou Editor. Regions are the Mangaka's page CONTENT and stay locked for
     // the Mangaka while the chapter is under review; a Tantou Editor may edit regions (box a panel for an
@@ -1639,15 +1640,19 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     // there), so the UI gate below is currently the only restriction. NOTE: this widens the editor's write
     // access to a chapter the Mangaka has not yet submitted; revisit if the planned JWT/EF authz adds
     // server-side role/status enforcement.
-    private bool CanEditRegions
+    private bool CanEditRegions =>
+        CanEditRegionsForStatus(Chapters.FirstOrDefault(c => c.Id == SelectedChapter)?.StatusCode);
+
+    // Per-chapter form of CanEditRegions. The save flush walks pages across ALL loaded chapters, so it
+    // needs to ask "may this actor edit regions on THAT chapter?" rather than only about the selected
+    // one — otherwise a buffered edit made on a locked chapter gets written when Save is pressed while
+    // standing on a different, editable chapter.
+    private bool CanEditRegionsForStatus(string? code)
     {
-        get
-        {
-            var code = Chapters.FirstOrDefault(c => c.Id == SelectedChapter)?.StatusCode;
-            if (_currentRoleName == "Mangaka") return CanManageContent && !IsChapterLocked;
-            if (_currentRoleName == "Tantou Editor") return code == "DRAFT" || code == "UNDER_REVIEW" || code == "REVISION_REQUESTED";
-            return false;
-        }
+        if (_seriesStatusCode == "COMPLETED") return false;
+        if (_currentRoleName == "Mangaka") return CanManageContent && !IsStatusContentLocked(code);
+        if (_currentRoleName == "Tantou Editor") return code == "DRAFT" || code == "UNDER_REVIEW" || code == "REVISION_REQUESTED";
+        return false;
     }
 
     private static bool IsAssistantTaskChapterSubmissionBlocked(string? statusCode) =>
@@ -2513,7 +2518,8 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                     // Programmatic load: silent=true to avoid a phantom change echo.
                     await _rightCanvasRef.InvokeVoidAsync("loadRegions",
                         string.IsNullOrEmpty(v.Regions) ? "[]" : v.Regions, true);
-
+                    // Same region-mutation gate as the left pane (see LoadPage).
+                    await _rightCanvasRef.InvokeVoidAsync("setRegionsEditable", CanEditRegions);
                 }
             }
         }

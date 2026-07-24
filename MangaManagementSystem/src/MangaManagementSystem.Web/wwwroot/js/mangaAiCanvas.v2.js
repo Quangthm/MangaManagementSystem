@@ -45,6 +45,18 @@ export function createMangaCanvasInstance() {
   let dragStartPos = null;
   const DRAG_THRESHOLD_PX = 4;
 
+  // Whether region MUTATION (create / move / resize / delete) is allowed on the page currently shown.
+  // Blazor drives this from CanEditRegions, so a chapter whose content is locked (e.g. UNDER_REVIEW for
+  // the Mangaka, or any finalized state) cannot be edited by dragging straight on the canvas — the
+  // toolbar buttons were disabled but the canvas itself used to accept drags, which silently marked the
+  // version dirty and got flushed later by a Save pressed while standing on a different chapter.
+  // Viewing, panning, zooming and SELECTING stay allowed so regions can still be inspected/annotated.
+  let regionsEditable = true;
+
+  function setRegionsEditable(editable) {
+    regionsEditable = !!editable;
+  }
+
   // Typography state
   let typo = {
     font: "Comic Sans MS, cursive",
@@ -160,6 +172,7 @@ export function createMangaCanvasInstance() {
       const pos = getMousePos(e);
 
       if (currentTool === "draw") {
+        if (!regionsEditable) return;   // locked chapter: no new regions
         isDrawing = true;
         drawStart = { x: e.clientX, y: e.clientY };
 
@@ -211,7 +224,7 @@ export function createMangaCanvasInstance() {
           if (clickedHandle) break;
         }
 
-        if (clickedHandle) {
+        if (clickedHandle && regionsEditable) {
           isResizing = true;
           resizeHandle = clickedHandle;
           targetRegion = clickedRegion;
@@ -247,10 +260,11 @@ export function createMangaCanvasInstance() {
             hit.selected = !hit.selected;
             syncToBlazor();
             redraw();
-          } else {
+          } else if (regionsEditable) {
             // Plain press only arms a drag (move); it must NOT change the selection. Selecting is
             // done via double-click (toggle) and Ctrl/Shift+click (multi) — see below / the dblclick
             // handler. Keeps the user's chosen selection intact while repositioning a box.
+            // Skipped entirely on a locked chapter so the box can be viewed/selected but never moved.
             isDraggingRegion = true;
             hasDragged = false;
             dragStartPos = pos;
@@ -857,6 +871,7 @@ export function createMangaCanvasInstance() {
   }
 
   function deleteRegion(id) {
+    if (!regionsEditable) return;
     regions = regions.filter((r) => r.id !== id);
     saveState();
     syncToBlazor();
@@ -864,7 +879,9 @@ export function createMangaCanvasInstance() {
   }
 
   function deleteSelectedRegions() {
-    // Keyboard Delete/Backspace path keeps a lightweight native confirm.
+    // Keyboard Delete/Backspace path keeps a lightweight native confirm. Guarded too: the toolbar
+    // button is disabled on a locked chapter but the Delete/Backspace key bypasses the toolbar.
+    if (!regionsEditable) return;
     if (!regions.some((r) => r.selected)) return;
     if (
       window.confirm("Are you sure you want to delete the selected panel(s)?")
@@ -875,6 +892,7 @@ export function createMangaCanvasInstance() {
 
   // Deletes without prompting — the toolbar button already confirmed via the MudBlazor dialog.
   function deleteSelectedRegionsConfirmed() {
+    if (!regionsEditable) return;
     if (!regions.some((r) => r.selected)) return;
     regions = regions.filter((r) => !r.selected);
     saveState();
@@ -1545,6 +1563,7 @@ export function createMangaCanvasInstance() {
     selectAllRegions,
     clearSelection,
     setRegionsVisible,
+    setRegionsEditable,
     deleteRegion,
     deleteSelectedRegions,
     deleteSelectedRegionsConfirmed,
