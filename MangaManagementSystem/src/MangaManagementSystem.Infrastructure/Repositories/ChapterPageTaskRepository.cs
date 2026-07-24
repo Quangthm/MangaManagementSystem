@@ -529,6 +529,15 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             cmd.CommandText = "manga.usp_ChapterPageTask_Cancel";
             cmd.CommandType = CommandType.StoredProcedure;
 
+            var currentTransaction =
+                _context.Database.CurrentTransaction;
+
+            if (currentTransaction != null)
+            {
+                cmd.Transaction =
+                    currentTransaction.GetDbTransaction();
+            }
+
             cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@actor_user_id", System.Data.SqlDbType.UniqueIdentifier) { Value = actorUserId });
             cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@chapter_page_task_id", System.Data.SqlDbType.UniqueIdentifier) { Value = taskId });
             cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@reason", System.Data.SqlDbType.NVarChar, 500) { Value = reason });
@@ -545,6 +554,15 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = "manga.usp_ChapterPageTask_MarkCompleted";
             cmd.CommandType = CommandType.StoredProcedure;
+
+            var currentTransaction =
+                _context.Database.CurrentTransaction;
+
+            if (currentTransaction != null)
+            {
+                cmd.Transaction =
+                    currentTransaction.GetDbTransaction();
+            }
 
             cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@actor_user_id", System.Data.SqlDbType.UniqueIdentifier) { Value = actorUserId });
             cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@chapter_page_task_id", System.Data.SqlDbType.UniqueIdentifier) { Value = taskId });
@@ -565,6 +583,15 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = "manga.usp_ChapterPageTask_ReturnForRework";
             cmd.CommandType = CommandType.StoredProcedure;
+
+            var currentTransaction =
+                _context.Database.CurrentTransaction;
+
+            if (currentTransaction != null)
+            {
+                cmd.Transaction =
+                    currentTransaction.GetDbTransaction();
+            }
 
             cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@actor_user_id", System.Data.SqlDbType.UniqueIdentifier) { Value = actorUserId });
             cmd.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@chapter_page_task_id", System.Data.SqlDbType.UniqueIdentifier) { Value = taskId });
@@ -628,15 +655,15 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 Value = string.IsNullOrWhiteSpace(updatedTaskDescription) ? (object)DBNull.Value : updatedTaskDescription
             });
 
-            var outParam = new Microsoft.Data.SqlClient.SqlParameter("@new_chapter_page_task_id", System.Data.SqlDbType.UniqueIdentifier) { Direction = System.Data.ParameterDirection.Output };
-            cmd.Parameters.Add(outParam);
+            var newTaskIdParam = new Microsoft.Data.SqlClient.SqlParameter("@new_chapter_page_task_id", System.Data.SqlDbType.UniqueIdentifier) { Direction = System.Data.ParameterDirection.Output };
+            cmd.Parameters.Add(newTaskIdParam);
 
             if (conn.State != ConnectionState.Open)
                 await conn.OpenAsync();
 
             await cmd.ExecuteNonQueryAsync();
 
-            return outParam.Value == DBNull.Value ? Guid.Empty : (Guid)outParam.Value;
+            return newTaskIdParam.Value == DBNull.Value ? Guid.Empty : (Guid)newTaskIdParam.Value;
         }
 
         // --- Eligible assistants for task reassignment ---
