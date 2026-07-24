@@ -100,8 +100,12 @@ else
                     }
                 }
             }
-            @if (_headerChap != null && _currentRoleName == "Mangaka"
-                 && (_headerChap.StatusCode == "DRAFT" || _headerChap.StatusCode == "REVISION_REQUESTED"))
+            @* Save / Discard: the Mangaka commits page content while the chapter is editable; a Tantou Editor
+               also needs them while UNDER_REVIEW / REVISION_REQUESTED to persist the regions they add for
+               annotation (Save is still auto-disabled unless there are unsaved changes). Mirrors CanEditRegions. *@
+            @if (_headerChap != null
+                 && ((_currentRoleName == "Mangaka" && (_headerChap.StatusCode == "DRAFT" || _headerChap.StatusCode == "REVISION_REQUESTED"))
+                     || (_currentRoleName == "Tantou Editor" && (_headerChap.StatusCode == "UNDER_REVIEW" || _headerChap.StatusCode == "REVISION_REQUESTED"))))
             {
                 <MudButton Variant="Variant.Filled" Color="@(HasUnsavedChanges ? Color.Warning : Color.Default)" Size="Size.Small"
                            StartIcon="@Icons.Material.Filled.Save" Class="mr-2" DisableElevation="true"
@@ -166,9 +170,15 @@ else
 
                     <!-- Drawing Tools -->
                     <MudTooltip Text="Select Tool"><MudIconButton Icon="@Icons.Material.Filled.NearMe" Color="@(CurrentTool == "select" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("select"))" Size="Size.Small" Disabled="@(!CanAnnotate)" /></MudTooltip>
+                    @* Region tool: the Mangaka edits regions as page content; a Tantou Editor may ALSO create
+                       regions while the chapter is UNDER_REVIEW / REVISION_REQUESTED (to box a panel for
+                       editorial annotation) — gated by CanEditRegions. Brush (image editing) stays Mangaka-only. *@
+                    @if (CanManageContent || _currentRoleName == "Tantou Editor")
+                    {
+                        <MudTooltip Text="Region Tool"><MudIconButton Icon="@Icons.Material.Filled.Crop" Color="@(CurrentTool == "draw" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("draw"))" Size="Size.Small" Disabled="@(!CanEditRegions)" /></MudTooltip>
+                    }
                     @if (CanManageContent)
                     {
-                        <MudTooltip Text="Region Tool"><MudIconButton Icon="@Icons.Material.Filled.Crop" Color="@(CurrentTool == "draw" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("draw"))" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
                         <MudTooltip Text="Brush Tool"><MudIconButton Icon="@Icons.Material.Filled.Brush" Color="@(CurrentTool == "brush" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("brush"))" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
                     }
                     <MudTooltip Text="Pin Tool"><MudIconButton Icon="@Icons.Material.Filled.PushPin" Color="@(CurrentTool == "pin" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("pin"))" Size="Size.Small" Disabled="@(!CanAnnotate)" /></MudTooltip>
@@ -181,7 +191,10 @@ else
                         </div>
                     }
 
-                    <MudTooltip Text="Auto Segment Panels"><MudIconButton Icon="@Icons.Material.Filled.DashboardCustomize" Color="Color.Secondary" OnClick="RunSegmentAI" Disabled="@(IsProcessing || IsChapterLocked)" Size="Size.Small" /></MudTooltip>
+                    @* Auto-segment is non-destructive: it APPENDS detected panels and skips any overlapping an
+                       existing region (IoU > 0.5), so it never wipes the Mangaka's regions or their task/annotation
+                       links. Safe to offer to a Tantou Editor during review — gated by CanEditRegions. *@
+                    <MudTooltip Text="Auto Segment Panels"><MudIconButton Icon="@Icons.Material.Filled.DashboardCustomize" Color="Color.Secondary" OnClick="RunSegmentAI" Disabled="@(IsProcessing || !CanEditRegions)" Size="Size.Small" /></MudTooltip>
                     <MudTooltip Text="Translate Selected (choose language)">
                         <MudMenu Icon="@Icons.Material.Filled.Translate" IconColor="Color.Info" Size="Size.Small" Dense="true" Disabled="@(IsProcessing || IsChapterLocked)">
                             <MudMenuItem Icon="@Icons.Material.Filled.Translate" OnClick='@(() => RunTranslateAI("vi"))'>Tiếng Việt (VI)</MudMenuItem>
@@ -191,9 +204,15 @@ else
                     @if (CanManageContent)
                     {
                         <MudTooltip Text="Edit region type (label editable when one is selected)"><MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Default" OnClick="OpenEditRegionDialog" Size="Size.Small" Disabled="@(IsChapterLocked || SelectedRegions.Count < 1)" /></MudTooltip>
-                        <MudTooltip Text="Delete Selected"><MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" OnClick="DeleteSelectedRegions" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
                     }
-                    <MudTooltip Text="Select All"><MudIconButton Icon="@Icons.Material.Filled.SelectAll" OnClick="SelectAllRegions" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
+                    @* Delete region: available to whoever may edit regions (Mangaka when editable, or Tantou
+                       Editor during review). The "region in use by a task/annotation" guard is reused unchanged
+                       in DeleteSelectedRegions (client) and BulkReplace (server). *@
+                    @if (CanManageContent || _currentRoleName == "Tantou Editor")
+                    {
+                        <MudTooltip Text="Delete Selected"><MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" OnClick="DeleteSelectedRegions" Size="Size.Small" Disabled="@(!CanEditRegions || SelectedRegions.Count < 1)" /></MudTooltip>
+                    }
+                    <MudTooltip Text="Select All"><MudIconButton Icon="@Icons.Material.Filled.SelectAll" OnClick="SelectAllRegions" Size="Size.Small" Disabled="@(!CanEditRegions)" /></MudTooltip>
                     <MudTooltip Text="Deselect All"><MudIconButton Icon="@Icons.Material.Filled.HighlightOff" OnClick="DeselectAllRegions" Size="Size.Small" /></MudTooltip>
                     <MudTooltip Text="@(_regionsHidden ? "Show Detection Frames" : "Hide Detection Frames")"><MudIconButton Icon="@(_regionsHidden ? Icons.Material.Filled.GridOff : Icons.Material.Filled.GridOn)" Color="@(_regionsHidden ? Color.Default : Color.Secondary)" OnClick="ToggleRegionsVisibility" Size="Size.Small" /></MudTooltip>
 
@@ -720,9 +739,13 @@ else
 
                     <MudTextField T="string" Label="Task description..." @bind-Value="TaskDescription" Variant="Variant.Outlined" Lines="3" Margin="Margin.Dense" Class="mb-3" />
 
+                    @* No Max here: MudBlazor would silently CLAMP a too-large value to the max, so the
+                       "too large" check in the create handler could never fire. Letting the value through
+                       lets the handler show the friendly message and block. Pattern is widened so an
+                       over-limit value can actually be typed and caught. *@
                     <MudNumericField T="decimal" Label="Compensation" @bind-Value="TaskCompensation" Variant="Variant.Outlined"
-                                     Margin="Margin.Dense" Class="mb-3" Min="0" Max="9999999999.99M" Format="0.##"
-                                     Pattern="^\d{0,10}(\.\d{0,2})?$" HideSpinButtons="true" />
+                                     Margin="Margin.Dense" Class="mb-3" Min="0" Format="0.##"
+                                     Pattern="^\d{0,12}(\.\d{0,2})?$" HideSpinButtons="true" />
 
                     <MudDatePicker Label="Deadline" @bind-Date="_taskDueDate" Variant="Variant.Outlined"
                                    Margin="Margin.Dense" Class="mb-3" MinDate="DateTime.Today"
@@ -1064,7 +1087,14 @@ else
         <div style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: flex; align-items: center; justify-content: center;" @onclick="CancelUploadConfirm">
             <div style="background: var(--mud-palette-surface); color: var(--mud-palette-text-primary); border-radius: 8px; width: 90%; max-width: 600px; max-height: 82vh; overflow-y: auto; padding: 24px; box-shadow: 0 8px 32px rgba(0,0,0,0.35);" @onclick:stopPropagation="true">
                 <MudText Typo="Typo.h6" Class="mb-2">@_uploadConfirmTitle</MudText>
-                <MudText Typo="Typo.body2" Class="mb-3 mf-muted">Review the image(s) below — click any image to crop / resize it — then confirm to add. Nothing is uploaded until you click Save.</MudText>
+                @if (_addPagesStaged.Any())
+                {
+                    <MudText Typo="Typo.body2" Class="mb-3 mf-muted">Review the image(s) below — click any image to crop / resize it — then confirm to add. Nothing is uploaded until you click Save.</MudText>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2" Class="mb-3 mf-muted">Review the image below, then confirm to add. Nothing is uploaded until you click Save.</MudText>
+                }
                 <div class="d-flex flex-wrap gap-2" style="max-height: 340px; overflow-y: auto;">
                     @if (_addPagesStaged.Any())
                     {

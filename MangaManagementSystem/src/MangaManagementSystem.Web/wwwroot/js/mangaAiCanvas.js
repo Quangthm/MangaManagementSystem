@@ -136,7 +136,7 @@ function setupEvents() {
         }
 
         const pos = getMousePos(e);
-        
+
         if (currentTool === 'draw') {
             isDrawing = true;
             drawStart = { x: e.clientX, y: e.clientY };
@@ -250,8 +250,17 @@ function setupEvents() {
 
         if (currentTool === 'select') {
             if (isDraggingRegion && targetRegion) {
-                targetRegion.x = Math.round(pos.x - dragOffsetX);
-                targetRegion.y = Math.round(pos.y - dragOffsetY);
+                let nx = pos.x - dragOffsetX;
+                let ny = pos.y - dragOffsetY;
+                // Keep the whole box INSIDE the image: it stops at the edge instead of leaving the page.
+                // Prevents out-of-bounds / negative coordinates (which the DB rejects) while preserving the
+                // region's size (moving, not resizing).
+                const imgW = originalImg ? originalImg.width : null;
+                const imgH = originalImg ? originalImg.height : null;
+                if (imgW != null) nx = Math.max(0, Math.min(nx, imgW - targetRegion.width));
+                if (imgH != null) ny = Math.max(0, Math.min(ny, imgH - targetRegion.height));
+                targetRegion.x = Math.round(nx);
+                targetRegion.y = Math.round(ny);
                 targetRegion.isSuggested = false; // Auto-approve on edit
                 redraw();
                 return;
@@ -280,6 +289,17 @@ function setupEvents() {
                     newY = orig.y + clampedDy;
                     newH = orig.h - clampedDy;
                 }
+
+                // Keep the resized box inside the image: an edge dragged past the page boundary stops at
+                // it (no negative / out-of-bounds coordinates for the DB to reject).
+                const imgW2 = originalImg ? originalImg.width : null;
+                const imgH2 = originalImg ? originalImg.height : null;
+                if (newX < 0) { newW += newX; newX = 0; }
+                if (newY < 0) { newH += newY; newY = 0; }
+                if (imgW2 != null && newX + newW > imgW2) newW = imgW2 - newX;
+                if (imgH2 != null && newY + newH > imgH2) newH = imgH2 - newY;
+                newW = Math.max(10, newW);
+                newH = Math.max(10, newH);
 
                 targetRegion.x = Math.round(newX);
                 targetRegion.y = Math.round(newY);
@@ -352,6 +372,8 @@ function setupEvents() {
         }
         
         if (isDraggingRegion || isResizing) {
+            // Move/resize already keep the box inside the image (clamped live above), so nothing lands
+            // out of bounds here.
             isDraggingRegion = false;
             isResizing = false;
             targetRegion = null;
@@ -637,6 +659,10 @@ function loadRegions(savedRegionsStr, silent) {
     } else {
         regions = [];
     }
+    // Region numbers (#N) are PER PAGE/VERSION: restart the id counter from this page's own
+    // highest existing id, not the session-global counter. Otherwise a region drawn on page 2
+    // kept counting up from page 1 (e.g. #3 continued as #4, #5...) instead of restarting.
+    nextId = regions.reduce((mx, r) => Math.max(mx, (r && typeof r.id === 'number') ? r.id : 0), 0) + 1;
     // Reset undo/redo history to the freshly loaded page so Undo cannot reach
     // back into a previously viewed page's regions.
     historyStack = [];
@@ -1065,7 +1091,7 @@ function calculateIoU(box1, box2) {
     return iou;
 }
 async function callSegmentAPI() {
-    if (!currentDataUrl) return false;
+    if (!currentDataUrl) return "No image is loaded.";
     try {
         let blob;
         try {
@@ -1078,7 +1104,7 @@ async function callSegmentAPI() {
             blob = await response.blob();
         }
         // Call Blazor C# backend instead of direct AI service call
-        if (!dotNetRef) return false;
+        if (!dotNetRef) return "The page is not ready. Please reload and try again.";
         const reader = new FileReader();
         const base64Promise = new Promise((resolve) => {
             reader.onloadend = () => resolve(reader.result);
@@ -1113,13 +1139,15 @@ async function callSegmentAPI() {
             saveState();
             if (typeof dotNetRef !== 'undefined' && dotNetRef) syncToBlazor();
             redraw();
-            return true;
+            return "success";
         }
+        // status !== "success": surface the backend's actual message (timeout / HTTP 500 / not reachable)
+        // instead of collapsing every failure into a generic "Segmentation failed.".
+        return (json && json.message) ? json.message : "Segmentation failed.";
     } catch (e) {
         console.error("AI API Error:", e);
-        return false;
+        return (e && e.message) ? e.message : "Segmentation failed.";
     }
-    return false;
 }
 
 async function callTranslateAPI(targetLang) {

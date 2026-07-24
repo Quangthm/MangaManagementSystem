@@ -134,6 +134,29 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 }
             }
 
+            // Flush deferred page soft-deletes. When a SAVED page is removed via the trash button the UI
+            // drops it from the buffer immediately but defers the DB soft-delete to here (see DeleteCurrentPage /
+            // _pagesPendingDelete). Without this flush the page reappears on reload — the delete never persisted.
+            // The delete API applies the same task/annotation guard server-side; the UI already blocks those too.
+            if (_pagesPendingDelete.Count > 0 && _currentUserId.HasValue)
+            {
+                foreach (var pageId in _pagesPendingDelete.ToList())
+                {
+                    try
+                    {
+                        await MangakaPageApi.DeleteAsync(_currentUserId.Value, pageId);
+                        _pagesPendingDelete.Remove(pageId);
+                        savedCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        failedCount++;
+                        Console.WriteLine($"Error deleting page {pageId}: {ex.Message}");
+                        Snackbar.Add($"Failed to delete a page: {ex.Message}", Severity.Error);
+                    }
+                }
+            }
+
             // Phase 1 — upload all pending page images to Cloudinary in PARALLEL (bounded concurrency) so a
             // multi-page save is not bottlenecked by sequential uploads. The DB creates below stay
             // sequential (page-number ordering + orphan cleanup) and just consume these results.
@@ -181,7 +204,13 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             foreach (var chap in Chapters)
             {
                 if (chap.ChapterId == Guid.Empty || chap.Pages == null) continue;
-                int pageNo = 1;
+                // New pages continue AFTER the highest existing page_no in this chapter — NOT a positional
+                // index. A soft-deleted page frees its number but leaves a gap; positional numbering would
+                // re-hit a still-active page_no and violate the filtered unique index
+                // ux_chapter_page_active_page_no ("Could not create page with version"). Gaps are kept and
+                // never reused (consistent with cancelled chapter numbers). PageNo == 0 = a not-yet-saved
+                // pending page that does not occupy a number yet.
+                int nextNewPageNo = chap.Pages.Where(p => p.PageNo > 0).Select(p => p.PageNo).DefaultIfEmpty(0).Max() + 1;
                 foreach (var page in chap.Pages)
                 {
                     if (page.ChapterPageId == Guid.Empty || (page.Versions.Any() && page.Versions[page.ActiveVersionIndex].PendingBytes != null))
@@ -220,7 +249,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                                         // New page: create page + version 1 + file atomically.
                                         var createReq = new CreatePageWithVersionRequestDto(
                                             chap.ChapterId,
-                                            pageNo,
+                                            nextNewPageNo,
                                             null,
                                             fileDto,
                                             ver.Note ?? "Original Upload");
@@ -229,12 +258,14 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                                         if (createdRes != null)
                                         {
                                             page.ChapterPageId = createdRes.Page.ChapterPageId;
+                                            page.PageNo = createdRes.Page.PageNo;   // authoritative number just assigned
                                             ver.ChapterPageVersionId = createdRes.Version.ChapterPageVersionId;
                                             ver.DataUrl = uploadResult.SecureUrl;
                                             ver.PendingBytes = null;
                                             ver.IsDirty = false;
                                             savedCount++;
                                             pagesUploaded++;
+                                            nextNewPageNo++;   // the next new page continues after this one
                                         }
                                     }
                                     else
@@ -272,17 +303,26 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                                     {
                                         try { await FileStorageService.DeleteFileAsync(uploadedPublicId, "image"); } catch { }
                                     }
-                                    Console.WriteLine($"Error uploading page {pageNo}: {ex.Message}");
-                                    Snackbar.Add($"Failed to upload page {pageNo}: {ex.Message}", Severity.Error);
+                                    var failedPageNo = page.PageNo > 0 ? page.PageNo : nextNewPageNo;
+                                    Console.WriteLine($"Error uploading page {failedPageNo}: {ex.Message}");
+                                    Snackbar.Add($"Failed to upload page {failedPageNo}: {ex.Message}", Severity.Error);
                                 }
                             }
                         }
                     }
-                    pageNo++;
                 }
             }
 
-            foreach (var page in pagesToSave)
+            // Save dirty region edits on EVERY loaded page across ALL chapters, not just the current
+            // chapter's (UploadedPages = the selected chapter only). A region edit made on a page of a
+            // DIFFERENT chapter earlier in the session was otherwise never persisted and left a permanent
+            // "dirty" flag -> the phantom "some changes could not be saved (0 failed)" that only a reload
+            // cleared. Split-view pages reference the same PageModel objects, so Distinct() de-dupes them.
+            var allRegionPages = Chapters.Where(c => c.Pages != null).SelectMany(c => c.Pages)
+                .Concat(_isSplitView && _splitUploadedPages != null ? _splitUploadedPages : Enumerable.Empty<PageModel>())
+                .Distinct()
+                .ToList();
+            foreach (var page in allRegionPages)
             {
                 if (page == null) continue;
                 if (page.Versions.Any())
@@ -315,14 +355,19 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
                                     string label = !string.IsNullOrEmpty(r.Label) ? r.Label : $"Region_{r.Id}";
                                     var (sourceType, confidence) = NormalizeRegionProvenance(r);
+                                    // Defensive clamp: coordinates must be >= 0 (DB CHECK
+                                    // ck_page_region_coordinates_nonnegative). A region dragged into the gray
+                                    // margin could carry a negative x/y; without this the whole BulkReplace
+                                    // fails with a 500 and the page stays unsaved. The canvas also clamps now,
+                                    // but this guards any already-buffered bad value too.
                                     return new MangaManagementSystem.Application.DTOs.Manga.CreatePageRegionDto(
                                         currentVersion.ChapterPageVersionId,
                                         (r.Type ?? "OTHER").ToUpper(),
                                         label,
-                                        (decimal)r.X,
-                                        (decimal)r.Y,
-                                        (decimal)r.Width,
-                                        (decimal)r.Height,
+                                        Math.Max(0m, (decimal)r.X),
+                                        Math.Max(0m, (decimal)r.Y),
+                                        Math.Max(0m, (decimal)r.Width),
+                                        Math.Max(0m, (decimal)r.Height),
                                         confidence,
                                         sourceType,
                                         textJson,
@@ -335,6 +380,12 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                                 currentVersion.IsDirty = false;
                                 savedCount++;
                             }
+                            else
+                            {
+                                // Payload present but not a valid array: nothing to persist. Clear the dirty
+                                // flag so the honest check below does not report "0 failed but not saved".
+                                currentVersion.IsDirty = false;
+                            }
                         }
                         catch (Exception ex)
                         {
@@ -342,6 +393,13 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                             Console.WriteLine($"Error saving regions: {ex.Message}");
                             Snackbar.Add($"Failed to save regions for a page: {ex.Message}", Severity.Error);
                         }
+                    }
+                    else
+                    {
+                        // Dirty version with a DB id but no region payload (a spurious / left-over flag,
+                        // e.g. after poking error paths): nothing to persist -> clear it so Save does not
+                        // report a phantom "some changes could not be saved (0 failed)".
+                        currentVersion.IsDirty = false;
                     }
                 }
             }
@@ -357,7 +415,8 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 Chapters.Any(c => c.Pages != null && c.Pages.Any(p =>
                     p.ChapterPageId == Guid.Empty ||
                     (p.Versions.Any() && p.Versions[p.ActiveVersionIndex].PendingBytes != null) ||
-                    (p.Versions.Any() && p.Versions[p.ActiveVersionIndex].IsDirty)));
+                    (p.Versions.Any() && p.Versions[p.ActiveVersionIndex].IsDirty))) ||
+                _pagesPendingDelete.Count > 0;
 
             if (failedCount == 0 && !anyRemainingUnsaved)
             {

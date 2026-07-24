@@ -252,13 +252,19 @@ namespace MangaManagementSystem.Application.Services
                         existingRegion.SourceType = dto.SourceType;
                         existingRegion.OriginalText = dto.OriginalText;
                         existingRegion.RegionLabel = dto.RegionLabel;
-                        if (existingRegion.CreatedByUserId.HasValue && existingRegion.CreatedByUserId.Value != Guid.Empty)
+                        // Record WHO actually made this change (the acting user for THIS request, e.g. a
+                        // Tantou Editor editing a Mangaka-created region during review) — not the original
+                        // creator, which is what this used to copy. dto.CreatedByUserId carries the acting
+                        // user id. Set the matching timestamp so updated_by/updated_at stay a consistent pair.
+                        if (dto.CreatedByUserId.HasValue && dto.CreatedByUserId.Value != Guid.Empty)
                         {
-                            existingRegion.UpdatedByUserId = existingRegion.CreatedByUserId;
+                            existingRegion.UpdatedByUserId = dto.CreatedByUserId;
+                            existingRegion.UpdatedAtUtc = DateTime.UtcNow;
                         }
                         else
                         {
                             existingRegion.UpdatedByUserId = null;
+                            existingRegion.UpdatedAtUtc = null;
                         }
                         _unitOfWork.PageRegions.Update(existingRegion);
                     }

@@ -32,6 +32,12 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 // phantom change back to Blazor. A freshly loaded page has no undo.
                 await _leftCanvasRef.InvokeVoidAsync("loadRegions",
                     string.IsNullOrEmpty(activeVersion.Regions) ? "[]" : activeVersion.Regions, true);
+                // A freshly loaded page starts clean: no region selection, the neutral 'select' tool, and
+                // the page's read-only state pushed to the canvas. Fixes (a) the previous page's selection
+                // lingering in the annotation/task panel, and (b) a draw tool carrying over onto a locked page.
+                SelectedRegions.Clear();
+                await _leftCanvasRef.InvokeVoidAsync("clearSelection");
+                await _leftCanvasRef.InvokeVoidAsync("setTool", "select");
                 CanUndo = false;
                 CanRedo = false;
 

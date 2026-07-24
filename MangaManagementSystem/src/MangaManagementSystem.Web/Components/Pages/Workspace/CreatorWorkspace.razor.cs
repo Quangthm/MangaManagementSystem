@@ -1562,6 +1562,21 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         }
     }
 
+    // DEFECT fix — PageRegion creation for a Tantou Editor during review. Regions are the Mangaka's page
+    // CONTENT and stay locked for the Mangaka while the chapter is under review; but a Tantou Editor may
+    // create regions while the chapter is UNDER_REVIEW or REVISION_REQUESTED so they can box a specific
+    // panel for an editorial annotation. The region API accepts either actor (no role/status guard there).
+    private bool CanEditRegions
+    {
+        get
+        {
+            var code = Chapters.FirstOrDefault(c => c.Id == SelectedChapter)?.StatusCode;
+            if (_currentRoleName == "Mangaka") return CanManageContent && !IsChapterLocked;
+            if (_currentRoleName == "Tantou Editor") return code == "UNDER_REVIEW" || code == "REVISION_REQUESTED";
+            return false;
+        }
+    }
+
     private static bool IsAssistantTaskChapterSubmissionBlocked(string? statusCode) =>
         statusCode is "APPROVED" or "SCHEDULED" or "ON_HOLD" or "RELEASED" or "CANCELLED";
     // Annotations are review/production FEEDBACK (BR-CP-018 / BR-WORKSPACE-007), not page content, so they
@@ -2051,14 +2066,14 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         var canvas = GetActiveCanvas();
         if (canvas == null || UploadedPages.Count == 0 || ActivePageIndex < 0 || ActivePageIndex >= UploadedPages.Count)
         {
-            Snackbar.Add("Không có trang nào để xuất.", Severity.Warning);
+            Snackbar.Add("There is no page to export.", Severity.Warning);
             return;
         }
 
         var page = UploadedPages[ActivePageIndex];
         if (!page.Versions.Any())
         {
-            Snackbar.Add("Trang này chưa có ảnh để xuất.", Severity.Warning);
+            Snackbar.Add("This page has no image to export.", Severity.Warning);
             return;
         }
 
@@ -2074,16 +2089,16 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             var ok = await canvas.InvokeAsync<bool>("downloadRenderedImage", fileName);
             if (ok)
             {
-                Snackbar.Add($"Đã xuất ảnh: {fileName}", Severity.Success);
+                Snackbar.Add($"Image exported: {fileName}", Severity.Success);
             }
             else
             {
-                Snackbar.Add("Không xuất được trang (ảnh có thể chưa tải xong). Hãy thử lại.", Severity.Warning);
+                Snackbar.Add("Could not export the page (the image may not have finished loading). Please try again.", Severity.Warning);
             }
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Xuất ảnh thất bại: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Export failed: {ex.Message}", Severity.Error);
             Console.WriteLine(ex.ToString());
         }
     }
@@ -2564,7 +2579,9 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
     private async Task DeleteSelectedRegions()
     {
-        if (IsChapterLocked) return;
+        // Region editing permission (Mangaka when editable, or Tantou Editor during review) — same gate as
+        // creating a region, so the editor can also remove a region they added for annotation.
+        if (!CanEditRegions) return;
         if (!SelectedRegions.Any())
         {
             Snackbar.Add("No region selected.", Severity.Info);
@@ -2688,15 +2705,20 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         StateHasChanged();
         
         Snackbar.Add("Running Segmentation...", Severity.Info);
-        var successSegment = await GetActiveCanvas()!.InvokeAsync<bool>("callSegmentAPI");
-        
+        var segmentResult = await GetActiveCanvas()!.InvokeAsync<string>("callSegmentAPI");
+
         IsProcessing = false;
         StateHasChanged();
-        
-        if (successSegment) {
+
+        if (segmentResult == "success") {
             Snackbar.Add("Segmentation complete.", Severity.Success);
         } else {
-            Snackbar.Add("Segmentation failed.", Severity.Error);
+            // Surface the real reason (timeout / HTTP 500 / service not reachable) instead of a generic
+            // failure, so the user knows whether to start the service, check its console, or retry.
+            // RequireInteraction: an AI error must not auto-dismiss — a timeout message that vanishes after
+            // 5s is easy to miss on a slow call, and the user needs to read what went wrong.
+            Snackbar.Add($"Segmentation failed: {segmentResult}", Severity.Error,
+                config => config.RequireInteraction = true);
         }
     }
 

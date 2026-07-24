@@ -228,8 +228,10 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             var contentType = string.IsNullOrWhiteSpace(file.ContentType) ? "image/png" : file.ContentType;
             var dataUrl = $"data:{contentType};base64,{Convert.ToBase64String(bytes)}";
 
-            // Carry the current canvas regions onto the new version (same behaviour as before).
-            var currentRegionsJson = await canvas.InvokeAsync<string>("exportRegions");
+            // An UPLOADED version is a NEW image with a different layout, so it must NOT inherit the
+            // current version's regions (that "bled" v2's regions onto v3). It starts with no regions.
+            // (Canvas edits via SaveAsNewVersion keep inheriting — there the image is the same, edited.)
+            const string currentRegionsJson = "[]";
 
             // #4 review + #5 defer: show the thumbnail confirm dialog; on Add, buffer as a PENDING new
             // version. Like a page upload, nothing hits Cloudinary/DB until Save → FlushPendingAsync
