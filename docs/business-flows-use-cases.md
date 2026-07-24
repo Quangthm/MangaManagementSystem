@@ -14,6 +14,9 @@
 
 > **Deferred source-series alignment — 2026-07-24:** `Series.source_series_id` / `SourceSeriesId` remains a nullable field in the database and existing backend/domain plumbing for compatibility and possible future implementation. Source-series selection/editing is **deferred** and is not part of the current MVP user-facing workflow: current UI, use cases, user stories, and active functional requirements must not present it as an available Mangaka action. Normal UI-driven create/update flows should leave it unset/null. If the feature is activated later, the implementation must reject self-reference. The current MVP proposal lifecycle continues to have no Mangaka proposal-withdrawal action and no `WITHDRAWN` proposal status.
 
+
+> **Latest Tantou Editor workspace/PageRegion alignment — 2026-07-24:** An `ACTIVE` Tantou Editor who is an active contributor of the owning series may retain read access to that series' chapter workspace across chapter lifecycle states, including `DRAFT` chapters that have not entered the editorial-review pipeline. Read access does not grant write authority. Persistent Tantou Editor `PageRegion` creation/editing is allowed only while the chapter is `UNDER_REVIEW` or `REVISION_REQUESTED`; permitted edits include region geometry, label, `type_code`, and applicable original-text metadata. A manually adjusted AI region follows the normal conversion to `MANUAL` and clears AI confidence. Tantou Editors must not create, edit, or delete `PageRegion` records from the workspace while the chapter is `DRAFT`, `APPROVED`, `SCHEDULED`, `ON_HOLD`, `RELEASED`, or `CANCELLED`. Editorial annotations may use existing saved regions, newly created regions, or both. Creating/editing a `PageRegion` for editorial review, including a region drawn while creating an annotation during `UNDER_REVIEW`, is review metadata and is not considered mutation of the underlying manga page file/content. The page/content lock applies to production-content changes such as page creation/deletion, page-version upload/replacement, and task output that creates or changes page content. Any region already referenced by an annotation, task, or other dependent workflow record remains protected from deletion.
+
 ---
 
 ## 1. Document Conventions
@@ -1439,6 +1442,35 @@ manga.usp_ChapterPageVersion_Create or equivalent page-version workflow procedur
 
 ---
 
+## BF-PAGE-002A — Tantou Editor Opens Chapter Workspace in Read-Only or Review Mode
+
+**Status:** Agreed  
+**Primary actor:** Tantou Editor  
+**Goal:** Allow an active Tantou Editor contributor to inspect exact-series chapter/page/version context even before formal review, while enabling persistent review edits only in the approved review states.
+
+### Main Flow
+
+```text
+Tantou Editor opens a chapter workspace for a series where the Editor is an active contributor
+→ Backend verifies the Editor account is ACTIVE and contributor relationship is active for the exact series
+→ Backend loads the chapter, logical pages, saved page versions, saved PageRegion overlays, and visible annotations
+→ If chapter status is UNDER_REVIEW or REVISION_REQUESTED:
+    UI may expose permitted editorial-review PageRegion and annotation actions
+→ If chapter status is DRAFT, APPROVED, SCHEDULED, ON_HOLD, RELEASED, or CANCELLED:
+    UI keeps the chapter/page/version/region/annotation context viewable
+    UI disables/hides persistent PageRegion and annotation mutation actions
+→ Any formal chapter editorial decision remains governed separately and is available only in the normal review decision state
+```
+
+### Important Notes
+
+- `DRAFT` does not prevent an active Tantou Editor contributor from viewing the chapter workspace; it prevents Editor review-metadata writes.
+- Read permission is not write permission.
+- Temporary/advisory AI output may be shown only according to the existing AI-tool rules; accepting/saving it as a `PageRegion` still requires `UNDER_REVIEW` or `REVISION_REQUESTED`.
+- Publication actions such as schedule/reschedule/hold/release are governed by the publication workflow and are not granted by chapter-workspace PageRegion permission.
+
+---
+
 ## BF-PAGE-003 — Create Page Regions for a Page Version
 
 **Status:** Agreed
@@ -1455,6 +1487,9 @@ User opens the chapter/page workspace
 → Backend validates the selected chapter_page_version_id and region request shape
 → Backend calls manga.usp_PageRegion_Create
 → Database verifies actor is an ACTIVE user and active SeriesContributor for the series that owns the selected page version
+→ Database resolves the actor role and owning chapter status
+→ If actor is Tantou Editor, database allows persistent PageRegion creation only when chapter status is UNDER_REVIEW or REVISION_REQUESTED
+→ If actor is Tantou Editor and chapter is DRAFT, APPROVED, SCHEDULED, ON_HOLD, RELEASED, or CANCELLED, database rejects the region write while preserving read-only workspace access
 → Database normalizes single-object JSON into an array when needed
 → Database parses region fields from JSON
 → Database inserts manga.PageRegion rows linked to the selected chapter_page_version_id
@@ -1527,8 +1562,12 @@ audit.usp_AuditEvent_Append
 - `PageRegion` should be used for saved manual regions and saved/accepted AI-suggested regions.
 - Temporary AI suggestions that the user has not accepted do not need to be saved as `PageRegion`.
 - The procedure should check actor permission and ownership context because those are cross-table business rules.
-- The table constraints should enforce simple field rules such as valid region type, valid source type, positive dimensions, confidence score rules, and foreign keys.
+- The table constraints should enforce simple field rules such as valid region type, valid source type, valid DOT/rectangle geometry, confidence score rules, and foreign keys.
 - `source_type = AI` means the region came from an AI suggestion. If an AI region is manually adjusted later, the system should update it as manual according to the PageRegion editing rules.
+- An active Tantou Editor contributor may create or edit saved regions only for `UNDER_REVIEW` or `REVISION_REQUESTED` chapters.
+- Tantou Editor region editing includes permitted geometry changes and `type_code` changes (plus other allowed metadata such as label/original text where applicable).
+- A Tantou Editor may inspect existing regions in `DRAFT`, `APPROVED`, `SCHEDULED`, `ON_HOLD`, `RELEASED`, or `CANCELLED`, but must not persist region create/edit/delete changes from the workspace in those states.
+- Running an advisory AI tool does not itself grant permission to save its suggestions; saving accepted suggestions as `PageRegion` must still satisfy the actor/status permission rules.
 
 ### System Should Try To
 
@@ -1553,6 +1592,7 @@ User opens the chapter/page workspace
 → User selects a saved PageRegion
 → UI requests deletion/removal
 → Backend validates actor permission for the owning series/page workspace
+→ If actor is Tantou Editor, backend permits deletion attempts only while the chapter is UNDER_REVIEW or REVISION_REQUESTED; other chapter states remain read-only for Editor region mutation
 → Backend checks whether the PageRegion is linked by ChapterPageAnnotationRegion, ChapterPageTaskRegion, or any other workflow record
 → If the region is not linked to any dependent workflow record, backend hard-deletes the PageRegion
 → UI removes the region overlay from the page version
@@ -1566,6 +1606,7 @@ User opens the chapter/page workspace
 - Deleting an unused region must not cascade into annotations, tasks, page versions, or files.
 - Whole-page regions created for Quick Select become non-deletable once linked to a task.
 - The UI should disable or hide the delete action for linked regions when that information is already known.
+- For Tantou Editor, an otherwise-unused region may be deleted only when Editor region mutation is permitted (`UNDER_REVIEW` or `REVISION_REQUESTED`); read access in other states does not grant deletion.
 
 ### System Should Try To
 
@@ -1603,6 +1644,8 @@ User opens the chapter/page workspace
 → Database verifies the actor account is ACTIVE
 → Database verifies the actor is an active contributor for the owning series
 → Database verifies the actor role is Mangaka or Tantou Editor
+→ If actor is Tantou Editor, database requires chapter status UNDER_REVIEW or REVISION_REQUESTED for annotation/region mutation
+→ If actor is Tantou Editor and chapter is DRAFT, APPROVED, SCHEDULED, ON_HOLD, RELEASED, or CANCELLED, database keeps workspace access read-only and rejects the annotation write
 → Database creates one manga.ChapterPageAnnotation row
 → Database creates one or more manga.ChapterPageAnnotationRegion rows
 → Database writes CHAPTER_PAGE_ANNOTATION_CREATED audit event
@@ -1654,6 +1697,9 @@ manga.ChapterPageVersion
 - `ChapterPageAnnotationRegion` primary key prevents duplicate annotation-region pairs.
 - Mangaka-created annotations are production-tracking feedback.
 - Tantou Editor-created annotations are editorial-review feedback.
+- For Tantou Editor, editorial annotations may use existing saved regions, newly created regions, or both only when the chapter is `UNDER_REVIEW` or `REVISION_REQUESTED`.
+- During `UNDER_REVIEW`, drawing and saving a new `PageRegion` specifically to target an editorial annotation is review metadata; it is not a change to the underlying manga page file/content and is therefore not blocked by the production page-content lock.
+- Tantou Editor may change a permitted region's `type_code` while performing allowed region editing; the same actor/state rules apply as for geometry changes.
 - The MVP does not add an annotation-origin column; permission is guarded by stored procedures using the annotation creator's current role and owning series context.
 
 ### System Should Try To
@@ -1984,7 +2030,9 @@ audit.AuditEvent
 **Primary actor:** Tantou Editor
 **Goal:** Record the final chapter-level editorial decision while preserving page-level annotations and review history.
 
-### Main Flow
+#> **Production content lock clarification:** When a chapter is `UNDER_REVIEW`, production-content changes (logical page creation/deletion, page-version upload/replacement, Assistant output that changes page content, and equivalent underlying page-file/content mutations) remain locked. This does **not** block the separately authorized Tantou Editor review-metadata actions defined for `UNDER_REVIEW`, including creating/editing `PageRegion` records (including `type_code`) and creating/managing editorial annotations. In other read-only chapter states, Editor workspace mutation remains blocked as defined by the PageRegion/workspace rules.
+
+## Main Flow
 
 ```text
 Tantou Editor opens the submitted chapter review queue
