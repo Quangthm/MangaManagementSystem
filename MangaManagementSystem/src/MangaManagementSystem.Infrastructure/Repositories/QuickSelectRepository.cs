@@ -120,6 +120,12 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         public async Task<QuickSelectTaskAssignmentResult> PersistQuickSelectAssignmentAsync(
             QuickSelectAssignmentPlan plan, CancellationToken cancellationToken = default)
         {
+            if (plan.ActorUserId == Guid.Empty)
+            {
+                throw new InvalidOperationException(
+                    "An authenticated actor user ID is required to persist a Quick Select assignment.");
+            }
+
             var strategy = _context.Database.CreateExecutionStrategy();
 
             return await strategy.ExecuteAsync(async () =>
@@ -133,7 +139,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     await AcquireChapterLockAsync(plan.ChapterId, cancellationToken);
                     await AcquireAppLockAsync(plan, cancellationToken);
 
-                    await RecheckGuardsAsync(plan, cancellationToken);
+                    var actorRoleName = await RecheckGuardsAsync(plan, cancellationToken);
 
                     var now = DateTime.UtcNow;
                     var regionLookup = await ResolveFullPageRegionsAsync(plan, now, cancellationToken);
@@ -198,7 +204,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                         {
                             OccurredAtUtc = now,
                             ActorUserId = plan.ActorUserId,
-                            ActorRoleName = null,
+                            ActorRoleName = actorRoleName,
                             ActionCode = "CHAPTER_PAGE_TASK_CREATED",
                             EntityType = "ChapterPageTask",
                             EntityId = item.ChapterPageTaskId.ToString(),
@@ -371,7 +377,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             }
         }
 
-        private async Task RecheckGuardsAsync(
+        private async Task<string> RecheckGuardsAsync(
             QuickSelectAssignmentPlan plan, CancellationToken ct)
         {
             var series = await _context.Series
@@ -469,6 +475,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     throw new InvalidOperationException(
                         "Selected page file changed. Please reload Quick Select and try again.");
             }
+
+            return actor.Role!.RoleName;
         }
 
         private async Task<Dictionary<Guid, PageRegion>> ResolveFullPageRegionsAsync(
