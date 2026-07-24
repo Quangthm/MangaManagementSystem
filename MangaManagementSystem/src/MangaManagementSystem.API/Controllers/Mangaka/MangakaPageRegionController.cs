@@ -121,7 +121,10 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return BadRequest("Invalid version ID.");
             }
 
-            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            // TEMP (demo) — see the bulk-replace [Authorize] note above. ResolveActorAsync defaults to
+            // Mangaka-only when passed no roles, so an editor got 403 "not an active Mangaka" even after the
+            // attribute was widened. Allow the Tantou Editor here too so the editor's region Save resolves.
+            var (actorUserId, actorFailure) = await ResolveActorAsync("Mangaka", "Tantou Editor");
             if (actorFailure is not null)
                 return actorFailure;
 
