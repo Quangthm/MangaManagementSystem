@@ -25,6 +25,7 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IFileStorageService FileStorageService
 @inject IAiService AiService
+@inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment Env
 
 @if (_accessDenied)
 {
@@ -119,11 +120,11 @@ else
                 }
             }
             @* Save / Discard: the Mangaka commits page content while the chapter is editable; a Tantou Editor
-               also needs them while UNDER_REVIEW / REVISION_REQUESTED to persist the regions they add for
-               annotation (Save is still auto-disabled unless there are unsaved changes). Mirrors CanEditRegions. *@
+               also needs them while DRAFT / UNDER_REVIEW / REVISION_REQUESTED to persist the regions they add
+               for annotation (Save is still auto-disabled unless there are unsaved changes). Mirrors CanEditRegions. *@
             @if (_headerChap != null
                  && ((_currentRoleName == "Mangaka" && (_headerChap.StatusCode == "DRAFT" || _headerChap.StatusCode == "REVISION_REQUESTED"))
-                     || (_currentRoleName == "Tantou Editor" && (_headerChap.StatusCode == "UNDER_REVIEW" || _headerChap.StatusCode == "REVISION_REQUESTED"))))
+                     || (_currentRoleName == "Tantou Editor" && (_headerChap.StatusCode == "DRAFT" || _headerChap.StatusCode == "UNDER_REVIEW" || _headerChap.StatusCode == "REVISION_REQUESTED"))))
             {
                 <MudButton Variant="Variant.Filled" Color="@(HasUnsavedChanges ? Color.Warning : Color.Default)" Size="Size.Small"
                            StartIcon="@Icons.Material.Filled.Save" Class="mr-2" DisableElevation="true"
@@ -761,12 +762,17 @@ else
                     <MudTextField T="string" Label="Task description..." @bind-Value="TaskDescription" Variant="Variant.Outlined" Lines="3" Margin="Margin.Dense" Class="mb-3" />
 
                     @* No Max here: MudBlazor would silently CLAMP a too-large value to the max, so the
-                       "too large" check in the create handler could never fire. Letting the value through
-                       lets the handler show the friendly message and block. No client Pattern here: MudBlazor
-                       rendered it into an invalid HTML pattern ("…$*" under the browser's /v regex flag) that
-                       spammed the console every keystroke; Min + Format + the submit handler are the real guard. *@
+                       "too large" check could never surface. Letting the value through lets Validation +
+                       the submit handler show the friendly "too large, re-enter" message and block. No
+                       client Pattern here: MudBlazor rendered it into an invalid HTML pattern ("…$*" under
+                       the browser's /v regex flag) that spammed the console every keystroke.
+                       Guards, in order: Min="0" blocks the minus key + negative values; the field's own
+                       converter rejects non-numeric text ("Not a valid number"); Immediate + Validation
+                       surface the negative/too-large message live as the user types; CreateTask() is the
+                       final backstop before the API call. *@
                     <MudNumericField T="decimal" Label="Compensation" @bind-Value="TaskCompensation" Variant="Variant.Outlined"
                                      Margin="Margin.Dense" Class="mb-3" Min="0" Format="0.##"
+                                     Immediate="true" Validation="@((Func<decimal, string?>)ValidateCompensation)"
                                      HideSpinButtons="true" />
 
                     <MudDatePicker Label="Deadline" @bind-Date="_taskDueDate" Variant="Variant.Outlined"
