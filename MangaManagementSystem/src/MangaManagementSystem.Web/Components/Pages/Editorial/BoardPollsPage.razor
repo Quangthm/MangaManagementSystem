@@ -1,4 +1,4 @@
-@page "/demo/mangaflow/polls"
+@page "/demo/mangaflow/decisions"
 @namespace MangaManagementSystem.Web.Components.Pages.Editorial
 
 @using System.Globalization
@@ -9,21 +9,21 @@
 
 @inject IEditorialBoardApiClient EditorialBoardApiClient
 
-<MangaFlowShell Title="Board Polls"
-                Subtitle="Editorial board voting system — manage and track serialization votes."
-                ActiveMenu="polls">
+<MangaFlowShell Title="Decision Center"
+                Subtitle="Review current board polls, track votes, and manage board decisions."
+                ActiveMenu="decisions">
     <ChildContent>
         @if (_isLoading)
         {
             <section class="mf-card">
-                <div class="mf-strong">Loading board polls...</div>
-                <div class="mf-muted">Fetching open polls from database.</div>
+                <div class="mf-strong">Loading decision center...</div>
+                <div class="mf-muted">Fetching current board polls from database.</div>
             </section>
         }
         else if (!string.IsNullOrWhiteSpace(_errorMessage))
         {
             <section class="mf-card">
-                <div class="mf-strong">Cannot load board polls</div>
+                <div class="mf-strong">Cannot load decision center</div>
                 <div class="mf-muted">@_errorMessage</div>
 
                 <button class="mf-btn mf-btn-primary mf-gap-small"
@@ -35,9 +35,9 @@
         else
         {
             <div class="mf-grid mf-grid-3">
-                <KpiCard Label="Open Polls"
+                <KpiCard Label="Current Polls"
                          Value="@_polls.Count.ToString(CultureInfo.InvariantCulture)"
-                         Description="Active voting sessions"
+                         Description="Active decision sessions"
                          Icon="O"
                          Tone="green" />
 
@@ -54,12 +54,12 @@
                          Tone="orange" />
             </div>
 
-            <h2 class="mf-section-title">Open Polls</h2>
+            <h2 class="mf-section-title">Current Polls</h2>
 
             @if (_polls.Count == 0)
             {
                 <section class="mf-card">
-                    <div class="mf-strong">No open polls</div>
+                    <div class="mf-strong">No current polls</div>
                     <div class="mf-muted">
                         When Board Chief opens a serialization or cancellation poll, it will appear here from SQL Server.
                     </div>
