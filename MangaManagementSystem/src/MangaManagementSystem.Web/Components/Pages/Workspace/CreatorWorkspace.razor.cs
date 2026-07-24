@@ -170,6 +170,13 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
     private SemaphoreSlim _dbSemaphore = new SemaphoreSlim(1, 1);
 
+    // Stable per-build cache key for the canvas ES module. Was DateTime.Now.Ticks — unique every canvas
+    // init, so the 53 KB module was re-downloaded + re-parsed each time and never cached. The assembly
+    // version is stable within a build (browser caches the module) and changes on rebuild/redeploy; a
+    // hard refresh (Ctrl+F5) still picks up in-place mangaAiCanvas.js edits during development.
+    private static readonly string CanvasScriptVersion =
+        typeof(CreatorWorkspace).Assembly.GetName().Version?.ToString() ?? "1";
+
     private bool _seriesNotFound = false;
     private bool _isAddingChapter = false;
     private bool _isLoadingChapter = false;
@@ -2137,8 +2144,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
         try
         {
-            var version = DateTime.Now.Ticks;
-            _moduleFactory = await JS.InvokeAsync<IJSObjectReference>("import", $"/js/mangaAiCanvas.js?v={version}");
+            _moduleFactory = await JS.InvokeAsync<IJSObjectReference>("import", $"/js/mangaAiCanvas.js?v={CanvasScriptVersion}");
             _leftCanvasRef = await _moduleFactory.InvokeAsync<IJSObjectReference>("createMangaCanvasInstance");
             _rightCanvasRef = await _moduleFactory.InvokeAsync<IJSObjectReference>("createMangaCanvasInstance");
             _objRefLeft = DotNetObjectReference.Create(new CanvasInterop(this, "Left"));

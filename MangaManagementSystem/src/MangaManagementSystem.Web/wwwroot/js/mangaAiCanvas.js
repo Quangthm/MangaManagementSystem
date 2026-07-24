@@ -203,7 +203,7 @@ function setupEvents() {
                 (r.type || '').toUpperCase() !== 'FULL_PAGE' &&
                 pos.x >= r.x && pos.x <= r.x + r.width &&
                 pos.y >= r.y && pos.y <= r.y + r.height);
-            
+
             if (hit) {
                 if (e.shiftKey || e.ctrlKey) {
                     // Shift/Ctrl + click toggles this region in/out of the multi-selection —
@@ -212,7 +212,9 @@ function setupEvents() {
                     syncToBlazor();
                     redraw();
                 } else {
-                    // Plain press starts a drag; single-region selection is toggled via double-click.
+                    // Plain press only arms a drag (move); it must NOT change the selection. Selecting is
+                    // done via double-click (toggle) and Ctrl/Shift+click (multi) — see below / the dblclick
+                    // handler. Keeps the user's chosen selection intact while repositioning a box.
                     isDraggingRegion = true;
                     targetRegion = hit;
                     dragOffsetX = pos.x - hit.x;

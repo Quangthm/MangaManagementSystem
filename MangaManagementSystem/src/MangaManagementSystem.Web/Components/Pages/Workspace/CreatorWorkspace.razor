@@ -762,11 +762,12 @@ else
 
                     @* No Max here: MudBlazor would silently CLAMP a too-large value to the max, so the
                        "too large" check in the create handler could never fire. Letting the value through
-                       lets the handler show the friendly message and block. Pattern is widened so an
-                       over-limit value can actually be typed and caught. *@
+                       lets the handler show the friendly message and block. No client Pattern here: MudBlazor
+                       rendered it into an invalid HTML pattern ("…$*" under the browser's /v regex flag) that
+                       spammed the console every keystroke; Min + Format + the submit handler are the real guard. *@
                     <MudNumericField T="decimal" Label="Compensation" @bind-Value="TaskCompensation" Variant="Variant.Outlined"
                                      Margin="Margin.Dense" Class="mb-3" Min="0" Format="0.##"
-                                     Pattern="^\d{0,12}(\.\d{0,2})?$" HideSpinButtons="true" />
+                                     HideSpinButtons="true" />
 
                     <MudDatePicker Label="Deadline" @bind-Date="_taskDueDate" Variant="Variant.Outlined"
                                    Margin="Margin.Dense" Class="mb-3" MinDate="DateTime.Today"
