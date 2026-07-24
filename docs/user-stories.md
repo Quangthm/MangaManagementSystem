@@ -13,6 +13,8 @@ Basis: Verified MVP business rules, updated PageRegion segmentation rules, and p
 
 > **Latest implementation-alignment decisions — 2026-07-23:** Email/password self-registration follows the current repository flow: the user must pass reCAPTCHA before a 6-digit email OTP is sent, and the pending account is created only after successful OTP verification; Google sign-up remains a separate verified-identity path and still creates `PENDING_APPROVAL`. The current MVP has no Mangaka proposal-withdrawal workflow. Assistants are allowed to view dynamic rankings, while manual ranking input remains restricted to Editorial Board Member/Chief roles. A `CANCELLED` chapter does not reserve its chapter number label: a new non-cancelled chapter may reuse the same label while the cancelled row keeps its original label, enforced by uniqueness among non-cancelled chapters only. Scheduling accepts `planned_release_date >=` the current publication business date (today in the configured publication timezone); past dates are invalid. `PageRegion` geometry supports either a DOT (`width = 0` and `height = 0`) or an area rectangle (`width > 0` and `height > 0`), and mixed zero/non-zero dimensions are invalid. Ranking preserves true ties: equal `ranking_score` values share the same `DENSE_RANK`; deterministic secondary ordering may be used only to display rows within the same rank and must not change `rank_position`.
 
+> **Deferred source-series alignment — 2026-07-24:** `Series.source_series_id` / `SourceSeriesId` remains a nullable field in the database and existing backend/domain plumbing for compatibility and possible future implementation. Source-series selection/editing is **deferred** and is not part of the current MVP user-facing workflow: current UI, use cases, user stories, and active functional requirements must not present it as an available Mangaka action. Normal UI-driven create/update flows should leave it unset/null. If the feature is activated later, the implementation must reject self-reference. The current MVP proposal lifecycle continues to have no Mangaka proposal-withdrawal action and no `WITHDRAWN` proposal status.
+
 ## Actor Consolidation and Shared Actor Groups Applied
 
 | Previous Actor Group / Issue | Final Actor Group | Handling |
@@ -105,9 +107,11 @@ Uploaded business files should follow the MVP file-purpose acceptance matrix in 
 
 ## 5. Mangaka
 
+> **Deferred source-series story:** There is no current MVP user story for selecting or editing a source series. The nullable `source_series_id` / `SourceSeriesId` remains in the database/backend model for compatibility and future work only; normal current UI flows leave it unset/null.
+
 | Story ID | Source Rule(s) | User Story |
 |---|---|---|
-| US-MANGAKA-001 | BR-SERIES-003, BR-SERIES-005, BR-SERIES-006, BR-SERIES-006A, BR-SERIES-006B, BR-SERIES-007, BR-SERIES-008, BR-SERIES-009, BR-SERIES-015, BR-SERIES-022, BR-SERIES-025 | As a Mangaka, I want to create and update a series draft profile with title, synopsis, genres, tags, language, cover image, source series, and proposed publication frequency while it is still in `PROPOSAL_DRAFT`, so that the manga project is clearly represented before formal review. |
+| US-MANGAKA-001 | BR-SERIES-003, BR-SERIES-005, BR-SERIES-006, BR-SERIES-006A, BR-SERIES-006B, BR-SERIES-007, BR-SERIES-015, BR-SERIES-022, BR-SERIES-025 | As a Mangaka, I want to create and update a series draft profile with title, synopsis, genres, tags, language, cover image, and proposed publication frequency while it is still in `PROPOSAL_DRAFT`, so that the manga project is clearly represented before formal review. |
 | US-MANGAKA-001C | BR-SERIES-007A, BR-SERIES-007B, BR-SERIES-007C | As a Mangaka, I want to crop and preview my series cover before saving a draft, so that the cover displays correctly in the required 2:3 portrait frame. |
 | US-MANGAKA-001D | BR-SERIES-007A, BR-SERIES-007B | As a Mangaka, I want the system to upload only the cropped series cover image, so that the final displayed cover matches my confirmed crop without storing the original source image. |
 | US-MANGAKA-001E | BR-SERIES-007D | As a Mangaka, I want a warning when my selected cover image is smaller than the recommended size, so that I understand the final cover may look blurry after upscaling. |

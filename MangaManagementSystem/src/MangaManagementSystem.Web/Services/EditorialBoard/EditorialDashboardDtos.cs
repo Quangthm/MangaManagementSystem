@@ -24,6 +24,7 @@ public sealed record EditorialProposalReviewRowDto(
     string Synopsis,
     string SubmittedByEditorName,
     string AssignedEditor,
+    string? CoverImageUrl,
     string? ProposalFileName,
     string? ProposalFileUrl,
     string? MarkupFileName,

@@ -146,4 +146,45 @@ public sealed class EditorialBoardApiClient : IEditorialBoardApiClient
         return await response.Content.ReadFromJsonAsync<FinalizePollResult>(
             cancellationToken: cancellationToken);
     }
+
+
+    public async Task<UpdateBoardPollDeadlineResult?> UpdatePollDeadlineAsync(
+        Guid pollId,
+        UpdateBoardPollDeadlineRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await _httpClient.PatchAsJsonAsync(
+            $"api/editorial-board/polls/{pollId}/deadline",
+            request,
+            cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var message = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new InvalidOperationException(message);
+        }
+
+        return await response.Content.ReadFromJsonAsync<UpdateBoardPollDeadlineResult>(
+            cancellationToken: cancellationToken);
+    }
+
+    public async Task<UpdateSeriesPublicationFrequencyResult?> UpdateSeriesPublicationFrequencyAsync(
+    Guid seriesId,
+    UpdateSeriesPublicationFrequencyRequest request,
+    CancellationToken cancellationToken = default)
+    {
+        var response = await _httpClient.PatchAsJsonAsync(
+            $"api/editorial-board/series/{seriesId}/publication-frequency",
+            request,
+            cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var message = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new InvalidOperationException(message);
+        }
+
+        return await response.Content.ReadFromJsonAsync<UpdateSeriesPublicationFrequencyResult>(
+            cancellationToken: cancellationToken);
+    }
 }
