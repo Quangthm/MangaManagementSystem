@@ -1,54 +1,43 @@
-# Current Session — Create Chapter Page Task Eligibility
+# Current Session — Series Cover / Header Layout Refactor
 
-**Date:** 2026-07-16
+**Date:** 2026-07-20
 **Branch:** `feature/Mangaka`
-**Status:** Implemented; static verification only
+**Status:** Implemented; build verified
 
 ## Goal
 
-Enforce production-eligible series and task-creation-eligible chapter states for both single-task and Quick Select `ChapterPageTask` creation. Replace only the single-task `manga.usp_ChapterPageTask_Create` call with EF Core while preserving its required audit behavior.
+Detach the series cover from the white metadata card on the `/series/{slug}` page. The cover is now an independent visual element outside the card. Responsive sizing (200-280px) and natural image height preserve the full cover artwork.
 
-## Production files changed
+## Files changed
 
-- `MangaManagementSystem/src/MangaManagementSystem.Domain/Policies/ChapterPageTaskCreationPolicy.cs`
-- `MangaManagementSystem/src/MangaManagementSystem.Application/Services/ChapterPageTaskService.cs`
-- `MangaManagementSystem/src/MangaManagementSystem.Infrastructure/Repositories/ChapterPageTaskRepository.cs`
-- `MangaManagementSystem/src/MangaManagementSystem.Infrastructure/Repositories/QuickSelectRepository.cs`
-- `MangaManagementSystem/src/MangaManagementSystem.API/Controllers/Mangaka/MangakaTaskController.cs`
+### Modified
+
+- `Components/Pages/Series/SeriesPage.razor` (major structural change)
 
 ## Result
 
-- `ChapterPageTaskCreationPolicy` permits task creation only for `DRAFT` and `REVISION_REQUESTED` chapters.
-- Both single-task and Quick Select writes reuse `SeriesProductionPolicy` and the new chapter policy inside `RepeatableRead` transactions.
-- Both paths authoritatively validate active Mangaka creator and active Assistant assignee roles and series memberships.
-- Single-task creation now uses EF Core for context lookup, task insertion, and region links.
-- `audit.usp_AuditEvent_Append` remains inside the active EF transaction, preserving role snapshot resolution, audit locking, and atomic rollback.
-- Quick Select retains its app lock, FULL_PAGE-region behavior, batch atomicity, and existing EF audit behavior.
-- Reload and notification remain after the single-task commit.
+- Cover is in its own grid column, completely outside the white metadata card.
+- Metadata card is an independent white card with existing border/radius/padding.
+- Cover width: `minmax(200px, 280px)` — grows on wider desktops.
+- Cover image: `width:100%; height:auto; display:block` — full cover visible, no cropping.
+- Cover fallback: `aspect-ratio:2/3` placeholder with centered MenuBook icon.
+- Inner header breakpoint: 680px — stacks cover above metadata on narrow screens.
+- Title-based alt text: `@_series.Title cover`.
+- `series-header-row` at `grid-column:1` preserves outer grid placement.
+- No changes to chapter list, contributor sidebar, Genres/Tags, lifecycle, or backend.
 
-## Constraint ownership
+## Backend impact
 
-Application validation is limited to workflow inputs: nonempty IDs, nonempty effective region list, required normalized title/description, and existing null due-date/compensation defaults. Task type, priority, compensation range/precision, maximum lengths, FKs, status checks, and junction uniqueness remain database-owned.
+None.
 
-Only confirmed SQL constraint/conflict numbers are converted to a safe client message. Unexpected `DbUpdateException` failures are logged and rethrown for the generic 500 response.
+## Build
 
-## Protected scope
-
-No Creator Workspace, Quick Select UI/service/DTO/API/client, task DTO/interface, SQL, schema, migration, `SeriesProductionPolicy`, Create Chapter, or unrelated task-lifecycle file was changed.
-
-## Verification boundary
-
-Only static checks are authorized. Restore, build, test, run, servers, watchers, migrations, and SQL execution were not run.
-
-Completed static checks:
-
-- `git diff --check` passed; only working-copy LF/CRLF notices were emitted.
-- Source search found no application call to `manga.usp_ChapterPageTask_Create`; only its unchanged bootstrap definition remains.
-- Both task-writing repositories call both policies inside `RepeatableRead` transactions.
-- The single-task audit command is attached to the current EF transaction.
-- Quick Select still calls its existing application-lock helper.
-- Protected workspace, DTO, interface, SQL, schema, migration, and configuration paths have no diff.
+```
+0 Error(s)
+68 Warning(s) — all pre-existing
+git diff --check → clean (SeriesPage.razor only)
+```
 
 ## Final handoff
 
-`docs/revision/Mangaka/2026-07-16-create-chapter-page-task-eligibility.md`
+`docs/revision/Mangaka/2026-07-20-series-cover-header-layout-refactor.md`

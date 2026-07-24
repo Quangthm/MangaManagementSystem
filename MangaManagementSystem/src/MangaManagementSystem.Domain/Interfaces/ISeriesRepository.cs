@@ -11,6 +11,14 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<Series?> GetSeriesWithChaptersAsync(Guid seriesId);
 
         /// <summary>
+        /// Loads and tracks the requested series for an update workflow.
+        /// The caller must already own the shared unit-of-work transaction.
+        /// </summary>
+        Task<Series?> GetByIdForUpdateAsync(
+            Guid seriesId,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Returns all series where the specified actor is an active contributor,
         /// with CoverFile eagerly loaded for dashboard display.
         /// Filters by: SeriesContributor.UserId == actorUserId, EndDate IS NULL,

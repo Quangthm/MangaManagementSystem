@@ -136,7 +136,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 ChapterPageVersionDto? versionDto = null;
                 try
                 {
-                    versionDto = await MangakaPageApi.CreateVersionWithFileAndRegionsAsync(_currentUserId!.Value, req);
+                    versionDto = await MangakaPageApi.CreateVersionWithFileAndRegionsAsync(req);
                 }
                 catch
                 {
@@ -213,9 +213,15 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         var file = e.File;
         if (file == null) return;
 
+        if (!IsAllowedWorkspaceImage(file, out var fileError))
+        {
+            Snackbar.Add(fileError, Severity.Warning);
+            return;
+        }
+
         try
         {
-            using var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 20);
+            using var stream = file.OpenReadStream(maxAllowedSize: WorkspaceMaxFileSizeBytes);
             using var memoryStream = new MemoryStream();
             await stream.CopyToAsync(memoryStream);
             var bytes = memoryStream.ToArray();
@@ -342,7 +348,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             // Guard (active task / unresolved annotation) + FileResource soft-delete + audit are all
             // owned by the service. The version row and its regions are kept as a history placeholder.
             var delResult = await MangakaPageApi.DeleteVersionImageAsync(
-                _currentUserId ?? Guid.Empty, activeVer.ChapterPageVersionId);
+                activeVer.ChapterPageVersionId);
             if (delResult == null) return;
 
             if (!delResult.Success)
@@ -386,7 +392,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
         try
         {
-            await MangakaPageApi.SetCurrentVersionAsync(_currentUserId!.Value, page.ChapterPageId, version.ChapterPageVersionId);
+            await MangakaPageApi.SetCurrentVersionAsync(page.ChapterPageId, version.ChapterPageVersionId);
             
             // Update UI state
             foreach (var v in page.Versions)

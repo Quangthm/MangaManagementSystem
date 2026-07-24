@@ -11,8 +11,6 @@ namespace MangaManagementSystem.Web.Services.Api
 {
     public class MangakaSeriesContributorApiClient : IMangakaSeriesContributorApiClient
     {
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
-
         private readonly HttpClient _httpClient;
 
         public MangakaSeriesContributorApiClient(HttpClient httpClient)
@@ -21,12 +19,10 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<IReadOnlyList<SeriesContributorListItemDto>> GetContributorsAsync(
-            Guid actorUserId,
             Guid seriesId,
             CancellationToken cancellationToken = default)
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, $"api/mangaka/series/{seriesId}/contributors");
-            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
             await EnsureSuccessAsync(response, cancellationToken);
@@ -36,7 +32,6 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<IReadOnlyList<EligibleAssistantContributorDto>> SearchEligibleAssistantsAsync(
-            Guid actorUserId,
             Guid seriesId,
             string? search,
             CancellationToken cancellationToken = default)
@@ -48,7 +43,6 @@ namespace MangaManagementSystem.Web.Services.Api
             }
 
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
             await EnsureSuccessAsync(response, cancellationToken);
@@ -58,13 +52,11 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task AddAssistantAsync(
-            Guid actorUserId,
             Guid seriesId,
             AddAssistantContributorRequest request,
             CancellationToken cancellationToken = default)
         {
             using var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"api/mangaka/series/{seriesId}/contributors/assistants");
-            httpRequest.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
             httpRequest.Content = JsonContent.Create(request);
 
             var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
@@ -72,14 +64,12 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task EndAssistantAsync(
-            Guid actorUserId,
             Guid seriesId,
             Guid assistantUserId,
             EndAssistantContributorRequest request,
             CancellationToken cancellationToken = default)
         {
             using var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"api/mangaka/series/{seriesId}/contributors/assistants/{assistantUserId}/end");
-            httpRequest.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
             httpRequest.Content = JsonContent.Create(request);
 
             var response = await _httpClient.SendAsync(httpRequest, cancellationToken);

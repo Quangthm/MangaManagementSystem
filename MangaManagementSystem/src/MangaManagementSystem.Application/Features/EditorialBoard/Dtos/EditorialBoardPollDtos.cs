@@ -1,4 +1,6 @@
-﻿namespace MangaManagementSystem.Application.Features.EditorialBoard.Dtos;
+﻿using System;
+
+namespace MangaManagementSystem.Application.Features.EditorialBoard.Dtos;
 
 public sealed record EditorialBoardPollDto(
     Guid PollId,
@@ -18,7 +20,12 @@ public sealed record EditorialBoardPollDto(
     int TotalVotes,
     string ComputedResultCode,
     string? CurrentUserChoiceCode,
-    string? CurrentUserVoteReason);
+    string? CurrentUserVoteReason,
+    string Author,
+    string Genre,
+    string TagsDisplay,
+    string Synopsis,
+    string? CoverImageUrl);
 
 public sealed record OpenSeriesBoardPollRequestDto(
     Guid ProposalId,
@@ -61,3 +68,39 @@ public sealed record FinalizeBoardPollResultDto(
     string SeriesStatusCode,
     string? PublicationFrequencyCode,
     DateTime EndedAtUtc);
+
+public sealed record CancellableBoardSeriesDto(
+    Guid SeriesId,
+    string Code,
+    string Title,
+    string Author,
+    string Genre,
+    string TagsDisplay,
+    string Synopsis,
+    string? PublicationFrequencyCode,
+    string StatusCode,
+    string? CoverImageUrl,
+    bool HasOpenCancelSerializationPoll);
+
+public sealed record OpenCancelSerializationPollRequestDto(
+    string PollReason,
+    DateTime? EndsAtUtc);
+
+public sealed record UpdateBoardPollDeadlineRequestDto(
+    DateTime? EndsAtUtc);
+
+public sealed record UpdateBoardPollDeadlineResultDto(
+    Guid PollId,
+    Guid SeriesId,
+    string PollStatusCode,
+    DateTime? EndsAtUtc);
+public sealed record UpdateSeriesPublicationFrequencyRequestDto(
+    string PublicationFrequencyCode,
+    string Reason);
+
+public sealed record UpdateSeriesPublicationFrequencyResultDto(
+    Guid SeriesId,
+    string Title,
+    string? OldPublicationFrequencyCode,
+    string NewPublicationFrequencyCode,
+    DateTime UpdatedAtUtc);

@@ -17,7 +17,6 @@ public class SeriesProposal
     public Guid SubmittedByUserId { get; set; }
     public User? SubmittedByUser { get; set; }
     public DateTime SubmittedAtUtc { get; set; }
-    public DateTime? WithdrawnAtUtc { get; set; }
     public Guid? ReviewedByUserId { get; set; }
     public User? ReviewedByUser { get; set; }
         public DateTime? ReviewedAtUtc { get; set; }

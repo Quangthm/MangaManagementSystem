@@ -26,6 +26,9 @@ namespace MangaManagementSystem.Application.Common
         public const string ChapterDecision =
             "CHAPTER_DECISION";
 
+        public const string PublicationSchedule =
+            "PUBLICATION_SCHEDULE";
+
         public const string SystemMessage =
             "SYSTEM_MESSAGE";
     }

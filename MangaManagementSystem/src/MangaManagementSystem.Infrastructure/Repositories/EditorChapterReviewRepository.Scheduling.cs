@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.Common;
+using MangaManagementSystem.Application.Features.Publication.Schedule;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
 using MangaManagementSystem.Infrastructure.Persistence;
@@ -169,6 +170,21 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
                 _dbContext.AuditEvents.Add(auditEvent);
 
+                var publicationScheduleEvent =
+                    PublicationScheduleNotificationSupport.Classify(
+                        previousStatusCode,
+                        newStatusCode,
+                        chapter.PlannedReleaseDate,
+                        chapter.PlannedReleaseDate);
+
+                await PublicationScheduleNotificationPersistence.AddNotificationsAsync(
+                    _dbContext,
+                    actorUserId,
+                    chapter,
+                    publicationScheduleEvent,
+                    reviewedAtUtc,
+                    ct);
+
                 var recipientUserIds =
                     await _dbContext.ActiveSeriesContributors
                         .AsNoTracking()
@@ -211,107 +227,6 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     review.DecisionCode,
                     review.Feedback,
                     review.ReviewedAtUtc);
-            }
-            catch
-            {
-                await transaction.RollbackAsync(ct);
-                throw;
-            }
-        }
-
-        public async Task<ChapterRescheduleResult> ReschedulePlannedReleaseDateAsync(
-            Guid actorUserId,
-            Guid chapterId,
-            DateTime newPlannedReleaseDate,
-            string reason,
-            CancellationToken ct = default)
-        {
-            await using var transaction = await _dbContext.Database.BeginTransactionAsync(ct);
-
-            try
-            {
-                var chapter = await _dbContext.Chapters
-                    .Include(c => c.Series)
-                    .FirstOrDefaultAsync(c => c.ChapterId == chapterId, ct);
-
-                if (chapter == null)
-                    throw new InvalidOperationException("Chapter does not exist.");
-
-                bool isAuthorized = await _dbContext.ActiveSeriesContributors
-                    .AnyAsync(sc =>
-                        sc.SeriesId == chapter.SeriesId &&
-                        sc.UserId == actorUserId &&
-                        sc.RoleName == TantouEditorRole,
-                        ct);
-
-                if (!isAuthorized)
-                    throw new InvalidOperationException(
-                        "You are not authorized to reschedule this chapter.");
-
-                if (chapter.StatusCode != StatusScheduledFull && chapter.StatusCode != StatusOnHold)
-                    throw new InvalidOperationException(
-                        "Only SCHEDULED or ON_HOLD chapters can be rescheduled.");
-
-                var normalizedDate = newPlannedReleaseDate.Date;
-                if (normalizedDate < DateTime.UtcNow.Date)
-                    throw new InvalidOperationException("Planned release date cannot be in the past.");
-
-                string oldStatusCode = chapter.StatusCode;
-                var previousPlannedDate = chapter.PlannedReleaseDate;
-
-                chapter.PlannedReleaseDate = normalizedDate;
-
-                string newStatusCode;
-                if (oldStatusCode == StatusOnHold)
-                {
-                    newStatusCode = StatusScheduledFull;
-                    chapter.StatusCode = StatusScheduledFull;
-                }
-                else
-                {
-                    newStatusCode = oldStatusCode;
-                }
-
-                chapter.UpdatedAtUtc = DateTime.UtcNow;
-
-                var detailJson = JsonSerializer.Serialize(new
-                {
-                    chapter_id = chapterId,
-                    series_id = chapter.SeriesId,
-                    old_status_code = oldStatusCode,
-                    new_status_code = newStatusCode,
-                    old_planned_release_date = previousPlannedDate,
-                    new_planned_release_date = normalizedDate,
-                    reason = reason,
-                    actor_user_id = actorUserId
-                });
-
-                var actorRoleName = await _dbContext.ActiveSeriesContributors
-                    .Where(sc => sc.SeriesId == chapter.SeriesId && sc.UserId == actorUserId)
-                    .Select(sc => sc.RoleName)
-                    .FirstOrDefaultAsync(ct);
-
-                _dbContext.AuditEvents.Add(new AuditEvent
-                {
-                    OccurredAtUtc = DateTime.UtcNow,
-                    ActorUserId = actorUserId,
-                    ActorRoleName = actorRoleName,
-                    ActionCode = "CHAPTER_RESCHEDULED",
-                    EntityType = "Chapter",
-                    EntityId = chapterId.ToString(),
-                    DetailJson = detailJson
-                });
-
-                await _dbContext.SaveChangesAsync(ct);
-                await transaction.CommitAsync(ct);
-
-                return new ChapterRescheduleResult(
-                    chapter.ChapterId,
-                    newStatusCode,
-                    normalizedDate,
-                    newStatusCode == StatusScheduledFull && oldStatusCode == StatusOnHold
-                        ? "Chapter has been taken off hold and rescheduled."
-                        : "Chapter rescheduled successfully.");
             }
             catch
             {
@@ -373,7 +288,15 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     newStatusCode = previousStatusCode;
                 }
 
-                chapter.UpdatedAtUtc = DateTime.UtcNow;
+                var changedAtUtc = DateTime.UtcNow;
+                chapter.UpdatedAtUtc = changedAtUtc;
+
+                var publicationScheduleEvent =
+                    PublicationScheduleNotificationSupport.Classify(
+                        previousStatusCode,
+                        newStatusCode,
+                        previousPlanned,
+                        normalizedDate);
 
                 var frequencyCode = chapter.Series?.PublicationFrequencyCode;
 
@@ -401,7 +324,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
                 _dbContext.AuditEvents.Add(new AuditEvent
                 {
-                    OccurredAtUtc = DateTime.UtcNow,
+                    OccurredAtUtc = changedAtUtc,
                     ActorUserId = actorUserId,
                     ActorRoleName = actorRoleName,
                     ActionCode = actionCode,
@@ -409,6 +332,14 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     EntityId = chapterId.ToString(),
                     DetailJson = detailJson
                 });
+
+                await PublicationScheduleNotificationPersistence.AddNotificationsAsync(
+                    _dbContext,
+                    actorUserId,
+                    chapter,
+                    publicationScheduleEvent,
+                    changedAtUtc,
+                    ct);
 
                 await _dbContext.SaveChangesAsync(ct);
                 await transaction.CommitAsync(ct);

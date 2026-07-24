@@ -11,12 +11,10 @@ namespace MangaManagementSystem.Web.Services.Api
 {
     /// <summary>
     /// HttpClient-backed implementation of <see cref="IMangakaChapterApiClient"/>.
-    /// Sends the transitional X-Actor-User-Id header and parses safe error messages for UI display.
+    /// Uses the configured bearer-token handler and parses safe error messages for UI display.
     /// </summary>
     public class MangakaChapterApiClient : IMangakaChapterApiClient
     {
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
-
         private readonly HttpClient _httpClient;
         private readonly ILogger<MangakaChapterApiClient> _logger;
 
@@ -29,11 +27,9 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<IReadOnlyList<MangakaChapterListItemDto>> GetMyChaptersAsync(
-            Guid actorUserId,
             CancellationToken cancellationToken = default)
         {
             using var requestMessage = new HttpRequestMessage(HttpMethod.Get, "api/mangaka/chapters");
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
@@ -52,13 +48,11 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<IReadOnlyList<MangakaChapterListItemDto>> GetSeriesChaptersAsync(
-            Guid actorUserId,
             Guid seriesId,
             CancellationToken cancellationToken = default)
         {
             using var requestMessage = new HttpRequestMessage(
                 HttpMethod.Get, $"api/mangaka/series/{seriesId}/chapters");
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
@@ -77,7 +71,6 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<MangakaChapterListItemDto> CreateChapterDraftAsync(
-            Guid actorUserId,
             CreateChapterDraftRequest request,
             CancellationToken cancellationToken = default)
         {
@@ -85,7 +78,6 @@ namespace MangaManagementSystem.Web.Services.Api
             {
                 Content = JsonContent.Create(request)
             };
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
@@ -109,7 +101,6 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<MangakaChapterListItemDto> UpdateChapterDraftAsync(
-            Guid actorUserId,
             Guid chapterId,
             UpdateChapterDraftRequest request,
             CancellationToken cancellationToken = default)
@@ -119,7 +110,6 @@ namespace MangaManagementSystem.Web.Services.Api
             {
                 Content = JsonContent.Create(request)
             };
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
@@ -143,7 +133,6 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<MangakaChapterListItemDto> SubmitChapterForReviewAsync(
-            Guid actorUserId,
             Guid chapterId,
             CancellationToken cancellationToken = default)
         {
@@ -152,7 +141,6 @@ namespace MangaManagementSystem.Web.Services.Api
             {
                 Content = JsonContent.Create(new { })
             };
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
@@ -176,7 +164,6 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<MangakaChapterListItemDto> CancelChapterSubmissionAsync(
-            Guid actorUserId,
             Guid chapterId,
             CancellationToken cancellationToken = default)
         {
@@ -185,7 +172,6 @@ namespace MangaManagementSystem.Web.Services.Api
             {
                 Content = JsonContent.Create(new { })
             };
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
@@ -209,7 +195,6 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<MangakaChapterListItemDto> CancelChapterAsync(
-            Guid actorUserId,
             Guid chapterId,
             CancellationToken cancellationToken = default)
         {
@@ -218,7 +203,6 @@ namespace MangaManagementSystem.Web.Services.Api
             {
                 Content = JsonContent.Create(new { })
             };
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
@@ -241,46 +225,11 @@ namespace MangaManagementSystem.Web.Services.Api
             throw new InvalidOperationException(message);
         }
 
-        public async Task<MangakaChapterListItemDto> ScheduleApprovedChapterAsync(
-            Guid actorUserId,
-            Guid chapterId,
-            ScheduleApprovedChapterRequest request,
-            CancellationToken cancellationToken = default)
-        {
-            using var requestMessage = new HttpRequestMessage(
-                HttpMethod.Post, $"api/mangaka/chapters/{chapterId}/schedule")
-            {
-                Content = JsonContent.Create(request)
-            };
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
-
-            var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
-
-            if (response.IsSuccessStatusCode)
-            {
-                var result = await response.Content.ReadFromJsonAsync<MangakaChapterListItemDto>(
-                    cancellationToken: cancellationToken);
-                if (result is null)
-                {
-                    throw new InvalidOperationException(
-                        "The chapter was scheduled but no confirmation was returned. Please refresh and verify.");
-                }
-                return result;
-            }
-
-            var message = await ExtractErrorMessageAsync(response);
-            _logger.LogWarning(
-                "Schedule approved chapter {ChapterId} failed: {StatusCode} {ReasonPhrase}",
-                chapterId, (int)response.StatusCode, response.ReasonPhrase);
-            throw new InvalidOperationException(message);
-        }
-
         /// <summary>
         /// Sets a planned release date on a plannable chapter (DRAFT, REVISION_REQUESTED, or APPROVED).
         /// If the chapter is APPROVED, it transitions to SCHEDULED.
         /// </summary>
         public async Task<SetChapterPlannedReleaseDateResponse> SetPlannedReleaseDateAsync(
-            Guid actorUserId,
             Guid chapterId,
             SetPlannedReleaseDateRequest request,
             CancellationToken cancellationToken = default)
@@ -290,7 +239,6 @@ namespace MangaManagementSystem.Web.Services.Api
             {
                 Content = JsonContent.Create(request)
             };
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 

@@ -12,37 +12,72 @@ Use this file to start sessions faster, reduce repeated explanation, and prevent
 * skipping verification,
 * forgetting to write `docs/revision` handoffs,
 * making broad unrelated refactors,
-* reintroducing mock data into production workflow pages.
+* reintroducing mock data into production workflow pages,
+* over-reading the entire documentation set when only a few sections are relevant.
 
 ---
 
-## Canonical context files
+## Focused context reading — default rule
 
-For most implementation sessions, tell the agent to read these files first:
+**Do not tell the coding agent to read every rules/specification file from top to bottom by default.**
+
+The agent should first understand the task, then search the documentation for the **specific rule IDs, feature names, routes, entities, statuses, actors, or keywords involved in that task**.
+
+### Required lightweight startup context
+
+For most implementation sessions, read only:
 
 ```text
 docs/agents/AGENTS.md
-docs/agents/AI_AGENT_SKILLS_GUIDE.md
-docs/agents/SESSION_RULE.md
 docs/agents/RESUME_PACK.md
+latest relevant file(s) under docs/revision/
+```
+
+Read `docs/agents/SESSION_RULE.md` or `docs/agents/AI_AGENT_SKILLS_GUIDE.md` only when the task needs their workflow/architecture guidance or when `AGENTS.md` points to a relevant section.
+
+### Business/specification documents are search-first, section-only
+
+These files are **reference sources**, not mandatory cover-to-cover reading:
+
+```text
 docs/context.md
 docs/business-rules.md
 docs/business-flows-use-cases.md
 docs/functional-requirements.md
 docs/ui-spec.md
 docs/user-stories.md
-latest relevant file(s) under docs/revision/
 ```
 
-If a task is very small, the agent may only need:
+For them:
+
+1. Search first with `rg`, repository search, headings, rule IDs, route names, status names, actor names, or feature keywords.
+2. Read only the matching section(s) and enough nearby context to avoid misunderstanding.
+3. Expand to another document only when the current task needs cross-checking.
+4. Do not repeatedly reread the same large files after the relevant rule has already been established.
+5. Do not load unrelated actors, workflows, modules, or historical rules merely because they are in the same document.
+6. Read a full business/specification document only when the task is genuinely broad enough that section-level reading is unsafe.
+
+Examples:
 
 ```text
-docs/agents/AGENTS.md
-docs/agents/RESUME_PACK.md
-latest relevant docs/revision handoff
+Chapter submission bug
+-> search: CHAPTER_REVIEW, active page tasks, DRAFT, REVISION_REQUESTED, SubmitChapterForReview
+-> read only matching chapter/task/submission sections.
+
+Series lifecycle change
+-> search: HIATUS, COMPLETED, lifecycle, contributor permission
+-> read only matching lifecycle sections.
+
+Small MudBlazor filter/navigation fix
+-> inspect the Razor page, related typed API client/DTO, existing navigation helper/pattern,
+   latest relevant handoff, and only the UI/business-rule sections that constrain that behavior.
 ```
 
-But for schema, stored procedure, workflow, role permission, or UI workflow changes, use the full context list.
+### Canonical context files
+
+The canonical documents remain the source of truth, but **being canonical does not mean every file must be read in full for every task**.
+
+Use the smallest relevant context set that is sufficient to implement the task safely.
 
 ---
 
@@ -69,7 +104,10 @@ Use these in almost every prompt.
 - Do not print, commit, or copy secrets.
 - Do not commit, push, reset, force-push, drop DB objects, run destructive migrations, or kill processes unless explicitly requested.
 - Inspect existing code before creating new files or patterns.
+- Do not over-read documentation. Search first, then read only task-relevant sections and nearby context.
+- Do not read every business/specification file end-to-end unless the task genuinely requires system-wide context.
 - Keep changes focused on the requested task.
+- For non-trivial implementation tasks, start in PLAN MODE and do not edit until the requested plan gate is satisfied.
 - Update or create docs/revision/_CURRENT_SESSION.md for meaningful tasks.
 - Create a final docs/revision/yyyy-MM-dd-short-task-slug.md handoff when done or paused.
 - Run build verification unless impossible; if not run, say clearly why.
@@ -113,19 +151,21 @@ Use this for most implementation tasks.
 ```text
 You are a senior .NET 8 Clean Architecture developer working on MangaFlow / MangaManagementSystem.
 
-[CONTEXT]
-Read these files first:
+[CONTEXT — FOCUSED READING]
+Do not read the whole documentation set by default.
+
+Start with:
 1. docs/agents/AGENTS.md
-2. docs/agents/AI_AGENT_SKILLS_GUIDE.md
-3. docs/agents/SESSION_RULE.md
-4. docs/agents/RESUME_PACK.md
-5. docs/context.md
-6. docs/business-rules.md
-7. docs/business-flows-use-cases.md
-8. docs/functional-requirements.md
-9. docs/ui-spec.md
-10. docs/user-stories.md
-11. The newest relevant handoff under docs/revision/
+2. docs/agents/RESUME_PACK.md
+3. The newest relevant handoff under docs/revision/
+
+Then inspect the target implementation and search the canonical business/specification files for only the rule IDs, feature names, routes, actors, statuses, entities, or keywords relevant to this task.
+
+Read only the matching sections plus enough nearby context to understand them.
+
+Read AI_AGENT_SKILLS_GUIDE.md, SESSION_RULE.md, context.md, business-rules.md, business-flows-use-cases.md, functional-requirements.md, ui-spec.md, or user-stories.md only as needed.
+
+Do not read those large files cover-to-cover unless this task genuinely spans enough of the system that focused reading would be unsafe.
 
 [VERIFY GATE]
 Before editing:
@@ -150,7 +190,11 @@ Before editing:
 [TASK]
 <describe the exact task here>
 
-[REQUIRED PLAN BEFORE EDITING]
+[PLAN MODE FIRST — REQUIRED]
+Start in PLAN MODE.
+
+Do not edit files yet.
+
 Give a compact plan first:
 
 Clean Architecture placement:
@@ -174,7 +218,10 @@ Verification:
 - Build command
 - Manual smoke checklist
 
-After the plan, implement the task. Continue until build passes or until a blocker requires user confirmation.
+Stop after the plan when the user asked for plan approval first.
+Only begin implementation after the plan is approved.
+
+If the user already explicitly authorized implementation without a separate approval gate, continue after the plan until build passes or a blocker requires user confirmation.
 
 [FINAL RESPONSE REQUIRED]
 Report:
@@ -245,14 +292,16 @@ Use this when you have screenshots, errors, logs, or broken behavior.
 ```text
 You are debugging MangaFlow / MangaManagementSystem.
 
-[CONTEXT]
-Read:
+[CONTEXT — FOCUSED READING]
+Start with:
 1. docs/agents/AGENTS.md
-2. docs/agents/AI_AGENT_SKILLS_GUIDE.md
-3. docs/agents/SESSION_RULE.md
-4. docs/agents/RESUME_PACK.md
-5. latest relevant docs/revision handoff
-6. relevant files from the error stack or UI route
+2. docs/agents/RESUME_PACK.md
+3. latest relevant docs/revision handoff
+4. relevant files from the error stack or UI route
+
+Search business/specification docs only for the rules directly related to the bug.
+Read only those matching sections and nearby context.
+Do not read the full rules/specification set unless the bug crosses multiple workflows and focused reading is insufficient.
 
 [VERIFY GATE]
 - Run git status --short --branch --untracked-files=all.
@@ -300,17 +349,16 @@ Use this when changing or creating SQL procedures.
 ```text
 You are implementing SQL Server stored procedure changes for MangaFlow / MangaManagementSystem.
 
-[CONTEXT]
-Read:
+[CONTEXT — FOCUSED READING]
+Start with:
 1. docs/agents/AGENTS.md
-2. docs/agents/AI_AGENT_SKILLS_GUIDE.md
-3. docs/agents/SESSION_RULE.md
-4. docs/agents/RESUME_PACK.md
-5. docs/business-rules.md
-6. docs/business-flows-use-cases.md
-7. docs/functional-requirements.md
-8. latest relevant docs/revision handoff
-9. existing SQL scripts/procedures related to this task
+2. docs/agents/RESUME_PACK.md
+3. latest relevant docs/revision handoff
+4. existing SQL scripts/procedures related to this task
+
+Then search business-rules.md, business-flows-use-cases.md, and functional-requirements.md for the exact procedure/workflow entities, statuses, permissions, audit events, and rule IDs involved.
+Read only those matching sections plus nearby context.
+Expand only when a dependency or conflict requires it.
 
 [TASK]
 <describe SQL/SP task here>
@@ -370,15 +418,16 @@ Use this for MudBlazor pages, dialogs, layout, navigation, and workflow UI.
 ```text
 You are implementing a Blazor Server / MudBlazor UI task for MangaFlow / MangaManagementSystem.
 
-[CONTEXT]
-Read:
+[CONTEXT — FOCUSED READING]
+Start with:
 1. docs/agents/AGENTS.md
-2. docs/agents/AI_AGENT_SKILLS_GUIDE.md
-3. docs/agents/SESSION_RULE.md
-4. docs/agents/RESUME_PACK.md
-5. docs/ui-spec.md
-6. latest relevant docs/revision handoff
-7. existing Razor page/component and typed API client related to this task
+2. docs/agents/RESUME_PACK.md
+3. latest relevant docs/revision handoff
+4. existing Razor page/component and typed API client related to this task
+
+Search ui-spec.md and the relevant business/specification docs for only the route, UI behavior, actor permission, status, or workflow involved.
+Read only matching sections and nearby context.
+Do not read the whole UI spec or all business-rule files for a small UI task.
 
 [TASK]
 <describe UI task here>
@@ -397,7 +446,9 @@ Read:
 - Do not hide unavailable actions without explanation; use disabled buttons/tooltips or status messages where useful.
 - Keep MudBlazor patterns consistent with existing pages.
 
-[REQUIRED PLAN BEFORE EDITING]
+[PLAN MODE FIRST — REQUIRED]
+Do not edit yet. First inspect the existing implementation and return this plan:
+
 Clean Architecture placement:
 - Web Razor:
 - Web typed API client:
@@ -442,15 +493,14 @@ Use this whenever old genre logic appears in code.
 ```text
 You are repairing MangaFlow / MangaManagementSystem code to align with the latest normalized genre/tag design.
 
-[CONTEXT]
-Read:
+[CONTEXT — FOCUSED READING]
+Start with:
 1. docs/agents/AGENTS.md
-2. docs/agents/AI_AGENT_SKILLS_GUIDE.md
-3. docs/agents/RESUME_PACK.md
-4. docs/context.md
-5. docs/business-rules.md
-6. docs/functional-requirements.md
-7. latest relevant docs/revision handoff
+2. docs/agents/RESUME_PACK.md
+3. latest relevant docs/revision handoff
+
+Search context.md, business-rules.md, and functional-requirements.md specifically for Genre, Tag, SeriesGenre, SeriesTag, proposal snapshot, and cover/FileResource rules.
+Read those matching sections only.
 
 [TASK]
 Find and repair old genre/tag assumptions in:
@@ -642,16 +692,18 @@ MangaFlow / MangaManagementSystem.
 
 [PROMPT REQUIREMENTS]
 The prompt must tell the agent to:
-1. Read docs/agents/AGENTS.md, AI_AGENT_SKILLS_GUIDE.md, SESSION_RULE.md, RESUME_PACK.md, business docs, and latest relevant docs/revision handoff.
-2. Inspect existing implementation before editing.
-3. Produce a short plan by Clean Architecture layer.
-4. Implement only the requested scope.
-5. Preserve typed API client flow.
-6. Avoid direct Razor/Web -> Application/Infrastructure calls.
-7. Update docs/revision/_CURRENT_SESSION.md during work.
-8. Run build.
-9. Create final docs/revision handoff.
-10. Continue until build passes or until a blocker requires user confirmation.
+1. Start with docs/agents/AGENTS.md, docs/agents/RESUME_PACK.md, and the latest relevant docs/revision handoff.
+2. Do NOT read every business/specification document end-to-end. Search them for task-specific rule IDs, routes, actors, statuses, entities, and keywords; read only matching sections and nearby context.
+3. Inspect the existing implementation before editing.
+4. Start in PLAN MODE and produce a short plan by Clean Architecture layer before changing code.
+5. Stop after the plan when the user requested plan approval first.
+6. Implement only the requested scope after approval.
+7. Preserve typed API client flow.
+8. Avoid direct Razor/Web -> Application/Infrastructure calls.
+9. Update docs/revision/_CURRENT_SESSION.md during meaningful work.
+10. Run build.
+11. Create final docs/revision handoff.
+12. Continue until build passes or until a blocker requires user confirmation once implementation is authorized.
 
 [OUTPUT]
 Return only the ready-to-paste prompt.
@@ -662,6 +714,18 @@ Return only the ready-to-paste prompt.
 ## Small prompt suffixes
 
 Use these at the end of prompts when needed.
+
+### Focused reading only
+
+```text
+Do not over-read the documentation. Search the canonical docs for the exact rule IDs, routes, actors, statuses, entities, and feature keywords involved in this task. Read only the matching sections plus enough nearby context to interpret them safely. Do not read every business/specification file end-to-end unless focused reading is genuinely insufficient.
+```
+
+### Plan mode first — wait for approval
+
+```text
+PLAN MODE FIRST. Inspect and reason about the task, but do not edit any files yet. Return the implementation plan, likely files, architecture impact, DB/API impact, risks, and verification steps. Stop after the plan and wait for my approval before making changes.
+```
 
 ### Continue until done
 

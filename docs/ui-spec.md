@@ -2,9 +2,17 @@
 
 **Project:** Manga Creation Workflow and Publishing Management System  
 **Target UI:** Blazor Server / MudBlazor MVP  
-**Last updated:** 2026-07-11
+**Last updated:** 2026-07-21
 
-**Latest lifecycle update:** `HIATUS` is the paused-series status. Active Mangaka or Tantou Editor contributors may pause/resume serialized series. Only active Mangaka contributors may mark serialized/hiatus series as `COMPLETED`. `HIATUS` blocks release only; `COMPLETED` makes the series read-only/immutable for normal business actions, cancels unreleased chapters after confirmation, and remains ranking-visible.  
+**Latest lifecycle update:** `HIATUS` is the paused-series status. Active Mangaka or Tantou Editor contributors may pause/resume serialized series. Only active Mangaka contributors may mark serialized/hiatus series as `COMPLETED`. `HIATUS` blocks release only; `COMPLETED` makes the series read-only/immutable for normal business actions, cancels unreleased chapters and distinct active `ASSIGNED`/`UNDER_REVIEW` tasks under those chapters after warning and confirmation, and remains ranking-visible.  
+
+**Latest ranking/notification update — 2026-07-21:** Existing Bell behavior for proposal/chapter/task notifications, board decisions, publication scheduling, and account approval remains unchanged. Ranking uses the weighted score `(v / (v + m)) * R + (m / (v + m)) * C`; `reading_count` remains popularity evidence rather than a direct score boost. `RANKING_WARNING` uses the finalized hybrid weekly rule: both `ranking_score < 6.5` and bottom-25% rank must fail in the same completed week, with failure in at least 2 of the latest 3 consecutive completed weeks including the latest. All distinct active contributors of the exact affected series receive the warning.  
+
+**Latest chapter submission validation — 2026-07-21:** The chapter workspace must surface the backend-authoritative submission gate: a Mangaka may submit only from `DRAFT` or `REVISION_REQUESTED` when zero distinct associated page tasks remain `ASSIGNED` or `UNDER_REVIEW`. If blocked, keep the chapter unchanged and show the clean backend message directing the Mangaka to complete or cancel active tasks; do not auto-cancel tasks or show a successful submission state.
+
+**Latest implementation-alignment decisions — 2026-07-23:** Email/password self-registration follows the current repository flow: the user must pass reCAPTCHA before a 6-digit email OTP is sent, and the pending account is created only after successful OTP verification; Google sign-up remains a separate verified-identity path and still creates `PENDING_APPROVAL`. The current MVP has no Mangaka proposal-withdrawal workflow. Assistants are allowed to view dynamic rankings, while manual ranking input remains restricted to Editorial Board Member/Chief roles. A `CANCELLED` chapter does not reserve its chapter number label: a new non-cancelled chapter may reuse the same label while the cancelled row keeps its original label, enforced by uniqueness among non-cancelled chapters only. Scheduling accepts `planned_release_date >=` the current publication business date (today in the configured publication timezone); past dates are invalid. `PageRegion` geometry supports either a DOT (`width = 0` and `height = 0`) or an area rectangle (`width > 0` and `height > 0`), and mixed zero/non-zero dimensions are invalid. Ranking preserves true ties: equal `ranking_score` values share the same `DENSE_RANK`; deterministic secondary ordering may be used only to display rows within the same rank and must not change `rank_position`.
+
+**Deferred source-series alignment — 2026-07-24:** `Series.source_series_id` / `SourceSeriesId` remains a nullable field in the database and existing backend/domain plumbing for compatibility and possible future implementation. Source-series selection/editing is **deferred** and is not part of the current MVP user-facing workflow: current UI, use cases, user stories, and active functional requirements must not present it as an available Mangaka action. Normal UI-driven create/update flows should leave it unset/null. If the feature is activated later, the implementation must reject self-reference. The current MVP proposal lifecycle continues to have no Mangaka proposal-withdrawal action and no `WITHDRAWN` proposal status.
 **Purpose:** Define the UI behavior for Mangaka-owned series drafting, slug usage, stable series URLs, and the centralized chapter-level workspace.
 
 ---
@@ -18,13 +26,15 @@
 | Separate business identifier | No separate human-readable business identifier is used; `series_id` is the backend identity and `slug` is the URL identity. |
 | Slug behavior | Backend generates slug from title during `PROPOSAL_DRAFT`; slug may auto-update when title changes during draft; slug locks after the series leaves `PROPOSAL_DRAFT`. |
 | Stable series URL | `/series/{slug}` becomes the main stable series URL, especially after the series becomes `SERIALIZED`. |
+| Series slug presentation | `/series/{slug}` uses an independent responsive cover column beside a separate metadata card; Genres and Tags use a 6-item preview with `Show all (N)` / `Show less` instead of arrow/page-number pagination. |
 | Series profile editing | Normal Mangaka edits are allowed only while `status_code = PROPOSAL_DRAFT`. |
 | Series hiatus | Active Mangaka or Tantou Editor contributors may set `SERIALIZED` series to `HIATUS` and resume `HIATUS` series to `SERIALIZED`; hiatus blocks release only. |
-| Series completion | Only active Mangaka contributors may mark a `SERIALIZED` or `HIATUS` series as `COMPLETED`; completion requires warning/confirmation, cancels unreleased chapters, and makes the series read-only. |
+| Series completion | Only active Mangaka contributors may mark a `SERIALIZED` or `HIATUS` series as `COMPLETED`; completion requires warning/confirmation, shows affected unreleased chapters and distinct active-task impact, cancels both within the completion cascade, and makes the series read-only. |
 | Publication frequency | Mangaka may set `publication_frequency_code` during draft as a proposed/preferred frequency; board serialization workflow may override it later. |
 | Workspace level | The centralized authorized workspace is chapter-level, not page-level. |
 | Workspace AI tools | AI segmentation and AI/OCR translation tools are available to all Authorized Page Workspace Users who have access to the relevant workspace. |
 | Workspace permissions | AI tools are shared; business actions remain role-specific and permission-gated. |
+| Chapter submission gate | Mangaka chapter submission is backend-authoritative and allowed only from `DRAFT`/`REVISION_REQUESTED` when zero distinct associated tasks are `ASSIGNED` or `UNDER_REVIEW`; blocked attempts must show a clean error and must not change chapter/task state. |
 | Publication schedule page | `/publication/schedule` is a shared weekly calendar. Read-only roles load only scheduled/released schedule data; scheduling actors may open a role-gated action drawer. |
 | Publication action drawer | Mangaka and Tantou Editor scheduling actions use a restricted actionable chapter feed, full-card drag/drop, and confirmation dialogs. Assistant, Board, Admin, and future public viewers must not load unscheduled/actionable drawer data. |
 
@@ -93,6 +103,8 @@ Allow Mangaka to create, view, edit, and submit their own series drafts before f
 
 ## 4. Create / Edit Series Draft Modal
 
+> **Deferred Source Series UI:** The current Create/Edit Series Draft UI must not show a Source Series field or selector. The nullable `source_series_id` / `SourceSeriesId` remains in the database/backend model for compatibility and possible future work. Normal UI-driven create/edit operations leave it unset/null. If the feature is introduced later, self-reference validation must be added.
+
 ### Fields
 
 | Field | Required | Notes |
@@ -104,7 +116,6 @@ Allow Mangaka to create, view, edit, and submit their own series drafts before f
 | Tags | No | Optional multi-select from `manga.Tag`, saved through `manga.SeriesTag`. |
 | Content language | Yes | `ja`, `en`, `vi`. |
 | Cover image | No | Must reference `FileResource` with `SERIES_COVER` purpose if provided. |
-| Source series | No | Cannot reference itself. |
 | Publication frequency | No | `WEEKLY`, `MONTHLY`, `IRREGULAR`; treated as Mangaka proposed frequency during draft. |
 
 ### Cover crop behavior
@@ -252,10 +263,63 @@ A unified series page that can later become the public reader-facing series URL.
 
 | Section | Content |
 |---|---|
-| Header | Current cover, title, status badge, genres, tags, language, publication frequency. |
+| Header | Current cover, title, status badge, genres, tags, language, publication frequency. The `SERIALIZED` status badge must display **Serialized**, not **Active**. |
 | Synopsis panel | Current series synopsis. |
 | Chapter list | Chapters under the series with status and planned/released dates. |
 | Role action panel | Buttons shown based on current user role and permission. |
+
+### Series header layout
+
+The `/series/{slug}` page uses an independent cover-and-metadata layout.
+
+```text
+Series header area
+├── Independent cover column
+│   └── Series cover or portrait placeholder
+│
+└── Series metadata card
+    ├── Title
+    ├── Status / language / publication frequency
+    ├── Genres
+    ├── Tags
+    ├── Active Mangaka display
+    ├── Synopsis
+    ├── Workspace action
+    └── Role-gated lifecycle actions
+```
+
+#### Cover behavior
+
+- The cover is visually separate from the white metadata card.
+- On wider screens, the cover appears to the left of the metadata card.
+- The cover column grows responsively when horizontal space allows, while preserving sufficient width for metadata.
+- The real cover image preserves the full stored artwork using responsive width and natural image height; it must not stretch to match the metadata-card height.
+- Cover height is independent from Genre/Tag expansion, synopsis length, lifecycle actions, and other metadata-card content.
+- Real cover images must not use dynamic full-card-height cropping.
+- When no cover exists, show a stable portrait placeholder with the existing neutral background and centered book icon.
+- On narrow screens, the cover stacks above the metadata card.
+- The cover and metadata card remain siblings in the page layout; the cover must not be placed back inside the metadata card.
+
+### Genre and Tag display behavior
+
+Genres and Tags are displayed as compact pill/chip metadata inside the series metadata card.
+
+| State | Behavior |
+|---|---|
+| No items | Do not render the corresponding Genres or Tags section. |
+| 1–6 items | Show all available chips and no expand control. |
+| More than 6 items, collapsed | Show the first 6 chips and a `Show all (N)` action. |
+| Expanded | Show all chips and replace the expand action with `Show less`. |
+| Show less | Return the corresponding section to its 6-item preview state. |
+
+Additional rules:
+
+- Genres and Tags have independent expand/collapse state.
+- Expanding Genres must not change the Tags state.
+- Expanding Tags must not change the Genres state.
+- Do not show previous/next arrows, page numbers, or pagination indicators for Genres or Tags.
+- Genre and Tag chips should preserve the established pill styling and wrap normally within the metadata card.
+- Genre/Tag expansion is client-side presentation behavior only and must not trigger additional API requests.
 
 ### Role-based actions
 
@@ -348,6 +412,7 @@ Rules:
 
   * `PROPOSAL_DRAFT`: show draft details/edit flow.
   * `SERIALIZED` and allowed statuses: navigate to `/series/{slug}`.
+  * The user-facing label for `SERIALIZED` is **Serialized**; do not display **Active** as the lifecycle status label.
   * review/locked statuses: show review/status modal or disabled state.
 
 ---
@@ -690,7 +755,7 @@ Define the UI behavior for changing a serialized series to `HIATUS`, resuming it
 
 | Series status | UI meaning |
 |---|---|
-| `SERIALIZED` | Active production/publication series. |
+| `SERIALIZED` | Display label: **Serialized**. Meaning: active production/publication series. |
 | `HIATUS` | Paused series. Production and scheduling may continue, but chapter release is blocked until the series returns to `SERIALIZED`. |
 | `COMPLETED` | Author-ended final series. The series and related production records are read-only for normal business actions. |
 | `CANCELLED` | Board/business-cancelled final series. |
@@ -713,13 +778,23 @@ Hiatus UI rules:
 
 | Action | Actor | Availability | UI behavior |
 |---|---|---|---|
-| Mark as Completed | Active Mangaka contributor only | Series status is `SERIALIZED` or `HIATUS` | Show a strong confirmation dialog listing unreleased chapters that will be cancelled. On success, show `COMPLETED` badge and read-only state. |
+| Mark as Completed | Active Mangaka contributor only | Series status is `SERIALIZED` or `HIATUS` | Show a strong confirmation dialog with the affected unreleased chapter list/count and the count of distinct active tasks that will be cancelled. On success, show `COMPLETED` badge and read-only state. |
 
-Completion confirmation dialog should explain:
+Completion confirmation dialog should explain the current backend-provided impact, for example:
 
 ```text
-This will mark the series as completed. All unreleased chapters will be cancelled and become read-only. Released chapters and historical records will be preserved. This action cannot be undone through normal workflow.
+This will mark the series as completed.
+
+Affected unreleased chapters: X
+Active tasks that will be cancelled: Y
+
+Unreleased DRAFT, REVISION_REQUESTED, UNDER_REVIEW, APPROVED, SCHEDULED, and ON_HOLD chapters will be cancelled.
+Distinct ASSIGNED and UNDER_REVIEW tasks under those affected chapters will also be cancelled.
+Released chapters, completed/cancelled tasks, and tasks under unaffected chapters will be preserved.
+This action cannot be undone through normal workflow.
 ```
+
+The preview is advisory. The backend must revalidate and recalculate authoritative completion impact when the user confirms.
 
 Completion UI rules:
 
@@ -727,6 +802,8 @@ Completion UI rules:
 - `COMPLETED` series should hide or disable normal business mutation actions, including edit series details/status, add chapter, edit chapter/page content, upload page versions, edit regions, create/update tasks, review, schedule, reschedule, hold, and release.
 - Released chapters remain visible as released.
 - Completion-cancelled chapters remain visible as cancelled/read-only historical records.
+- `ASSIGNED` and `UNDER_REVIEW` tasks under completion-cancelled chapters become `CANCELLED` and remain visible as historical task records where authorized.
+- `COMPLETED` and already `CANCELLED` tasks remain unchanged, and tasks under unaffected chapters remain unchanged.
 - Completed series remain visible in the ranking UI when ranking input exists.
 
 ---
@@ -784,9 +861,18 @@ Show contributors on `/series/{slug}` without using a slide-out drawer.
 Use a page-level two-column grid when contributors exist:
 
 ```text
-Left: series detail card + chapter list
-Right: contributor sidebar card
+Left:
+  series header area
+  ├── independent cover
+  └── series metadata card
+  +
+  chapter list
+
+Right:
+  contributor sidebar card
 ```
+
+The cover is part of the left-side series header area but remains visually separate from the metadata card.
 
 ### Behavior
 
@@ -928,6 +1014,32 @@ Display selected content.
 | Editorial Board Chief | No workspace access by default unless future permission grants it. |
 | Admin | No manga production actions. |
 
+### Chapter submission validation UI behavior
+
+The **Submit Chapter for Review** action is available only within the existing Mangaka chapter workflow, but the backend remains authoritative for final eligibility.
+
+| Condition | UI / system behavior |
+|---|---|
+| Chapter is `DRAFT` or `REVISION_REQUESTED` and zero distinct associated tasks are `ASSIGNED`/`UNDER_REVIEW` | Allow the existing submit action. On success, refresh the chapter as `UNDER_REVIEW`. |
+| One or more associated tasks are `ASSIGNED` or `UNDER_REVIEW` | Backend blocks submission. Keep the current chapter status and show the clean validation response. |
+| Associated tasks are only `COMPLETED` and/or `CANCELLED` | These tasks do not block submission; continue with the normal remaining validations. |
+| UI already has active-task information loaded | The UI may disable or warn proactively for convenience, but it must still call/rely on backend validation as the authoritative rule. |
+| Backend rejects submission | Do not show success state, do not navigate as though submission succeeded, and do not mutate task state locally. |
+
+Recommended blocked-submission message:
+
+```text
+This chapter cannot be submitted for editorial review while active page tasks are still assigned or under review. Complete or cancel those tasks before submitting the chapter.
+```
+
+Additional UI rules:
+
+- Do not add previous/parallel client-side logic that attempts to derive the authoritative chapter/task relationship independently from the backend.
+- Do not automatically complete, cancel, reassign, or delete tasks when submission is blocked.
+- A blocked attempt must not display a successful `UNDER_REVIEW` state or imply that Tantou Editors were notified.
+- `CHAPTER_REVIEW` is created only after the backend successfully transitions the chapter to `UNDER_REVIEW`.
+- If the submit API returns the approved user-safe business validation message, surface that message cleanly to the Mangaka.
+
 ### Page, version, and region retention UI behavior
 
 | UI action | MVP behavior |
@@ -945,7 +1057,7 @@ Display selected content.
 | Decision action | Required input | Result | UI meaning |
 |---|---|---|---|
 | Approve Chapter with no planned release date | None required | `Chapter.status_code = APPROVED` | Chapter is accepted but still needs a planned release date before it becomes scheduled or released. |
-| Approve Chapter with an existing future planned release date | None required | `Chapter.status_code = SCHEDULED` | Chapter is accepted, scheduled, and locked from Mangaka/page content mutation workflows. |
+| Approve Chapter with an existing planned release date of today or later | None required | `Chapter.status_code = SCHEDULED` | Chapter is accepted, scheduled, and locked from Mangaka/page content mutation workflows. |
 | Request Revision | Non-blank comments; optional markup file | `Chapter.status_code = REVISION_REQUESTED` | Same chapter becomes editable again and can receive new page versions. |
 | Cancel Chapter | Non-blank comments; optional markup file | `Chapter.status_code = CANCELLED` | Current chapter attempt is terminal/read-only and cannot be edited or resubmitted. |
 
@@ -955,11 +1067,11 @@ Display selected content.
 |---|---|
 | Mangaka viewing `SCHEDULED` chapter | Show read-only state and message: `This chapter is scheduled. Content changes are locked. Schedule changes are audit-visible.` |
 | Mangaka viewing `ON_HOLD` chapter | Show read-only/on-hold state and hold reason when available. Explain that returning to schedule requires a new planned release date. |
-| Mangaka scheduling/rescheduling an allowed chapter | Allow selecting any future planned release date; show frequency-based suggestions/warnings but do not hard-block mismatches. Require confirmation. |
+| Mangaka scheduling/rescheduling an allowed chapter | Allow selecting any planned release date on the current publication business date or later; show frequency-based suggestions/warnings but do not hard-block mismatches. Require confirmation. |
 | Tantou Editor viewing `SCHEDULED` chapter | Show planned release date, advisory frequency information, Reschedule action, Put On Hold action, and Release action when eligible. |
-| Tantou Editor scheduling/rescheduling an allowed chapter | Allow selecting any future planned release date; show frequency-based suggestions/warnings but do not hard-block mismatches. Require confirmation. |
+| Tantou Editor scheduling/rescheduling an allowed chapter | Allow selecting any planned release date on the current publication business date or later; show frequency-based suggestions/warnings but do not hard-block mismatches. Require confirmation. |
 | Tantou Editor putting `SCHEDULED` chapter on hold | Require a non-blank operational/editorial reason and confirmation. |
-| Tantou Editor returning `ON_HOLD` chapter to schedule | Require a new future planned release date and confirmation. |
+| Tantou Editor returning `ON_HOLD` chapter to schedule | Require a new planned release date on the current publication business date or later and confirmation. |
 | Tantou Editor releasing a chapter | Require confirmation; set `released_at_utc` to the current UTC time and preserve existing `planned_release_date` unless it is missing. |
 | Any user viewing `SCHEDULED` or `ON_HOLD` workspace | Keep read-only viewing available where authorized, but hide/disable page/content mutation actions. |
 
@@ -1040,7 +1152,7 @@ For MVP, symbolic `returnContext` is safer and easier to avoid open-redirect mis
 | Create annotation | Yes, as production-tracking annotation when active contributor | No | Yes, as editorial-review annotation when active contributor | No | No | No |
 | Update annotation text | Mangaka-created unresolved annotations only | No | Mangaka-created or Tantou Editor-created unresolved annotations | No | No | No |
 | Resolve annotation | Mangaka-created annotations only | No | Mangaka-created or Tantou Editor-created annotations | No | No | No |
-| Submit chapter for review | Yes | No | No | No | No | No |
+| Submit chapter for review | Yes, if active Mangaka contributor, chapter is `DRAFT`/`REVISION_REQUESTED`, and zero distinct associated tasks are `ASSIGNED`/`UNDER_REVIEW` | No | No | No | No | No |
 | Create replacement draft for cancelled chapter | Yes, if contributor | No | No | No | No | No |
 | Final chapter review decision | No | No | Yes | No | No | No |
 
@@ -1063,11 +1175,16 @@ For MVP, symbolic `returnContext` is safer and easier to avoid open-redirect mis
 - Backend generates slug on create and on title change during draft.
 - Slug is locked after the series leaves `PROPOSAL_DRAFT`.
 - `/series/{slug}` works as main series URL after serialization.
+- `/series/{slug}` displays the series cover independently from the metadata card; metadata height must not stretch or crop the cover.
+- Genres and Tags on `/series/{slug}` use a 6-item preview with `Show all (N)` / `Show less`, with independent expand state and no arrow/page-number pagination.
 - Chapter workspace route uses internal chapter/page/version IDs.
 - Workspace has left navigation for chapters/pages/versions.
 - Workspace has right tools/actions panel.
 - AI tools are available to all Authorized Page Workspace Users with access.
 - Role-specific actions remain permission-gated.
+- Mangaka chapter submission is blocked when any distinct associated page task is `ASSIGNED` or `UNDER_REVIEW`; `COMPLETED` and `CANCELLED` tasks do not block.
+- A blocked chapter submission leaves chapter/task state unchanged and shows a clean user-facing validation message instead of a success state.
+- Successful chapter submission still transitions the chapter to `UNDER_REVIEW` and triggers the existing successful audit/notification behavior.
 - Mangaka can create production-tracking annotations and update/resolve Mangaka-created annotations.
 - Mangaka cannot update or resolve Tantou Editor-created annotations.
 - Tantou Editors can create editorial-review annotations and update/resolve both Mangaka-created and Tantou Editor-created annotations when they are active contributors for the series.
@@ -1075,6 +1192,7 @@ For MVP, symbolic `returnContext` is safer and easier to avoid open-redirect mis
 - Chapter revision and cancellation decisions require non-blank comments, while markup files are optional.
 - Cancelled chapter screens are read-only and do not allow edit, upload, resubmit, schedule, or release actions.
 - Mangaka contributors can create a replacement draft for a cancelled chapter using the same chapter number label.
+- The cancelled chapter keeps its original number label; the replacement may use the same label because uniqueness applies only to non-cancelled chapters. The UI should distinguish the historical cancelled attempt by status/context rather than relabelling it.
 
 ---
 
@@ -1086,7 +1204,7 @@ Support a shared weekly publication calendar for planned and released chapters, 
 
 Scheduling is chapter-level. The UI must use `Chapter.planned_release_date`, `Chapter.released_at_utc`, and `Chapter.status_code`; it must not present `SCHEDULED` as a series status.
 
-`Series.publication_frequency_code` is advisory. It may provide suggested dates and warning messages, but it must not hard-block authorized users from choosing a different future date.
+`Series.publication_frequency_code` is advisory. It may provide suggested dates and warning messages, but it must not hard-block authorized users from choosing a different date on the current publication business date or later.
 
 ### Current route and URL behavior
 
@@ -1185,7 +1303,7 @@ The scheduling action drawer is a role-gated UI for Mangaka and Tantou Editor sc
 - Drag/drop is used only to set or change a chapter planned release date.
 - Dragging from the action drawer to a calendar day is allowed for authorized actionable chapters.
 - Dragging an existing calendar card is allowed only when the actor has an authorized actionable payload for that chapter.
-- Dropping onto a future date opens or completes the same scheduling confirmation flow used by normal schedule/reschedule actions.
+- Dropping onto today or a later date opens or completes the same scheduling confirmation flow used by normal schedule/reschedule actions.
 - Dropping onto past dates must be blocked or rejected with a clear error.
 - There is no unschedule-by-drag behavior in the MVP.
 - The drawer is not a drop target for clearing planned dates.
@@ -1198,8 +1316,8 @@ The scheduling action drawer is a role-gated UI for Mangaka and Tantou Editor sc
 |---|---|
 | `WEEKLY` | Suggest the same weekday in the next week when a useful reference date exists. |
 | `MONTHLY` | Suggest the same day number in the next month when possible, otherwise the last valid day of the next month. |
-| `IRREGULAR` | Do not require a strict default; user chooses a future date. |
-| `NULL` | Show that the official release approach has not been decided; user chooses a future date. |
+| `IRREGULAR` | Do not require a strict default; user chooses today or a later date. |
+| `NULL` | Show that the official release approach has not been decided; user chooses today or a later date. |
 
 ### Hard validation behavior
 
@@ -1217,13 +1335,13 @@ The scheduling action drawer is a role-gated UI for Mangaka and Tantou Editor sc
 
 | Current chapter state/action | Result |
 |---|---|
-| `DRAFT` or `REVISION_REQUESTED` + future planned date set | Planned date is saved; chapter remains editable/plannable in its current status. |
+| `DRAFT` or `REVISION_REQUESTED` + planned date of today or later set | Planned date is saved; chapter remains editable/plannable in its current status. |
 | `UNDER_REVIEW` + editor approves + no planned date | Chapter becomes `APPROVED`. |
-| `UNDER_REVIEW` + editor approves + future planned date exists | Chapter becomes `SCHEDULED`. |
-| `APPROVED` + future planned date set | Chapter becomes `SCHEDULED`. |
+| `UNDER_REVIEW` + editor approves + planned date of today or later exists | Chapter becomes `SCHEDULED`. |
+| `APPROVED` + planned date of today or later set | Chapter becomes `SCHEDULED`. |
 | `SCHEDULED` + Mangaka/Editor reschedules | Chapter remains `SCHEDULED`; planned date is updated. |
 | `SCHEDULED` + Editor puts on hold | Chapter becomes `ON_HOLD`; the previous release plan is suspended and audit details preserve the old date/reason. |
-| `ON_HOLD` + Editor returns to schedule | Requires a new future planned release date; chapter becomes `SCHEDULED`. |
+| `ON_HOLD` + Editor returns to schedule | Requires a new planned release date on the current publication business date or later; chapter becomes `SCHEDULED`. |
 | `APPROVED` or `SCHEDULED` + Editor releases while parent series is `SERIALIZED` | Chapter becomes `RELEASED`; `released_at_utc` is set to the current UTC time. |
 | `RELEASED` or `CANCELLED` chapter, or parent series `HIATUS`/`COMPLETED`/`CANCELLED` for release action | Blocked. |
 
@@ -1255,7 +1373,7 @@ The UI should ask for confirmation before:
 - A `SCHEDULED` chapter should show a clear locked state for Mangaka users.
 - An `ON_HOLD` chapter should show a clear paused/on-hold state with reason when available.
 - The workspace may remain viewable if the user is authorized, but saved page/content mutation controls should be hidden or disabled.
-- On-hold recovery requires a new future planned release date.
+- On-hold recovery requires a new planned release date on the current publication business date or later.
 - Automatic overdue-to-on-hold behavior is deferred. The UI may show overdue warnings, but it should not trigger writes from read-only page loading.
 
 ### Current non-goals / deferred items
@@ -1266,23 +1384,92 @@ The UI should ask for confirmation before:
 - No bulk scheduling/holding/releasing unless implemented later.
 - No loading of actionable/unscheduled chapter data for read-only schedule roles.
 
+
+## 9A. Notification Bell and Approved Notification Behavior
+
+### General behavior
+
+- The shared Notification Bell displays unread in-app notifications for authenticated users in the layouts available to their role.
+- Opening or marking a notification as read records `read_at_utc` and refreshes the unread badge.
+- Notifications are awareness/navigation aids and are not the authoritative audit trail.
+- When a specific notification type has a dedicated destination, the Bell should reuse that destination rather than inventing a parallel workflow page.
+- When recipient rules are series-contributor-scoped, only distinct active contributors of the exact affected series are eligible.
+
+### Approved notification UI mapping
+
+| Type | User-facing behavior / destination |
+|---|---|
+| `PROPOSAL_REVIEW` | Active Tantou Editor contributors of the exact series receive the submitted proposal notification. Bell opens `/editor/proposals/{seriesProposalId}`. |
+| `PROPOSAL_DECISION` | Active Mangaka contributors of the affected series receive decision-specific content for Request Revision, Pass To Board, or Cancel Proposal. Bell opens `/mangaka/proposals/{proposalId}`. |
+| `BOARD_POLL` | Active Editorial Board Members receive a new-poll notification; the initiating Chief is excluded. Bell reuses the existing board-poll workflow destination. |
+| `BOARD_DECISION` | All active contributors of the exact series receive outcome-specific content when the poll closes with approved/rejected/no-decision or when the Chief manually cancels it. Bell opens the existing Board Decision notification detail route when available. |
+| `TASK_ASSIGNMENT` | Assigned Assistant receives new assignment. On reassignment, the original Assistant sees a `Task Reassigned` notice with the reason linked to the original task; the replacement Assistant sees the replacement assignment. Bell opens `/assistant/task/{taskId}` for the related task. |
+| `TASK_REVIEW` | Active Mangaka contributors of the exact series are notified when Assistant work enters `UNDER_REVIEW`. Bell opens `/mangaka/review-submissions`. |
+| `CHAPTER_REVIEW` | Active Tantou Editor contributors of the exact series are notified when a chapter enters `UNDER_REVIEW`. Bell opens `/editor/chapters`. |
+| `CHAPTER_DECISION` | Active Mangaka contributors of the affected series receive Approved / Revision Requested / Cancelled decision content. Bell opens `/mangaka/chapters`. |
+| `PUBLICATION_SCHEDULE` | All other active contributors of the exact series, excluding the initiating actor, are notified when a chapter enters `SCHEDULED` or an already scheduled chapter moves to a different normalized planned date. The Bell should open the relevant chapter/publication-schedule context using the existing scheduling navigation pattern; no new parallel scheduling page is required. |
+| `ACCOUNT_APPROVED` | The approved user receives the in-app approval notification; the approval workflow also sends a separate email to the user's registered email address. |
+| `RANKING_WARNING` | All distinct active contributors of the exact affected `SERIALIZED` or `HIATUS` series receive the warning when the hybrid ranking-risk rule is met. Bell opens the existing ranking/series context. The warning should identify the latest evaluated week, current weighted score, rank/total, and that the series failed both the `< 6.5` score baseline and bottom-25% check; it is advisory and must not imply automatic cancellation. |
+| `SYSTEM_MESSAGE` | Generic/reserved only; do not use it when a more specific approved notification type applies. |
+
+### Publication schedule notification exclusions
+
+Do not show a new `PUBLICATION_SCHEDULE` notification when:
+
+- a `DRAFT` chapter only receives or changes a planned release date and remains `DRAFT`;
+- a `REVISION_REQUESTED` chapter only receives or changes a planned release date and remains `REVISION_REQUESTED`;
+- an `UNDER_REVIEW` chapter only receives or changes a planned release date and remains `UNDER_REVIEW`;
+- a `SCHEDULED` chapter is saved with the same normalized planned release date.
+
+The scheduling/rescheduling actor is excluded from `PUBLICATION_SCHEDULE` recipients.
+
+---
+
 ## 10. Series Ranking UI
 
 ### Purpose
 
 Display dynamic series rankings from `manga.vw_SeriesRanking` for a selected `PublicationPeriod`.
 
+**Access:** All `ACTIVE` authenticated roles, including Assistant, may view ranking results. Only Editorial Board Member and Editorial Board Chief roles may create or update manual ranking input.
+
 ### Ranking list fields
 
 | Field | Notes |
 |---|---|
-| Rank position | Computed by the ranking view using `DENSE_RANK()`. |
+| Rank position | Computed with tie-preserving `DENSE_RANK()` on `ranking_score`; equal scores display the same rank. |
 | Series title | Display name of the ranked series. |
 | Slug | Optional; use only if the row links to `/series/{slug}`. |
 | Average rating | Score from period vote input. |
 | Rating count | Number of rating/vote submissions in the period. |
 | Reading count | Number of readers/views/follows in the period. |
-| Ranking score | Computed score from the ranking formula. |
+| Ranking score | Weighted score computed from the ranking formula. |
+
+### Ranking score behavior
+
+```text
+ranking_score =
+    (v / (v + m)) * R
+    +
+    (m / (v + m)) * C
+```
+
+- `R` = series average rating for the effective ranking scope.
+- `v` = series rating count for the effective ranking scope.
+- `C` = rating-count-weighted average rating across eligible ranked series in that same scope.
+- `m` = median rating count across eligible ranked series in that same scope.
+- `reading_count` is displayed as popularity/readership evidence and is not directly added to `ranking_score`.
+- Equal `ranking_score` values share one rank position. Within a tied rank, rows may be displayed by `average_rating`, then `rating_count`, `reading_count`, and `series_id` for stable ordering only; this order must not alter the shared rank.
+- The UI does not need to expose `C` or `m`; they are calculation inputs.
+- For monthly/yearly/all-time derived views, aggregate weekly source evidence by series first, then recalculate the broader scope's own `R`, `v`, `C`, `m`, and weighted score. Do not average weekly ranking scores.
+
+### Ranking warning UI behavior
+
+- A completed weekly result fails the warning checks only when **both** `ranking_score < 6.5` and bottom-25% rank are true.
+- High ranking risk requires failed checks in at least 2 of the latest 3 consecutive completed weekly periods, including the latest.
+- The series must have ranking input in all 3 evaluated weeks and each week must contain at least 4 ranked series.
+- Current/incomplete weeks and monthly/yearly/all-time reporting views do not independently generate warnings.
+- The Bell warning is sent to all distinct active contributors of the exact affected series and is advisory only.
 
 ### Filtering behavior
 
@@ -1293,7 +1480,7 @@ Display dynamic series rankings from `manga.vw_SeriesRanking` for a selected `Pu
 
 ### Vote input management behavior
 
-- Editorial Board Members and Editorial Board Chiefs may enter or update `SeriesVoteInput` when allowed.
+- Editorial Board Members and Editorial Board Chiefs may enter or update `SeriesVoteInput` for `WEEKLY` publication periods when allowed; monthly/yearly/all-time views are derived from weekly source evidence and do not accept separate manual aggregate input.
 - Input fields are `rating_count`, `average_rating`, `reading_count`, and optional `data_source_note`.
 - Validation should reject non-positive counts, `average_rating` outside 0 to 10, and `rating_count > reading_count`.
 - The vote input screen should explain that weekly input is period-only and must not include earlier weeks.

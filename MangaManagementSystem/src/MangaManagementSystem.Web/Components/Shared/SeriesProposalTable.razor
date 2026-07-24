@@ -138,12 +138,14 @@
                     <span style="font-size: 0.8rem; color: #64748b;">v@(p.ProposalVersionNo)</span>
                     @if (ShowSubmitterColumn)
                     {
-                        <span style="font-size: 0.8rem; color: #64748b;">@p.SubmittedByDisplayName</span>
+                        <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.8rem; color: #64748b;"
+                              title="@p.SubmittedByDisplayName">@p.SubmittedByDisplayName</span>
                     }
                     <span style="font-size: 0.78rem; color: #64748b;">@p.SubmittedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</span>
                     @if (ShowReviewerColumns)
                     {
-                        <span style="font-size: 0.8rem; color: #64748b;">@(string.IsNullOrWhiteSpace(p.ReviewerDisplayName) ? "—" : p.ReviewerDisplayName)</span>
+                        <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.8rem; color: #64748b;"
+                              title="@p.ReviewerDisplayName">@(string.IsNullOrWhiteSpace(p.ReviewerDisplayName) ? "—" : p.ReviewerDisplayName)</span>
                         <span style="font-size: 0.78rem; color: #64748b;">@(p.ReviewedAtUtc.HasValue ? p.ReviewedAtUtc.Value.ToLocalTime().ToString("MMM d, yyyy") : "—")</span>
                     }
                     <span style="display: inline-block;">

@@ -54,6 +54,18 @@ public sealed class EditorialBoardController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("series/cancellable-for-cancel-poll")]
+    [Authorize(Roles = "Editorial Board Chief")]
+    public async Task<IActionResult> GetCancellableSeriesForCancelPoll(
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new GetCancellableBoardSeriesQuery(),
+            cancellationToken);
+
+        return Ok(result);
+    }
+
     [HttpPost("proposals/{proposalId:guid}/polls")]
     [Authorize(Roles = "Editorial Board Chief")]
     public async Task<IActionResult> OpenPoll(
@@ -74,6 +86,95 @@ public sealed class EditorialBoardController : ControllerBase
 
             var result = await _mediator.Send(
                 new OpenSeriesBoardPollCommand(
+                    ChiefUserId: chiefUserId,
+                    Request: commandRequest),
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
+    [HttpPost("series/{seriesId:guid}/cancel-poll")]
+    [Authorize(Roles = "Editorial Board Chief")]
+    public async Task<IActionResult> OpenCancelSerializationPoll(
+        Guid seriesId,
+        [FromBody] OpenCancelSerializationPollApiRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var chiefUserId = GetCurrentUserId();
+
+            var commandRequest = new OpenCancelSerializationPollRequestDto(
+                PollReason: request.PollReason,
+                EndsAtUtc: request.EndsAtUtc);
+
+            var result = await _mediator.Send(
+                new OpenCancelSerializationPollCommand(
+                    SeriesId: seriesId,
+                    ChiefUserId: chiefUserId,
+                    Request: commandRequest),
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
+    [HttpPatch("polls/{pollId:guid}/deadline")]
+    [Authorize(Roles = "Editorial Board Chief")]
+    public async Task<IActionResult> UpdatePollDeadline(
+        Guid pollId,
+        [FromBody] UpdateBoardPollDeadlineApiRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var chiefUserId = GetCurrentUserId();
+
+            var commandRequest = new UpdateBoardPollDeadlineRequestDto(
+                EndsAtUtc: request.EndsAtUtc);
+
+            var result = await _mediator.Send(
+                new UpdateBoardPollDeadlineCommand(
+                    PollId: pollId,
+                    ChiefUserId: chiefUserId,
+                    Request: commandRequest),
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
+    [HttpPatch("series/{seriesId:guid}/publication-frequency")]
+    [Authorize(Roles = "Editorial Board Chief")]
+    public async Task<IActionResult> UpdateSeriesPublicationFrequency(
+        Guid seriesId,
+        [FromBody] UpdateSeriesPublicationFrequencyApiRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var chiefUserId = GetCurrentUserId();
+
+            var commandRequest = new UpdateSeriesPublicationFrequencyRequestDto(
+                PublicationFrequencyCode: request.PublicationFrequencyCode,
+                Reason: request.Reason);
+
+            var result = await _mediator.Send(
+                new UpdateSeriesPublicationFrequencyCommand(
+                    SeriesId: seriesId,
                     ChiefUserId: chiefUserId,
                     Request: commandRequest),
                 cancellationToken);
@@ -186,6 +287,17 @@ public sealed class EditorialBoardController : ControllerBase
         string PollReason,
         string? PublicationFrequencyCode,
         DateTime? EndsAtUtc);
+
+    public sealed record OpenCancelSerializationPollApiRequest(
+        string PollReason,
+        DateTime? EndsAtUtc);
+
+    public sealed record UpdateBoardPollDeadlineApiRequest(
+        DateTime? EndsAtUtc);
+
+    public sealed record UpdateSeriesPublicationFrequencyApiRequest(
+        string PublicationFrequencyCode,
+        string Reason);
 
     public sealed record CastVoteApiRequest(
         string ChoiceCode,

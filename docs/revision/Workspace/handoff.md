@@ -1,6 +1,146 @@
 # Handoff — Mangaka Workspace: manual-save + full API migration (2026-07-01)
 
-> ## ▶️ BẮT ĐẦU SESSION SAU TỪ ĐÂY (2026-07-13) — editor workspace round 2/3
+> ## ▶️ BẮT ĐẦU SESSION SAU TỪ ĐÂY (2026-07-21, chiều) — header overlap + upload retry + region provenance
+>
+> **Branch:** `feature/workspace-v3`. PR **#86 đã merge vào main**; đợt này là code mới nằm trên đó, sẽ mở PR kế tiếp.
+> Đã merge `origin/main` (2 lần trong ngày): ranking score rules + `RANKING_WARNING` contract (docs), rồi
+> `34d303c` schema view cho ranking score. Cả 2 lần **không conflict**.
+>
+> ### 1. Vấn đề đã fix
+>
+> 1. **Header workspace bị đè chữ.** Khối giữa ("Chapter N - Page M") được canh giữa bằng `position:absolute`
+>    nên nằm ngoài luồng flex; series có tên dài + nhiều genre thì chữ bên trái vẽ đè lên. → Bố cục lại thành
+>    3 track flex thật (`flex:1 1 0` + `min-width:0`), cắt ellipsis tên/genre, ẩn dòng genre dưới 1280px.
+> 2. **Upload page không có retry.** Một lần chớp mạng giữa lúc save nhiều page là page đó fail luôn.
+>    → Retry tối đa 3 lần, backoff 400ms/800ms, **chỉ** cho lỗi dạng mạng (`IsTransientUploadError`).
+>    Header hiện `retrying (n/3)`. Hết lượt vẫn giữ dirty flag + cleanup Cloudinary → Save bấm lại được.
+> 3. **Bulk save nuốt provenance của region.** `RegionModel` không mang `SourceType`/`ConfidenceScore`,
+>    `CreatorWorkspace.Save.cs` hardcode `"MANUAL"` + `null` cho **mọi** region → chỉ cần bấm Save một lần
+>    là region không hề đụng tới cũng bị ghi đè thành MANUAL. → Thêm 2 field vào `RegionModel`, map ở cả 2 chỗ
+>    load từ DB, và `NormalizeRegionProvenance` giữ đúng `ck_page_region_confidence_source`.
+>
+> ### 2. Phát hiện phụ (CHƯA fix — cân nhắc cho session sau)
+>
+> - **Không có gì trong hệ thống đang ghi `source_type = 'AI'`** — không code C#, không seed SQL. Lý do:
+>   `AiRegionDto` (service Python) không trả confidence, mà schema bắt buộc AI phải có confidence.
+>   Nên fix (3) hiện mang tính phòng thủ; muốn AI region lưu đúng nguồn gốc thì phải đổi contract của
+>   `MangaAI_Service` + `AiRegionDto`. **Cố ý không làm** vì đụng phần AI.
+> - **Guard "region đang gắn annotation/task thì không xóa" chỉ có ở server và im lặng.**
+>   `deleteSelectedRegionsConfirmed` (JS) cho xóa thoải mái; `BulkReplacePageRegionsAsync` giữ lại row
+>   (`protectedIds`) nhưng trả về `bool` nên UI vẫn báo "saved successfully". Hệ quả: user xóa xong,
+>   reload thấy region quay lại, không hiểu vì sao. Chủ repo đã biết và **quyết định tạm chấp nhận**.
+> - **Xóa region → Save → Undo → Save** thì region quay lại DB nhưng với `page_region_id` **mới**
+>   (BulkReplace không tìm thấy id cũ → rơi vào nhánh create). Đã rà: **không gây mồ côi** annotation/task
+>   vì region có liên kết không bao giờ bị xóa ở bước đầu. Kết luận: hợp lý, giữ nguyên. Cái mất là
+>   `created_at_utc` / `created_by_user_id` bị viết lại — chấp nhận ở mức MVP.
+>
+> ### 3. File đã đổi
+>
+> - `Components/Pages/Workspace/CreatorWorkspace.razor` — layout header 3 track + responsive breakpoint.
+> - `Components/Pages/Workspace/CreatorWorkspace.Save.cs` — `UploadPageImageWithRetryAsync`,
+>   `IsTransientUploadError`, `NormalizeRegionProvenance`, bỏ hardcode MANUAL ở call site.
+> - `Components/Pages/Workspace/CreatorWorkspace.razor.cs` — map `SourceType`/`ConfidenceScore` ở 2 chỗ
+>   load region từ DB (initial load + `BuildRegionsJsonFromDbAsync`).
+> - `Components/Pages/Workspace/Models/WorkspaceViewModels.cs` — `RegionModel` +2 field.
+> - **Không đụng** JS canvas (`syncToBlazor` truyền nguyên object nên field mới tự sống sót), không đụng
+>   DB/SP/Cloudinary.
+>
+> ### 4. Những gì CHƯA kiểm tra
+>
+> - **CHƯA smoke test.** Mới chỉ build sạch (API 0 error/27 warning, Web 0 error/65 warning — đúng baseline).
+>   Quy trình smoke test đã bàn: header ở 1920/1440/1280/1100; retry chỉ dựng được đường **thất bại**
+>   (tắt API rồi bấm Save — đường retry-rồi-thành-công không dựng nổi bằng tay vì cửa sổ backoff ~1.2s);
+>   provenance phải test bằng SQL (tự `UPDATE ... source_type='AI', confidence_score=0.8765` rồi save lại
+>   và kiểm tra nó còn nguyên).
+> - **Regression quan trọng nhất chưa chạy:** vẽ/di chuyển/sửa text region → Save → reload, và xác nhận
+>   `page_region_id` **không đổi** khi chỉ di chuyển (nếu đổi id là nó xóa-tạo lại thay vì update).
+>
+> ---
+>
+> ## (2026-07-21, sáng) — tài liệu: sơ đồ luồng + bộ test case
+>
+> **Branch:** `feature/workspace-v3` — **đã push, đồng bộ với origin**, working tree sạch. PR đang mở, **chưa merge**.
+> Commit gần nhất: `dba4edf` (merge `origin/main`: schedule calendar nav, PUBLICATION_SCHEDULE notification, refactor ranking).
+>
+> ### 1. Vấn đề đang fix
+>
+> Đợt này **KHÔNG sửa code sản phẩm**. Toàn bộ là **tài liệu hoá**:
+> - Vẽ sơ đồ luồng (flowchart) cho phần workspace vốn chưa có sơ đồ nào.
+> - Dựng bộ test case cho workspace theo mẫu SWT301 của môn học.
+> - Rà lại độ phủ test case so với code hiện tại.
+>
+> Code sản phẩm lần cuối thay đổi ở đợt **2026-07-19** (upload limits, AI hardening, `clean_bubble` v3, fix task/annotation) — xem block bên dưới.
+>
+> ### 2. Nguyên nhân / phát hiện chính
+>
+> - **Workspace chưa có sơ đồ luồng nào.** File `Manga.drawio` của nhóm có 15 trang nhưng chỉ phủ series/proposal/board/task/annotation — **toàn bộ page & version (phần lõi của workspace) bị trống**.
+> - **Quy ước vẽ của nhóm dùng hình bình hành cho Input/Output** (nhập liệu, hiển thị thông báo), chữ nhật cho xử lý. Ban đầu bỏ sót quy ước này, đã sửa lại toàn bộ 9 trang.
+> - **Lỗi phổ biến khi vẽ:** mũi tên **chỉ gắn 1 đầu** vào hình (đầu kia là toạ độ cố định) — nhìn mắt thường không phát hiện được, nhưng kéo hình là đứt. Đã viết script kiểm tra XML để bắt lỗi này.
+> - **Bộ test case cũ (154 case, 19/07) còn thiếu 7 trường hợp** khi đối chiếu lại với code: sửa loại vùng (1 vùng / hàng loạt / nút disabled), crop từng trang ở dialog preview, AI không nhận ra bong bóng nào, brush color/size, zoom in/out. Đã bổ sung → **161 case**.
+> - **API redirect HTTP → HTTPS (307)**, làm mất body của request POST. Khi test bằng công cụ ngoài phải gọi thẳng `https://localhost:7256`, không dùng `http://localhost:5234`.
+>
+> ### 3. File đã đọc / thay đổi
+>
+> **Thay đổi trong repo (đã push):** chỉ có merge `origin/main` — **không có code sản phẩm nào của mình**.
+>
+> **Sản phẩm của đợt này nằm NGOÀI repo** (file draw.io, file Excel test case, script kiểm tra). Cần thì hỏi chủ repo — không commit vì đây là tài liệu môn học, không phải mã nguồn.
+>
+> **Chỉ đọc:** `CreatorWorkspace.*`, `ChapterPageVersionService.cs`, `MangakaChapterRepository.cs`, `ChapterPageAnnotationRepository.cs`, `EditorChapterReviewsController.cs`, `SubmitChapterEditorialReviewCommandHandler.cs`, `MangaManagementSystem_Schema.sql` (constraint `ck_chapter_editorial_review_feedback_required`).
+>
+> ### 4. Bước tiếp theo
+>
+> 1. **Hoàn thiện sơ đồ draw.io** — xem mục Note bên dưới, còn một số chỉnh sửa.
+> 2. **Nhóm chạy 161 test case** trong file Excel, điền cột Result (dropdown Pass/Fail/Untested/N/A) → coverage tự tính.
+> 3. Nếu bài nộp bắt buộc `.xls`: mở file → Save As → *Excel 97-2003 Workbook*.
+> 4. Hai việc hoãn có chủ đích về AI (xem block 2026-07-19): base URL vào config (~20 phút), và AI đi qua controller thay vì `@inject` (~3–4h, nên tách PR riêng).
+>
+> ### 5. Những gì CHƯA kiểm tra
+>
+> - **CHƯA chạy test case nào.** Cột Result trống hoàn toàn 161/161. Không được coi đây là "đã test".
+> - **Chưa smoke test UI** sau lần merge `origin/main` cuối (main đổi layout sidebar dùng chung `RoleAwarePageFrame` — có thể ảnh hưởng hiển thị menu ở các trang khác).
+> - Sơ đồ luồng mới chỉ kiểm tra **cấu trúc** (mũi tên gắn đúng, không ngõ cụt/mồ côi, hình đúng loại) — **chưa ai review lại nội dung nghiệp vụ**.
+>
+> ### 📌 NOTE — Sơ đồ luồng workspace (còn dở, làm tiếp session sau)
+>
+> Đã vẽ **9 luồng workspace** bổ sung vào file draw.io của nhóm (trước đó nhóm chưa có sơ đồ nào cho page & version — phần lõi của workspace):
+> Create Chapter · Upload Page · Create Page Version · AI Translate Page · Set Current Version · Delete Page · Cancel Assistant Task · Submit Chapter for Review · Editor Chapter Review Decision.
+>
+> **Quy ước vẽ của nhóm — ai vẽ tiếp phải theo** (rút từ 15 trang gốc):
+> - Bắt đầu/Kết thúc: hình tròn 30×30 · Xử lý: chữ nhật 120×50 · Quyết định: thoi 140×140, **luôn chỉ Có/Không**
+> - **Input/Output dùng HÌNH BÌNH HÀNH** — cho ô **nhập liệu** và ô **hiển thị thông báo** (dễ bỏ sót nhất)
+> - Mũi tên `endArrow=classic` · nhãn Yes/No là text box rời · bố cục dọc, **No sang trái, Yes xuống dưới**
+> - Nhóm **KHÔNG dùng** Note / Predefined Process / đường nét đứt — đừng thêm vào cho lệch chuẩn
+>
+> **Lỗi hay gặp:** mũi tên **chỉ gắn 1 đầu** vào hình (đầu kia là toạ độ cố định) — nhìn mắt thường không thấy, nhưng kéo hình là đứt. Hay xảy ra khi **xoá hình rồi dán hình khác vào chỗ cũ**. Kiểm tra: click mũi tên, đầu mút **xanh lá = đã gắn**, **xanh dương = chưa gắn**.
+>
+> **Còn lại:** luồng `Delete Version Image` chưa vẽ; một số trang cần chỉnh bố cục cho vừa khổ in.
+>
+> > File draw.io, bộ test case và script kiểm tra nằm **ngoài repo** — hỏi chủ repo nếu cần.
+>
+> ---
+
+> ## (2026-07-19) — upload limits + AI hardening + clean_bubble v3
+>
+> **Đọc:** [`2026-07-19-upload-limits-ai-hardening-bubble-clean.md`](2026-07-19-upload-limits-ai-hardening-bubble-clean.md) — session note đầy đủ.
+>
+> **Branch:** `feature/workspace-v3` (PR #78). Đã merge `origin/main` (task eligibility) và **đã push**.
+>
+> **Tóm tắt đợt này (đã smoke test, user xác nhận OK):**
+> 1. **Giới hạn upload** (`CreatorWorkspace.razor.cs`, `.Versions.cs`): 10MB/file, 30 trang/lần, whitelist png/jpeg/webp, validate TRƯỚC khi mở stream nên file lỗi bị bỏ qua thay vì hủy cả batch. Lý do: Blazor Server buffer upload **trên server** → 100×20MB là rủi ro OOM circuit.
+> 2. **AI timeout + lỗi rõ nghĩa** (`DependencyInjection.cs`, `AiService.cs`): timeout 60s, 4 loại lỗi riêng thay cho `return null` → hết `"AI returned null"`. Không retry khi timeout.
+> 3. **`clean_bubble` v2 → v3** (`MangaAI_Service/main.py`): đổi từ dò nét CHỮ sang xác định LÒNG bong bóng rồi tô sạch. Tô lố ra artwork **11 → 4** (bộ 55); ca chữ to không tô được **4 → 1** (bộ 262). Bỏ hẳn `fill(255)` fallback — chế độ hỏng nặng nhất của v2.
+>
+> **⚠️ ĐỌC DOCSTRING `clean_bubble` TRƯỚC KHI SỬA NÓ.** Đã ghi 4 hướng ĐÃ THỬ VÀ THẤT BẠI kèm số đo (MORPH_CLOSE, guard coverage 0.92, convex hull, phân cấp contour). Đừng thử lại nếu chưa đo damage artwork trên trang thật.
+>
+> **Known deviation (hoãn CÓ CHỦ ĐÍCH, không phải quên):**
+> - **AI base URL hardcode** trong `AiService.cs`, còn `Web/appsettings.json:37` có key `AiService:BaseUrl` **không bao giờ được đọc** → bẫy config. (~20 phút)
+> - **`CreatorWorkspace.razor:27` `@inject IAiService`** — Web gọi thẳng Application/Infrastructure, **không có AI controller**. Sai CLAUDE.md §3.1/§4.6. Fix đúng ~3–4h → **PR riêng**.
+>
+> **Hạn chế đã chốt:** bong bóng kề nhau vẫn sót ~1 chữ ở góc bị viền bong bóng bên cạnh cắt (~1.4%). Mọi cách xóa triệt để đều đánh đổi bằng phá artwork → chọn giữ, mangaka tô tay bằng brush.
+>
+> ---
+
+> ## (2026-07-13) — editor workspace round 2/3
 >
 > **Branch:** `feature/workspace-v3`. **4 commit local CHƯA PUSH** (ahead 4 of origin): `dc77446` (gate Notes/Versions cho editor + fix pin split-view) · `e2992cd` (handoff) · `0b25133` (editor duyệt chapter #4b) · `28ee732` (Cancel cần markup + ẩn DRAFT với editor). PR đang mở = **#78** (`feature/workspace-v3 → main`); push branch là PR tự cập nhật.
 >

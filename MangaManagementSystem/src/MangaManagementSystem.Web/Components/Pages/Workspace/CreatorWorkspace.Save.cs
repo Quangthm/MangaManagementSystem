@@ -76,6 +76,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             .SelectMany(c => c.Pages ?? new List<PageModel>())
             .Count(p => p.Versions.Any() && p.Versions[p.ActiveVersionIndex].PendingBytes != null);
         int pagesUploaded = 0;
+        _uploadRetryCount = 0;
         _saveProgress = totalPendingPages > 0 ? $"Uploading pages… (0/{totalPendingPages})" : "Saving…";
         await _dbSemaphore.WaitAsync();
         try
@@ -90,7 +91,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                         // only if somehow unset. The DB enforces uniqueness incl. cancelled chapters.
                         var numberLabel = string.IsNullOrWhiteSpace(chap.NumberLabel) ? chap.Id.ToString() : chap.NumberLabel.Trim();
                         var req = new CreateChapterDraftRequest(seriesGuid, numberLabel, chap.Title);
-                        var createdDto = await MangakaChapterApi.CreateChapterDraftAsync(_currentUserId!.Value, req);
+                        var createdDto = await MangakaChapterApi.CreateChapterDraftAsync(req);
                         if (createdDto != null)
                         {
                             chap.ChapterId = createdDto.ChapterId;
@@ -117,7 +118,6 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                     // Id would collide with the integer chapter that happens to share that position.
                     var numberLabel = string.IsNullOrWhiteSpace(chap.NumberLabel) ? chap.Id.ToString() : chap.NumberLabel.Trim();
                     await MangakaChapterApi.UpdateChapterDraftAsync(
-                        _currentUserId!.Value,
                         chap.ChapterId,
                         new UpdateChapterDraftRequest(
                             numberLabel,
@@ -161,12 +161,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                     await uploadGate.WaitAsync();
                     try
                     {
-                        var res = await FileStorageService.UploadFileAsync(
-                            v.PendingBytes!,
-                            v.PendingFileName ?? "page.png",
-                            v.PendingContentType ?? "image/png",
-                            "CHAPTER_PAGE_VERSION");
-                        uploadResults[v] = res;
+                        uploadResults[v] = await UploadPageImageWithRetryAsync(v);
                     }
                     catch (Exception ex)
                     {
@@ -229,7 +224,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                                             fileDto,
                                             ver.Note ?? "Original Upload");
 
-                                        var createdRes = await MangakaPageApi.CreatePageWithVersionAsync(_currentUserId!.Value, createReq);
+                                        var createdRes = await MangakaPageApi.CreatePageWithVersionAsync(createReq);
                                         if (createdRes != null)
                                         {
                                             page.ChapterPageId = createdRes.Page.ChapterPageId;
@@ -254,7 +249,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                                             Regions: BuildRegionDtosForSave(ver.Regions),
                                             SetAsCurrent: true);
 
-                                        var versionDto = await MangakaPageApi.CreateVersionWithFileAndRegionsAsync(_currentUserId!.Value, req);
+                                        var versionDto = await MangakaPageApi.CreateVersionWithFileAndRegionsAsync(req);
                                         if (versionDto != null)
                                         {
                                             ver.ChapterPageVersionId = versionDto.ChapterPageVersionId;
@@ -318,6 +313,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                                     });
 
                                     string label = !string.IsNullOrEmpty(r.Label) ? r.Label : $"Region_{r.Id}";
+                                    var (sourceType, confidence) = NormalizeRegionProvenance(r);
                                     return new MangaManagementSystem.Application.DTOs.Manga.CreatePageRegionDto(
                                         currentVersion.ChapterPageVersionId,
                                         (r.Type ?? "OTHER").ToUpper(),
@@ -326,15 +322,15 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                                         (decimal)r.Y,
                                         (decimal)r.Width,
                                         (decimal)r.Height,
-                                        null,
-                                        "MANUAL",
+                                        confidence,
+                                        sourceType,
                                         textJson,
                                         r.DbId,
                                         _currentUserId
                                     );
                                 }).ToList();
 
-                                await MangakaRegionApi.BulkReplaceAsync(_currentUserId ?? Guid.Empty, currentVersion.ChapterPageVersionId, dtos);
+                                await MangakaRegionApi.BulkReplaceAsync(currentVersion.ChapterPageVersionId, dtos);
                                 currentVersion.IsDirty = false;
                                 savedCount++;
                             }
@@ -368,7 +364,14 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 _saveState = SaveStatus.Saved;
                 _imageDirty = false;
                 _ = JS.InvokeVoidAsync("setUnsavedFlag", false);
-                if (savedCount > 0) Snackbar.Add("Changes saved successfully.", Severity.Success);
+                if (savedCount > 0)
+                {
+                    Snackbar.Add(
+                        _uploadRetryCount > 0
+                            ? $"Changes saved successfully (after {_uploadRetryCount} upload retry/retries)."
+                            : "Changes saved successfully.",
+                        Severity.Success);
+                }
             }
             else
             {
@@ -386,6 +389,92 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             _dbSemaphore.Release();
             StateHasChanged();
         }
+    }
+
+    // --- Upload retry -------------------------------------------------------------------------
+    // A Cloudinary upload can fail on a transient network hiccup / timeout while the bytes and the
+    // DB row are both still fine. Retrying the whole Save in that case re-uploads every page, so
+    // each page image gets its own bounded retry with exponential backoff first.
+    private const int UploadMaxAttempts = 3;
+
+    // Number of retried upload attempts in the current save (for the summary snackbar).
+    private int _uploadRetryCount;
+
+    private async Task<FileUploadResultDto> UploadPageImageWithRetryAsync(PageVersionModel version)
+    {
+        Exception? lastError = null;
+        for (int attempt = 1; attempt <= UploadMaxAttempts; attempt++)
+        {
+            try
+            {
+                return await FileStorageService.UploadFileAsync(
+                    version.PendingBytes!,
+                    version.PendingFileName ?? "page.png",
+                    version.PendingContentType ?? "image/png",
+                    "CHAPTER_PAGE_VERSION");
+            }
+            catch (Exception ex) when (attempt < UploadMaxAttempts && IsTransientUploadError(ex))
+            {
+                lastError = ex;
+                System.Threading.Interlocked.Increment(ref _uploadRetryCount);
+                Console.WriteLine($"Upload attempt {attempt}/{UploadMaxAttempts} failed for " +
+                                  $"{version.PendingFileName}: {ex.Message}");
+                _saveProgress = $"Upload failed — retrying ({attempt + 1}/{UploadMaxAttempts})…";
+                await InvokeAsync(StateHasChanged);
+                // 400ms, 800ms — short enough that a save does not feel hung.
+                await Task.Delay(TimeSpan.FromMilliseconds(400 * Math.Pow(2, attempt - 1)));
+            }
+        }
+
+        throw lastError ?? new InvalidOperationException("Upload failed.");
+    }
+
+    // Only network-shaped failures are worth retrying; a rejected/invalid file would fail again.
+    private static bool IsTransientUploadError(Exception ex)
+    {
+        for (Exception? e = ex; e != null; e = e.InnerException)
+        {
+            if (e is HttpRequestException
+                || e is TaskCanceledException
+                || e is TimeoutException
+                || e is System.IO.IOException
+                || e is System.Net.Sockets.SocketException)
+            {
+                return true;
+            }
+
+            var msg = e.Message;
+            if (!string.IsNullOrEmpty(msg)
+                && (msg.Contains("timeout", StringComparison.OrdinalIgnoreCase)
+                    || msg.Contains("timed out", StringComparison.OrdinalIgnoreCase)
+                    || msg.Contains("temporarily", StringComparison.OrdinalIgnoreCase)
+                    || msg.Contains("Service Unavailable", StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // A bulk save rewrites every region of the version, so it must carry each box's own provenance
+    // back — sending a flat "MANUAL" would silently downgrade AI-detected regions and drop their
+    // confidence score on the first save of an untouched page.
+    // manga.PageRegion.ck_page_region_confidence_source only accepts AI + a score, or MANUAL + no
+    // score, so a region claiming AI without a usable score is stored as MANUAL instead of failing
+    // the whole save.
+    private static (string SourceType, decimal? ConfidenceScore) NormalizeRegionProvenance(RegionModel region)
+    {
+        var sourceType = (region.SourceType ?? string.Empty).Trim().ToUpperInvariant();
+        if (sourceType != "AI") return ("MANUAL", null);
+
+        // ck_page_region_confidence: 0 <= confidence_score <= 1.
+        if (region.ConfidenceScore is not double score || double.IsNaN(score) || score < 0 || score > 1)
+        {
+            return ("MANUAL", null);
+        }
+
+        return ("AI", (decimal)score);
     }
 
     }

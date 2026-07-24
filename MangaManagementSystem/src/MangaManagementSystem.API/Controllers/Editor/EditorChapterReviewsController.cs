@@ -2,16 +2,17 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.API.Contracts;
+using MangaManagementSystem.API.Security;
 using MangaManagementSystem.Application.DTOs.Editor;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.PutScheduledChapterOnHold;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.ReleaseChapter;
-using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.RescheduleChapter;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.SetChapterPlannedReleaseDate;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.SubmitChapterEditorialReview;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queries.GetEditorActionableChapters;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queries.GetEditorChapterReviewDetail;
 using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queries.GetEditorChapterReviewQueue;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -35,19 +36,23 @@ namespace MangaManagementSystem.API.Controllers.Editor
     /// here. Both endpoints are scoped to series the actor contributes to.
     /// </summary>
     [ApiController]
+    [Authorize(Roles = TantouEditorRoleName)]
     [Route("api/editor/chapters")]
     public class EditorChapterReviewsController : ControllerBase
     {
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
+        private const string TantouEditorRoleName = "Tantou Editor";
 
         private readonly IMediator _mediator;
+        private readonly IAuthenticatedActorResolver _actorResolver;
         private readonly ILogger<EditorChapterReviewsController> _logger;
 
         public EditorChapterReviewsController(
             IMediator mediator,
+            IAuthenticatedActorResolver actorResolver,
             ILogger<EditorChapterReviewsController> logger)
         {
             _mediator = mediator;
+            _actorResolver = actorResolver;
             _logger = logger;
         }
 
@@ -61,11 +66,9 @@ namespace MangaManagementSystem.API.Controllers.Editor
             [FromQuery(Name = "status")] string? status,
             CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             try
             {
@@ -92,11 +95,9 @@ namespace MangaManagementSystem.API.Controllers.Editor
             Guid chapterId,
             CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             try
             {
@@ -132,11 +133,9 @@ namespace MangaManagementSystem.API.Controllers.Editor
             [FromBody] SubmitChapterEditorialReviewRequest request,
             CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             if (string.IsNullOrWhiteSpace(request.DecisionCode))
             {
@@ -181,11 +180,9 @@ namespace MangaManagementSystem.API.Controllers.Editor
             [FromForm] SubmitChapterEditorialReviewFormRequest request,
             CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             if (string.IsNullOrWhiteSpace(request.DecisionCode))
             {
@@ -238,9 +235,9 @@ namespace MangaManagementSystem.API.Controllers.Editor
             [FromBody] SetPlannedReleaseDateApiRequest request,
             CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             try
             {
@@ -267,49 +264,15 @@ namespace MangaManagementSystem.API.Controllers.Editor
             }
         }
 
-        [HttpPut("{chapterId:guid}/reschedule")]
-        public async Task<IActionResult> ReschedulePlannedReleaseDateAsync(
-            Guid chapterId,
-            [FromBody] EditorRescheduleChapterRequest request,
-            CancellationToken cancellationToken)
-        {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
-
-            if (string.IsNullOrWhiteSpace(request.Reason))
-                return BadRequest(new ApiErrorResponse("A reason is required for rescheduling."));
-
-            try
-            {
-                var result = await _mediator.Send(
-                    new RescheduleChapterPlannedReleaseDateCommand(
-                        actorUserId, chapterId, request.NewPlannedReleaseDate, request.Reason),
-                    cancellationToken);
-                return Ok(result);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new ApiErrorResponse(ex.Message));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unexpected error rescheduling chapter {ChapterId}.", chapterId);
-                return Problem(
-                    detail: "We could not reschedule the chapter right now. Please try again later.",
-                    statusCode: StatusCodes.Status500InternalServerError);
-            }
-        }
-
         [HttpPost("{chapterId:guid}/hold")]
         public async Task<IActionResult> PutChapterOnHoldAsync(
             Guid chapterId,
             [FromBody] EditorPutChapterOnHoldRequest request,
             CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             if (string.IsNullOrWhiteSpace(request.Reason))
                 return BadRequest(new ApiErrorResponse("A reason is required to put a chapter on hold."));
@@ -340,9 +303,9 @@ namespace MangaManagementSystem.API.Controllers.Editor
             [FromBody] EditorReleaseChapterRequest request,
             CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             try
             {
@@ -372,9 +335,9 @@ namespace MangaManagementSystem.API.Controllers.Editor
             [FromQuery(Name = "maxResults")] int? maxResults,
             CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             try
             {
@@ -397,20 +360,25 @@ namespace MangaManagementSystem.API.Controllers.Editor
             }
         }
 
-        private bool TryResolveActorUserId(out Guid actorUserId)
+        private async Task<(Guid ActorUserId, IActionResult? Failure)> ResolveActorAsync()
         {
-            actorUserId = Guid.Empty;
-
-            if (Request.Headers.TryGetValue(ActorUserIdHeader, out var headerValues))
+            var result = await _actorResolver.ResolveAsync(User, TantouEditorRoleName);
+            if (result.Succeeded)
             {
-                string? raw = headerValues.ToString();
-                if (Guid.TryParse(raw, out actorUserId) && actorUserId != Guid.Empty)
-                {
-                    return true;
-                }
+                return (result.ActorUserId, null);
             }
 
-            return false;
+            var response = new ApiErrorResponse(
+                result.FailureKind == AuthenticatedActorFailureKind.UserNotFound
+                    ? "Authenticated Tantou Editor account was not found."
+                    : result.FailureKind == AuthenticatedActorFailureKind.InvalidIdentity
+                        ? "Authenticated Tantou Editor information is invalid."
+                        : "The current account is not an active Tantou Editor.");
+
+            return result.FailureKind is AuthenticatedActorFailureKind.InvalidIdentity
+                or AuthenticatedActorFailureKind.UserNotFound
+                ? (Guid.Empty, Unauthorized(response))
+                : (Guid.Empty, StatusCode(StatusCodes.Status403Forbidden, response));
         }
     }
 }

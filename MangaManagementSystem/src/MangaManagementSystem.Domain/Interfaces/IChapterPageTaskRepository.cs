@@ -1,5 +1,6 @@
 using MangaManagementSystem.Domain.Entities;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace MangaManagementSystem.Domain.Interfaces
@@ -28,6 +29,14 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<ChapterPageTask?> GetByIdWithFullContextAsync(Guid taskId);
 
         Task<IReadOnlyList<ChapterPageTask>> GetByChapterPageIdWithRegionsAsync(Guid chapterPageId);
+
+        Task<IReadOnlyList<ChapterPageTask>> GetByChapterIdsAsync(
+            IReadOnlyCollection<Guid> chapterIds,
+            CancellationToken cancellationToken = default);
+
+        Task<IReadOnlyList<ChapterPageTask>> GetDistinctActiveTasksByChapterIdsAsync(
+            IReadOnlyCollection<Guid> chapterIds,
+            CancellationToken cancellationToken = default);
         // Mangaka task lifecycle SPs
         Task CancelTaskAsync(Guid actorUserId, Guid taskId, string reason);
         Task MarkTaskCompletedAsync(Guid actorUserId, Guid taskId, string? completionNote);

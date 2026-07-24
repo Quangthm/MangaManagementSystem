@@ -15,13 +15,6 @@ namespace MangaManagementSystem.Domain.Interfaces
             UploadedFileMetadata? markup,
             CancellationToken ct = default);
 
-        Task<ChapterRescheduleResult> ReschedulePlannedReleaseDateAsync(
-            Guid actorUserId,
-            Guid chapterId,
-            DateTime newPlannedReleaseDate,
-            string reason,
-            CancellationToken ct = default);
-
         Task<ChapterPlannedDateResult> SetPlannedReleaseDateAsync(
             Guid actorUserId,
             Guid chapterId,

@@ -190,15 +190,7 @@
                 </MudText>
             }
 
-            @if (Proposal.WithdrawnAtUtc.HasValue)
-            {
-                <MudDivider Class="my-3" />
-                <MudAlert Severity="Severity.Error" Dense="true">
-                    <MudText Typo="Typo.caption">
-                        Withdrawn on @Proposal.WithdrawnAtUtc.Value.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
-                    </MudText>
-                </MudAlert>
-            }
+           
         </MudPaper>
 
         @if (SidePanel is not null)

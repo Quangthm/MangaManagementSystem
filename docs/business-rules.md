@@ -4,9 +4,17 @@
 **Scope:** Manga workflow management, proposal review, board polling, page versioning, annotations, page tasks, ranking simulation, notifications, and auditability.  
 **Important MVP design direction:** Avoid unnecessary history/submission/policy tables unless the business event is important enough to store directly.
 
-> **Latest alignment update — 2026-07-04:** This version replaces strict publication-period scheduling enforcement with the finalized advisory scheduling direction. Publication scheduling remains chapter-level: planned release dates belong to `Chapter`, `SCHEDULED` applies to `Chapter.status_code`, and page/content workflows remain locked for scheduled/on-hold chapters. `Series.publication_frequency_code` now drives default suggestions and warnings only; Mangaka and Tantou Editors may choose any future planned release date when permissions/status allow it. Editors remain the final release enforcer, on-hold recovery requires a new planned date, and auto-hold for overdue scheduled chapters is deferred.
+> **Latest alignment update — 2026-07-04:** This version replaces strict publication-period scheduling enforcement with the finalized advisory scheduling direction. Publication scheduling remains chapter-level: planned release dates belong to `Chapter`, `SCHEDULED` applies to `Chapter.status_code`, and page/content workflows remain locked for scheduled/on-hold chapters. `Series.publication_frequency_code` now drives default suggestions and warnings only; Mangaka and Tantou Editors may choose any planned release date on the current publication business date or later when permissions/status allow it. Editors remain the final release enforcer, on-hold recovery requires a new planned date, and auto-hold for overdue scheduled chapters is deferred.
 
-> **Latest series lifecycle alignment — 2026-07-11:** `HIATUS` is the schema term for a paused series. Active Mangaka or Tantou Editor contributors may move a `SERIALIZED` series to `HIATUS` and may resume it back to `SERIALIZED`. `HIATUS` blocks chapter release only; drafting, editing, review, scheduling, and rescheduling remain allowed when normal chapter rules allow them. Only active Mangaka contributors may mark a `SERIALIZED` or `HIATUS` series as `COMPLETED`. A completed series is final, immutable for normal business changes, cancels unreleased chapters after warning and confirmation, preserves released and historical records, and remains visible in rankings when ranking input exists.
+> **Latest series lifecycle alignment — 2026-07-19:** `HIATUS` is the schema term for a paused series. Active Mangaka or Tantou Editor contributors may move a `SERIALIZED` series to `HIATUS` and resume it back to `SERIALIZED`. `HIATUS` blocks chapter release only; drafting, editing, review, scheduling, and rescheduling remain allowed when normal chapter rules allow them. Only active Mangaka contributors may mark their `SERIALIZED` or `HIATUS` series as `COMPLETED`. A completed series is final, immutable for normal business changes, cancels unreleased chapters and their distinct active `ASSIGNED`/`UNDER_REVIEW` page tasks after warning and confirmation, preserves released chapters and terminal task history, and remains visible in rankings when ranking input exists.
+
+> **Latest ranking and notification alignment — 2026-07-21:** Existing approved notification behavior for proposal, board, task, chapter, publication scheduling, and account approval remains unchanged. Dynamic ranking now uses the weighted formula `ranking_score = (v / (v + m)) * R + (m / (v + m)) * C`; `reading_count` is no longer a direct score boost. The `RANKING_WARNING` contract is finalized: a weekly result fails only when both the weighted score is below the approved `6.5` baseline and the series is in the bottom 25% for that completed week; high risk requires failure in at least 2 of the latest 3 consecutive completed weekly periods including the latest. Recipients are all distinct active contributors of the exact affected series.
+
+> **Latest chapter submission validation — 2026-07-21:** Chapter submission is allowed only for an active Mangaka contributor, from `DRAFT` or `REVISION_REQUESTED`, when zero distinct associated page tasks are still `ASSIGNED` or `UNDER_REVIEW`. `COMPLETED` and `CANCELLED` tasks do not block. Association is derived through task-region/page-region/page-version/page/chapter links and deduplicated by `ChapterPageTaskId`. A blocked submission performs no chapter transition, successful-submission audit, `CHAPTER_REVIEW` notification, or automatic task mutation; same-chapter task creation and submission must be concurrency-safe.
+
+> **Latest implementation-alignment decisions — 2026-07-23:** Email/password self-registration follows the current repository flow: the user must pass reCAPTCHA before a 6-digit email OTP is sent, and the pending account is created only after successful OTP verification; Google sign-up remains a separate verified-identity path and still creates `PENDING_APPROVAL`. The current MVP has no Mangaka proposal-withdrawal workflow. Assistants are allowed to view dynamic rankings, while manual ranking input remains restricted to Editorial Board Member/Chief roles. A `CANCELLED` chapter does not reserve its chapter number label: a new non-cancelled chapter may reuse the same label while the cancelled row keeps its original label, enforced by uniqueness among non-cancelled chapters only. Scheduling accepts `planned_release_date >=` the current publication business date (today in the configured publication timezone); past dates are invalid. `PageRegion` geometry supports either a DOT (`width = 0` and `height = 0`) or an area rectangle (`width > 0` and `height > 0`), and mixed zero/non-zero dimensions are invalid. Ranking preserves true ties: equal `ranking_score` values share the same `DENSE_RANK`; deterministic secondary ordering may be used only to display rows within the same rank and must not change `rank_position`.
+
+> **Deferred source-series alignment — 2026-07-24:** `Series.source_series_id` / `SourceSeriesId` remains a nullable field in the database and existing backend/domain plumbing for compatibility and possible future implementation. Source-series selection/editing is **deferred** and is not part of the current MVP user-facing workflow: current UI, use cases, user stories, and active functional requirements must not present it as an available Mangaka action. Normal UI-driven create/update flows should leave it unset/null. If the feature is activated later, the implementation must reject self-reference. The current MVP proposal lifecycle continues to have no Mangaka proposal-withdrawal action and no `WITHDRAWN` proposal status.
 
 ---
 
@@ -132,6 +140,8 @@
 | BR-USER-020 | Display name changes should be recorded in the audit log for traceability. | Active draft |
 | BR-USER-021 | The system should reject empty or whitespace-only display names after trimming. | Active draft |
 | BR-USER-022 | A user may update their own avatar and portfolio file | Active draft |
+| BR-USER-023 | Email/password self-registration must pass reCAPTCHA verification before the system sends a registration OTP. | Active draft |
+| BR-USER-024 | Email/password self-registration must verify the 6-digit OTP sent to the entered email before the system creates the user account. Successful OTP verification creates the account as `PENDING_APPROVAL` and does not bypass Admin approval. Google sign-up uses verified Google identity instead of this email-OTP step and also creates `PENDING_APPROVAL`. | Active draft |
 ---
 
 ## 5. Series
@@ -152,8 +162,8 @@
 | BR-SERIES-007B | The system should not store original/cropped dual files or crop metadata for `SERIES_COVER` in MVP. | Active draft |
 | BR-SERIES-007C | The MVP series cover crop target is a 2:3 portrait image, currently output as `1000×1500` `image/png` before upload. | Active draft |
 | BR-SERIES-007D | Source images smaller than the recommended cover output size may still be accepted, but the UI should warn that the final cover may look blurry after upscaling. | Active draft |
-| BR-SERIES-008 | A series may optionally reference another series as its source version. | Active draft |
-| BR-SERIES-009 | A series cannot reference itself as its own source series. | Active draft |
+| BR-SERIES-008 | `Series.source_series_id` is a nullable self-reference retained in the database and existing backend/domain plumbing for compatibility and possible future use. Source-series selection/editing is deferred and is not an active current-MVP user workflow. | Future information |
+| BR-SERIES-009 | While the source-series feature is deferred, current MVP UI/use cases must not expose or require `source_series_id`; normal UI-driven create/update flows should leave it unset/null. If the feature is activated later, a series must not reference itself. | Future information |
 | BR-SERIES-010 | Series ownership and contributor membership are managed through `SeriesContributor` instead of storing a lead Mangaka directly in `Series`. | Active draft |
 | BR-SERIES-011 | A series may have multiple contributors who can participate in managing or editing series information. | Active draft |
 | BR-SERIES-012 | When editable series profile metadata is changed, the system must record both the update time and the user who made the change. | Active draft |
@@ -166,7 +176,7 @@
 | BR-SERIES-019 | While a series is still in `PROPOSAL_DRAFT`, the backend may automatically regenerate the slug when the Mangaka changes the title and saves the draft. | Active draft |
 | BR-SERIES-020 | Once a series leaves `PROPOSAL_DRAFT`, the slug must be locked for normal workflow so the future `/series/{slug}` URL remains stable. | Active draft |
 | BR-SERIES-021 | The stable main series URL uses `/series/{slug}` and becomes meaningful primarily after the series reaches `SERIALIZED`. | Active draft |
-| BR-SERIES-022 | Normal Mangaka profile updates to title, slug, synopsis, genres, tags, cover, content language, source series, and publication frequency are allowed only while the series is in `PROPOSAL_DRAFT`. | Active draft |
+| BR-SERIES-022 | Normal Mangaka profile updates to title, slug, synopsis, genres, tags, cover, content language, and publication frequency are allowed only while the series is in `PROPOSAL_DRAFT`. The deferred `source_series_id` field is not part of current MVP profile editing. | Active draft |
 | BR-SERIES-023 | After a series leaves `PROPOSAL_DRAFT`, normal profile editing is locked; later changes require a separate controlled workflow, board/chief procedure, or future administrative correction process. | Active draft |
 | BR-SERIES-024 | After serialization, Mangaka production work continues through chapters, pages, page versions, regions, tasks, and the authorized chapter workspace rather than by editing the locked series profile. | Active draft |
 | BR-SERIES-025 | When a Mangaka creates a new series draft, the system must create the `Series` row and an active `SeriesContributor` row for that Mangaka in the same backend workflow or transaction, so that the creator is immediately recognized as an active Mangaka contributor for the draft. | Active draft |
@@ -188,6 +198,11 @@
 | BR-SERIES-040 | Unreleased active chapters for completion cancellation include `DRAFT`, `REVISION_REQUESTED`, `UNDER_REVIEW`, `APPROVED`, `SCHEDULED`, and `ON_HOLD` chapters; already `RELEASED` chapters and already `CANCELLED` chapters must not be changed. | Active draft |
 | BR-SERIES-041 | Completion-cancelled chapters remain preserved as read-only historical records and must follow the normal terminal behavior of cancelled chapters. | Active draft |
 | BR-SERIES-042 | A `CANCEL_SERIALIZATION` board poll may target a `SERIALIZED` or `HIATUS` series, but not a `COMPLETED` series through normal MVP workflow. | Active draft |
+| BR-SERIES-043 | Before confirming series completion, the system should show the affected unreleased chapters and the count of distinct active page tasks that will be cancelled; execution must recalculate authoritative impact rather than trusting the preview. | Active draft |
+| BR-SERIES-044 | When a series is completed, each distinct `ASSIGNED` or `UNDER_REVIEW` page task linked to a completion-cancelled chapter must be changed to `CANCELLED`. | Active draft |
+| BR-SERIES-045 | Series completion must preserve `COMPLETED` tasks, already `CANCELLED` tasks, and tasks linked only to unaffected chapters such as `RELEASED` chapters. | Active draft |
+| BR-SERIES-046 | A page task affected by series completion must be counted, changed, and cancellation-audited at most once even when the task is linked to multiple `PageRegion` records under affected chapters. | Active draft |
+| BR-SERIES-047 | Series completion must apply required task cancellations, chapter cancellations, the `Series.status_code = COMPLETED` change, and required audit records atomically so that a failure rolls back the entire cascade. | Active draft |
 
 ### Future Information
 
@@ -226,8 +241,6 @@
 | BR-PROP-007 | Once a `SeriesProposal` row is created, its submitted snapshot fields should remain locked. | Active draft |
 | BR-PROP-008 | If revision is requested, the corrected proposal must be submitted as a new proposal version. | Active draft |
 | BR-PROP-009 | Proposal status should reflect the current review stage of the submitted proposal package. | Active draft |
-| BR-PROP-010 | A proposal may only have a withdrawal timestamp when its status is `WITHDRAWN`. | Active draft |
-| BR-PROP-011 | A withdrawn proposal may exist without editorial review metadata if it was withdrawn before editorial review was completed. | Active draft |
 | BR-PROP-012 | Editorial review information may be stored directly in `SeriesProposal` because each proposal version receives at most one editorial review. | Active draft |
 | BR-PROP-013 | `UNDER_BOARD_REVIEW` means the proposal passed editorial review and is waiting for board voting/decision. | Active draft |
 | BR-PROP-014 | `APPROVED` means the proposal was approved by the board, not merely by the editor. | Active draft |
@@ -316,7 +329,7 @@
 | Rule ID | Business Rule | Review Status |
 |---|---|---|
 | BR-CH-001 | Each chapter belongs to exactly one series. | Active draft |
-| BR-CH-002 | Chapter number labels must be unique among **non-cancelled** chapters within the same series. A cancelled chapter does **not** reserve its number: when a new chapter reuses that number, the cancelled chapter is relabelled to a unique freed value (`{original}~{id}`) so the number becomes available, while its original number is preserved in the `CHAPTER_CANCELLED` audit entry. This keeps the non-filtered `uq_chapter_series_chapter_number` constraint satisfied without a schema change. | Active draft |
+| BR-CH-002 | Chapter number labels must be unique among **non-cancelled** chapters within the same series. A `CANCELLED` chapter does **not** reserve its number and keeps its original `chapter_number_label`; therefore a new non-cancelled replacement chapter may use the same label (for example, a cancelled Chapter 3 and a new active Chapter 3 may coexist). The database should enforce this with a filtered unique index such as `(series_id, chapter_number_label) WHERE status_code <> N'CANCELLED'`. | Active draft |
 | BR-CH-003 | A chapter starts with `DRAFT` status when it is created. | Active draft |
 | BR-CH-004 | `Chapter.status_code` stores only the current workflow status of the chapter. | Active draft |
 | BR-CH-005 | A chapter may move through statuses such as `DRAFT`, `UNDER_REVIEW`, `REVISION_REQUESTED`, `APPROVED`, `SCHEDULED`, `RELEASED`, `ON_HOLD`, and `CANCELLED`. | Active draft |
@@ -328,13 +341,14 @@
 | BR-CH-011 | `created_by_user_id` should identify the user who created the chapter record, usually a Mangaka or authorized contributor. | Active draft |
 | BR-CH-012 | `updated_at_utc` records the last time the chapter row was modified for operational display. | Active draft |
 | BR-CH-013 | Scheduling is chapter-level, not series-level; `SCHEDULED` is a chapter status and must not be applied to `Series.status_code`. | Active draft |
-| BR-CH-014 | Mangaka and Tantou Editors may set or reschedule `Chapter.planned_release_date` when chapter status and permissions allow it, as long as the chosen planned release date is not in the past. | Active draft |
-| BR-CH-015 | If an `APPROVED` chapter receives a future `planned_release_date`, the chapter should move to `SCHEDULED`. | Active draft |
+| BR-CH-014 | Mangaka and Tantou Editors may set or reschedule `Chapter.planned_release_date` when chapter status and permissions allow it, as long as the chosen planned release date is on or after the current publication business date. | Active draft |
+| BR-CH-015 | If an `APPROVED` chapter receives a `planned_release_date` on the current publication business date or later, the chapter should move to `SCHEDULED`. | Active draft |
 | BR-CH-016 | When a chapter is `SCHEDULED`, Mangaka users must not change chapter content or perform page/content mutation workflows for that chapter. | Active draft |
-| BR-CH-017 | When a chapter is `SCHEDULED`, authorized Mangaka and Tantou Editors may reschedule `planned_release_date` to a future date; the system may warn about frequency mismatch but must not hard-block it. | Active draft |
-| BR-CH-018 | When a chapter is `SCHEDULED`, a Tantou Editor may move the chapter to `ON_HOLD` with a required reason; returning from `ON_HOLD` to `SCHEDULED` requires setting a new future planned release date. | Active draft |
+| BR-CH-017 | When a chapter is `SCHEDULED`, authorized Mangaka and Tantou Editors may reschedule `planned_release_date` to the current publication business date or a later date; the system may warn about frequency mismatch but must not hard-block it. | Active draft |
+| BR-CH-018 | When a chapter is `SCHEDULED`, a Tantou Editor may move the chapter to `ON_HOLD` with a required reason; returning from `ON_HOLD` to `SCHEDULED` requires setting a new planned release date on the current publication business date or later. | Active draft |
 | BR-CH-019 | A chapter cannot be released while its parent series is `HIATUS`, `COMPLETED`, or `CANCELLED`. | Active draft |
 | BR-CH-020 | If the parent series is `COMPLETED`, normal chapter creation and mutation workflows must be blocked for all chapters under that series. | Active draft |
+| BR-CH-021 | Normal new chapter creation is allowed only when the parent series is `SERIALIZED` or `HIATUS` and the creator is an `ACTIVE` Mangaka account with an active Mangaka contributor relationship to that series. Proposal/review states, `COMPLETED`, `CANCELLED`, null, and unknown series states must not allow normal chapter creation. | Active draft |
 
 ---
 
@@ -428,8 +442,8 @@
 |---|---|---|
 | BR-PGTASK-001 | Each page task derives its logical `ChapterPage` context from one or more linked `PageRegion` records; `ChapterPageTask` does not store `chapter_page_id` directly. | Active draft |
 | BR-PGTASK-002 | A logical `ChapterPage` may have many tasks over time through linked `PageRegion` records. | Active draft |
-| BR-PGTASK-003 | A page task represents one assignment of work to one assistant or authorized user. | Active draft |
-| BR-PGTASK-004 | Each page task must be assigned to exactly one assistant or authorized user. | Active draft |
+| BR-PGTASK-003 | A page task represents one assignment of work to one active Assistant contributor of the owning series. | Active draft |
+| BR-PGTASK-004 | Each page task must be assigned to exactly one `ACTIVE` Assistant account that is an active Assistant contributor of the owning series. | Active draft |
 | BR-PGTASK-005 | Each page task must record the user who created it. | Active draft |
 | BR-PGTASK-006 | Task assignment is region-linked and page-derived in the MVP; whole-chapter task assignment is future scope. | Active draft |
 | BR-PGTASK-007 | A page task may target one or more `PageRegion` records through the `ChapterPageTaskRegion` junction table. | Active draft |
@@ -457,6 +471,11 @@
 | BR-PGTASK-029 | The system should preserve the original task record after cancellation for traceability. | Active draft |
 | BR-PGTASK-030 | If cancelled work needs to be reassigned, the Mangaka should create a new task for the same page instead of changing the original assignee. | Active draft |
 | BR-PGTASK-031 | Audit logging should record task creation, cancellation, completion, and status changes. | Active draft |
+| BR-PGTASK-032 | New page task creation is allowed only when the owning series is `SERIALIZED` or `HIATUS` and the owning chapter is `DRAFT` or `REVISION_REQUESTED`. Later chapter states, proposal/review series states, `COMPLETED`, `CANCELLED`, null, and unknown states must not allow new task creation. | Active draft |
+| BR-PGTASK-033 | The creator of a new page task must be an `ACTIVE` Mangaka account and an active Mangaka contributor of the owning series. | Active draft |
+| BR-PGTASK-034 | The assignee of a new page task must be an `ACTIVE` Assistant account and an active Assistant contributor of the owning series. | Active draft |
+| BR-PGTASK-035 | Single-task creation and Quick Select/batch task creation must enforce the same creator, assignee, parent-series, and parent-chapter production-eligibility rules. | Active draft |
+| BR-PGTASK-036 | For series-completion cascade purposes, `ASSIGNED` and `UNDER_REVIEW` are active cancellable task statuses; `COMPLETED` and `CANCELLED` tasks are terminal and must be preserved. | Active draft |
 
 ---
 
@@ -470,6 +489,13 @@
 | BR-CH-SUB-004 | When revision is requested, the chapter becomes editable again and new page versions may be uploaded. | Active draft |
 | BR-CH-SUB-005 | Chapter content is stored as page-level assets through `ChapterPageVersion`, not as one required chapter-level submission file. | Active draft |
 | BR-CH-SUB-006 | A chapter-level submission file or generated PDF is a future enhancement, not required for MVP. | Active draft |
+| BR-CH-SUB-007 | Only an `ACTIVE` Mangaka who is an active Mangaka contributor of the owning series may submit a chapter for editorial review, and the chapter must be in `DRAFT` or `REVISION_REQUESTED` with zero distinct active page tasks associated with that chapter. | Active draft |
+| BR-CH-SUB-008 | For chapter-submission validation, page tasks in `ASSIGNED` or `UNDER_REVIEW` are active and block submission; `COMPLETED` and `CANCELLED` tasks do not block submission. | Active draft |
+| BR-CH-SUB-009 | Chapter-submission task validation must derive chapter association through `ChapterPageTask` → linked `PageRegion` → `ChapterPageVersion` → `ChapterPage` → `Chapter`, and must deduplicate by `ChapterPageTaskId` so one task linked to multiple regions counts only once. | Active draft |
+| BR-CH-SUB-010 | If any distinct active page task exists for the chapter, the backend must reject submission before changing chapter status, writing the successful chapter-submission audit event, or creating `CHAPTER_REVIEW`; the rejection must not automatically complete, cancel, reassign, delete, or otherwise mutate those tasks. | Active draft |
+| BR-CH-SUB-011 | A blocked chapter submission must return a clean user-facing business validation message explaining that active page tasks must be completed or cancelled before the chapter can be submitted. | Active draft |
+| BR-CH-SUB-012 | Same-chapter task creation and chapter submission must be concurrency-coordinated so a new `ASSIGNED`/`UNDER_REVIEW` task cannot commit concurrently with the chapter transition to `UNDER_REVIEW`. | Active draft |
+| BR-CH-SUB-013 | After all chapter-submission validations pass, the existing successful flow remains unchanged: the chapter transitions to `UNDER_REVIEW`, the normal submission audit is written, and `CHAPTER_REVIEW` is created for the correct distinct active Tantou Editor contributors of the exact series. | Active draft |
 | BR-CH-REV-001 | Editorial reviews are recorded directly against `Chapter` in the MVP. | Active draft |
 | BR-CH-REV-002 | Each `ChapterEditorialReview` record must belong to exactly one chapter. | Active draft |
 | BR-CH-REV-003 | A chapter may have multiple editorial review records over time, especially across revision cycles. | Active draft |
@@ -562,11 +588,11 @@
 
 | Rule ID | Business Rule | Review Status |
 |---|---|---|
-| BR-PUB-SCHEDULE-001 | The system may suggest planned release dates from `Series.publication_frequency_code`, but Mangaka and Tantou Editors may choose any future planned release date when the chapter status and permissions allow scheduling. | Active draft |
+| BR-PUB-SCHEDULE-001 | The system may suggest planned release dates from `Series.publication_frequency_code`, but Mangaka and Tantou Editors may choose any planned release date on the current publication business date or later when the chapter status and permissions allow scheduling. | Active draft |
 | BR-PUB-SCHEDULE-002 | For `WEEKLY` series, the default suggestion should usually be the same weekday in the next week when a reference date exists. | Active draft |
 | BR-PUB-SCHEDULE-003 | For `MONTHLY` series, the default suggestion should usually be the same day number in the next month when possible, otherwise the last valid day of the next month. | Active draft |
-| BR-PUB-SCHEDULE-004 | For `IRREGULAR` or `NULL` frequency, no strict default date is required; the UI may use a neutral suggestion such as the next available future date. | Active draft |
-| BR-PUB-SCHEDULE-005 | The system must block planned release dates in the past. | Active draft |
+| BR-PUB-SCHEDULE-004 | For `IRREGULAR` or `NULL` frequency, no strict default date is required; the UI may use a neutral suggestion such as today or the next available later date. | Active draft |
+| BR-PUB-SCHEDULE-005 | The system must block planned release dates earlier than the current publication business date; today is valid. | Active draft |
 | BR-PUB-SCHEDULE-006 | The system should warn, not block, when a chosen planned release date does not match the series' advisory frequency pattern. | Active draft |
 | BR-PUB-SCHEDULE-007 | The system must allow multiple chapters from the same series to share the same planned release date when authorized users intentionally plan a bulk or catch-up release. | Active draft |
 | BR-PUB-SCHEDULE-008 | Schedule setting and rescheduling must be audit-visible, including actor, old/new planned release date, old/new status when changed, and reason when provided. | Active draft |
@@ -582,8 +608,8 @@
 | BR-PUB-SCHEDULED-002 | Page/content mutation workflows blocked for `SCHEDULED` and `ON_HOLD` chapters include page creation, page deletion, page-version upload, assistant task output submission that creates or changes page content, and other saved page/content changes. | Active draft |
 | BR-PUB-SCHEDULED-003 | Mangaka and Tantou Editors may set or reschedule a chapter planned release date when the chapter status and permissions allow scheduling. | Active draft |
 | BR-PUB-SCHEDULED-004 | Tantou Editors may place a `SCHEDULED` chapter `ON_HOLD` only with a non-blank operational or editorial reason. | Active draft |
-| BR-PUB-SCHEDULED-005 | Moving a chapter to `ON_HOLD` suspends the previous release plan; the previous planned date should be preserved in audit details, while the active chapter should require a new future planned release date before returning to `SCHEDULED`. | Active draft |
-| BR-PUB-SCHEDULED-006 | Returning a chapter from `ON_HOLD` to `SCHEDULED` requires setting a new planned release date that is not in the past. | Active draft |
+| BR-PUB-SCHEDULED-005 | Moving a chapter to `ON_HOLD` suspends the previous release plan; the previous planned date should be preserved in audit details, while the active chapter should require a new planned release date on the current publication business date or later before returning to `SCHEDULED`. | Active draft |
+| BR-PUB-SCHEDULED-006 | Returning a chapter from `ON_HOLD` to `SCHEDULED` requires setting a new planned release date on the current publication business date or later. | Active draft |
 | BR-PUB-SCHEDULED-007 | Tantou Editors may release an eligible scheduled or approved chapter with confirmation; releasing sets `released_at_utc` to the current UTC time and sets `status_code = RELEASED`. | Active draft |
 | BR-PUB-SCHEDULED-008 | If a chapter is released and `planned_release_date` is missing, the system sets it to the current publication business date; if it already exists, the system preserves it. | Active draft |
 | BR-PUB-SCHEDULED-009 | Automatic movement of overdue `SCHEDULED` chapters to `ON_HOLD` is deferred; the MVP may show overdue warnings but should not perform automatic hold transitions unless a later task explicitly implements them. | Active draft |
@@ -615,6 +641,7 @@
 | BR-SERIES-VOTE-013 | Series vote input should record the Editorial Board Member who entered the simulated/aggregated vote data and the UTC entry timestamp. | Active draft |
 | BR-SERIES-VOTE-014 | Only Editorial Board Members or Editorial Board Chief users may enter simulated or aggregated series vote input in MVP. | Active draft |
 | BR-SERIES-VOTE-015 | `data_source_note` may describe the report, tracking website, internal spreadsheet, or other evidence used to enter the series vote input. | Active draft |
+| BR-SERIES-VOTE-016 | Manual MVP `SeriesVoteInput` creation/update is allowed for `WEEKLY` publication periods only. Monthly, yearly, or all-time ranking results are derived from weekly source evidence and must not require separately persisted manual aggregate `SeriesVoteInput` rows. | Active draft |
 
 ### 18.2 Dynamic Series Ranking
 
@@ -623,12 +650,16 @@
 | BR-RANK-001 | Series ranking is calculated dynamically from `SeriesVoteInput` records joined to `PublicationPeriod` and `Series`; the MVP does not require `SeriesRankingSnapshot`. | Active draft |
 | BR-RANK-002 | Ranking is partitioned by `publication_period_id`, so each publication period has its own rank list. | Active draft |
 | BR-RANK-003 | The dynamic ranking view should expose period details, series identity, title/slug when needed for navigation, rating count, average rating, reading count, ranking score, and rank position. | Active draft |
-| BR-RANK-004 | The MVP ranking score is calculated as `average_rating * LOG10(1 + rating_count) + reading_count * 0.001`. | Active draft |
-| BR-RANK-005 | Rank position is computed using `DENSE_RANK()` ordered by ranking score, average rating, rating count, reading count, and `series_id` as a deterministic tie-breaker. | Active draft |
+| BR-RANK-004 | The MVP ranking score uses a weighted rating: `ranking_score = (v / (v + m)) * R + (m / (v + m)) * C`, where `R` is the series average rating, `v` is its rating count, `C` is the rating-count-weighted average rating of all eligible ranked series in the same effective ranking scope, and `m` is the median rating count of those eligible ranked series. | Active draft |
+| BR-RANK-005 | Rank position is computed using `DENSE_RANK()` ordered by `ranking_score DESC` for the effective ranking scope. Series with the same `ranking_score` share the same rank position. For deterministic display only, tied rows may then be ordered by `average_rating DESC`, `rating_count DESC`, `reading_count DESC`, and `series_id ASC`; these secondary fields must not change `rank_position`. | Active draft |
 | BR-RANK-006 | `ranking_score` and `rank_position` are derived values and should not be stored as normal duplicated columns unless later performance profiling proves caching is required. | Active draft |
 | BR-RANK-007 | Ranking results do not automatically cancel a series. | Active draft |
 | BR-RANK-008 | Ranking and cancellation-risk evidence may support board review, but any cancellation still requires the applicable board/editorial workflow decision. | Active draft |
 | BR-RANK-009 | Completed series remain visible in dynamic rankings when `SeriesVoteInput` exists for the selected publication period; ranking views must not hide a series only because `Series.status_code = COMPLETED`. | Active draft |
+| BR-RANK-010 | For a direct publication-period ranking, `C` must be calculated as `SUM(average_rating * rating_count) / SUM(rating_count)` across eligible ranked series in that same period, and `m` must be the median `rating_count` across those eligible ranked series. | Active draft |
+| BR-RANK-011 | `reading_count` is popularity/readership evidence and must not directly increase the weighted `ranking_score`. It may be used only as a deterministic display-order field among rows that already share the same rank; it must not break a ranking-score tie or change `rank_position`. | Active draft |
+| BR-RANK-012 | When a broader ranking scope such as monthly, yearly, or all-time is derived from weekly inputs, the system must first aggregate weekly source evidence by series, then recalculate that broader scope's own `R`, `v`, `C`, and `m`; it must not average weekly `ranking_score` values or reuse weekly `C`/`m`. | Active draft |
+| BR-RANK-013 | All `ACTIVE` authenticated system roles, including Assistants, may view dynamic ranking results. Creating or updating manual `SeriesVoteInput` remains restricted to Editorial Board Member and Editorial Board Chief roles. | Active draft |
 
 
 ---
@@ -640,18 +671,37 @@
 | Rule ID | Business Rule | Review Status |
 |---|---|---|
 | BR-NOTIF-001 | A notification must be addressed to exactly one recipient user. | Active draft |
-| BR-NOTIF-002 | Notifications are used for in-app MVP messages, not email or push notifications. | Active draft |
+| BR-NOTIF-002 | `manga.Notification` records are in-app MVP messages. A workflow may also send a separate email when explicitly required; account approval is the current approved case where an in-app `ACCOUNT_APPROVED` notification and an approval email are both sent. | Active draft |
 | BR-NOTIF-003 | A notification may optionally reference a related business entity such as a series, chapter, page task, proposal, board poll, or ranking result. | Active draft |
 | BR-NOTIF-004 | If `related_entity_type` is provided, `related_entity_id` must also be provided, and vice versa. | Active draft |
 | BR-NOTIF-005 | A notification is considered unread when `read_at_utc IS NULL`. | Active draft |
 | BR-NOTIF-006 | When a user reads a notification, the system records `read_at_utc`. | Active draft |
-| BR-NOTIF-007 | Ranking warning notifications should be created when a ranking evidence indicates high cancellation risk for a series. | Active draft |
-| BR-NOTIF-008 | Ranking warning notifications should be sent to active Mangaka contributors of the affected series. | Active draft |
-| BR-NOTIF-009 | Task assignment notifications should be sent to the assigned user when a page task is created. | Active draft |
-| BR-NOTIF-010 | Review result notifications should be sent to relevant contributors when a proposal or chapter review decision is recorded. | Active draft |
-| BR-NOTIF-011 | Board poll notifications may be sent to Editorial Board Members when a new board poll is opened. | Active draft |
-| BR-NOTIF-014 | Notifications are user-facing awareness records and should not be treated as the authoritative audit trail. | Active draft |
+| BR-NOTIF-007 | A completed weekly ranking result is a failed ranking week for `RANKING_WARNING` only when **both** conditions are true: `ranking_score < 6.5` and the series is in the bottom 25% of ranked series for that same weekly period. The bottom group size is `CEILING(total_ranked_series * 0.25)`, and each evaluated week must contain at least 4 ranked series. The `6.5` value is the approved MVP low-score baseline for warning evaluation, not a statistical guarantee of cancellation. | Active draft |
+| BR-NOTIF-008 | A `RANKING_WARNING` high-risk condition exists only when a `SERIALIZED` or `HIATUS` series has a failed ranking week in at least 2 of its latest 3 consecutive completed weekly publication periods, the latest completed week is also a failed ranking week, the series has ranking input in all 3 periods, and each evaluated period contains at least 4 ranked series. | Active draft |
+| BR-NOTIF-009 | `TASK_ASSIGNMENT` is sent to the assigned Assistant when a page task is created. Quick Select creates one assignment notification per created task. On reassignment, the original Assistant receives a `TASK_ASSIGNMENT` notification titled as a reassignment/cancellation notice, including the required reassignment reason and linked to the original task, while the replacement Assistant receives a `TASK_ASSIGNMENT` notification linked to the replacement task. | Active draft |
+| BR-NOTIF-010 | `PROPOSAL_DECISION` is created when a Tantou Editor records Request Revision, Pass To Board, or Cancel Proposal. Recipients are the distinct active Mangaka contributors of the affected series, and the notification relates to the affected `SeriesProposal`. | Active draft |
+| BR-NOTIF-011 | `BOARD_POLL` is created when an Editorial Board Chief opens a real board poll. Each active user whose exact role is Editorial Board Member receives one notification; the initiating Chief is excluded and duplicate recipient IDs must be removed. | Active draft |
+| BR-NOTIF-012 | `PROPOSAL_REVIEW` is created when a Mangaka submits a proposal for editorial review. Recipients are the distinct active Tantou Editor contributors of that exact series; unrelated Tantou Editors must not receive it. The notification relates to the submitted `SeriesProposal`. | Active draft |
+| BR-NOTIF-013 | `CHAPTER_REVIEW` is created when a Mangaka submits a `DRAFT` or `REVISION_REQUESTED` chapter and the chapter transitions to `UNDER_REVIEW`. Recipients are the distinct active Tantou Editor contributors of that exact series; unrelated Tantou Editors must not receive it. The notification relates to the submitted `Chapter`. | Active draft |
+| BR-NOTIF-014 | Notifications are user-facing awareness records and must not be treated as the authoritative audit trail. | Active draft |
 | BR-NOTIF-015 | Important workflow actions that create notifications should still be recorded in the audit log when auditability is required. | Active draft |
+| BR-NOTIF-016 | `TASK_REVIEW` is created when an Assistant submits task work and the task transitions from `ASSIGNED` to `UNDER_REVIEW`. Recipients are the distinct active Mangaka contributors of that exact series, and the notification relates to the submitted `ChapterPageTask`. | Active draft |
+| BR-NOTIF-017 | `CHAPTER_DECISION` is created when a Tantou Editor records an Approved, Revision Requested, or Cancelled chapter editorial decision. Recipients are the distinct active Mangaka contributors of the affected series, and the notification relates to the affected `Chapter`. | Active draft |
+| BR-NOTIF-018 | `BOARD_DECISION` is created when a board poll is closed with an `APPROVED`, `REJECTED`, or `NO_DECISION` outcome, and also when the Editorial Board Chief manually cancels the poll. The notification content must reflect the actual closed/no-decision/cancelled outcome and relate to the affected `SeriesBoardPoll`. | Active draft |
+| BR-NOTIF-019 | `BOARD_DECISION` recipients are all distinct active contributors of the exact affected series, regardless of contributor role. Unrelated users must not receive the notification. | Active draft |
+| BR-NOTIF-020 | `PUBLICATION_SCHEDULE` is created when a chapter transitions from a non-`SCHEDULED` status into `SCHEDULED`, or when a chapter already in `SCHEDULED` is rescheduled to a different normalized `planned_release_date`. | Active draft |
+| BR-NOTIF-021 | `PUBLICATION_SCHEDULE` must not be created when a `DRAFT`, `REVISION_REQUESTED`, or `UNDER_REVIEW` chapter only receives or changes a planned release date while remaining in that non-`SCHEDULED` status, or when a `SCHEDULED` chapter is saved with the same normalized planned release date. | Active draft |
+| BR-NOTIF-022 | `PUBLICATION_SCHEDULE` recipients are all other distinct active contributors of the exact affected series, excluding the initiating actor who performed the scheduling or rescheduling action. | Active draft |
+| BR-NOTIF-023 | `ACCOUNT_APPROVED` is created for the approved user when an Admin approves/activates a pending account. | Active draft |
+| BR-NOTIF-024 | When an Admin approves/activates a pending account, the system also sends an account-approval email to the approved user's email address in addition to the in-app `ACCOUNT_APPROVED` notification. | Active draft |
+| BR-NOTIF-025 | `SYSTEM_MESSAGE` is a generic/reserved notification type and must not be used as a substitute when a more specific approved notification type applies. No new automatic `SYSTEM_MESSAGE` trigger should be inferred without an explicitly defined workflow. | Active draft |
+| BR-NOTIF-026 | When a notification rule uses active series contributors, recipients must belong to the exact affected series, have an active contributor relationship (`end_date IS NULL`), have user status `ACTIVE`, and be deduplicated by user ID. | Active draft |
+| BR-NOTIF-027 | `RANKING_WARNING` recipients are all distinct active contributors of the exact affected series, regardless of contributor role, using the active-contributor definition in BR-NOTIF-026. | Active draft |
+| BR-NOTIF-028 | `RANKING_WARNING` is evaluated from completed `WEEKLY` periods only. Current/incomplete weeks must not trigger it, and monthly/yearly/all-time reporting views must not independently create additional ranking warnings. | Active draft |
+| BR-NOTIF-029 | Re-evaluating the same affected series and latest completed weekly period must be idempotent: the system must not create more than one `RANKING_WARNING` per recipient for that series/evaluated week. | Active draft |
+| BR-NOTIF-030 | A `RANKING_WARNING` is advisory only and must not automatically change series status, pause/cancel a series, or open a `CANCEL_SERIALIZATION` poll. Normal board workflow remains required for cancellation. | Active draft |
+| BR-NOTIF-031 | Because ranking risk is derived from multiple weekly periods, `RANKING_WARNING` should relate to the affected `Series`; Bell navigation should open the existing ranking/series context for that series. | Active draft |
+| BR-NOTIF-032 | Completed or cancelled series may remain visible in ranking history, but new cancellation-risk warnings apply only while the series is currently `SERIALIZED` or `HIATUS`. | Active draft |
 
 ---
 

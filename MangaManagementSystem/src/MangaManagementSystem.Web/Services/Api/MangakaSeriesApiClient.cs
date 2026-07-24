@@ -11,10 +11,6 @@ namespace MangaManagementSystem.Web.Services.Api
 {
     public class MangakaSeriesApiClient : IMangakaSeriesApiClient
     {
-        // Transitional actor header forwarded to the API while API auth is not yet implemented.
-        // The Web host owns the Blazor cookie/session and passes the logged-in user's id here.
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
-
         private readonly HttpClient _httpClient;
         private readonly ILogger<MangakaSeriesApiClient> _logger;
 
@@ -25,11 +21,9 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<IReadOnlyList<SeriesDto>> GetMySeriesAsync(
-            Guid actorUserId,
             CancellationToken cancellationToken = default)
         {
             using var requestMessage = new HttpRequestMessage(HttpMethod.Get, "api/mangaka/series/my-series");
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
@@ -50,7 +44,6 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<SeriesDraftCreatedDto> CreateDraftAsync(
-            Guid actorUserId,
             string title,
             string synopsis,
             IReadOnlyList<Guid> genreIds,
@@ -112,7 +105,6 @@ namespace MangaManagementSystem.Web.Services.Api
             {
                 Content = form
             };
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
@@ -133,7 +125,6 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<SeriesProposalSubmittedDto> SubmitProposalAsync(
-            Guid actorUserId,
             Guid seriesId,
             byte[] proposalFileBytes,
             string proposalFileName,
@@ -159,7 +150,6 @@ namespace MangaManagementSystem.Web.Services.Api
             {
                 Content = form
             };
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
@@ -188,7 +178,6 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<SeriesDraftUpdatedDto> UpdateDraftAsync(
-            Guid actorUserId,
             Guid seriesId,
             string title,
             string synopsis,
@@ -242,7 +231,6 @@ namespace MangaManagementSystem.Web.Services.Api
             {
                 Content = form
             };
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
@@ -271,7 +259,6 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<SeriesDraftCancelledDto> CancelDraftAsync(
-            Guid actorUserId,
             Guid seriesId,
             string? reason = null,
             CancellationToken cancellationToken = default)
@@ -287,7 +274,6 @@ namespace MangaManagementSystem.Web.Services.Api
             {
                 Content = content
             };
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
@@ -316,11 +302,9 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<IReadOnlyList<MangakaSeriesProposalDto>> GetMySeriesProposalsAsync(
-            Guid actorUserId,
             CancellationToken cancellationToken = default)
         {
             using var requestMessage = new HttpRequestMessage(HttpMethod.Get, "api/mangaka/series/proposals");
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
@@ -341,13 +325,11 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<MangakaSeriesProposalDto?> GetMySeriesProposalDetailAsync(
-            Guid actorUserId,
             Guid proposalId,
             CancellationToken cancellationToken = default)
         {
             var route = $"api/mangaka/series/proposals/{proposalId}";
             using var requestMessage = new HttpRequestMessage(HttpMethod.Get, route);
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
@@ -368,13 +350,11 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<SeriesDto?> GetMySeriesCardByIdAsync(
-            Guid actorUserId,
             Guid seriesId,
             CancellationToken cancellationToken = default)
         {
             var route = $"api/mangaka/series/{seriesId}/card";
             using var requestMessage = new HttpRequestMessage(HttpMethod.Get, route);
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 

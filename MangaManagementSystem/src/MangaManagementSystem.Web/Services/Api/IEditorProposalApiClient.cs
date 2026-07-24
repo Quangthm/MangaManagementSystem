@@ -18,7 +18,6 @@ namespace MangaManagementSystem.Web.Services.Api
         /// Pass null/empty status for all proposals.
         /// </summary>
         Task<IReadOnlyList<ProposalQueueItemDto>> GetQueueAsync(
-            Guid actorUserId,
             string? statusCode = null,
             CancellationToken cancellationToken = default);
 
@@ -27,7 +26,6 @@ namespace MangaManagementSystem.Web.Services.Api
         /// Returns null when the proposal is not found.
         /// </summary>
         Task<EditorProposalDetailDto?> GetDetailAsync(
-            Guid actorUserId,
             Guid proposalId,
             CancellationToken cancellationToken = default);
 
@@ -35,7 +33,6 @@ namespace MangaManagementSystem.Web.Services.Api
         /// Claims a proposal for editorial review. Notes are optional.
         /// </summary>
         Task<EditorReviewActionResultDto> ClaimAsync(
-            Guid actorUserId,
             Guid proposalId,
             string? notes = null,
             CancellationToken cancellationToken = default);
@@ -44,7 +41,6 @@ namespace MangaManagementSystem.Web.Services.Api
         /// Records a Request Revision decision. Comments required; markup optional.
         /// </summary>
         Task<EditorReviewActionResultDto> RequestRevisionAsync(
-            Guid actorUserId,
             Guid proposalId,
             string comments,
             byte[]? markupFileBytes = null,
@@ -57,7 +53,6 @@ namespace MangaManagementSystem.Web.Services.Api
         /// proposal to UNDER_BOARD_REVIEW only — never APPROVED.
         /// </summary>
         Task<EditorReviewActionResultDto> PassToBoardAsync(
-            Guid actorUserId,
             Guid proposalId,
             string? comments = null,
             byte[]? markupFileBytes = null,
@@ -69,7 +64,6 @@ namespace MangaManagementSystem.Web.Services.Api
         /// Records a Cancel Proposal decision. Comments and markup file are both required.
         /// </summary>
         Task<EditorReviewActionResultDto> CancelAsync(
-            Guid actorUserId,
             Guid proposalId,
             string comments,
             byte[] markupFileBytes,

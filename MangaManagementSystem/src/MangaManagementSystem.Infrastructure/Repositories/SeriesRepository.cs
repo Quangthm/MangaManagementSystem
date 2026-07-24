@@ -41,6 +41,25 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .FirstOrDefaultAsync(s => s.SeriesId == seriesId);
         }
 
+        public async Task<Series?> GetByIdForUpdateAsync(
+            Guid seriesId,
+            CancellationToken cancellationToken = default)
+        {
+            if (_context.Database.CurrentTransaction is null)
+            {
+                throw new InvalidOperationException(
+                    "A transaction must be active before loading a series for update.");
+            }
+
+            return await _context.Series
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM manga.Series WITH (XLOCK, HOLDLOCK)
+                    WHERE series_id = {seriesId}
+                    """)
+                .SingleOrDefaultAsync(cancellationToken);
+        }
+
         /// <summary>
         /// Returns only series where the specified actor is an active Mangaka contributor,
         /// with CoverFile eagerly loaded for the dashboard card thumbnails.

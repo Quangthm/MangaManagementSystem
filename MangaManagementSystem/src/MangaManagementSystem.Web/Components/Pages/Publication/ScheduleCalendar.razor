@@ -7,6 +7,7 @@
 @using MangaManagementSystem.Domain.Interfaces
 @using MangaManagementSystem.Web.Services.Api
 @using MangaManagementSystem.Web.Components.Pages.Publication
+@using MangaManagementSystem.Web.Components.Layouts
 @using MangaManagementSystem.Web.Helpers
 @using System.Security.Claims
 @attribute [Authorize]
@@ -260,6 +261,9 @@
         border-radius: 8px;
     }
 </style>
+<RoleAwarePageFrame BoardTitle="Publication Release Calendar"
+                    BoardSubtitle="Browse planned and released chapter updates."
+                    BoardActiveMenu="publication-schedule">
 <div class="@(IsPendingPlacement ? "mf-pending-placement" : null)">
     <MudLayout>
         <MudDrawer @bind-Open="_drawerOpen" Anchor="Anchor.Right" Variant="DrawerVariant.Persistent"
@@ -454,6 +458,8 @@
         </MudMainContent>
     </MudLayout>
 </div>
+</RoleAwarePageFrame>
+
 @code {
     private MudAutocomplete<PublicationScheduleSeriesSuggestion>? _seriesAutocomplete;
     private bool _isInitialized;
@@ -532,12 +538,12 @@
 
             if (_isMangaka)
             {
-                var chapters = await MangakaChapterApi.GetMyChaptersAsync(_currentUserId);
+                var chapters = await MangakaChapterApi.GetMyChaptersAsync();
                 items = chapters.Select(c => MapMangakaChapterToActionableItem(c));
             }
             else if (_isEditor)
             {
-                var chapters = await EditorChapterReviewApi.GetActionableChaptersAsync(_currentUserId);
+                var chapters = await EditorChapterReviewApi.GetActionableChaptersAsync();
                 items = chapters.Select(c => MapEditorChapterToActionableItem(c));
             }
             else
@@ -743,12 +749,12 @@
             if (_isMangaka)
             {
                 response = await MangakaChapterApi.SetPlannedReleaseDateAsync(
-                    _currentUserId, chapter.ChapterId, request);
+                    chapter.ChapterId, request);
             }
             else if (_isEditor)
             {
                 response = await EditorChapterReviewApi.SetPlannedReleaseDateAsync(
-                    _currentUserId, chapter.ChapterId, request);
+                    chapter.ChapterId, request);
             }
             else
             {

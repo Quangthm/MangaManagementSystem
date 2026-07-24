@@ -11,8 +11,6 @@ namespace MangaManagementSystem.Web.Services.Api
 {
     public class EditorSeriesApiClient : IEditorSeriesApiClient
     {
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
-
         private readonly HttpClient _httpClient;
         private readonly ILogger<EditorSeriesApiClient> _logger;
 
@@ -25,10 +23,9 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<EditorSeriesListDto> GetSeriesAsync(
-            Guid actorUserId, CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default)
         {
             using var requestMessage = new HttpRequestMessage(HttpMethod.Get, "api/editor/series");
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 

@@ -1,6 +1,5 @@
 @page "/editor/proposals"
 @using Microsoft.AspNetCore.Authorization
-@using System.Security.Claims
 @using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Web.Services.Api
 @using MangaManagementSystem.Web.Components.Shared
@@ -8,7 +7,6 @@
 @inject IEditorProposalApiClient EditorProposalApiClient
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
-@inject AuthenticationStateProvider AuthStateProvider
 
 <EditorLayout>
     <div class="mf-page">
@@ -65,19 +63,8 @@
     private IReadOnlyList<SeriesProposalListItemModel> _mappedItems = Array.Empty<SeriesProposalListItemModel>();
     private IReadOnlyList<GenreDto> _availableGenres = Array.Empty<GenreDto>();
     private IReadOnlyList<TagDto> _availableTags = Array.Empty<TagDto>();
-    private Guid _currentUserId;
-
     protected override async Task OnInitializedAsync()
     {
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-        var user = authState.User;
-        if (user.Identity?.IsAuthenticated == true)
-        {
-            var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (Guid.TryParse(idClaim, out var userId))
-                _currentUserId = userId;
-        }
-
         await LoadProposals();
     }
 
@@ -98,7 +85,7 @@
         _error = null;
         try
         {
-            _proposals = await EditorProposalApiClient.GetQueueAsync(_currentUserId, statusCode: null);
+            _proposals = await EditorProposalApiClient.GetQueueAsync(statusCode: null);
             _mappedItems = _proposals.Select(MapToListItem).ToList().AsReadOnly();
             _availableGenres = _proposals
                 .SelectMany(p => p.Genres)

@@ -47,8 +47,14 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
         public async Task<ChapterPageAnnotation?> GetByIdWithRegionsAsync(Guid id)
         {
+            // The author navigation is included because this is the read that builds the response of
+            // CreateChapterPageAnnotationAsync. Without it the DTO came back with a null display name and
+            // role, so a freshly created annotation showed no author in the workspace until the page was
+            // reloaded and the list read (which does include it) filled them in.
             return await _context.ChapterPageAnnotations
                 .Include(a => a.PageRegions)
+                .Include(a => a.AnnotatedByUser)
+                    .ThenInclude(u => u!.Role)
                 .FirstOrDefaultAsync(a => a.ChapterPageAnnotationId == id);
         }
 

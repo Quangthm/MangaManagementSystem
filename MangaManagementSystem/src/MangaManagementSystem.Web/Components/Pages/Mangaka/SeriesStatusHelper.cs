@@ -7,7 +7,7 @@ public static class SeriesStatusHelper
         "PROPOSAL_DRAFT" => "Proposal Draft",
         "UNDER_EDITORIAL_REVIEW" => "Editorial Review",
         "UNDER_BOARD_REVIEW" => "Board Review",
-        "SERIALIZED" => "Active",
+        "SERIALIZED" => "Serialized",
         "HIATUS" => "Hiatus",
         "CANCELLED" => "Cancelled",
         "COMPLETED" => "Completed",

@@ -369,7 +369,6 @@ CREATE TABLE manga.SeriesProposal (
 	status_code NVARCHAR(50) NOT NULL CONSTRAINT df_series_proposal_status_code DEFAULT(N'UNDER_EDITORIAL_REVIEW'),
 	submitted_by_user_id UNIQUEIDENTIFIER NOT NULL,
 	submitted_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_proposal_submitted_at_utc DEFAULT SYSUTCDATETIME(),
-	withdrawn_at_utc DATETIME2(0) NULL,
 	reviewed_by_user_id UNIQUEIDENTIFIER NULL,
 	reviewed_at_utc DATETIME2(0) NULL,
 	comments NVARCHAR(MAX) NULL,
@@ -380,21 +379,10 @@ CREATE TABLE manga.SeriesProposal (
 			N'UNDER_BOARD_REVIEW',
 			N'REVISION_REQUESTED',
 			N'APPROVED',
-			N'CANCELLED',
-			N'WITHDRAWN'
+			N'CANCELLED'
 			)
 		),
 	CONSTRAINT ck_series_proposal_version_positive CHECK (proposal_version_no > 0),
-	CONSTRAINT ck_series_proposal_withdrawn_at_matches_status CHECK (
-		(
-			status_code = N'WITHDRAWN'
-			AND withdrawn_at_utc IS NOT NULL
-			)
-		OR (
-			status_code <> N'WITHDRAWN'
-			AND withdrawn_at_utc IS NULL
-			)
-		),
 	CONSTRAINT ck_series_proposal_review_pair CHECK (
 		(
 			reviewed_by_user_id IS NULL
@@ -415,7 +403,6 @@ CREATE TABLE manga.SeriesProposal (
 		proposal_version_no
 		)
 	);
-
 CREATE INDEX ix_series_proposal_series_version ON manga.SeriesProposal (
 	series_id,
 	proposal_version_no DESC
@@ -957,18 +944,13 @@ CREATE TABLE manga.ChapterEditorialReview (
 CHECK
 (
     decision_code = N'APPROVED'
-
     OR
     (
-        decision_code = N'REVISION_REQUESTED'
+        decision_code IN (
+            N'REVISION_REQUESTED',
+            N'CANCELLED'
+        )
         AND NULLIF(LTRIM(RTRIM(comments)), N'') IS NOT NULL
-    )
-
-    OR
-    (
-        decision_code = N'CANCELLED'
-        AND NULLIF(LTRIM(RTRIM(comments)), N'') IS NOT NULL
-        AND markup_file_id IS NOT NULL
     )
 ),
 	CONSTRAINT fk_chapter_editorial_review_chapter FOREIGN KEY (chapter_id) REFERENCES manga.Chapter(chapter_id),
@@ -1070,9 +1052,24 @@ ON manga.SeriesVoteInput (
     series_id
 );
 GO
-CREATE VIEW manga.vw_SeriesRanking
+GO
+
+CREATE OR ALTER VIEW manga.vw_SeriesRanking
 AS
-WITH ScoreBase AS (
+
+/* ============================================================
+   STEP 1: Load the ranking input for each publication period.
+
+   Current MVP usage:
+   - SeriesVoteInput is entered for WEEKLY periods.
+   - Monthly / All-Time aggregation is currently handled
+     separately by the C# ranking UI implementation.
+
+   R = average_rating
+   v = rating_count
+   ============================================================ */
+WITH InputBase AS
+(
     SELECT
         pp.publication_period_id,
         pp.period_name,
@@ -1086,21 +1083,194 @@ WITH ScoreBase AS (
 
         svi.rating_count,
         svi.average_rating,
-        svi.reading_count,
+        svi.reading_count
+
+    FROM manga.SeriesVoteInput AS svi
+
+    INNER JOIN manga.PublicationPeriod AS pp
+        ON pp.publication_period_id =
+           svi.publication_period_id
+
+    INNER JOIN manga.Series AS s
+        ON s.series_id =
+           svi.series_id
+),
+
+/* ============================================================
+   STEP 2: Calculate statistics for the whole publication period.
+
+   C = period_average_rating
+
+       SUM(average_rating * rating_count)
+       ----------------------------------
+                 SUM(rating_count)
+
+   This means series with more rating evidence contribute more
+   strongly to the period baseline.
+
+   m = rating_confidence_weight
+
+       Median rating_count among all ranked series
+       in the same publication period.
+
+   m is used as the confidence/prior weight.
+   ============================================================ */
+PeriodStatistics AS
+(
+    SELECT
+        ib.*,
+
+        /* C = weighted average rating of the period */
+        CAST(
+            SUM(
+                CAST(
+                    ib.average_rating
+                    * ib.rating_count
+                    AS DECIMAL(38, 8)
+                )
+            ) OVER
+            (
+                PARTITION BY
+                    ib.publication_period_id
+            )
+            /
+            NULLIF(
+                SUM(
+                    CAST(
+                        ib.rating_count
+                        AS DECIMAL(38, 8)
+                    )
+                ) OVER
+                (
+                    PARTITION BY
+                        ib.publication_period_id
+                ),
+                0
+            )
+            AS DECIMAL(18, 8)
+        ) AS period_average_rating,
+
+        /* m = median rating count of the period */
+        CAST(
+            PERCENTILE_CONT(0.5)
+            WITHIN GROUP
+            (
+                ORDER BY
+                    ib.rating_count
+            )
+            OVER
+            (
+                PARTITION BY
+                    ib.publication_period_id
+            )
+            AS DECIMAL(18, 8)
+        ) AS rating_confidence_weight
+
+    FROM InputBase AS ib
+),
+
+/* ============================================================
+   STEP 3: Calculate the MAL-style weighted ranking score.
+
+   Formula:
+
+       ranking_score =
+           (v / (v + m)) * R
+           +
+           (m / (v + m)) * C
+
+   Equivalent form used below:
+
+       ranking_score =
+           (v * R + m * C)
+           ----------------
+                v + m
+
+   Where:
+
+       R = series average_rating
+       v = series rating_count
+       C = weighted average rating of the publication period
+       m = median rating_count of the publication period
+
+   reading_count is intentionally NOT included in ranking_score.
+   It remains popularity/readership evidence and can still be
+   displayed and used as a deterministic tie-breaker.
+   ============================================================ */
+ScoreBase AS
+(
+    SELECT
+        ps.publication_period_id,
+        ps.period_name,
+        ps.period_type_code,
+        ps.period_start_date,
+        ps.period_end_date,
+
+        ps.series_id,
+        ps.title,
+        ps.slug,
+
+        ps.rating_count,
+        ps.average_rating,
+        ps.reading_count,
 
         CAST(
             (
-                svi.average_rating * LOG10(1 + svi.rating_count)
-                + svi.reading_count * 0.001
+                (
+                    CAST(
+                        ps.rating_count
+                        AS DECIMAL(18, 8)
+                    )
+                    *
+                    CAST(
+                        ps.average_rating
+                        AS DECIMAL(18, 8)
+                    )
+                )
+                +
+                (
+                    CAST(
+                        ps.rating_confidence_weight
+                        AS DECIMAL(18, 8)
+                    )
+                    *
+                    CAST(
+                        ps.period_average_rating
+                        AS DECIMAL(18, 8)
+                    )
+                )
+            )
+            /
+            NULLIF(
+                CAST(
+                    ps.rating_count
+                    AS DECIMAL(18, 8)
+                )
+                +
+                CAST(
+                    ps.rating_confidence_weight
+                    AS DECIMAL(18, 8)
+                ),
+                0
             )
             AS DECIMAL(18, 4)
         ) AS ranking_score
-    FROM manga.SeriesVoteInput svi
-    INNER JOIN manga.PublicationPeriod pp
-        ON pp.publication_period_id = svi.publication_period_id
-    INNER JOIN manga.Series s
-        ON s.series_id = svi.series_id
+
+    FROM PeriodStatistics AS ps
 )
+
+/* ============================================================
+   STEP 4: Rank series independently inside each period.
+
+   Primary ordering:
+       ranking_score DESC
+
+   Deterministic tie-breakers:
+       average_rating DESC
+       rating_count DESC
+       reading_count DESC
+       series_id ASC
+   ============================================================ */
 SELECT
     publication_period_id,
     period_name,
@@ -1115,18 +1285,17 @@ SELECT
     rating_count,
     average_rating,
     reading_count,
+
     ranking_score,
 
-    DENSE_RANK() OVER (
+    DENSE_RANK() OVER
+    (
         PARTITION BY publication_period_id
-        ORDER BY
-            ranking_score DESC,
-            average_rating DESC,
-            rating_count DESC,
-            reading_count DESC,
-            series_id
+        ORDER BY ranking_score DESC
     ) AS rank_position
+
 FROM ScoreBase;
+
 GO
 CREATE TABLE manga.Notification (
 	notification_id UNIQUEIDENTIFIER NOT NULL CONSTRAINT df_notification_id DEFAULT NEWID() CONSTRAINT pk_notification PRIMARY KEY,
