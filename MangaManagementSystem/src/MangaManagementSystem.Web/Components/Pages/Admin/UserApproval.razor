@@ -31,26 +31,67 @@
                 <MudProgressLinear Indeterminate="true" Class="mb-4" />
             }
 
-            @if (_rejectTarget != null)
-            {
-                <MudDialog @bind-Visible="_showRejectConfirm">
-                    <DialogContent>
-                        <MudText Typo="Typo.h6" Class="font-weight-bold">Confirm Reject User</MudText>
-                        <MudText Class="mt-2">Are you sure you want to reject this user registration?</MudText>
-                        <MudText Class="mt-2">
-                            Current status:
-                            <MudChip T="string" Size="Size.Small">@_rejectTarget.StatusCode</MudChip>
-                        </MudText>
-                        <MudAlert Severity="Severity.Warning" Class="mt-3">
-                            Rejected accounts cannot log in. This action can be reviewed in the system records.
-                        </MudAlert>
-                    </DialogContent>
-                    <DialogActions>
-                        <MudButton Variant="Variant.Text" OnClick="CancelReject">Cancel</MudButton>
-                        <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="ConfirmRejectAsync">Reject</MudButton>
-                    </DialogActions>
-                </MudDialog>
-            }
+            @if (_showRejectConfirm && _rejectTarget != null)
+{
+    <div class="reject-modal-overlay"
+         @onclick="CloseRejectDialog">
+
+        <div class="reject-modal-panel"
+             @onclick:stopPropagation="true">
+
+            <MudText Typo="Typo.h6"
+                     Class="font-weight-bold">
+                Confirm Reject User
+            </MudText>
+
+            <MudText Class="mt-2">
+                Are you sure you want to reject this user registration?
+            </MudText>
+
+            <MudText Class="mt-2">
+                Current status:
+                <MudChip T="string"
+                         Size="Size.Small">
+                    @_rejectTarget.StatusCode
+                </MudChip>
+            </MudText>
+
+            <MudTextField T="string"
+                          Label="Reject reason"
+                          Placeholder="Enter the reason for rejecting this account"
+                          Value="@_rejectReason"
+                          ValueChanged="@OnRejectReasonChanged"
+                          Variant="Variant.Outlined"
+                          Lines="4"
+                          MaxLength="500"
+                          Counter="500"
+                          Immediate="true"
+                          Required="true"
+                          Class="mt-3" />
+
+            <MudAlert Severity="Severity.Warning"
+                      Class="mt-3">
+                A reject reason is required and will be stored in the audit history.
+                Rejected accounts cannot log in.
+            </MudAlert>
+
+            <div class="reject-modal-actions">
+                <button type="button"
+                        class="reject-cancel-button"
+                        @onclick="CloseRejectDialog">
+                    CANCEL
+                </button>
+
+                <button type="button"
+                        class="reject-confirm-button"
+                        disabled="@(_processingUserId.HasValue || string.IsNullOrWhiteSpace(_rejectReason))"
+                        @onclick="ConfirmRejectAsync">
+                    REJECT
+                </button>
+            </div>
+        </div>
+    </div>
+}
 
             @if (!_isLoading && !_pendingUsers.Any())
             {
@@ -174,6 +215,57 @@
     </div>
 </AdminLayout>
 
+
+<style>
+    .reject-modal-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 1500;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.55);
+    }
+
+    .reject-modal-panel {
+        width: min(520px, calc(100vw - 32px));
+        padding: 24px;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.30);
+    }
+
+    .reject-modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 18px;
+    }
+
+    .reject-cancel-button,
+    .reject-confirm-button {
+        padding: 9px 16px;
+        border: 0;
+        border-radius: 4px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .reject-cancel-button {
+        background: transparent;
+    }
+
+    .reject-confirm-button {
+        color: white;
+        background: #d32f2f;
+    }
+
+    .reject-confirm-button:disabled {
+        color: #999;
+        background: #ddd;
+        cursor: not-allowed;
+    }
+</style>
 @code {
     private readonly DialogOptions _dialogOptions =
         new()
@@ -195,6 +287,7 @@
     private bool _isImagePreview;
 
     private bool _showRejectConfirm;
+    private string? _rejectReason;
     private UserDto? _rejectTarget;
 
     protected override async Task OnInitializedAsync()
@@ -314,6 +407,7 @@
     private Task RejectAsync(UserDto user)
     {
         _rejectTarget = user;
+        _rejectReason = null;
         _showRejectConfirm = true;
 
         return Task.CompletedTask;
@@ -326,12 +420,22 @@
             return;
         }
 
+        if (string.IsNullOrWhiteSpace(_rejectReason))
+        {
+            Snackbar.Add(
+                "Reject reason is required.",
+                Severity.Error);
+
+            return;
+        }
+
         if (_processingUserId.HasValue)
         {
             return;
         }
 
         var user = _rejectTarget;
+        var reason = _rejectReason.Trim();
 
         _processingUserId = user.UserId;
         _showRejectConfirm = false;
@@ -339,7 +443,8 @@
         try
         {
             await AdminUserApiClient.RejectUserAsync(
-                user.UserId);
+                user.UserId,
+                reason);
 
             Snackbar.Add(
                 $"Rejected {user.Username}.",
@@ -363,12 +468,18 @@
         {
             _processingUserId = null;
             _rejectTarget = null;
+            _rejectReason = null;
         }
     }
 
-    private void CancelReject()
+    private void OnRejectReasonChanged(string? value)
+    {
+        _rejectReason = value;
+    }
+    private void CloseRejectDialog()
     {
         _showRejectConfirm = false;
         _rejectTarget = null;
+        _rejectReason = null;
     }
 }
