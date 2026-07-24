@@ -606,24 +606,6 @@ else
                             </MudAlert>
                         }
 
-                        @if (_assistantWorkspaceTask is not null)
-                        {
-                            <MudText Typo="Typo.caption" Class="mf-muted d-block mb-2">Assigned chapter page</MudText>
-                            <MudPaper Elevation="0" Class="pa-2 border-1 mud-border-lines-default rounded mb-3">
-                                <MudText Typo="Typo.body2" Class="font-weight-medium mb-1">@AssistantAssignedLocationLabel</MudText>
-                                <MudText Typo="Typo.caption" Class="mf-muted d-block mb-2">
-                                    Jump directly to the chapter and page that this task was assigned on.
-                                </MudText>
-                                <MudButton Variant="Variant.Outlined"
-                                           Color="Color.Primary"
-                                           Size="Size.Small"
-                                           StartIcon="@Icons.Material.Filled.MyLocation"
-                                           OnClick="JumpToAssignedTaskPageAsync">
-                                    Jump to assigned chapter/page
-                                </MudButton>
-                            </MudPaper>
-                        }
-
                         <div class="mb-3">
                             <InputFile OnChange="HandleAssistantWorkspaceFileSelected"
                                        accept="image/png,image/jpeg,image/jpg,image/webp"

@@ -207,8 +207,6 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private string AssistantSubmitButtonText => _assistantSubmitting ? "Submitting..." : "Submit Current Canvas";
     private bool HasAssistantSelectedFile => _assistantSelectedFile is not null;
     private bool AssistantWorkspaceCanAcceptSubmission => AssistantWorkspaceSubmissionBlockedReason is null;
-    private string AssistantAssignedLocationLabel =>
-        $"{_assistantWorkspaceTask?.ChapterNumberLabel ?? $"Chapter {SelectedChapter}"} • Page {_assistantWorkspaceTask?.PageNo?.ToString() ?? SelectedPage.ToString()}";
 
     private string? AssistantTaskChapterStatusCode =>
         _assistantWorkspaceTask?.ChapterId is Guid taskChapterId
@@ -1208,6 +1206,19 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                       }
                       var activeIdx = pageModel.Versions.FindIndex(v => v.IsCurrentVersion && !v.IsDeleted);
                       if (activeIdx >= 0) pageModel.ActiveVersionIndex = activeIdx;
+
+                      // When a task workspace is open, use the task's source version
+                      // instead of the global current version. This ensures the
+                      // Assistant always starts from the Mangaka-assigned baseline,
+                      // not from another Assistant's unapproved submission.
+                      // BR: task source version takes priority over page-current.
+                      if (_taskTargetVersionId.HasValue)
+                      {
+                          var targetIdx = pageModel.Versions.FindIndex(
+                              v => v.ChapterPageVersionId == _taskTargetVersionId.Value);
+                          if (targetIdx >= 0) pageModel.ActiveVersionIndex = targetIdx;
+                      }
+
                       chapter.Pages.Add(pageModel);
                   }
                   chapter.PageCount = chapter.Pages.Count;
