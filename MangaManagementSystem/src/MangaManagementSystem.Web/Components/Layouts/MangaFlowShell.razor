@@ -7,21 +7,6 @@
                    NavTitle="Editorial Board"
                    OverviewHref="/dashboard"
                    NavItems="_navItems">
-    <ExtraNavContent>
-        <AuthorizeView Roles="Editorial Board Chief,Board Chief">
-            <Authorized>
-                <NavLink href="/demo/mangaflow/decisions"
-                         class="mf-nav-link"
-                         Match="NavLinkMatch.Prefix">
-                    <MudIcon Icon="@Icons.Material.Filled.HowToVote"
-                             Size="Size.Small"
-                             Class="mf-nav-icon" />
-                    Decision Center
-                </NavLink>
-            </Authorized>
-        </AuthorizeView>
-    </ExtraNavContent>
-
     <ChildContent>
         <header class="mf-topbar">
             <div class="mf-breadcrumb">
@@ -93,7 +78,7 @@
     [
         new("/demo/mangaflow/editorial", "Editorial Dashboard", Icons.Material.Filled.Dashboard, true),
         new("/demo/mangaflow/proposals", "Proposal Reviews", Icons.Material.Filled.Article),
-        new("/demo/mangaflow/polls", "Board Polls", Icons.Material.Filled.Poll),
+        new("/demo/mangaflow/decisions", "Decision Center", Icons.Material.Filled.HowToVote),
         new("/ranking", "Ranking", Icons.Material.Filled.Leaderboard),
     ];
 }

@@ -56,8 +56,8 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             """
             SELECT COUNT(1)
             FROM manga.vw_SeriesBoardPollVoteSummary
-            WHERE poll_status_code = N'CLOSED'
-              AND is_applicable = 1;
+            WHERE poll_status_code = N'OPEN'
+              AND ISNULL(total_vote_count, 0) > 0;
             """,
             cancellationToken);
 
@@ -1933,8 +1933,8 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
             FROM manga.vw_SeriesBoardPollVoteSummary v
             INNER JOIN manga.Series s
                 ON s.series_id = v.series_id
-            WHERE v.poll_status_code = N'CLOSED'
-              AND v.is_applicable = 1
+            WHERE v.poll_status_code = N'OPEN'
+              AND ISNULL(v.total_vote_count, 0) > 0
             ORDER BY v.started_at_utc DESC;
             """;
 
