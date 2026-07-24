@@ -106,7 +106,14 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 
         /// <summary>PUT /api/mangaka/regions/version/{versionId}/bulk-replace — replace all regions of a version.</summary>
         [HttpPut("version/{versionId:guid}/bulk-replace")]
-        [Authorize(Roles = MangakaRoleName)]
+        // TEMP (demo) — REVISIT in the JWT-authz / EF-Core refactor. Widened from MangakaRoleName to
+        // RegionCreateRoles ("Mangaka,Tantou Editor") so a Tantou Editor can persist regions they add/
+        // delete during review — the workspace Save uses bulk-replace, so Mangaka-only here => editor
+        // Save returns 403. Safe for now: the editor's canvas loads the FULL region set before replacing,
+        // and the "region in use by a task/annotation" guard (client + PageRegionService) blocks
+        // destructive deletes. Reassess the role model when the team finalizes JWT authz + moves regions
+        // from stored procs to EF Core (possible DB change). See docs/revision handoff.
+        [Authorize(Roles = RegionCreateRoles)]
         public async Task<IActionResult> BulkReplaceAsync(Guid versionId, [FromBody] BulkReplaceRegionsRequest? request)
         {
             if (versionId == Guid.Empty)
@@ -114,7 +121,10 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return BadRequest("Invalid version ID.");
             }
 
-            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            // TEMP (demo) — see the bulk-replace [Authorize] note above. ResolveActorAsync defaults to
+            // Mangaka-only when passed no roles, so an editor got 403 "not an active Mangaka" even after the
+            // attribute was widened. Allow the Tantou Editor here too so the editor's region Save resolves.
+            var (actorUserId, actorFailure) = await ResolveActorAsync("Mangaka", "Tantou Editor");
             if (actorFailure is not null)
                 return actorFailure;
 

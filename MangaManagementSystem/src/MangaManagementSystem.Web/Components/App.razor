@@ -29,8 +29,9 @@
     <script src="js/recaptcha.js"></script>
     <script src="js/portfolio-viewer.js"></script>
     <script src="js/admin-file-content.js?v=phase6-preview-v3-20260621"></script>
-    <script src="/js/profile-settings-crop.js"></script>
-    <script src="/js/image-crop.js"></script>
+    @* profile-settings-crop.js / image-crop.js are ES modules (they use `export`) and are loaded on demand
+       via dynamic import() in ProfileSettings.razor / ImageCropDialog.razor. Do NOT also include them as
+       classic <script> here — that parses them as non-modules and throws "Unexpected token 'export'". *@
     <script src="/js/upload-preview.js"></script>
     <script src="/js/scheduleDrag.js"></script>
     <script src="_framework/blazor.web.js"></script>

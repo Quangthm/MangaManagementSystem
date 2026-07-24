@@ -91,6 +91,12 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             if (idx < 0) return url;
             int insertAt = idx + marker.Length;
             if (url.AsSpan(insertAt).StartsWith("f_auto")) return url;
+            // f_auto,q_auto = format (WebP/AVIF) + quality auto — shrinks the FILE without changing pixel
+            // dimensions. Do NOT add a resize (w_/h_/c_limit) here: fitImageOntoCanvas sets canvas.width =
+            // image.width, so the canvas coordinate space == the delivered image's pixel size. Region
+            // coordinates are stored in that absolute pixel space, so delivering a smaller image shifts the
+            // canvas coords and breaks region hit-testing (click-select) and alignment. Reducing image size
+            // further needs the regions made resolution-independent (normalize in JS) first.
             return url.Insert(insertAt, "f_auto,q_auto/");
         }
 

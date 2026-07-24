@@ -348,6 +348,18 @@
                     OutputWidth,
                     OutputHeight);
 
+            // Block early with a clear, sized message instead of letting OpenReadStreamAsync throw a raw
+            // ".NET stream exceeds maxAllowedSize" error. A high-resolution crop exported as PNG can balloon
+            // past the 10 MB limit; tell the user what happened and how to fix it.
+            if (croppedStreamReference.Length > MaxUploadBytes)
+            {
+                Snackbar.Add(
+                    $"The cropped image is {croppedStreamReference.Length / (1024.0 * 1024.0):0.0} MB, " +
+                    $"over the {MaxUploadBytes / (1024 * 1024)} MB limit. Crop a smaller area or start from a lighter image.",
+                    Severity.Warning);
+                return;
+            }
+
             await using var croppedStream =
                 await croppedStreamReference.OpenReadStreamAsync(
                     maxAllowedSize: MaxUploadBytes);
