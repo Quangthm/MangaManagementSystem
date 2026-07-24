@@ -11,6 +11,8 @@
 **Latest chapter submission validation — 2026-07-21:** The chapter workspace must surface the backend-authoritative submission gate: a Mangaka may submit only from `DRAFT` or `REVISION_REQUESTED` when zero distinct associated page tasks remain `ASSIGNED` or `UNDER_REVIEW`. If blocked, keep the chapter unchanged and show the clean backend message directing the Mangaka to complete or cancel active tasks; do not auto-cancel tasks or show a successful submission state.
 
 **Latest implementation-alignment decisions — 2026-07-23:** Email/password self-registration follows the current repository flow: the user must pass reCAPTCHA before a 6-digit email OTP is sent, and the pending account is created only after successful OTP verification; Google sign-up remains a separate verified-identity path and still creates `PENDING_APPROVAL`. The current MVP has no Mangaka proposal-withdrawal workflow. Assistants are allowed to view dynamic rankings, while manual ranking input remains restricted to Editorial Board Member/Chief roles. A `CANCELLED` chapter does not reserve its chapter number label: a new non-cancelled chapter may reuse the same label while the cancelled row keeps its original label, enforced by uniqueness among non-cancelled chapters only. Scheduling accepts `planned_release_date >=` the current publication business date (today in the configured publication timezone); past dates are invalid. `PageRegion` geometry supports either a DOT (`width = 0` and `height = 0`) or an area rectangle (`width > 0` and `height > 0`), and mixed zero/non-zero dimensions are invalid. Ranking preserves true ties: equal `ranking_score` values share the same `DENSE_RANK`; deterministic secondary ordering may be used only to display rows within the same rank and must not change `rank_position`.
+
+**Deferred source-series alignment — 2026-07-24:** `Series.source_series_id` / `SourceSeriesId` remains a nullable field in the database and existing backend/domain plumbing for compatibility and possible future implementation. Source-series selection/editing is **deferred** and is not part of the current MVP user-facing workflow: current UI, use cases, user stories, and active functional requirements must not present it as an available Mangaka action. Normal UI-driven create/update flows should leave it unset/null. If the feature is activated later, the implementation must reject self-reference. The current MVP proposal lifecycle continues to have no Mangaka proposal-withdrawal action and no `WITHDRAWN` proposal status.
 **Purpose:** Define the UI behavior for Mangaka-owned series drafting, slug usage, stable series URLs, and the centralized chapter-level workspace.
 
 ---
@@ -101,6 +103,8 @@ Allow Mangaka to create, view, edit, and submit their own series drafts before f
 
 ## 4. Create / Edit Series Draft Modal
 
+> **Deferred Source Series UI:** The current Create/Edit Series Draft UI must not show a Source Series field or selector. The nullable `source_series_id` / `SourceSeriesId` remains in the database/backend model for compatibility and possible future work. Normal UI-driven create/edit operations leave it unset/null. If the feature is introduced later, self-reference validation must be added.
+
 ### Fields
 
 | Field | Required | Notes |
@@ -112,7 +116,6 @@ Allow Mangaka to create, view, edit, and submit their own series drafts before f
 | Tags | No | Optional multi-select from `manga.Tag`, saved through `manga.SeriesTag`. |
 | Content language | Yes | `ja`, `en`, `vi`. |
 | Cover image | No | Must reference `FileResource` with `SERIES_COVER` purpose if provided. |
-| Source series | No | Cannot reference itself. |
 | Publication frequency | No | `WEEKLY`, `MONTHLY`, `IRREGULAR`; treated as Mangaka proposed frequency during draft. |
 
 ### Cover crop behavior

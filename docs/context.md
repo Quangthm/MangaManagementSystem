@@ -14,6 +14,8 @@
 
 > **Latest implementation-alignment decisions — 2026-07-23:** Email/password self-registration follows the current repository flow: the user must pass reCAPTCHA before a 6-digit email OTP is sent, and the pending account is created only after successful OTP verification; Google sign-up remains a separate verified-identity path and still creates `PENDING_APPROVAL`. The current MVP has no Mangaka proposal-withdrawal workflow. Assistants are allowed to view dynamic rankings, while manual ranking input remains restricted to Editorial Board Member/Chief roles. A `CANCELLED` chapter does not reserve its chapter number label: a new non-cancelled chapter may reuse the same label while the cancelled row keeps its original label, enforced by uniqueness among non-cancelled chapters only. Scheduling accepts `planned_release_date >=` the current publication business date (today in the configured publication timezone); past dates are invalid. `PageRegion` geometry supports either a DOT (`width = 0` and `height = 0`) or an area rectangle (`width > 0` and `height > 0`), and mixed zero/non-zero dimensions are invalid. Ranking preserves true ties: equal `ranking_score` values share the same `DENSE_RANK`; deterministic secondary ordering may be used only to display rows within the same rank and must not change `rank_position`.
 
+> **Deferred source-series alignment — 2026-07-24:** `Series.source_series_id` / `SourceSeriesId` remains a nullable field in the database and existing backend/domain plumbing for compatibility and possible future implementation. Source-series selection/editing is **deferred** and is not part of the current MVP user-facing workflow: current UI, use cases, user stories, and active functional requirements must not present it as an available Mangaka action. Normal UI-driven create/update flows should leave it unset/null. If the feature is activated later, the implementation must reject self-reference. The current MVP proposal lifecycle continues to have no Mangaka proposal-withdrawal action and no `WITHDRAWN` proposal status.
+
 ---
 
 ## 1. Project Summary
@@ -40,7 +42,7 @@ The MVP should stay focused and avoid unnecessary tables unless a table represen
 | Users and accounts | Use one MVP role per account. New users start as `PENDING_APPROVAL`. Admin activates, rejects, or disables accounts. Each user has a non-unique `display_name` for UI display; if not provided during registration or external login, it defaults to the username. Users may update their own display name without entering their account password. |
 | File management | Store actual media in Cloudinary; store metadata and references in `manga.FileResource`. Every file resource must store a backend-calculated `sha256_hash`; duplicate-file warnings based on this hash are optional MVP usability behavior and may be implemented only where time allows. |
 | Series cover crop | The Web UI may crop a selected cover image in the browser before upload. The current MVP cover output is a `1000×1500` PNG in a 2:3 portrait ratio; the cropped file is the actual `SERIES_COVER`, while the original source image and crop metadata are not stored. |
-| Series management | Manage series profile, unique slug, lifecycle status, primary language, normalized genres, normalized tags, current cover image, publication frequency, and optional source series reference. `series_id` is the internal backend identity; `slug` is the stable URL identity after serialization. No separate `series_code` is used in MVP. |
+| Series management | Manage series profile, unique slug, lifecycle status, primary language, normalized genres, normalized tags, current cover image, and publication frequency. `series_id` is the internal backend identity; `slug` is the stable URL identity after serialization. No separate `series_code` is used in MVP. The nullable `source_series_id` field remains in the database/backend model but its user-facing workflow is deferred. |
 | Series lifecycle | Use `HIATUS` as the paused-series status. Active Mangaka or Tantou Editor contributors may pause/resume a serialized series. Only active Mangaka contributors may mark a series as `COMPLETED`. `HIATUS` blocks release only; `COMPLETED` freezes normal business mutations, cancels unreleased chapters and distinct active `ASSIGNED`/`UNDER_REVIEW` tasks under those chapters after warning and confirmation, preserves released chapters and terminal task history, and remains ranking-visible. |
 | Series contributors | Manage team membership through `SeriesContributor`, not a direct lead Mangaka column on `Series`. |
 | Series proposals | Store formal submitted proposal versions in `SeriesProposal`; revisions create new proposal rows. |
@@ -59,6 +61,7 @@ The MVP should stay focused and avoid unnecessary tables unless a table represen
 
 ### 2.2 Explicitly Out of Scope
 
+- User-facing Source Series selection/editing is deferred; the nullable `source_series_id` field remains in the database/backend model for compatibility and future work.
 Do **not** implement these for the MVP:
 
 - Full drawing/inking/layer editor
@@ -230,7 +233,7 @@ The project uses **permission-based actor grouping** for shared features and rol
 - Tags are normalized through `manga.Tag` and `manga.SeriesTag`, allowing a series to have multiple specific tropes, settings, character traits, themes, source/context labels, or content descriptors.
 - Genres and tags are current series metadata, not proposal-history snapshot tables in MVP.
 - Cover images are current series metadata, use `FileResource`, and should use file purpose `SERIES_COVER`.
-- A series may reference another series as its source version but cannot reference itself.
+- `Series.source_series_id` remains a nullable schema/backend self-reference for compatibility and future work, but source-series selection/editing is deferred and is not exposed by current MVP user flows. Normal UI-driven create/update operations leave it unset/null; if the feature is enabled later, self-reference must be rejected.
 - Series ownership and contributor membership are managed through `SeriesContributor`.
 - A series may have multiple contributors.
 - `Series.updated_at_utc` and `Series.updated_by_user_id` track profile metadata edits, not full status history.

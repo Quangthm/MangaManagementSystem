@@ -12,6 +12,8 @@
 
 > **Latest implementation-alignment decisions — 2026-07-23:** Email/password self-registration follows the current repository flow: the user must pass reCAPTCHA before a 6-digit email OTP is sent, and the pending account is created only after successful OTP verification; Google sign-up remains a separate verified-identity path and still creates `PENDING_APPROVAL`. The current MVP has no Mangaka proposal-withdrawal workflow. Assistants are allowed to view dynamic rankings, while manual ranking input remains restricted to Editorial Board Member/Chief roles. A `CANCELLED` chapter does not reserve its chapter number label: a new non-cancelled chapter may reuse the same label while the cancelled row keeps its original label, enforced by uniqueness among non-cancelled chapters only. Scheduling accepts `planned_release_date >=` the current publication business date (today in the configured publication timezone); past dates are invalid. `PageRegion` geometry supports either a DOT (`width = 0` and `height = 0`) or an area rectangle (`width > 0` and `height > 0`), and mixed zero/non-zero dimensions are invalid. Ranking preserves true ties: equal `ranking_score` values share the same `DENSE_RANK`; deterministic secondary ordering may be used only to display rows within the same rank and must not change `rank_position`.
 
+> **Deferred source-series alignment — 2026-07-24:** `Series.source_series_id` / `SourceSeriesId` remains a nullable field in the database and existing backend/domain plumbing for compatibility and possible future implementation. Source-series selection/editing is **deferred** and is not part of the current MVP user-facing workflow: current UI, use cases, user stories, and active functional requirements must not present it as an available Mangaka action. Normal UI-driven create/update flows should leave it unset/null. If the feature is activated later, the implementation must reject self-reference. The current MVP proposal lifecycle continues to have no Mangaka proposal-withdrawal action and no `WITHDRAWN` proposal status.
+
 ---
 
 ## 1. Document Conventions
@@ -488,6 +490,8 @@ User selects/uploads a file
 
 # 4. Series and Proposal Flows
 
+> **Deferred source-series field:** The nullable `Series.source_series_id` / `SourceSeriesId` field remains in the database and existing backend/domain plumbing, but the current MVP does not expose a Source Series selector or source-series create/edit step. Normal UI-driven draft creation and editing leave the field unset/null. This is retained only for compatibility/future work; if activated later, self-reference must be rejected.
+
 
 ## BF-SERIES-001 — Create Series Draft
 
@@ -501,7 +505,7 @@ User selects/uploads a file
 Mangaka opens /mangaka/series/drafts
 → Mangaka clicks Create Draft
 → UI shows create draft popup/modal
-→ Mangaka enters title, synopsis, one or more genres, optional tags, content language, optional source series, optional proposed publication frequency, and optional cover image
+→ Mangaka enters title, synopsis, one or more genres, optional tags, content language, optional proposed publication frequency, and optional cover image
 → If a cover image is selected, the UI opens a 2:3 portrait crop preview dialog
 → Mangaka confirms the crop, and the UI produces a `1000×1500` PNG from the selected visible area
 → Backend validates the form and confirms the actor is an active Mangaka
@@ -565,7 +569,7 @@ audit.usp_AuditEvent_Append
 Mangaka opens /mangaka/series/drafts
 → Mangaka selects a draft series
 → UI opens edit draft popup/modal
-→ Mangaka updates title, synopsis, genres, tags, content language, optional source series, optional proposed publication frequency, and optional cover image
+→ Mangaka updates title, synopsis, genres, tags, content language, optional proposed publication frequency, and optional cover image
 → If a replacement cover image is selected, the UI opens a 2:3 portrait crop preview dialog
 → Mangaka confirms the crop, and the UI produces a `1000×1500` PNG from the selected visible area
 → Backend validates the form and confirms the actor is an active Mangaka contributor of the selected series
@@ -591,7 +595,7 @@ audit.usp_AuditEvent_Append
 ### Important Notes
 
 - Normal Mangaka profile updates are allowed only while `Series.status_code = PROPOSAL_DRAFT`.
-- Once the series leaves `PROPOSAL_DRAFT`, title, slug, synopsis, genres, tags, cover, content language, source series, and `publication_frequency_code` are locked from normal Mangaka profile editing.
+- Once the series leaves `PROPOSAL_DRAFT`, title, slug, synopsis, genres, tags, cover, content language, and `publication_frequency_code` are locked from normal Mangaka profile editing.
 - Slug may auto-regenerate from title during `PROPOSAL_DRAFT` because draft workflows use `series_id`.
 - Slug locks after the series leaves `PROPOSAL_DRAFT`; no slug history or redirect table is required for MVP.
 - `publication_frequency_code` is treated as Mangaka's proposed/preferred frequency during draft; board serialization/frequency override is handled by a separate board procedure.
