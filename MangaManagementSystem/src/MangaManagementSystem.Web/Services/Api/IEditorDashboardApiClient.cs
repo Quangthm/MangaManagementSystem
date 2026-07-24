@@ -13,8 +13,8 @@ namespace MangaManagementSystem.Web.Services.Api
     {
         /// <summary>
         /// Loads the editor dashboard (KPI counts, proposal queue preview, recent series
-        /// activity). Sends the transitional X-Actor-User-Id header.
+        /// activity).
         /// </summary>
-        Task<EditorDashboardDto> GetDashboardAsync(Guid actorUserId, CancellationToken cancellationToken = default);
+        Task<EditorDashboardDto> GetDashboardAsync(CancellationToken cancellationToken = default);
     }
 }

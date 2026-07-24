@@ -2,7 +2,10 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.API.Contracts;
+using MangaManagementSystem.API.Security;
 using MangaManagementSystem.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -10,19 +13,23 @@ using Microsoft.Extensions.Logging;
 namespace MangaManagementSystem.API.Controllers.Mangaka
 {
     [ApiController]
+    [Authorize(Roles = MangakaRoleName)]
     [Route("api/mangaka")]
     public class QuickSelectController : ControllerBase
     {
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
+        private const string MangakaRoleName = "Mangaka";
 
         private readonly IQuickSelectService _quickSelectService;
+        private readonly IAuthenticatedActorResolver _actorResolver;
         private readonly ILogger<QuickSelectController> _logger;
 
         public QuickSelectController(
             IQuickSelectService quickSelectService,
+            IAuthenticatedActorResolver actorResolver,
             ILogger<QuickSelectController> logger)
         {
             _quickSelectService = quickSelectService;
+            _actorResolver = actorResolver;
             _logger = logger;
         }
 
@@ -31,10 +38,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             Guid seriesId,
             CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest("Could not identify the requesting user. Please sign in again.");
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             if (seriesId == Guid.Empty)
             {
@@ -66,6 +72,10 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             Guid chapterId,
             CancellationToken cancellationToken)
         {
+            var (_, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
+
             if (chapterId == Guid.Empty)
             {
                 return BadRequest("Invalid chapter ID.");
@@ -96,10 +106,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             Guid seriesId,
             CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest("Could not identify the requesting user. Please sign in again.");
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             if (seriesId == Guid.Empty)
             {
@@ -131,10 +140,9 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             [FromBody] QuickSelectTaskAssignmentRequest request,
             CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest("Could not identify the requesting user. Please sign in again.");
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             if (request == null)
             {
@@ -163,20 +171,25 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             }
         }
 
-        private bool TryResolveActorUserId(out Guid actorUserId)
+        private async Task<(Guid ActorUserId, IActionResult? Failure)> ResolveActorAsync()
         {
-            actorUserId = Guid.Empty;
-
-            if (Request.Headers.TryGetValue(ActorUserIdHeader, out var headerValues))
+            var result = await _actorResolver.ResolveAsync(User, MangakaRoleName);
+            if (result.Succeeded)
             {
-                string? raw = headerValues.ToString();
-                if (Guid.TryParse(raw, out actorUserId) && actorUserId != Guid.Empty)
-                {
-                    return true;
-                }
+                return (result.ActorUserId, null);
             }
 
-            return false;
+            var response = new ApiErrorResponse(
+                result.FailureKind == AuthenticatedActorFailureKind.UserNotFound
+                    ? "Authenticated Mangaka account was not found."
+                    : result.FailureKind == AuthenticatedActorFailureKind.InvalidIdentity
+                        ? "Authenticated Mangaka information is invalid."
+                        : "The current account is not an active Mangaka.");
+
+            return result.FailureKind is AuthenticatedActorFailureKind.InvalidIdentity
+                or AuthenticatedActorFailureKind.UserNotFound
+                ? (Guid.Empty, Unauthorized(response))
+                : (Guid.Empty, StatusCode(StatusCodes.Status403Forbidden, response));
         }
     }
 }

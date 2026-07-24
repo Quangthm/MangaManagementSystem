@@ -16,12 +16,11 @@ using Microsoft.Extensions.Logging;
 namespace MangaManagementSystem.Web.Services.Api
 {
     /// <summary>
-    /// HttpClient-backed implementation of <see cref="IEditorChapterReviewApiClient"/>. Sends
-    /// the transitional X-Actor-User-Id header and parses safe error messages for UI display.
+    /// HttpClient-backed implementation of <see cref="IEditorChapterReviewApiClient"/>. Parses
+    /// safe error messages for UI display.
     /// </summary>
     public class EditorChapterReviewApiClient : IEditorChapterReviewApiClient
     {
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
         private const long MaxMarkupFileSize = 10 * 1024 * 1024; // 10 MB
 
         private readonly HttpClient _httpClient;
@@ -35,7 +34,6 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<EditorChapterReviewQueueDto> GetReviewQueueAsync(
-            Guid actorUserId,
             string? statusFilter = null,
             CancellationToken cancellationToken = default)
         {
@@ -46,7 +44,6 @@ namespace MangaManagementSystem.Web.Services.Api
             }
 
             using var requestMessage = new HttpRequestMessage(HttpMethod.Get, route);
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
@@ -72,14 +69,11 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<EditorChapterReviewDetailResult> GetReviewDetailAsync(
-            Guid actorUserId,
             Guid chapterId,
             CancellationToken cancellationToken = default)
         {
             using var requestMessage = new HttpRequestMessage(
                 HttpMethod.Get, $"api/editor/chapters/{chapterId}/review-detail");
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
-
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
             if (response.IsSuccessStatusCode)
@@ -112,7 +106,6 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<SubmitChapterEditorialReviewResponse> SubmitReviewDecisionWithMarkupAsync(
-            Guid actorUserId,
             Guid chapterId,
             string decisionCode,
             string? comments,
@@ -138,8 +131,6 @@ namespace MangaManagementSystem.Web.Services.Api
             {
                 Content = content
             };
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
-
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
             if (response.IsSuccessStatusCode)
@@ -165,7 +156,6 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<SubmitChapterEditorialReviewResponse> SubmitReviewDecisionAsync(
-            Guid actorUserId,
             Guid chapterId,
             SubmitChapterEditorialReviewRequest request,
             CancellationToken cancellationToken = default)
@@ -175,8 +165,6 @@ namespace MangaManagementSystem.Web.Services.Api
             {
                 Content = JsonContent.Create(request)
             };
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
-
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
             if (response.IsSuccessStatusCode)
@@ -202,7 +190,6 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<PutScheduledChapterOnHoldResponse> PutChapterOnHoldAsync(
-            Guid actorUserId,
             Guid chapterId,
             string reason,
             CancellationToken cancellationToken = default)
@@ -213,8 +200,6 @@ namespace MangaManagementSystem.Web.Services.Api
             {
                 Content = JsonContent.Create(request)
             };
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
-
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
             if (response.IsSuccessStatusCode)
@@ -231,7 +216,6 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<SetChapterPlannedReleaseDateResponse> SetPlannedReleaseDateAsync(
-            Guid actorUserId,
             Guid chapterId,
             SetPlannedReleaseDateRequest request,
             CancellationToken cancellationToken = default)
@@ -241,8 +225,6 @@ namespace MangaManagementSystem.Web.Services.Api
             {
                 Content = JsonContent.Create(request)
             };
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
-
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
             if (response.IsSuccessStatusCode)
@@ -259,7 +241,6 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<ReleaseChapterResponse> ReleaseChapterAsync(
-            Guid actorUserId,
             Guid chapterId,
             bool confirmRelease,
             CancellationToken cancellationToken = default)
@@ -270,8 +251,6 @@ namespace MangaManagementSystem.Web.Services.Api
             {
                 Content = JsonContent.Create(request)
             };
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
-
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
             if (response.IsSuccessStatusCode)
@@ -288,7 +267,6 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<IReadOnlyList<EditorActionableChapterDto>> GetActionableChaptersAsync(
-            Guid actorUserId,
             Guid? seriesId = null,
             string? searchText = null,
             string? statusCode = null,
@@ -329,7 +307,6 @@ namespace MangaManagementSystem.Web.Services.Api
                 sb.Length -= 1;
 
             using var requestMessage = new HttpRequestMessage(HttpMethod.Get, sb.ToString());
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 

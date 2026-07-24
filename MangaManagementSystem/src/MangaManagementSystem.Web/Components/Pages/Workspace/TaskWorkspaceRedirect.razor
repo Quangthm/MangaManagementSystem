@@ -116,7 +116,7 @@ else
             return await AssistantTaskApi.GetTaskDetailAsync(userId, TaskId);
         }
 
-        return await MangakaTaskApi.GetTaskDetailAsync(userId, TaskId);
+        return await MangakaTaskApi.GetTaskDetailAsync(TaskId);
     }
 
     private static string GetDefaultReturnUrl(ClaimsPrincipal user)

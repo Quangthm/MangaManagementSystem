@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using MangaManagementSystem.Application;
+using MangaManagementSystem.API.Security;
 using MangaManagementSystem.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -19,6 +20,9 @@ namespace MangaManagementSystem.API
             builder.Services.AddInfrastructure(builder.Configuration);
 
             builder.Services.AddControllers();
+            builder.Services.AddScoped<
+                IAuthenticatedActorResolver,
+                AuthenticatedActorResolver>();
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
 

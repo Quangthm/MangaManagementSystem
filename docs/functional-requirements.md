@@ -4,11 +4,15 @@
 **Writing standard:** Requirements use the technical requirement style: **“The system shall…”**  
 **MVP alignment note:** These requirements remove earlier conflicting assumptions such as `SeriesStatusHistory`, `ChapterSubmission`, `SeriesBoardDecision`, `RegionTranslation`, persistent AI job history, and direct annotation coordinates.
 
-> **Latest alignment update — 2026-07-04:** This version replaces strict publication-period schedule validation with advisory chapter-level publication scheduling. `Series.publication_frequency_code` now provides default suggestions and warnings only. Authorized Mangaka and Tantou Editors may schedule/reschedule future planned release dates; Editors handle hold/release enforcement; held chapters require a new planned date to return to `SCHEDULED`; and auto-hold/release automation remain deferred.
+> **Latest alignment update — 2026-07-04:** This version replaces strict publication-period schedule validation with advisory chapter-level publication scheduling. `Series.publication_frequency_code` now provides default suggestions and warnings only. Authorized Mangaka and Tantou Editors may schedule/reschedule planned release dates on the current publication business date or later; Editors handle hold/release enforcement; held chapters require a new planned date to return to `SCHEDULED`; and auto-hold/release automation remain deferred.
 
 > **Latest series lifecycle alignment — 2026-07-19:** The system shall use `HIATUS` for paused series; active Mangaka or Tantou Editor contributors may pause/resume serialized series; `HIATUS` blocks release only. Only active Mangaka contributors may mark serialized or hiatus series as `COMPLETED`; completion blocks future business mutations, cancels unreleased chapters and their distinct active `ASSIGNED`/`UNDER_REVIEW` page tasks after warning and confirmation, preserves released chapters and terminal task history, and does not hide completed series from rankings.
 
 > **Latest ranking and notification alignment — 2026-07-21:** Existing approved notification requirements for proposal, board, task, chapter, publication scheduling, and account approval remain unchanged. The system shall use the weighted ranking formula `ranking_score = (v / (v + m)) * R + (m / (v + m)) * C`, where `C` is the rating-count-weighted scope average and `m` is the scope median rating count; `reading_count` is not a direct score boost. `RANKING_WARNING` is finalized as a hybrid completed-week rule using the documented `6.5` baseline together with bottom-25% relative rank, with persistence across at least 2 of the latest 3 consecutive completed weekly periods including the latest. Recipients are all distinct active contributors of the exact affected series.
+
+> **Latest chapter submission validation — 2026-07-21:** The system shall allow chapter submission only from `DRAFT` or `REVISION_REQUESTED` by an active Mangaka contributor and only when zero distinct associated page tasks are `ASSIGNED` or `UNDER_REVIEW`. `COMPLETED` and `CANCELLED` tasks shall not block. Blocking validation shall be backend-authoritative, deduplicate by task ID through the existing region/page relationship, produce a clean error with no chapter/audit/notification/task mutation, and be concurrency-safe against same-chapter task creation.
+
+> **Latest implementation-alignment decisions — 2026-07-23:** Email/password self-registration follows the current repository flow: the user must pass reCAPTCHA before a 6-digit email OTP is sent, and the pending account is created only after successful OTP verification; Google sign-up remains a separate verified-identity path and still creates `PENDING_APPROVAL`. The current MVP has no Mangaka proposal-withdrawal workflow. Assistants are allowed to view dynamic rankings, while manual ranking input remains restricted to Editorial Board Member/Chief roles. A `CANCELLED` chapter does not reserve its chapter number label: a new non-cancelled chapter may reuse the same label while the cancelled row keeps its original label, enforced by uniqueness among non-cancelled chapters only. Scheduling accepts `planned_release_date >=` the current publication business date (today in the configured publication timezone); past dates are invalid. `PageRegion` geometry supports either a DOT (`width = 0` and `height = 0`) or an area rectangle (`width > 0` and `height > 0`), and mixed zero/non-zero dimensions are invalid. Ranking preserves true ties: equal `ranking_score` values share the same `DENSE_RANK`; deterministic secondary ordering may be used only to display rows within the same rank and must not change `rank_position`.
 
 ---
 
@@ -40,8 +44,8 @@
 | FR-REG-001 | The system shall allow page regions to be created manually or suggested by AI. | BR-REG-006 |
 | FR-REG-002 | The system shall require each `PageRegion` to belong to exactly one `ChapterPageVersion`. | BR-REG-001 |
 | FR-REG-003 | The system shall restrict `PageRegion.type_code` to `PANEL`, `SPEECH_BUBBLE`, `CHARACTER`, `SFX_TEXT`, `BACKGROUND`, `FULL_PAGE`, or `OTHER`. | BR-REG-002 |
-| FR-REG-004 | The system shall store page region coordinates as rectangular bounding boxes using `x`, `y`, `width`, and `height`. | BR-REG-003 |
-| FR-REG-005 | The system shall require each page region width and height to be positive. | BR-REG-004 |
+| FR-REG-004 | The system shall store page region geometry using pixel-based `x`, `y`, `width`, and `height` values relative to the original page image dimensions. | BR-REG-003 |
+| FR-REG-005 | The system shall require `width` and `height` to be non-negative and shall accept only two geometry shapes: DOT when `width = 0` and `height = 0`, or area/rectangle when `width > 0` and `height > 0`; mixed zero/non-zero dimensions shall be rejected. | BR-REG-004 |
 | FR-REG-006 | The system shall store page region coordinates relative to the original uploaded page image dimensions. | BR-REG-010 |
 | FR-REG-007 | The system shall restrict `PageRegion.source_type` to `AI` or `MANUAL`. | BR-REG-005 |
 | FR-REG-008 | The system shall change an AI-generated page region to `MANUAL` when a user adjusts the region. | BR-REG-007 |
@@ -138,6 +142,8 @@
 | FR-USER-020 | The system shall record display name changes in the audit log. | BR-USER-020 |
 | FR-USER-021 | The system shall reject empty or whitespace-only display names after trimming. | BR-USER-021 |
 | FR-USER-022 | The system shall allow an authenticated user to update their own avatar and portfolio file through the profile workflow. | BR-USER-022 |
+| FR-USER-023 | The system shall require successful reCAPTCHA verification before sending the registration OTP for email/password self-registration. | BR-USER-023 |
+| FR-USER-024 | The system shall require successful verification of the 6-digit email OTP before creating an email/password registration account; the created account shall remain `PENDING_APPROVAL`. Google sign-up shall use verified Google identity instead of this email-OTP step and shall also create `PENDING_APPROVAL`. | BR-USER-024 |
 ---
 
 ## 3.5 Series
@@ -235,8 +241,6 @@
 | FR-PROP-007 | The system shall prevent direct editing of submitted proposal snapshot fields after the `SeriesProposal` row is created. | BR-PROP-007 |
 | FR-PROP-008 | The system shall require corrected proposal content to be submitted as a new proposal version when revision is requested. | BR-PROP-008 |
 | FR-PROP-009 | The system shall store proposal status to reflect the current review stage of the submitted proposal package. | BR-PROP-009 |
-| FR-PROP-010 | The system shall allow a proposal to store a withdrawal timestamp only when its status is `WITHDRAWN`. | BR-PROP-010 |
-| FR-PROP-011 | The system shall allow a withdrawn proposal to exist without editorial review metadata if it was withdrawn before editorial review completion. | BR-PROP-011 |
 | FR-PROP-012 | The system shall store editorial review information directly in `SeriesProposal` for MVP. | BR-PROP-012 |
 | FR-PROP-013 | The system shall prevent more than one editorial review decision from being recorded for the same submitted proposal version. | BR-PROP-012 |
 | FR-PROP-014 | The system shall use `UNDER_BOARD_REVIEW` to indicate that a proposal passed editorial review and is waiting for board voting/decision. | BR-PROP-013 |
@@ -341,11 +345,11 @@
 | FR-CH-011 | The system shall store the user who created the chapter in `created_by_user_id`. | BR-CH-011 |
 | FR-CH-012 | The system shall update `Chapter.updated_at_utc` when the chapter row is modified for operational display. | BR-CH-012 |
 | FR-CH-013 | The system shall treat scheduling as chapter-level and shall not use `Series.status_code = SCHEDULED` for publication scheduling. | BR-CH-013 |
-| FR-CH-014 | The system shall allow Mangaka and Tantou Editors to set or reschedule `Chapter.planned_release_date` when chapter status and permissions allow it, as long as the chosen planned release date is not in the past. | BR-CH-014 |
-| FR-CH-015 | The system shall move an `APPROVED` chapter to `SCHEDULED` when a future `planned_release_date` is set. | BR-CH-015 |
+| FR-CH-014 | The system shall allow Mangaka and Tantou Editors to set or reschedule `Chapter.planned_release_date` when chapter status and permissions allow it, as long as the chosen planned release date is on or after the current publication business date. | BR-CH-014 |
+| FR-CH-015 | The system shall move an `APPROVED` chapter to `SCHEDULED` when a `planned_release_date` on the current publication business date or later is set. | BR-CH-015 |
 | FR-CH-016 | The system shall lock Mangaka chapter content changes when a chapter is `SCHEDULED`. | BR-CH-016 |
-| FR-CH-017 | The system shall allow authorized Mangaka and Tantou Editors to reschedule a `SCHEDULED` chapter to a future date while treating publication frequency mismatch as a warning rather than a hard blocker. | BR-CH-017 |
-| FR-CH-018 | The system shall require a new future planned release date when returning a chapter from `ON_HOLD` to `SCHEDULED`. | BR-CH-018 |
+| FR-CH-017 | The system shall allow authorized Mangaka and Tantou Editors to reschedule a `SCHEDULED` chapter to the current publication business date or a later date while treating publication frequency mismatch as a warning rather than a hard blocker. | BR-CH-017 |
+| FR-CH-018 | The system shall require a new planned release date on the current publication business date or later when returning a chapter from `ON_HOLD` to `SCHEDULED`. | BR-CH-018 |
 | FR-CH-019 | The system shall block chapter release when the parent series is `HIATUS`, `COMPLETED`, or `CANCELLED`. | BR-CH-019 |
 | FR-CH-020 | The system shall block normal chapter creation and mutation workflows when the parent series is `COMPLETED`. | BR-CH-020 |
 | FR-CH-021 | The system shall allow normal new chapter creation only when the parent series is `SERIALIZED` or `HIATUS` and the actor is an `ACTIVE` Mangaka account with an active Mangaka contributor relationship to that series. | BR-CH-021 |
@@ -497,6 +501,13 @@
 | FR-CH-SUB-005 | The system shall allow chapter pages and page versions to become editable again when the chapter status becomes `REVISION_REQUESTED`. | BR-CH-SUB-004 |
 | FR-CH-SUB-006 | The system shall store chapter content as page-level assets through `ChapterPageVersion`. | BR-CH-SUB-005 |
 | FR-CH-SUB-007 | The system shall not require one chapter-level submission file or generated PDF for MVP. | BR-CH-SUB-006 |
+| FR-CH-SUB-008 | The system shall allow chapter submission for editorial review only when the actor is an `ACTIVE` Mangaka and active Mangaka contributor of the owning series, the chapter is `DRAFT` or `REVISION_REQUESTED`, and zero distinct active page tasks are associated with that chapter. | BR-CH-SUB-007 |
+| FR-CH-SUB-009 | The system shall treat `ASSIGNED` and `UNDER_REVIEW` page tasks as blocking chapter submission and shall treat `COMPLETED` and `CANCELLED` page tasks as non-blocking. | BR-CH-SUB-008 |
+| FR-CH-SUB-010 | The system shall derive task-to-chapter association through linked task regions, page regions, page versions, and logical chapter pages, and shall deduplicate by `ChapterPageTaskId` so one task linked to multiple regions is counted once. | BR-CH-SUB-009 |
+| FR-CH-SUB-011 | When at least one distinct active page task exists, the system shall reject chapter submission before changing chapter status, writing the successful submission audit, or creating `CHAPTER_REVIEW`, and shall not automatically mutate the blocking tasks. | BR-CH-SUB-010 |
+| FR-CH-SUB-012 | The system shall return a clean user-facing validation response explaining that active page tasks must be completed or cancelled before chapter submission can proceed. | BR-CH-SUB-011 |
+| FR-CH-SUB-013 | The system shall concurrency-coordinate task creation and chapter submission for the same chapter so an active task cannot be created concurrently with the chapter transition to `UNDER_REVIEW`. | BR-CH-SUB-012 |
+| FR-CH-SUB-014 | When chapter-submission validation succeeds, the system shall preserve the existing successful behavior by changing the chapter to `UNDER_REVIEW`, writing the normal chapter-submission audit, and creating `CHAPTER_REVIEW` notifications for the correct distinct active Tantou Editor contributors of the exact series. | BR-CH-SUB-013 |
 | FR-CH-REV-001 | The system shall record editorial reviews directly against `Chapter`. | BR-CH-REV-001 |
 | FR-CH-REV-002 | The system shall require each `ChapterEditorialReview` record to belong to exactly one chapter. | BR-CH-REV-002 |
 | FR-CH-REV-003 | The system shall allow a chapter to have multiple editorial review records over time across revision cycles. | BR-CH-REV-003 |
@@ -554,8 +565,8 @@
 | FR-PUB-013 | The system shall apply the board-specified publication frequency as the official `Series.publication_frequency_code` when a `START_SERIALIZATION` poll is approved, overriding the Mangaka's preference. | BR-PUB-013 |
 | FR-PUB-016 | The system shall allow Editorial Board Chief users to directly change `Series.publication_frequency_code` only when they provide a required audit reason. | BR-PUB-015 |
 | FR-PUB-017 | The system shall treat `Series.publication_frequency_code` as an advisory source for default date suggestions and warnings, not as a hard scheduling constraint. | BR-PUB-006, BR-PUB-SCHEDULE-001 |
-| FR-PUB-018 | The system shall allow authorized Mangaka and Tantou Editor users to schedule or reschedule chapters to any future planned release date when chapter status and permissions allow. | BR-PUB-SCHEDULE-001, BR-PUB-SCHEDULED-003 |
-| FR-PUB-019 | The system shall block planned release dates in the past. | BR-PUB-SCHEDULE-005 |
+| FR-PUB-018 | The system shall allow authorized Mangaka and Tantou Editor users to schedule or reschedule chapters to any planned release date on the current publication business date or later when chapter status and permissions allow. | BR-PUB-SCHEDULE-001, BR-PUB-SCHEDULED-003 |
+| FR-PUB-019 | The system shall block planned release dates earlier than the current publication business date and allow today. | BR-PUB-SCHEDULE-005 |
 | FR-PUB-020 | The system shall warn, not block, when a chosen planned release date does not match the advisory publication frequency pattern. | BR-PUB-SCHEDULE-006 |
 | FR-PUB-021 | The system shall allow multiple chapters from the same series to share the same planned release date for bulk, catch-up, or campaign release plans. | BR-PUB-SCHEDULE-007 |
 | FR-PUB-022 | The system shall ask for confirmation before schedule, reschedule, hold, return-from-hold, release, or bulk publication actions change chapter state. | BR-PUB-SCHEDULE-010 |
@@ -582,7 +593,7 @@
 | FR-PUB-SCHEDULED-002 | The system shall block page/content mutation workflows while a chapter is `SCHEDULED` or `ON_HOLD`. | BR-PUB-SCHEDULED-002 |
 | FR-PUB-SCHEDULED-003 | The system shall allow authorized Mangaka and Tantou Editor users to set or reschedule planned release dates when chapter status permits. | BR-PUB-SCHEDULED-003 |
 | FR-PUB-SCHEDULED-004 | The system shall require a non-blank operational or editorial reason when a Tantou Editor places a `SCHEDULED` chapter `ON_HOLD`. | BR-PUB-SCHEDULED-004 |
-| FR-PUB-SCHEDULED-005 | The system shall require a new future planned release date before a chapter returns from `ON_HOLD` to `SCHEDULED`. | BR-PUB-SCHEDULED-005, BR-PUB-SCHEDULED-006 |
+| FR-PUB-SCHEDULED-005 | The system shall require a new planned release date on the current publication business date or later before a chapter returns from `ON_HOLD` to `SCHEDULED`. | BR-PUB-SCHEDULED-005, BR-PUB-SCHEDULED-006 |
 | FR-PUB-SCHEDULED-006 | The system shall allow Tantou Editors to release eligible approved or scheduled chapters with confirmation. | BR-PUB-SCHEDULED-007 |
 | FR-PUB-SCHEDULED-007 | The system shall set `released_at_utc` to the current UTC time when an eligible chapter is released. | BR-PUB-SCHEDULED-007 |
 | FR-PUB-SCHEDULED-008 | The system shall defer automatic overdue-to-ON_HOLD transitions unless a later workflow explicitly implements them. | BR-PUB-SCHEDULED-009 |
@@ -623,14 +634,15 @@
 | FR-RANK-003 | The system shall compute ranking separately for each `publication_period_id`. | BR-RANK-002 |
 | FR-RANK-004 | The system shall expose ranking output through a dynamic view such as `manga.vw_SeriesRanking`. | BR-RANK-003 |
 | FR-RANK-005 | The system shall compute `ranking_score` using the weighted formula `(v / (v + m)) * R + (m / (v + m)) * C`, where `R` is the series average rating, `v` is its rating count, `C` is the rating-count-weighted average rating of eligible ranked series in the same effective ranking scope, and `m` is the median rating count of those eligible ranked series. | BR-RANK-004 |
-| FR-RANK-006 | The system shall compute rank position using dense ranking ordered by ranking score, average rating, rating count, reading count, and series ID. | BR-RANK-005 |
+| FR-RANK-006 | The system shall compute `rank_position` with `DENSE_RANK()` ordered by `ranking_score DESC` only, so series with equal ranking scores receive the same rank; deterministic secondary ordering of tied rows shall not change `rank_position`. | BR-RANK-005 |
 | FR-RANK-007 | The system shall avoid storing `ranking_score` and `rank_position` as duplicated normal columns unless later performance profiling proves caching is required. | BR-RANK-006 |
 | FR-RANK-008 | The system shall prevent ranking results from automatically cancelling a series. | BR-RANK-007 |
 | FR-RANK-009 | The system shall allow ranking evidence to support board review while still requiring the applicable workflow decision for cancellation. | BR-RANK-008 |
 | FR-RANK-010 | The system shall keep completed series visible in dynamic rankings when `SeriesVoteInput` exists for the selected publication period. | BR-RANK-009 |
 | FR-RANK-011 | The system shall calculate `C` for a direct ranking scope as `SUM(average_rating * rating_count) / SUM(rating_count)` across eligible ranked series in that scope and shall calculate `m` as the median `rating_count` across those series. | BR-RANK-010 |
-| FR-RANK-012 | The system shall keep `reading_count` as popularity/readership evidence and shall not directly add it to `ranking_score`; it may remain visible and may be used as a deterministic tie-breaker. | BR-RANK-011 |
+| FR-RANK-012 | The system shall keep `reading_count` as popularity/readership evidence and shall not directly add it to `ranking_score`; it may be used to order rows within an already tied rank but shall not break the tie or change `rank_position`. | BR-RANK-011 |
 | FR-RANK-013 | When deriving monthly, yearly, or all-time ranking from weekly inputs, the system shall aggregate weekly source evidence by series first and then recalculate that broader scope's own `R`, `v`, `C`, and `m`; it shall not average weekly ranking scores or reuse weekly `C`/`m`. | BR-RANK-012 |
+| FR-RANK-014 | The system shall allow all `ACTIVE` authenticated roles, including Assistants, to view dynamic ranking results while restricting manual `SeriesVoteInput` create/update operations to Editorial Board Member and Editorial Board Chief roles. | BR-RANK-013, BR-SERIES-VOTE-014 |
 
 
 ---

@@ -42,13 +42,13 @@
             <MudPaper Class="pa-4 mb-4 mf-card" Elevation="0">
                 <MudGrid>
                     <MudItem xs="12" md="4">
-                        <MudSelect T="Guid?" Label="Series" Value="@_selectedSeriesId"
-                                   Variant="Variant.Outlined" Clearable="true"
+                        <MudSelect T="Guid" Label="Series" Value="@_selectedSeriesId"
+                                   Variant="Variant.Outlined"
                                    ValueChanged="OnSeriesFilterChanged">
-                            <MudSelectItem T="Guid?" Value="@(null)">All Series</MudSelectItem>
+                            <MudSelectItem T="Guid" Value="@AllSeriesFilterValue">All Series</MudSelectItem>
                             @foreach (var series in _seriesList)
                             {
-                                <MudSelectItem T="Guid?" Value="@series.SeriesId">@series.Title</MudSelectItem>
+                                <MudSelectItem T="Guid" Value="@series.SeriesId">@series.Title</MudSelectItem>
                             }
                         </MudSelect>
                     </MudItem>
@@ -166,6 +166,14 @@
                                 }
 
                                 <MudStack Row="true" Class="mt-3" Style="flex-wrap: wrap;" Spacing="2">
+                                    @if (CanViewWorkspace(chapter))
+                                    {
+                                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                                                   StartIcon="@Icons.Material.Filled.OpenInNew"
+                                                   OnClick="@(() => Nav.NavigateTo(BuildWorkspaceLink(chapter)))">
+                                            View Workspace
+                                        </MudButton>
+                                    }
                                     @if (chapter.StatusCode == "DRAFT" || chapter.StatusCode == "REVISION_REQUESTED")
                                     {
                                         <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
@@ -300,8 +308,11 @@
     private IReadOnlyList<MangakaChapterListItemDto> _chapters = Array.Empty<MangakaChapterListItemDto>();
     private IReadOnlyList<SeriesDto> _seriesList = Array.Empty<SeriesDto>();
 
-    private Guid? _selectedSeriesId;
+    private static readonly Guid AllSeriesFilterValue = Guid.Empty;
+    private Guid _selectedSeriesId = AllSeriesFilterValue;
     private string _statusFilter = "ALL";
+
+    private string CurrentUrl => $"/{Nav.ToBaseRelativePath(Nav.Uri)}";
 
     // Create dialog state
     private bool _showCreateDialog;
@@ -352,8 +363,8 @@
     {
         try
         {
-            _seriesList = await SeriesClient.GetMySeriesAsync(_currentUserId);
-            _chapters = await ChapterClient.GetMyChaptersAsync(_currentUserId);
+            _seriesList = await SeriesClient.GetMySeriesAsync();
+            _chapters = await ChapterClient.GetMyChaptersAsync();
         }
         catch (Exception ex)
         {
@@ -365,9 +376,9 @@
     {
         var query = source.AsEnumerable();
 
-        if (_selectedSeriesId.HasValue)
+        if (_selectedSeriesId != AllSeriesFilterValue)
         {
-            query = query.Where(c => c.SeriesId == _selectedSeriesId.Value);
+            query = query.Where(c => c.SeriesId == _selectedSeriesId);
         }
 
         if (_statusFilter != "ALL")
@@ -378,10 +389,20 @@
         return query;
     }
 
-    private void OnSeriesFilterChanged(Guid? value)
+    private void OnSeriesFilterChanged(Guid value)
     {
         _selectedSeriesId = value;
         ResetChapterCardsPage();
+    }
+
+    private static bool CanViewWorkspace(MangakaChapterListItemDto chapter) =>
+        !string.IsNullOrWhiteSpace(chapter.SeriesSlug) &&
+        chapter.StatusCode is "DRAFT" or "REVISION_REQUESTED" or "UNDER_REVIEW" or "APPROVED" or "SCHEDULED" or "ON_HOLD" or "RELEASED";
+
+    private string BuildWorkspaceLink(MangakaChapterListItemDto chapter)
+    {
+        var targetUrl = $"/series/{chapter.SeriesSlug}/workspace?chapterId={chapter.ChapterId}";
+        return SafeReturnUrl.AppendReturnUrl(targetUrl, CurrentUrl);
     }
 
     private void OnStatusFilterChanged(string value)
@@ -428,7 +449,7 @@
                 _createChapterNumberLabel.Trim(),
                 string.IsNullOrWhiteSpace(_createChapterTitle) ? null : _createChapterTitle.Trim());
 
-            await ChapterClient.CreateChapterDraftAsync(_currentUserId, request);
+            await ChapterClient.CreateChapterDraftAsync(request);
             _showCreateDialog = false;
             Snackbar.Add("Chapter draft created successfully.", Severity.Success);
             await RefreshAfterMutation();
@@ -463,7 +484,7 @@
                 _editChapterNumberLabel.Trim(),
                 string.IsNullOrWhiteSpace(_editChapterTitle) ? null : _editChapterTitle.Trim());
 
-            await ChapterClient.UpdateChapterDraftAsync(_currentUserId, _editChapter.ChapterId, request);
+            await ChapterClient.UpdateChapterDraftAsync(_editChapter.ChapterId, request);
             _showEditDialog = false;
             Snackbar.Add("Chapter draft updated successfully.", Severity.Success);
             await RefreshAfterMutation();
@@ -483,7 +504,7 @@
         _actionInProgress = true;
         try
         {
-            await ChapterClient.SubmitChapterForReviewAsync(_currentUserId, chapterId);
+            await ChapterClient.SubmitChapterForReviewAsync(chapterId);
             Snackbar.Add("Chapter submitted for review.", Severity.Success);
             await RefreshAfterMutation();
         }
@@ -501,7 +522,7 @@
     {
         try
         {
-            _chapters = await ChapterClient.GetMyChaptersAsync(_currentUserId);
+            _chapters = await ChapterClient.GetMyChaptersAsync();
             ResetChapterCardsPage();
         }
         catch (Exception ex)

@@ -58,6 +58,12 @@ function syncAnnotations(anns) {
 function initCanvas(canvasId, containerId, dotnet) {
     canvas = document.getElementById(canvasId);
     container = document.getElementById(containerId);
+
+    if (!canvas || !container) {
+        throw new Error(
+            `Canvas initialization failed: missing canvas '${canvasId}' or container '${containerId}'.`);
+    }
+
     ctx = canvas.getContext('2d');
     dotNetRef = dotnet;
 

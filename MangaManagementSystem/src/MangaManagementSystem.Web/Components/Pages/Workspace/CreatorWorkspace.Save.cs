@@ -91,7 +91,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                         // only if somehow unset. The DB enforces uniqueness incl. cancelled chapters.
                         var numberLabel = string.IsNullOrWhiteSpace(chap.NumberLabel) ? chap.Id.ToString() : chap.NumberLabel.Trim();
                         var req = new CreateChapterDraftRequest(seriesGuid, numberLabel, chap.Title);
-                        var createdDto = await MangakaChapterApi.CreateChapterDraftAsync(_currentUserId!.Value, req);
+                        var createdDto = await MangakaChapterApi.CreateChapterDraftAsync(req);
                         if (createdDto != null)
                         {
                             chap.ChapterId = createdDto.ChapterId;
@@ -118,7 +118,6 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                     // Id would collide with the integer chapter that happens to share that position.
                     var numberLabel = string.IsNullOrWhiteSpace(chap.NumberLabel) ? chap.Id.ToString() : chap.NumberLabel.Trim();
                     await MangakaChapterApi.UpdateChapterDraftAsync(
-                        _currentUserId!.Value,
                         chap.ChapterId,
                         new UpdateChapterDraftRequest(
                             numberLabel,
@@ -144,7 +143,10 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 {
                     try
                     {
-                        await MangakaPageApi.DeleteAsync(_currentUserId.Value, pageId);
+                        // Merge (JWT refactor): DeleteAsync no longer takes an actor id — the acting user
+                        // now comes from the Bearer token server-side. The _currentUserId.HasValue guard above
+                        // still gates on having a logged-in user context.
+                        await MangakaPageApi.DeleteAsync(pageId);
                         _pagesPendingDelete.Remove(pageId);
                         savedCount++;
                     }
@@ -254,7 +256,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                                             fileDto,
                                             ver.Note ?? "Original Upload");
 
-                                        var createdRes = await MangakaPageApi.CreatePageWithVersionAsync(_currentUserId!.Value, createReq);
+                                        var createdRes = await MangakaPageApi.CreatePageWithVersionAsync(createReq);
                                         if (createdRes != null)
                                         {
                                             page.ChapterPageId = createdRes.Page.ChapterPageId;
@@ -281,7 +283,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                                             Regions: BuildRegionDtosForSave(ver.Regions),
                                             SetAsCurrent: true);
 
-                                        var versionDto = await MangakaPageApi.CreateVersionWithFileAndRegionsAsync(_currentUserId!.Value, req);
+                                        var versionDto = await MangakaPageApi.CreateVersionWithFileAndRegionsAsync(req);
                                         if (versionDto != null)
                                         {
                                             ver.ChapterPageVersionId = versionDto.ChapterPageVersionId;
@@ -376,7 +378,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                                     );
                                 }).ToList();
 
-                                await MangakaRegionApi.BulkReplaceAsync(_currentUserId ?? Guid.Empty, currentVersion.ChapterPageVersionId, dtos);
+                                await MangakaRegionApi.BulkReplaceAsync(currentVersion.ChapterPageVersionId, dtos);
                                 currentVersion.IsDirty = false;
                                 savedCount++;
                             }

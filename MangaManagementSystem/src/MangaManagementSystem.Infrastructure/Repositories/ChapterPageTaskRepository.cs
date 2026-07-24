@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Globalization;
 using Microsoft.Data.SqlClient;
 using System.Linq;
 using System.Text.Json;
@@ -28,6 +29,69 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             ILogger<ChapterPageTaskRepository> logger) : base(context)
         {
             _logger = logger;
+        }
+
+        private async Task AcquireChapterLockAsync(
+            Guid chapterId, CancellationToken ct)
+        {
+            var connection = _context.Database.GetDbConnection();
+
+            if (connection.State != ConnectionState.Open)
+            {
+                await connection.OpenAsync(ct);
+            }
+
+            await using var command = connection.CreateCommand();
+
+            var currentTransaction = _context.Database.CurrentTransaction;
+            if (currentTransaction is not null)
+            {
+                command.Transaction = currentTransaction.GetDbTransaction();
+            }
+
+            command.CommandText = """
+                DECLARE @lockResult int;
+
+                EXEC @lockResult = sys.sp_getapplock
+                    @Resource = @resource,
+                    @LockMode = @lockMode,
+                    @LockOwner = @lockOwner,
+                    @LockTimeout = @lockTimeout;
+
+                SELECT @lockResult;
+                """;
+
+            var resource = command.CreateParameter();
+            resource.ParameterName = "@resource";
+            resource.Value = $"manga_chapter_{chapterId:D}";
+            command.Parameters.Add(resource);
+
+            var lockMode = command.CreateParameter();
+            lockMode.ParameterName = "@lockMode";
+            lockMode.Value = "Exclusive";
+            command.Parameters.Add(lockMode);
+
+            var lockOwner = command.CreateParameter();
+            lockOwner.ParameterName = "@lockOwner";
+            lockOwner.Value = "Transaction";
+            command.Parameters.Add(lockOwner);
+
+            var lockTimeout = command.CreateParameter();
+            lockTimeout.ParameterName = "@lockTimeout";
+            lockTimeout.Value = 5000;
+            command.Parameters.Add(lockTimeout);
+
+            var resultObj = await command.ExecuteScalarAsync(ct);
+            var result = Convert.ToInt32(resultObj, CultureInfo.InvariantCulture);
+
+            if (result < 0)
+            {
+                _logger.LogWarning(
+                    "Chapter lock acquisition failed with result {LockResult} for chapter {ChapterId}",
+                    result, chapterId);
+                throw new InvalidOperationException(
+                    "This chapter is currently being modified. Please try again.");
+            }
         }
 
         public async Task<Guid> CreateChapterPageTaskAsync(
@@ -112,6 +176,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     throw new InvalidOperationException(
                         "The selected page-region context is no longer valid.");
                 }
+
+                await AcquireChapterLockAsync(chapter.ChapterId, default);
 
                 var actor =
                     await _context.Users
@@ -439,6 +505,19 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     && distinctChapterIds.Contains(
                         region.ChapterPageVersion.ChapterPage.Chapter.ChapterId)))
                 .ToListAsync(cancellationToken);
+        }
+
+        public async Task<IReadOnlyList<ChapterPageTask>> GetDistinctActiveTasksByChapterIdsAsync(
+            IReadOnlyCollection<Guid> chapterIds,
+            CancellationToken cancellationToken = default)
+        {
+            var tasks = await GetByChapterIdsAsync(chapterIds, cancellationToken);
+
+            return tasks
+                .GroupBy(task => task.ChapterPageTaskId)
+                .Select(group => group.First())
+                .Where(task => ChapterPageTaskLifecyclePolicy.IsActiveTaskStatus(task.StatusCode))
+                .ToList();
         }
 
         // --- Mangaka task lifecycle SPs ---

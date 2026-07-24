@@ -9,7 +9,6 @@
 @inject IMangakaSeriesApiClient MangakaSeriesClient
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
-@inject AuthenticationStateProvider AuthStateProvider
 @using MangaManagementSystem.Web.Services
 
 <MangakaLayout>
@@ -540,7 +539,6 @@
 </MangakaLayout>
 
 @code {
-    private Guid _currentUserId;
     private bool _loading = true;
     private string? _error;
     private IReadOnlyList<ChapterPageTaskDto> _tasks = Array.Empty<ChapterPageTaskDto>();
@@ -726,7 +724,7 @@
         _quickSelectLoadingSeries = true;
         try
         {
-            _quickSelectSeries = await MangakaSeriesClient.GetMySeriesAsync(_currentUserId);
+            _quickSelectSeries = await MangakaSeriesClient.GetMySeriesAsync();
         }
         catch (Exception ex)
         {
@@ -854,7 +852,7 @@
         _quickSelectLoadingChapters = true;
         try
         {
-            _quickSelectChapters = await MangakaTaskClient.GetQuickSelectChaptersAsync(_currentUserId, seriesId);
+            _quickSelectChapters = await MangakaTaskClient.GetQuickSelectChaptersAsync(seriesId);
         }
         catch (Exception ex)
         {
@@ -872,7 +870,7 @@
         _quickSelectLoadingAssistants = true;
         try
         {
-            _quickSelectAssistants = await MangakaTaskClient.GetQuickSelectAssistantsAsync(_currentUserId, seriesId);
+            _quickSelectAssistants = await MangakaTaskClient.GetQuickSelectAssistantsAsync(seriesId);
         }
         catch (Exception ex)
         {
@@ -963,7 +961,7 @@
                 _quickSelectCompensation,
                 pageRequests);
 
-            var result = await MangakaTaskClient.QuickSelectAssignAsync(_currentUserId, request);
+            var result = await MangakaTaskClient.QuickSelectAssignAsync(request);
 
             _showQuickSelect = false;
             Snackbar.Add($"Created {result.CreatedTaskCount} task(s).", Severity.Success);
@@ -982,17 +980,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-        var user = authState.User;
-        if (user.Identity?.IsAuthenticated == true)
-        {
-            var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (Guid.TryParse(idClaim, out var userId))
-            {
-                _currentUserId = userId;
-            }
-        }
-
         await LoadTasksAsync();
     }
 
@@ -1002,7 +989,7 @@
         _error = null;
         try
         {
-            _tasks = await MangakaTaskClient.GetTasksForReviewAsync(_currentUserId);
+            _tasks = await MangakaTaskClient.GetTasksForReviewAsync();
         }
         catch (Exception ex)
         {
@@ -1043,7 +1030,7 @@
         _actionInProgress = true;
         try
         {
-            await MangakaTaskClient.ApproveTaskAsync(_currentUserId, taskId);
+            await MangakaTaskClient.ApproveTaskAsync(taskId);
             Snackbar.Add("Task approved successfully.", Severity.Success);
             await RefreshTasksAfterMutationAsync();
         }
@@ -1071,7 +1058,7 @@
         _showReturnDialog = false;
         try
         {
-            await MangakaTaskClient.ReturnTaskForReworkAsync(_currentUserId, _dialogTaskId, _returnReason.Trim());
+            await MangakaTaskClient.ReturnTaskForReworkAsync(_dialogTaskId, _returnReason.Trim());
             Snackbar.Add("Task returned for rework.", Severity.Success);
             await RefreshTasksAfterMutationAsync();
         }
@@ -1098,7 +1085,7 @@
         _showCancelDialog = false;
         try
         {
-            await MangakaTaskClient.CancelTaskAsync(_currentUserId, _dialogTaskId, _cancelReason.Trim());
+            await MangakaTaskClient.CancelTaskAsync(_dialogTaskId, _cancelReason.Trim());
             Snackbar.Add("Task cancelled.", Severity.Success);
             await RefreshTasksAfterMutationAsync();
         }
@@ -1127,7 +1114,7 @@
 
         try
         {
-            _eligibleAssistants = await MangakaTaskClient.GetEligibleAssistantsAsync(_currentUserId, task.ChapterPageTaskId);
+            _eligibleAssistants = await MangakaTaskClient.GetEligibleAssistantsAsync(task.ChapterPageTaskId);
         }
         catch (Exception ex)
         {
@@ -1154,7 +1141,7 @@
                 _reassignReason.Trim(),
                 string.IsNullOrWhiteSpace(_reassignDescription) ? null : _reassignDescription.Trim());
 
-            await MangakaTaskClient.ReassignTaskAsync(_currentUserId, _dialogTaskId, request);
+            await MangakaTaskClient.ReassignTaskAsync(_dialogTaskId, request);
             Snackbar.Add("Task reassigned successfully.", Severity.Success);
             await RefreshTasksAfterMutationAsync();
         }

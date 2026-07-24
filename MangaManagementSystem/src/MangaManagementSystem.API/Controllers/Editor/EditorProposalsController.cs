@@ -3,6 +3,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.API.Contracts;
+using MangaManagementSystem.API.Security;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Features.Editor.SeriesProposals.Commands.CancelProposalReview;
 using MangaManagementSystem.Application.Features.Editor.SeriesProposals.Commands.ClaimEditorialReview;
@@ -11,6 +12,7 @@ using MangaManagementSystem.Application.Features.Editor.SeriesProposals.Commands
 using MangaManagementSystem.Application.Features.Editor.SeriesProposals.Queries.GetEditorProposalDetail;
 using MangaManagementSystem.Application.Features.Editor.SeriesProposals.Queries.GetEditorialProposalQueue;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
@@ -24,21 +26,25 @@ namespace MangaManagementSystem.API.Controllers.Editor
     /// lives here.
     /// </summary>
     [ApiController]
+    [Authorize(Roles = TantouEditorRoleName)]
     [Route("api/editor/proposals")]
     public class EditorProposalsController : ControllerBase
     {
         // Transitional actor header — same pattern as the Mangaka workflows. The Web host owns
         // the Blazor cookie/session and forwards the logged-in user's id here.
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
+        private const string TantouEditorRoleName = "Tantou Editor";
 
         private readonly IMediator _mediator;
+        private readonly IAuthenticatedActorResolver _actorResolver;
         private readonly ILogger<EditorProposalsController> _logger;
 
         public EditorProposalsController(
             IMediator mediator,
+            IAuthenticatedActorResolver actorResolver,
             ILogger<EditorProposalsController> logger)
         {
             _mediator = mediator;
+            _actorResolver = actorResolver;
             _logger = logger;
         }
 
@@ -51,11 +57,9 @@ namespace MangaManagementSystem.API.Controllers.Editor
             [FromQuery(Name = "status")] string? status,
             CancellationToken cancellationToken)
         {
-            Guid actorUserId = Guid.Empty;
-            if (Request.Headers.TryGetValue(ActorUserIdHeader, out var headerValues))
-            {
-                Guid.TryParse(headerValues.FirstOrDefault(), out actorUserId);
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             var query = new GetEditorialProposalQueueQuery(actorUserId, status);
 
@@ -82,11 +86,9 @@ namespace MangaManagementSystem.API.Controllers.Editor
             Guid proposalId,
             CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             try
             {
@@ -118,11 +120,9 @@ namespace MangaManagementSystem.API.Controllers.Editor
             [FromBody] ClaimProposalRequest? request,
             CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             string? notes = string.IsNullOrWhiteSpace(request?.Notes) ? null : request.Notes.Trim();
 
@@ -157,11 +157,9 @@ namespace MangaManagementSystem.API.Controllers.Editor
             [FromForm] RequestRevisionForm request,
             CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             if (string.IsNullOrWhiteSpace(request.Comments))
             {
@@ -193,11 +191,9 @@ namespace MangaManagementSystem.API.Controllers.Editor
             [FromForm] PassToBoardForm request,
             CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             (byte[]? markupBytes, string? markupName, string? markupContentType) =
                 await ReadOptionalFileAsync(request.MarkupFile, cancellationToken);
@@ -224,11 +220,9 @@ namespace MangaManagementSystem.API.Controllers.Editor
             [FromForm] CancelProposalForm request,
             CancellationToken cancellationToken)
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
-            {
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
-            }
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
+            if (actorFailure is not null)
+                return actorFailure;
 
             if (string.IsNullOrWhiteSpace(request.Comments))
             {
@@ -296,20 +290,25 @@ namespace MangaManagementSystem.API.Controllers.Editor
             return (ms.ToArray(), file.FileName, file.ContentType);
         }
 
-        private bool TryResolveActorUserId(out Guid actorUserId)
+        private async Task<(Guid ActorUserId, IActionResult? Failure)> ResolveActorAsync()
         {
-            actorUserId = Guid.Empty;
-
-            if (Request.Headers.TryGetValue(ActorUserIdHeader, out var headerValues))
+            var result = await _actorResolver.ResolveAsync(User, TantouEditorRoleName);
+            if (result.Succeeded)
             {
-                string? raw = headerValues.ToString();
-                if (Guid.TryParse(raw, out actorUserId) && actorUserId != Guid.Empty)
-                {
-                    return true;
-                }
+                return (result.ActorUserId, null);
             }
 
-            return false;
+            var response = new ApiErrorResponse(
+                result.FailureKind == AuthenticatedActorFailureKind.UserNotFound
+                    ? "Authenticated Tantou Editor account was not found."
+                    : result.FailureKind == AuthenticatedActorFailureKind.InvalidIdentity
+                        ? "Authenticated Tantou Editor information is invalid."
+                        : "The current account is not an active Tantou Editor.");
+
+            return result.FailureKind is AuthenticatedActorFailureKind.InvalidIdentity
+                or AuthenticatedActorFailureKind.UserNotFound
+                ? (Guid.Empty, Unauthorized(response))
+                : (Guid.Empty, StatusCode(StatusCodes.Status403Forbidden, response));
         }
     }
 }
