@@ -8,9 +8,17 @@ public interface IEditorialBoardApiClient
     Task<IReadOnlyList<EditorialBoardPollDto>> GetOpenPollsAsync(
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<EditorialBoardPollDto>> GetPollHistoryAsync(
+        CancellationToken cancellationToken = default);
+
     Task<OpenPollResult?> OpenPollAsync(
         Guid proposalId,
         OpenPollRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<OpenPollResult?> OpenCancelSerializationPollAsync(
+        Guid seriesId,
+        OpenCancelSerializationPollRequest request,
         CancellationToken cancellationToken = default);
 
     Task<CastVoteResult?> CastVoteAsync(
@@ -26,13 +34,16 @@ public interface IEditorialBoardApiClient
         Guid pollId,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<EditorialBoardPollDto>> GetPollHistoryAsync(
-    CancellationToken cancellationToken = default);
     Task<IReadOnlyList<CancellableBoardSeriesDto>> GetCancellableSeriesForCancelPollAsync(
-    CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default);
 
-    Task<OpenPollResult?> OpenCancelSerializationPollAsync(
+    Task<UpdateBoardPollDeadlineResult?> UpdatePollDeadlineAsync(
+        Guid pollId,
+        UpdateBoardPollDeadlineRequest request,
+        CancellationToken cancellationToken = default);
+    
+    Task<UpdateSeriesPublicationFrequencyResult?> UpdateSeriesPublicationFrequencyAsync(
         Guid seriesId,
-        OpenCancelSerializationPollRequest request,
+        UpdateSeriesPublicationFrequencyRequest request,
         CancellationToken cancellationToken = default);
 }

@@ -1,28 +1,29 @@
-@page "/demo/mangaflow/polls"
+@page "/demo/mangaflow/decisions"
 @namespace MangaManagementSystem.Web.Components.Pages.Editorial
 
 @using System.Globalization
 @using System.Linq
 @using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Authorization
 @using MangaManagementSystem.Web.Services.EditorialBoard
 
 @inject IEditorialBoardApiClient EditorialBoardApiClient
 
-<MangaFlowShell Title="Board Polls"
-                Subtitle="Editorial board voting system — manage and track serialization votes."
-                ActiveMenu="polls">
+<MangaFlowShell Title="Decision Center"
+                Subtitle="Review current board polls, track votes, and manage board decisions."
+                ActiveMenu="decisions">
     <ChildContent>
         @if (_isLoading)
         {
             <section class="mf-card">
-                <div class="mf-strong">Loading board polls...</div>
-                <div class="mf-muted">Fetching open polls from database.</div>
+                <div class="mf-strong">Loading decision center...</div>
+                <div class="mf-muted">Fetching current board polls from database.</div>
             </section>
         }
         else if (!string.IsNullOrWhiteSpace(_errorMessage))
         {
             <section class="mf-card">
-                <div class="mf-strong">Cannot load board polls</div>
+                <div class="mf-strong">Cannot load decision center</div>
                 <div class="mf-muted">@_errorMessage</div>
 
                 <button class="mf-btn mf-btn-primary mf-gap-small"
@@ -34,9 +35,9 @@
         else
         {
             <div class="mf-grid mf-grid-3">
-                <KpiCard Label="Open Polls"
+                <KpiCard Label="Current Polls"
                          Value="@_polls.Count.ToString(CultureInfo.InvariantCulture)"
-                         Description="Active voting sessions"
+                         Description="Active decision sessions"
                          Icon="O"
                          Tone="green" />
 
@@ -53,12 +54,12 @@
                          Tone="orange" />
             </div>
 
-            <h2 class="mf-section-title">Open Polls</h2>
+            <h2 class="mf-section-title">Current Polls</h2>
 
             @if (_polls.Count == 0)
             {
                 <section class="mf-card">
-                    <div class="mf-strong">No open polls</div>
+                    <div class="mf-strong">No current polls</div>
                     <div class="mf-muted">
                         When Board Chief opens a serialization or cancellation poll, it will appear here from SQL Server.
                     </div>
@@ -76,13 +77,22 @@
                                     <div class="mf-muted">@poll.Code · @poll.PollTypeCode</div>
                                 </div>
 
-                                <StatusBadge Status="Open" />
+                                <div class="mf-poll-card-header-actions">
+                                    <button type="button"
+                                            class="mf-btn mf-btn-soft"
+                                            @onclick:stopPropagation="true"
+                                            @onclick="() => OpenSeriesInformation(poll)">
+                                        Information
+                                    </button>
+
+                                    <StatusBadge Status="Open" />
+                                </div>
                             </div>
 
                             <VoteBreakdown Approve="@poll.ApproveVotes"
                                            Reject="@poll.RejectVotes"
                                            Abstain="@poll.AbstainVotes"
-                                           TotalMembers="9" />
+                                           TotalMembers="@TotalBoardMembers" />
 
                             <div class="mf-row mf-gap-small">
                                 <div class="mf-muted">@DeadlineText(poll)</div>
@@ -121,6 +131,19 @@
                             <div class="mf-voting-header-actions">
                                 <span class="mf-deadline-pill">@DeadlineText(_selectedPoll)</span>
 
+                                <AuthorizeView Roles="Editorial Board Chief">
+                                    <Authorized>
+                                        @if (!IsEditingDeadline(_selectedPoll))
+                                        {
+                                            <button type="button"
+                                                    class="mf-btn mf-btn-soft mf-deadline-header-btn"
+                                                    @onclick="() => StartDeadlineEditor(_selectedPoll)">
+                                                Update Deadline
+                                            </button>
+                                        }
+                                    </Authorized>
+                                </AuthorizeView>
+
                                 <button class="mf-icon-btn"
                                         @onclick="CloseVotingCenter">
                                     ×
@@ -128,10 +151,66 @@
                             </div>
                         </div>
 
+                        <AuthorizeView Roles="Editorial Board Chief">
+                            <Authorized>
+                                @if (IsEditingDeadline(_selectedPoll))
+                                {
+                                    <div class="mf-deadline-editor mf-deadline-editor-header">
+                                        <label>Update deadline</label>
+
+                                        <input class="mf-input"
+                                               type="date"
+                                               value="@_deadlineDraftText"
+                                               @onchange="OnDeadlineDateChanged" />
+
+                                        <div class="mf-actions tight">
+                                            <button type="button"
+                                                    class="mf-btn mf-btn-primary"
+                                                    disabled="@_isSavingDeadline"
+                                                    @onclick="() => SaveDeadlineAsync(_selectedPoll)">
+                                                @(_isSavingDeadline ? "Saving..." : "Save")
+                                            </button>
+
+                                            <button type="button"
+                                                    class="mf-btn"
+                                                    disabled="@_isSavingDeadline"
+                                                    @onclick="() => ClearDeadlineAsync(_selectedPoll)">
+                                                Clear
+                                            </button>
+
+                                            <button type="button"
+                                                    class="mf-btn"
+                                                    disabled="@_isSavingDeadline"
+                                                    @onclick="CancelDeadlineEditor">
+                                                Cancel
+                                            </button>
+                                        </div>
+
+                                        @if (!string.IsNullOrWhiteSpace(_deadlineMessage)
+                                            && _deadlineEditorPollId == _selectedPoll.PollId)
+                                        {
+                                            <div class="mf-alert info">
+                                                @_deadlineMessage
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </Authorized>
+                        </AuthorizeView>
+
                         <div class="mf-voting-body">
                             <main class="mf-voting-main">
                                 <section class="mf-card">
-                                    <h2>@_selectedPoll.SeriesTitle</h2>
+                                    <div class="mf-series-title-row">
+                                        <h2>@_selectedPoll.SeriesTitle</h2>
+
+                                        <button type="button"
+                                                class="mf-btn mf-btn-soft"
+                                                @onclick:stopPropagation="true"
+                                                @onclick="OpenSelectedSeriesInformation">
+                                            Information
+                                        </button>
+                                    </div>
 
                                     <div class="mf-proposal-summary-box">
                                         <strong>Poll Reason</strong>
@@ -222,8 +301,8 @@
                                     <h3>Live Results</h3>
 
                                     <div class="mf-live-total">
-                                        <strong>@_selectedPoll.TotalVotes</strong>
-                                        <span>Total votes submitted</span>
+                                        <strong>@_selectedPoll.TotalVotes/@TotalBoardMembers</strong>
+                                        <span>Participation</span>
                                     </div>
 
                                     @RenderResultRow("Approve", "approve", _selectedPoll.ApproveVotes, _selectedPoll.TotalVotes)
@@ -241,6 +320,139 @@
                     </div>
                 </div>
             }
+
+            @if (_informationPoll is not null)
+            {
+                <div class="mf-modal-backdrop mf-information-modal-backdrop"
+                     @onclick="CloseSeriesInformation">
+                    <div class="mf-modal large" @onclick:stopPropagation="true">
+                        <div class="mf-modal-header">
+                            <div>
+                                <div class="mf-modal-meta">
+                                    <span class="mf-code">@_informationPoll.Code</span>
+                                    <StatusBadge Status="@_informationPoll.PollStatusCode" />
+                                </div>
+
+                                <h2>@_informationPoll.SeriesTitle</h2>
+                            </div>
+
+                            <button type="button"
+                                    class="mf-icon-btn"
+                                    @onclick="CloseSeriesInformation">
+                                ×
+                            </button>
+                        </div>
+
+                        <div class="mf-cover-info-layout">
+                            <section class="mf-cover-panel">
+                                <h3 class="mf-clear-title">Cover Page</h3>
+
+                                @if (!string.IsNullOrWhiteSpace(_informationPoll.CoverImageUrl))
+                                {
+                                    <img class="mf-cover-large"
+                                         src="@_informationPoll.CoverImageUrl"
+                                         alt="Series cover" />
+                                }
+                                else
+                                {
+                                    <div class="mf-cover-large-placeholder">
+                                        No cover page
+                                    </div>
+                                }
+                            </section>
+
+                            <section class="mf-info-panel">
+                                <h3 class="mf-clear-title">Series Information</h3>
+
+                                <div class="mf-grid mf-grid-2">
+                                    <div class="mf-info-tile">
+                                        <span>Author</span>
+                                        <strong>@_informationPoll.Author</strong>
+                                    </div>
+
+                                    <div class="mf-info-tile mf-genres-tile">
+                                        <span>Genre</span>
+
+                                        @if (InformationGenres.Count == 0)
+                                        {
+                                            <strong>Unknown Genre</strong>
+                                        }
+                                        else
+                                        {
+                                            <div class="mf-genre-list">
+                                                @foreach (var genre in VisibleInformationGenres)
+                                                {
+                                                    <span class="mf-genre-pill">@genre</span>
+                                                }
+                                            </div>
+
+                                            @if (InformationGenres.Count > MaxVisibleInformationGenres)
+                                            {
+                                                <button type="button"
+                                                        class="mf-info-expand-toggle"
+                                                        @onclick="ToggleInformationGenres">
+                                                    @(_showAllInformationGenres
+                                                        ? "Show less"
+                                                        : $"+{HiddenInformationGenreCount} more")
+                                                </button>
+                                            }
+                                        }
+                                    </div>
+
+                                    <div class="mf-info-tile mf-tags-tile">
+                                        <span>Tags</span>
+
+                                        @if (InformationTags.Count == 0)
+                                        {
+                                            <strong>No tags</strong>
+                                        }
+                                        else
+                                        {
+                                            <div class="mf-tag-list">
+                                                @foreach (var tag in VisibleInformationTags)
+                                                {
+                                                    <span class="mf-tag-pill">@tag</span>
+                                                }
+                                            </div>
+
+                                            @if (InformationTags.Count > MaxVisibleInformationTags)
+                                            {
+                                                <button type="button"
+                                                        class="mf-info-expand-toggle"
+                                                        @onclick="ToggleInformationTags">
+                                                    @(_showAllInformationTags
+                                                        ? "Show less"
+                                                        : $"+{HiddenInformationTagCount} more")
+                                                </button>
+                                            }
+                                        }
+                                    </div>
+
+                                    <div class="mf-info-tile">
+                                        <span>Publication Frequency</span>
+                                        <strong>@(_informationPoll.PublicationFrequencyCode ?? "N/A")</strong>
+                                    </div>
+
+                                    <div class="mf-info-tile">
+                                        <span>Poll Type</span>
+                                        <strong>@_informationPoll.PollTypeCode</strong>
+                                    </div>
+
+                                    <div class="mf-info-tile">
+                                        <span>Poll Status</span>
+                                        <strong>@_informationPoll.PollStatusCode</strong>
+                                    </div>
+                                </div>
+
+                                <div class="mf-info-tile wide mf-gap-small">
+                                    <span>Synopsis</span>
+                                    <p>@_informationPoll.Synopsis</p>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+                </div>
+            }
         }
     </ChildContent>
 </MangaFlowShell>
@@ -249,8 +461,15 @@
     private const string DefaultRejectReason =
         "Rejected by board member during voting.";
 
+    private const int TotalBoardMembers = 9;
+
+    private const int MaxVisibleInformationGenres = 3;
+    private const int MaxVisibleInformationTags = 3;
+
     private IReadOnlyList<EditorialBoardPollDto> _polls = Array.Empty<EditorialBoardPollDto>();
+
     private EditorialBoardPollDto? _selectedPoll;
+    private EditorialBoardPollDto? _informationPoll;
 
     private bool _isLoading = true;
     private bool _isSavingVote;
@@ -259,6 +478,14 @@
     private string? _voteMessage;
     private string _selectedChoice = string.Empty;
     private string? _voteReason;
+
+    private Guid? _deadlineEditorPollId;
+    private string _deadlineDraftText = string.Empty;
+    private string? _deadlineMessage;
+    private bool _isSavingDeadline;
+
+    private bool _showAllInformationGenres;
+    private bool _showAllInformationTags;
 
     private string VoteReasonPlaceholder => _selectedChoice == "REJECT"
         ? "Reason / comment. If empty, a default rejection reason will be saved."
@@ -297,6 +524,7 @@
     private void OpenVotingCenter(EditorialBoardPollDto poll)
     {
         _selectedPoll = poll;
+        _informationPoll = null;
         _selectedChoice = poll.CurrentUserChoiceCode ?? string.Empty;
         _voteReason = poll.CurrentUserVoteReason;
         _voteMessage = null;
@@ -305,9 +533,35 @@
     private void CloseVotingCenter()
     {
         _selectedPoll = null;
+        _informationPoll = null;
         _selectedChoice = string.Empty;
         _voteReason = null;
         _voteMessage = null;
+        CancelDeadlineEditor();
+    }
+
+    private void OpenSeriesInformation(EditorialBoardPollDto poll)
+    {
+        _informationPoll = poll;
+        _showAllInformationGenres = false;
+        _showAllInformationTags = false;
+    }
+
+    private void OpenSelectedSeriesInformation()
+    {
+        if (_selectedPoll is null)
+        {
+            return;
+        }
+
+        OpenSeriesInformation(_selectedPoll);
+    }
+
+    private void CloseSeriesInformation()
+    {
+        _informationPoll = null;
+        _showAllInformationGenres = false;
+        _showAllInformationTags = false;
     }
 
     private void SelectChoice(string choiceCode)
@@ -419,6 +673,170 @@
             .ToString("MMM dd, yyyy", CultureInfo.InvariantCulture);
 
         return $"Deadline: {dateStr}";
+    }
+
+    private IReadOnlyList<string> InformationGenres =>
+        _informationPoll is null
+            ? Array.Empty<string>()
+            : SplitGenreDisplay(_informationPoll.Genre);
+
+    private IReadOnlyList<string> InformationTags =>
+        _informationPoll is null
+            ? Array.Empty<string>()
+            : SplitCommaDisplay(_informationPoll.TagsDisplay);
+
+    private IEnumerable<string> VisibleInformationGenres =>
+        _showAllInformationGenres
+            ? InformationGenres
+            : InformationGenres.Take(MaxVisibleInformationGenres);
+
+    private IEnumerable<string> VisibleInformationTags =>
+        _showAllInformationTags
+            ? InformationTags
+            : InformationTags.Take(MaxVisibleInformationTags);
+
+    private int HiddenInformationGenreCount =>
+        Math.Max(0, InformationGenres.Count - MaxVisibleInformationGenres);
+
+    private int HiddenInformationTagCount =>
+        Math.Max(0, InformationTags.Count - MaxVisibleInformationTags);
+
+    private void ToggleInformationGenres()
+    {
+        _showAllInformationGenres = !_showAllInformationGenres;
+    }
+
+    private void ToggleInformationTags()
+    {
+        _showAllInformationTags = !_showAllInformationTags;
+    }
+
+    private bool IsEditingDeadline(EditorialBoardPollDto poll)
+    {
+        return _deadlineEditorPollId == poll.PollId;
+    }
+
+    private void StartDeadlineEditor(EditorialBoardPollDto poll)
+    {
+        _deadlineEditorPollId = poll.PollId;
+        _deadlineDraftText = poll.EndsAtUtc?.ToLocalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            ?? DateTime.Today.AddDays(7).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        _deadlineMessage = null;
+    }
+
+    private void CancelDeadlineEditor()
+    {
+        _deadlineEditorPollId = null;
+        _deadlineDraftText = string.Empty;
+        _deadlineMessage = null;
+    }
+
+    private void OnDeadlineDateChanged(ChangeEventArgs args)
+    {
+        _deadlineDraftText = args.Value?.ToString() ?? string.Empty;
+        _deadlineMessage = null;
+    }
+
+    private async Task SaveDeadlineAsync(EditorialBoardPollDto poll)
+    {
+        if (_isSavingDeadline)
+        {
+            return;
+        }
+
+        if (!DateTime.TryParse(
+                _deadlineDraftText,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var parsedDate))
+        {
+            _deadlineMessage = "Please choose a valid deadline date.";
+            return;
+        }
+
+        var localDeadline = parsedDate.Date
+            .AddHours(23)
+            .AddMinutes(59)
+            .AddSeconds(59);
+
+        await UpdateDeadlineAsync(
+            poll,
+            localDeadline.ToUniversalTime());
+    }
+
+    private async Task ClearDeadlineAsync(EditorialBoardPollDto poll)
+    {
+        await UpdateDeadlineAsync(poll, null);
+    }
+
+    private async Task UpdateDeadlineAsync(
+        EditorialBoardPollDto poll,
+        DateTime? endsAtUtc)
+    {
+        if (_isSavingDeadline)
+        {
+            return;
+        }
+
+        _isSavingDeadline = true;
+        _deadlineMessage = null;
+
+        try
+        {
+            await EditorialBoardApiClient.UpdatePollDeadlineAsync(
+                poll.PollId,
+                new UpdateBoardPollDeadlineRequest(endsAtUtc));
+
+            await LoadPollsAsync();
+
+            if (_selectedPoll is not null && _selectedPoll.PollId == poll.PollId)
+            {
+                _selectedPoll = _polls.FirstOrDefault(item => item.PollId == poll.PollId);
+            }
+
+            if (_informationPoll is not null && _informationPoll.PollId == poll.PollId)
+            {
+                _informationPoll = _polls.FirstOrDefault(item => item.PollId == poll.PollId);
+            }
+
+            _deadlineEditorPollId = null;
+            _deadlineDraftText = string.Empty;
+            _deadlineMessage = "Deadline updated successfully.";
+        }
+        catch (Exception ex)
+        {
+            _deadlineMessage = ex.Message;
+        }
+        finally
+        {
+            _isSavingDeadline = false;
+        }
+    }
+
+    private static IReadOnlyList<string> SplitGenreDisplay(string? genreDisplay)
+    {
+        if (string.IsNullOrWhiteSpace(genreDisplay))
+        {
+            return Array.Empty<string>();
+        }
+
+        return genreDisplay
+            .Split(" / ", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(genre => !string.IsNullOrWhiteSpace(genre))
+            .ToList();
+    }
+
+    private static IReadOnlyList<string> SplitCommaDisplay(string? display)
+    {
+        if (string.IsNullOrWhiteSpace(display))
+        {
+            return Array.Empty<string>();
+        }
+
+        return display
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .ToList();
     }
 
     private RenderFragment RenderResultRow(string label, string tone, int count, int total) => __builder =>
