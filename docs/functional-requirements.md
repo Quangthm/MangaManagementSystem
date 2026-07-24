@@ -14,6 +14,8 @@
 
 > **Latest implementation-alignment decisions — 2026-07-23:** Email/password self-registration follows the current repository flow: the user must pass reCAPTCHA before a 6-digit email OTP is sent, and the pending account is created only after successful OTP verification; Google sign-up remains a separate verified-identity path and still creates `PENDING_APPROVAL`. The current MVP has no Mangaka proposal-withdrawal workflow. Assistants are allowed to view dynamic rankings, while manual ranking input remains restricted to Editorial Board Member/Chief roles. A `CANCELLED` chapter does not reserve its chapter number label: a new non-cancelled chapter may reuse the same label while the cancelled row keeps its original label, enforced by uniqueness among non-cancelled chapters only. Scheduling accepts `planned_release_date >=` the current publication business date (today in the configured publication timezone); past dates are invalid. `PageRegion` geometry supports either a DOT (`width = 0` and `height = 0`) or an area rectangle (`width > 0` and `height > 0`), and mixed zero/non-zero dimensions are invalid. Ranking preserves true ties: equal `ranking_score` values share the same `DENSE_RANK`; deterministic secondary ordering may be used only to display rows within the same rank and must not change `rank_position`.
 
+> **Deferred source-series alignment — 2026-07-24:** `Series.source_series_id` / `SourceSeriesId` remains a nullable field in the database and existing backend/domain plumbing for compatibility and possible future implementation. Source-series selection/editing is **deferred** and is not part of the current MVP user-facing workflow: current UI, use cases, user stories, and active functional requirements must not present it as an available Mangaka action. Normal UI-driven create/update flows should leave it unset/null. If the feature is activated later, the implementation must reject self-reference. The current MVP proposal lifecycle continues to have no Mangaka proposal-withdrawal action and no `WITHDRAWN` proposal status.
+
 ---
 
 ## 3. Functional Requirements
@@ -148,6 +150,8 @@
 
 ## 3.5 Series
 
+> **Deferred source-series implementation:** `Series.source_series_id` / `SourceSeriesId` remains nullable in the database and existing backend/domain plumbing, but it is not an active current-MVP functional requirement. No current UI/use case shall expose source-series selection or editing, and normal UI-driven create/update flows should leave the field unset/null. If enabled in a future iteration, self-reference must be rejected. Accordingly, the former active source-series requirements `FR-SERIES-010` and `FR-SERIES-011` are deferred and intentionally omitted from the active requirement table.
+
 | ID | Functional Requirement | Source Business Rules |
 |---|---|---|
 | FR-SERIES-001 | The system shall allow active Mangaka users to create series draft profiles. | BR-SERIES-001, BR-SERIES-002, BR-SERIES-003, BR-SERIES-015 |
@@ -168,8 +172,6 @@
 | FR-SERIES-009D | The system shall not require crop metadata or original/cropped dual-file storage for `SERIES_COVER` in MVP. | BR-SERIES-007B |
 | FR-SERIES-009E | The current Web cropper shall output the MVP series cover crop as a `1000×1500` image file. | BR-SERIES-007C |
 | FR-SERIES-009F | The system should warn users when the selected source image is smaller than the recommended cover output size and may look blurry after upscaling. | BR-SERIES-007D |
-| FR-SERIES-010 | The system shall allow a series to optionally reference another series as its source version. | BR-SERIES-008 |
-| FR-SERIES-011 | The system shall prevent a series from referencing itself as its source series. | BR-SERIES-009 |
 | FR-SERIES-012 | The system shall manage series ownership and contributor membership through `SeriesContributor` instead of `lead_mangaka_user_id` on `Series`. | BR-SERIES-010 |
 | FR-SERIES-013 | The system shall allow a series to have multiple contributors who can participate in managing or editing series information. | BR-SERIES-011 |
 | FR-SERIES-014 | The system shall record both `updated_at_utc` and `updated_by_user_id` when editable series profile metadata is changed. | BR-SERIES-012 |
@@ -181,7 +183,7 @@
 | FR-SERIES-020 | The system shall regenerate and update the slug when the Mangaka changes the title and saves while the series is still `PROPOSAL_DRAFT`. | BR-SERIES-019 |
 | FR-SERIES-021 | The system shall lock the slug from normal update after the series leaves `PROPOSAL_DRAFT`. | BR-SERIES-020 |
 | FR-SERIES-022 | The system shall expose `/series/{slug}` as the stable main series URL after the series becomes `SERIALIZED`. | BR-SERIES-021 |
-| FR-SERIES-023 | The system shall allow normal Mangaka updates to title, synopsis, genres, tags, cover, content language, source series, publication frequency, and regenerate slug from title only while the series is in `PROPOSAL_DRAFT`. | BR-SERIES-022 |
+| FR-SERIES-023 | The system shall allow normal Mangaka updates to title, synopsis, genres, tags, cover, content language, publication frequency, and regenerate slug from title only while the series is in `PROPOSAL_DRAFT`. | BR-SERIES-022 |
 | FR-SERIES-024 | The system shall reject normal series profile update attempts after the series leaves `PROPOSAL_DRAFT`, unless a separate controlled workflow allows the specific change. | BR-SERIES-023 |
 | FR-SERIES-025 | The system shall allow Mangaka production work after serialization through chapters, pages, page versions, regions, tasks, and the authorized chapter workspace rather than normal series profile editing. | BR-SERIES-024 |
 | FR-SERIES-026 | The system shall create an active `SeriesContributor` record for the Mangaka who creates a new series draft in the same backend workflow or transaction that creates the `Series` record. | BR-SERIES-025 |
