@@ -1,3 +1,4 @@
+using MangaManagementSystem.Application.Features.Ranking.Warnings;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Domain.Interfaces;
 using MangaManagementSystem.Infrastructure.Options;
@@ -9,6 +10,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using EFCore.NamingConventions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using MangaManagementSystem.Application.Features.EditorialBoard.Repositories;
 using MangaManagementSystem.Application.Features.Ranking.Repositories;
 
@@ -18,6 +20,7 @@ namespace MangaManagementSystem.Infrastructure
     {
         public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
         {
+            services.TryAddSingleton(TimeProvider.System);
             services.AddScoped<MangaManagementSystem.Infrastructure.Persistence.Interceptors.AuditableEntityInterceptor>();
 
             services.AddDbContext<ApplicationDbContext>((sp, options) =>
@@ -97,6 +100,7 @@ namespace MangaManagementSystem.Infrastructure
 
             services.AddScoped<IEditorialBoardRepository, EditorialBoardRepository>();
             services.AddScoped<ISeriesRankingRepository, SeriesRankingRepository>();
+            services.AddScoped<IRankingWarningRepository, RankingWarningRepository>();
             services.AddScoped<IPublicationPeriodRepository, PublicationPeriodRepository>();
             services.AddScoped<IPublicationScheduleRepository, PublicationScheduleRepository>();
             services.AddScoped<IChapterOnHoldRepository, ChapterOnHoldRepository>();
