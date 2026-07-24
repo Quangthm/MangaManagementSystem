@@ -12,14 +12,12 @@ using Microsoft.Extensions.Logging;
 namespace MangaManagementSystem.Web.Services.Api
 {
     /// <summary>
-    /// HttpClient-backed implementation of <see cref="IEditorProposalApiClient"/>. Sends the
-    /// transitional X-Actor-User-Id header, builds multipart/form-data for decision actions that
+    /// HttpClient-backed implementation of <see cref="IEditorProposalApiClient"/>. Builds
+    /// multipart/form-data for decision actions that
     /// carry a markup file, and parses safe error messages for UI snackbars.
     /// </summary>
     public class EditorProposalApiClient : IEditorProposalApiClient
     {
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
-
         private readonly HttpClient _httpClient;
         private readonly ILogger<EditorProposalApiClient> _logger;
 
@@ -30,7 +28,6 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<IReadOnlyList<ProposalQueueItemDto>> GetQueueAsync(
-            Guid actorUserId,
             string? statusCode = null,
             CancellationToken cancellationToken = default)
         {
@@ -41,7 +38,6 @@ namespace MangaManagementSystem.Web.Services.Api
             }
 
             using var requestMessage = new HttpRequestMessage(HttpMethod.Get, route);
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
@@ -60,14 +56,11 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<EditorProposalDetailDto?> GetDetailAsync(
-            Guid actorUserId,
             Guid proposalId,
             CancellationToken cancellationToken = default)
         {
             using var requestMessage = new HttpRequestMessage(
                 HttpMethod.Get, $"api/editor/proposals/{proposalId}");
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
-
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
             if (response.StatusCode == HttpStatusCode.NotFound)
@@ -89,7 +82,6 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<EditorReviewActionResultDto> ClaimAsync(
-            Guid actorUserId,
             Guid proposalId,
             string? notes = null,
             CancellationToken cancellationToken = default)
@@ -102,13 +94,10 @@ namespace MangaManagementSystem.Web.Services.Api
             {
                 Content = content
             };
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
-
             return await SendDecisionAsync(requestMessage, proposalId, "claim", cancellationToken);
         }
 
         public async Task<EditorReviewActionResultDto> RequestRevisionAsync(
-            Guid actorUserId,
             Guid proposalId,
             string comments,
             byte[]? markupFileBytes = null,
@@ -123,13 +112,10 @@ namespace MangaManagementSystem.Web.Services.Api
             {
                 Content = form
             };
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
-
             return await SendDecisionAsync(requestMessage, proposalId, "request revision", cancellationToken);
         }
 
         public async Task<EditorReviewActionResultDto> PassToBoardAsync(
-            Guid actorUserId,
             Guid proposalId,
             string? comments = null,
             byte[]? markupFileBytes = null,
@@ -144,13 +130,10 @@ namespace MangaManagementSystem.Web.Services.Api
             {
                 Content = form
             };
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
-
             return await SendDecisionAsync(requestMessage, proposalId, "pass to board", cancellationToken);
         }
 
         public async Task<EditorReviewActionResultDto> CancelAsync(
-            Guid actorUserId,
             Guid proposalId,
             string comments,
             byte[] markupFileBytes,
@@ -170,8 +153,6 @@ namespace MangaManagementSystem.Web.Services.Api
             {
                 Content = form
             };
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
-
             return await SendDecisionAsync(requestMessage, proposalId, "cancel", cancellationToken);
         }
 

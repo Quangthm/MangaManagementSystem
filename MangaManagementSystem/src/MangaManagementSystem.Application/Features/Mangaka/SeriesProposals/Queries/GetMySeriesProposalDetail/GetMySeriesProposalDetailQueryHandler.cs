@@ -50,7 +50,6 @@ namespace MangaManagementSystem.Application.Features.Mangaka.SeriesProposals.Que
                 Tags: MapTags(proposal.Series?.Tags),
                 StatusCode: proposal.StatusCode,
                 SubmittedAtUtc: proposal.SubmittedAtUtc,
-                WithdrawnAtUtc: proposal.WithdrawnAtUtc,
                 ReviewedAtUtc: proposal.ReviewedAtUtc,
                 Comments: proposal.Comments,
                 SubmittedByDisplayName: proposal.SubmittedByUser?.DisplayName ?? string.Empty,

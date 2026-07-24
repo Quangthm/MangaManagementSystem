@@ -74,7 +74,7 @@
         _error = null;
         try
         {
-            var proposal = await MangakaSeriesApiClient.GetMySeriesProposalDetailAsync(_currentUserId, ProposalId);
+            var proposal = await MangakaSeriesApiClient.GetMySeriesProposalDetailAsync(ProposalId);
             if (proposal is null)
             {
                 _error = "Proposal not found or you do not have access.";
@@ -115,7 +115,6 @@
         ProposalFileUrl: p.ProposalFile.SecureUrl,
         MarkupFileName: p.MarkupFile?.OriginalFileName,
         MarkupFileUrl: p.MarkupFile?.SecureUrl,
-        WithdrawnAtUtc: p.WithdrawnAtUtc,
         HasEditorialDecision: p.ReviewedAtUtc.HasValue
     );
 }

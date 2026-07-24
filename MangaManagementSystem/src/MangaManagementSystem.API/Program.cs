@@ -3,6 +3,7 @@ using MangaManagementSystem.Application;
 using MangaManagementSystem.Application.Features.Ranking.Warnings;
 using MangaManagementSystem.API.Endpoints;
 using MangaManagementSystem.API.HostedServices;
+using MangaManagementSystem.API.Security;
 using MangaManagementSystem.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -34,7 +35,7 @@ namespace MangaManagementSystem.API
                 builder.Services.AddSingleton(TimeProvider.System);
             }
 
-// Application use-case services and Infrastructure (EF Core,
+            // Application use-case services and Infrastructure (EF Core,
             // stored procedure wrappers, Cloudinary, OTP cache) are reused
             // as-is. The API only owns the HTTP boundary; it does not contain
             // business logic or SQL details.
@@ -44,6 +45,9 @@ namespace MangaManagementSystem.API
             builder.Services.AddHostedService<RankingWarningEvaluationHostedService>();
 
             builder.Services.AddControllers();
+            builder.Services.AddScoped<
+                IAuthenticatedActorResolver,
+                AuthenticatedActorResolver>();
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
 

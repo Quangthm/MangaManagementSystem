@@ -443,7 +443,7 @@
 
     private async Task<List<ActionableChapterItem>> LoadMangakaChaptersAsync()
     {
-        var chapters = await MangakaApi.GetMyChaptersAsync(_currentUserId);
+        var chapters = await MangakaApi.GetMyChaptersAsync();
         return chapters
             .Where(c => !ExcludedStatuses.Contains(c.StatusCode))
             .Select(c => new ActionableChapterItem(
@@ -457,7 +457,7 @@
     private async Task<List<ActionableChapterItem>> LoadEditorChaptersAsync()
     {
         var chapters = await EditorApi.GetActionableChaptersAsync(
-            _currentUserId, SelectedSeriesId);
+            SelectedSeriesId);
         return chapters
             .Select(c => new ActionableChapterItem(
                 c.ChapterId, c.SeriesId, c.SeriesTitle,
@@ -554,14 +554,14 @@
                 if (_isMangaka)
                 {
                     var response = await MangakaApi.SetPlannedReleaseDateAsync(
-                        _currentUserId, chapter.ChapterId,
+                        chapter.ChapterId,
                         new SetPlannedReleaseDateRequest(scheduleResult.NewPlannedReleaseDate));
                     Snackbar.Add(response.ValidationMessage ?? "Planned release date updated.", Severity.Success);
                 }
                 else if (_isEditor)
                 {
                     var response = await EditorApi.SetPlannedReleaseDateAsync(
-                        _currentUserId, chapter.ChapterId,
+                        chapter.ChapterId,
                         new SetPlannedReleaseDateRequest(scheduleResult.NewPlannedReleaseDate));
                     Snackbar.Add(response.ValidationMessage ?? "Planned release date updated.", Severity.Success);
                 }
@@ -585,7 +585,7 @@
         {
             try
             {
-                await EditorApi.PutChapterOnHoldAsync(_currentUserId, chapter.ChapterId, holdResult.Reason);
+                await EditorApi.PutChapterOnHoldAsync(chapter.ChapterId, holdResult.Reason);
                 Snackbar.Add("Chapter has been put on hold.", Severity.Success);
                 await ReloadAllAsync();
             }
@@ -613,7 +613,7 @@
         {
             try
             {
-                await EditorApi.ReleaseChapterAsync(_currentUserId, chapter.ChapterId, true);
+                await EditorApi.ReleaseChapterAsync(chapter.ChapterId, true);
                 Snackbar.Add("Chapter has been released.", Severity.Success);
                 await ReloadAllAsync();
             }

@@ -9,6 +9,10 @@
 **Latest ranking/notification update — 2026-07-21:** Existing Bell behavior for proposal/chapter/task notifications, board decisions, publication scheduling, and account approval remains unchanged. Ranking uses the weighted score `(v / (v + m)) * R + (m / (v + m)) * C`; `reading_count` remains popularity evidence rather than a direct score boost. `RANKING_WARNING` uses the finalized hybrid weekly rule: both `ranking_score < 6.5` and bottom-25% rank must fail in the same completed week, with failure in at least 2 of the latest 3 consecutive completed weeks including the latest. All distinct active contributors of the exact affected series receive the warning.  
 
 **Latest chapter submission validation — 2026-07-21:** The chapter workspace must surface the backend-authoritative submission gate: a Mangaka may submit only from `DRAFT` or `REVISION_REQUESTED` when zero distinct associated page tasks remain `ASSIGNED` or `UNDER_REVIEW`. If blocked, keep the chapter unchanged and show the clean backend message directing the Mangaka to complete or cancel active tasks; do not auto-cancel tasks or show a successful submission state.
+
+**Latest implementation-alignment decisions — 2026-07-23:** Email/password self-registration follows the current repository flow: the user must pass reCAPTCHA before a 6-digit email OTP is sent, and the pending account is created only after successful OTP verification; Google sign-up remains a separate verified-identity path and still creates `PENDING_APPROVAL`. The current MVP has no Mangaka proposal-withdrawal workflow. Assistants are allowed to view dynamic rankings, while manual ranking input remains restricted to Editorial Board Member/Chief roles. A `CANCELLED` chapter does not reserve its chapter number label: a new non-cancelled chapter may reuse the same label while the cancelled row keeps its original label, enforced by uniqueness among non-cancelled chapters only. Scheduling accepts `planned_release_date >=` the current publication business date (today in the configured publication timezone); past dates are invalid. `PageRegion` geometry supports either a DOT (`width = 0` and `height = 0`) or an area rectangle (`width > 0` and `height > 0`), and mixed zero/non-zero dimensions are invalid. Ranking preserves true ties: equal `ranking_score` values share the same `DENSE_RANK`; deterministic secondary ordering may be used only to display rows within the same rank and must not change `rank_position`.
+
+**Deferred source-series alignment — 2026-07-24:** `Series.source_series_id` / `SourceSeriesId` remains a nullable field in the database and existing backend/domain plumbing for compatibility and possible future implementation. Source-series selection/editing is **deferred** and is not part of the current MVP user-facing workflow: current UI, use cases, user stories, and active functional requirements must not present it as an available Mangaka action. Normal UI-driven create/update flows should leave it unset/null. If the feature is activated later, the implementation must reject self-reference. The current MVP proposal lifecycle continues to have no Mangaka proposal-withdrawal action and no `WITHDRAWN` proposal status.
 **Purpose:** Define the UI behavior for Mangaka-owned series drafting, slug usage, stable series URLs, and the centralized chapter-level workspace.
 
 ---
@@ -99,6 +103,8 @@ Allow Mangaka to create, view, edit, and submit their own series drafts before f
 
 ## 4. Create / Edit Series Draft Modal
 
+> **Deferred Source Series UI:** The current Create/Edit Series Draft UI must not show a Source Series field or selector. The nullable `source_series_id` / `SourceSeriesId` remains in the database/backend model for compatibility and possible future work. Normal UI-driven create/edit operations leave it unset/null. If the feature is introduced later, self-reference validation must be added.
+
 ### Fields
 
 | Field | Required | Notes |
@@ -110,7 +116,6 @@ Allow Mangaka to create, view, edit, and submit their own series drafts before f
 | Tags | No | Optional multi-select from `manga.Tag`, saved through `manga.SeriesTag`. |
 | Content language | Yes | `ja`, `en`, `vi`. |
 | Cover image | No | Must reference `FileResource` with `SERIES_COVER` purpose if provided. |
-| Source series | No | Cannot reference itself. |
 | Publication frequency | No | `WEEKLY`, `MONTHLY`, `IRREGULAR`; treated as Mangaka proposed frequency during draft. |
 
 ### Cover crop behavior
@@ -1052,7 +1057,7 @@ Additional UI rules:
 | Decision action | Required input | Result | UI meaning |
 |---|---|---|---|
 | Approve Chapter with no planned release date | None required | `Chapter.status_code = APPROVED` | Chapter is accepted but still needs a planned release date before it becomes scheduled or released. |
-| Approve Chapter with an existing future planned release date | None required | `Chapter.status_code = SCHEDULED` | Chapter is accepted, scheduled, and locked from Mangaka/page content mutation workflows. |
+| Approve Chapter with an existing planned release date of today or later | None required | `Chapter.status_code = SCHEDULED` | Chapter is accepted, scheduled, and locked from Mangaka/page content mutation workflows. |
 | Request Revision | Non-blank comments; optional markup file | `Chapter.status_code = REVISION_REQUESTED` | Same chapter becomes editable again and can receive new page versions. |
 | Cancel Chapter | Non-blank comments; optional markup file | `Chapter.status_code = CANCELLED` | Current chapter attempt is terminal/read-only and cannot be edited or resubmitted. |
 
@@ -1062,11 +1067,11 @@ Additional UI rules:
 |---|---|
 | Mangaka viewing `SCHEDULED` chapter | Show read-only state and message: `This chapter is scheduled. Content changes are locked. Schedule changes are audit-visible.` |
 | Mangaka viewing `ON_HOLD` chapter | Show read-only/on-hold state and hold reason when available. Explain that returning to schedule requires a new planned release date. |
-| Mangaka scheduling/rescheduling an allowed chapter | Allow selecting any future planned release date; show frequency-based suggestions/warnings but do not hard-block mismatches. Require confirmation. |
+| Mangaka scheduling/rescheduling an allowed chapter | Allow selecting any planned release date on the current publication business date or later; show frequency-based suggestions/warnings but do not hard-block mismatches. Require confirmation. |
 | Tantou Editor viewing `SCHEDULED` chapter | Show planned release date, advisory frequency information, Reschedule action, Put On Hold action, and Release action when eligible. |
-| Tantou Editor scheduling/rescheduling an allowed chapter | Allow selecting any future planned release date; show frequency-based suggestions/warnings but do not hard-block mismatches. Require confirmation. |
+| Tantou Editor scheduling/rescheduling an allowed chapter | Allow selecting any planned release date on the current publication business date or later; show frequency-based suggestions/warnings but do not hard-block mismatches. Require confirmation. |
 | Tantou Editor putting `SCHEDULED` chapter on hold | Require a non-blank operational/editorial reason and confirmation. |
-| Tantou Editor returning `ON_HOLD` chapter to schedule | Require a new future planned release date and confirmation. |
+| Tantou Editor returning `ON_HOLD` chapter to schedule | Require a new planned release date on the current publication business date or later and confirmation. |
 | Tantou Editor releasing a chapter | Require confirmation; set `released_at_utc` to the current UTC time and preserve existing `planned_release_date` unless it is missing. |
 | Any user viewing `SCHEDULED` or `ON_HOLD` workspace | Keep read-only viewing available where authorized, but hide/disable page/content mutation actions. |
 
@@ -1187,6 +1192,7 @@ For MVP, symbolic `returnContext` is safer and easier to avoid open-redirect mis
 - Chapter revision and cancellation decisions require non-blank comments, while markup files are optional.
 - Cancelled chapter screens are read-only and do not allow edit, upload, resubmit, schedule, or release actions.
 - Mangaka contributors can create a replacement draft for a cancelled chapter using the same chapter number label.
+- The cancelled chapter keeps its original number label; the replacement may use the same label because uniqueness applies only to non-cancelled chapters. The UI should distinguish the historical cancelled attempt by status/context rather than relabelling it.
 
 ---
 
@@ -1198,7 +1204,7 @@ Support a shared weekly publication calendar for planned and released chapters, 
 
 Scheduling is chapter-level. The UI must use `Chapter.planned_release_date`, `Chapter.released_at_utc`, and `Chapter.status_code`; it must not present `SCHEDULED` as a series status.
 
-`Series.publication_frequency_code` is advisory. It may provide suggested dates and warning messages, but it must not hard-block authorized users from choosing a different future date.
+`Series.publication_frequency_code` is advisory. It may provide suggested dates and warning messages, but it must not hard-block authorized users from choosing a different date on the current publication business date or later.
 
 ### Current route and URL behavior
 
@@ -1297,7 +1303,7 @@ The scheduling action drawer is a role-gated UI for Mangaka and Tantou Editor sc
 - Drag/drop is used only to set or change a chapter planned release date.
 - Dragging from the action drawer to a calendar day is allowed for authorized actionable chapters.
 - Dragging an existing calendar card is allowed only when the actor has an authorized actionable payload for that chapter.
-- Dropping onto a future date opens or completes the same scheduling confirmation flow used by normal schedule/reschedule actions.
+- Dropping onto today or a later date opens or completes the same scheduling confirmation flow used by normal schedule/reschedule actions.
 - Dropping onto past dates must be blocked or rejected with a clear error.
 - There is no unschedule-by-drag behavior in the MVP.
 - The drawer is not a drop target for clearing planned dates.
@@ -1310,8 +1316,8 @@ The scheduling action drawer is a role-gated UI for Mangaka and Tantou Editor sc
 |---|---|
 | `WEEKLY` | Suggest the same weekday in the next week when a useful reference date exists. |
 | `MONTHLY` | Suggest the same day number in the next month when possible, otherwise the last valid day of the next month. |
-| `IRREGULAR` | Do not require a strict default; user chooses a future date. |
-| `NULL` | Show that the official release approach has not been decided; user chooses a future date. |
+| `IRREGULAR` | Do not require a strict default; user chooses today or a later date. |
+| `NULL` | Show that the official release approach has not been decided; user chooses today or a later date. |
 
 ### Hard validation behavior
 
@@ -1329,13 +1335,13 @@ The scheduling action drawer is a role-gated UI for Mangaka and Tantou Editor sc
 
 | Current chapter state/action | Result |
 |---|---|
-| `DRAFT` or `REVISION_REQUESTED` + future planned date set | Planned date is saved; chapter remains editable/plannable in its current status. |
+| `DRAFT` or `REVISION_REQUESTED` + planned date of today or later set | Planned date is saved; chapter remains editable/plannable in its current status. |
 | `UNDER_REVIEW` + editor approves + no planned date | Chapter becomes `APPROVED`. |
-| `UNDER_REVIEW` + editor approves + future planned date exists | Chapter becomes `SCHEDULED`. |
-| `APPROVED` + future planned date set | Chapter becomes `SCHEDULED`. |
+| `UNDER_REVIEW` + editor approves + planned date of today or later exists | Chapter becomes `SCHEDULED`. |
+| `APPROVED` + planned date of today or later set | Chapter becomes `SCHEDULED`. |
 | `SCHEDULED` + Mangaka/Editor reschedules | Chapter remains `SCHEDULED`; planned date is updated. |
 | `SCHEDULED` + Editor puts on hold | Chapter becomes `ON_HOLD`; the previous release plan is suspended and audit details preserve the old date/reason. |
-| `ON_HOLD` + Editor returns to schedule | Requires a new future planned release date; chapter becomes `SCHEDULED`. |
+| `ON_HOLD` + Editor returns to schedule | Requires a new planned release date on the current publication business date or later; chapter becomes `SCHEDULED`. |
 | `APPROVED` or `SCHEDULED` + Editor releases while parent series is `SERIALIZED` | Chapter becomes `RELEASED`; `released_at_utc` is set to the current UTC time. |
 | `RELEASED` or `CANCELLED` chapter, or parent series `HIATUS`/`COMPLETED`/`CANCELLED` for release action | Blocked. |
 
@@ -1367,7 +1373,7 @@ The UI should ask for confirmation before:
 - A `SCHEDULED` chapter should show a clear locked state for Mangaka users.
 - An `ON_HOLD` chapter should show a clear paused/on-hold state with reason when available.
 - The workspace may remain viewable if the user is authorized, but saved page/content mutation controls should be hidden or disabled.
-- On-hold recovery requires a new future planned release date.
+- On-hold recovery requires a new planned release date on the current publication business date or later.
 - Automatic overdue-to-on-hold behavior is deferred. The UI may show overdue warnings, but it should not trigger writes from read-only page loading.
 
 ### Current non-goals / deferred items
@@ -1425,11 +1431,13 @@ The scheduling/rescheduling actor is excluded from `PUBLICATION_SCHEDULE` recipi
 
 Display dynamic series rankings from `manga.vw_SeriesRanking` for a selected `PublicationPeriod`.
 
+**Access:** All `ACTIVE` authenticated roles, including Assistant, may view ranking results. Only Editorial Board Member and Editorial Board Chief roles may create or update manual ranking input.
+
 ### Ranking list fields
 
 | Field | Notes |
 |---|---|
-| Rank position | Computed by the ranking view using `DENSE_RANK()`. |
+| Rank position | Computed with tie-preserving `DENSE_RANK()` on `ranking_score`; equal scores display the same rank. |
 | Series title | Display name of the ranked series. |
 | Slug | Optional; use only if the row links to `/series/{slug}`. |
 | Average rating | Score from period vote input. |
@@ -1451,6 +1459,7 @@ ranking_score =
 - `C` = rating-count-weighted average rating across eligible ranked series in that same scope.
 - `m` = median rating count across eligible ranked series in that same scope.
 - `reading_count` is displayed as popularity/readership evidence and is not directly added to `ranking_score`.
+- Equal `ranking_score` values share one rank position. Within a tied rank, rows may be displayed by `average_rating`, then `rating_count`, `reading_count`, and `series_id` for stable ordering only; this order must not alter the shared rank.
 - The UI does not need to expose `C` or `m`; they are calculation inputs.
 - For monthly/yearly/all-time derived views, aggregate weekly source evidence by series first, then recalculate the broader scope's own `R`, `v`, `C`, `m`, and weighted score. Do not average weekly ranking scores.
 

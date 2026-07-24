@@ -538,12 +538,12 @@
 
             if (_isMangaka)
             {
-                var chapters = await MangakaChapterApi.GetMyChaptersAsync(_currentUserId);
+                var chapters = await MangakaChapterApi.GetMyChaptersAsync();
                 items = chapters.Select(c => MapMangakaChapterToActionableItem(c));
             }
             else if (_isEditor)
             {
-                var chapters = await EditorChapterReviewApi.GetActionableChaptersAsync(_currentUserId);
+                var chapters = await EditorChapterReviewApi.GetActionableChaptersAsync();
                 items = chapters.Select(c => MapEditorChapterToActionableItem(c));
             }
             else
@@ -749,12 +749,12 @@
             if (_isMangaka)
             {
                 response = await MangakaChapterApi.SetPlannedReleaseDateAsync(
-                    _currentUserId, chapter.ChapterId, request);
+                    chapter.ChapterId, request);
             }
             else if (_isEditor)
             {
                 response = await EditorChapterReviewApi.SetPlannedReleaseDateAsync(
-                    _currentUserId, chapter.ChapterId, request);
+                    chapter.ChapterId, request);
             }
             else
             {

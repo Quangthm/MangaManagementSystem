@@ -369,7 +369,6 @@ CREATE TABLE manga.SeriesProposal (
 	status_code NVARCHAR(50) NOT NULL CONSTRAINT df_series_proposal_status_code DEFAULT(N'UNDER_EDITORIAL_REVIEW'),
 	submitted_by_user_id UNIQUEIDENTIFIER NOT NULL,
 	submitted_at_utc DATETIME2(0) NOT NULL CONSTRAINT df_series_proposal_submitted_at_utc DEFAULT SYSUTCDATETIME(),
-	withdrawn_at_utc DATETIME2(0) NULL,
 	reviewed_by_user_id UNIQUEIDENTIFIER NULL,
 	reviewed_at_utc DATETIME2(0) NULL,
 	comments NVARCHAR(MAX) NULL,
@@ -380,21 +379,10 @@ CREATE TABLE manga.SeriesProposal (
 			N'UNDER_BOARD_REVIEW',
 			N'REVISION_REQUESTED',
 			N'APPROVED',
-			N'CANCELLED',
-			N'WITHDRAWN'
+			N'CANCELLED'
 			)
 		),
 	CONSTRAINT ck_series_proposal_version_positive CHECK (proposal_version_no > 0),
-	CONSTRAINT ck_series_proposal_withdrawn_at_matches_status CHECK (
-		(
-			status_code = N'WITHDRAWN'
-			AND withdrawn_at_utc IS NOT NULL
-			)
-		OR (
-			status_code <> N'WITHDRAWN'
-			AND withdrawn_at_utc IS NULL
-			)
-		),
 	CONSTRAINT ck_series_proposal_review_pair CHECK (
 		(
 			reviewed_by_user_id IS NULL
@@ -415,7 +403,6 @@ CREATE TABLE manga.SeriesProposal (
 		proposal_version_no
 		)
 	);
-
 CREATE INDEX ix_series_proposal_series_version ON manga.SeriesProposal (
 	series_id,
 	proposal_version_no DESC
@@ -957,18 +944,13 @@ CREATE TABLE manga.ChapterEditorialReview (
 CHECK
 (
     decision_code = N'APPROVED'
-
     OR
     (
-        decision_code = N'REVISION_REQUESTED'
+        decision_code IN (
+            N'REVISION_REQUESTED',
+            N'CANCELLED'
+        )
         AND NULLIF(LTRIM(RTRIM(comments)), N'') IS NOT NULL
-    )
-
-    OR
-    (
-        decision_code = N'CANCELLED'
-        AND NULLIF(LTRIM(RTRIM(comments)), N'') IS NOT NULL
-        AND markup_file_id IS NOT NULL
     )
 ),
 	CONSTRAINT fk_chapter_editorial_review_chapter FOREIGN KEY (chapter_id) REFERENCES manga.Chapter(chapter_id),
@@ -1308,15 +1290,8 @@ SELECT
 
     DENSE_RANK() OVER
     (
-        PARTITION BY
-            publication_period_id
-
-        ORDER BY
-            ranking_score DESC,
-            average_rating DESC,
-            rating_count DESC,
-            reading_count DESC,
-            series_id ASC
+        PARTITION BY publication_period_id
+        ORDER BY ranking_score DESC
     ) AS rank_position
 
 FROM ScoreBase;

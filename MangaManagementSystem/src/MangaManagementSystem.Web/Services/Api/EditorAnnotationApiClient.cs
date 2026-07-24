@@ -12,8 +12,6 @@ namespace MangaManagementSystem.Web.Services.Api
 {
     public class EditorAnnotationApiClient : IEditorAnnotationApiClient
     {
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
-
         private readonly HttpClient _httpClient;
         private readonly ILogger<EditorAnnotationApiClient> _logger;
 
@@ -26,7 +24,6 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<EditorAnnotationWorkspaceDto> GetAnnotationsAsync(
-            Guid actorUserId,
             string? seriesId = null,
             string? issueType = null,
             string? status = null,
@@ -46,7 +43,6 @@ namespace MangaManagementSystem.Web.Services.Api
                 route += "?" + string.Join("&", queryParams);
 
             using var requestMessage = new HttpRequestMessage(HttpMethod.Get, route);
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
