@@ -252,7 +252,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                         .CanCreateTask(chapter.StatusCode))
                 {
                     throw new InvalidOperationException(
-                        "New tasks can only be created for DRAFT or REVISION_REQUESTED chapters in a SERIALIZED or HIATUS series.");
+                        "Tasks can only be created for chapters in draft or needing revision, while the series is serialized or on hiatus.");
                 }
 
                 var createdAtUtc =

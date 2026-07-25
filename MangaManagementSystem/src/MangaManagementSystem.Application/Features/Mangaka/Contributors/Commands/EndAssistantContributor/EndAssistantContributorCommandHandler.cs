@@ -54,6 +54,16 @@ namespace MangaManagementSystem.Application.Features.Mangaka.Contributors.Comman
                 throw new InvalidOperationException("Only an active Mangaka contributor can remove assistants from this series.");
             }
 
+            var seriesStatus = await _seriesContributorRepository.GetSeriesStatusCodeAsync(
+                request.SeriesId,
+                cancellationToken);
+
+            if (string.Equals(seriesStatus, "COMPLETED", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "This series is completed, so its contributor list can no longer be changed.");
+            }
+
             var target = await _seriesContributorRepository.GetContributorTargetSnapshotAsync(
                 request.SeriesId,
                 request.AssistantUserId,
@@ -82,7 +92,7 @@ namespace MangaManagementSystem.Application.Features.Mangaka.Contributors.Comman
             if (hasActiveTasks)
             {
                 throw new InvalidOperationException(
-                    "This assistant has active tasks. Reassign or cancel their tasks before removing them from the series.");
+                    "This assistant still has active tasks. Reassign or cancel those tasks before removing them from the series.");
             }
 
             await _seriesContributorRepository.EndAssistantContributorViaProcAsync(

@@ -18,6 +18,10 @@ namespace MangaManagementSystem.Application.Interfaces
             Guid seriesId,
             CancellationToken cancellationToken = default);
 
+        Task<string?> GetSeriesStatusCodeAsync(
+            Guid seriesId,
+            CancellationToken cancellationToken = default);
+
         Task<IReadOnlyList<SeriesContributorListItemDto>> GetSeriesContributorsAsync(
             Guid actorUserId,
             Guid seriesId,

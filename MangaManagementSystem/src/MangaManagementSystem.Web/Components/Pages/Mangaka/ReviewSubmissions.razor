@@ -386,7 +386,13 @@
 
                 @if (_quickSelectSelectedSeriesId.HasValue)
                 {
-                    if (_quickSelectLoadingChapters)
+                    if (!IsQuickSelectSeriesEligible)
+                    {
+                        <MudAlert Severity="Severity.Warning" Class="mb-3">
+                            @QuickSelectEligibilityMessage
+                        </MudAlert>
+                    }
+                    else if (_quickSelectLoadingChapters)
                     {
                         <MudProgressLinear Indeterminate="true" Class="mb-3" />
                     }
@@ -407,7 +413,13 @@
 
                 @if (_quickSelectSelectedChapterId.HasValue)
                 {
-                    if (_quickSelectLoadingPages)
+                    if (!IsQuickSelectChapterEligible)
+                    {
+                        <MudAlert Severity="Severity.Warning" Class="mb-3">
+                            @QuickSelectEligibilityMessage
+                        </MudAlert>
+                    }
+                    else if (_quickSelectLoadingPages)
                     {
                         <MudProgressLinear Indeterminate="true" Class="mb-3" />
                     }
@@ -652,6 +664,8 @@
     private bool _quickSelectLoadingChapters;
     private bool _quickSelectLoadingPages;
     private bool _quickSelectLoadingAssistants;
+    private const string QuickSelectEligibilityMessage =
+        "Tasks can only be created for chapters in draft or needing revision, while the series is serialized or on hiatus.";
     private Guid? _quickSelectSelectedSeriesId;
     private Guid? _quickSelectSelectedChapterId;
     private Guid? _quickSelectSelectedAssistantId;
@@ -674,10 +688,18 @@
     private IReadOnlyList<QuickSelectPageDto> _quickSelectSelectedPages =>
         _quickSelectPages.Where(p => _quickSelectPageSelections.TryGetValue(p.ChapterPageId, out var sel) && sel).ToList();
 
+    private bool IsQuickSelectSeriesEligible =>
+        _quickSelectSelectedSeriesDto?.StatusCode is "SERIALIZED" or "HIATUS";
+
+    private bool IsQuickSelectChapterEligible =>
+        _quickSelectSelectedChapterDto?.StatusCode is "DRAFT" or "REVISION_REQUESTED";
+
     private bool CanQuickSelectSubmit()
     {
         return _quickSelectSelectedSeriesId.HasValue
             && _quickSelectSelectedChapterId.HasValue
+            && IsQuickSelectSeriesEligible
+            && IsQuickSelectChapterEligible
             && _quickSelectSelectedAssistantId.HasValue
             && _quickSelectSelectedPages.Any()
             && !string.IsNullOrWhiteSpace(_quickSelectTypeCode)
@@ -760,6 +782,12 @@
             return;
         }
 
+        if (!IsQuickSelectSeriesEligible)
+        {
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
         var loadChapters = LoadQuickSelectChaptersAsync(series.SeriesId);
         var loadAssistants = LoadQuickSelectAssistantsInternalAsync(series.SeriesId);
         await Task.WhenAll(loadChapters, loadAssistants);
@@ -774,6 +802,12 @@
         _quickSelectPageOverrides = new();
 
         if (chapter == null || chapter.ChapterId == Guid.Empty)
+        {
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        if (!IsQuickSelectChapterEligible)
         {
             await InvokeAsync(StateHasChanged);
             return;
@@ -928,6 +962,12 @@
 
     private async Task ConfirmQuickSelect()
     {
+        if (!IsQuickSelectSeriesEligible || !IsQuickSelectChapterEligible)
+        {
+            Snackbar.Add(QuickSelectEligibilityMessage, Severity.Warning);
+            return;
+        }
+
         if (!CanQuickSelectSubmit()) return;
 
         var selectedPages = _quickSelectSelectedPages;
@@ -967,9 +1007,13 @@
             Snackbar.Add($"Created {result.CreatedTaskCount} task(s).", Severity.Success);
             await RefreshTasksAfterMutationAsync();
         }
-        catch (Exception ex)
+        catch (ApiClientException ex) when (IsExpectedQuickSelectBusinessFailure(ex))
         {
-            Snackbar.Add($"{ex.Message}", Severity.Error);
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        catch (Exception)
+        {
+            Snackbar.Add("We couldn't create these tasks right now. Please try again.", Severity.Error);
         }
         finally
         {
@@ -977,6 +1021,10 @@
             await InvokeAsync(StateHasChanged);
         }
     }
+
+    private static bool IsExpectedQuickSelectBusinessFailure(ApiClientException exception)
+        => exception.StatusCode is System.Net.HttpStatusCode.BadRequest
+            or System.Net.HttpStatusCode.Conflict;
 
     protected override async Task OnInitializedAsync()
     {

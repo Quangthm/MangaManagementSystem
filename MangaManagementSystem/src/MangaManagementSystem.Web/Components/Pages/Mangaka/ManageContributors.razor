@@ -75,13 +75,23 @@
                 </MudGrid>
 
                 <MudStack Row="true" Class="mt-3" Justify="Justify.FlexEnd">
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                               StartIcon="@Icons.Material.Filled.PersonAdd"
-                               Disabled="@(!_selectedSeriesId.HasValue || _dialogLoading)"
-                               OnClick="OpenAddAssistantDialogAsync">
-                        Add Assistant
-                    </MudButton>
+                    <MudTooltip Text="@ContributorListRestrictionMessage">
+                        <span>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.PersonAdd"
+                                       Disabled="@(!_selectedSeriesId.HasValue || _dialogLoading || IsAddAssistantDisabled)"
+                                       OnClick="OpenAddAssistantDialogAsync">
+                                Add Assistant
+                            </MudButton>
+                        </span>
+                    </MudTooltip>
                 </MudStack>
+                @if (!string.IsNullOrWhiteSpace(ContributorListRestrictionMessage))
+                {
+                    <MudText Typo="Typo.caption" Class="mf-muted mt-2" Align="Align.Right">
+                        @ContributorListRestrictionMessage
+                    </MudText>
+                }
             </MudPaper>
 
             @if (!_selectedSeriesId.HasValue)
@@ -136,11 +146,17 @@
                         <MudTd DataLabel="Actions">
                             @if (context.IsActive && context.RoleName == "Assistant")
                             {
-                                <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
-                                           Disabled="@_dialogLoading"
-                                           OnClick="@(() => OpenEndAssistantDialog(context))">
-                                    End
-                                </MudButton>
+                                <MudTooltip Text="@(IsContributorListReadOnly
+                                    ? ContributorListRestrictionMessage
+                                    : "Remove this assistant from the series")">
+                                    <span>
+                                        <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                                   Disabled="@(_dialogLoading || IsContributorListReadOnly)"
+                                                   OnClick="@(() => OpenEndAssistantDialog(context))">
+                                            End
+                                        </MudButton>
+                                    </span>
+                                </MudTooltip>
                             }
                             else
                             {
@@ -224,6 +240,7 @@
     private List<SeriesContributorListItemDto> _contributors = [];
     private Guid? _selectedSeriesId;
     private string? _selectedSeriesTitle;
+    private bool _assistantSearchErrorShown;
 
     private string _searchText = string.Empty;
     private string _roleFilter = "ALL";
@@ -241,6 +258,23 @@
         .Where(ApplyRoleFilter)
         .Where(ApplyStatusFilter);
 
+    private SeriesDto? SelectedSeries =>
+        _series.FirstOrDefault(series => series.SeriesId == _selectedSeriesId);
+
+    private bool IsContributorListReadOnly =>
+        string.Equals(SelectedSeries?.StatusCode, "COMPLETED", StringComparison.OrdinalIgnoreCase);
+
+    private bool IsAddAssistantDisabled =>
+        IsContributorListReadOnly
+        || string.Equals(SelectedSeries?.StatusCode, "CANCELLED", StringComparison.OrdinalIgnoreCase);
+
+    private string ContributorListRestrictionMessage =>
+        IsContributorListReadOnly
+            ? "This series is completed. Its contributor list is read-only."
+            : string.Equals(SelectedSeries?.StatusCode, "CANCELLED", StringComparison.OrdinalIgnoreCase)
+                ? "This series has been cancelled. New contributors cannot be added."
+                : string.Empty;
+
     protected override async Task OnInitializedAsync()
     {
         try
@@ -254,9 +288,9 @@
                 await LoadContributorsAsync();
             }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            _error = ex.Message;
+            _error = "We couldn't load the contributors for this series right now. Please try again.";
         }
         finally
         {
@@ -284,6 +318,7 @@
     {
         _selectedSeriesId = seriesId;
         _selectedSeriesTitle = _series.FirstOrDefault(x => x.SeriesId == seriesId)?.Title;
+        _assistantSearchErrorShown = false;
         _loading = true;
         _error = null;
 
@@ -291,9 +326,9 @@
         {
             await LoadContributorsAsync();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            _error = ex.Message;
+            _error = "We couldn't load the contributors for this series right now. Please try again.";
         }
         finally
         {
@@ -366,6 +401,13 @@
 
     private async Task OpenAddAssistantDialogAsync()
     {
+        if (IsAddAssistantDisabled)
+        {
+            Snackbar.Add(ContributorListRestrictionMessage, Severity.Warning);
+            return;
+        }
+
+        _assistantSearchErrorShown = false;
         _selectedAssistantCandidate = null;
         _showAddAssistantDialog = true;
         await Task.CompletedTask;
@@ -392,16 +434,25 @@
 
         try
         {
-            return await ContributorApiClient.SearchEligibleAssistantsAsync(
+            var assistants = await ContributorApiClient.SearchEligibleAssistantsAsync(
                 _selectedSeriesId.Value, value, cancellationToken);
+            _assistantSearchErrorShown = false;
+            return assistants;
         }
         catch (OperationCanceledException)
         {
             return Enumerable.Empty<EligibleAssistantContributorDto>();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Snackbar.Add($"Could not search assistants: {ex.Message}", Severity.Error);
+            if (!_assistantSearchErrorShown)
+            {
+                Snackbar.Add(
+                    "We couldn't load available assistants right now. Please try again.",
+                    Severity.Error);
+                _assistantSearchErrorShown = true;
+            }
+
             return Enumerable.Empty<EligibleAssistantContributorDto>();
         }
     }
@@ -410,6 +461,12 @@
     {
         if (!_selectedSeriesId.HasValue || _selectedAssistantCandidate is null)
         {
+            return;
+        }
+
+        if (IsAddAssistantDisabled)
+        {
+            Snackbar.Add(ContributorListRestrictionMessage, Severity.Warning);
             return;
         }
 
@@ -425,9 +482,13 @@
             await LoadContributorsAsync();
             StateHasChanged();
         }
-        catch (Exception ex)
+        catch (ApiClientException ex) when (IsExpectedBusinessFailure(ex))
         {
             Snackbar.Add(ex.Message, Severity.Error);
+        }
+        catch (Exception)
+        {
+            Snackbar.Add("We couldn't add this assistant right now. Please try again.", Severity.Error);
         }
         finally
         {
@@ -437,6 +498,12 @@
 
     private void OpenEndAssistantDialog(SeriesContributorListItemDto contributor)
     {
+        if (IsContributorListReadOnly)
+        {
+            Snackbar.Add(ContributorListRestrictionMessage, Severity.Warning);
+            return;
+        }
+
         _assistantToEnd = contributor;
         _endReason = string.Empty;
         _showEndAssistantDialog = true;
@@ -456,6 +523,12 @@
             return;
         }
 
+        if (IsContributorListReadOnly)
+        {
+            Snackbar.Add(ContributorListRestrictionMessage, Severity.Warning);
+            return;
+        }
+
         _dialogLoading = true;
         try
         {
@@ -469,13 +542,21 @@
             await LoadContributorsAsync();
             StateHasChanged();
         }
-        catch (Exception ex)
+        catch (ApiClientException ex) when (IsExpectedBusinessFailure(ex))
         {
             Snackbar.Add(ex.Message, Severity.Error);
+        }
+        catch (Exception)
+        {
+            Snackbar.Add("We couldn't remove this assistant right now. Please try again.", Severity.Error);
         }
         finally
         {
             _dialogLoading = false;
         }
     }
+
+    private static bool IsExpectedBusinessFailure(ApiClientException exception)
+        => exception.StatusCode is System.Net.HttpStatusCode.BadRequest
+            or System.Net.HttpStatusCode.Conflict;
 }
