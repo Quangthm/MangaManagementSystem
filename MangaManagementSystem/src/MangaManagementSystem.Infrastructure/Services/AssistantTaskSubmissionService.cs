@@ -166,17 +166,32 @@ namespace MangaManagementSystem.Infrastructure.Services
                     newFileResourceId, request.ChapterPageTaskId);
 
                 // ----------------------------------------------------------------
-                // 3. Create new ChapterPageVersion as a candidate (not current).
-                //    The submitted version is a candidate for Mangaka review.
-                //    It MUST NOT be promoted to current/active here.
-                //    Promotion happens only when Mangaka approves/completes the task.
-                //    a. Compute next version_no
-                //    b. Insert new version row with is_current_version = 0
+                // 3. Create new ChapterPageVersion
+                //    a. Flip previous current version to not-current
+                //    b. Compute next version_no
+                //    c. Insert new version row and capture the generated PK
                 // ----------------------------------------------------------------
                 Guid newPageVersionId;
                 short newVersionNo;
                 {
-                    // 3a. Compute next version_no
+                    // 3a. Unset is_current_version on existing current version
+                    await using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.Transaction = (System.Data.Common.DbTransaction)transaction;
+                        cmd.CommandText = @"
+                            UPDATE manga.ChapterPageVersion
+                            SET is_current_version = 0
+                            WHERE chapter_page_id = @cpId
+                              AND is_current_version = 1;";
+                        cmd.CommandType = CommandType.Text;
+                        cmd.Parameters.Add(new SqlParameter("@cpId", SqlDbType.UniqueIdentifier)
+                        {
+                            Value = chapterPageId
+                        });
+                        await cmd.ExecuteNonQueryAsync(cancellationToken);
+                    }
+
+                    // 3b. Compute next version_no
                     await using (var cmd = conn.CreateCommand())
                     {
                         cmd.Transaction = (System.Data.Common.DbTransaction)transaction;
@@ -194,8 +209,7 @@ namespace MangaManagementSystem.Infrastructure.Services
                         newVersionNo = Convert.ToInt16(result);
                     }
 
-                    // 3b. Insert new ChapterPageVersion and capture generated PK
-                    //     is_current_version = 0 — candidate, not yet approved.
+                    // 3c. Insert new ChapterPageVersion and capture generated PK
                     await using (var cmd = conn.CreateCommand())
                     {
                         cmd.Transaction = (System.Data.Common.DbTransaction)transaction;
@@ -218,7 +232,7 @@ namespace MangaManagementSystem.Infrastructure.Services
                                 @versionNo,
                                 @fileId,
                                 @versionNote,
-                                0
+                                1
                             );
 
                             SELECT chapter_page_version_id FROM @created;";

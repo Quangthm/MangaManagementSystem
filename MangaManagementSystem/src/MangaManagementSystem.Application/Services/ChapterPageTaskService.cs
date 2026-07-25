@@ -3,7 +3,6 @@ using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
-using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,14 +13,10 @@ namespace MangaManagementSystem.Application.Services
     public class ChapterPageTaskService : IChapterPageTaskService
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IFileStorageService _fileStorageService;
-        private readonly ILogger<ChapterPageTaskService> _logger;
 
-        public ChapterPageTaskService(IUnitOfWork unitOfWork, IFileStorageService fileStorageService, ILogger<ChapterPageTaskService> logger)
+        public ChapterPageTaskService(IUnitOfWork unitOfWork)
         {
             _unitOfWork = unitOfWork;
-            _fileStorageService = fileStorageService;
-            _logger = logger;
         }
 
         public async Task<ChapterPageTaskDto> CreateChapterPageTaskAsync(
@@ -260,66 +255,7 @@ namespace MangaManagementSystem.Application.Services
 
         public async Task ApproveTaskAsync(Guid actorUserId, Guid taskId, string? completionNote)
         {
-            if (actorUserId == Guid.Empty)
-                throw new InvalidOperationException("Actor user ID is required.");
-            if (taskId == Guid.Empty)
-                throw new InvalidOperationException("Task ID is required.");
-
-            var task = await _unitOfWork.ChapterPageTasks
-                .GetByIdWithFullContextAsync(taskId);
-
-            if (task == null)
-                throw new InvalidOperationException("Task not found.");
-
-            if (task.CreatedByUserId != actorUserId)
-                throw new InvalidOperationException(
-                    "You are not authorized to approve this task.");
-
-            if (task.StatusCode != "UNDER_REVIEW")
-                throw new InvalidOperationException(
-                    "Only tasks currently under review can be approved.");
-
-            var candidateVersionId = task.CompletedPageVersionId;
-            if (!candidateVersionId.HasValue)
-                throw new InvalidOperationException(
-                    "Task has no submitted candidate version to approve.");
-
-            var v2 = task.CompletedPageVersion;
-            if (v2 == null)
-                throw new InvalidOperationException(
-                    "The candidate version record no longer exists.");
-
-            await _unitOfWork.BeginTransactionAsync();
-
-            try
-            {
-                // Find the current version (V1) for the same ChapterPage.
-                var currentVersions = await _unitOfWork.ChapterPageVersions
-                    .FindAsync(v => v.ChapterPageId == v2.ChapterPageId && v.IsCurrentVersion);
-                var v1 = currentVersions.FirstOrDefault();
-
-                // Call the SP — changes task status to COMPLETED.
-                await _unitOfWork.ChapterPageTasks
-                    .MarkTaskCompletedAsync(actorUserId, taskId, completionNote);
-
-                // Demote the previous current version (if it exists and is not V2).
-                if (v1 != null && v1.ChapterPageVersionId != v2.ChapterPageVersionId)
-                {
-                    v1.IsCurrentVersion = false;
-                    await _unitOfWork.SaveChangesAsync();
-                }
-
-                // Promote the candidate to current.
-                v2.IsCurrentVersion = true;
-                await _unitOfWork.SaveChangesAsync();
-
-                await _unitOfWork.CommitTransactionAsync();
-            }
-            catch
-            {
-                await _unitOfWork.RollbackTransactionAsync();
-                throw;
-            }
+            await _unitOfWork.ChapterPageTasks.MarkTaskCompletedAsync(actorUserId, taskId, completionNote);
         }
 
         public async Task ReturnTaskForReworkAsync(Guid actorUserId, Guid taskId, string reason)
@@ -331,7 +267,7 @@ namespace MangaManagementSystem.Application.Services
             if (string.IsNullOrWhiteSpace(reason))
                 throw new InvalidOperationException("Updated task instructions are required when returning a task for rework.");
 
-            var task = await _unitOfWork.ChapterPageTasks.GetByIdWithFullContextAsync(taskId);
+            var task = await _unitOfWork.ChapterPageTasks.GetByIdWithRegionsAsync(taskId);
             if (task == null)
                 throw new InvalidOperationException("Task not found.");
 
@@ -341,103 +277,12 @@ namespace MangaManagementSystem.Application.Services
             if (task.StatusCode != "UNDER_REVIEW")
                 throw new InvalidOperationException("Only tasks currently under review can be returned for rework.");
 
-            var candidateVersionId = task.CompletedPageVersionId;
-            var candidateFileResource = task.CompletedPageVersion?.PageFile;
-            var cloudinaryPublicId = candidateFileResource?.CloudinaryPublicId;
-
-            await _unitOfWork.BeginTransactionAsync();
-
-            try
-            {
-                await _unitOfWork.ChapterPageTasks
-                    .ReturnTaskForReworkAsync(actorUserId, taskId, reason);
-
-                // Return SP already cleared completed_page_version_id in the DB;
-                // synchronize tracked entity so EF doesn't block V2 deletion.
-                task.CompletedPageVersionId = null;
-                await _unitOfWork.SaveChangesAsync();
-
-                if (candidateVersionId.HasValue && task.CompletedPageVersion != null)
-                {
-                    await DiscardCandidateVersionAsync(task.CompletedPageVersion, actorUserId);
-                }
-
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitTransactionAsync();
-
-                // Best-effort Cloudinary cleanup after DB commit succeeds.
-                if (!string.IsNullOrWhiteSpace(cloudinaryPublicId))
-                {
-                    try
-                    {
-                        await _fileStorageService.DeleteFileAsync(cloudinaryPublicId, "image");
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to delete discarded Assistant submission file from Cloudinary. PublicId: {PublicId}", cloudinaryPublicId);
-                    }
-                }
-            }
-            catch
-            {
-                await _unitOfWork.RollbackTransactionAsync();
-                throw;
-            }
+            await _unitOfWork.ChapterPageTasks.ReturnTaskForReworkAsync(actorUserId, taskId, reason);
         }
 
         public async Task CancelTaskAsync(Guid actorUserId, Guid taskId, string reason)
         {
-            if (actorUserId == Guid.Empty)
-                throw new InvalidOperationException("Actor user ID is required.");
-            if (taskId == Guid.Empty)
-                throw new InvalidOperationException("Task ID is required.");
-            if (string.IsNullOrWhiteSpace(reason))
-                throw new InvalidOperationException("Reason is required when cancelling a task.");
-
-            var task = await _unitOfWork.ChapterPageTasks.GetByIdWithFullContextAsync(taskId);
-            if (task == null)
-                throw new InvalidOperationException("Task not found.");
-
-            var candidateVersionId = task.CompletedPageVersionId;
-            var candidateFileResource = task.CompletedPageVersion?.PageFile;
-            var cloudinaryPublicId = candidateFileResource?.CloudinaryPublicId;
-
-            await _unitOfWork.BeginTransactionAsync();
-
-            try
-            {
-                await _unitOfWork.ChapterPageTasks
-                    .CancelTaskAsync(actorUserId, taskId, reason);
-
-                task.CompletedPageVersionId = null;
-                await _unitOfWork.SaveChangesAsync();
-
-                if (candidateVersionId.HasValue && task.CompletedPageVersion != null)
-                {
-                    await DiscardCandidateVersionAsync(task.CompletedPageVersion, actorUserId);
-                }
-
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitTransactionAsync();
-
-                // Best-effort Cloudinary cleanup after DB commit succeeds.
-                if (!string.IsNullOrWhiteSpace(cloudinaryPublicId))
-                {
-                    try
-                    {
-                        await _fileStorageService.DeleteFileAsync(cloudinaryPublicId, "image");
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to delete discarded Assistant submission file from Cloudinary. PublicId: {PublicId}", cloudinaryPublicId);
-                    }
-                }
-            }
-            catch
-            {
-                await _unitOfWork.RollbackTransactionAsync();
-                throw;
-            }
+            await _unitOfWork.ChapterPageTasks.CancelTaskAsync(actorUserId, taskId, reason);
         }
 
         public async Task<IEnumerable<ChapterPageTaskDto>> GetTasksForReviewByCreatorAsync(Guid creatorUserId)
@@ -467,10 +312,9 @@ namespace MangaManagementSystem.Application.Services
             if (reassignmentReason.Length > 500)
                 throw new InvalidOperationException("Reason must not exceed 500 characters.");
 
-            // Load task to validate status and ownership, and capture
-            // any unapproved candidate version before it is discarded.
+            // Load task to validate status and ownership.
             var task = await _unitOfWork.ChapterPageTasks
-                .GetByIdWithFullContextAsync(taskId);
+                .GetByIdWithRegionsAsync(taskId);
 
             if (task == null)
                 throw new InvalidOperationException("Task not found.");
@@ -500,11 +344,6 @@ namespace MangaManagementSystem.Application.Services
                     ? task.TaskDescription
                     : request.UpdatedTaskDescription.Trim();
 
-            // Capture candidate info before the SP discards it.
-            var candidateVersionId = task.CompletedPageVersionId;
-            var candidateFileResource = task.CompletedPageVersion?.PageFile;
-            var cloudinaryPublicId = candidateFileResource?.CloudinaryPublicId;
-
             await _unitOfWork.BeginTransactionAsync();
 
             try
@@ -516,6 +355,9 @@ namespace MangaManagementSystem.Application.Services
                 // EF adds both:
                 // 1. the original assistant's cancellation/reassignment notice;
                 // 2. the replacement assistant's new assignment notification.
+                //
+                // Both Notifications are saved before the shared transaction
+                // is committed.
                 var newTaskId =
                     await _unitOfWork.ChapterPageTasks
                         .AssignToDifferentUserAsync(
@@ -529,14 +371,6 @@ namespace MangaManagementSystem.Application.Services
                 {
                     throw new InvalidOperationException(
                         "Failed to create the replacement task.");
-                }
-
-                task.CompletedPageVersionId = null;
-                await _unitOfWork.SaveChangesAsync();
-
-                if (candidateVersionId.HasValue && task.CompletedPageVersion != null)
-                {
-                    await DiscardCandidateVersionAsync(task.CompletedPageVersion, actorUserId);
                 }
 
                 await _unitOfWork.Notifications.AddAsync(
@@ -553,19 +387,6 @@ namespace MangaManagementSystem.Application.Services
 
                 await _unitOfWork.SaveChangesAsync();
                 await _unitOfWork.CommitTransactionAsync();
-
-                // Best-effort Cloudinary cleanup after the DB transaction commits.
-                if (!string.IsNullOrWhiteSpace(cloudinaryPublicId))
-                {
-                    try
-                    {
-                        await _fileStorageService.DeleteFileAsync(cloudinaryPublicId, "image");
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to delete discarded Assistant submission file from Cloudinary. PublicId: {PublicId}", cloudinaryPublicId);
-                    }
-                }
 
                 return new ReassignChapterPageTaskResult(
                     taskId,
@@ -591,20 +412,6 @@ namespace MangaManagementSystem.Application.Services
             return rawAssistants
                 .Select(a => new EligibleAssistantDto(a.UserId, a.DisplayName, a.Username))
                 .ToList();
-        }
-
-        private async Task DiscardCandidateVersionAsync(ChapterPageVersion version, Guid actorUserId)
-        {
-            if (version == null)
-                return;
-
-            if (version.PageFileId != Guid.Empty && version.PageFile != null)
-            {
-                version.PageFile.DeletedAtUtc = DateTime.UtcNow;
-                version.PageFile.DeletedByUserId = actorUserId;
-            }
-
-            _unitOfWork.ChapterPageVersions.Delete(version);
         }
 
         private static Notification CreateTaskReassignmentNotification(

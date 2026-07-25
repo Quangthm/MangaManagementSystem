@@ -3697,8 +3697,7 @@ GO
 CREATE OR ALTER PROCEDURE [manga].[usp_ChapterPageTask_Cancel]
     @actor_user_id UNIQUEIDENTIFIER,
     @chapter_page_task_id UNIQUEIDENTIFIER,
-    @reason NVARCHAR(500),
-    @discarded_cloudinary_public_id NVARCHAR(255) = NULL OUTPUT
+    @reason NVARCHAR(500)
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -3795,45 +3794,11 @@ END;
         UPDATE manga.ChapterPageTask
         SET
             status_code = N'CANCELLED',
-            completed_page_version_id = NULL,
             updated_at_utc = @cancelled_at_utc
         WHERE chapter_page_task_id = @chapter_page_task_id;
 
         --------------------------------------------------------------------
-        -- 6. Discard the unapproved submission candidate (if any).
-        --
-        -- The FK on completed_page_version_id was cleared by the UPDATE
-        -- above, so the candidate ChapterPageVersion and its FileResource
-        -- can be safely removed. This prevents an unapproved submission from
-        -- lingering as an orphan version in the page history after the task
-        -- is cancelled.
-        --------------------------------------------------------------------
-        IF @completed_page_version_id IS NOT NULL
-        BEGIN
-            DECLARE @discarded_file_resource_id UNIQUEIDENTIFIER;
-
-            SELECT
-                @discarded_file_resource_id = cpv.page_file_id,
-                @discarded_cloudinary_public_id = fr.cloudinary_public_id
-            FROM manga.ChapterPageVersion cpv
-            INNER JOIN manga.FileResource fr
-                ON fr.file_resource_id = cpv.page_file_id
-            WHERE cpv.chapter_page_version_id = @completed_page_version_id;
-
-            IF @discarded_file_resource_id IS NOT NULL
-            BEGIN
-                EXEC manga.usp_FileResource_SoftDelete
-                    @file_resource_id = @discarded_file_resource_id,
-                    @deleted_by_user_id = @actor_user_id,
-                    @delete_reason = N'Unapproved task submission discarded on cancellation.';
-            END;
-
-            DELETE FROM manga.ChapterPageVersion
-            WHERE chapter_page_version_id = @completed_page_version_id;
-        END;
-
-        --------------------------------------------------------------------
-        -- 7. Audit
+        -- 6. Audit
         --------------------------------------------------------------------
         DECLARE @audit_entity_id NVARCHAR(100) =
             CONVERT(NVARCHAR(36), @chapter_page_task_id);
@@ -3877,8 +3842,7 @@ CREATE OR ALTER PROCEDURE [manga].[usp_ChapterPageTask_AssignToDifferentUser]
     @new_assigned_to_user_id UNIQUEIDENTIFIER,
     @reason NVARCHAR(500),
     @updated_task_description NVARCHAR(MAX),
-    @new_chapter_page_task_id UNIQUEIDENTIFIER OUTPUT,
-    @discarded_cloudinary_public_id NVARCHAR(255) = NULL OUTPUT
+    @new_chapter_page_task_id UNIQUEIDENTIFIER OUTPUT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -3987,17 +3951,12 @@ BEGIN
     ;THROW 58508, 'New assigned user must be an active contributor of the same series as the existing task.', 1;
 END;
         --------------------------------------------------------------------
-        -- 4. Cancel old task (discarded submission is captured for cleanup)
+        -- 4. Cancel old task
         --------------------------------------------------------------------
-        DECLARE @cancel_discarded_cloudinary_public_id NVARCHAR(255);
-
         EXEC manga.usp_ChapterPageTask_Cancel
             @actor_user_id = @actor_user_id,
             @chapter_page_task_id = @chapter_page_task_id,
-            @reason = @reason,
-            @discarded_cloudinary_public_id = @cancel_discarded_cloudinary_public_id OUTPUT;
-
-        SET @discarded_cloudinary_public_id = @cancel_discarded_cloudinary_public_id;
+            @reason = @reason;
 
         --------------------------------------------------------------------
         -- 5. Create replacement task
@@ -4347,38 +4306,7 @@ END;
         WHERE chapter_page_task_id = @chapter_page_task_id;
 
         --------------------------------------------------------------------
-        -- 6. Promote the submitted candidate to current/active page version.
-        --
-        -- The completed_page_version_id points to the ChapterPageVersion
-        -- created by the Assistant's submission. It was inserted with
-        -- is_current_version = 0. Now that the Mangaka has approved the
-        -- work, promote it:
-        --   a. Unset is_current_version on the previous current version.
-        --   b. Set is_current_version = 1 on the approved candidate.
-        --------------------------------------------------------------------
-        IF @completed_page_version_id IS NOT NULL
-        BEGIN
-            DECLARE @chapter_page_id UNIQUEIDENTIFIER;
-
-            SELECT @chapter_page_id = cpv.chapter_page_id
-            FROM manga.ChapterPageVersion cpv
-            WHERE cpv.chapter_page_version_id = @completed_page_version_id;
-
-            IF @chapter_page_id IS NOT NULL
-            BEGIN
-                UPDATE manga.ChapterPageVersion
-                SET is_current_version = 0
-                WHERE chapter_page_id = @chapter_page_id
-                  AND is_current_version = 1;
-
-                UPDATE manga.ChapterPageVersion
-                SET is_current_version = 1
-                WHERE chapter_page_version_id = @completed_page_version_id;
-            END;
-        END;
-
-        --------------------------------------------------------------------
-        -- 7. Audit
+        -- 6. Audit
         --------------------------------------------------------------------
         DECLARE @audit_entity_id NVARCHAR(100) =
             CONVERT(NVARCHAR(36), @chapter_page_task_id);
@@ -4418,8 +4346,7 @@ GO
 CREATE OR ALTER   PROCEDURE [manga].[usp_ChapterPageTask_ReturnForRework]
     @actor_user_id UNIQUEIDENTIFIER,
     @chapter_page_task_id UNIQUEIDENTIFIER,
-    @updated_task_description NVARCHAR(MAX),
-    @discarded_cloudinary_public_id NVARCHAR(255) = NULL OUTPUT
+    @updated_task_description NVARCHAR(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -4520,41 +4447,7 @@ END;
         WHERE chapter_page_task_id = @chapter_page_task_id;
 
         --------------------------------------------------------------------
-        -- 7. Discard the unapproved submission candidate.
-        --
-        -- The FK on completed_page_version_id has been cleared by the UPDATE
-        -- above. If there was a previously-submitted candidate version
-        -- (captured in @old_completed_page_version_id), it is now safe to
-        -- delete both the ChapterPageVersion row and its associated
-        -- FileResource. This prevents a rejected submission from remaining
-        -- as an orphan version in the page history.
-        --------------------------------------------------------------------
-        IF @old_completed_page_version_id IS NOT NULL
-        BEGIN
-            DECLARE @discarded_file_resource_id UNIQUEIDENTIFIER;
-
-            SELECT
-                @discarded_file_resource_id = cpv.page_file_id,
-                @discarded_cloudinary_public_id = fr.cloudinary_public_id
-            FROM manga.ChapterPageVersion cpv
-            INNER JOIN manga.FileResource fr
-                ON fr.file_resource_id = cpv.page_file_id
-            WHERE cpv.chapter_page_version_id = @old_completed_page_version_id;
-
-            IF @discarded_file_resource_id IS NOT NULL
-            BEGIN
-                EXEC manga.usp_FileResource_SoftDelete
-                    @file_resource_id = @discarded_file_resource_id,
-                    @deleted_by_user_id = @actor_user_id,
-                    @delete_reason = N'Unapproved task submission discarded on return-for-rework.';
-            END;
-
-            DELETE FROM manga.ChapterPageVersion
-            WHERE chapter_page_version_id = @old_completed_page_version_id;
-        END;
-
-        --------------------------------------------------------------------
-        -- 8. Audit
+        -- 7. Audit
         --------------------------------------------------------------------
         DECLARE @audit_entity_id NVARCHAR(100) =
             CONVERT(NVARCHAR(36), @chapter_page_task_id);
