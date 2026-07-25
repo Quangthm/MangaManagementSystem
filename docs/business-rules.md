@@ -16,6 +16,9 @@
 
 > **Deferred source-series alignment — 2026-07-24:** `Series.source_series_id` / `SourceSeriesId` remains a nullable field in the database and existing backend/domain plumbing for compatibility and possible future implementation. Source-series selection/editing is **deferred** and is not part of the current MVP user-facing workflow: current UI, use cases, user stories, and active functional requirements must not present it as an available Mangaka action. Normal UI-driven create/update flows should leave it unset/null. If the feature is activated later, the implementation must reject self-reference. The current MVP proposal lifecycle continues to have no Mangaka proposal-withdrawal action and no `WITHDRAWN` proposal status.
 
+
+> **Latest Tantou Editor workspace/PageRegion alignment — 2026-07-24:** An `ACTIVE` Tantou Editor who is an active contributor of the owning series may retain read access to that series' chapter workspace across chapter lifecycle states, including `DRAFT` chapters that have not entered the editorial-review pipeline. Read access does not grant write authority. Persistent Tantou Editor `PageRegion` creation/editing is allowed only while the chapter is `UNDER_REVIEW` or `REVISION_REQUESTED`; permitted edits include region geometry, label, `type_code`, and applicable original-text metadata. A manually adjusted AI region follows the normal conversion to `MANUAL` and clears AI confidence. Tantou Editors must not create, edit, or delete `PageRegion` records from the workspace while the chapter is `DRAFT`, `APPROVED`, `SCHEDULED`, `ON_HOLD`, `RELEASED`, or `CANCELLED`. Editorial annotations may use existing saved regions, newly created regions, or both. Creating/editing a `PageRegion` for editorial review, including a region drawn while creating an annotation during `UNDER_REVIEW`, is review metadata and is not considered mutation of the underlying manga page file/content. The page/content lock applies to production-content changes such as page creation/deletion, page-version upload/replacement, and task output that creates or changes page content. Any region already referenced by an annotation, task, or other dependent workflow record remains protected from deletion.
+
 ---
 
 ## 1. AI-Assisted Translation
@@ -64,7 +67,7 @@
 | BR-REG-023 | The system should not automatically save duplicate AI-detected regions that substantially overlap an existing saved region of the same type. | Active draft |
 | BR-REG-024 | Users may save non-duplicate AI-detected regions as new `PageRegion` records when they are useful for annotation, task assignment, translation, OCR review, or segmentation display. | Active draft |
 | BR-REG-025 | Saved `PageRegion` records may be reused later for annotation, task assignment, translation/OCR review, or page segmentation display. | Active draft |
-| BR-REG-026 | A saved `PageRegion` may be adjusted by authorized users when region editing is permitted. | Active draft |
+| BR-REG-026 | A saved `PageRegion` may be adjusted by authorized users when region editing is permitted. Permitted adjustments may include `x`, `y`, `width`, `height`, `region_label`, `type_code`, and applicable `original_text`; changing an AI-generated region manually converts it to `source_type = MANUAL` and clears AI confidence according to the existing source/confidence rules. | Active draft |
 | BR-REG-027 | When a saved `PageRegion` is adjusted, the system should record the last update time and the user who made the update. | Active draft |
 | BR-REG-028 | AI-assisted segmentation tools are available to all Authorized Page Workspace Users who can access the relevant workspace; saving, editing, assigning, or using detected regions must still follow role-specific permissions. | Active draft |
 | BR-REG-029 | A `FULL_PAGE` region represents the entire page image area. It uses `type_code = FULL_PAGE`, `x = 0`, `y = 0`, `width > 0`, `height > 0`, `source_type = MANUAL`, and `confidence_score = NULL`. | Active draft |
@@ -73,6 +76,8 @@
 | BR-REG-032 | `FileResource` does not store image width/height. Page image dimensions must be resolved from Cloudinary metadata when needed (e.g. for creating whole-page regions). Cloudinary metadata lookups must not hold an open database transaction. | Active draft |
 | BR-REG-033 | A `PageRegion` may be hard-deleted only when it is not connected to any `ChapterPageAnnotationRegion`, `ChapterPageTaskRegion`, or other workflow record that depends on the region. | Active draft |
 | BR-REG-034 | If a `PageRegion` is connected to an annotation or task, normal user deletion must be blocked and the region must be preserved for traceability. | Active draft |
+| BR-REG-035 | An `ACTIVE` Tantou Editor who is an active contributor of the owning series and has access to the chapter workspace may create new `PageRegion` records and edit existing `PageRegion` records for editorial-review purposes only when the owning chapter is `UNDER_REVIEW` or `REVISION_REQUESTED`. Editor edits may include permitted geometry, `region_label`, `type_code`, and applicable `original_text`. | Active draft |
+| BR-REG-036 | Tantou Editors must not create, edit, or delete `PageRegion` records from the chapter workspace while the chapter is `DRAFT`, `APPROVED`, `SCHEDULED`, `ON_HOLD`, `RELEASED`, or `CANCELLED`. This restriction does not remove their separately authorized read access to chapter/page/version/region/annotation data. | Active draft |
 
 ---
 
@@ -382,6 +387,8 @@
 | BR-CP-024 | In the current MVP, normal users cannot delete saved `ChapterPageVersion` records. Wrong, outdated, or superseded saved versions remain in version history and may be replaced only by saving a newer version. | Active draft |
 | BR-CP-025 | When a newly saved page version becomes current, the previously current version for the same `ChapterPage` must be unset as current while remaining preserved for traceability and comparison. | Active draft |
 | BR-CP-026 | Future versions may add an Admin/system retention workflow to purge old or unused page versions after a chapter has been released, but this is outside MVP and must not remove versions still required by regions, annotations, tasks, reviews, release history, or audit. | Future information |
+| BR-CP-027 | The chapter page/content lock refers to production-content mutations such as creating or deleting logical pages, uploading/replacing `ChapterPageVersion` content, Assistant task output submission that creates or changes page content, and other mutations of the underlying manga page file/content. These production-content mutations are blocked while the chapter is `UNDER_REVIEW`, `APPROVED`, `SCHEDULED`, `ON_HOLD`, `RELEASED`, or `CANCELLED`. | Active draft |
+| BR-CP-028 | Editorial-review metadata is separate from the underlying manga page content. Therefore, the production-content lock in `UNDER_REVIEW` does not block a permitted Tantou Editor from creating/editing `PageRegion` records or creating/updating/resolving editorial annotations under the applicable region/annotation rules. In `REVISION_REQUESTED`, the same editor review-metadata permissions may continue while Mangaka production editing is also available. | Active draft |
 
 ---
 
@@ -402,6 +409,8 @@
 | BR-WORKSPACE-010 | The workspace back action should return to the main `/series/{slug}` page by default when the user entered from the series page. | Active draft |
 | BR-WORKSPACE-011 | When the user enters the workspace from a review queue, dashboard, or task list, the workspace may return to that source context instead of `/series/{slug}`. | Active draft |
 | BR-WORKSPACE-012 | Workspace routing should use stable internal IDs such as `chapter_id`, `chapter_page_id`, and `chapter_page_version_id` for editing context; slug should be used mainly for returning to or displaying the main series page. | Active draft |
+| BR-WORKSPACE-013 | Read access and write permission are separate. An `ACTIVE` Tantou Editor who is an active contributor of the owning series may open and inspect the chapter workspace, page versions, saved regions, and annotations for that exact series across chapter lifecycle states where the record remains available, including `DRAFT` before submission and read-only post-review/terminal states. | Active draft |
+| BR-WORKSPACE-014 | For Tantou Editors, workspace persistence actions are state-gated. `PageRegion`/editorial-annotation review metadata may be written only in `UNDER_REVIEW` or `REVISION_REQUESTED` according to their specific rules. In `DRAFT`, `APPROVED`, `SCHEDULED`, `ON_HOLD`, `RELEASED`, and `CANCELLED`, the workspace is read-only for Tantou Editor page/region/annotation mutation. Separately authorized publication actions such as schedule/reschedule/hold/release remain governed by the publication workflow and are not granted by workspace write permission. | Active draft |
 
 ---
 
@@ -421,8 +430,8 @@
 | BR-ANN-010 | An annotation must contain non-empty annotation text. | Active draft |
 | BR-ANN-011 | Each annotation must record the user who created it. | Active draft |
 | BR-ANN-012 | Each annotation must record the time it was created. | Active draft |
-| BR-ANN-013 | Only active Mangaka contributors and active Tantou Editor contributors with access to the owning series/page workspace may create annotations in MVP. Assistants, Board roles, and Admin do not create annotations in MVP. | Active draft |
-| BR-ANN-014 | A page annotation may be created from existing saved `PageRegion` records, newly created `PageRegion` records, or a combination of both. | Active draft |
+| BR-ANN-013 | Only active Mangaka contributors and active Tantou Editor contributors with access to the owning series/page workspace may create annotations in MVP. For Tantou Editors specifically, editorial-review annotation creation is permitted only when the chapter is `UNDER_REVIEW` or `REVISION_REQUESTED`; in `DRAFT`, `APPROVED`, `SCHEDULED`, `ON_HOLD`, `RELEASED`, and `CANCELLED`, Editor workspace access is read-only for annotations. Assistants, Board roles, and Admin do not create annotations in MVP. | Active draft |
+| BR-ANN-014 | A page annotation may be created from existing saved `PageRegion` records, newly created `PageRegion` records, or a combination of both. For a Tantou Editor, newly created regions used by an annotation must satisfy the Editor PageRegion state/permission rules; creating a region specifically for an editorial annotation during `UNDER_REVIEW` is review metadata and is not treated as a mutation of the underlying manga page content. | Active draft |
 | BR-ANN-015 | If an annotation is resolved, both resolver and resolved timestamp must be recorded. | Active draft |
 | BR-ANN-016 | If an annotation is unresolved, both `resolved_by_user_id` and `resolved_at_utc` must be NULL. | Active draft |
 | BR-ANN-017 | Resolving an annotation marks the feedback as handled but must not delete the annotation or its linked region records. | Active draft |
@@ -435,6 +444,7 @@
 | BR-ANN-024 | Resolved annotations should not be edited in MVP; any correction to resolved feedback should use a new annotation or a future correction workflow. | Active draft |
 | BR-ANN-025 | The MVP does not add an annotation-origin column. Stored procedures determine creation and resolution permissions by joining `ChapterPageAnnotation.annotated_by_user_id` to the creator's current role and by deriving the owning series through `ChapterPageAnnotationRegion → PageRegion → ChapterPageVersion → ChapterPage → Chapter`. | Active draft |
 | BR-ANN-026 | Annotation text updates must be audit-logged with old text, new text, actor user, owning series/page context, and optional update reason when available. | Active draft |
+| BR-ANN-027 | Tantou Editor annotation create/update/resolve actions are editorial-review workspace mutations and therefore are permitted only in `UNDER_REVIEW` or `REVISION_REQUESTED` when the Editor is `ACTIVE`, is an active contributor of the exact series, and otherwise satisfies annotation ownership rules. Outside those states the Editor may still view annotations but must not mutate them from the workspace. | Active draft |
 
 ## 14. Page Task
 
