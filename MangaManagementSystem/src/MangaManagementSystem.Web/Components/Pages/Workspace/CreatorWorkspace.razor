@@ -120,11 +120,12 @@ else
                 }
             }
             @* Save / Discard: the Mangaka commits page content while the chapter is editable; a Tantou Editor
-               also needs them while DRAFT / UNDER_REVIEW / REVISION_REQUESTED to persist the regions they add
-               for annotation (Save is still auto-disabled unless there are unsaved changes). Mirrors CanEditRegions. *@
+               also needs them while UNDER_REVIEW / REVISION_REQUESTED to persist the review regions they add
+               (Save is still auto-disabled unless there are unsaved changes). Mirrors CanEditRegions — per
+               BR-REG-036 / BR-WORKSPACE-014 the editor is READ-ONLY on DRAFT, so no Save there. *@
             @if (_headerChap != null
                  && ((_currentRoleName == "Mangaka" && (_headerChap.StatusCode == "DRAFT" || _headerChap.StatusCode == "REVISION_REQUESTED"))
-                     || (_currentRoleName == "Tantou Editor" && (_headerChap.StatusCode == "DRAFT" || _headerChap.StatusCode == "UNDER_REVIEW" || _headerChap.StatusCode == "REVISION_REQUESTED"))))
+                     || (_currentRoleName == "Tantou Editor" && (_headerChap.StatusCode == "UNDER_REVIEW" || _headerChap.StatusCode == "REVISION_REQUESTED"))))
             {
                 <MudButton Variant="Variant.Filled" Color="@(HasUnsavedChanges ? Color.Warning : Color.Default)" Size="Size.Small"
                            StartIcon="@Icons.Material.Filled.Save" Class="mr-2" DisableElevation="true"
@@ -223,9 +224,14 @@ else
                             <MudMenuItem Icon="@Icons.Material.Filled.Translate" OnClick='@(() => RunTranslateAI("en"))'>English (EN)</MudMenuItem>
                         </MudMenu>
                     </MudTooltip>
-                    @if (CanManageContent)
+                    @* BR-REG-035: editing a region's type_code / label is a permitted region edit for a Tantou
+                       Editor too, so the button is SHOWN to the editor (same @if as Region Tool / Delete) and
+                       gated by CanEditRegions (Mangaka in DRAFT/REVISION_REQUESTED; Tantou Editor in
+                       UNDER_REVIEW/REVISION_REQUESTED) — not CanManageContent, which had hidden it entirely,
+                       nor IsChapterLocked, which had blocked the editor from adjusting region type/label. *@
+                    @if (CanManageContent || _currentRoleName == "Tantou Editor")
                     {
-                        <MudTooltip Text="Edit region type (label editable when one is selected)"><MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Default" OnClick="OpenEditRegionDialog" Size="Size.Small" Disabled="@(IsChapterLocked || SelectedRegions.Count < 1)" /></MudTooltip>
+                        <MudTooltip Text="Edit region type (label editable when one is selected)"><MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Default" OnClick="OpenEditRegionDialog" Size="Size.Small" Disabled="@(!CanEditRegions || SelectedRegions.Count < 1)" /></MudTooltip>
                     }
                     @* Delete region: available to whoever may edit regions (Mangaka when editable, or Tantou
                        Editor during review). The "region in use by a task/annotation" guard is reused unchanged

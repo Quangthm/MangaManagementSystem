@@ -106,8 +106,8 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                             {
                                 var taskPanels = t.PageRegions?.Where(r => r.Width > 0.05m)
                                     .Select(r => canvasPanelNo.TryGetValue(r.PageRegionId, out var no)
-                                        ? $"Panel #{no}"
-                                        : $"Panel #{ParseRegionId(r.RegionLabel)}")
+                                        ? FormatRegionTarget(r.TypeCode, no)
+                                        : FormatRegionTarget(r.TypeCode, ParseRegionId(r.RegionLabel)))
                                     .ToList() ?? new List<string>();
                                 string taskTarget = taskPanels.Any() ? string.Join(", ", taskPanels) : $"Page {SelectedPage}";
                                 newTasks.Add(new ProductionTask
@@ -140,8 +140,8 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                                 var pinRegion = a.PageRegions?.FirstOrDefault(r => r.Width <= 0.05m && r.Height <= 0.05m);
                                 var targetRegions = a.PageRegions?.Where(r => r.Width > 0.05m)
                                     .Select(r => canvasPanelNo.TryGetValue(r.PageRegionId, out var no)
-                                        ? $"Panel #{no}"
-                                        : $"Panel #{ParseRegionId(r.RegionLabel)}")
+                                        ? FormatRegionTarget(r.TypeCode, no)
+                                        : FormatRegionTarget(r.TypeCode, ParseRegionId(r.RegionLabel)))
                                     .ToList() ?? new List<string>();
 
                                 string annTarget;
@@ -267,8 +267,8 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
         var taskPanels = _assistantWorkspaceTask.PageRegions?.Where(r => r.Width > 0.05m)
             .Select(r => canvasPanelNo.TryGetValue(r.PageRegionId, out var no)
-                ? $"Panel #{no}"
-                : $"Panel #{ParseRegionId(r.RegionLabel)}")
+                ? FormatRegionTarget(r.TypeCode, no)
+                : FormatRegionTarget(r.TypeCode, ParseRegionId(r.RegionLabel)))
             .ToList() ?? new List<string>();
 
         string taskTarget = taskPanels.Any()
@@ -312,8 +312,8 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             var pinRegion = a.PageRegions?.FirstOrDefault(r => r.Width <= 0.05m && r.Height <= 0.05m);
             var targetRegions = a.PageRegions?.Where(r => r.Width > 0.05m)
                 .Select(r => canvasPanelNo.TryGetValue(r.PageRegionId, out var no)
-                    ? $"Panel #{no}"
-                    : $"Panel #{ParseRegionId(r.RegionLabel)}")
+                    ? FormatRegionTarget(r.TypeCode, no)
+                    : FormatRegionTarget(r.TypeCode, ParseRegionId(r.RegionLabel)))
                 .ToList() ?? new List<string>();
 
             string annTarget;

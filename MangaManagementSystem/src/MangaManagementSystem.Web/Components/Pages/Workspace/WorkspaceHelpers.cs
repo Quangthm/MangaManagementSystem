@@ -101,6 +101,23 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         }
 
         /// <summary>
+        /// True for the system-managed whole-page anchor type. Such a region is created automatically when
+        /// a task/annotation targets no specific panel, so it is never drawn on the canvas, never offered
+        /// for manual edit, and never displayed as a panel.
+        /// </summary>
+        public static bool IsFullPageRegion(string? typeCode)
+            => string.Equals((typeCode ?? "").Trim(), "FULL_PAGE", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Display text for a task/annotation target region. A FULL_PAGE anchor is not a panel the user
+        /// drew and its number is an internal canvas id, so showing "Panel #12" for it is wrong on both
+        /// counts — it reads as the whole page instead.
+        /// </summary>
+        /// Wording matches the label used when a task/annotation is first created with no selection.
+        public static string FormatRegionTarget(string? typeCode, int panelNumber)
+            => IsFullPageRegion(typeCode) ? "Full page" : $"Panel #{panelNumber}";
+
+        /// <summary>
         /// Maps legacy/canvas type values onto the DB type codes (ck_page_region_type_code). FULL_PAGE is
         /// system-managed (needs x=0,y=0) so it is not offered for manual edit; anything unknown → OTHER.
         /// </summary>

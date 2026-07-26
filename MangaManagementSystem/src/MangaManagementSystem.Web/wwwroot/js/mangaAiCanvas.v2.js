@@ -832,10 +832,13 @@ export function createMangaCanvasInstance() {
     redraw();
   }
 
-  // Selects every region (e.g. to translate or assign the whole page at once).
+  // Selects every region (e.g. to translate or assign the whole page at once). Excludes the
+  // system-managed FULL_PAGE anchor: selecting it would attach the whole-page region to a task or
+  // annotation alongside the real panels, which is not what "select all panels" means.
   function selectAllRegions() {
     let changed = false;
     regions.forEach((r) => {
+      if ((r.type || "").toUpperCase() === "FULL_PAGE") return;
       if (!r.selected) {
         r.selected = true;
         changed = true;
@@ -983,6 +986,13 @@ export function createMangaCanvasInstance() {
 
     // 2. Draw regions and text
     regions.forEach((r) => {
+      // FULL_PAGE regions are system-managed page anchors (0,0 → full width/height) created when a
+      // task/annotation targets no specific panel. They are data, not something the user drew, so
+      // they must stay invisible — drawing one paints its fill + border over the WHOLE page and
+      // covers every panel underneath. Skipped here to match the hit-test, which already ignores
+      // them; the region stays in `regions` so save/bulk-replace still round-trips it.
+      if ((r.type || "").toUpperCase() === "FULL_PAGE") return;
+
       const hasText = r.translatedText && r.translatedText.trim() !== "";
 
       // Fill / translated text

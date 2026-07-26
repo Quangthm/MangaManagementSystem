@@ -484,7 +484,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         {
             regionIds = await EnsureRegionsSavedAsync(regionsToSave);
             // Show only the panel number(s) — same #N shown on the canvas — not raw coordinates.
-            target = string.Join(", ", SelectedRegions.Select(r => $"Panel #{r.Id}"));
+            target = string.Join(", ", SelectedRegions.Select(r => FormatRegionTarget(r.Type, r.Id)));
         }
 
         int newId = ActiveTasks.Any() ? ActiveTasks.Max(t => t.Id) + 1 : 1;
@@ -721,7 +721,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         else if (!SelectedRegions.Any())
             target = "Full page";
         else
-            target = string.Join(", ", SelectedRegions.Select(r => $"Panel #{r.Id}"));
+            target = string.Join(", ", SelectedRegions.Select(r => FormatRegionTarget(r.Type, r.Id)));
 
         try
         {
@@ -1632,14 +1632,13 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private static bool IsStatusContentLocked(string? code) =>
         code is "UNDER_REVIEW" or "APPROVED" or "SCHEDULED" or "ON_HOLD" or "RELEASED" or "CANCELLED";
 
-    // PageRegion editing for a Tantou Editor. Regions are the Mangaka's page CONTENT and stay locked for
-    // the Mangaka while the chapter is under review; a Tantou Editor may edit regions (box a panel for an
-    // editorial annotation) while the chapter is still in an editing/review cycle. Per repo-owner request
-    // this now includes DRAFT — not just UNDER_REVIEW / REVISION_REQUESTED — so the editor's region tools
-    // are available on a draft chapter as well. The region API accepts either actor (no role/status guard
-    // there), so the UI gate below is currently the only restriction. NOTE: this widens the editor's write
-    // access to a chapter the Mangaka has not yet submitted; revisit if the planned JWT/EF authz adds
-    // server-side role/status enforcement.
+    // PageRegion editing gate. Per BR-REG-035 / BR-REG-036 / BR-WORKSPACE-013/014 (docs 2026-07-24):
+    //   Mangaka       — edit regions while the chapter is content-editable (DRAFT / REVISION_REQUESTED).
+    //   Tantou Editor — edit regions ONLY while UNDER_REVIEW or REVISION_REQUESTED (editorial-review
+    //                   metadata). The editor keeps READ access to DRAFT and read-only states, but read
+    //                   does not grant write: they must NOT create/edit/delete regions on DRAFT, APPROVED,
+    //                   SCHEDULED, ON_HOLD, RELEASED, or CANCELLED. (An earlier build let the editor edit
+    //                   on DRAFT; the finalized rule reverses that.)
     private bool CanEditRegions =>
         CanEditRegionsForStatus(Chapters.FirstOrDefault(c => c.Id == SelectedChapter)?.StatusCode);
 
@@ -1651,28 +1650,34 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     {
         if (_seriesStatusCode == "COMPLETED") return false;
         if (_currentRoleName == "Mangaka") return CanManageContent && !IsStatusContentLocked(code);
-        if (_currentRoleName == "Tantou Editor") return code == "DRAFT" || code == "UNDER_REVIEW" || code == "REVISION_REQUESTED";
+        if (_currentRoleName == "Tantou Editor") return code == "UNDER_REVIEW" || code == "REVISION_REQUESTED";
         return false;
     }
 
     private static bool IsAssistantTaskChapterSubmissionBlocked(string? statusCode) =>
         statusCode is "APPROVED" or "SCHEDULED" or "ON_HOLD" or "RELEASED" or "CANCELLED";
-    // Annotations are review/production FEEDBACK (BR-CP-018 / BR-WORKSPACE-007), not page content, so they
-    // stay available while a chapter is in an editing/review cycle — including UNDER_REVIEW, which is exactly
-    // when a Tantou Editor reviews. Only the finalized states stop new annotations. This is deliberately
-    // separate from IsChapterLocked (which locks page/version/region CONTENT while under review or later).
+    // Annotations are review/production FEEDBACK, not page content, so they stay available while a chapter
+    // is in an editing/review cycle. Per BR-ANN-013 / BR-ANN-027 (docs 2026-07-24) the permitted states are
+    // ROLE-SPECIFIC:
+    //   Mangaka       — DRAFT / UNDER_REVIEW / REVISION_REQUESTED (production-tracking feedback).
+    //   Tantou Editor — ONLY UNDER_REVIEW / REVISION_REQUESTED (editorial-review feedback). On DRAFT (and
+    //                   the finalized states) the editor's workspace is READ-ONLY for annotation mutation.
+    // Fine-grained resolve-by-origin (BR-ANN-020/021) is still enforced server-side by the annotation SPs.
     private bool CanAnnotate
     {
         get
         {
-            // BR-ANN-013: only active Mangaka and Tantou Editor contributors may create/resolve
-            // annotations in MVP. Assistants can now reach the workspace (WorkspaceRoles) but must not
-            // see annotation create/resolve controls. Fine-grained resolve-by-origin (BR-ANN-020/021)
-            // is still enforced server-side by the annotation stored procedures (BR-ANN-025).
-            if (_currentRoleName != "Mangaka" && _currentRoleName != "Tantou Editor") return false;
-            var chap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
-            var code = chap?.StatusCode;
-            return code == "DRAFT" || code == "UNDER_REVIEW" || code == "REVISION_REQUESTED";
+            var code = Chapters.FirstOrDefault(c => c.Id == SelectedChapter)?.StatusCode;
+            if (_currentRoleName == "Mangaka")
+            {
+                return code is "DRAFT" or "UNDER_REVIEW" or "REVISION_REQUESTED";
+            }
+            if (_currentRoleName == "Tantou Editor")
+            {
+                return code is "UNDER_REVIEW" or "REVISION_REQUESTED";
+            }
+            // Assistants can reach the workspace (WorkspaceRoles) but must not create/resolve annotations.
+            return false;
         }
     }
 
@@ -2644,9 +2649,20 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private async Task<string> BuildRegionsJsonFromDbAsync(Guid versionId)
     {
         var dbRegions = await MangakaRegionApi.GetByVersionsAsync(new[] { versionId });
+
+        // The system-managed FULL_PAGE anchor must not consume a panel number: the query has no ORDER BY,
+        // so whether it landed before or after the real panels was down to whatever order SQL returned,
+        // and when it landed first every panel number shifted by one. Push it to the end. OrderBy is a
+        // stable sort, so the real panels keep exactly the relative order (and therefore the numbers)
+        // they have today. FULL_PAGE still gets a unique canvas id — needed by select/delete and nextId —
+        // but its number is never shown (see FormatRegionTarget and the redraw skip).
+        var ordered = dbRegions
+            .OrderBy(r => IsFullPageRegion(r.TypeCode) ? 1 : 0)
+            .ToList();
+
         var mapped = new List<RegionModel>();
         int idx = 1;
-        foreach (var r in dbRegions)
+        foreach (var r in ordered)
         {
             if (r.Width <= 0.05m && r.Height <= 0.05m) continue; // skip annotation pin markers
 
@@ -2762,6 +2778,9 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private async Task ApplyEditRegion()
     {
         _showEditRegionDialog = false;
+        // Same region-edit permission as the toolbar button (BR-REG-026/035): Mangaka in editable states,
+        // Tantou Editor in UNDER_REVIEW/REVISION_REQUESTED. Backstop so a stale open dialog can't persist.
+        if (!CanEditRegions) return;
         var canvas = GetActiveCanvas();
         if (canvas == null) return;
         var targets = SelectedRegions.ToList();
