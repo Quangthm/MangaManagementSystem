@@ -36,6 +36,17 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                           cancellationToken);
         }
 
+        public Task<string?> GetSeriesStatusCodeAsync(
+            Guid seriesId,
+            CancellationToken cancellationToken = default)
+        {
+            return _context.Series
+                .AsNoTracking()
+                .Where(series => series.SeriesId == seriesId)
+                .Select(series => series.StatusCode)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
         public async Task<IReadOnlyList<SeriesContributorListItemDto>> GetSeriesContributorsAsync(
             Guid actorUserId,
             Guid seriesId,
@@ -193,7 +204,19 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             };
             cmd.Parameters.Add(outputParam);
 
-            await ExecuteNonQueryWithConnectionAsync(cmd, cancellationToken);
+            try
+            {
+                await ExecuteNonQueryWithConnectionAsync(cmd, cancellationToken);
+            }
+            catch (SqlException ex) when (ex.Number == 57203)
+            {
+                var statusCode = await GetSeriesStatusCodeAsync(seriesId, cancellationToken);
+                throw new InvalidOperationException(
+                    string.Equals(statusCode, "COMPLETED", StringComparison.OrdinalIgnoreCase)
+                        ? "This series is completed, so its contributor list can no longer be changed."
+                        : "This series has been cancelled, so new contributors can no longer be added.",
+                    ex);
+            }
         }
 
         public async Task EndAssistantContributorViaProcAsync(

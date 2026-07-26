@@ -134,18 +134,15 @@ namespace MangaManagementSystem.Web.Services.Api
 
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
             return JsonSerializer.Deserialize<ReassignChapterPageTaskResult>(content, _jsonOptions)
-                ?? throw new InvalidOperationException("Failed to parse reassignment result.");
+                ?? throw new InvalidOperationException(
+                    "The reassignment may have completed, but no confirmation was returned. Refresh before trying again.");
         }
 
         private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken ct)
         {
             if (!response.IsSuccessStatusCode)
             {
-                var errorContent = await response.Content.ReadAsStringAsync(ct);
-                throw new HttpRequestException(
-                    $"API returned {(int)response.StatusCode}: {errorContent}",
-                    null,
-                    response.StatusCode);
+                throw await ApiResponseReader.CreateExceptionAsync(response, ct);
             }
         }
 
@@ -196,7 +193,8 @@ namespace MangaManagementSystem.Web.Services.Api
 
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
             return JsonSerializer.Deserialize<QuickSelectTaskAssignmentResult>(content, _jsonOptions)
-                ?? throw new InvalidOperationException("Failed to parse quick select assignment result.");
+                ?? throw new InvalidOperationException(
+                    "The tasks may have been created, but no confirmation was returned. Refresh before trying again.");
         }
     }
 }

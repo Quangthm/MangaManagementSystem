@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using MangaManagementSystem.Application.DTOs.Auth;
 
@@ -53,99 +54,75 @@ namespace MangaManagementSystem.Web.Services.Api
             var requestUri =
                 response.RequestMessage?.RequestUri?.ToString() ?? "UNKNOWN";
 
-            try
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
             {
-                var body =
-                    await response.Content
-                        .ReadAsStringAsync(
-                            cancellationToken);
+                message = "Your session is no longer valid. Please sign in again.";
+            }
+            else if (response.StatusCode == HttpStatusCode.Forbidden)
+            {
+                message = "You don't have permission to perform this action.";
+            }
+            else if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                message = "The requested resource could not be found.";
+            }
+            else if ((int)response.StatusCode >= 500)
+            {
+                message = "The request could not be completed right now. Please try again.";
+            }
 
-                if (!string.IsNullOrWhiteSpace(body))
+            if ((int)response.StatusCode < 500
+                && response.StatusCode != HttpStatusCode.Unauthorized)
+            {
+                try
                 {
-                    using var document =
-                        JsonDocument.Parse(body);
+                    var body =
+                        await response.Content
+                            .ReadAsStringAsync(
+                                cancellationToken);
 
-                    var root =
-                        document.RootElement;
+                    if (!string.IsNullOrWhiteSpace(body))
+                    {
+                        var trimmedBody = body.Trim();
+                        var looksLikeJson =
+                            trimmedBody.StartsWith('{')
+                            || trimmedBody.StartsWith('[')
+                            || trimmedBody.StartsWith('"');
 
-                    if (TryReadString(
-                            root,
-                            "code",
-                            out var parsedCode))
-                    {
-                        code = parsedCode;
-                    }
-
-                    if (TryReadString(
-                            root,
-                            "message",
-                            out var parsedMessage)
-                        || TryReadString(
-                            root,
-                            "detail",
-                            out parsedMessage)
-                        || TryReadString(
-                            root,
-                            "title",
-                            out parsedMessage))
-                    {
-                        message = parsedMessage;
-                    }
-                    else if (root.TryGetProperty(
-                            "errors",
-                            out var errors)
-                        && errors.ValueKind ==
-                            JsonValueKind.Object)
-                    {
-                        foreach (var error
-                            in errors.EnumerateObject())
+                        if (looksLikeJson
+                            && TryParseStructuredError(
+                                body,
+                                out var parsedCode,
+                                out var parsedMessage))
                         {
-                            if (error.Value.ValueKind
-                                != JsonValueKind.Array)
+                            if (!string.IsNullOrWhiteSpace(parsedCode))
                             {
-                                continue;
+                                code = parsedCode;
                             }
 
-                            foreach (var item
-                                in error.Value
-                                    .EnumerateArray())
+                            if (!string.IsNullOrWhiteSpace(parsedMessage))
                             {
-                                if (item.ValueKind
-                                    != JsonValueKind.String)
-                                {
-                                    continue;
-                                }
-
-                                var validationMessage =
-                                    item.GetString();
-
-                                if (!string.IsNullOrWhiteSpace(
-                                        validationMessage))
-                                {
-                                    message =
-                                        validationMessage;
-
-                                    code =
-                                        AuthErrorCodes
-                                            .ValidationFailed;
-
-                                    break;
-                                }
+                                message = parsedMessage;
                             }
-
-                            if (code ==
-                                AuthErrorCodes
-                                    .ValidationFailed)
+                        }
+                        else if (!looksLikeJson
+                            && string.Equals(
+                                response.Content.Headers.ContentType?.MediaType,
+                                "text/plain",
+                                StringComparison.OrdinalIgnoreCase))
+                        {
+                            var plainMessage = trimmedBody;
+                            if (!string.IsNullOrWhiteSpace(plainMessage))
                             {
-                                break;
+                                message = plainMessage;
                             }
                         }
                     }
                 }
-            }
-            catch (JsonException)
-            {
-                // Use safe defaults.
+                catch (JsonException)
+                {
+                    // Use the status-aware safe default.
+                }
             }
 
             return new ApiClientException(
@@ -154,6 +131,76 @@ namespace MangaManagementSystem.Web.Services.Api
                 response.StatusCode,
                 requestMethod,
                 requestUri);
+        }
+
+        private static bool TryParseStructuredError(
+            string body,
+            out string? code,
+            out string? message)
+        {
+            code = null;
+            message = null;
+
+            using var document = JsonDocument.Parse(body);
+            var root = document.RootElement;
+
+            if (root.ValueKind == JsonValueKind.String)
+            {
+                message = root.GetString();
+                return !string.IsNullOrWhiteSpace(message);
+            }
+
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            if (TryReadString(root, "code", out var parsedCode))
+            {
+                code = parsedCode;
+            }
+
+            if (TryReadString(root, "message", out var parsedMessage)
+                || TryReadString(root, "detail", out parsedMessage)
+                || TryReadString(root, "title", out parsedMessage))
+            {
+                message = parsedMessage;
+                return true;
+            }
+
+            if (!root.TryGetProperty("errors", out var errors)
+                || errors.ValueKind != JsonValueKind.Object)
+            {
+                return code is not null;
+            }
+
+            foreach (var error in errors.EnumerateObject())
+            {
+                if (error.Value.ValueKind != JsonValueKind.Array)
+                {
+                    continue;
+                }
+
+                foreach (var item in error.Value.EnumerateArray())
+                {
+                    if (item.ValueKind != JsonValueKind.String)
+                    {
+                        continue;
+                    }
+
+                    var validationMessage = item.GetString();
+                    if (string.IsNullOrWhiteSpace(validationMessage))
+                    {
+                        continue;
+                    }
+
+                    message = validationMessage;
+                    code = AuthErrorCodes.ValidationFailed;
+                    return true;
+                }
+            }
+
+            return code is not null;
         }
 
         private static bool TryReadString(

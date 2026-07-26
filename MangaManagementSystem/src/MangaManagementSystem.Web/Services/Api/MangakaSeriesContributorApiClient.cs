@@ -80,11 +80,7 @@ namespace MangaManagementSystem.Web.Services.Api
         {
             if (!response.IsSuccessStatusCode)
             {
-                var errorContent = await response.Content.ReadAsStringAsync(ct);
-                throw new HttpRequestException(
-                    $"API returned {(int)response.StatusCode}: {errorContent}",
-                    null,
-                    response.StatusCode);
+                throw await ApiResponseReader.CreateExceptionAsync(response, ct);
             }
         }
     }

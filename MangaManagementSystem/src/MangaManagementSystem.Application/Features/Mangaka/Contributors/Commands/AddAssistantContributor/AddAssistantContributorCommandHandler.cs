@@ -42,6 +42,22 @@ namespace MangaManagementSystem.Application.Features.Mangaka.Contributors.Comman
                 throw new InvalidOperationException("Only an active Mangaka contributor can add assistants to this series.");
             }
 
+            var seriesStatus = await _seriesContributorRepository.GetSeriesStatusCodeAsync(
+                request.SeriesId,
+                cancellationToken);
+
+            if (string.Equals(seriesStatus, "COMPLETED", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "This series is completed, so its contributor list can no longer be changed.");
+            }
+
+            if (string.Equals(seriesStatus, "CANCELLED", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "This series has been cancelled, so new contributors can no longer be added.");
+            }
+
             var target = await _seriesContributorRepository.GetContributorTargetSnapshotAsync(
                 request.SeriesId,
                 request.AssistantUserId,
