@@ -13,7 +13,7 @@ using System.Threading.Tasks;
 
 namespace MangaManagementSystem.Infrastructure.Repositories
 {
-    public class UserRepository : GenericRepository<User>, IUserRepository, IAdminUserQueryRepository
+    public class UserRepository : GenericRepository<User>, IUserRepository, IAdminUserQueryRepository, IUserProfileFileRepository
     {
         public UserRepository(ApplicationDbContext context) : base(context)
         {
@@ -614,7 +614,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 cancellationToken);
         }
         public async Task<UserFileReplacementResult>
-            UpdateAvatarFileViaProcAsync(
+            ReplaceAvatarFileAsync(
                 UserFileReplacementRequest request)
         {
             ArgumentNullException.ThrowIfNull(request);
@@ -698,7 +698,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         }
 
         public async Task<UserFileReplacementResult>
-            UpdatePortfolioFileViaProcAsync(
+            ReplacePortfolioFileAsync(
                 UserFileReplacementRequest request)
         {
             ArgumentNullException.ThrowIfNull(request);

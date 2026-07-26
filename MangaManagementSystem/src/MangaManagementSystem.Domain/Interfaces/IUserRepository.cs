@@ -2,23 +2,6 @@ using MangaManagementSystem.Domain.Entities;
 
 namespace MangaManagementSystem.Domain.Interfaces
 {
-    public sealed record UserFileReplacementRequest(
-        Guid UserId,
-        string OriginalFileName,
-        string CloudinaryPublicId,
-        string CloudinarySecureUrl,
-        string ContentType,
-        long FileSizeBytes,
-        string Sha256Hash
-    );
-
-    public sealed record UserFileReplacementResult(
-        Guid NewFileResourceId,
-        Guid? OldFileResourceId,
-        string? OldCloudinaryPublicId,
-        string? OldContentType
-    );
-
 public interface IUserRepository
         : IGenericRepository<User>
     {
@@ -90,15 +73,7 @@ Task<IReadOnlyDictionary<string, int>>
             string displayName,
             CancellationToken cancellationToken = default);
 
-        Task<UserFileReplacementResult>
-            UpdateAvatarFileViaProcAsync(
-                UserFileReplacementRequest request);
-
-        Task<UserFileReplacementResult>
-            UpdatePortfolioFileViaProcAsync(
-                UserFileReplacementRequest request);
-
-        Task ResetPasswordViaProcAsync(
+Task ResetPasswordViaProcAsync(
             Guid userId,
             string passwordHash);
     }

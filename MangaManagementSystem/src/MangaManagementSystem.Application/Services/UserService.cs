@@ -31,6 +31,8 @@ namespace MangaManagementSystem.Application.Services
         };
 
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IUserProfileFileRepository
+            _userProfileFileRepository;
         private readonly IPasswordHasher _passwordHasher;
         private readonly IEmailService _emailService;
         private readonly INotificationService _notificationService;
@@ -40,6 +42,7 @@ namespace MangaManagementSystem.Application.Services
 
         public UserService(
             IUnitOfWork unitOfWork,
+            IUserProfileFileRepository userProfileFileRepository,
             IPasswordHasher passwordHasher,
             IEmailService emailService,
             INotificationService notificationService,
@@ -48,6 +51,8 @@ namespace MangaManagementSystem.Application.Services
             ILogger<UserService> logger)
         {
             _unitOfWork = unitOfWork;
+            _userProfileFileRepository =
+                userProfileFileRepository;
             _passwordHasher = passwordHasher;
             _emailService = emailService;
             _notificationService = notificationService;
@@ -407,8 +412,8 @@ namespace MangaManagementSystem.Application.Services
                         upload.Sha256Hash!);
 
                 replacementResult =
-                    await _unitOfWork.Users
-                        .UpdateAvatarFileViaProcAsync(request);
+                    await _userProfileFileRepository
+                        .ReplaceAvatarFileAsync(request);
             }
             catch
             {
@@ -462,8 +467,8 @@ namespace MangaManagementSystem.Application.Services
                         upload.Sha256Hash!);
 
                 replacementResult =
-                    await _unitOfWork.Users
-                        .UpdatePortfolioFileViaProcAsync(request);
+                    await _userProfileFileRepository
+                        .ReplacePortfolioFileAsync(request);
             }
             catch
             {
