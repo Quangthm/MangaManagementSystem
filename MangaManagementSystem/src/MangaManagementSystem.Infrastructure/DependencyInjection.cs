@@ -85,10 +85,26 @@ namespace MangaManagementSystem.Infrastructure
             services.AddScoped<ISeriesContributorManagementRepository, SeriesContributorRepository>();
             services.AddScoped<IQuickSelectRepository, QuickSelectRepository>();
             // Unit of Work
-            services.AddScoped<IFileResourceRepository, FileResourceRepository>();
+            services.AddScoped<FileResourceRepository>();
+            services.AddScoped<IFileResourceRepository>(
+                serviceProvider =>
+                    serviceProvider
+                        .GetRequiredService<FileResourceRepository>());
+            services.AddScoped<IAdminFileResourceRepository>(
+                serviceProvider =>
+                    serviceProvider
+                        .GetRequiredService<FileResourceRepository>());
             services.AddScoped<INotificationRepository, NotificationRepository>();
             services.AddScoped<IPasswordResetTokenService, PasswordResetTokenService>();
-            services.AddScoped<IAuditEventRepository, AuditEventRepository>();
+            services.AddScoped<AuditEventRepository>();
+            services.AddScoped<IAuditEventRepository>(
+                serviceProvider =>
+                    serviceProvider
+                        .GetRequiredService<AuditEventRepository>());
+            services.AddScoped<IAdminAuditQueryRepository>(
+                serviceProvider =>
+                    serviceProvider
+                        .GetRequiredService<AuditEventRepository>());
             services.AddScoped<IUnitOfWork, UnitOfWork>();
 
             // File storage (application interface implemented in Infrastructure)

@@ -1,7 +1,6 @@
 using MangaManagementSystem.Application.DTOs.Admin;
 using MangaManagementSystem.Application.Features.Admin.Files.Queries;
 using MangaManagementSystem.Application.Interfaces;
-using MangaManagementSystem.Domain.Interfaces;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -96,7 +95,7 @@ namespace MangaManagementSystem.Application.Features.Admin.Files.Commands
             SoftDeleteAdminFileCommand,
             AdminFileDetailDto>
     {
-        private readonly IFileResourceRepository
+        private readonly IAdminFileResourceRepository
             _fileResourceRepository;
         private readonly IFileStorageService
             _fileStorageService;
@@ -104,7 +103,7 @@ namespace MangaManagementSystem.Application.Features.Admin.Files.Commands
             _logger;
 
         public SoftDeleteAdminFileCommandHandler(
-            IFileResourceRepository fileResourceRepository,
+            IAdminFileResourceRepository fileResourceRepository,
             IFileStorageService fileStorageService,
             ILogger<SoftDeleteAdminFileCommandHandler> logger)
         {
@@ -162,7 +161,7 @@ namespace MangaManagementSystem.Application.Features.Admin.Files.Commands
             CleanupAdminFileStorageCommand,
             AdminFileCleanupResultDto>
     {
-        private readonly IFileResourceRepository
+        private readonly IAdminFileResourceRepository
             _fileResourceRepository;
         private readonly IFileStorageService
             _fileStorageService;
@@ -170,7 +169,7 @@ namespace MangaManagementSystem.Application.Features.Admin.Files.Commands
             _logger;
 
         public CleanupAdminFileStorageCommandHandler(
-            IFileResourceRepository fileResourceRepository,
+            IAdminFileResourceRepository fileResourceRepository,
             IFileStorageService fileStorageService,
             ILogger<CleanupAdminFileStorageCommandHandler> logger)
         {
@@ -212,7 +211,7 @@ namespace MangaManagementSystem.Application.Features.Admin.Files.Commands
             CleanupDeletedAdminFilesStorageCommand,
             AdminFileCleanupBatchResultDto>
     {
-        private readonly IFileResourceRepository
+        private readonly IAdminFileResourceRepository
             _fileResourceRepository;
         private readonly IFileStorageService
             _fileStorageService;
@@ -220,7 +219,7 @@ namespace MangaManagementSystem.Application.Features.Admin.Files.Commands
             _logger;
 
         public CleanupDeletedAdminFilesStorageCommandHandler(
-            IFileResourceRepository fileResourceRepository,
+            IAdminFileResourceRepository fileResourceRepository,
             IFileStorageService fileStorageService,
             ILogger<CleanupDeletedAdminFilesStorageCommandHandler> logger)
         {

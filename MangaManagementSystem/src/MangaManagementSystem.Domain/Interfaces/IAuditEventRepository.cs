@@ -2,15 +2,6 @@ using MangaManagementSystem.Domain.Entities;
 
 namespace MangaManagementSystem.Domain.Interfaces
 {
-    public sealed record AuditEventSearchCriteria(
-        string? Search,
-        string? ActionCode,
-        string? EntityType,
-        DateTime? FromUtc,
-        DateTime? ToUtc,
-        int PageNumber,
-        int PageSize);
-
     public interface IAuditEventRepository
     {
         Task<AuditEvent?> GetByIdAsync(
@@ -29,18 +20,6 @@ namespace MangaManagementSystem.Domain.Interfaces
                 int pageSize,
                 CancellationToken cancellationToken = default);
 
-        Task<(IReadOnlyList<AuditEvent> Items, int TotalCount)>
-            SearchAsync(
-                AuditEventSearchCriteria criteria,
-                CancellationToken cancellationToken = default);
-
-        Task<IReadOnlyList<string>>
-            GetDistinctActionCodesAsync(
-                CancellationToken cancellationToken = default);
-
-        Task<IReadOnlyList<string>>
-            GetDistinctEntityTypesAsync(
-                CancellationToken cancellationToken = default);
         Task AddAsync(
             AuditEvent auditEvent,
             CancellationToken cancellationToken = default);

@@ -1,3 +1,4 @@
+using MangaManagementSystem.Application.Interfaces;
 using System.Data;
 using System.Data.Common;
 using MangaManagementSystem.Application.Common;
@@ -11,7 +12,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 {
     public sealed class FileResourceRepository
         : GenericRepository<FileResource>,
-          IFileResourceRepository
+          IFileResourceRepository,
+          IAdminFileResourceRepository
     {
         public FileResourceRepository(
             ApplicationDbContext context)

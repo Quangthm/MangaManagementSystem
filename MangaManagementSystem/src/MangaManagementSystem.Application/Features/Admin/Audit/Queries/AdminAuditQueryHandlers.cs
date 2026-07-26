@@ -1,5 +1,5 @@
+using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Application.DTOs.Admin;
-using MangaManagementSystem.Domain.Interfaces;
 using MediatR;
 
 namespace MangaManagementSystem.Application.Features.Admin.Audit.Queries
@@ -63,11 +63,11 @@ namespace MangaManagementSystem.Application.Features.Admin.Audit.Queries
             SearchAdminAuditEventsQuery,
             AdminAuditPageDto>
     {
-        private readonly IAuditEventRepository
+        private readonly IAdminAuditQueryRepository
             _auditEventRepository;
 
         public SearchAdminAuditEventsQueryHandler(
-            IAuditEventRepository auditEventRepository)
+            IAdminAuditQueryRepository auditEventRepository)
         {
             _auditEventRepository = auditEventRepository;
         }
@@ -146,11 +146,11 @@ namespace MangaManagementSystem.Application.Features.Admin.Audit.Queries
             GetAdminAuditFilterOptionsQuery,
             AdminAuditFilterOptionsDto>
     {
-        private readonly IAuditEventRepository
+        private readonly IAdminAuditQueryRepository
             _auditEventRepository;
 
         public GetAdminAuditFilterOptionsQueryHandler(
-            IAuditEventRepository auditEventRepository)
+            IAdminAuditQueryRepository auditEventRepository)
         {
             _auditEventRepository = auditEventRepository;
         }
