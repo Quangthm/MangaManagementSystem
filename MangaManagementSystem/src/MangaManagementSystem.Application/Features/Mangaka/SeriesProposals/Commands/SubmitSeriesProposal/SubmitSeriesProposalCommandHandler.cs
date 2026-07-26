@@ -163,7 +163,7 @@ namespace MangaManagementSystem.Application.Features.Mangaka.SeriesProposals.Com
                     .ToList();
 
                 (seriesProposalId, proposalVersionNo) =
-                    await _seriesProposalRepository.SubmitSeriesProposalViaProcAsync(
+                    await _seriesProposalRepository.SubmitSeriesProposalAsync(
                         seriesId: command.SeriesId,
                         submittedByUserId: command.ActorUserId,
                         originalFileName: uploadResult.OriginalFileName,

@@ -37,16 +37,14 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<IReadOnlyList<Series>> GetAllWithCoverAsync();
 
         /// <summary>
-        /// Updates a series draft profile through <c>manga.usp_Series_UpdateProfile</c>.
-        /// Only series with status <c>PROPOSAL_DRAFT</c> can be updated.
-        /// The stored procedure: validates actor is active Mangaka contributor, enforces
-        /// PROPOSAL_DRAFT status guard, soft-deletes the old cover FileResource when a new
-        /// cover is supplied, creates a new SERIES_COVER FileResource, updates manga.Series,
-        /// and writes the audit event.
-        /// Cover metadata is all-or-nothing: pass all six cover params or all nulls.
-        /// Returns the new cover FileResource id (null when cover was not changed).
+        /// Updates a proposal-draft series profile.
+        /// Validates that the actor is an active Mangaka contributor and that
+        /// the series remains in proposal-draft status.
+        /// Replaces the cover when new cover metadata is supplied and records
+        /// the corresponding audit event.
+        /// Returns the new cover file id, or null when the cover is unchanged.
         /// </summary>
-        Task<Guid?> UpdateSeriesDraftViaProcAsync(
+        Task<Guid?> UpdateSeriesDraftAsync(
             Guid actorUserId,
             Guid seriesId,
             string title,
@@ -65,26 +63,23 @@ namespace MangaManagementSystem.Domain.Interfaces
             CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Cancels a PROPOSAL_DRAFT series through <c>manga.usp_Series_CancelDraft</c>.
-        /// The stored procedure: validates the series is PROPOSAL_DRAFT, validates the actor
-        /// is an active Mangaka contributor, transitions Series.status_code to CANCELLED,
-        /// and writes the SERIES_DRAFT_CANCELLED audit event.
-        /// No FileResource cleanup or Cloudinary involvement — pure status transition.
+        /// Cancels a proposal-draft series.
+        /// Validates that the actor is an active Mangaka contributor, transitions
+        /// the series to cancelled status, and records the corresponding audit event.
         /// </summary>
-        Task CancelSeriesDraftViaProcAsync(
+        Task CancelSeriesDraftAsync(
             Guid actorUserId,
             Guid seriesId,
             string? reason,
             CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Creates a series draft through the <c>manga.usp_Series_Create</c> stored procedure.
-        /// The procedure enforces actor permission, creates the optional SERIES_COVER FileResource,
-        /// inserts the Series (status PROPOSAL_DRAFT), seeds the creator contributor, and writes the audit event.
-        /// Cover metadata is all-or-nothing; pass nulls when no cover is provided.
-        /// Returns the new series id and the cover FileResource id (null when no cover was provided).
+        /// Creates a proposal-draft series for an active Mangaka actor.
+        /// Creates the optional cover file, initializes the creator contributor,
+        /// and records the corresponding audit event.
+        /// Returns the new series id and optional cover file id.
         /// </summary>
-        Task<(Guid newSeriesId, Guid? coverFileResourceId)> CreateSeriesDraftViaProcAsync(
+        Task<(Guid newSeriesId, Guid? coverFileResourceId)> CreateSeriesDraftAsync(
             Guid actorUserId,
             string title,
             string slug,
@@ -105,7 +100,7 @@ namespace MangaManagementSystem.Domain.Interfaces
         /// <summary>
         /// Returns series detail by slug with CoverFile, all contributors (active and past),
         /// and paginated chapters. Used by the /series/{slug} detail page.
-        /// Returns null if series not found. EF Core read query — no stored procedure.
+        /// Read-only query.
         /// </summary>
         Task<(Series? Series, IReadOnlyList<SeriesContributorReadModel> Contributors, IReadOnlyList<Chapter> Chapters, int TotalChapterCount)>
             GetSeriesDetailBySlugAsync(
@@ -124,7 +119,7 @@ namespace MangaManagementSystem.Domain.Interfaces
         /// - SeriesContributor.UserId == actorUserId
         /// - SeriesContributor.EndDate IS NULL
         /// Returns null if series not found.
-        /// EF Core read query — no stored procedure.
+        /// Read-only query.
         /// </summary>
         Task<(Guid SeriesId, string Slug, string Title, bool CanAccess)?>
             GetWorkspaceEntryBySlugAsync(

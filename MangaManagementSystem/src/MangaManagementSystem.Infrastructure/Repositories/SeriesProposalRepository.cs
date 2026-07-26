@@ -300,11 +300,11 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         /// <summary>
         /// Calls <c>manga.usp_SeriesProposal_Submit</c> via ADO.NET StoredProcedure command.
         /// Uses strongly-typed SqlParameters and output parameter capture, consistent with
-        /// SeriesRepository.CreateSeriesDraftViaProcAsync.
+        /// SeriesRepository.CreateSeriesDraftAsync.
         /// Maps known custom SQL error numbers to user-safe InvalidOperationException messages.
         /// Raw SQL error text is never surfaced to callers.
         /// </summary>
-        public async Task<(Guid SeriesProposalId, short ProposalVersionNo)> SubmitSeriesProposalViaProcAsync(
+        public async Task<(Guid SeriesProposalId, short ProposalVersionNo)> SubmitSeriesProposalAsync(
             Guid seriesId,
             Guid submittedByUserId,
             string originalFileName,

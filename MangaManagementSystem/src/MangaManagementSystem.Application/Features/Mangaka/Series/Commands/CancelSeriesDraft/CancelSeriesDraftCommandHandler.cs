@@ -53,7 +53,7 @@ namespace MangaManagementSystem.Application.Features.Mangaka.Series.Commands.Can
 
             try
             {
-                await _seriesRepository.CancelSeriesDraftViaProcAsync(
+                await _seriesRepository.CancelSeriesDraftAsync(
                     actorUserId: command.ActorUserId,
                     seriesId: command.SeriesId,
                     reason: reason,

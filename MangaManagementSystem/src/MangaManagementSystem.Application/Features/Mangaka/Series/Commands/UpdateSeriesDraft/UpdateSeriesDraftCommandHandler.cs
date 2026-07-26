@@ -143,7 +143,7 @@ namespace MangaManagementSystem.Application.Features.Mangaka.Series.Commands.Upd
 
             try
             {
-                newCoverFileResourceId = await _seriesRepository.UpdateSeriesDraftViaProcAsync(
+                newCoverFileResourceId = await _seriesRepository.UpdateSeriesDraftAsync(
                     actorUserId: command.ActorUserId,
                     seriesId: command.SeriesId,
                     title: title,

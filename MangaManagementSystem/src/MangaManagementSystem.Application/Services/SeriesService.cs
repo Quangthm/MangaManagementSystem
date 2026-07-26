@@ -126,7 +126,7 @@ namespace MangaManagementSystem.Application.Services
 
             try
             {
-                (newSeriesId, coverFileResourceId) = await _unitOfWork.Series.CreateSeriesDraftViaProcAsync(
+                (newSeriesId, coverFileResourceId) = await _unitOfWork.Series.CreateSeriesDraftAsync(
                     actorUserId,
                     title,
                     slug,
