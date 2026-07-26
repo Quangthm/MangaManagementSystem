@@ -226,6 +226,17 @@ namespace MangaManagementSystem.Application.Services
             return chapter?.StatusCode;
         }
 
+        /// <inheritdoc />
+        public async Task<string?> GetChapterStatusByRegionIdAsync(
+            Guid pageRegionId,
+            CancellationToken cancellationToken = default)
+        {
+            var region = await _unitOfWork.PageRegions.GetByIdAsync(pageRegionId);
+            return region == null
+                ? null
+                : await GetChapterStatusByVersionIdAsync(region.ChapterPageVersionId, cancellationToken);
+        }
+
         public async Task<bool> BulkReplacePageRegionsAsync(Guid chapterPageVersionId, IEnumerable<CreatePageRegionDto> dtos)
         {
             // Get all existing regions for this version

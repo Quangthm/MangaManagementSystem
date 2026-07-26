@@ -29,5 +29,12 @@ namespace MangaManagementSystem.Application.Interfaces
         /// SPs/EF path themselves carry no status guard.
         /// </summary>
         Task<string?> GetChapterStatusByVersionIdAsync(Guid chapterPageVersionId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Same as <see cref="GetChapterStatusByVersionIdAsync"/> but starting from a region
+        /// (region → version → page → chapter). Used by the annotation write endpoints, which identify
+        /// their target by region rather than by version, to enforce BR-ANN-013/027 server-side.
+        /// </summary>
+        Task<string?> GetChapterStatusByRegionIdAsync(Guid pageRegionId, CancellationToken cancellationToken = default);
     }
 }

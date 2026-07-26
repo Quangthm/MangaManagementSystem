@@ -56,10 +56,14 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             if (!await _workspaceAccess.CanAccessVersionsAsync(actorUserId, new[] { dto.ChapterPageVersionId }, HttpContext.RequestAborted))
                 return Forbid();
 
-            // NOTE: no chapter-state guard here. Single CreateAsync / EnsureFullPage are also the anchor path
-            // for a task/annotation target, which BR-ANN-014 / BR-CP-028 treat as review metadata (permitted
-            // in states where standalone region CONTENT editing is not). The workspace's standalone region
-            // editing persists through bulk-replace, which is the one gated by chapter state below.
+            // BR-REG-035 / BR-REG-036: a Tantou Editor may create a region only while the chapter is
+            // UNDER_REVIEW or REVISION_REQUESTED — this covers a region created to target an editorial
+            // annotation too (BR-ANN-014 requires such regions to satisfy the Editor state rules). The
+            // Mangaka is not state-gated on this endpoint; see the gateMangaka note on the helper.
+            var createStateFailure = await EnsureRegionWriteStateAllowedAsync(
+                dto.ChapterPageVersionId, HttpContext.RequestAborted, gateMangaka: false);
+            if (createStateFailure is not null)
+                return createStateFailure;
 
             try
             {
@@ -90,6 +94,14 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return actorFailure;
             if (!await _workspaceAccess.CanAccessVersionsAsync(actorUserId, new[] { versionId }, HttpContext.RequestAborted))
                 return Forbid();
+
+            // BR-REG-035 / BR-REG-036, same reasoning as CreateAsync: the editor may not have a whole-page
+            // anchor created on their behalf outside UNDER_REVIEW / REVISION_REQUESTED. Reusing an existing
+            // FULL_PAGE region would be harmless, but this endpoint creates one when none exists.
+            var stateFailure = await EnsureRegionWriteStateAllowedAsync(
+                versionId, HttpContext.RequestAborted, gateMangaka: false);
+            if (stateFailure is not null)
+                return stateFailure;
 
             try
             {
@@ -136,7 +148,8 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             // Server-side chapter-state guard (BR-REG-035/036, BR-WORKSPACE-014). Bulk-replace is the
             // workspace's standalone region-editing Save path, so this is where "editor edits only in
             // UNDER_REVIEW/REVISION_REQUESTED; Mangaka only in DRAFT/REVISION_REQUESTED" is enforced —
-            // not just in the client. (Single Create/EnsureFullPage stay ungated as task/annotation anchors.)
+            // not just in the client. Both roles are gated here: unlike the anchor endpoints, this one
+            // rewrites the version's whole region set, which is region content, not review metadata.
             var stateFailure = await EnsureRegionWriteStateAllowedAsync(versionId, HttpContext.RequestAborted);
             if (stateFailure is not null)
                 return stateFailure;
@@ -250,8 +263,28 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         //   Tantou Editor — UNDER_REVIEW / REVISION_REQUESTED (editorial-review metadata window only).
         // Returns null when allowed, or the IActionResult to return otherwise. NOTE: annotation writes still
         // lack the equivalent server guard — deferred until the team's SP→EF-Core refactor touches that repo.
-        private async Task<IActionResult?> EnsureRegionWriteStateAllowedAsync(Guid versionId, CancellationToken cancellationToken)
+        /// <param name="gateMangaka">
+        /// When false, only the Tantou Editor is state-gated and the Mangaka is left unrestricted. Used by the
+        /// anchor endpoints (Create / EnsureFullPage): BR-REG-035/036 restrict the EDITOR to UNDER_REVIEW /
+        /// REVISION_REQUESTED explicitly — including a region created to target an annotation (BR-ANN-014) —
+        /// whereas BR-ANN-013 places no equivalent state gate on Mangaka annotations, and region-for-annotation
+        /// is review metadata rather than a production-content mutation (BR-CP-028). Gating the Mangaka here
+        /// would break the legitimate whole-page anchor when they annotate a chapter that is UNDER_REVIEW.
+        /// </param>
+        private async Task<IActionResult?> EnsureRegionWriteStateAllowedAsync(
+            Guid versionId,
+            CancellationToken cancellationToken,
+            bool gateMangaka = true)
         {
+            bool isEditor = User.IsInRole("Tantou Editor");
+            bool isMangaka = User.IsInRole("Mangaka");
+
+            // Nothing to check for a Mangaka on the ungated anchor endpoints — skip the status lookup.
+            if (isMangaka && !isEditor && !gateMangaka)
+            {
+                return null;
+            }
+
             var status = await _regionService.GetChapterStatusByVersionIdAsync(versionId, cancellationToken);
             if (status is null)
             {
@@ -259,13 +292,15 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             }
 
             bool allowed;
-            if (User.IsInRole("Mangaka"))
+            if (isEditor)
             {
-                allowed = status is "DRAFT" or "REVISION_REQUESTED";
-            }
-            else if (User.IsInRole("Tantou Editor"))
-            {
+                // BR-REG-035 / BR-REG-036 / BR-WORKSPACE-014: editor region writes only during review.
+                // Checked before the Mangaka branch so a user holding both roles gets the stricter rule.
                 allowed = status is "UNDER_REVIEW" or "REVISION_REQUESTED";
+            }
+            else if (isMangaka)
+            {
+                allowed = !gateMangaka || status is "DRAFT" or "REVISION_REQUESTED";
             }
             else
             {
