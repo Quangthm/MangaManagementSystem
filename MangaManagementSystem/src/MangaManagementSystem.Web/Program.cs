@@ -91,7 +91,8 @@ builder.Services.AddHttpClient<IRegistrationApiClient, RegistrationApiClient>((s
 
                 client.BaseAddress =
                     new Uri(settings.Value.BaseUrl);
-            });
+            })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
             builder.Services
                 .AddHttpClient<IProfileApiClient, ProfileApiClient>((sp, client) =>
                 {

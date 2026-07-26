@@ -1,10 +1,13 @@
+using System.Security.Claims;
 using MangaManagementSystem.API.Contracts;
 using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MangaManagementSystem.API.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/profile/password")]
     public sealed class ProfilePasswordController
@@ -26,21 +29,20 @@ namespace MangaManagementSystem.API.Controllers
         }
 
         [HttpPost("otp")]
-        public async Task<IActionResult> SendOtpAsync(
-            [FromBody] SendProfilePasswordOtpRequest request)
+        public async Task<IActionResult> SendOtpAsync()
         {
-            if (request.UserId == Guid.Empty)
+            if (!TryResolveAuthenticatedUserId(out var userId))
             {
-                return BadRequest(
+                return Unauthorized(
                     new ApiErrorResponse(
                         AuthErrorCodes.InvalidRequest,
-                        "User id is required."));
+                        "Authenticated user information is invalid."));
             }
 
             try
             {
                 await _userService.SendProfileOtpAsync(
-                    request.UserId,
+                    userId,
                     PasswordResetActionCode);
 
                 return Ok(
@@ -59,7 +61,7 @@ namespace MangaManagementSystem.API.Controllers
                 _logger.LogError(
                     ex,
                     "Failed to send password OTP for user {UserId}.",
-                    request.UserId);
+                    userId);
 
                 return StatusCode(
                     StatusCodes.Status500InternalServerError,
@@ -73,16 +75,15 @@ namespace MangaManagementSystem.API.Controllers
         public async Task<IActionResult> ResetAsync(
             [FromBody] ResetProfilePasswordRequest request)
         {
-            if (request.UserId == Guid.Empty)
+            if (!TryResolveAuthenticatedUserId(out var userId))
             {
-                return BadRequest(
+                return Unauthorized(
                     new ApiErrorResponse(
                         AuthErrorCodes.InvalidRequest,
-                        "User id is required."));
+                        "Authenticated user information is invalid."));
             }
 
-            if (string.IsNullOrWhiteSpace(
-                    request.OtpCode))
+            if (string.IsNullOrWhiteSpace(request.OtpCode))
             {
                 return BadRequest(
                     new ApiErrorResponse(
@@ -90,8 +91,7 @@ namespace MangaManagementSystem.API.Controllers
                         "OTP code is required."));
             }
 
-            if (string.IsNullOrWhiteSpace(
-                    request.NewPassword)
+            if (string.IsNullOrWhiteSpace(request.NewPassword)
                 || request.NewPassword.Length < 8)
             {
                 return BadRequest(
@@ -103,11 +103,10 @@ namespace MangaManagementSystem.API.Controllers
             try
             {
                 var verified =
-                    await _userService
-                        .VerifyProfileOtpAsync(
-                            request.UserId,
-                            PasswordResetActionCode,
-                            request.OtpCode);
+                    await _userService.VerifyProfileOtpAsync(
+                        userId,
+                        PasswordResetActionCode,
+                        request.OtpCode);
 
                 if (!verified)
                 {
@@ -118,7 +117,7 @@ namespace MangaManagementSystem.API.Controllers
                 }
 
                 await _userService.ResetPasswordAsync(
-                    request.UserId,
+                    userId,
                     request.NewPassword);
 
                 return Ok(
@@ -137,7 +136,7 @@ namespace MangaManagementSystem.API.Controllers
                 _logger.LogError(
                     ex,
                     "Failed to reset password for user {UserId}.",
-                    request.UserId);
+                    userId);
 
                 return StatusCode(
                     StatusCodes.Status500InternalServerError,
@@ -145,6 +144,20 @@ namespace MangaManagementSystem.API.Controllers
                         AuthErrorCodes.RequestFailed,
                         "The password could not be reset. Please try again."));
             }
+        }
+
+        private bool TryResolveAuthenticatedUserId(
+            out Guid userId)
+        {
+            var rawUserId =
+                User.FindFirstValue(
+                    ClaimTypes.NameIdentifier)
+                ?? User.FindFirstValue("sub")
+                ?? User.FindFirstValue("user_id")
+                ?? User.FindFirstValue("UserId");
+
+            return Guid.TryParse(rawUserId, out userId)
+                   && userId != Guid.Empty;
         }
     }
 }
