@@ -157,10 +157,10 @@ namespace MangaManagementSystem.Application.Features.Admin.Users.Queries
             SearchAdminUsersQuery,
             AdminUserPageDto>
     {
-        private readonly IUserRepository _userRepository;
+        private readonly IAdminUserQueryRepository _userRepository;
 
         public SearchAdminUsersQueryHandler(
-            IUserRepository userRepository)
+            IAdminUserQueryRepository userRepository)
         {
             _userRepository = userRepository;
         }

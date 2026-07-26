@@ -1,3 +1,4 @@
+using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
 using MangaManagementSystem.Infrastructure.Persistence;
@@ -12,7 +13,7 @@ using System.Threading.Tasks;
 
 namespace MangaManagementSystem.Infrastructure.Repositories
 {
-    public class UserRepository : GenericRepository<User>, IUserRepository
+    public class UserRepository : GenericRepository<User>, IUserRepository, IAdminUserQueryRepository
     {
         public UserRepository(ApplicationDbContext context) : base(context)
         {
