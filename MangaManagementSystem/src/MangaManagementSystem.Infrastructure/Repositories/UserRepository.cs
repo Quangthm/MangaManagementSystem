@@ -210,7 +210,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                         portfolioFileId);
         }
 
-        public async Task ChangeUserStatusViaProcAsync(
+        public async Task ChangeUserStatusAsync(
             Guid adminUserId,
             Guid targetUserId,
             string newStatusCode,
@@ -277,7 +277,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             await ReloadTrackedUserAsync(targetUserId);
         }
 
-        public async Task<Guid> CreateUserViaProcAsync(
+        public async Task<Guid> CreateUserAsync(
             string roleName,
             string username,
             string email,
@@ -792,7 +792,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             return result;
         }
 
-        public async Task ResetPasswordViaProcAsync(
+        public async Task ResetPasswordAsync(
             Guid userId,
             string passwordHash)
         {

@@ -338,7 +338,7 @@ namespace MangaManagementSystem.Application.Services
                         Guid.NewGuid().ToString("N") + "!Aa1");
 
                 var newUserId =
-                    await _unitOfWork.Users.CreateUserViaProcAsync(
+                    await _unitOfWork.Users.CreateUserAsync(
                         normalizedRoleName,
                         username,
                         normalizedEmail,
@@ -514,7 +514,7 @@ namespace MangaManagementSystem.Application.Services
                     newPassword);
 
             await _unitOfWork.Users
-                .ResetPasswordViaProcAsync(
+                .ResetPasswordAsync(
                     payload.UserId,
                     passwordHash);
 

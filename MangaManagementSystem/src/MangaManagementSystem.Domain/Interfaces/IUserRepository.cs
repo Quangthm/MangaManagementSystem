@@ -34,13 +34,13 @@ Task<IReadOnlyDictionary<string, int>>
         Task<User?> GetByPortfolioFileIdAsync(
             Guid portfolioFileId);
 
-        Task ChangeUserStatusViaProcAsync(
+        Task ChangeUserStatusAsync(
             Guid adminUserId,
             Guid targetUserId,
             string newStatusCode,
             string? reason = null);
 
-        Task<Guid> CreateUserViaProcAsync(
+        Task<Guid> CreateUserAsync(
             string roleName,
             string username,
             string email,
@@ -73,7 +73,7 @@ Task<IReadOnlyDictionary<string, int>>
             string displayName,
             CancellationToken cancellationToken = default);
 
-Task ResetPasswordViaProcAsync(
+Task ResetPasswordAsync(
             Guid userId,
             string passwordHash);
     }

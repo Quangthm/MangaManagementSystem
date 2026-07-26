@@ -70,7 +70,7 @@ namespace MangaManagementSystem.Application.Services
             var email = dto.Email.Trim().ToLowerInvariant();
             var passwordHash = _passwordHasher.HashPassword(dto.Password);
 
-            var newUserId = await _unitOfWork.Users.CreateUserViaProcAsync(
+            var newUserId = await _unitOfWork.Users.CreateUserAsync(
                 roleName,
                 username,
                 email,
@@ -166,7 +166,7 @@ namespace MangaManagementSystem.Application.Services
 
             try
             {
-                await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
+                await _unitOfWork.Users.ChangeUserStatusAsync(
                     adminUserId,
                     userId,
                     StatusActive,
@@ -226,7 +226,7 @@ namespace MangaManagementSystem.Application.Services
                     reason,
                     "Reject reason");
 
-            await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
+            await _unitOfWork.Users.ChangeUserStatusAsync(
                 adminUserId,
                 userId,
                 StatusRejected,
@@ -246,7 +246,7 @@ namespace MangaManagementSystem.Application.Services
                     $"User {userId} cannot be activated because their status is '{user.StatusCode}', not '{StatusDisabled}'.");
             }
 
-            await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
+            await _unitOfWork.Users.ChangeUserStatusAsync(
                 adminUserId,
                 userId,
                 StatusActive,
@@ -265,7 +265,7 @@ namespace MangaManagementSystem.Application.Services
                     reason,
                     "Disable reason");
 
-            await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
+            await _unitOfWork.Users.ChangeUserStatusAsync(
                 adminUserId,
                 userId,
                 StatusDisabled,
@@ -518,7 +518,7 @@ namespace MangaManagementSystem.Application.Services
             var passwordHash =
                 _passwordHasher.HashPassword(newPassword);
 
-            await _unitOfWork.Users.ResetPasswordViaProcAsync(
+            await _unitOfWork.Users.ResetPasswordAsync(
                 userId,
                 passwordHash);
         }
