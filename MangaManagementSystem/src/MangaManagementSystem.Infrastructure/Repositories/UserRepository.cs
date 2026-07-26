@@ -288,95 +288,27 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             Guid? portfolioFileId = null,
             Guid? createdByUserId = null)
         {
-            var conn = _context.Database.GetDbConnection();
-            await using var cmd = conn.CreateCommand();
+            var result =
+                await CreateUserCoreAsync(
+                    roleName,
+                    username,
+                    email,
+                    passwordHash,
+                    displayName,
+                    avatarFileId,
+                    portfolioFileId,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    createdByUserId);
 
-            cmd.CommandText = "auth.usp_User_Create";
-            cmd.CommandType = CommandType.StoredProcedure;
-
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@role_name",
-                    SqlDbType.NVarChar,
-                    30)
-                {
-                    Value = roleName
-                });
-
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@username",
-                    SqlDbType.NVarChar,
-                    50)
-                {
-                    Value = username
-                });
-
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@email",
-                    SqlDbType.NVarChar,
-                    254)
-                {
-                    Value = email
-                });
-
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@password_hash",
-                    SqlDbType.NVarChar,
-                    255)
-                {
-                    Value = passwordHash
-                });
-
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@display_name",
-                    SqlDbType.NVarChar,
-                    100)
-                {
-                    Value = (object?)displayName ?? DBNull.Value
-                });
-
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@avatar_file_id",
-                    SqlDbType.UniqueIdentifier)
-                {
-                    Value = (object?)avatarFileId ?? DBNull.Value
-                });
-
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@portfolio_file_id",
-                    SqlDbType.UniqueIdentifier)
-                {
-                    Value = (object?)portfolioFileId ?? DBNull.Value
-                });
-
-            var outParam = new SqlParameter(
-                "@new_user_id",
-                SqlDbType.UniqueIdentifier)
-            {
-                Direction = ParameterDirection.Output
-            };
-
-            cmd.Parameters.Add(outParam);
-
-            if (conn.State != ConnectionState.Open)
-            {
-                await conn.OpenAsync();
-            }
-
-            await cmd.ExecuteNonQueryAsync();
-
-            return outParam.Value == DBNull.Value
-                ? Guid.Empty
-                : (Guid)outParam.Value;
+            return result.newUserId;
         }
 
-        public async Task<(
+        public Task<(
             Guid newUserId,
             Guid? portfolioFileResourceId)>
             CreateUserWithOptionalPortfolioAsync(
@@ -394,182 +326,449 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 string? portfolioSha256Hash = null,
                 Guid? createdByUserId = null)
         {
-            var conn = _context.Database.GetDbConnection();
-            await using var cmd = conn.CreateCommand();
+            return CreateUserCoreAsync(
+                roleName,
+                username,
+                email,
+                passwordHash,
+                displayName,
+                avatarFileId,
+                null,
+                portfolioOriginalFileName,
+                portfolioCloudinaryPublicId,
+                portfolioCloudinarySecureUrl,
+                portfolioContentType,
+                portfolioFileSizeBytes,
+                portfolioSha256Hash,
+                createdByUserId);
+        }
 
-            cmd.CommandText =
-                "auth.usp_User_CreateWithOptionalPortfolio";
+        private async Task<(
+            Guid newUserId,
+            Guid? portfolioFileResourceId)>
+            CreateUserCoreAsync(
+                string roleName,
+                string username,
+                string email,
+                string passwordHash,
+                string? displayName,
+                Guid? avatarFileId,
+                Guid? existingPortfolioFileId,
+                string? portfolioOriginalFileName,
+                string? portfolioCloudinaryPublicId,
+                string? portfolioCloudinarySecureUrl,
+                string? portfolioContentType,
+                long? portfolioFileSizeBytes,
+                string? portfolioSha256Hash,
+                Guid? createdByUserId)
+        {
+            var normalizedRoleName =
+                roleName?.Trim()
+                ?? string.Empty;
 
-            cmd.CommandType =
-                CommandType.StoredProcedure;
+            var normalizedUsername =
+                username?.Trim()
+                ?? string.Empty;
 
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@role_name",
-                    SqlDbType.NVarChar,
-                    30)
-                {
-                    Value = roleName
-                });
+            var normalizedEmail =
+                email?.Trim()
+                    .ToLowerInvariant()
+                ?? string.Empty;
 
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@username",
-                    SqlDbType.NVarChar,
-                    50)
-                {
-                    Value = username
-                });
+            var normalizedPasswordHash =
+                passwordHash?.Trim()
+                ?? string.Empty;
 
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@email",
-                    SqlDbType.NVarChar,
-                    254)
-                {
-                    Value = email
-                });
+            var normalizedDisplayName =
+                string.IsNullOrWhiteSpace(displayName)
+                    ? normalizedUsername
+                    : displayName.Trim();
 
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@password_hash",
-                    SqlDbType.NVarChar,
-                    255)
-                {
-                    Value = passwordHash
-                });
-
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@display_name",
-                    SqlDbType.NVarChar,
-                    100)
-                {
-                    Value =
-                        (object?)displayName
-                        ?? DBNull.Value
-                });
-
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@avatar_file_id",
-                    SqlDbType.UniqueIdentifier)
-                {
-                    Value =
-                        (object?)avatarFileId
-                        ?? DBNull.Value
-                });
-
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@portfolio_original_file_name",
-                    SqlDbType.NVarChar,
-                    260)
-                {
-                    Value =
-                        (object?)portfolioOriginalFileName
-                        ?? DBNull.Value
-                });
-
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@portfolio_cloudinary_public_id",
-                    SqlDbType.NVarChar,
-                    255)
-                {
-                    Value =
-                        (object?)portfolioCloudinaryPublicId
-                        ?? DBNull.Value
-                });
-
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@portfolio_cloudinary_secure_url",
-                    SqlDbType.NVarChar,
-                    1000)
-                {
-                    Value =
-                        (object?)portfolioCloudinarySecureUrl
-                        ?? DBNull.Value
-                });
-
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@portfolio_content_type",
-                    SqlDbType.NVarChar,
-                    100)
-                {
-                    Value =
-                        (object?)portfolioContentType
-                        ?? DBNull.Value
-                });
-
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@portfolio_file_size_bytes",
-                    SqlDbType.BigInt)
-                {
-                    Value =
-                        (object?)portfolioFileSizeBytes
-                        ?? DBNull.Value
-                });
-
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@portfolio_sha256_hash",
-                    SqlDbType.Char,
-                    64)
-                {
-                    Value =
-                        (object?)portfolioSha256Hash
-                        ?? DBNull.Value
-                });
-
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@created_by_user_id",
-                    SqlDbType.UniqueIdentifier)
-                {
-                    Value =
-                        (object?)createdByUserId
-                        ?? DBNull.Value
-                });
-
-            var outUserId = new SqlParameter(
-                "@new_user_id",
-                SqlDbType.UniqueIdentifier)
+            if (string.IsNullOrWhiteSpace(
+                    normalizedRoleName))
             {
-                Direction = ParameterDirection.Output
-            };
-
-            var outFileResourceId = new SqlParameter(
-                "@portfolio_file_resource_id",
-                SqlDbType.UniqueIdentifier)
-            {
-                Direction = ParameterDirection.Output
-            };
-
-            cmd.Parameters.Add(outUserId);
-            cmd.Parameters.Add(outFileResourceId);
-
-            if (conn.State != ConnectionState.Open)
-            {
-                await conn.OpenAsync();
+                throw new ArgumentException(
+                    "Role name is required.",
+                    nameof(roleName));
             }
 
-            await cmd.ExecuteNonQueryAsync();
+            if (string.IsNullOrWhiteSpace(
+                    normalizedUsername))
+            {
+                throw new ArgumentException(
+                    "Username is required.",
+                    nameof(username));
+            }
 
-            var newUserId =
-                outUserId.Value == DBNull.Value
-                    ? Guid.Empty
-                    : (Guid)outUserId.Value;
+            if (string.IsNullOrWhiteSpace(
+                    normalizedEmail))
+            {
+                throw new ArgumentException(
+                    "Email is required.",
+                    nameof(email));
+            }
 
-            var portfolioId =
-                outFileResourceId.Value == DBNull.Value
-                    ? (Guid?)null
-                    : (Guid)outFileResourceId.Value;
+            if (normalizedPasswordHash.Length < 20)
+            {
+                throw new ArgumentException(
+                    "Password hash is invalid.",
+                    nameof(passwordHash));
+            }
 
-            return (newUserId, portfolioId);
+            var hasNewPortfolio =
+                !string.IsNullOrWhiteSpace(
+                    portfolioCloudinaryPublicId);
+
+            if (hasNewPortfolio
+                && (
+                    string.IsNullOrWhiteSpace(
+                        portfolioOriginalFileName)
+                    || string.IsNullOrWhiteSpace(
+                        portfolioCloudinarySecureUrl)
+                    || string.IsNullOrWhiteSpace(
+                        portfolioContentType)
+                    || !portfolioFileSizeBytes.HasValue
+                    || portfolioFileSizeBytes.Value <= 0
+                    || string.IsNullOrWhiteSpace(
+                        portfolioSha256Hash)))
+            {
+                throw new ArgumentException(
+                    "Portfolio file metadata is incomplete.");
+            }
+
+            IDbContextTransaction? transaction = null;
+
+            if (_context.Database.CurrentTransaction is null)
+            {
+                transaction =
+                    await _context.Database
+                        .BeginTransactionAsync(
+                            IsolationLevel.Serializable);
+            }
+
+            try
+            {
+                var normalizedRoleKey =
+                    normalizedRoleName.ToUpper();
+
+                var role =
+                    await _context.Roles
+                        .SingleOrDefaultAsync(
+                            item =>
+                                item.RoleName.ToUpper()
+                                == normalizedRoleKey);
+
+                if (role is null)
+                {
+                    throw new InvalidOperationException(
+                        "Invalid role name.");
+                }
+
+                var normalizedUsernameKey =
+                    normalizedUsername.ToUpper();
+
+                var duplicateExists =
+                    await _context.Users
+                        .AsNoTracking()
+                        .AnyAsync(
+                            item =>
+                                item.Username.ToUpper()
+                                    == normalizedUsernameKey
+                                || item.Email.ToLower()
+                                    == normalizedEmail);
+
+                if (duplicateExists)
+                {
+                    throw new InvalidOperationException(
+                        "Username or email already exists.");
+                }
+
+                Guid auditActorUserId;
+                string auditActorRoleName;
+
+                if (createdByUserId.HasValue)
+                {
+                    var actor =
+                        await _context.Users
+                            .AsNoTracking()
+                            .Include(item => item.Role)
+                            .SingleOrDefaultAsync(
+                                item =>
+                                    item.UserId
+                                    == createdByUserId.Value);
+
+                    if (actor?.Role is null)
+                    {
+                        throw new InvalidOperationException(
+                            "Creator user role could not be resolved.");
+                    }
+
+                    auditActorUserId =
+                        actor.UserId;
+
+                    auditActorRoleName =
+                        actor.Role.RoleName;
+                }
+                else
+                {
+                    auditActorUserId =
+                        Guid.Empty;
+
+                    auditActorRoleName =
+                        role.RoleName;
+                }
+
+                var occurredAtUtc =
+                    DateTime.UtcNow;
+
+                var newUserId =
+                    Guid.NewGuid();
+
+                if (!createdByUserId.HasValue)
+                {
+                    auditActorUserId =
+                        newUserId;
+                }
+
+                var user =
+                    new User
+                    {
+                        UserId =
+                            newUserId,
+
+                        RoleId =
+                            role.RoleId,
+
+                        Username =
+                            normalizedUsername,
+
+                        Email =
+                            normalizedEmail,
+
+                        PasswordHash =
+                            normalizedPasswordHash,
+
+                        DisplayName =
+                            normalizedDisplayName,
+
+                        AvatarFileId =
+                            avatarFileId,
+
+                        PortfolioFileId =
+                            existingPortfolioFileId,
+
+                        StatusCode =
+                            "PENDING_APPROVAL",
+
+                        CreatedAtUtc =
+                            occurredAtUtc
+                    };
+
+                _context.Users.Add(
+                    user);
+
+                var registrationDetailJson =
+                    JsonSerializer.Serialize(
+                        new
+                        {
+                            user_id =
+                                newUserId,
+
+                            role_id =
+                                role.RoleId,
+
+                            role_name =
+                                role.RoleName,
+
+                            username =
+                                normalizedUsername,
+
+                            email =
+                                normalizedEmail,
+
+                            display_name =
+                                normalizedDisplayName,
+
+                            status_code =
+                                "PENDING_APPROVAL"
+                        });
+
+                _context.AuditEvents.Add(
+                    new AuditEvent
+                    {
+                        OccurredAtUtc =
+                            occurredAtUtc,
+
+                        ActorUserId =
+                            auditActorUserId,
+
+                        ActorRoleName =
+                            auditActorRoleName,
+
+                        ActionCode =
+                            "USER_REGISTERED",
+
+                        EntityType =
+                            "Users",
+
+                        EntityId =
+                            newUserId.ToString(),
+
+                        DetailJson =
+                            registrationDetailJson
+                    });
+
+                /*
+                    Save the User first.
+
+                    A newly created portfolio references the User through
+                    UploadedByUserId, while the User references the new
+                    portfolio through PortfolioFileId. Saving the User first
+                    avoids a circular insert dependency.
+                */
+                await _context.SaveChangesAsync();
+
+                Guid? portfolioFileResourceId =
+                    null;
+
+                if (hasNewPortfolio)
+                {
+                    portfolioFileResourceId =
+                        Guid.NewGuid();
+
+                    var portfolioFile =
+                        new FileResource
+                        {
+                            FileResourceId =
+                                portfolioFileResourceId.Value,
+
+                            FilePurposeCode =
+                                "REGISTRATION_PORTFOLIO",
+
+                            OriginalFileName =
+                                portfolioOriginalFileName!.Trim(),
+
+                            CloudinaryPublicId =
+                                portfolioCloudinaryPublicId!.Trim(),
+
+                            CloudinarySecureUrl =
+                                portfolioCloudinarySecureUrl!.Trim(),
+
+                            ContentType =
+                                portfolioContentType!.Trim(),
+
+                            FileSizeBytes =
+                                portfolioFileSizeBytes!.Value,
+
+                            Sha256Hash =
+                                portfolioSha256Hash!.Trim(),
+
+                            UploadedByUserId =
+                                newUserId,
+
+                            UploadedAtUtc =
+                                occurredAtUtc
+                        };
+
+                    _context.FileResources.Add(
+                        portfolioFile);
+
+                    user.PortfolioFileId =
+                        portfolioFileResourceId;
+
+                    var portfolioDetailJson =
+                        JsonSerializer.Serialize(
+                            new
+                            {
+                                user_id =
+                                    newUserId,
+
+                                old_portfolio_file_id =
+                                    (Guid?)null,
+
+                                new_portfolio_file_id =
+                                    portfolioFileResourceId,
+
+                                old_cloudinary_public_id =
+                                    (string?)null,
+
+                                new_cloudinary_public_id =
+                                    portfolioFile
+                                        .CloudinaryPublicId,
+
+                                new_original_file_name =
+                                    portfolioFile
+                                        .OriginalFileName,
+
+                                new_content_type =
+                                    portfolioFile
+                                        .ContentType,
+
+                                new_file_size_bytes =
+                                    portfolioFile
+                                        .FileSizeBytes
+                            });
+
+                    _context.AuditEvents.Add(
+                        new AuditEvent
+                        {
+                            OccurredAtUtc =
+                                occurredAtUtc,
+
+                            ActorUserId =
+                                newUserId,
+
+                            ActorRoleName =
+                                role.RoleName,
+
+                            ActionCode =
+                                "REGISTRATION_PORTFOLIO_ATTACHED",
+
+                            EntityType =
+                                "Users",
+
+                            EntityId =
+                                newUserId.ToString(),
+
+                            DetailJson =
+                                portfolioDetailJson
+                        });
+
+                    await _context.SaveChangesAsync();
+                }
+
+                if (transaction is not null)
+                {
+                    await transaction.CommitAsync();
+                }
+
+                return (
+                    newUserId,
+                    portfolioFileResourceId);
+            }
+            catch (Exception exception)
+            {
+                if (transaction is not null)
+                {
+                    await transaction.RollbackAsync();
+                }
+
+                if (exception is DbUpdateException)
+                {
+                    throw new InvalidOperationException(
+                        "User creation failed because username, email, role, or related file data is invalid.",
+                        exception);
+                }
+
+                throw;
+            }
+            finally
+            {
+                if (transaction is not null)
+                {
+                    await transaction.DisposeAsync();
+                }
+            }
         }
 
         public async Task UpdateDisplayNameAsync(
