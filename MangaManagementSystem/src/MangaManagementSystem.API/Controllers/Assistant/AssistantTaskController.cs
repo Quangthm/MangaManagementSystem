@@ -1,6 +1,9 @@
 using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.API.Contracts;
+using MangaManagementSystem.API.Security;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Infrastructure.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -8,15 +11,14 @@ using Microsoft.Extensions.Logging;
 namespace MangaManagementSystem.API.Controllers.Assistant
 {
     /// <summary>
-    /// Thin HTTP boundary for Assistant task workflows. Uses the transitional
-    /// X-Actor-User-Id header — the Web host owns the Blazor cookie/session and
-    /// forwards the logged-in user's id here.
+    /// JWT-protected HTTP boundary for Assistant task workflows.
     /// </summary>
     [ApiController]
+    [Authorize(Roles = AssistantRoleName)]
     [Route("api/assistant/tasks")]
     public class AssistantTaskController : ControllerBase
     {
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
+        private const string AssistantRoleName = "Assistant";
 
         private readonly IAssistantTaskSubmissionService _submissionService;
         private readonly IFileStorageService _fileStorageService;
@@ -24,6 +26,7 @@ namespace MangaManagementSystem.API.Controllers.Assistant
         private readonly IChapterPageTaskService _chapterPageTaskService;
         private readonly IChapterPageAnnotationService _annotationService;
         private readonly IChapterService _chapterService;
+        private readonly IAuthenticatedActorResolver _actorResolver;
         private readonly ILogger<AssistantTaskController> _logger;
 
         public AssistantTaskController(
@@ -32,6 +35,7 @@ namespace MangaManagementSystem.API.Controllers.Assistant
             IChapterPageTaskService chapterPageTaskService,
             IChapterPageAnnotationService annotationService,
             IChapterService chapterService,
+            IAuthenticatedActorResolver actorResolver,
             ILogger<AssistantTaskController> logger)
         {
             _submissionService = submissionService ?? throw new ArgumentNullException(nameof(submissionService));
@@ -40,6 +44,7 @@ namespace MangaManagementSystem.API.Controllers.Assistant
             _chapterPageTaskService = chapterPageTaskService ?? throw new ArgumentNullException(nameof(chapterPageTaskService));
             _annotationService = annotationService ?? throw new ArgumentNullException(nameof(annotationService));
             _chapterService = chapterService ?? throw new ArgumentNullException(nameof(chapterService));
+            _actorResolver = actorResolver ?? throw new ArgumentNullException(nameof(actorResolver));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -50,9 +55,12 @@ namespace MangaManagementSystem.API.Controllers.Assistant
         [HttpGet]
         public async Task<IActionResult> GetAssignedTasksAsync()
         {
-            if (!TryResolveActorUserId(out Guid actorUserId))
+            var (actorUserId, actorFailure) =
+                await ResolveActorAsync();
+
+            if (actorFailure is not null)
             {
-                return BadRequest("Could not identify the requesting user. Please sign in again.");
+                return actorFailure;
             }
 
             try
@@ -81,9 +89,12 @@ namespace MangaManagementSystem.API.Controllers.Assistant
                 return BadRequest("Invalid task ID.");
             }
 
-            if (!TryResolveActorUserId(out Guid actorUserId))
+            var (actorUserId, actorFailure) =
+                await ResolveActorAsync();
+
+            if (actorFailure is not null)
             {
-                return BadRequest("Could not identify the requesting user. Please sign in again.");
+                return actorFailure;
             }
 
             try
@@ -122,9 +133,12 @@ namespace MangaManagementSystem.API.Controllers.Assistant
                 return BadRequest("Invalid task ID.");
             }
 
-            if (!TryResolveActorUserId(out Guid actorUserId))
+            var (actorUserId, actorFailure) =
+                await ResolveActorAsync();
+
+            if (actorFailure is not null)
             {
-                return BadRequest("Could not identify the requesting user. Please sign in again.");
+                return actorFailure;
             }
 
             if (file == null || file.Length <= 0)
@@ -223,9 +237,12 @@ namespace MangaManagementSystem.API.Controllers.Assistant
                 return BadRequest("Invalid task ID.");
             }
 
-            if (!TryResolveActorUserId(out Guid actorUserId))
+            var (actorUserId, actorFailure) =
+                await ResolveActorAsync();
+
+            if (actorFailure is not null)
             {
-                return BadRequest("Could not identify the requesting user. Please sign in again.");
+                return actorFailure;
             }
 
             try
@@ -256,24 +273,42 @@ namespace MangaManagementSystem.API.Controllers.Assistant
                     statusCode: StatusCodes.Status500InternalServerError);
             }
         }
-
-        private bool TryResolveActorUserId(out Guid actorUserId)
+        private async Task<(Guid ActorUserId, IActionResult? Failure)>
+            ResolveActorAsync()
         {
-            actorUserId = Guid.Empty;
+            var result =
+                await _actorResolver.ResolveAsync(
+                    User,
+                    AssistantRoleName);
 
-            if (Request.Headers.TryGetValue(ActorUserIdHeader, out var headerValues))
+            if (result.Succeeded)
             {
-                string? raw = headerValues.ToString();
-                if (Guid.TryParse(raw, out actorUserId) && actorUserId != Guid.Empty)
-                {
-                    return true;
-                }
+                return (result.ActorUserId, null);
             }
 
-            return false;
-        }
+            var response =
+                new ApiErrorResponse(
+                    result.FailureKind
+                        == AuthenticatedActorFailureKind.UserNotFound
+                        ? "Authenticated Assistant account was not found."
+                        : result.FailureKind
+                            == AuthenticatedActorFailureKind.InvalidIdentity
+                            ? "Authenticated Assistant information is invalid."
+                            : "The current account is not an active Assistant.");
 
-        private async Task EnsureTaskCanBeSubmittedAsync(Guid taskId, Guid actorUserId)
+            return result.FailureKind
+                is AuthenticatedActorFailureKind.InvalidIdentity
+                or AuthenticatedActorFailureKind.UserNotFound
+                    ? (
+                        Guid.Empty,
+                        Unauthorized(response))
+                    : (
+                        Guid.Empty,
+                        StatusCode(
+                            StatusCodes.Status403Forbidden,
+                            response));
+        }
+private async Task EnsureTaskCanBeSubmittedAsync(Guid taskId, Guid actorUserId)
         {
             var task = await _chapterPageTaskService.GetAssignedTaskDetailForAssistantAsync(actorUserId, taskId);
             if (task == null || task.ChapterId == null)

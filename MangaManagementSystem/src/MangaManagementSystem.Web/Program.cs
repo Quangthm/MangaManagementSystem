@@ -227,7 +227,8 @@ builder.Services.AddHttpClient<IAdminFileApiClient, AdminFileApiClient>((sp, cli
             {
                 var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
                 client.BaseAddress = new Uri(settings.Value.BaseUrl);
-            });
+            })
+                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
             builder.Services
                 .AddHttpClient<Services.Api.ISeriesApiClient, Services.Api.SeriesApiClient>((sp, client) =>
                 {

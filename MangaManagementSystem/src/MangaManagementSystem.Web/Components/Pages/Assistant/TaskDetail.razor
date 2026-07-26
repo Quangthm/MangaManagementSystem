@@ -1,14 +1,10 @@
 @page "/assistant/task/{TaskId:guid}"
 @using Microsoft.AspNetCore.Authorization
-@using Microsoft.AspNetCore.Components.Authorization
-@using System.Security.Claims
 @using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Assistant")]
 @inject NavigationManager Nav
 @inject IAssistantTaskApiClient AssistantTaskClient
-@inject AuthenticationStateProvider AuthStateProvider
-
 <AssistantLayout>
     <div style="display: flex; flex-direction: column; height: 100%; background: #f8fafc;">
         @* ── Header ── *@
@@ -369,7 +365,6 @@
 @code {
     [Parameter] public Guid TaskId { get; set; }
 
-    private Guid _currentUserId;
     private bool _loading = true;
     private bool _showSourcePreview;
     private bool _showOutputPreview;
@@ -442,17 +437,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-        var user = authState.User;
-        if (user.Identity?.IsAuthenticated == true)
-        {
-            var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (Guid.TryParse(idClaim, out var userId))
-            {
-                _currentUserId = userId;
-            }
-        }
-
         await LoadTaskAsync();
     }
 
@@ -463,11 +447,11 @@
 
         try
         {
-            _task = await AssistantTaskClient.GetTaskDetailAsync(_currentUserId, TaskId);
+            _task = await AssistantTaskClient.GetTaskDetailAsync(TaskId);
 
             if (_task != null)
             {
-                _annotations = await AssistantTaskClient.GetTaskAnnotationsAsync(_currentUserId, TaskId);
+                _annotations = await AssistantTaskClient.GetTaskAnnotationsAsync(TaskId);
             }
         }
         catch (Exception ex)
