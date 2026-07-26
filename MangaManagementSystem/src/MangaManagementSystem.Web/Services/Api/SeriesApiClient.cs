@@ -12,9 +12,6 @@ namespace MangaManagementSystem.Web.Services.Api
 {
     public class SeriesApiClient : ISeriesApiClient
     {
-        // Transitional actor header forwarded to the API while API auth is not yet implemented.
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
-
         private readonly HttpClient _httpClient;
         private readonly ILogger<SeriesApiClient> _logger;
 
@@ -51,14 +48,12 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<SeriesWorkspaceEntryDto?> GetWorkspaceEntryAsync(
-            Guid actorUserId,
             string slug,
             CancellationToken cancellationToken = default)
         {
             using var requestMessage = new HttpRequestMessage(
                 HttpMethod.Get,
                 $"api/series/{Uri.EscapeDataString(slug)}/workspace-entry");
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
 
             var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 

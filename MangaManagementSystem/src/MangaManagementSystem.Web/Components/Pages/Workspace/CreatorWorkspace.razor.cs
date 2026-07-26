@@ -888,7 +888,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
         try
         {
-            var entry = await SeriesApiClient.GetWorkspaceEntryAsync(_currentUserId.Value, Slug);
+            var entry = await SeriesApiClient.GetWorkspaceEntryAsync(Slug);
             if (entry is null || !entry.CanAccess)
             {
                 _accessDenied = true;

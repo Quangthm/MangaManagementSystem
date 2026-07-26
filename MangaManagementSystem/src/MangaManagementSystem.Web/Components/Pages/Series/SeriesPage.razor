@@ -532,7 +532,7 @@
 
             if (_series is not null && _currentUserId.HasValue)
             {
-                _workspaceAccess = await SeriesApiClient.GetWorkspaceEntryAsync(_currentUserId.Value, Slug);
+                _workspaceAccess = await SeriesApiClient.GetWorkspaceEntryAsync(Slug);
             }
 
         }
