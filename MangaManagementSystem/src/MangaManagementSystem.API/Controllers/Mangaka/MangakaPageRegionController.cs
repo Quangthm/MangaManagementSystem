@@ -56,6 +56,11 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             if (!await _workspaceAccess.CanAccessVersionsAsync(actorUserId, new[] { dto.ChapterPageVersionId }, HttpContext.RequestAborted))
                 return Forbid();
 
+            // NOTE: no chapter-state guard here. Single CreateAsync / EnsureFullPage are also the anchor path
+            // for a task/annotation target, which BR-ANN-014 / BR-CP-028 treat as review metadata (permitted
+            // in states where standalone region CONTENT editing is not). The workspace's standalone region
+            // editing persists through bulk-replace, which is the one gated by chapter state below.
+
             try
             {
                 var created = await _regionService.CreatePageRegionAsync(dto with { CreatedByUserId = actorUserId });
@@ -127,6 +132,14 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             var (actorUserId, actorFailure) = await ResolveActorAsync("Mangaka", "Tantou Editor");
             if (actorFailure is not null)
                 return actorFailure;
+
+            // Server-side chapter-state guard (BR-REG-035/036, BR-WORKSPACE-014). Bulk-replace is the
+            // workspace's standalone region-editing Save path, so this is where "editor edits only in
+            // UNDER_REVIEW/REVISION_REQUESTED; Mangaka only in DRAFT/REVISION_REQUESTED" is enforced —
+            // not just in the client. (Single Create/EnsureFullPage stay ungated as task/annotation anchors.)
+            var stateFailure = await EnsureRegionWriteStateAllowedAsync(versionId, HttpContext.RequestAborted);
+            if (stateFailure is not null)
+                return stateFailure;
 
             try
             {
@@ -228,6 +241,41 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 or AuthenticatedActorFailureKind.UserNotFound
                 ? (Guid.Empty, Unauthorized(response))
                 : (Guid.Empty, StatusCode(StatusCodes.Status403Forbidden, response));
+        }
+
+        // Server-side chapter-state guard for region WRITES (BR-REG-035/036, BR-WORKSPACE-013/014). The role
+        // gate ([Authorize(Roles)]) already limits WHO; this limits WHEN, which the region service/EF path
+        // does not enforce on its own. Mirrors the workspace client (CanEditRegionsForStatus):
+        //   Mangaka       — DRAFT / REVISION_REQUESTED (content-editable states).
+        //   Tantou Editor — UNDER_REVIEW / REVISION_REQUESTED (editorial-review metadata window only).
+        // Returns null when allowed, or the IActionResult to return otherwise. NOTE: annotation writes still
+        // lack the equivalent server guard — deferred until the team's SP→EF-Core refactor touches that repo.
+        private async Task<IActionResult?> EnsureRegionWriteStateAllowedAsync(Guid versionId, CancellationToken cancellationToken)
+        {
+            var status = await _regionService.GetChapterStatusByVersionIdAsync(versionId, cancellationToken);
+            if (status is null)
+            {
+                return NotFound(new ApiErrorResponse("The page version's chapter could not be found."));
+            }
+
+            bool allowed;
+            if (User.IsInRole("Mangaka"))
+            {
+                allowed = status is "DRAFT" or "REVISION_REQUESTED";
+            }
+            else if (User.IsInRole("Tantou Editor"))
+            {
+                allowed = status is "UNDER_REVIEW" or "REVISION_REQUESTED";
+            }
+            else
+            {
+                allowed = false;
+            }
+
+            return allowed
+                ? null
+                : StatusCode(StatusCodes.Status403Forbidden, new ApiErrorResponse(
+                    $"Editing page regions is not permitted while the chapter is {status}."));
         }
     }
 }

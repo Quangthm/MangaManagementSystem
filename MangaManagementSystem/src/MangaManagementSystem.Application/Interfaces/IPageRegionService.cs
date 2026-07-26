@@ -21,5 +21,13 @@ namespace MangaManagementSystem.Application.Interfaces
         /// created without an explicit region selection.
         /// </summary>
         Task<PageRegionDto> EnsureFullPageRegionAsync(Guid chapterPageVersionId, Guid actorUserId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Resolves the owning chapter's current status_code for a page version (version → page → chapter),
+        /// or null if the version/page/chapter no longer exists. Used by the region write endpoints to
+        /// enforce the chapter-state rule (BR-REG-035/036, BR-WORKSPACE-014) server-side, since the region
+        /// SPs/EF path themselves carry no status guard.
+        /// </summary>
+        Task<string?> GetChapterStatusByVersionIdAsync(Guid chapterPageVersionId, CancellationToken cancellationToken = default);
     }
 }
