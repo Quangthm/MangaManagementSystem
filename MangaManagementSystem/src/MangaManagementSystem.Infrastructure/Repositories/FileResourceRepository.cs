@@ -1,12 +1,12 @@
 using MangaManagementSystem.Application.Interfaces;
 using System.Data;
-using System.Data.Common;
+using System.Text.Json;
 using MangaManagementSystem.Application.Common;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
 using MangaManagementSystem.Infrastructure.Persistence;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace MangaManagementSystem.Infrastructure.Repositories
 {
@@ -268,81 +268,141 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             string deleteReason,
             CancellationToken cancellationToken = default)
         {
-            var connection =
-                _context.Database.GetDbConnection();
+            var normalizedDeleteReason =
+                string.IsNullOrWhiteSpace(deleteReason)
+                    ? null
+                    : deleteReason.Trim();
 
-            var shouldClose =
-                connection.State != ConnectionState.Open;
+            IDbContextTransaction? transaction = null;
 
-            if (shouldClose)
+            if (_context.Database.CurrentTransaction is null)
             {
-                await connection.OpenAsync(
-                    cancellationToken);
+                transaction =
+                    await _context.Database.BeginTransactionAsync(
+                        IsolationLevel.Serializable,
+                        cancellationToken);
             }
 
             try
             {
-                await using var command =
-                    connection.CreateCommand();
+                var actor =
+                    await _context.Users
+                        .AsNoTracking()
+                        .Include(user => user.Role)
+                        .SingleOrDefaultAsync(
+                            user =>
+                                user.UserId == actorUserId,
+                            cancellationToken);
 
-                command.CommandText =
-                    "manga.usp_FileResource_SoftDelete";
+                if (actor?.Role is null)
+                {
+                    throw new InvalidOperationException(
+                        "Actor user role could not be resolved.");
+                }
 
-                command.CommandType =
-                    CommandType.StoredProcedure;
+                var fileResource =
+                    await _context.FileResources
+                        .SingleOrDefaultAsync(
+                            file =>
+                                file.FileResourceId
+                                == fileResourceId,
+                            cancellationToken);
 
-                AddParameter(
-                    command,
-                    "@file_resource_id",
-                    SqlDbType.UniqueIdentifier,
-                    fileResourceId);
+                if (fileResource is null)
+                {
+                    throw new KeyNotFoundException(
+                        "File resource does not exist.");
+                }
 
-                AddParameter(
-                    command,
-                    "@deleted_by_user_id",
-                    SqlDbType.UniqueIdentifier,
-                    actorUserId);
+                if (fileResource.DeletedAtUtc.HasValue)
+                {
+                    throw new InvalidOperationException(
+                        "File resource is already deleted.");
+                }
 
-                AddParameter(
-                    command,
-                    "@delete_reason",
-                    SqlDbType.NVarChar,
-                    deleteReason,
-                    500);
+                var deletedAtUtc =
+                    DateTime.UtcNow;
 
-                await command.ExecuteNonQueryAsync(
+                fileResource.DeletedAtUtc =
+                    deletedAtUtc;
+
+                fileResource.DeletedByUserId =
+                    actorUserId;
+
+                var detailJson =
+                    JsonSerializer.Serialize(
+                        new
+                        {
+                            file_resource_id =
+                                fileResource.FileResourceId,
+
+                            file_purpose_code =
+                                fileResource.FilePurposeCode,
+
+                            original_file_name =
+                                fileResource.OriginalFileName,
+
+                            cloudinary_public_id =
+                                fileResource.CloudinaryPublicId,
+
+                            content_type =
+                                fileResource.ContentType,
+
+                            delete_reason =
+                                normalizedDeleteReason
+                        });
+
+                _context.AuditEvents.Add(
+                    new AuditEvent
+                    {
+                        OccurredAtUtc =
+                            deletedAtUtc,
+
+                        ActorUserId =
+                            actorUserId,
+
+                        ActorRoleName =
+                            actor.Role.RoleName,
+
+                        ActionCode =
+                            "FILE_RESOURCE_SOFT_DELETED",
+
+                        EntityType =
+                            "FileResource",
+
+                        EntityId =
+                            fileResourceId.ToString(),
+
+                        DetailJson =
+                            detailJson
+                    });
+
+                await _context.SaveChangesAsync(
                     cancellationToken);
+
+                if (transaction is not null)
+                {
+                    await transaction.CommitAsync(
+                        cancellationToken);
+                }
+            }
+            catch
+            {
+                if (transaction is not null)
+                {
+                    await transaction.RollbackAsync(
+                        cancellationToken);
+                }
+
+                throw;
             }
             finally
             {
-                if (shouldClose)
+                if (transaction is not null)
                 {
-                    await connection.CloseAsync();
+                    await transaction.DisposeAsync();
                 }
             }
-        }
-
-        private static void AddParameter(
-            DbCommand command,
-            string name,
-            SqlDbType type,
-            object? value,
-            int? size = null)
-        {
-            var parameter =
-                new SqlParameter(
-                    name,
-                    type)
-                {
-                    Value = value ?? DBNull.Value
-                };
-
-            if (size.HasValue)
-            {
-                parameter.Size = size.Value;
-            }
-
-            command.Parameters.Add(parameter);
         }
     }
 }
