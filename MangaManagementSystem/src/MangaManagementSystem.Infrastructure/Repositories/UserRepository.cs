@@ -614,183 +614,362 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             await _context.SaveChangesAsync(
                 cancellationToken);
         }
-        public async Task<UserFileReplacementResult>
+        public Task<UserFileReplacementResult>
             ReplaceAvatarFileAsync(
                 UserFileReplacementRequest request)
         {
             ArgumentNullException.ThrowIfNull(request);
 
-            var conn = _context.Database.GetDbConnection();
-            await using var cmd = conn.CreateCommand();
-
-            cmd.CommandText =
-                "auth.usp_User_UpdateAvatarFile";
-
-            cmd.CommandType =
-                CommandType.StoredProcedure;
-
-            AddFileReplacementInputParameters(
-                cmd,
-                request);
-
-            var newAvatarFileIdParameter =
-                new SqlParameter(
-                    "@new_avatar_file_id",
-                    SqlDbType.UniqueIdentifier)
-                {
-                    Direction = ParameterDirection.Output
-                };
-
-            var oldAvatarFileIdParameter =
-                new SqlParameter(
-                    "@old_avatar_file_id",
-                    SqlDbType.UniqueIdentifier)
-                {
-                    Direction = ParameterDirection.Output
-                };
-
-            var oldCloudinaryPublicIdParameter =
-                new SqlParameter(
-                    "@old_cloudinary_public_id",
-                    SqlDbType.NVarChar,
-                    255)
-                {
-                    Direction = ParameterDirection.Output
-                };
-
-            var oldContentTypeParameter =
-                new SqlParameter(
-                    "@old_content_type",
-                    SqlDbType.NVarChar,
-                    100)
-                {
-                    Direction = ParameterDirection.Output
-                };
-
-            cmd.Parameters.Add(newAvatarFileIdParameter);
-            cmd.Parameters.Add(oldAvatarFileIdParameter);
-            cmd.Parameters.Add(oldCloudinaryPublicIdParameter);
-            cmd.Parameters.Add(oldContentTypeParameter);
-
-            if (conn.State != ConnectionState.Open)
-            {
-                await conn.OpenAsync();
-            }
-
-            await cmd.ExecuteNonQueryAsync();
-
-            if (newAvatarFileIdParameter.Value == DBNull.Value)
-            {
-                throw new InvalidOperationException(
-                    "The avatar update procedure did not return a new FileResource id.");
-            }
-
-            var result = new UserFileReplacementResult(
-                (Guid)newAvatarFileIdParameter.Value,
-                ReadNullableGuid(oldAvatarFileIdParameter),
-                ReadNullableString(
-                    oldCloudinaryPublicIdParameter),
-                ReadNullableString(oldContentTypeParameter));
-
-            await ReloadTrackedUserAsync(
-                request.UserId);
-
-            return result;
+            return ReplaceUserProfileFileAsync(
+                request,
+                filePurposeCode: "USER_AVATAR",
+                replaceAvatar: true,
+                softDeleteReason:
+                    "Replaced by a new user avatar.");
         }
 
-        public async Task<UserFileReplacementResult>
+        public Task<UserFileReplacementResult>
             ReplacePortfolioFileAsync(
                 UserFileReplacementRequest request)
         {
             ArgumentNullException.ThrowIfNull(request);
 
-            var conn = _context.Database.GetDbConnection();
-            await using var cmd = conn.CreateCommand();
+            return ReplaceUserProfileFileAsync(
+                request,
+                filePurposeCode:
+                    "REGISTRATION_PORTFOLIO",
+                replaceAvatar: false,
+                softDeleteReason:
+                    "Replaced by a new user portfolio.");
+        }
 
-            cmd.CommandText =
-                "auth.usp_User_UpdatePortfolioFile";
-
-            cmd.CommandType =
-                CommandType.StoredProcedure;
-
-            AddFileReplacementInputParameters(
-                cmd,
-                request);
-
-            var newPortfolioFileIdParameter =
-                new SqlParameter(
-                    "@new_portfolio_file_id",
-                    SqlDbType.UniqueIdentifier)
-                {
-                    Direction = ParameterDirection.Output
-                };
-
-            var oldPortfolioFileIdParameter =
-                new SqlParameter(
-                    "@old_portfolio_file_id",
-                    SqlDbType.UniqueIdentifier)
-                {
-                    Direction = ParameterDirection.Output
-                };
-
-            var oldCloudinaryPublicIdParameter =
-                new SqlParameter(
-                    "@old_cloudinary_public_id",
-                    SqlDbType.NVarChar,
-                    255)
-                {
-                    Direction = ParameterDirection.Output
-                };
-
-            var oldContentTypeParameter =
-                new SqlParameter(
-                    "@old_content_type",
-                    SqlDbType.NVarChar,
-                    100)
-                {
-                    Direction = ParameterDirection.Output
-                };
-
-            cmd.Parameters.Add(
-                newPortfolioFileIdParameter);
-
-            cmd.Parameters.Add(
-                oldPortfolioFileIdParameter);
-
-            cmd.Parameters.Add(
-                oldCloudinaryPublicIdParameter);
-
-            cmd.Parameters.Add(
-                oldContentTypeParameter);
-
-            if (conn.State != ConnectionState.Open)
+        private async Task<UserFileReplacementResult>
+            ReplaceUserProfileFileAsync(
+                UserFileReplacementRequest request,
+                string filePurposeCode,
+                bool replaceAvatar,
+                string softDeleteReason)
+        {
+            if (request.UserId == Guid.Empty)
             {
-                await conn.OpenAsync();
+                throw new ArgumentException(
+                    "User id is required.",
+                    nameof(request));
             }
 
-            await cmd.ExecuteNonQueryAsync();
-
-            if (newPortfolioFileIdParameter.Value
-                == DBNull.Value)
+            if (string.IsNullOrWhiteSpace(
+                    request.OriginalFileName)
+                || string.IsNullOrWhiteSpace(
+                    request.CloudinaryPublicId)
+                || string.IsNullOrWhiteSpace(
+                    request.CloudinarySecureUrl)
+                || string.IsNullOrWhiteSpace(
+                    request.ContentType)
+                || string.IsNullOrWhiteSpace(
+                    request.Sha256Hash)
+                || request.FileSizeBytes <= 0)
             {
-                throw new InvalidOperationException(
-                    "The portfolio update procedure did not return a new FileResource id.");
+                throw new ArgumentException(
+                    "Uploaded file metadata is invalid.",
+                    nameof(request));
             }
 
-            var result =
-                new UserFileReplacementResult(
-                    (Guid)newPortfolioFileIdParameter.Value,
-                    ReadNullableGuid(
-                        oldPortfolioFileIdParameter),
-                    ReadNullableString(
-                        oldCloudinaryPublicIdParameter),
-                    ReadNullableString(
-                        oldContentTypeParameter));
+            IDbContextTransaction? transaction = null;
 
-            await ReloadTrackedUserAsync(
-                request.UserId);
+            if (_context.Database.CurrentTransaction is null)
+            {
+                transaction =
+                    await _context.Database
+                        .BeginTransactionAsync(
+                            IsolationLevel.Serializable);
+            }
 
-            return result;
+            try
+            {
+                var user =
+                    await _context.Users
+                        .Include(item => item.Role)
+                        .SingleOrDefaultAsync(
+                            item =>
+                                item.UserId
+                                == request.UserId);
+
+                if (user is null)
+                {
+                    throw new KeyNotFoundException(
+                        "User was not found.");
+                }
+
+                if (user.Role is null)
+                {
+                    throw new InvalidOperationException(
+                        "Actor user role could not be resolved.");
+                }
+
+                Guid? oldFileId =
+                    replaceAvatar
+                        ? user.AvatarFileId
+                        : user.PortfolioFileId;
+
+                FileResource? oldFile = null;
+
+                if (oldFileId.HasValue)
+                {
+                    oldFile =
+                        await _context.FileResources
+                            .SingleOrDefaultAsync(
+                                file =>
+                                    file.FileResourceId
+                                    == oldFileId.Value);
+
+                    if (oldFile is null)
+                    {
+                        throw new InvalidOperationException(
+                            replaceAvatar
+                                ? "The previous avatar FileResource was not found."
+                                : "The previous portfolio FileResource was not found.");
+                    }
+
+                    if (!string.Equals(
+                            oldFile.FilePurposeCode,
+                            filePurposeCode,
+                            StringComparison.Ordinal))
+                    {
+                        throw new InvalidOperationException(
+                            replaceAvatar
+                                ? "The previous file is not a USER_AVATAR resource."
+                                : "The previous file is not a REGISTRATION_PORTFOLIO resource.");
+                    }
+                }
+
+                var occurredAtUtc =
+                    DateTime.UtcNow;
+
+                var newFile =
+                    new FileResource
+                    {
+                        FileResourceId =
+                            Guid.NewGuid(),
+
+                        FilePurposeCode =
+                            filePurposeCode,
+
+                        OriginalFileName =
+                            request.OriginalFileName,
+
+                        CloudinaryPublicId =
+                            request.CloudinaryPublicId,
+
+                        CloudinarySecureUrl =
+                            request.CloudinarySecureUrl,
+
+                        ContentType =
+                            request.ContentType,
+
+                        FileSizeBytes =
+                            request.FileSizeBytes,
+
+                        Sha256Hash =
+                            request.Sha256Hash,
+
+                        UploadedByUserId =
+                            request.UserId,
+
+                        UploadedAtUtc =
+                            occurredAtUtc
+                    };
+
+                _context.FileResources.Add(
+                    newFile);
+
+                if (replaceAvatar)
+                {
+                    user.AvatarFileId =
+                        newFile.FileResourceId;
+                }
+                else
+                {
+                    user.PortfolioFileId =
+                        newFile.FileResourceId;
+                }
+
+                if (oldFile is not null
+                    && !oldFile.DeletedAtUtc.HasValue)
+                {
+                    oldFile.DeletedAtUtc =
+                        occurredAtUtc;
+
+                    oldFile.DeletedByUserId =
+                        request.UserId;
+
+                    var fileDeleteDetailJson =
+                        JsonSerializer.Serialize(
+                            new
+                            {
+                                file_resource_id =
+                                    oldFile.FileResourceId,
+
+                                file_purpose_code =
+                                    oldFile.FilePurposeCode,
+
+                                original_file_name =
+                                    oldFile.OriginalFileName,
+
+                                cloudinary_public_id =
+                                    oldFile.CloudinaryPublicId,
+
+                                content_type =
+                                    oldFile.ContentType,
+
+                                delete_reason =
+                                    softDeleteReason
+                            });
+
+                    _context.AuditEvents.Add(
+                        new AuditEvent
+                        {
+                            OccurredAtUtc =
+                                occurredAtUtc,
+
+                            ActorUserId =
+                                request.UserId,
+
+                            ActorRoleName =
+                                user.Role.RoleName,
+
+                            ActionCode =
+                                "FILE_RESOURCE_SOFT_DELETED",
+
+                            EntityType =
+                                "FileResource",
+
+                            EntityId =
+                                oldFile.FileResourceId
+                                    .ToString(),
+
+                            DetailJson =
+                                fileDeleteDetailJson
+                        });
+                }
+
+                var userActionCode =
+                    replaceAvatar
+                        ? "USER_AVATAR_UPDATED"
+                        : oldFileId.HasValue
+                            ? "USER_PORTFOLIO_UPDATED"
+                            : "REGISTRATION_PORTFOLIO_ATTACHED";
+
+                var userDetailJson =
+                    replaceAvatar
+                        ? JsonSerializer.Serialize(
+                            new
+                            {
+                                user_id =
+                                    request.UserId,
+
+                                old_avatar_file_id =
+                                    oldFileId,
+
+                                new_avatar_file_id =
+                                    newFile.FileResourceId,
+
+                                old_cloudinary_public_id =
+                                    oldFile?.CloudinaryPublicId,
+
+                                new_cloudinary_public_id =
+                                    newFile.CloudinaryPublicId,
+
+                                new_original_file_name =
+                                    newFile.OriginalFileName,
+
+                                new_content_type =
+                                    newFile.ContentType,
+
+                                new_file_size_bytes =
+                                    newFile.FileSizeBytes
+                            })
+                        : JsonSerializer.Serialize(
+                            new
+                            {
+                                user_id =
+                                    request.UserId,
+
+                                old_portfolio_file_id =
+                                    oldFileId,
+
+                                new_portfolio_file_id =
+                                    newFile.FileResourceId,
+
+                                old_cloudinary_public_id =
+                                    oldFile?.CloudinaryPublicId,
+
+                                new_cloudinary_public_id =
+                                    newFile.CloudinaryPublicId,
+
+                                new_original_file_name =
+                                    newFile.OriginalFileName,
+
+                                new_content_type =
+                                    newFile.ContentType,
+
+                                new_file_size_bytes =
+                                    newFile.FileSizeBytes
+                            });
+
+                _context.AuditEvents.Add(
+                    new AuditEvent
+                    {
+                        OccurredAtUtc =
+                            occurredAtUtc,
+
+                        ActorUserId =
+                            request.UserId,
+
+                        ActorRoleName =
+                            user.Role.RoleName,
+
+                        ActionCode =
+                            userActionCode,
+
+                        EntityType =
+                            "Users",
+
+                        EntityId =
+                            request.UserId.ToString(),
+
+                        DetailJson =
+                            userDetailJson
+                    });
+
+                await _context.SaveChangesAsync();
+
+                if (transaction is not null)
+                {
+                    await transaction.CommitAsync();
+                }
+
+                return new UserFileReplacementResult(
+                    newFile.FileResourceId,
+                    oldFileId,
+                    oldFile?.CloudinaryPublicId,
+                    oldFile?.ContentType);
+            }
+            catch
+            {
+                if (transaction is not null)
+                {
+                    await transaction.RollbackAsync();
+                }
+
+                throw;
+            }
+            finally
+            {
+                if (transaction is not null)
+                {
+                    await transaction.DisposeAsync();
+                }
+            }
         }
 
         public async Task ResetPasswordAsync(
@@ -909,88 +1088,6 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     await transaction.DisposeAsync();
                 }
             }
-        }
-
-        private static void AddFileReplacementInputParameters(
-            System.Data.Common.DbCommand command,
-            UserFileReplacementRequest request)
-        {
-            command.Parameters.Add(
-                new SqlParameter(
-                    "@user_id",
-                    SqlDbType.UniqueIdentifier)
-                {
-                    Value = request.UserId
-                });
-
-            command.Parameters.Add(
-                new SqlParameter(
-                    "@original_file_name",
-                    SqlDbType.NVarChar,
-                    260)
-                {
-                    Value = request.OriginalFileName
-                });
-
-            command.Parameters.Add(
-                new SqlParameter(
-                    "@cloudinary_public_id",
-                    SqlDbType.NVarChar,
-                    255)
-                {
-                    Value = request.CloudinaryPublicId
-                });
-
-            command.Parameters.Add(
-                new SqlParameter(
-                    "@cloudinary_secure_url",
-                    SqlDbType.NVarChar,
-                    1000)
-                {
-                    Value = request.CloudinarySecureUrl
-                });
-
-            command.Parameters.Add(
-                new SqlParameter(
-                    "@content_type",
-                    SqlDbType.NVarChar,
-                    100)
-                {
-                    Value = request.ContentType
-                });
-
-            command.Parameters.Add(
-                new SqlParameter(
-                    "@file_size_bytes",
-                    SqlDbType.BigInt)
-                {
-                    Value = request.FileSizeBytes
-                });
-
-            command.Parameters.Add(
-                new SqlParameter(
-                    "@sha256_hash",
-                    SqlDbType.Char,
-                    64)
-                {
-                    Value = request.Sha256Hash
-                });
-        }
-
-        private static Guid? ReadNullableGuid(
-            SqlParameter parameter)
-        {
-            return parameter.Value == DBNull.Value
-                ? null
-                : (Guid)parameter.Value;
-        }
-
-        private static string? ReadNullableString(
-            SqlParameter parameter)
-        {
-            return parameter.Value == DBNull.Value
-                ? null
-                : Convert.ToString(parameter.Value);
         }
 
         private async Task ReloadTrackedUserAsync(
