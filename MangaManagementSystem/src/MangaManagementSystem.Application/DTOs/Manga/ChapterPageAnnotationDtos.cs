@@ -24,7 +24,7 @@ namespace MangaManagementSystem.Application.DTOs.Manga
         [Required] IReadOnlyList<Guid> PageRegionIds
     );
 
-    /// <summary>Web → API body to create an annotation. Author is taken from the X-Actor-User-Id header.</summary>
+    /// <summary>Web → API body to create an annotation. Author is derived from the authenticated JWT actor.</summary>
     public sealed record CreateMangakaAnnotationRequest(
         string IssueTypeCode,
         string? AnnotationText,

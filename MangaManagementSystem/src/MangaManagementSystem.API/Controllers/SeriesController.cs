@@ -29,10 +29,6 @@ namespace MangaManagementSystem.API.Controllers
     [Route("api/series")]
     public class SeriesController : ControllerBase
     {
-        // Transitional actor header. The API does not yet own authentication; the Web host
-        // owns the Blazor cookie/session and forwards the logged-in user's id here.
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
-
         private readonly IMediator _mediator;
         private readonly ILogger<SeriesController> _logger;
 
@@ -85,6 +81,7 @@ namespace MangaManagementSystem.API.Controllers
         /// (to enforce series-specific access before loading workspace content).
         /// Route: GET /api/series/{slug}/workspace-entry
         /// </summary>
+        [Authorize]
         [HttpGet("{slug}/workspace-entry")]
         public async Task<IActionResult> GetWorkspaceEntryAsync(
             string slug,
@@ -95,10 +92,11 @@ namespace MangaManagementSystem.API.Controllers
                 return BadRequest(new ApiErrorResponse("A series slug is required."));
             }
 
-            if (!TryResolveActorUserId(out Guid actorUserId))
+            if (!TryResolveJwtActor(
+                    out Guid actorUserId,
+                    out _))
             {
-                return BadRequest(new ApiErrorResponse(
-                    "Could not identify the requesting user. Please sign in again."));
+                return JwtActorRequired();
             }
 
             var query = new GetSeriesWorkspaceEntryQuery(slug, actorUserId);
@@ -364,20 +362,5 @@ namespace MangaManagementSystem.API.Controllers
             return true;
         }
 
-        private bool TryResolveActorUserId(out Guid actorUserId)
-        {
-            actorUserId = Guid.Empty;
-
-            if (Request.Headers.TryGetValue(ActorUserIdHeader, out var headerValues))
-            {
-                string? raw = headerValues.ToString();
-                if (Guid.TryParse(raw, out actorUserId) && actorUserId != Guid.Empty)
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
     }
 }

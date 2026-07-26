@@ -12,9 +12,6 @@ namespace MangaManagementSystem.Web.Services.Api
 {
     public class SeriesApiClient : ISeriesApiClient
     {
-        // Transitional actor header forwarded to the API while API auth is not yet implemented.
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
-
         private readonly HttpClient _httpClient;
         private readonly ILogger<SeriesApiClient> _logger;
 
@@ -51,34 +48,44 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task<SeriesWorkspaceEntryDto?> GetWorkspaceEntryAsync(
-            Guid actorUserId,
             string slug,
             CancellationToken cancellationToken = default)
         {
-            using var requestMessage = new HttpRequestMessage(
-                HttpMethod.Get,
-                $"api/series/{Uri.EscapeDataString(slug)}/workspace-entry");
-            requestMessage.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+            var route =
+                $"api/series/{Uri.EscapeDataString(slug)}/workspace-entry";
 
-            var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
+            var response =
+                await _httpClient.GetAsync(
+                    route,
+                    cancellationToken);
 
             if (response.StatusCode == HttpStatusCode.NotFound)
+            {
                 return null;
+            }
 
             if (response.IsSuccessStatusCode)
             {
-                return await response.Content.ReadFromJsonAsync<SeriesWorkspaceEntryDto>(
-                    cancellationToken: cancellationToken);
+                return await response.Content
+                    .ReadFromJsonAsync<SeriesWorkspaceEntryDto>(
+                        cancellationToken:
+                            cancellationToken);
             }
 
-            var message = await ExtractErrorMessageAsync(response);
+            var message =
+                await ExtractErrorMessageAsync(
+                    response,
+                    cancellationToken:
+                        cancellationToken);
+
             _logger.LogWarning(
                 "Load workspace entry failed for slug {Slug}: {StatusCode} {ReasonPhrase}",
-                slug, (int)response.StatusCode, response.ReasonPhrase);
+                slug,
+                (int)response.StatusCode,
+                response.ReasonPhrase);
 
             throw new InvalidOperationException(message);
         }
-
         public async Task<SeriesLifecycleActionsDto> GetLifecycleActionsAsync(
             Guid seriesId,
             CancellationToken cancellationToken = default)

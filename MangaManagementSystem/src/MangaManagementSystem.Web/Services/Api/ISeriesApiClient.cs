@@ -18,7 +18,6 @@ namespace MangaManagementSystem.Web.Services.Api
             CancellationToken cancellationToken = default);
 
         Task<SeriesWorkspaceEntryDto?> GetWorkspaceEntryAsync(
-            Guid actorUserId,
             string slug,
             CancellationToken cancellationToken = default);
 
