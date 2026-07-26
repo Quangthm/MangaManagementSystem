@@ -97,11 +97,9 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private string _reviewDecision = "APPROVED";
     private string _reviewComment = "";
     private bool _reviewSubmitting;
-    // DB constraint ck_chapter_editorial_review_feedback_required: CANCELLED requires comments AND a
-    // markup file (like proposal cancellation); REVISION only requires comments; APPROVED requires neither.
-    private IBrowserFile? _reviewMarkupFile;
-
-    private void OnReviewMarkupSelected(InputFileChangeEventArgs e) => _reviewMarkupFile = e.File;
+    // ck_chapter_editorial_review_feedback_required: CANCELLED and REVISION_REQUESTED both require comments;
+    // APPROVED requires neither. No markup attachment is offered from the workspace dialog — the review
+    // decision alone is enough to cancel. (The Editor review page keeps its own optional attachment.)
 
     // Numeric sort key for a chapter number label; non-numeric/blank sinks to the end.
     private static decimal ChapterSortKey(string? label)
@@ -120,27 +118,17 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             return;
         }
 
-        if (_reviewDecision == "CANCELLED" && _reviewMarkupFile == null)
-        {
-            Snackbar.Add("Cancelling a chapter requires an attached markup file (plus comments).", Severity.Warning);
-            return;
-        }
-
         _reviewSubmitting = true;
         try
         {
             var comments = string.IsNullOrWhiteSpace(_reviewComment) ? null : _reviewComment.Trim();
-            var res = _reviewMarkupFile != null
-                ? await EditorReviewApi.SubmitReviewDecisionWithMarkupAsync(
-                    chap.ChapterId, _reviewDecision, comments, _reviewMarkupFile)
-                : await EditorReviewApi.SubmitReviewDecisionAsync(
-                    chap.ChapterId,
-                    new MangaManagementSystem.Application.DTOs.Editor.SubmitChapterEditorialReviewRequest(_reviewDecision, comments));
+            var res = await EditorReviewApi.SubmitReviewDecisionAsync(
+                chap.ChapterId,
+                new MangaManagementSystem.Application.DTOs.Editor.SubmitChapterEditorialReviewRequest(_reviewDecision, comments));
 
             chap.StatusCode = res.StatusCode;
             _showReviewDialog = false;
             _reviewComment = "";
-            _reviewMarkupFile = null;
             Snackbar.Add($"Review submitted ({res.DecisionCode}). Chapter is now {res.StatusCode}.", Severity.Success);
         }
         catch (Exception ex)
