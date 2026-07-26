@@ -331,8 +331,19 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 
             try
             {
+                // BR-CP-027: this endpoint can replace the version's PageFileId and flip IsCurrentVersion,
+                // both production-content mutations, so it must respect the same content lock that
+                // create-with-file and set-current already enforce.
+                var page = await _pageService.GetChapterPageByIdAsync(request.ChapterPageId);
+                if (page == null) return NotFound();
+                await _chapterService.EnsureChapterAllowsContentMutationsAsync(page.ChapterId);
+
                 var updated = await _versionService.UpdateChapterPageVersionAsync(request);
                 return updated == null ? NotFound() : Ok(updated);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -381,8 +392,22 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 
             try
             {
+                // BR-CP-027: removing a version's image mutates the underlying manga page content, so the
+                // content lock applies here as it does to page delete and version upload. The service's own
+                // guard only refuses when a region is still linked to an active task/unresolved annotation,
+                // which is a different rule and does not cover chapter state.
+                var version = await _versionService.GetChapterPageVersionByIdAsync(versionId);
+                if (version == null) return NotFound();
+                var page = await _pageService.GetChapterPageByIdAsync(version.ChapterPageId);
+                if (page == null) return NotFound();
+                await _chapterService.EnsureChapterAllowsContentMutationsAsync(page.ChapterId);
+
                 var result = await _versionService.DeleteVersionImageAsync(versionId, actorUserId, "Mangaka");
                 return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
