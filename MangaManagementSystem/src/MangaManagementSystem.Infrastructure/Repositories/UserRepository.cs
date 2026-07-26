@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace MangaManagementSystem.Infrastructure.Repositories
@@ -796,67 +797,118 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             Guid userId,
             string passwordHash)
         {
-            var conn = _context.Database.GetDbConnection();
-
-            await using var cmd = conn.CreateCommand();
-
-            cmd.CommandText =
-                "auth.usp_User_ResetPassword";
-
-            cmd.CommandType =
-                CommandType.StoredProcedure;
-
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@target_user_id",
-                    SqlDbType.UniqueIdentifier)
-                {
-                    Value = userId
-                });
-
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@new_password_hash",
-                    SqlDbType.NVarChar,
-                    255)
-                {
-                    Value = passwordHash
-                });
-
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@actor_user_id",
-                    SqlDbType.UniqueIdentifier)
-                {
-                    Value = DBNull.Value
-                });
-
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@reset_mode",
-                    SqlDbType.NVarChar,
-                    30)
-                {
-                    Value = "TOKEN_RESET"
-                });
-
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@reset_reason",
-                    SqlDbType.NVarChar,
-                    500)
-                {
-                    Value = "Password reset verified by one-time token."
-                });
-
-            if (conn.State != ConnectionState.Open)
+            if (userId == Guid.Empty)
             {
-                await conn.OpenAsync();
+                throw new ArgumentException(
+                    "User id is required.",
+                    nameof(userId));
             }
 
-            await cmd.ExecuteNonQueryAsync();
+            if (string.IsNullOrWhiteSpace(passwordHash)
+                || passwordHash.Trim().Length < 20)
+            {
+                throw new ArgumentException(
+                    "Password hash is invalid.",
+                    nameof(passwordHash));
+            }
 
-            await ReloadTrackedUserAsync(userId);
+            IDbContextTransaction? transaction = null;
+
+            if (_context.Database.CurrentTransaction is null)
+            {
+                transaction =
+                    await _context.Database.BeginTransactionAsync(
+                        IsolationLevel.Serializable);
+            }
+
+            try
+            {
+                var user =
+                    await _context.Users
+                        .SingleOrDefaultAsync(
+                            item =>
+                                item.UserId == userId);
+
+                if (user is null)
+                {
+                    throw new KeyNotFoundException(
+                        "Target user does not exist.");
+                }
+
+                var occurredAtUtc =
+                    DateTime.UtcNow;
+
+                user.PasswordHash =
+                    passwordHash;
+
+                var detailJson =
+                    JsonSerializer.Serialize(
+                        new
+                        {
+                            user_id =
+                                user.UserId,
+
+                            status_code =
+                                user.StatusCode,
+
+                            reset_mode =
+                                "TOKEN_RESET",
+
+                            reset_reason =
+                                "Password reset verified by one-time token.",
+
+                            result =
+                                "Password hash updated."
+                        });
+
+                _context.AuditEvents.Add(
+                    new AuditEvent
+                    {
+                        OccurredAtUtc =
+                            occurredAtUtc,
+
+                        ActorUserId =
+                            null,
+
+                        ActorRoleName =
+                            null,
+
+                        ActionCode =
+                            "PASSWORD_RESET_BY_TOKEN",
+
+                        EntityType =
+                            "Users",
+
+                        EntityId =
+                            userId.ToString(),
+
+                        DetailJson =
+                            detailJson
+                    });
+
+                await _context.SaveChangesAsync();
+
+                if (transaction is not null)
+                {
+                    await transaction.CommitAsync();
+                }
+            }
+            catch
+            {
+                if (transaction is not null)
+                {
+                    await transaction.RollbackAsync();
+                }
+
+                throw;
+            }
+            finally
+            {
+                if (transaction is not null)
+                {
+                    await transaction.DisposeAsync();
+                }
+            }
         }
 
         private static void AddFileReplacementInputParameters(
