@@ -372,7 +372,7 @@ namespace MangaManagementSystem.Application.Services
             }
 
             await _unitOfWork.Users
-                .UpdateDisplayNameViaProcAsync(
+                .UpdateDisplayNameAsync(
                     userId,
                     trimmedDisplayName);
 

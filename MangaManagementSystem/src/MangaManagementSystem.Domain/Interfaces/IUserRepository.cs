@@ -100,9 +100,10 @@ namespace MangaManagementSystem.Domain.Interfaces
                 string? portfolioSha256Hash = null,
                 Guid? createdByUserId = null);
 
-        Task UpdateDisplayNameViaProcAsync(
+        Task UpdateDisplayNameAsync(
             Guid userId,
-            string displayName);
+            string displayName,
+            CancellationToken cancellationToken = default);
 
         Task<UserFileReplacementResult>
             UpdateAvatarFileViaProcAsync(

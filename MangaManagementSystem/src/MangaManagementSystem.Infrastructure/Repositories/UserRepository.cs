@@ -570,46 +570,48 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             return (newUserId, portfolioId);
         }
 
-        public async Task UpdateDisplayNameViaProcAsync(
+        public async Task UpdateDisplayNameAsync(
             Guid userId,
-            string displayName)
+            string displayName,
+            CancellationToken cancellationToken = default)
         {
-            var conn = _context.Database.GetDbConnection();
-            await using var cmd = conn.CreateCommand();
-
-            cmd.CommandText =
-                "auth.usp_User_UpdateDisplayName";
-
-            cmd.CommandType =
-                CommandType.StoredProcedure;
-
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@user_id",
-                    SqlDbType.UniqueIdentifier)
-                {
-                    Value = userId
-                });
-
-            cmd.Parameters.Add(
-                new SqlParameter(
-                    "@display_name",
-                    SqlDbType.NVarChar,
-                    100)
-                {
-                    Value = displayName.Trim()
-                });
-
-            if (conn.State != ConnectionState.Open)
+            if (userId == Guid.Empty)
             {
-                await conn.OpenAsync();
+                throw new ArgumentException(
+                    "User id is required.",
+                    nameof(userId));
             }
 
-            await cmd.ExecuteNonQueryAsync();
+            string normalizedDisplayName =
+                displayName?.Trim()
+                ?? string.Empty;
 
-            await ReloadTrackedUserAsync(userId);
+            if (string.IsNullOrWhiteSpace(
+                    normalizedDisplayName))
+            {
+                throw new ArgumentException(
+                    "Display name is required.",
+                    nameof(displayName));
+            }
+
+            var user =
+                await _context.Users
+                    .FirstOrDefaultAsync(
+                        item => item.UserId == userId,
+                        cancellationToken);
+
+            if (user is null)
+            {
+                throw new System.Collections.Generic.KeyNotFoundException(
+                    "The requested user could not be found.");
+            }
+
+            user.DisplayName =
+                normalizedDisplayName;
+
+            await _context.SaveChangesAsync(
+                cancellationToken);
         }
-
         public async Task<UserFileReplacementResult>
             UpdateAvatarFileViaProcAsync(
                 UserFileReplacementRequest request)
