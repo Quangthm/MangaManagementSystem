@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using MangaManagementSystem.Application.Features.Publication.Schedule.Queries.GetPublicationScheduleCalendar;
 using MangaManagementSystem.Domain.Interfaces;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -11,6 +12,7 @@ using Microsoft.Extensions.Logging;
 namespace MangaManagementSystem.API.Controllers.Publication
 {
     [ApiController]
+    [Authorize]
     [Route("api/publication/schedule")]
     public class PublicationScheduleController : ControllerBase
     {
