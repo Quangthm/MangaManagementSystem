@@ -17,8 +17,11 @@ namespace MangaManagementSystem.Web.Services.Api
             int chapterPageSize = 10,
             CancellationToken cancellationToken = default);
 
+        /// <summary>
+        /// Checks whether the signed-in user may enter the series workspace. The actor is taken from the
+        /// JWT the message handler attaches, so no user id is passed from the caller.
+        /// </summary>
         Task<SeriesWorkspaceEntryDto?> GetWorkspaceEntryAsync(
-            Guid actorUserId,
             string slug,
             CancellationToken cancellationToken = default);
 

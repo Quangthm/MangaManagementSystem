@@ -207,6 +207,36 @@ namespace MangaManagementSystem.Application.Services
             return MapToDto(region);
         }
 
+        /// <inheritdoc />
+        public async Task<string?> GetChapterStatusByVersionIdAsync(
+            Guid chapterPageVersionId,
+            CancellationToken cancellationToken = default)
+        {
+            var version = await _unitOfWork.ChapterPageVersions.GetByIdAsync(chapterPageVersionId);
+            if (version == null)
+            {
+                return null;
+            }
+            var page = await _unitOfWork.ChapterPages.GetByIdAsync(version.ChapterPageId);
+            if (page == null)
+            {
+                return null;
+            }
+            var chapter = await _unitOfWork.Chapters.GetByIdAsync(page.ChapterId);
+            return chapter?.StatusCode;
+        }
+
+        /// <inheritdoc />
+        public async Task<string?> GetChapterStatusByRegionIdAsync(
+            Guid pageRegionId,
+            CancellationToken cancellationToken = default)
+        {
+            var region = await _unitOfWork.PageRegions.GetByIdAsync(pageRegionId);
+            return region == null
+                ? null
+                : await GetChapterStatusByVersionIdAsync(region.ChapterPageVersionId, cancellationToken);
+        }
+
         public async Task<bool> BulkReplacePageRegionsAsync(Guid chapterPageVersionId, IEnumerable<CreatePageRegionDto> dtos)
         {
             // Get all existing regions for this version
@@ -227,6 +257,19 @@ namespace MangaManagementSystem.Application.Services
                 if (existingRegion == null && !string.IsNullOrEmpty(dto.RegionLabel))
                 {
                     existingRegion = existing.FirstOrDefault(r => r.RegionLabel == dto.RegionLabel);
+                }
+
+                // Last-resort identity match: the exact same box. Two distinct regions cannot legitimately
+                // occupy an identical rectangle, so a geometry match means this dto IS that row — it merely
+                // arrived without its db id, or under a label that had already been claimed by an earlier
+                // dto in this same batch (labels are synthesized as "Region_{canvas id}", which is not a
+                // stable identity). Without this fallback such a dto is INSERTED as a new row while the
+                // original survives deletion below because a task/annotation protects it — leaving two
+                // identical regions on the page, each drawn on top of the other.
+                if (existingRegion == null)
+                {
+                    existingRegion = existing.FirstOrDefault(r =>
+                        r.X == dto.X && r.Y == dto.Y && r.Width == dto.Width && r.Height == dto.Height);
                 }
 
                 if (existingRegion != null)
@@ -252,13 +295,19 @@ namespace MangaManagementSystem.Application.Services
                         existingRegion.SourceType = dto.SourceType;
                         existingRegion.OriginalText = dto.OriginalText;
                         existingRegion.RegionLabel = dto.RegionLabel;
-                        if (existingRegion.CreatedByUserId.HasValue && existingRegion.CreatedByUserId.Value != Guid.Empty)
+                        // Record WHO actually made this change (the acting user for THIS request, e.g. a
+                        // Tantou Editor editing a Mangaka-created region during review) — not the original
+                        // creator, which is what this used to copy. dto.CreatedByUserId carries the acting
+                        // user id. Set the matching timestamp so updated_by/updated_at stay a consistent pair.
+                        if (dto.CreatedByUserId.HasValue && dto.CreatedByUserId.Value != Guid.Empty)
                         {
-                            existingRegion.UpdatedByUserId = existingRegion.CreatedByUserId;
+                            existingRegion.UpdatedByUserId = dto.CreatedByUserId;
+                            existingRegion.UpdatedAtUtc = DateTime.UtcNow;
                         }
                         else
                         {
                             existingRegion.UpdatedByUserId = null;
+                            existingRegion.UpdatedAtUtc = null;
                         }
                         _unitOfWork.PageRegions.Update(existingRegion);
                     }

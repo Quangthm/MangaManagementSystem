@@ -91,8 +91,31 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             if (idx < 0) return url;
             int insertAt = idx + marker.Length;
             if (url.AsSpan(insertAt).StartsWith("f_auto")) return url;
+            // f_auto,q_auto = format (WebP/AVIF) + quality auto — shrinks the FILE without changing pixel
+            // dimensions. Do NOT add a resize (w_/h_/c_limit) here: fitImageOntoCanvas sets canvas.width =
+            // image.width, so the canvas coordinate space == the delivered image's pixel size. Region
+            // coordinates are stored in that absolute pixel space, so delivering a smaller image shifts the
+            // canvas coords and breaks region hit-testing (click-select) and alignment. Reducing image size
+            // further needs the regions made resolution-independent (normalize in JS) first.
             return url.Insert(insertAt, "f_auto,q_auto/");
         }
+
+        /// <summary>
+        /// True for the system-managed whole-page anchor type. Such a region is created automatically when
+        /// a task/annotation targets no specific panel, so it is never drawn on the canvas, never offered
+        /// for manual edit, and never displayed as a panel.
+        /// </summary>
+        public static bool IsFullPageRegion(string? typeCode)
+            => string.Equals((typeCode ?? "").Trim(), "FULL_PAGE", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Display text for a task/annotation target region. A FULL_PAGE anchor is not a panel the user
+        /// drew and its number is an internal canvas id, so showing "Panel #12" for it is wrong on both
+        /// counts — it reads as the whole page instead.
+        /// </summary>
+        /// Wording matches the label used when a task/annotation is first created with no selection.
+        public static string FormatRegionTarget(string? typeCode, int panelNumber)
+            => IsFullPageRegion(typeCode) ? "Full page" : $"Panel #{panelNumber}";
 
         /// <summary>
         /// Maps legacy/canvas type values onto the DB type codes (ck_page_region_type_code). FULL_PAGE is
