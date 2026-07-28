@@ -99,7 +99,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .ToListAsync();
         }
 
-        public async Task<(Guid newSeriesId, Guid? coverFileResourceId)> CreateSeriesDraftViaProcAsync(
+        public async Task<(Guid newSeriesId, Guid? coverFileResourceId)> CreateSeriesDraftAsync(
             Guid actorUserId,
             string title,
             string slug,
@@ -204,7 +204,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         /// Uses ADO.NET CommandType.StoredProcedure with strongly-typed SqlParameters.
         /// Maps known custom error numbers to user-safe InvalidOperationException messages.
         /// </summary>
-        public async Task<Guid?> UpdateSeriesDraftViaProcAsync(
+        public async Task<Guid?> UpdateSeriesDraftAsync(
             Guid actorUserId,
             Guid seriesId,
             string title,
@@ -301,7 +301,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         /// The procedure has no OUTPUT parameters; success = no exception.
         /// Maps known custom SQL error numbers to user-safe messages.
         /// </summary>
-        public async Task CancelSeriesDraftViaProcAsync(
+        public async Task CancelSeriesDraftAsync(
             Guid actorUserId,
             Guid seriesId,
             string? reason,

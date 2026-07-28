@@ -1,14 +1,11 @@
-﻿@page "/assistant"
+@page "/assistant"
 
 @inject NavigationManager Nav
 @using Microsoft.AspNetCore.Authorization
-@using Microsoft.AspNetCore.Components.Authorization
-@using System.Security.Claims
 @using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Assistant")]
 @inject IAssistantTaskApiClient AssistantTaskClient
-@inject AuthenticationStateProvider AuthStateProvider
 @inject ISnackbar Snackbar
 
 <AssistantLayout>
@@ -192,7 +189,6 @@
 </AssistantLayout>
 
 @code {
-    private Guid _currentUserId;
     private bool _loading = true;
     private string? _loadError;
     private IReadOnlyList<ChapterPageTaskDto>? _tasks;
@@ -224,17 +220,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-        var user = authState.User;
-        if (user.Identity?.IsAuthenticated == true)
-        {
-            var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (Guid.TryParse(idClaim, out var userId))
-            {
-                _currentUserId = userId;
-            }
-        }
-
         await LoadTasksAsync();
     }
 
@@ -244,7 +229,7 @@
         _loadError = null;
         try
         {
-            _tasks = await AssistantTaskClient.GetAssignedTasksAsync(_currentUserId);
+            _tasks = await AssistantTaskClient.GetAssignedTasksAsync();
             var now = DateTime.UtcNow;
             _assignedCount = _tasks.Count(t => t.StatusCode == "ASSIGNED");
             _dueSoon = _tasks.Where(t => !IsOverdue(t) && t.DueAtUtc.HasValue && t.DueAtUtc.Value >= now && t.DueAtUtc.Value <= now.AddDays(3) && t.StatusCode != "COMPLETED" && t.StatusCode != "CANCELLED").ToList();

@@ -2,35 +2,7 @@ using MangaManagementSystem.Domain.Entities;
 
 namespace MangaManagementSystem.Domain.Interfaces
 {
-    public sealed record UserFileReplacementRequest(
-        Guid UserId,
-        string OriginalFileName,
-        string CloudinaryPublicId,
-        string CloudinarySecureUrl,
-        string ContentType,
-        long FileSizeBytes,
-        string Sha256Hash
-    );
-
-    public sealed record UserFileReplacementResult(
-        Guid NewFileResourceId,
-        Guid? OldFileResourceId,
-        string? OldCloudinaryPublicId,
-        string? OldContentType
-    );
-
-    public sealed record UserSearchCriteria(
-        string? Search,
-        string? StatusCode,
-        string? RoleName,
-        int PageNumber,
-        int PageSize);
-
-    public sealed record PagedUserResult(
-        IReadOnlyList<User> Items,
-        int TotalCount);
-
-    public interface IUserRepository
+public interface IUserRepository
         : IGenericRepository<User>
     {
         Task<User?> GetByEmailAsync(
@@ -49,11 +21,7 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<IReadOnlyList<User>> GetAllWithRoleAsync(
             CancellationToken cancellationToken = default);
 
-        Task<PagedUserResult> SearchAdminUsersAsync(
-            UserSearchCriteria criteria,
-            CancellationToken cancellationToken = default);
-
-        Task<IReadOnlyDictionary<string, int>>
+Task<IReadOnlyDictionary<string, int>>
             GetStatusCountsAsync(
                 CancellationToken cancellationToken = default);
 
@@ -66,13 +34,13 @@ namespace MangaManagementSystem.Domain.Interfaces
         Task<User?> GetByPortfolioFileIdAsync(
             Guid portfolioFileId);
 
-        Task ChangeUserStatusViaProcAsync(
+        Task ChangeUserStatusAsync(
             Guid adminUserId,
             Guid targetUserId,
             string newStatusCode,
             string? reason = null);
 
-        Task<Guid> CreateUserViaProcAsync(
+        Task<Guid> CreateUserAsync(
             string roleName,
             string username,
             string email,
@@ -100,19 +68,12 @@ namespace MangaManagementSystem.Domain.Interfaces
                 string? portfolioSha256Hash = null,
                 Guid? createdByUserId = null);
 
-        Task UpdateDisplayNameViaProcAsync(
+        Task UpdateDisplayNameAsync(
             Guid userId,
-            string displayName);
+            string displayName,
+            CancellationToken cancellationToken = default);
 
-        Task<UserFileReplacementResult>
-            UpdateAvatarFileViaProcAsync(
-                UserFileReplacementRequest request);
-
-        Task<UserFileReplacementResult>
-            UpdatePortfolioFileViaProcAsync(
-                UserFileReplacementRequest request);
-
-        Task ResetPasswordViaProcAsync(
+Task ResetPasswordAsync(
             Guid userId,
             string passwordHash);
     }

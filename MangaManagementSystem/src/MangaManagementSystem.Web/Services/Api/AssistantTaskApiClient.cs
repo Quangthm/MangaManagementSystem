@@ -6,175 +6,263 @@ using System.Text.Json;
 
 namespace MangaManagementSystem.Web.Services.Api
 {
-    public class AssistantTaskApiClient : IAssistantTaskApiClient
+    public class AssistantTaskApiClient
+        : IAssistantTaskApiClient
     {
-        private const string ActorUserIdHeader = "X-Actor-User-Id";
-
         private readonly HttpClient _httpClient;
         private readonly JsonSerializerOptions _jsonOptions;
 
-        public AssistantTaskApiClient(HttpClient httpClient)
+        public AssistantTaskApiClient(
+            HttpClient httpClient)
         {
-            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-            _jsonOptions = new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                PropertyNameCaseInsensitive = true
-            };
+            _httpClient =
+                httpClient
+                ?? throw new ArgumentNullException(
+                    nameof(httpClient));
+
+            _jsonOptions =
+                new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy =
+                        JsonNamingPolicy.CamelCase,
+                    PropertyNameCaseInsensitive = true
+                };
         }
 
-        // === Read Operations ===
-
-        public async Task<IReadOnlyList<ChapterPageTaskDto>> GetAssignedTasksAsync(Guid actorUserId, CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyList<ChapterPageTaskDto>>
+            GetAssignedTasksAsync(
+                CancellationToken cancellationToken = default)
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, "api/assistant/tasks");
-            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+            using var request =
+                new HttpRequestMessage(
+                    HttpMethod.Get,
+                    "api/assistant/tasks");
 
-            var response = await _httpClient.SendAsync(request, cancellationToken);
+            using var response =
+                await _httpClient.SendAsync(
+                    request,
+                    cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
-                var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                var errorContent =
+                    await response.Content
+                        .ReadAsStringAsync(
+                            cancellationToken);
+
                 throw new HttpRequestException(
                     $"API returned {(int)response.StatusCode} ({response.StatusCode}): {errorContent}",
                     null,
                     response.StatusCode);
             }
 
-            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            var result = JsonSerializer.Deserialize<IReadOnlyList<ChapterPageTaskDto>>(responseContent, _jsonOptions);
+            var responseContent =
+                await response.Content
+                    .ReadAsStringAsync(
+                        cancellationToken);
 
-            return result ?? new List<ChapterPageTaskDto>();
+            var result =
+                JsonSerializer.Deserialize<
+                    IReadOnlyList<ChapterPageTaskDto>>(
+                    responseContent,
+                    _jsonOptions);
+
+            return result
+                   ?? new List<ChapterPageTaskDto>();
         }
 
-        public async Task<ChapterPageTaskDto?> GetTaskDetailAsync(Guid actorUserId, Guid taskId, CancellationToken cancellationToken = default)
+        public async Task<ChapterPageTaskDto?>
+            GetTaskDetailAsync(
+                Guid taskId,
+                CancellationToken cancellationToken = default)
         {
             if (taskId == Guid.Empty)
             {
-                throw new ArgumentException("Invalid task ID.", nameof(taskId));
+                throw new ArgumentException(
+                    "Invalid task ID.",
+                    nameof(taskId));
             }
 
-            using var request = new HttpRequestMessage(HttpMethod.Get, $"api/assistant/tasks/{taskId}");
-            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+            using var request =
+                new HttpRequestMessage(
+                    HttpMethod.Get,
+                    $"api/assistant/tasks/{taskId}");
 
-            var response = await _httpClient.SendAsync(request, cancellationToken);
+            using var response =
+                await _httpClient.SendAsync(
+                    request,
+                    cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
-                if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                if (response.StatusCode
+                    == System.Net.HttpStatusCode.NotFound)
                 {
                     return null;
                 }
 
-                var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                var errorContent =
+                    await response.Content
+                        .ReadAsStringAsync(
+                            cancellationToken);
+
                 throw new HttpRequestException(
                     $"API returned {(int)response.StatusCode} ({response.StatusCode}): {errorContent}",
                     null,
                     response.StatusCode);
             }
 
-            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            var result = JsonSerializer.Deserialize<ChapterPageTaskDto>(responseContent, _jsonOptions);
+            var responseContent =
+                await response.Content
+                    .ReadAsStringAsync(
+                        cancellationToken);
 
-            return result;
+            return JsonSerializer.Deserialize<
+                ChapterPageTaskDto>(
+                responseContent,
+                _jsonOptions);
         }
 
-        // === Annotations ===
-
-        public async Task<IReadOnlyList<ChapterPageAnnotationDto>> GetTaskAnnotationsAsync(Guid actorUserId, Guid taskId, CancellationToken cancellationToken = default)
+        public async Task<
+            IReadOnlyList<ChapterPageAnnotationDto>>
+            GetTaskAnnotationsAsync(
+                Guid taskId,
+                CancellationToken cancellationToken = default)
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, $"api/assistant/tasks/{taskId}/annotations");
-            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+            using var request =
+                new HttpRequestMessage(
+                    HttpMethod.Get,
+                    $"api/assistant/tasks/{taskId}/annotations");
 
-            var response = await _httpClient.SendAsync(request, cancellationToken);
+            using var response =
+                await _httpClient.SendAsync(
+                    request,
+                    cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
-                // Non-critical: return empty list on error so the page still works
-                return new List<ChapterPageAnnotationDto>();
+                return new List<
+                    ChapterPageAnnotationDto>();
             }
 
-            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            var result = JsonSerializer.Deserialize<IReadOnlyList<ChapterPageAnnotationDto>>(responseContent, _jsonOptions);
+            var responseContent =
+                await response.Content
+                    .ReadAsStringAsync(
+                        cancellationToken);
 
-            return result ?? new List<ChapterPageAnnotationDto>();
+            var result =
+                JsonSerializer.Deserialize<
+                    IReadOnlyList<
+                        ChapterPageAnnotationDto>>(
+                    responseContent,
+                    _jsonOptions);
+
+            return result
+                   ?? new List<
+                       ChapterPageAnnotationDto>();
         }
 
-        // === Completed Work ===
-
-        public async Task<AssistantCompletedWorkSummaryDto?> GetCompletedWorkAsync(Guid actorUserId, CancellationToken cancellationToken = default)
+        public async Task<
+            AssistantCompletedWorkSummaryDto?>
+            GetCompletedWorkAsync(
+                CancellationToken cancellationToken = default)
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, "api/assistant/completed-work");
-            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
+            using var request =
+                new HttpRequestMessage(
+                    HttpMethod.Get,
+                    "api/assistant/completed-work");
 
-            var response = await _httpClient.SendAsync(request, cancellationToken);
+            using var response =
+                await _httpClient.SendAsync(
+                    request,
+                    cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
-                var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                var errorContent =
+                    await response.Content
+                        .ReadAsStringAsync(
+                            cancellationToken);
+
                 throw new HttpRequestException(
                     $"API returned {(int)response.StatusCode} ({response.StatusCode}): {errorContent}",
                     null,
                     response.StatusCode);
             }
 
-            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            var result = JsonSerializer.Deserialize<AssistantCompletedWorkSummaryDto>(responseContent, _jsonOptions);
+            var responseContent =
+                await response.Content
+                    .ReadAsStringAsync(
+                        cancellationToken);
 
-            return result;
+            return JsonSerializer.Deserialize<
+                AssistantCompletedWorkSummaryDto>(
+                responseContent,
+                _jsonOptions);
         }
 
-        // === Submit Operation ===
-
-        public async Task<AssistantTaskSubmitResultDto?> SubmitTaskWorkAsync(
-            Guid actorUserId,
-            Guid taskId,
-            IBrowserFile file,
-            string? versionNote = null,
-            CancellationToken cancellationToken = default)
+        public async Task<
+            AssistantTaskSubmitResultDto?>
+            SubmitTaskWorkAsync(
+                Guid taskId,
+                IBrowserFile file,
+                string? versionNote = null,
+                CancellationToken cancellationToken = default)
         {
-            if (file == null)
-            {
-                throw new ArgumentNullException(nameof(file));
-            }
+            ArgumentNullException.ThrowIfNull(file);
 
             if (taskId == Guid.Empty)
             {
-                throw new ArgumentException("Invalid task ID.", nameof(taskId));
+                throw new ArgumentException(
+                    "Invalid task ID.",
+                    nameof(taskId));
             }
 
-            using var ms = new MemoryStream();
-            await using (var stream = file.OpenReadStream(10 * 1024 * 1024))
+            using var memoryStream =
+                new MemoryStream();
+
+            await using (
+                var stream =
+                    file.OpenReadStream(
+                        10 * 1024 * 1024))
             {
-                await stream.CopyToAsync(ms, cancellationToken);
+                await stream.CopyToAsync(
+                    memoryStream,
+                    cancellationToken);
             }
+
             return await SubmitTaskWorkAsync(
-                actorUserId,
                 taskId,
-                ms.ToArray(),
+                memoryStream.ToArray(),
                 file.Name,
                 file.ContentType,
                 versionNote,
                 cancellationToken);
         }
 
-        public async Task<AssistantTaskSubmitResultDto?> SubmitTaskWorkAsync(
-            Guid actorUserId,
-            Guid taskId,
-            byte[] fileBytes,
-            string fileName,
-            string contentType,
-            string? versionNote = null,
-            CancellationToken cancellationToken = default)
+        public async Task<
+            AssistantTaskSubmitResultDto?>
+            SubmitTaskWorkAsync(
+                Guid taskId,
+                byte[] fileBytes,
+                string fileName,
+                string contentType,
+                string? versionNote = null,
+                CancellationToken cancellationToken = default)
         {
-            if (fileBytes == null || fileBytes.Length == 0)
+            if (fileBytes == null
+                || fileBytes.Length == 0)
             {
-                throw new ArgumentException("A file is required for submission.", nameof(fileBytes));
+                throw new ArgumentException(
+                    "A file is required for submission.",
+                    nameof(fileBytes));
             }
 
             if (taskId == Guid.Empty)
             {
-                throw new ArgumentException("Invalid task ID.", nameof(taskId));
+                throw new ArgumentException(
+                    "Invalid task ID.",
+                    nameof(taskId));
             }
 
             if (string.IsNullOrWhiteSpace(fileName))
@@ -187,35 +275,67 @@ namespace MangaManagementSystem.Web.Services.Api
                 contentType = "image/png";
             }
 
-            using var content = new MultipartFormDataContent();
-            var fileContent = new ByteArrayContent(fileBytes);
-            fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse(contentType);
-            content.Add(fileContent, "file", fileName);
+            using var content =
+                new MultipartFormDataContent();
 
-            if (!string.IsNullOrWhiteSpace(versionNote))
+            using var fileContent =
+                new ByteArrayContent(fileBytes);
+
+            fileContent.Headers.ContentType =
+                MediaTypeHeaderValue.Parse(
+                    contentType);
+
+            content.Add(
+                fileContent,
+                "file",
+                fileName);
+
+            if (!string.IsNullOrWhiteSpace(
+                    versionNote))
             {
-                content.Add(new StringContent(versionNote, Encoding.UTF8, "text/plain"), "versionNote");
+                content.Add(
+                    new StringContent(
+                        versionNote,
+                        Encoding.UTF8,
+                        "text/plain"),
+                    "versionNote");
             }
 
-            using var request = new HttpRequestMessage(HttpMethod.Post, $"api/assistant/tasks/{taskId}/submit-work");
-            request.Headers.Add(ActorUserIdHeader, actorUserId.ToString());
-            request.Content = content;
+            using var request =
+                new HttpRequestMessage(
+                    HttpMethod.Post,
+                    $"api/assistant/tasks/{taskId}/submit-work")
+                {
+                    Content = content
+                };
 
-            var response = await _httpClient.SendAsync(request, cancellationToken);
+            using var response =
+                await _httpClient.SendAsync(
+                    request,
+                    cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
-                var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                var errorContent =
+                    await response.Content
+                        .ReadAsStringAsync(
+                            cancellationToken);
+
                 throw new HttpRequestException(
                     $"API returned {(int)response.StatusCode} ({response.StatusCode}): {errorContent}",
                     null,
                     response.StatusCode);
             }
 
-            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            var result = JsonSerializer.Deserialize<AssistantTaskSubmitResultDto>(responseContent, _jsonOptions);
+            var responseContent =
+                await response.Content
+                    .ReadAsStringAsync(
+                        cancellationToken);
 
-            return result;
+            return JsonSerializer.Deserialize<
+                AssistantTaskSubmitResultDto>(
+                responseContent,
+                _jsonOptions);
         }
     }
 }

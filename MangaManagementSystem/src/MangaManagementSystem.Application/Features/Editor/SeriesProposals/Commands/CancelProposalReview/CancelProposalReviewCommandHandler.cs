@@ -14,7 +14,7 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Comm
     ///   1. Validate inputs (comments required; markup file required).
     ///   2. Upload the markup file to Cloudinary via IFileStorageService.
     ///   3. Open the shared Unit of Work transaction.
-    ///   4. Call manga.usp_SeriesProposal_CancelEditorialReview through the repository wrapper.
+    ///   4. Persist the review cancellation through the series proposal repository.
     ///   5. Add PROPOSAL_DECISION notifications for active Mangaka contributors.
     ///   6. Save EF notifications and commit the shared transaction.
     ///   7. If the workflow fails, roll back and attempt Cloudinary cleanup.

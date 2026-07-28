@@ -1,12 +1,9 @@
-﻿@page "/assistant/tasks"
+@page "/assistant/tasks"
 @using Microsoft.AspNetCore.Authorization
-@using Microsoft.AspNetCore.Components.Authorization
-@using System.Security.Claims
 @using MangaManagementSystem.Application.DTOs.Manga
 @using MangaManagementSystem.Web.Services.Api
 @attribute [Authorize(Roles = "Assistant")]
 @inject NavigationManager Nav
-@inject AuthenticationStateProvider AuthStateProvider
 @inject IAssistantTaskApiClient AssistantTaskClient
 
 <AssistantLayout>
@@ -138,7 +135,6 @@
 </AssistantLayout>
 
 @code {
-    private Guid _currentUserId;
     private bool _loading = true;
     private string? _error;
     private IReadOnlyList<ChapterPageTaskDto>? _tasks;
@@ -179,17 +175,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-        var user = authState.User;
-        if (user.Identity?.IsAuthenticated == true)
-        {
-            var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (Guid.TryParse(idClaim, out var userId))
-            {
-                _currentUserId = userId;
-            }
-        }
-
         await LoadTasksAsync();
     }
 
@@ -199,7 +184,7 @@
         _error = null;
         try
         {
-            _tasks = await AssistantTaskClient.GetAssignedTasksAsync(_currentUserId);
+            _tasks = await AssistantTaskClient.GetAssignedTasksAsync();
 
             var now = DateTime.UtcNow;
             _assignedCount = _tasks.Count(t => t.StatusCode == "ASSIGNED");

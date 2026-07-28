@@ -113,7 +113,7 @@ else
     {
         if (user.IsInRole("Assistant"))
         {
-            return await AssistantTaskApi.GetTaskDetailAsync(userId, TaskId);
+            return await AssistantTaskApi.GetTaskDetailAsync(TaskId);
         }
 
         return await MangakaTaskApi.GetTaskDetailAsync(TaskId);

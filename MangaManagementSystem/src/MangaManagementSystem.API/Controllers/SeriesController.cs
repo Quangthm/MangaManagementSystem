@@ -1,8 +1,8 @@
 using System;
-using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.API.Contracts;
+using MangaManagementSystem.API.Security;
 using MangaManagementSystem.Application.Common.Security;
 using MangaManagementSystem.Application.DTOs.Manga;
 using MangaManagementSystem.Application.Features.Series.Lifecycle.Commands.CompleteSeries;
@@ -24,18 +24,22 @@ namespace MangaManagementSystem.API.Controllers
     /// Serves the /series/{slug} detail page and the workspace-entry access check.
     /// Controllers only read the request, resolve the actor, call one Application use
     /// case via IMediator, and map known failures to safe HTTP responses.
-    /// Every actor-dependent endpoint takes its identity from the authenticated JWT.
     /// </summary>
     [ApiController]
     [Route("api/series")]
     public class SeriesController : ControllerBase
     {
         private readonly IMediator _mediator;
+        private readonly IAuthenticatedActorResolver _actorResolver;
         private readonly ILogger<SeriesController> _logger;
 
-        public SeriesController(IMediator mediator, ILogger<SeriesController> logger)
+        public SeriesController(
+            IMediator mediator,
+            IAuthenticatedActorResolver actorResolver,
+            ILogger<SeriesController> logger)
         {
             _mediator = mediator;
+            _actorResolver = actorResolver;
             _logger = logger;
         }
 
@@ -93,13 +97,15 @@ namespace MangaManagementSystem.API.Controllers
                 return BadRequest(new ApiErrorResponse("A series slug is required."));
             }
 
-            // The actor comes from the JWT, never from the request. This endpoint decides whether the
-            // caller may enter a series workspace, so taking the identity from a client-supplied header
-            // let any caller ask the question as any user. The role is not needed by the query.
-            if (!TryResolveJwtActor(out Guid actorUserId, out _))
+            var actor =
+                await _actorResolver.ResolveActiveUserAsync(User);
+
+            if (!actor.Succeeded)
             {
-                return JwtActorRequired();
+                return MapActorFailure(actor);
             }
+
+            var actorUserId = actor.ActorUserId;
 
             var query = new GetSeriesWorkspaceEntryQuery(slug, actorUserId);
 
@@ -133,12 +139,16 @@ namespace MangaManagementSystem.API.Controllers
             Guid seriesId,
             CancellationToken cancellationToken = default)
         {
-            if (!TryResolveJwtActor(
-                    out Guid actorUserId,
-                    out string actorRoleName))
+            var actor =
+                await _actorResolver.ResolveActiveUserAsync(User);
+
+            if (!actor.Succeeded)
             {
-                return JwtActorRequired();
+                return MapActorFailure(actor);
             }
+
+            var actorUserId = actor.ActorUserId;
+            var actorRoleName = actor.ActorRoleName;
 
             return await ExecuteLifecycleRequestAsync(
                 seriesId,
@@ -161,12 +171,16 @@ namespace MangaManagementSystem.API.Controllers
             Guid seriesId,
             CancellationToken cancellationToken = default)
         {
-            if (!TryResolveJwtActor(
-                    out Guid actorUserId,
-                    out string actorRoleName))
+            var actor =
+                await _actorResolver.ResolveActiveUserAsync(User);
+
+            if (!actor.Succeeded)
             {
-                return JwtActorRequired();
+                return MapActorFailure(actor);
             }
+
+            var actorUserId = actor.ActorUserId;
+            var actorRoleName = actor.ActorRoleName;
 
             return await ExecuteLifecycleRequestAsync(
                 seriesId,
@@ -190,12 +204,16 @@ namespace MangaManagementSystem.API.Controllers
             [FromBody] SetSeriesHiatusRequest? request,
             CancellationToken cancellationToken = default)
         {
-            if (!TryResolveJwtActor(
-                    out Guid actorUserId,
-                    out string actorRoleName))
+            var actor =
+                await _actorResolver.ResolveActiveUserAsync(User);
+
+            if (!actor.Succeeded)
             {
-                return JwtActorRequired();
+                return MapActorFailure(actor);
             }
+
+            var actorUserId = actor.ActorUserId;
+            var actorRoleName = actor.ActorRoleName;
 
             if (request is null)
             {
@@ -238,12 +256,16 @@ namespace MangaManagementSystem.API.Controllers
             Guid seriesId,
             CancellationToken cancellationToken = default)
         {
-            if (!TryResolveJwtActor(
-                    out Guid actorUserId,
-                    out string actorRoleName))
+            var actor =
+                await _actorResolver.ResolveActiveUserAsync(User);
+
+            if (!actor.Succeeded)
             {
-                return JwtActorRequired();
+                return MapActorFailure(actor);
             }
+
+            var actorUserId = actor.ActorUserId;
+            var actorRoleName = actor.ActorRoleName;
 
             return await ExecuteLifecycleRequestAsync(
                 seriesId,
@@ -266,12 +288,16 @@ namespace MangaManagementSystem.API.Controllers
             Guid seriesId,
             CancellationToken cancellationToken = default)
         {
-            if (!TryResolveJwtActor(
-                    out Guid actorUserId,
-                    out string actorRoleName))
+            var actor =
+                await _actorResolver.ResolveActiveUserAsync(User);
+
+            if (!actor.Succeeded)
             {
-                return JwtActorRequired();
+                return MapActorFailure(actor);
             }
+
+            var actorUserId = actor.ActorUserId;
+            var actorRoleName = actor.ActorRoleName;
 
             return await ExecuteLifecycleRequestAsync(
                 seriesId,
@@ -324,44 +350,30 @@ namespace MangaManagementSystem.API.Controllers
             }
         }
 
-        private IActionResult JwtActorRequired()
+        private IActionResult MapActorFailure(
+            AuthenticatedActorResult result)
         {
-            return Unauthorized(new ApiErrorResponse(
-                "Authenticated actor information is missing or invalid."));
+            var response = new ApiErrorResponse(
+                result.FailureKind switch
+                {
+                    AuthenticatedActorFailureKind.UserNotFound =>
+                        "Authenticated actor account was not found.",
+
+                    AuthenticatedActorFailureKind.InvalidIdentity =>
+                        "Authenticated actor information is invalid.",
+
+                    _ =>
+                        "The current account is not active."
+                });
+
+            return result.FailureKind
+                is AuthenticatedActorFailureKind.InvalidIdentity
+                or AuthenticatedActorFailureKind.UserNotFound
+                    ? Unauthorized(response)
+                    : StatusCode(
+                        StatusCodes.Status403Forbidden,
+                        response);
         }
 
-        private bool TryResolveJwtActor(
-            out Guid actorUserId,
-            out string actorRoleName)
-        {
-            actorUserId = Guid.Empty;
-            actorRoleName = string.Empty;
-
-            if (User.Identity?.IsAuthenticated != true)
-            {
-                return false;
-            }
-
-            string? actorUserIdValue =
-                User.FindFirstValue(ClaimTypes.NameIdentifier)
-                ?? User.FindFirstValue("sub")
-                ?? User.FindFirstValue("user_id")
-                ?? User.FindFirstValue("UserId");
-
-            string? resolvedActorRoleName =
-                User.FindFirstValue(ClaimTypes.Role)
-                ?? User.FindFirstValue("role");
-
-            if (!Guid.TryParse(actorUserIdValue, out actorUserId)
-                || actorUserId == Guid.Empty
-                || string.IsNullOrWhiteSpace(resolvedActorRoleName))
-            {
-                actorUserId = Guid.Empty;
-                return false;
-            }
-
-            actorRoleName = resolvedActorRoleName;
-            return true;
-        }
     }
 }

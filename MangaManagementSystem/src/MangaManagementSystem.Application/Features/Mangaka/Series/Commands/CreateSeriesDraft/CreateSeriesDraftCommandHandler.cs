@@ -184,7 +184,7 @@ namespace MangaManagementSystem.Application.Features.Mangaka.Series.Commands.Cre
             try
             {
                 (newSeriesId, coverFileResourceId) =
-                    await _seriesRepository.CreateSeriesDraftViaProcAsync(
+                    await _seriesRepository.CreateSeriesDraftAsync(
                         actorUserId:               command.ActorUserId,
                         title:                     title,
                         slug:                      slug,

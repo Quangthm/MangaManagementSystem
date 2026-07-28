@@ -17,16 +17,13 @@ namespace MangaManagementSystem.Web.Services.Api
             _logger = logger;
         }
 
-        public async Task SendOtpAsync(
-            Guid userId)
+        public async Task SendOtpAsync()
         {
+
             using var response =
-                await _httpClient.PostAsJsonAsync(
+                await _httpClient.PostAsync(
                     "api/profile/password/otp",
-                    new
-                    {
-                        UserId = userId
-                    });
+                    content: null);
 
             await EnsureSuccessAsync(
                 response,
@@ -34,16 +31,15 @@ namespace MangaManagementSystem.Web.Services.Api
         }
 
         public async Task ResetPasswordAsync(
-            Guid userId,
             string otpCode,
             string newPassword)
         {
+
             using var response =
                 await _httpClient.PostAsJsonAsync(
                     "api/profile/password/reset",
                     new
                     {
-                        UserId = userId,
                         OtpCode = otpCode,
                         NewPassword = newPassword
                     });

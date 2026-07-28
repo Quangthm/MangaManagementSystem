@@ -14,7 +14,7 @@ namespace MangaManagementSystem.Application.Features.Editor.SeriesProposals.Comm
     ///   1. Validate inputs (comments optional; markup optional).
     ///   2. If a markup file is supplied, upload it to Cloudinary via IFileStorageService.
     ///   3. Open the shared Unit of Work transaction.
-    ///   4. Call manga.usp_SeriesProposal_PassToBoard through the repository wrapper.
+    ///   4. Persist the board handoff through the series proposal repository.
     ///   5. Add PROPOSAL_DECISION notifications for active Mangaka contributors.
     ///   6. Save EF notifications and commit the shared transaction.
     ///   7. If the workflow fails after a Cloudinary upload, roll back and attempt cleanup.

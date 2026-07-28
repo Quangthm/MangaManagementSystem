@@ -1042,7 +1042,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             if (IsAssistantWorkspace)
             {
                 _assistantWorkspaceTask = task;
-                _assistantWorkspaceTaskAnnotations = await AssistantTaskApi.GetTaskAnnotationsAsync(_currentUserId.Value, parsedTaskId);
+                _assistantWorkspaceTaskAnnotations = await AssistantTaskApi.GetTaskAnnotationsAsync(parsedTaskId);
             }
         }
         catch (Exception ex)
@@ -1055,7 +1055,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     {
         if (IsAssistantWorkspace)
         {
-            return await AssistantTaskApi.GetTaskDetailAsync(actorUserId, parsedTaskId);
+            return await AssistantTaskApi.GetTaskDetailAsync(parsedTaskId);
         }
 
         return await MangakaTaskApi.GetTaskDetailAsync(parsedTaskId);
@@ -1982,7 +1982,6 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             if (_assistantSelectedFile is not null)
             {
                 result = await AssistantTaskApi.SubmitTaskWorkAsync(
-                    _currentUserId.Value,
                     _assistantWorkspaceTask.ChapterPageTaskId,
                     _assistantSelectedFile,
                     _assistantSubmissionNotes);
@@ -2005,7 +2004,6 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
                 var fileName = BuildAssistantSubmissionFileName();
                 result = await AssistantTaskApi.SubmitTaskWorkAsync(
-                    _currentUserId.Value,
                     _assistantWorkspaceTask.ChapterPageTaskId,
                     fileBytes,
                     fileName,

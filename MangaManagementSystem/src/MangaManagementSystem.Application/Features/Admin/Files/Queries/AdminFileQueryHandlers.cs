@@ -1,6 +1,6 @@
-﻿using MangaManagementSystem.Application.Common;
+﻿using MangaManagementSystem.Application.Interfaces;
+using MangaManagementSystem.Application.Common;
 using MangaManagementSystem.Application.DTOs.Admin;
-using MangaManagementSystem.Domain.Interfaces;
 using MediatR;
 
 namespace MangaManagementSystem.Application.Features.Admin.Files.Queries
@@ -224,11 +224,11 @@ namespace MangaManagementSystem.Application.Features.Admin.Files.Queries
             SearchAdminFilesQuery,
             AdminFilePageDto>
     {
-        private readonly IFileResourceRepository
+        private readonly IAdminFileResourceRepository
             _fileResourceRepository;
 
         public SearchAdminFilesQueryHandler(
-            IFileResourceRepository fileResourceRepository)
+            IAdminFileResourceRepository fileResourceRepository)
         {
             _fileResourceRepository =
                 fileResourceRepository;
@@ -302,11 +302,11 @@ namespace MangaManagementSystem.Application.Features.Admin.Files.Queries
             GetAdminFileDetailQuery,
             AdminFileDetailDto?>
     {
-        private readonly IFileResourceRepository
+        private readonly IAdminFileResourceRepository
             _fileResourceRepository;
 
         public GetAdminFileDetailQueryHandler(
-            IFileResourceRepository fileResourceRepository)
+            IAdminFileResourceRepository fileResourceRepository)
         {
             _fileResourceRepository =
                 fileResourceRepository;
@@ -341,11 +341,11 @@ namespace MangaManagementSystem.Application.Features.Admin.Files.Queries
             GetAdminFileContentSourceQuery,
             AdminFileContentSourceDto?>
     {
-        private readonly IFileResourceRepository
+        private readonly IAdminFileResourceRepository
             _fileResourceRepository;
 
         public GetAdminFileContentSourceQueryHandler(
-            IFileResourceRepository fileResourceRepository)
+            IAdminFileResourceRepository fileResourceRepository)
         {
             _fileResourceRepository =
                 fileResourceRepository;

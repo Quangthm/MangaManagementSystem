@@ -58,7 +58,20 @@ namespace MangaManagementSystem.Infrastructure
             services.AddScoped<ISeriesRepository, SeriesRepository>();
             services.AddScoped<IChapterRepository, ChapterRepository>();
             services.AddScoped<IMangakaChapterRepository, MangakaChapterRepository>();
-            services.AddScoped<IUserRepository, UserRepository>();
+            services.AddScoped<UserRepository>();
+
+            services.AddScoped<IUserRepository>(
+                serviceProvider =>
+                    serviceProvider.GetRequiredService<UserRepository>());
+
+            services.AddScoped<
+                MangaManagementSystem.Application.Interfaces.IAdminUserQueryRepository>(
+                serviceProvider =>
+                    serviceProvider.GetRequiredService<UserRepository>());
+            services.AddScoped<
+                MangaManagementSystem.Application.Interfaces.IUserProfileFileRepository>(
+                serviceProvider =>
+                    serviceProvider.GetRequiredService<UserRepository>());
             services.AddScoped<IChapterPageTaskRepository, ChapterPageTaskRepository>();
             services.AddScoped<IChapterPageAnnotationRepository, ChapterPageAnnotationRepository>();
             services.AddScoped<IWorkspaceResourceAuthorizationService, WorkspaceResourceAuthorizationService>();
@@ -72,10 +85,26 @@ namespace MangaManagementSystem.Infrastructure
             services.AddScoped<ISeriesContributorManagementRepository, SeriesContributorRepository>();
             services.AddScoped<IQuickSelectRepository, QuickSelectRepository>();
             // Unit of Work
-            services.AddScoped<IFileResourceRepository, FileResourceRepository>();
+            services.AddScoped<FileResourceRepository>();
+            services.AddScoped<IFileResourceRepository>(
+                serviceProvider =>
+                    serviceProvider
+                        .GetRequiredService<FileResourceRepository>());
+            services.AddScoped<IAdminFileResourceRepository>(
+                serviceProvider =>
+                    serviceProvider
+                        .GetRequiredService<FileResourceRepository>());
             services.AddScoped<INotificationRepository, NotificationRepository>();
             services.AddScoped<IPasswordResetTokenService, PasswordResetTokenService>();
-            services.AddScoped<IAuditEventRepository, AuditEventRepository>();
+            services.AddScoped<AuditEventRepository>();
+            services.AddScoped<IAuditEventRepository>(
+                serviceProvider =>
+                    serviceProvider
+                        .GetRequiredService<AuditEventRepository>());
+            services.AddScoped<IAdminAuditQueryRepository>(
+                serviceProvider =>
+                    serviceProvider
+                        .GetRequiredService<AuditEventRepository>());
             services.AddScoped<IUnitOfWork, UnitOfWork>();
 
             // File storage (application interface implemented in Infrastructure)

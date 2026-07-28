@@ -31,6 +31,8 @@ namespace MangaManagementSystem.Application.Services
         };
 
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IUserProfileFileRepository
+            _userProfileFileRepository;
         private readonly IPasswordHasher _passwordHasher;
         private readonly IEmailService _emailService;
         private readonly INotificationService _notificationService;
@@ -40,6 +42,7 @@ namespace MangaManagementSystem.Application.Services
 
         public UserService(
             IUnitOfWork unitOfWork,
+            IUserProfileFileRepository userProfileFileRepository,
             IPasswordHasher passwordHasher,
             IEmailService emailService,
             INotificationService notificationService,
@@ -48,6 +51,8 @@ namespace MangaManagementSystem.Application.Services
             ILogger<UserService> logger)
         {
             _unitOfWork = unitOfWork;
+            _userProfileFileRepository =
+                userProfileFileRepository;
             _passwordHasher = passwordHasher;
             _emailService = emailService;
             _notificationService = notificationService;
@@ -65,7 +70,7 @@ namespace MangaManagementSystem.Application.Services
             var email = dto.Email.Trim().ToLowerInvariant();
             var passwordHash = _passwordHasher.HashPassword(dto.Password);
 
-            var newUserId = await _unitOfWork.Users.CreateUserViaProcAsync(
+            var newUserId = await _unitOfWork.Users.CreateUserAsync(
                 roleName,
                 username,
                 email,
@@ -161,7 +166,7 @@ namespace MangaManagementSystem.Application.Services
 
             try
             {
-                await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
+                await _unitOfWork.Users.ChangeUserStatusAsync(
                     adminUserId,
                     userId,
                     StatusActive,
@@ -221,7 +226,7 @@ namespace MangaManagementSystem.Application.Services
                     reason,
                     "Reject reason");
 
-            await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
+            await _unitOfWork.Users.ChangeUserStatusAsync(
                 adminUserId,
                 userId,
                 StatusRejected,
@@ -241,7 +246,7 @@ namespace MangaManagementSystem.Application.Services
                     $"User {userId} cannot be activated because their status is '{user.StatusCode}', not '{StatusDisabled}'.");
             }
 
-            await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
+            await _unitOfWork.Users.ChangeUserStatusAsync(
                 adminUserId,
                 userId,
                 StatusActive,
@@ -260,7 +265,7 @@ namespace MangaManagementSystem.Application.Services
                     reason,
                     "Disable reason");
 
-            await _unitOfWork.Users.ChangeUserStatusViaProcAsync(
+            await _unitOfWork.Users.ChangeUserStatusAsync(
                 adminUserId,
                 userId,
                 StatusDisabled,
@@ -372,7 +377,7 @@ namespace MangaManagementSystem.Application.Services
             }
 
             await _unitOfWork.Users
-                .UpdateDisplayNameViaProcAsync(
+                .UpdateDisplayNameAsync(
                     userId,
                     trimmedDisplayName);
 
@@ -407,8 +412,8 @@ namespace MangaManagementSystem.Application.Services
                         upload.Sha256Hash!);
 
                 replacementResult =
-                    await _unitOfWork.Users
-                        .UpdateAvatarFileViaProcAsync(request);
+                    await _userProfileFileRepository
+                        .ReplaceAvatarFileAsync(request);
             }
             catch
             {
@@ -462,8 +467,8 @@ namespace MangaManagementSystem.Application.Services
                         upload.Sha256Hash!);
 
                 replacementResult =
-                    await _unitOfWork.Users
-                        .UpdatePortfolioFileViaProcAsync(request);
+                    await _userProfileFileRepository
+                        .ReplacePortfolioFileAsync(request);
             }
             catch
             {
@@ -513,7 +518,7 @@ namespace MangaManagementSystem.Application.Services
             var passwordHash =
                 _passwordHasher.HashPassword(newPassword);
 
-            await _unitOfWork.Users.ResetPasswordViaProcAsync(
+            await _unitOfWork.Users.ResetPasswordAsync(
                 userId,
                 passwordHash);
         }

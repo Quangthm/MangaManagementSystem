@@ -14,7 +14,7 @@ namespace MangaManagementSystem.Domain.Interfaces
         /// <summary>
         /// Returns all proposals for the given series IDs, ordered by ProposalVersionNo desc then
         /// SubmittedAtUtc desc. Callers group in memory to resolve the latest per series. This
-        /// avoids thread-unsafe parallel EF queries on the same DbContext.
+        /// avoids parallel data access during batch resolution.
         /// Returns an empty list when seriesIds is null or empty.
         /// </summary>
         Task<IReadOnlyList<SeriesProposal>> GetLatestForSeriesBatchAsync(
@@ -25,42 +25,42 @@ namespace MangaManagementSystem.Domain.Interfaces
         /// Returns all proposals for series where the specified actor is an active Mangaka
         /// contributor. Scoped by SeriesContributor membership (EndDate IS NULL, User ACTIVE,
         /// Role Mangaka). Eagerly loads Series, SubmittedByUser, ReviewedByUser, ProposalFile,
-        /// and MarkupFile. Read-only EF query; no stored procedure required.
+        /// and MarkupFile. Read-only query.
         /// </summary>
         Task<IReadOnlyList<SeriesProposal>> GetMySeriesProposalsAsync(Guid actorUserId, CancellationToken ct = default);
 
         /// <summary>
         /// Returns a single proposal by ID, scoped to the specified actor's active Mangaka
         /// contributor memberships. Returns null when not found or not authorized.
-        /// Same eager includes as GetMySeriesProposalsAsync. Read-only EF query.
+        /// Same eager includes as GetMySeriesProposalsAsync. Read-only query.
         /// </summary>
         Task<SeriesProposal?> GetMySeriesProposalDetailAsync(Guid actorUserId, Guid seriesProposalId, CancellationToken ct = default);
 
         /// <summary>
         /// Returns true when the specified user is an active Tantou Editor contributor of the
         /// given series (SeriesContributor.EndDate IS NULL, User ACTIVE, Role 'Tantou Editor').
-        /// This mirrors the membership predicate used by the editorial-review stored procedures
-        /// and represents the "claimed" state for editorial review. Read-only EF query.
+        /// This mirrors the membership predicate used by editorial review workflows
+        /// and represents the "claimed" state for editorial review. Read-only query.
         /// </summary>
         Task<bool> IsActiveTantouEditorContributorAsync(Guid seriesId, Guid userId, CancellationToken ct = default);
 
         /// <summary>
         /// Returns all active Tantou Editor contributors for the given series.
         /// Active = SeriesContributor.EndDate IS NULL, User ACTIVE, Role 'Tantou Editor'.
-        /// Read-only EF query.
+        /// Read-only query.
         /// </summary>
         Task<IReadOnlyList<ActiveTantouEditorInfo>> GetActiveTantouEditorContributorsAsync(
             Guid seriesId, CancellationToken ct = default);
 
         /// <summary>
-        /// Submits a series proposal for editorial review via <c>manga.usp_SeriesProposal_Submit</c>.
-        /// The stored procedure: validates the series is PROPOSAL_DRAFT, validates the submitter is
-        /// an active Mangaka contributor, creates the SERIES_PROPOSAL FileResource, creates the
-        /// SeriesProposal row, transitions Series to UNDER_EDITORIAL_REVIEW, and writes the audit event.
-        /// The caller must NOT pass title/synopsis/genre — the procedure snapshots them from Series.
-        /// All file metadata parameters are required (no nulls accepted by the procedure).
+        /// Submits a series proposal for editorial review.
+        /// Validates that the series is a proposal draft and that the submitter
+        /// is an active Mangaka contributor.
+        /// Creates the proposal file and proposal version, transitions the series
+        /// to editorial review, and records the corresponding audit event.
+        /// Title, synopsis, genres, and tags are snapshotted from the series.
         /// </summary>
-        Task<(Guid SeriesProposalId, short ProposalVersionNo)> SubmitSeriesProposalViaProcAsync(
+        Task<(Guid SeriesProposalId, short ProposalVersionNo)> SubmitSeriesProposalAsync(
             Guid seriesId,
             Guid submittedByUserId,
             string originalFileName,

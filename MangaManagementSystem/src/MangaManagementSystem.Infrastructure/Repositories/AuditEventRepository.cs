@@ -1,3 +1,4 @@
+using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
 using MangaManagementSystem.Infrastructure.Persistence;
@@ -6,7 +7,8 @@ using Microsoft.EntityFrameworkCore;
 namespace MangaManagementSystem.Infrastructure.Repositories
 {
     public sealed class AuditEventRepository
-        : IAuditEventRepository
+        : IAuditEventRepository,
+          IAdminAuditQueryRepository
     {
         private readonly ApplicationDbContext _context;
 

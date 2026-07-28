@@ -1543,7 +1543,7 @@
 
         await RunBusyAsync(async () =>
         {
-            await ProfilePasswordApiClient.SendOtpAsync(_currentUserId);
+            await ProfilePasswordApiClient.SendOtpAsync();
 
             _otpSentForPassword = true;
             _otpCodePassword = string.Empty;
@@ -1573,7 +1573,6 @@
         await RunBusyAsync(async () =>
         {
             await ProfilePasswordApiClient.ResetPasswordAsync(
-                _currentUserId,
                 _otpCodePassword,
                 _newPassword);
 
