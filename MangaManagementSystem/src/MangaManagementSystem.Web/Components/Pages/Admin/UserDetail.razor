@@ -10,6 +10,25 @@
 
 <PageTitle>User Detail - MangaFlow</PageTitle>
 
+<style>
+    .admin-user-reason-dialog-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 2000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        background: rgba(0, 0, 0, 0.45);
+    }
+
+    .admin-user-reason-dialog-card {
+        width: min(520px, 100%);
+        max-height: calc(100vh - 32px);
+        overflow-y: auto;
+    }
+</style>
+
 <AdminLayout>
     <div class="mf-page">
         <MudButton Variant="Variant.Text"
@@ -261,13 +280,17 @@
 
             @if (_showReasonDialog)
             {
-                <MudDialog @bind-Visible="_showReasonDialog">
-                    <DialogContent>
-                        <MudText Typo="Typo.h6" Class="font-weight-bold">
+                <div class="admin-user-reason-dialog-backdrop"
+                     role="presentation">
+                    <MudPaper Class="admin-user-reason-dialog-card pa-5"
+                              Elevation="12">
+                        <MudText Typo="Typo.h6"
+                                 Class="font-weight-bold">
                             @(_reasonAction == ReasonAction.Reject
                                 ? "Reject Account"
                                 : "Disable Account")
                         </MudText>
+
                         <MudTextField T="string"
                                       @bind-Value="_reason"
                                       Label="@(_reasonAction == ReasonAction.Reject ? "Reject reason" : "Disable reason")"
@@ -276,21 +299,33 @@
                                       MaxLength="500"
                                       Counter="500"
                                       Required="true"
+                                      Immediate="true"
                                       Class="mt-4" />
-                        <MudAlert Severity="Severity.Warning" Class="mt-3">
+
+                        <MudAlert Severity="Severity.Warning"
+                                  Class="mt-3">
                             The reason is required and will appear in the audit history.
                         </MudAlert>
-                    </DialogContent>
-                    <DialogActions>
-                        <MudButton Variant="Variant.Text" OnClick="CloseReasonDialog">Cancel</MudButton>
-                        <MudButton Variant="Variant.Filled"
-                                   Color="Color.Error"
-                                   Disabled="@string.IsNullOrWhiteSpace(_reason)"
-                                   OnClick="SubmitReasonActionAsync">
-                            Confirm
-                        </MudButton>
-                    </DialogActions>
-                </MudDialog>
+
+                        <MudStack Row="true"
+                                  Justify="Justify.FlexEnd"
+                                  Spacing="2"
+                                  Class="mt-4">
+                            <MudButton Variant="Variant.Text"
+                                       Disabled="@_isActionBusy"
+                                       OnClick="@CloseReasonDialog">
+                                Cancel
+                            </MudButton>
+
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Error"
+                                       Disabled="@(_isActionBusy || string.IsNullOrWhiteSpace(_reason))"
+                                       OnClick="@SubmitReasonActionAsync">
+                                Confirm
+                            </MudButton>
+                        </MudStack>
+                    </MudPaper>
+                </div>
             }
         }
     </div>
