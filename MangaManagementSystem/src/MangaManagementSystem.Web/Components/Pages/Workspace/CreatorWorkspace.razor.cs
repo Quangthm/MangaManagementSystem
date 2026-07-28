@@ -122,13 +122,24 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         try
         {
             var comments = string.IsNullOrWhiteSpace(_reviewComment) ? null : _reviewComment.Trim();
-            var res = await EditorReviewApi.SubmitReviewDecisionAsync(
-                chap.ChapterId,
-                new MangaManagementSystem.Application.DTOs.Editor.SubmitChapterEditorialReviewRequest(_reviewDecision, comments));
+            
+            MangaManagementSystem.Application.DTOs.Editor.SubmitChapterEditorialReviewResponse res;
+            if (_markupFile != null)
+            {
+                res = await EditorReviewApi.SubmitReviewDecisionWithMarkupAsync(
+                    chap.ChapterId, _reviewDecision, comments, _markupFile);
+            }
+            else
+            {
+                res = await EditorReviewApi.SubmitReviewDecisionAsync(
+                    chap.ChapterId,
+                    new MangaManagementSystem.Application.DTOs.Editor.SubmitChapterEditorialReviewRequest(_reviewDecision, comments));
+            }
 
             chap.StatusCode = res.StatusCode;
             _showReviewDialog = false;
             _reviewComment = "";
+            _markupFile = null;
             Snackbar.Add($"Review submitted ({res.DecisionCode}). Chapter is now {res.StatusCode}.", Severity.Success);
         }
         catch (Exception ex)
@@ -1307,7 +1318,10 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             ActiveTasks = new();
             ActiveAnnotations = new();
             SelectedRegions.Clear();
-            Snackbar.Add("Please upload an image to begin.", Severity.Info);
+            if (CanManageContent)
+            {
+                Snackbar.Add("Please upload an image to begin.", Severity.Info);
+            }
         }
         // Sync split view pane when chapter changes. Updating the data alone does not
         // re-render the right canvas (it is JS-rendered), so drive it through
@@ -3056,9 +3070,41 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
     public async ValueTask DisposeAsync()
     {
+        // Revert global Snackbar settings when leaving Workspace
+        Snackbar.Configuration.PositionClass = Defaults.Classes.Position.TopRight;
+        Snackbar.Configuration.NewestOnTop = false;
+        Snackbar.Configuration.HideTransitionDuration = 500;
+        Snackbar.Configuration.ShowTransitionDuration = 500;
+        
         _objRef?.Dispose();
         await ValueTask.CompletedTask;
     }
 
+    // ----------------------------------------------------------------------
+    // EDITOR MARKUP UPLOAD
+    // ----------------------------------------------------------------------
+    private Microsoft.AspNetCore.Components.Forms.IBrowserFile? _markupFile;
+    private void OnMarkupFileChanged(Microsoft.AspNetCore.Components.Forms.IBrowserFile file)
+    {
+        _markupFile = file;
+    }
+
+    // ----------------------------------------------------------------------
+    // ANNOTATION DESCRIPTION DIALOG
+    // ----------------------------------------------------------------------
+    private bool _showAnnotationDescriptionDialog;
+    private AnnotationModel? _selectedAnnotationForDescription;
+    
+    private void OpenAnnotationDescriptionDialog(AnnotationModel ann)
+    {
+        _selectedAnnotationForDescription = ann;
+        _showAnnotationDescriptionDialog = true;
+    }
+    
+    private void CloseAnnotationDescriptionDialog()
+    {
+        _showAnnotationDescriptionDialog = false;
+        _selectedAnnotationForDescription = null;
+    }
     }
 }

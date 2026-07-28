@@ -387,7 +387,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 "CANCELLED" =>
                     (
                         "Chapter Cancelled",
-                        "Your chapter was cancelled during editorial review. Open chapter management to review the editor feedback."
+                        "Your chapter was cancelled. Open chapter management to review feedback."
                     ),
                 _ =>
                     throw new InvalidOperationException(
