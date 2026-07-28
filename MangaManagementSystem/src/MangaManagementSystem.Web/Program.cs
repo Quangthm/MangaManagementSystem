@@ -910,8 +910,8 @@ app.MapPost(
                 HttpContext context,
                 UserDto user,
                 string roleName,
-                string? accessToken = null,
-                DateTime? expiresAtUtc = null)
+                string? accessToken,
+                DateTime expiresAtUtc)
         {
             var claims =
                 new List<Claim>
@@ -949,13 +949,10 @@ app.MapPost(
                 new ClaimsPrincipal(identity);
 
             var cookieExpiresAt =
-                expiresAtUtc.HasValue
-                    ? new DateTimeOffset(
-                        DateTime.SpecifyKind(
-                            expiresAtUtc.Value,
-                            DateTimeKind.Utc))
-                    : DateTimeOffset.UtcNow
-                        .AddDays(14);
+                new DateTimeOffset(
+                    DateTime.SpecifyKind(
+                        expiresAtUtc,
+                        DateTimeKind.Utc));
 
             await context.SignInAsync(
                 CookieAuthenticationDefaults

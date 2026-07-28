@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Security.Claims;
+using System.Text;
 using MangaManagementSystem.Application;
 using MangaManagementSystem.API.Security;
 using MangaManagementSystem.Infrastructure;
@@ -51,6 +52,71 @@ namespace MangaManagementSystem.API
                             Encoding.UTF8.GetBytes(jwtKey)),
                         ClockSkew = TimeSpan.FromMinutes(1)
                     };
+
+                    options.Events =
+                        new JwtBearerEvents
+                        {
+                            OnTokenValidated =
+                                async context =>
+                                {
+                                    var principal =
+                                        context.Principal;
+
+                                    if (principal is null)
+                                    {
+                                        context.Fail(
+                                            "The authenticated identity is missing.");
+
+                                        return;
+                                    }
+
+                                    var actorResolver =
+                                        context.HttpContext
+                                            .RequestServices
+                                            .GetRequiredService<
+                                                IAuthenticatedActorResolver>();
+
+                                    var actor =
+                                        await actorResolver
+                                            .ResolveActiveUserAsync(
+                                                principal);
+
+                                    if (!actor.Succeeded)
+                                    {
+                                        context.Fail(
+                                            "The authenticated account is no longer active.");
+
+                                        return;
+                                    }
+
+                                    if (principal.Identity
+                                        is ClaimsIdentity identity)
+                                    {
+                                        var existingRoleClaims =
+                                            identity
+                                                .FindAll(
+                                                    ClaimTypes.Role)
+                                                .ToArray();
+
+                                        foreach (
+                                            var roleClaim
+                                            in existingRoleClaims)
+                                        {
+                                            identity.RemoveClaim(
+                                                roleClaim);
+                                        }
+
+                                        if (!string.IsNullOrWhiteSpace(
+                                                actor.ActorRoleName))
+                                        {
+                                            identity.AddClaim(
+                                                new Claim(
+                                                    ClaimTypes.Role,
+                                                    actor.ActorRoleName));
+                                        }
+                                    }
+                                }
+                        };
                 });
 
             builder.Services.AddAuthorization();
