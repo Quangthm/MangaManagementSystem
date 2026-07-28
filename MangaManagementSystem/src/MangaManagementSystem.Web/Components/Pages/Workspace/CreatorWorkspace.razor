@@ -115,7 +115,7 @@ else
                 {
                     @if (_headerChap.StatusCode == "DRAFT" || _headerChap.StatusCode == "REVISION_REQUESTED")
                     {
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Send" Class="mr-2" DisableElevation="true" OnClick="@(() => SubmitChapterForReview(_headerChap.ChapterId))">Submit for Review</MudButton>
+                        <MudButton Variant="Variant.Filled" Size="Size.Small" StartIcon="@Icons.Material.Filled.Send" Class="mr-2 mf-btn-action mf-btn-submit" DisableElevation="true" OnClick="@(() => SubmitChapterForReview(_headerChap.ChapterId))">Submit for Review</MudButton>
                     }
                 }
             }
@@ -127,15 +127,15 @@ else
                  && ((_currentRoleName == "Mangaka" && (_headerChap.StatusCode == "DRAFT" || _headerChap.StatusCode == "REVISION_REQUESTED"))
                      || (_currentRoleName == "Tantou Editor" && (_headerChap.StatusCode == "UNDER_REVIEW" || _headerChap.StatusCode == "REVISION_REQUESTED"))))
             {
-                <MudButton Variant="Variant.Filled" Color="@(HasUnsavedChanges ? Color.Warning : Color.Default)" Size="Size.Small"
-                           StartIcon="@Icons.Material.Filled.Save" Class="mr-2" DisableElevation="true"
+                <MudButton Variant="Variant.Filled" Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Save" Class="@($"mr-2 mf-btn-action {(HasUnsavedChanges ? "mf-btn-save" : "mf-btn-disabled")}")" DisableElevation="true"
                            OnClick="SaveAllChangesAsync" Disabled="@(!HasUnsavedChanges || _saveState == SaveStatus.Saving)">
                     @(_saveState == SaveStatus.Saving ? "Saving…" : "Save")
                 </MudButton>
                 @if (HasUnsavedChanges)
                 {
-                    <MudButton Variant="Variant.Outlined" Color="Color.Default" Size="Size.Small"
-                               StartIcon="@Icons.Material.Filled.Undo" Class="mr-2" DisableElevation="true"
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.Undo" Class="mr-2 mf-btn-action mf-btn-discard" DisableElevation="true"
                                OnClick="DiscardChangesAsync" Disabled="@(_saveState == SaveStatus.Saving)">
                         Discard
                     </MudButton>
@@ -143,9 +143,9 @@ else
             }
             @if (_headerChap != null && _currentRoleName == "Tantou Editor" && _headerChap.StatusCode == "UNDER_REVIEW")
             {
-                <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" StartIcon="@Icons.Material.Filled.RateReview" Class="mr-2" DisableElevation="true" OnClick="@(() => { _reviewDecision = "APPROVED"; _reviewComment = ""; _showReviewDialog = true; })">Submit Review</MudButton>
+                <MudButton Variant="Variant.Filled" Size="Size.Small" StartIcon="@Icons.Material.Filled.RateReview" Class="mr-2 mf-btn-action mf-btn-review" DisableElevation="true" OnClick="@(() => { _reviewDecision = "APPROVED"; _reviewComment = ""; _showReviewDialog = true; })">Submit Review</MudButton>
             }
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.FileDownload" DisableElevation="true" OnClick="ExportCurrentPage">Export</MudButton>
+            <MudButton Variant="Variant.Filled" Size="Size.Small" StartIcon="@Icons.Material.Filled.FileDownload" Class="mf-btn-action mf-btn-export" DisableElevation="true" OnClick="ExportCurrentPage">Export</MudButton>
         </div>
     </header>
 
@@ -790,8 +790,8 @@ else
 
                     <MudDatePicker Label="Deadline" @bind-Date="_taskDueDate" Variant="Variant.Outlined"
                                    Margin="Margin.Dense" Class="mb-3" MinDate="DateTime.Today"
+                                   AnchorOrigin="Origin.TopLeft" TransformOrigin="Origin.TopRight"
                                    HelperText="Due date for this task (defaults to 7 days from now)." />
-
                     <div class="d-flex flex-column mb-3">
                         <div class="d-flex flex-wrap gap-1" style="max-height: 120px; overflow-y: auto;">
                             @if (SelectedRegions.Any())
@@ -812,7 +812,7 @@ else
                         </div>
                     </div>
 
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateTask" Disabled="@IsChapterLocked">Create Task</MudButton>
+                    <MudButton Variant="Variant.Filled" Class="mf-btn-submit mf-btn-action" FullWidth="true" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateTask" Disabled="@IsChapterLocked">Create Task</MudButton>
                     }
                 </MudPaper>
             </div>
@@ -959,7 +959,7 @@ else
                                 </div>
                             </div>
 
-                            <MudButton Variant="Variant.Filled" Color="Color.Warning" FullWidth="true" StartIcon="@Icons.Material.Filled.AddComment" OnClick="CreateAnnotation" Disabled="@(!CanAnnotate)">Add Annotation</MudButton>
+                            <MudButton Variant="Variant.Filled" Class="mf-btn-save mf-btn-action" FullWidth="true" StartIcon="@Icons.Material.Filled.AddComment" OnClick="CreateAnnotation" Disabled="@(!CanAnnotate)">Add Annotation</MudButton>
                             }
                         </MudPaper>
                     </div>
@@ -1036,7 +1036,7 @@ else
                             <MudTextField T="string" Label="@($"Page {SelectedPage} Note")" @bind-Value="activePage.PageNotes" Variant="Variant.Outlined" Lines="4" FullWidth="true" ReadOnly="@(!CanManageContent)" Placeholder="Notes about this page (applies to the whole page, all versions)…" />
                             @if (CanManageContent)
                             {
-                                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SavePageNote" Disabled="@IsChapterLocked">Save Page Note</MudButton>
+                                <MudButton Variant="Variant.Filled" Class="mf-btn-export mf-btn-action" OnClick="SavePageNote" Disabled="@IsChapterLocked">Save Page Note</MudButton>
                             }
 
                             <MudDivider Class="my-2" />
@@ -1048,7 +1048,7 @@ else
                                 <MudTextField T="string" Label="@($"v{activeVer.VersionNo} Note")" @bind-Value="activeVer.Note" Variant="Variant.Outlined" Lines="8" FullWidth="true" ReadOnly="@(!CanManageContent)" />
                                 @if (CanManageContent)
                                 {
-                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveVersionNote" Disabled="@IsChapterLocked">Save Note</MudButton>
+                                    <MudButton Variant="Variant.Filled" Class="mf-btn-export mf-btn-action" OnClick="SaveVersionNote" Disabled="@IsChapterLocked">Save Note</MudButton>
                                 }
                             }
                             else
@@ -1407,6 +1407,75 @@ else
         display: flex;
         flex-direction: column;
         cursor: not-allowed;
+    }
+    
+
+
+    /* Tạo màu nền so le (alternating) cho các Tab để dễ phân biệt */
+    .workspace-tabs .mud-tab:nth-child(odd) {
+        background-color: rgba(0, 0, 0, 0.1) !important;
+    }
+    .workspace-tabs .mud-tab:nth-child(even) {
+        background-color: rgba(255, 255, 255, 0.05) !important;
+    }
+
+    /* Làm nổi bật Tab đang được chọn */
+    .workspace-tabs .mud-tab.mud-tab-active {
+        background-color: rgba(255, 255, 255, 0.15) !important;
+        font-weight: 700 !important;
+    }
+
+    /* Premium Button Styles */
+    .mf-btn-action {
+        border-radius: 8px !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.5px !important;
+        text-transform: uppercase !important;
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12) !important;
+        border: none !important;
+    }
+    .mf-btn-action:not(:disabled):hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2) !important;
+        filter: brightness(1.1) !important;
+    }
+    .mf-btn-action:not(:disabled):active {
+        transform: translateY(1px) !important;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1) !important;
+    }
+
+    .mf-btn-submit {
+        background: linear-gradient(135deg, #6366F1, #8B5CF6) !important;
+        color: white !important;
+    }
+    .mf-btn-save {
+        background: linear-gradient(135deg, #F59E0B, #EA580C) !important;
+        color: white !important;
+    }
+    .mf-btn-disabled {
+        background: #E5E7EB !important;
+        color: #9CA3AF !important;
+        box-shadow: none !important;
+    }
+    .mf-btn-discard {
+        background: rgba(239, 68, 68, 0.1) !important;
+        color: #EF4444 !important;
+        box-shadow: none !important;
+        border: 1px solid rgba(239, 68, 68, 0.3) !important;
+    }
+    .mf-btn-discard:not(:disabled):hover {
+        background: rgba(239, 68, 68, 0.15) !important;
+        border: 1px solid rgba(239, 68, 68, 0.5) !important;
+        box-shadow: 0 4px 10px rgba(239, 68, 68, 0.15) !important;
+    }
+    .mf-btn-review {
+        background: linear-gradient(135deg, #10B981, #059669) !important;
+        color: white !important;
+    }
+    .mf-btn-export {
+        background: linear-gradient(135deg, #0EA5E9, #2563EB) !important;
+        color: white !important;
     }
 </style>
 

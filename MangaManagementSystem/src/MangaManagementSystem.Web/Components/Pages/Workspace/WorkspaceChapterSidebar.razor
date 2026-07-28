@@ -26,10 +26,10 @@
             @foreach (var chapter in Chapters)
             {
                 var isCurrent = (chapter.Id == SelectedChapter);
-                var bgClass = isCurrent ? "background-color: #eef2ff; border-left: 3px solid #4f46e5;" : "";
+                var activeClass = isCurrent ? "mf-chapter-active" : "";
                 var textColor = isCurrent ? Color.Primary : Color.Default;
 
-                <MudListItem Class="rounded-lg" Style="@bgClass" OnClick="@(() => OnSelectChapter.InvokeAsync(chapter.Id))">
+                <MudListItem Class="@($"rounded-lg mf-chapter-item {activeClass}")" OnClick="@(() => OnSelectChapter.InvokeAsync(chapter.Id))">
                     @if (chapter.IsRenaming)
                     {
                         <div class="d-flex align-center w-100" @onclick:stopPropagation="true">
@@ -199,3 +199,20 @@
         return sb.ToString();
     }
 }
+
+<style>
+    .mf-chapter-item {
+        transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+        border-left: 3px solid transparent;
+        cursor: pointer;
+    }
+    .mf-chapter-item:not(.mf-chapter-active):hover {
+        background-color: #f8fafc !important; /* Very light slate */
+        transform: translateX(2px);
+        border-left-color: #cbd5e1; /* Slate 300 */
+    }
+    .mf-chapter-active {
+        background-color: #eef2ff !important;
+        border-left: 3px solid #4f46e5 !important;
+    }
+</style>
