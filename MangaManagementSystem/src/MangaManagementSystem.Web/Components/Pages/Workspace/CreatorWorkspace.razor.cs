@@ -533,6 +533,21 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private string _cancelTaskReason = string.Empty;
     private bool _cancelTaskInProgress;
 
+    private bool _showTaskDescriptionDialog;
+    private ProductionTask? _selectedTaskForDescription;
+
+    private void OpenTaskDescriptionDialog(ProductionTask task)
+    {
+        _selectedTaskForDescription = task;
+        _showTaskDescriptionDialog = true;
+    }
+
+    private void CloseTaskDescriptionDialog()
+    {
+        _showTaskDescriptionDialog = false;
+        _selectedTaskForDescription = null;
+    }
+
     private void OpenCancelTaskDialog(int taskId)
     {
         if (IsChapterLocked) return;

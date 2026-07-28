@@ -880,16 +880,19 @@ else
                                           }
                                       </div>
                                   </div>
-                                  <div class="d-flex align-center flex-shrink-0" @onclick:stopPropagation="true">
-                                      <MudTooltip Text="Status is set by the workflow (assistant submits / Mangaka reviews), not edited here.">
-                                          <MudChip T="string" Size="Size.Small" Color="@chipColor" Variant="Variant.Outlined">@task.Status</MudChip>
-                                      </MudTooltip>
-                                      @if (!isTerminal)
-                                      {
-                                          <MudTooltip Text="Cancel task">
-                                              <MudIconButton Icon="@Icons.Material.Filled.Cancel" Size="Size.Small" Color="Color.Error" Class="ml-1" OnClick="@(() => OpenCancelTaskDialog(task.Id))" Disabled="@IsChapterLocked" />
+                                  <div class="d-flex flex-column align-end justify-space-between flex-shrink-0" @onclick:stopPropagation="true">
+                                      <div class="d-flex align-center mb-1">
+                                          <MudTooltip Text="Status is set by the workflow (assistant submits / Mangaka reviews), not edited here.">
+                                              <MudChip T="string" Size="Size.Small" Color="@chipColor" Variant="Variant.Outlined">@task.Status</MudChip>
                                           </MudTooltip>
-                                      }
+                                          @if (!isTerminal)
+                                          {
+                                              <MudTooltip Text="Cancel task">
+                                                  <MudIconButton Icon="@Icons.Material.Filled.Cancel" Size="Size.Small" Color="Color.Error" Class="ml-1" OnClick="@(() => OpenCancelTaskDialog(task.Id))" Disabled="@IsChapterLocked" />
+                                              </MudTooltip>
+                                          }
+                                      </div>
+                                      <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" OnClick="@(() => OpenTaskDescriptionDialog(task))" Style="font-size: 10px; padding: 0;">view description task</MudButton>
                                   </div>
                               </div>
                           </MudPaper>
@@ -1228,6 +1231,29 @@ else
             <MudButton Color="Color.Error" Variant="Variant.Filled"
                        Disabled="@(string.IsNullOrWhiteSpace(_cancelTaskReason) || _cancelTaskInProgress)"
                        OnClick="ConfirmCancelTask">Cancel Task</MudButton>
+        </DialogActions>
+    </MudDialog>
+
+    <MudDialog @bind-Visible="_showTaskDescriptionDialog" Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
+        <TitleContent><MudText Typo="Typo.h6">Task description</MudText></TitleContent>
+        <DialogContent>
+            @if (_selectedTaskForDescription != null)
+            {
+                <MudStack Spacing="2">
+                    <MudText><b>Assistant assigned:</b> @_selectedTaskForDescription.Assistant</MudText>
+                    <MudText><b>Task type:</b> @_selectedTaskForDescription.Type</MudText>
+                    <MudText><b>Target:</b> @_selectedTaskForDescription.Target</MudText>
+                    <MudText><b>Compensation:</b> @(_selectedTaskForDescription.CompensationAmount.HasValue ? _selectedTaskForDescription.CompensationAmount.Value.ToString("N0") + " VND" : "N/A")</MudText>
+                    <MudText><b>Deadline:</b> @(_selectedTaskForDescription.DueAtUtc.HasValue ? _selectedTaskForDescription.DueAtUtc.Value.ToLocalTime().ToString("g") : "N/A")</MudText>
+                    <MudText><b>Description:</b></MudText>
+                    <MudPaper Elevation="0" Class="pa-3 mud-background-gray">
+                        <MudText Typo="Typo.body2" Style="white-space: pre-wrap;">@_selectedTaskForDescription.Description</MudText>
+                    </MudPaper>
+                </MudStack>
+            }
+        </DialogContent>
+        <DialogActions>
+            <MudButton Color="Color.Primary" OnClick="CloseTaskDescriptionDialog">Close</MudButton>
         </DialogActions>
     </MudDialog>
 </div>

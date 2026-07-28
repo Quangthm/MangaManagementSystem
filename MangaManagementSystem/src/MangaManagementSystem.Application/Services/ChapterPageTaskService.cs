@@ -247,6 +247,7 @@ namespace MangaManagementSystem.Application.Services
                     r.UpdatedByUserId)).ToList(),
                 AssignedToDisplayName: t.AssignedToUser?.DisplayName,
                 AssignedUsername: t.AssignedToUser?.Username,
+                CompensationAmount: t.CompensationAmount,
                 CreatedAtUtc: t.CreatedAtUtc
             );
         }
