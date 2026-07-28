@@ -15,18 +15,32 @@ public enum AuthenticatedActorFailureKind
 public sealed record AuthenticatedActorResult(
     bool Succeeded,
     Guid ActorUserId,
+    string ActorRoleName,
     AuthenticatedActorFailureKind FailureKind)
 {
-    public static AuthenticatedActorResult Success(Guid actorUserId) =>
-        new(true, actorUserId, AuthenticatedActorFailureKind.None);
+    public static AuthenticatedActorResult Success(
+        Guid actorUserId,
+        string actorRoleName) =>
+        new(
+            true,
+            actorUserId,
+            actorRoleName,
+            AuthenticatedActorFailureKind.None);
 
     public static AuthenticatedActorResult Failure(
         AuthenticatedActorFailureKind failureKind) =>
-        new(false, Guid.Empty, failureKind);
+        new(
+            false,
+            Guid.Empty,
+            string.Empty,
+            failureKind);
 }
 
 public interface IAuthenticatedActorResolver
 {
+    Task<AuthenticatedActorResult> ResolveActiveUserAsync(
+        ClaimsPrincipal principal);
+
     Task<AuthenticatedActorResult> ResolveAsync(
         ClaimsPrincipal principal,
         string requiredRole);
@@ -47,6 +61,12 @@ public sealed class AuthenticatedActorResolver : IAuthenticatedActorResolver
         _userService = userService;
     }
 
+    public async Task<AuthenticatedActorResult> ResolveActiveUserAsync(
+        ClaimsPrincipal principal)
+        => await ResolveCoreAsync(
+            principal,
+            Array.Empty<string>());
+
     public async Task<AuthenticatedActorResult> ResolveAsync(
         ClaimsPrincipal principal,
         string requiredRole)
@@ -64,7 +84,8 @@ public sealed class AuthenticatedActorResolver : IAuthenticatedActorResolver
         var actorUserIdValue =
             principal.FindFirst(ClaimTypes.NameIdentifier)?.Value
             ?? principal.FindFirst("sub")?.Value
-            ?? principal.FindFirst("user_id")?.Value;
+            ?? principal.FindFirst("user_id")?.Value
+            ?? principal.FindFirst("UserId")?.Value;
 
         if (!Guid.TryParse(actorUserIdValue, out var actorUserId)
             || actorUserId == Guid.Empty)
@@ -90,8 +111,8 @@ public sealed class AuthenticatedActorResolver : IAuthenticatedActorResolver
                 AuthenticatedActorFailureKind.InactiveAccount);
         }
 
-        if (allowedRoles.Count == 0
-            || !allowedRoles.Any(role => string.Equals(
+        if (allowedRoles.Count > 0
+            && !allowedRoles.Any(role => string.Equals(
                 actor.RoleName,
                 role,
                 StringComparison.OrdinalIgnoreCase)))
@@ -100,6 +121,8 @@ public sealed class AuthenticatedActorResolver : IAuthenticatedActorResolver
                 AuthenticatedActorFailureKind.WrongRole);
         }
 
-        return AuthenticatedActorResult.Success(actorUserId);
+        return AuthenticatedActorResult.Success(
+            actorUserId,
+            actor.RoleName ?? string.Empty);
     }
 }

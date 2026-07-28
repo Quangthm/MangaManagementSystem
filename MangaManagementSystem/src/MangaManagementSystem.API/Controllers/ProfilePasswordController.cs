@@ -1,4 +1,4 @@
-using System.Security.Claims;
+using MangaManagementSystem.API.Security;
 using MangaManagementSystem.API.Contracts;
 using MangaManagementSystem.Application.DTOs.Auth;
 using MangaManagementSystem.Application.Interfaces;
@@ -17,27 +17,33 @@ namespace MangaManagementSystem.API.Controllers
             "PROFILE_PASSWORD_RESET";
 
         private readonly IUserService _userService;
+        private readonly IAuthenticatedActorResolver
+            _actorResolver;
         private readonly ILogger<ProfilePasswordController>
             _logger;
 
         public ProfilePasswordController(
             IUserService userService,
+            IAuthenticatedActorResolver actorResolver,
             ILogger<ProfilePasswordController> logger)
         {
             _userService = userService;
+            _actorResolver = actorResolver;
             _logger = logger;
         }
 
         [HttpPost("otp")]
         public async Task<IActionResult> SendOtpAsync()
         {
-            if (!TryResolveAuthenticatedUserId(out var userId))
+            var actor =
+                await _actorResolver.ResolveActiveUserAsync(User);
+
+            if (!actor.Succeeded)
             {
-                return Unauthorized(
-                    new ApiErrorResponse(
-                        AuthErrorCodes.InvalidRequest,
-                        "Authenticated user information is invalid."));
+                return MapActorFailure(actor);
             }
+
+            var userId = actor.ActorUserId;
 
             try
             {
@@ -75,13 +81,15 @@ namespace MangaManagementSystem.API.Controllers
         public async Task<IActionResult> ResetAsync(
             [FromBody] ResetProfilePasswordRequest request)
         {
-            if (!TryResolveAuthenticatedUserId(out var userId))
+            var actor =
+                await _actorResolver.ResolveActiveUserAsync(User);
+
+            if (!actor.Succeeded)
             {
-                return Unauthorized(
-                    new ApiErrorResponse(
-                        AuthErrorCodes.InvalidRequest,
-                        "Authenticated user information is invalid."));
+                return MapActorFailure(actor);
             }
+
+            var userId = actor.ActorUserId;
 
             if (string.IsNullOrWhiteSpace(request.OtpCode))
             {
@@ -146,18 +154,32 @@ namespace MangaManagementSystem.API.Controllers
             }
         }
 
-        private bool TryResolveAuthenticatedUserId(
-            out Guid userId)
+        private IActionResult MapActorFailure(
+            AuthenticatedActorResult result)
         {
-            var rawUserId =
-                User.FindFirstValue(
-                    ClaimTypes.NameIdentifier)
-                ?? User.FindFirstValue("sub")
-                ?? User.FindFirstValue("user_id")
-                ?? User.FindFirstValue("UserId");
+            var message = result.FailureKind switch
+            {
+                AuthenticatedActorFailureKind.InactiveAccount =>
+                    "The current account is not active.",
 
-            return Guid.TryParse(rawUserId, out userId)
-                   && userId != Guid.Empty;
+                AuthenticatedActorFailureKind.WrongRole =>
+                    "The current account is not permitted to use this operation.",
+
+                _ =>
+                    "Authenticated user information is invalid."
+            };
+
+            var response = new ApiErrorResponse(
+                AuthErrorCodes.InvalidRequest,
+                message);
+
+            return result.FailureKind
+                is AuthenticatedActorFailureKind.InvalidIdentity
+                or AuthenticatedActorFailureKind.UserNotFound
+                    ? Unauthorized(response)
+                    : StatusCode(
+                        StatusCodes.Status403Forbidden,
+                        response);
         }
     }
 }
