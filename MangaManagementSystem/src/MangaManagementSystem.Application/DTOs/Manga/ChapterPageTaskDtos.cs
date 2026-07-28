@@ -53,7 +53,7 @@ namespace MangaManagementSystem.Application.DTOs.Manga
 
     /// <summary>
     /// Web → API request body to create a single page task. The actor (creator) is taken from the
-    /// Authenticated actor is derived from JWT, not the body; status is defaulted by the create SP.
+    /// authenticated JWT actor, not the body; status is defaulted by the create SP.
     /// </summary>
     public sealed record CreateMangakaTaskRequest(
         Guid AssignedToUserId,

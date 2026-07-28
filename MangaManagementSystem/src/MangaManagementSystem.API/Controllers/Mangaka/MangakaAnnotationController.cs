@@ -22,20 +22,53 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         private const string AnnotationRoles = "Mangaka,Tantou Editor";
 
         private readonly IChapterPageAnnotationService _annotationService;
+        private readonly IPageRegionService _regionService;
         private readonly IAuthenticatedActorResolver _actorResolver;
         private readonly IWorkspaceResourceAuthorizationService _workspaceAccess;
         private readonly ILogger<MangakaAnnotationController> _logger;
 
         public MangakaAnnotationController(
             IChapterPageAnnotationService annotationService,
+            IPageRegionService regionService,
             IAuthenticatedActorResolver actorResolver,
             IWorkspaceResourceAuthorizationService workspaceAccess,
             ILogger<MangakaAnnotationController> logger)
         {
             _annotationService = annotationService;
+            _regionService = regionService;
             _actorResolver = actorResolver;
             _workspaceAccess = workspaceAccess;
             _logger = logger;
+        }
+
+        /// <summary>
+        /// BR-ANN-013 / BR-ANN-027: annotation mutation from the workspace is permitted for a Tantou Editor
+        /// only while the owning chapter is UNDER_REVIEW or REVISION_REQUESTED; in DRAFT, APPROVED,
+        /// SCHEDULED, ON_HOLD, RELEASED and CANCELLED their workspace access is read-only. Returns a 403
+        /// result when the write must be refused, or null when it may proceed.
+        ///
+        /// Only the editor is gated here: the rules place no equivalent chapter-state restriction on Mangaka
+        /// annotations, so a Mangaka keeps the behaviour they have today. Returns null (allow) when the
+        /// chapter cannot be resolved, leaving the existing service/SP permission checks as the authority
+        /// rather than blocking a legitimate write on a lookup miss.
+        /// </summary>
+        private async Task<IActionResult?> EnsureEditorAnnotationStateAllowedAsync(
+            Guid anchorRegionId,
+            CancellationToken cancellationToken)
+        {
+            if (!User.IsInRole("Tantou Editor"))
+            {
+                return null;
+            }
+
+            var status = await _regionService.GetChapterStatusByRegionIdAsync(anchorRegionId, cancellationToken);
+            if (status is null || status is "UNDER_REVIEW" or "REVISION_REQUESTED")
+            {
+                return null;
+            }
+
+            return StatusCode(StatusCodes.Status403Forbidden, new ApiErrorResponse(
+                $"Editorial annotations cannot be changed while the chapter is {status}."));
         }
 
         /// <summary>GET /api/mangaka/annotations/by-page/{chapterPageId}</summary>
@@ -84,6 +117,14 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             if (!await _workspaceAccess.CanAccessRegionsAsync(actorUserId, request.PageRegionIds, HttpContext.RequestAborted))
                 return Forbid();
 
+            // BR-ANN-013 / BR-ANN-027: a Tantou Editor may create an editorial annotation only while the
+            // chapter is UNDER_REVIEW or REVISION_REQUESTED; other states are read-only for them. All the
+            // regions of one annotation belong to the same page, so the first one settles the chapter.
+            var stateFailure = await EnsureEditorAnnotationStateAllowedAsync(
+                request.PageRegionIds[0], HttpContext.RequestAborted);
+            if (stateFailure is not null)
+                return stateFailure;
+
             try
             {
                 var created = await _annotationService.CreateChapterPageAnnotationAsync(new CreateChapterPageAnnotationDto(
@@ -127,6 +168,19 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return actorFailure;
             if (!await _workspaceAccess.CanAccessAnnotationAsync(actorUserId, annotationId, HttpContext.RequestAborted))
                 return Forbid();
+
+            // BR-ANN-027: resolving is an editorial-review mutation, so a Tantou Editor may do it only while
+            // the chapter is UNDER_REVIEW or REVISION_REQUESTED. The annotation carries its own regions, so
+            // resolve the chapter through one of them.
+            var annotation = await _annotationService.GetChapterPageAnnotationByIdWithRegionsAsync(annotationId);
+            var anchorRegionId = annotation?.PageRegions?.FirstOrDefault()?.PageRegionId;
+            if (anchorRegionId.HasValue)
+            {
+                var stateFailure = await EnsureEditorAnnotationStateAllowedAsync(
+                    anchorRegionId.Value, HttpContext.RequestAborted);
+                if (stateFailure is not null)
+                    return stateFailure;
+            }
 
             try
             {

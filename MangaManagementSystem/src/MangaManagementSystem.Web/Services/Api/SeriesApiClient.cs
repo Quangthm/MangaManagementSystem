@@ -51,41 +51,29 @@ namespace MangaManagementSystem.Web.Services.Api
             string slug,
             CancellationToken cancellationToken = default)
         {
-            var route =
-                $"api/series/{Uri.EscapeDataString(slug)}/workspace-entry";
+            using var requestMessage = new HttpRequestMessage(
+                HttpMethod.Get,
+                $"api/series/{Uri.EscapeDataString(slug)}/workspace-entry");
 
-            var response =
-                await _httpClient.GetAsync(
-                    route,
-                    cancellationToken);
+            var response = await _httpClient.SendAsync(requestMessage, cancellationToken);
 
             if (response.StatusCode == HttpStatusCode.NotFound)
-            {
                 return null;
-            }
 
             if (response.IsSuccessStatusCode)
             {
-                return await response.Content
-                    .ReadFromJsonAsync<SeriesWorkspaceEntryDto>(
-                        cancellationToken:
-                            cancellationToken);
+                return await response.Content.ReadFromJsonAsync<SeriesWorkspaceEntryDto>(
+                    cancellationToken: cancellationToken);
             }
 
-            var message =
-                await ExtractErrorMessageAsync(
-                    response,
-                    cancellationToken:
-                        cancellationToken);
-
+            var message = await ExtractErrorMessageAsync(response);
             _logger.LogWarning(
                 "Load workspace entry failed for slug {Slug}: {StatusCode} {ReasonPhrase}",
-                slug,
-                (int)response.StatusCode,
-                response.ReasonPhrase);
+                slug, (int)response.StatusCode, response.ReasonPhrase);
 
             throw new InvalidOperationException(message);
         }
+
         public async Task<SeriesLifecycleActionsDto> GetLifecycleActionsAsync(
             Guid seriesId,
             CancellationToken cancellationToken = default)

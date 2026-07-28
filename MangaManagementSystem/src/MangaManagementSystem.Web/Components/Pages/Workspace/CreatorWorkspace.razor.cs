@@ -97,11 +97,9 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private string _reviewDecision = "APPROVED";
     private string _reviewComment = "";
     private bool _reviewSubmitting;
-    // DB constraint ck_chapter_editorial_review_feedback_required: CANCELLED requires comments AND a
-    // markup file (like proposal cancellation); REVISION only requires comments; APPROVED requires neither.
-    private IBrowserFile? _reviewMarkupFile;
-
-    private void OnReviewMarkupSelected(InputFileChangeEventArgs e) => _reviewMarkupFile = e.File;
+    // ck_chapter_editorial_review_feedback_required: CANCELLED and REVISION_REQUESTED both require comments;
+    // APPROVED requires neither. No markup attachment is offered from the workspace dialog — the review
+    // decision alone is enough to cancel. (The Editor review page keeps its own optional attachment.)
 
     // Numeric sort key for a chapter number label; non-numeric/blank sinks to the end.
     private static decimal ChapterSortKey(string? label)
@@ -120,27 +118,17 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             return;
         }
 
-        if (_reviewDecision == "CANCELLED" && _reviewMarkupFile == null)
-        {
-            Snackbar.Add("Cancelling a chapter requires an attached markup file (plus comments).", Severity.Warning);
-            return;
-        }
-
         _reviewSubmitting = true;
         try
         {
             var comments = string.IsNullOrWhiteSpace(_reviewComment) ? null : _reviewComment.Trim();
-            var res = _reviewMarkupFile != null
-                ? await EditorReviewApi.SubmitReviewDecisionWithMarkupAsync(
-                    chap.ChapterId, _reviewDecision, comments, _reviewMarkupFile)
-                : await EditorReviewApi.SubmitReviewDecisionAsync(
-                    chap.ChapterId,
-                    new MangaManagementSystem.Application.DTOs.Editor.SubmitChapterEditorialReviewRequest(_reviewDecision, comments));
+            var res = await EditorReviewApi.SubmitReviewDecisionAsync(
+                chap.ChapterId,
+                new MangaManagementSystem.Application.DTOs.Editor.SubmitChapterEditorialReviewRequest(_reviewDecision, comments));
 
             chap.StatusCode = res.StatusCode;
             _showReviewDialog = false;
             _reviewComment = "";
-            _reviewMarkupFile = null;
             Snackbar.Add($"Review submitted ({res.DecisionCode}). Chapter is now {res.StatusCode}.", Severity.Success);
         }
         catch (Exception ex)
@@ -169,6 +157,35 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private bool _newAnnotationFormCollapsed = false;
 
     private SemaphoreSlim _dbSemaphore = new SemaphoreSlim(1, 1);
+
+    // Cache key for the canvas ES module. Derived from the physical mangaAiCanvas.js file's last-modified
+    // time (via the web-root file provider, which resolves wwwroot correctly under both `dotnet run` and
+    // publish) so the key changes exactly when the file changes: an in-place edit (dev) or a redeploy
+    // shipping a new file both bust the browser cache automatically — no hard refresh (Ctrl+F5) needed —
+    // while an unchanged file keeps a stable key so the 53 KB module stays cached (the old DateTime.Now
+    // .Ticks re-downloaded + re-parsed it on every canvas init). Falls back to the assembly version if
+    // the file can't be located, so a missing/moved wwwroot never breaks canvas init. Computed once and
+    // cached because the file provider does I/O.
+    private string? _canvasScriptVersion;
+    private string CanvasScriptVersion => _canvasScriptVersion ??= ResolveCanvasScriptVersion();
+
+    private string ResolveCanvasScriptVersion()
+    {
+        try
+        {
+            var file = Env.WebRootFileProvider.GetFileInfo("js/mangaAiCanvas.v2.js");
+            if (file.Exists)
+            {
+                return file.LastModified.UtcTicks.ToString();
+            }
+        }
+        catch
+        {
+            // Ignore and fall back to the assembly version below.
+        }
+
+        return typeof(CreatorWorkspace).Assembly.GetName().Version?.ToString() ?? "1";
+    }
 
     private bool _seriesNotFound = false;
     private bool _isAddingChapter = false;
@@ -276,6 +293,26 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private Guid? AssignedAssistantId { get; set; }
     private string TaskDescription { get; set; } = "";
     private decimal TaskCompensation { get; set; } = 0m;   // manga.ChapterPageTask.compensation_amount (metadata; no currency unit per BR)
+
+    // compensation_amount is DECIMAL(12,2) with a CHECK >= 0. Keep the UI cap in sync with the DB so a
+    // value can never reach a raw SQL overflow/CHECK error.
+    private const decimal MaxCompensation = 9_999_999_999.99m;
+
+    // Inline (real-time) validation for the Compensation field. Runs on the already-parsed decimal, so an
+    // unparseable entry (letters) is caught earlier by the field's own "Not a valid number" converter
+    // error. Returns null when the value is acceptable. Mirrors the CreateTask() submit guard.
+    private static string? ValidateCompensation(decimal value)
+    {
+        if (value < 0)
+        {
+            return "Compensation cannot be negative.";
+        }
+        if (value > MaxCompensation)
+        {
+            return $"Compensation is too large (max {MaxCompensation:0.##}).";
+        }
+        return null;
+    }
     private DateTime? _taskDueDate = DateTime.Today.AddDays(7);   // manga.ChapterPageTask.due_at_utc (deadline); null → service defaults to +7 days
     
     private void OnTaskTypeChanged(string value) => TaskType = value;
@@ -398,9 +435,9 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             Snackbar.Add("Compensation cannot be negative.", Severity.Warning);
             return;
         }
-        if (TaskCompensation > 9_999_999_999.99m)
+        if (TaskCompensation > MaxCompensation)
         {
-            Snackbar.Add("Compensation is too large (max 9,999,999,999.99).", Severity.Warning);
+            Snackbar.Add($"Compensation is too large (max {MaxCompensation:0.##}).", Severity.Warning);
             return;
         }
 
@@ -435,7 +472,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         {
             regionIds = await EnsureRegionsSavedAsync(regionsToSave);
             // Show only the panel number(s) — same #N shown on the canvas — not raw coordinates.
-            target = string.Join(", ", SelectedRegions.Select(r => $"Panel #{r.Id}"));
+            target = string.Join(", ", SelectedRegions.Select(r => FormatRegionTarget(r.Type, r.Id)));
         }
 
         int newId = ActiveTasks.Any() ? ActiveTasks.Max(t => t.Id) + 1 : 1;
@@ -672,7 +709,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         else if (!SelectedRegions.Any())
             target = "Full page";
         else
-            target = string.Join(", ", SelectedRegions.Select(r => $"Panel #{r.Id}"));
+            target = string.Join(", ", SelectedRegions.Select(r => FormatRegionTarget(r.Type, r.Id)));
 
         try
         {
@@ -1574,32 +1611,61 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             if (_seriesStatusCode == "COMPLETED") return true;
             var chap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
             if (chap == null) return false;
-            var code = chap.StatusCode;
-            // ON_HOLD is a paused SCHEDULED chapter (post-approval); content must stay locked like
-            // SCHEDULED/APPROVED (BR-CH-016/018) — returning it to SCHEDULED only needs a new date, not edits.
-            return code == "UNDER_REVIEW" || code == "APPROVED" || code == "SCHEDULED"
-                || code == "ON_HOLD" || code == "RELEASED" || code == "CANCELLED";
+            return IsStatusContentLocked(chap.StatusCode);
         }
+    }
+
+    // ON_HOLD is a paused SCHEDULED chapter (post-approval); content must stay locked like
+    // SCHEDULED/APPROVED (BR-CH-016/018) — returning it to SCHEDULED only needs a new date, not edits.
+    private static bool IsStatusContentLocked(string? code) =>
+        code is "UNDER_REVIEW" or "APPROVED" or "SCHEDULED" or "ON_HOLD" or "RELEASED" or "CANCELLED";
+
+    // PageRegion editing gate. Per BR-REG-035 / BR-REG-036 / BR-WORKSPACE-013/014 (docs 2026-07-24):
+    //   Mangaka       — edit regions while the chapter is content-editable (DRAFT / REVISION_REQUESTED).
+    //   Tantou Editor — edit regions ONLY while UNDER_REVIEW or REVISION_REQUESTED (editorial-review
+    //                   metadata). The editor keeps READ access to DRAFT and read-only states, but read
+    //                   does not grant write: they must NOT create/edit/delete regions on DRAFT, APPROVED,
+    //                   SCHEDULED, ON_HOLD, RELEASED, or CANCELLED. (An earlier build let the editor edit
+    //                   on DRAFT; the finalized rule reverses that.)
+    private bool CanEditRegions =>
+        CanEditRegionsForStatus(Chapters.FirstOrDefault(c => c.Id == SelectedChapter)?.StatusCode);
+
+    // Per-chapter form of CanEditRegions. The save flush walks pages across ALL loaded chapters, so it
+    // needs to ask "may this actor edit regions on THAT chapter?" rather than only about the selected
+    // one — otherwise a buffered edit made on a locked chapter gets written when Save is pressed while
+    // standing on a different, editable chapter.
+    private bool CanEditRegionsForStatus(string? code)
+    {
+        if (_seriesStatusCode == "COMPLETED") return false;
+        if (_currentRoleName == "Mangaka") return CanManageContent && !IsStatusContentLocked(code);
+        if (_currentRoleName == "Tantou Editor") return code == "UNDER_REVIEW" || code == "REVISION_REQUESTED";
+        return false;
     }
 
     private static bool IsAssistantTaskChapterSubmissionBlocked(string? statusCode) =>
         statusCode is "APPROVED" or "SCHEDULED" or "ON_HOLD" or "RELEASED" or "CANCELLED";
-    // Annotations are review/production FEEDBACK (BR-CP-018 / BR-WORKSPACE-007), not page content, so they
-    // stay available while a chapter is in an editing/review cycle — including UNDER_REVIEW, which is exactly
-    // when a Tantou Editor reviews. Only the finalized states stop new annotations. This is deliberately
-    // separate from IsChapterLocked (which locks page/version/region CONTENT while under review or later).
+    // Annotations are review/production FEEDBACK, not page content, so they stay available while a chapter
+    // is in an editing/review cycle. Per BR-ANN-013 / BR-ANN-027 (docs 2026-07-24) the permitted states are
+    // ROLE-SPECIFIC:
+    //   Mangaka       — DRAFT / UNDER_REVIEW / REVISION_REQUESTED (production-tracking feedback).
+    //   Tantou Editor — ONLY UNDER_REVIEW / REVISION_REQUESTED (editorial-review feedback). On DRAFT (and
+    //                   the finalized states) the editor's workspace is READ-ONLY for annotation mutation.
+    // Fine-grained resolve-by-origin (BR-ANN-020/021) is still enforced server-side by the annotation SPs.
     private bool CanAnnotate
     {
         get
         {
-            // BR-ANN-013: only active Mangaka and Tantou Editor contributors may create/resolve
-            // annotations in MVP. Assistants can now reach the workspace (WorkspaceRoles) but must not
-            // see annotation create/resolve controls. Fine-grained resolve-by-origin (BR-ANN-020/021)
-            // is still enforced server-side by the annotation stored procedures (BR-ANN-025).
-            if (_currentRoleName != "Mangaka" && _currentRoleName != "Tantou Editor") return false;
-            var chap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
-            var code = chap?.StatusCode;
-            return code == "DRAFT" || code == "UNDER_REVIEW" || code == "REVISION_REQUESTED";
+            var code = Chapters.FirstOrDefault(c => c.Id == SelectedChapter)?.StatusCode;
+            if (_currentRoleName == "Mangaka")
+            {
+                return code is "DRAFT" or "UNDER_REVIEW" or "REVISION_REQUESTED";
+            }
+            if (_currentRoleName == "Tantou Editor")
+            {
+                return code is "UNDER_REVIEW" or "REVISION_REQUESTED";
+            }
+            // Assistants can reach the workspace (WorkspaceRoles) but must not create/resolve annotations.
+            return false;
         }
     }
 
@@ -2070,14 +2136,14 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         var canvas = GetActiveCanvas();
         if (canvas == null || UploadedPages.Count == 0 || ActivePageIndex < 0 || ActivePageIndex >= UploadedPages.Count)
         {
-            Snackbar.Add("Không có trang nào để xuất.", Severity.Warning);
+            Snackbar.Add("There is no page to export.", Severity.Warning);
             return;
         }
 
         var page = UploadedPages[ActivePageIndex];
         if (!page.Versions.Any())
         {
-            Snackbar.Add("Trang này chưa có ảnh để xuất.", Severity.Warning);
+            Snackbar.Add("This page has no image to export.", Severity.Warning);
             return;
         }
 
@@ -2093,16 +2159,16 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             var ok = await canvas.InvokeAsync<bool>("downloadRenderedImage", fileName);
             if (ok)
             {
-                Snackbar.Add($"Đã xuất ảnh: {fileName}", Severity.Success);
+                Snackbar.Add($"Image exported: {fileName}", Severity.Success);
             }
             else
             {
-                Snackbar.Add("Không xuất được trang (ảnh có thể chưa tải xong). Hãy thử lại.", Severity.Warning);
+                Snackbar.Add("Could not export the page (the image may not have finished loading). Please try again.", Severity.Warning);
             }
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Xuất ảnh thất bại: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Export failed: {ex.Message}", Severity.Error);
             Console.WriteLine(ex.ToString());
         }
     }
@@ -2113,21 +2179,29 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             && !_accessDenied
             && string.IsNullOrWhiteSpace(_workspaceLoadError);
 
-        if (!canvasDomAvailable || _canvasInitialized)
+        // Synchronous re-entry guard. OnAfterRenderAsync fires after EVERY render, but the init below
+        // awaits several JS calls before _canvasInitialized flips true. Without an in-progress flag set
+        // BEFORE the first await, renders arriving during those awaits each pass this check and run
+        // initCanvas again — binding a 2nd/3rd/4th copy of the mousedown/dblclick listeners to the same
+        // container. A single user double-click then fires every copy, toggling selection on/off an even
+        // number of times so it never sticks (the "chip lights up then vanishes" bug). One init only.
+        if (!canvasDomAvailable || _canvasInitialized || _canvasInitializing)
         {
             return;
         }
+        _canvasInitializing = true;
 
         try
         {
-            var version = DateTime.Now.Ticks;
-            _moduleFactory = await JS.InvokeAsync<IJSObjectReference>("import", $"/js/mangaAiCanvas.js?v={version}");
+            _moduleFactory = await JS.InvokeAsync<IJSObjectReference>("import", $"/js/mangaAiCanvas.v2.js?v={CanvasScriptVersion}");
             _leftCanvasRef = await _moduleFactory.InvokeAsync<IJSObjectReference>("createMangaCanvasInstance");
             _rightCanvasRef = await _moduleFactory.InvokeAsync<IJSObjectReference>("createMangaCanvasInstance");
             _objRefLeft = DotNetObjectReference.Create(new CanvasInterop(this, "Left"));
             _objRefRight = DotNetObjectReference.Create(new CanvasInterop(this, "Right"));
             await _leftCanvasRef.InvokeVoidAsync("initCanvas", "ai-canvas-left", "ai-canvas-container-left", _objRefLeft);
+            await _leftCanvasRef.InvokeVoidAsync("setTool", CurrentTool);
             await _rightCanvasRef.InvokeVoidAsync("initCanvas", "ai-canvas-right", "ai-canvas-container-right", _objRefRight);
+            await _rightCanvasRef.InvokeVoidAsync("setTool", CurrentTool);
 
             _canvasInitialized = true;
 
@@ -2154,7 +2228,17 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             Console.Error.WriteLine(ex);
             await InvokeAsync(StateHasChanged);
         }
+        finally
+        {
+            // Release the in-progress guard. On success _canvasInitialized keeps re-entry out; on failure
+            // this allows a later render to retry a clean single init.
+            _canvasInitializing = false;
+        }
     }
+
+    // True only while OnAfterRenderAsync is mid-init (between the first await and completion) — blocks the
+    // re-entrant renders that would otherwise double-bind the canvas event listeners.
+    private bool _canvasInitializing;
 
     // Add-pages chooser + double-page split state.
     private bool _showUploadChoice;
@@ -2425,7 +2509,8 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                     // Programmatic load: silent=true to avoid a phantom change echo.
                     await _rightCanvasRef.InvokeVoidAsync("loadRegions",
                         string.IsNullOrEmpty(v.Regions) ? "[]" : v.Regions, true);
-
+                    // Same region-mutation gate as the left pane (see LoadPage).
+                    await _rightCanvasRef.InvokeVoidAsync("setRegionsEditable", CanEditRegions);
                 }
             }
         }
@@ -2550,9 +2635,20 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private async Task<string> BuildRegionsJsonFromDbAsync(Guid versionId)
     {
         var dbRegions = await MangakaRegionApi.GetByVersionsAsync(new[] { versionId });
+
+        // The system-managed FULL_PAGE anchor must not consume a panel number: the query has no ORDER BY,
+        // so whether it landed before or after the real panels was down to whatever order SQL returned,
+        // and when it landed first every panel number shifted by one. Push it to the end. OrderBy is a
+        // stable sort, so the real panels keep exactly the relative order (and therefore the numbers)
+        // they have today. FULL_PAGE still gets a unique canvas id — needed by select/delete and nextId —
+        // but its number is never shown (see FormatRegionTarget and the redraw skip).
+        var ordered = dbRegions
+            .OrderBy(r => IsFullPageRegion(r.TypeCode) ? 1 : 0)
+            .ToList();
+
         var mapped = new List<RegionModel>();
         int idx = 1;
-        foreach (var r in dbRegions)
+        foreach (var r in ordered)
         {
             if (r.Width <= 0.05m && r.Height <= 0.05m) continue; // skip annotation pin markers
 
@@ -2607,7 +2703,9 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
     private async Task DeleteSelectedRegions()
     {
-        if (IsChapterLocked) return;
+        // Region editing permission (Mangaka when editable, or Tantou Editor during review) — same gate as
+        // creating a region, so the editor can also remove a region they added for annotation.
+        if (!CanEditRegions) return;
         if (!SelectedRegions.Any())
         {
             Snackbar.Add("No region selected.", Severity.Info);
@@ -2666,6 +2764,9 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private async Task ApplyEditRegion()
     {
         _showEditRegionDialog = false;
+        // Same region-edit permission as the toolbar button (BR-REG-026/035): Mangaka in editable states,
+        // Tantou Editor in UNDER_REVIEW/REVISION_REQUESTED. Backstop so a stale open dialog can't persist.
+        if (!CanEditRegions) return;
         var canvas = GetActiveCanvas();
         if (canvas == null) return;
         var targets = SelectedRegions.ToList();
@@ -2731,15 +2832,20 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         StateHasChanged();
         
         Snackbar.Add("Running Segmentation...", Severity.Info);
-        var successSegment = await GetActiveCanvas()!.InvokeAsync<bool>("callSegmentAPI");
-        
+        var segmentResult = await GetActiveCanvas()!.InvokeAsync<string>("callSegmentAPI");
+
         IsProcessing = false;
         StateHasChanged();
-        
-        if (successSegment) {
+
+        if (segmentResult == "success") {
             Snackbar.Add("Segmentation complete.", Severity.Success);
         } else {
-            Snackbar.Add("Segmentation failed.", Severity.Error);
+            // Surface the real reason (timeout / HTTP 500 / service not reachable) instead of a generic
+            // failure, so the user knows whether to start the service, check its console, or retry.
+            // RequireInteraction: an AI error must not auto-dismiss — a timeout message that vanishes after
+            // 5s is easy to miss on a slow call, and the user needs to read what went wrong.
+            Snackbar.Add($"Segmentation failed: {segmentResult}", Severity.Error,
+                config => config.RequireInteraction = true);
         }
     }
 
