@@ -1,6 +1,8 @@
-﻿using MangaManagementSystem.Application.Interfaces;
+using MangaManagementSystem.Application.Features.Ranking.Warnings;
+using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Application.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace MangaManagementSystem.Application
 {
@@ -14,6 +16,10 @@ namespace MangaManagementSystem.Application
             services.AddMediatR(configuration =>
                 configuration.RegisterServicesFromAssembly(
                     typeof(DependencyInjection).Assembly));
+
+            services.TryAddSingleton(new RankingWarningOptions());
+            services.TryAddSingleton<RankingWarningEvaluationGate>();
+            services.AddScoped<IRankingWarningEvaluator, RankingWarningEvaluator>();
 
             services.AddScoped<ISeriesService, SeriesService>();
             services.AddScoped<IChapterService, ChapterService>();

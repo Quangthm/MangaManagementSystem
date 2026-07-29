@@ -18,6 +18,7 @@
 
     <div class="mf-page">
         <MudStack Spacing="4" Class="ranking-page">
+
             <RankingHero RankingScope="@_rankingScope"
                          RankingScopeChanged="OnRankingScopeChangedAsync"
                          PeriodOptions="@_periodOptions"
@@ -97,6 +98,7 @@
 </RankingPageFrame>
 
 @code {
+
     private const string ScopeWeekly = "WEEKLY";
     private const string ScopeMonthly = "MONTHLY";
     private const string ScopeAllTime = "ALL_TIME";
@@ -105,8 +107,8 @@
     [
         new("rank_asc", "Rank (Ascending)"),
         new("rank_desc", "Rank (Descending)"),
-        new("title_asc", "Series Title (A–Z)"),
-        new("title_desc", "Series Title (Z–A)"),
+        new("title_asc", "Series Title (Aâ€“Z)"),
+        new("title_desc", "Series Title (Zâ€“A)"),
         new("score_desc", "Ranking Score (Highest First)"),
         new("score_asc", "Ranking Score (Lowest First)"),
         new("average_rating_desc", "Average Rating (Highest First)"),
@@ -236,8 +238,8 @@
         : _rankingRows.Max(row => row.Score).ToString("0.0", CultureInfo.InvariantCulture);
 
     private string MostReadSeriesTitle => _rankingRows.Count == 0
-        ? "—"
-        : _rankingRows.MaxBy(row => row.ReadingCount)?.Title ?? "—";
+        ? "â€”"
+        : _rankingRows.MaxBy(row => row.ReadingCount)?.Title ?? "â€”";
 
     private async Task LoadPeriodsAsync()
     {
@@ -331,7 +333,7 @@
             result.Add(new PublicationPeriodOption(
                 id,
                 group.Key,
-                $"{group.Key} ({startDate:dd/MM/yyyy} – {endDate:dd/MM/yyyy})",
+                $"{group.Key} ({startDate:dd/MM/yyyy} â€“ {endDate:dd/MM/yyyy})",
                 startDate,
                 endDate));
         }

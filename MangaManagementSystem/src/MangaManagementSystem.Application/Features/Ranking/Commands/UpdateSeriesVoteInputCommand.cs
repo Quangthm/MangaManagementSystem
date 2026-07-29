@@ -1,5 +1,7 @@
 using MangaManagementSystem.Application.Features.Ranking.Dtos;
 using MangaManagementSystem.Application.Features.Ranking.Repositories;
+using MangaManagementSystem.Application.Features.Ranking.Warnings;
+using Microsoft.Extensions.Logging;
 using MediatR;
 
 namespace MangaManagementSystem.Application.Features.Ranking.Commands;
@@ -16,11 +18,17 @@ public sealed class UpdateSeriesVoteInputCommandHandler
     : IRequestHandler<UpdateSeriesVoteInputCommand, SeriesVoteInputDto>
 {
     private readonly ISeriesRankingRepository _repository;
+    private readonly IRankingWarningEvaluator _rankingWarningEvaluator;
+    private readonly ILogger<UpdateSeriesVoteInputCommandHandler> _logger;
 
     public UpdateSeriesVoteInputCommandHandler(
-        ISeriesRankingRepository repository)
+        ISeriesRankingRepository repository,
+        IRankingWarningEvaluator rankingWarningEvaluator,
+        ILogger<UpdateSeriesVoteInputCommandHandler> logger)
     {
         _repository = repository;
+        _rankingWarningEvaluator = rankingWarningEvaluator;
+        _logger = logger;
     }
 
     public async Task<SeriesVoteInputDto> Handle(
@@ -30,7 +38,7 @@ public sealed class UpdateSeriesVoteInputCommandHandler
         await ValidateActorAsync(request.ActorUserId, cancellationToken);
         ValidateVoteInput(request.RatingCount, request.AverageRating, request.ReadingCount);
 
-        return await _repository.UpdateSeriesVoteInputAsync(
+        var result = await _repository.UpdateSeriesVoteInputAsync(
             request.ActorUserId,
             request.SeriesVoteInputId,
             request.RatingCount,
@@ -38,6 +46,30 @@ public sealed class UpdateSeriesVoteInputCommandHandler
             request.ReadingCount,
             NormalizeNote(request.DataSourceNote),
             cancellationToken);
+
+        await TryRunRankingWarningCatchUpAsync(result.SeriesId);
+        return result;
+    }
+
+
+    private async Task TryRunRankingWarningCatchUpAsync(
+        Guid seriesId)
+    {
+        try
+        {
+            await _rankingWarningEvaluator.EvaluateAsync(
+                new RankingWarningEvaluationRequest(
+                    RankingWarningEvaluationTriggers.CorrectionCatchUp,
+                    seriesId),
+                CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(
+                exception,
+                "Ranking warning correction catch-up failed after updating vote input. SeriesId={SeriesId}",
+                seriesId);
+        }
     }
 
     private async Task ValidateActorAsync(Guid actorUserId, CancellationToken cancellationToken)
