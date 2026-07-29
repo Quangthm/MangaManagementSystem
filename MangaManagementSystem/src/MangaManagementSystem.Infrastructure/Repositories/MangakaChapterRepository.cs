@@ -259,8 +259,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 if (hasUnresolvedAnnotations)
                 {
                     throw new InvalidOperationException(
-                        "This chapter cannot be submitted for editorial review while there are unresolved annotations created by you or your assistants. " +
-                        "Resolve these annotations before submitting the chapter.");
+                        "Please resolve your annotations before submitting the chapter.");
                 }
 
                 var recipientUserIds = await _context
