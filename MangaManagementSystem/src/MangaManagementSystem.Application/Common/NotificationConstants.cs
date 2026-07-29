@@ -29,6 +29,9 @@ namespace MangaManagementSystem.Application.Common
         public const string PublicationSchedule =
             "PUBLICATION_SCHEDULE";
 
+        public const string RankingWarning =
+            "RANKING_WARNING";
+
         public const string SystemMessage =
             "SYSTEM_MESSAGE";
     }

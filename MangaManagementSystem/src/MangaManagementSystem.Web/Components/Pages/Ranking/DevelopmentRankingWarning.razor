@@ -1,0 +1,35 @@
+@page "/development/ranking-warning"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin,Editorial Board Chief,EditorialBoardChief,Board Chief")]
+@inject IWebHostEnvironment Environment
+
+<PageTitle>Development Ranking Warning Console</PageTitle>
+
+@if (!Environment.IsDevelopment())
+{
+    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="ma-4">
+        This page is available only in the Development environment.
+    </MudAlert>
+}
+else
+{
+    <RankingPageFrame>
+        <RankingStyles />
+
+        <div class="mf-page">
+            <MudStack Spacing="4" Class="ranking-page">
+                <MudPaper Class="pa-4">
+                    <MudText Typo="Typo.h4">
+                        Development Ranking Warning Console
+                    </MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Development-only controls for fixed UTC time and manual Ranking Warning evaluation.
+                        This console is intentionally separated from the normal Ranking page.
+                    </MudText>
+                </MudPaper>
+
+                <DevelopmentRankingTimeConsole />
+            </MudStack>
+        </div>
+    </RankingPageFrame>
+}
