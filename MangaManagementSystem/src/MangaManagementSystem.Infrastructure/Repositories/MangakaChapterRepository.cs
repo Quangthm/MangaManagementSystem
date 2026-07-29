@@ -248,6 +248,9 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
                 bool hasUnresolvedAnnotations = await _context.ChapterPageAnnotations
                     .AnyAsync(a => a.ResolvedAtUtc == null &&
+                                   a.AnnotatedByUser != null &&
+                                   a.AnnotatedByUser.Role != null &&
+                                   a.AnnotatedByUser.Role.RoleName != "Tantou Editor" &&
                                    a.PageRegions.Any(r => r.ChapterPageVersion != null && 
                                                           r.ChapterPageVersion.ChapterPage != null && 
                                                           r.ChapterPageVersion.ChapterPage.ChapterId == chapterId),
@@ -256,8 +259,8 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 if (hasUnresolvedAnnotations)
                 {
                     throw new InvalidOperationException(
-                        "This chapter cannot be submitted for editorial review while there are unresolved annotations. " +
-                        "Resolve all annotations before submitting the chapter.");
+                        "This chapter cannot be submitted for editorial review while there are unresolved annotations created by you or your assistants. " +
+                        "Resolve these annotations before submitting the chapter.");
                 }
 
                 var recipientUserIds = await _context
