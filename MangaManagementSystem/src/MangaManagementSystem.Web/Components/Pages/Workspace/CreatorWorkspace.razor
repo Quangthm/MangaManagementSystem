@@ -64,16 +64,15 @@ else
 {
 <div class="mf-workspace-container">
     <!-- Header -->
-    <header class="mf-workspace-header px-4 py-2 d-flex align-center">
-        <!-- 3 vùng flex (trái/giữa/phải) thay cho absolute-center: series nhiều genre không còn
-             đè lên phần "Chapter … - Page …" ở giữa; title/genre tự cắt bằng ellipsis. -->
-        <div class="d-flex align-center mf-header-side">
+    <!-- Header -->
+    <header class="mf-workspace-header px-4 py-2 d-flex align-center position-relative">
+        <div class="d-flex align-center mf-header-side" style="max-width: calc(50vw - 150px);">
             <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="HandleBackClick" Class="mr-2" />
             <MudText Typo="Typo.h6" Class="font-weight-bold mf-header-title" title="@SeriesTitle">@SeriesTitle</MudText>
             <MudText Typo="Typo.caption" Class="mf-muted ml-2 mt-1 mf-header-subtitle" title="@SeriesSubtitle">@SeriesSubtitle</MudText>
         </div>
 
-        <div class="d-flex align-center text-center mf-header-center">
+        <div class="d-flex align-center justify-center mf-header-center">
             @if (SelectedChapter > 0 && SelectedPage > 0 && UploadedPages != null && ActivePageIndex >= 0 && ActivePageIndex < UploadedPages.Count)
             {
                 <MudText Typo="Typo.h6" Class="font-weight-bold mr-4">Chapter @SelectedChapterLabel - Page @SelectedPage</MudText>
@@ -104,7 +103,7 @@ else
             }
         </div>
 
-        <div class="d-flex align-center gap-2 mf-header-side justify-end">
+        <div class="d-flex align-center gap-2 mf-header-side justify-end ml-auto">
 
             @{
                 var _headerChap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
@@ -1332,7 +1331,9 @@ else
         display: flex;
         flex-direction: column;
         height: 100vh;
-        width: 100vw;
+        width: 100%;
+        max-width: 100vw;
+        overflow-x: hidden;
         background-color: #ffffff;
         /* Panel widths as variables so laptop breakpoints can shrink the side panels
            (giving the canvas more room) without breaking the collapse toggle. */
@@ -1356,19 +1357,23 @@ else
     .mf-workspace-header {
         border-bottom: 1px solid var(--mud-palette-lines-default);
         gap: 12px;
-        flex-wrap: nowrap;
         overflow: hidden;
+        flex-wrap: nowrap;
+        width: 100%;
+        flex-shrink: 0;
     }
-    /* Hai bên co giãn bằng nhau => khối giữa nằm giữa mà không cần position:absolute,
-       nên không bao giờ bị đè bởi tên series / danh sách genre dài. */
     .mf-workspace-header .mf-header-side {
-        flex: 1 1 0;
-        min-width: 0;
+        /* No fixed width needed, ml-auto pushes right side */
     }
     .mf-workspace-header .mf-header-center {
-        flex: 0 1 auto;
-        min-width: 0;
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
         white-space: nowrap;
+        pointer-events: none; /* prevent it from blocking clicks if it overlaps */
+    }
+    .mf-workspace-header .mf-header-center * {
+        pointer-events: auto; /* re-enable clicks for icons/text inside */
     }
     .mf-workspace-header .mf-header-title {
         max-width: 34ch;
