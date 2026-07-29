@@ -1,0 +1,210 @@
+@using System.Globalization
+@using MangaManagementSystem.Application.Features.Ranking.Warnings
+@using MangaManagementSystem.Web.Services.Api
+
+@inject IDevelopmentRankingWarningApiClient DevelopmentApiClient
+@inject ISnackbar Snackbar
+
+<MudPaper Class="pa-5" Elevation="2">
+    @if (_state?.IsFakeTimeActive == true)
+    {
+        <MudAlert Severity="Severity.Warning"
+                  Variant="Variant.Filled"
+                  Class="mb-4">
+            <strong>FAKE TIME ACTIVE</strong> — this state is in-memory only and resets when the API restarts.
+        </MudAlert>
+    }
+
+    <MudStack Spacing="3">
+        <MudText Typo="Typo.h5">Development Time Console</MudText>
+
+        @if (_state is not null)
+        {
+            <MudGrid>
+                <MudItem xs="12" md="4">
+                    <MudText Typo="Typo.subtitle2">Real UTC</MudText>
+                    <MudText>@_state.RealUtc.ToString("O")</MudText>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudText Typo="Typo.subtitle2">Effective UTC</MudText>
+                    <MudText>@_state.EffectiveUtc.ToString("O")</MudText>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudText Typo="Typo.subtitle2">Mode</MudText>
+                    <MudText>@_state.Mode</MudText>
+                </MudItem>
+            </MudGrid>
+        }
+
+        <MudDivider />
+
+        <MudGrid>
+            <MudItem xs="12" md="8">
+                <MudTextField T="string"
+                              Label="Fixed UTC (ISO-8601)"
+                              @bind-Value="_fixedUtcText"
+                              Placeholder="2026-07-27T00:00:00Z"
+                              Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" md="4" Class="d-flex align-center">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Disabled="@_busy"
+                           OnClick="SetFixedUtcAsync">
+                    Set Fixed UTC
+                </MudButton>
+            </MudItem>
+
+            <MudItem xs="12" md="8">
+                <MudNumericField T="double"
+                                 Label="Offset minutes"
+                                 @bind-Value="_offsetMinutes"
+                                 Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" md="4" Class="d-flex align-center">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Secondary"
+                           Disabled="@_busy"
+                           OnClick="ApplyOffsetAsync">
+                    Apply Offset
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+
+        <MudStack Row="true" Spacing="2">
+            <MudButton Variant="Variant.Outlined"
+                       Disabled="@_busy"
+                       OnClick="ResetTimeAsync">
+                Reset to Real Time
+            </MudButton>
+
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Warning"
+                       Disabled="@_busy"
+                       OnClick="RunEvaluationAsync">
+                Run Ranking Evaluation Now
+            </MudButton>
+
+            <MudButton Variant="Variant.Text"
+                       Disabled="@_busy"
+                       OnClick="RefreshAsync">
+                Refresh
+            </MudButton>
+        </MudStack>
+
+        @if (_summary is not null)
+        {
+            <MudDivider />
+            <MudText Typo="Typo.h6">Evaluation summary</MudText>
+            <MudGrid>
+                <MudItem xs="6" md="3"><strong>Outcome:</strong> @_summary.OutcomeCode</MudItem>
+                <MudItem xs="6" md="3"><strong>Candidates:</strong> @_summary.CandidateSeriesCount</MudItem>
+                <MudItem xs="6" md="3"><strong>Sent:</strong> @_summary.NotificationsCreated</MudItem>
+                <MudItem xs="6" md="3"><strong>Duplicates:</strong> @_summary.DuplicateNotificationsSkipped</MudItem>
+                <MudItem xs="6" md="3"><strong>Missing rows:</strong> @_summary.MissingRowsSkipped</MudItem>
+                <MudItem xs="6" md="3"><strong>Status skipped:</strong> @_summary.StatusSkipped</MudItem>
+                <MudItem xs="6" md="3"><strong>No recipient:</strong> @_summary.NoRecipientSkipped</MudItem>
+                <MudItem xs="6" md="3"><strong>Errors:</strong> @_summary.ErrorCount</MudItem>
+            </MudGrid>
+            @if (!string.IsNullOrWhiteSpace(_summary.Detail))
+            {
+                <MudText Typo="Typo.body2">@_summary.Detail</MudText>
+            }
+        }
+    </MudStack>
+</MudPaper>
+
+@code {
+    private DevelopmentTimeState? _state;
+    private RankingWarningEvaluationSummary? _summary;
+    private string _fixedUtcText = "2026-07-27T00:00:00Z";
+    private double _offsetMinutes;
+    private bool _busy;
+
+    protected override Task OnInitializedAsync()
+    {
+        return RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        await RunOperationAsync(async () =>
+        {
+            _state = await DevelopmentApiClient.GetTimeStateAsync();
+        });
+    }
+
+    private async Task SetFixedUtcAsync()
+    {
+        if (!DateTimeOffset.TryParse(
+                _fixedUtcText,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal
+                | DateTimeStyles.AdjustToUniversal,
+                out var fixedUtc))
+        {
+            Snackbar.Add(
+                "Enter a valid UTC timestamp, for example 2026-07-27T00:00:00Z.",
+                Severity.Error);
+            return;
+        }
+
+        await RunOperationAsync(async () =>
+        {
+            _state = await DevelopmentApiClient.SetFixedUtcAsync(fixedUtc);
+            Snackbar.Add("Fixed UTC applied.", Severity.Success);
+        });
+    }
+
+    private async Task ApplyOffsetAsync()
+    {
+        await RunOperationAsync(async () =>
+        {
+            _state = await DevelopmentApiClient.ApplyOffsetAsync(_offsetMinutes);
+            Snackbar.Add("UTC offset applied.", Severity.Success);
+        });
+    }
+
+    private async Task ResetTimeAsync()
+    {
+        await RunOperationAsync(async () =>
+        {
+            _state = await DevelopmentApiClient.ResetTimeAsync();
+            Snackbar.Add("Effective time reset to real UTC.", Severity.Success);
+        });
+    }
+
+    private async Task RunEvaluationAsync()
+    {
+        await RunOperationAsync(async () =>
+        {
+            _summary = await DevelopmentApiClient.RunEvaluationAsync();
+            _state = await DevelopmentApiClient.GetTimeStateAsync();
+            Snackbar.Add("Ranking warning evaluation completed.", Severity.Success);
+        });
+    }
+
+    private async Task RunOperationAsync(
+        Func<Task> operation)
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+
+        try
+        {
+            await operation();
+        }
+        catch (Exception exception)
+        {
+            Snackbar.Add(exception.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

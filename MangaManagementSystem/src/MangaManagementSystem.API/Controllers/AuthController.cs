@@ -218,8 +218,21 @@ namespace MangaManagementSystem.API.Controllers
             UserDto user,
             string roleName)
         {
+            var expireMinutesValue =
+                _configuration["Jwt:ExpireMinutes"];
+
+            if (!int.TryParse(
+                    expireMinutesValue,
+                    out var expireMinutes)
+                || expireMinutes <= 0)
+            {
+                throw new InvalidOperationException(
+                    "Jwt:ExpireMinutes must be a positive integer.");
+            }
+
             var expiresAtUtc =
-                DateTime.UtcNow.AddDays(14);
+                DateTime.UtcNow.AddMinutes(
+                    expireMinutes);
 
             var accessToken =
                 GenerateJwtToken(

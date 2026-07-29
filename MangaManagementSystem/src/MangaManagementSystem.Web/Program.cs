@@ -32,6 +32,17 @@ namespace MangaManagementSystem.Web
 
             builder.Services.AddMemoryCache();
             builder.Services.Configure<ApiSettings>(builder.Configuration.GetSection(ApiSettings.SectionName));
+
+            if (builder.Environment.IsDevelopment())
+            {
+                builder.Services
+                    .AddHttpClient<IDevelopmentRankingWarningApiClient, DevelopmentRankingWarningApiClient>((sp, client) =>
+                    {
+                        var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                        client.BaseAddress = new Uri(settings.Value.BaseUrl);
+                    })
+                    .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
+            }
             builder.Services.AddScoped<ApiAuthorizationMessageHandler>();
 builder.Services.AddHttpClient<IRegistrationApiClient, RegistrationApiClient>((sp, client) =>
             {
@@ -312,7 +323,7 @@ builder.Services.AddHttpClient<IAdminFileApiClient, AdminFileApiClient>((sp, cli
                 app.UseHsts();
             }
 
-            app.UseHttpsRedirection();  
+            app.UseHttpsRedirection();
             app.UseStaticFiles();
 
             app.UseAuthentication();
@@ -910,8 +921,8 @@ app.MapPost(
                 HttpContext context,
                 UserDto user,
                 string roleName,
-                string? accessToken = null,
-                DateTime? expiresAtUtc = null)
+                string? accessToken,
+                DateTime expiresAtUtc)
         {
             var claims =
                 new List<Claim>
@@ -949,13 +960,10 @@ app.MapPost(
                 new ClaimsPrincipal(identity);
 
             var cookieExpiresAt =
-                expiresAtUtc.HasValue
-                    ? new DateTimeOffset(
-                        DateTime.SpecifyKind(
-                            expiresAtUtc.Value,
-                            DateTimeKind.Utc))
-                    : DateTimeOffset.UtcNow
-                        .AddDays(14);
+                new DateTimeOffset(
+                    DateTime.SpecifyKind(
+                        expiresAtUtc,
+                        DateTimeKind.Utc));
 
             await context.SignInAsync(
                 CookieAuthenticationDefaults

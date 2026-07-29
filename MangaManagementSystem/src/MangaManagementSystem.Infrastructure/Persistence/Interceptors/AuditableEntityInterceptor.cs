@@ -10,6 +10,12 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Interceptors
 {
     public class AuditableEntityInterceptor : SaveChangesInterceptor
     {
+        private readonly TimeProvider _timeProvider;
+
+        public AuditableEntityInterceptor(TimeProvider timeProvider)
+        {
+            _timeProvider = timeProvider;
+        }
         public override InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)
         {
             UpdateEntities(eventData.Context);
@@ -30,7 +36,7 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Interceptors
             {
                 if (entry.State == EntityState.Added)
                 {
-                    var utcNow = DateTime.UtcNow;
+                    var utcNow = _timeProvider.GetUtcNow().UtcDateTime;
                     var createdProp = entry.Properties.FirstOrDefault(p => p.Metadata.Name == "CreatedAtUtc");
                     if (createdProp != null && (createdProp.CurrentValue == null || (DateTime)createdProp.CurrentValue == default(DateTime)))
                     {
@@ -39,7 +45,7 @@ namespace MangaManagementSystem.Infrastructure.Persistence.Interceptors
                 }
                 else if (entry.State == EntityState.Modified)
                 {
-                    var utcNow = DateTime.UtcNow;
+                    var utcNow = _timeProvider.GetUtcNow().UtcDateTime;
                     var updatedProp = entry.Properties.FirstOrDefault(p => p.Metadata.Name == "UpdatedAtUtc");
                     if (updatedProp != null)
                     {

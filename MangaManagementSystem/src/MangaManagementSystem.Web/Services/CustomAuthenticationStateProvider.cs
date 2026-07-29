@@ -34,7 +34,8 @@ namespace MangaManagementSystem.Web.Services
         }
 
         public async Task MarkUserAsAuthenticated(
-            AuthResultDto authResult)
+            AuthResultDto authResult,
+            DateTime expiresAtUtc)
         {
             if (authResult.User is null
                 || string.IsNullOrWhiteSpace(
@@ -86,8 +87,10 @@ namespace MangaManagementSystem.Web.Services
                 {
                     IsPersistent = true,
                     ExpiresUtc =
-                        DateTimeOffset.UtcNow
-                            .AddDays(14)
+                        new DateTimeOffset(
+                            DateTime.SpecifyKind(
+                                expiresAtUtc,
+                                DateTimeKind.Utc))
                 });
 
             NotifyAuthenticationStateChanged(
