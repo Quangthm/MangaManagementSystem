@@ -861,7 +861,7 @@ else
                           var isTaskOnActiveVersion = IsTaskOnActiveVersion(task);
                           var locationChipText = isTaskOnActiveVersion ? "Current version" : "Other version";
                           
-                          <MudPaper Elevation="0" Class="pa-3 border-1 mud-border-lines-default rounded-lg"
+                          <MudPaper Elevation="0" Class="@($"pa-3 border-1 mud-border-lines-default rounded-lg mf-selectable-card {(isTargetTask ? "selected" : "")}")"
                                     Style="@($"cursor: pointer; {(isTargetTask ? "border-left: 3px solid #4f46e5; background: #eef2ff;" : (!isTaskOnActiveVersion ? "background: #f8fafc;" : ""))}")"
                                     @onclick="@(() => SelectTaskPanels(task))">
                               <div class="d-flex justify-space-between" style="gap: 8px;">
@@ -887,8 +887,8 @@ else
                                           }
                                       </div>
                                   </div>
-                                  <div class="d-flex flex-column align-end justify-space-between flex-shrink-0" @onclick:stopPropagation="true">
-                                      <div class="d-flex align-center mb-1">
+                                  <div class="d-flex flex-column align-end justify-space-between flex-shrink-0">
+                                      <div class="d-flex align-center mb-1" @onclick:stopPropagation="true">
                                           <MudTooltip Text="Status is set by the workflow (assistant submits / Mangaka reviews), not edited here.">
                                               <MudChip T="string" Size="Size.Small" Color="@chipColor" Variant="Variant.Outlined">@task.Status</MudChip>
                                           </MudTooltip>
@@ -899,7 +899,9 @@ else
                                               </MudTooltip>
                                           }
                                       </div>
-                                      <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" OnClick="@(() => OpenTaskDescriptionDialog(task))" Style="font-size: 10px; padding: 0;">view description task</MudButton>
+                                      <div @onclick:stopPropagation="true">
+                                          <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" OnClick="@(() => OpenTaskDescriptionDialog(task))" Style="font-size: 10px; padding: 0;">view description task</MudButton>
+                                      </div>
                                   </div>
                               </div>
                           </MudPaper>
@@ -980,7 +982,7 @@ else
                             {
                                 var annColor = ann.IsResolved ? Color.Success : Color.Error;
                                 var isSelectedAnn = _selectedAnnotationId == ann.Id;
-                                <MudPaper Elevation="0" Class="pa-3 border-1 mud-border-lines-default rounded-lg"
+                                <MudPaper Elevation="0" Class="@($"pa-3 border-1 mud-border-lines-default rounded-lg mf-selectable-card {(isSelectedAnn ? "selected" : "")}")"
                                           Style="@($"cursor: pointer; {(isSelectedAnn ? "border-left: 3px solid #4f46e5; background: #eef2ff;" : "")}")" @onclick="@(() => SelectAnnotationPanels(ann))">
                                     <div class="d-flex justify-space-between align-start">
                                         <div class="d-flex flex-column">
@@ -1012,8 +1014,8 @@ else
                                                 <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" OnClick="@(() => OpenAnnotationDescriptionDialog(ann))" Style="font-size: 10px; padding: 0; min-width: auto; justify-content: flex-start;">view description annotation</MudButton>
                                             </div>
                                         </div>
-                                        <div class="d-flex flex-column align-end justify-space-between flex-shrink-0" @onclick:stopPropagation="true">
-                                            <div class="d-flex align-center mb-1">
+                                        <div class="d-flex flex-column align-end justify-space-between flex-shrink-0">
+                                            <div class="d-flex align-center mb-1" @onclick:stopPropagation="true">
                                                 @if (!ann.IsResolved && CanResolveAnnotation(ann))
                                                 {
                                                     <MudTooltip Text="Resolve Issue"><MudIconButton Icon="@Icons.Material.Filled.Check" Size="Size.Small" Color="Color.Success" OnClick="@(() => ResolveAnnotation(ann.Id))" /></MudTooltip>
@@ -1519,4 +1521,14 @@ else
     .mud-snackbar.mud-alert-filled-success { background: linear-gradient(135deg, rgba(46, 125, 50, 0.95), rgba(67, 160, 71, 0.95)) !important; }
     .mud-snackbar.mud-alert-filled-warning { background: linear-gradient(135deg, rgba(245, 124, 0, 0.95), rgba(251, 140, 0, 0.95)) !important; }
     .mud-snackbar.mud-alert-filled-info { background: linear-gradient(135deg, rgba(25, 118, 210, 0.95), rgba(30, 136, 229, 0.95)) !important; }
+
+    /* Hover effect for selectable task and annotation cards */
+    .mf-selectable-card {
+        transition: transform 0.15s ease-in-out, background-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    }
+    .mf-selectable-card:not(.selected):hover {
+        background-color: #f8fafc !important; /* light slate */
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    }
 </style>

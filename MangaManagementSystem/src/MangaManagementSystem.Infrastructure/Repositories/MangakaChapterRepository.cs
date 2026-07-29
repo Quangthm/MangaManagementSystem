@@ -246,6 +246,20 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                         "submitting the chapter.");
                 }
 
+                bool hasUnresolvedAnnotations = await _context.ChapterPageAnnotations
+                    .AnyAsync(a => a.ResolvedAtUtc == null &&
+                                   a.PageRegions.Any(r => r.ChapterPageVersion != null && 
+                                                          r.ChapterPageVersion.ChapterPage != null && 
+                                                          r.ChapterPageVersion.ChapterPage.ChapterId == chapterId),
+                                   cancellationToken);
+
+                if (hasUnresolvedAnnotations)
+                {
+                    throw new InvalidOperationException(
+                        "This chapter cannot be submitted for editorial review while there are unresolved annotations. " +
+                        "Resolve all annotations before submitting the chapter.");
+                }
+
                 var recipientUserIds = await _context
                     .ActiveSeriesContributors
                     .AsNoTracking()

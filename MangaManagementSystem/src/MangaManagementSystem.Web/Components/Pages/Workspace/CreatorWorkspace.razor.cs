@@ -483,7 +483,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         {
             regionIds = await EnsureRegionsSavedAsync(regionsToSave);
             // Show only the panel number(s) — same #N shown on the canvas — not raw coordinates.
-            target = string.Join(", ", SelectedRegions.Select(r => FormatRegionTarget(r.Type, r.Id)));
+            target = string.Join(", ", regionsToSave.Select(r => FormatRegionTarget(r.Type, r.Id)));
         }
 
         int newId = ActiveTasks.Any() ? ActiveTasks.Max(t => t.Id) + 1 : 1;
@@ -515,6 +515,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 Target = target,
                 Description = TaskDescription,
                 Status = "Assigned",
+                CompensationAmount = Math.Round(TaskCompensation, 2, MidpointRounding.AwayFromZero),
                 VersionId = GetActiveVersionId(),
                 Regions = regionsToSave.ToList()   // so clicking the new card highlights its panels immediately
             });
@@ -732,10 +733,10 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         string target;
         if (PendingPinX.HasValue && PendingPinY.HasValue)
             target = $"Pin at ({Math.Round(PendingPinX.Value)}, {Math.Round(PendingPinY.Value)})";
-        else if (!SelectedRegions.Any())
+        else if (!regionsToSave.Any())
             target = "Full page";
         else
-            target = string.Join(", ", SelectedRegions.Select(r => FormatRegionTarget(r.Type, r.Id)));
+            target = string.Join(", ", regionsToSave.Select(r => FormatRegionTarget(r.Type, r.Id)));
 
         try
         {
