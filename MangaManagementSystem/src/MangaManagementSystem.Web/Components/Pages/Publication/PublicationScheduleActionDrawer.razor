@@ -68,6 +68,15 @@
         color: #64748b;
     }
 
+    .mf-drawer-card-chapter-title {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        overflow: hidden;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
     .mf-drawer-card-actions {
         display: flex;
         gap: 4px;
@@ -253,7 +262,10 @@
                 </div>
                 <div class="mf-drawer-card-info">
                     <div class="mf-drawer-card-series" title="@chapter.SeriesTitle">@chapter.SeriesTitle</div>
-                    <div class="mf-drawer-card-chapter">@chapter.ChapterNumberLabel @(!string.IsNullOrEmpty(chapter.ChapterTitle) ? $"- {chapter.ChapterTitle}" : "")</div>
+                    <div class="mf-drawer-card-chapter mf-drawer-card-chapter-title"
+                         title="@chapter.ChapterTitle">
+                        @chapter.ChapterNumberLabel @(!string.IsNullOrEmpty(chapter.ChapterTitle) ? $"- {chapter.ChapterTitle}" : "")
+                    </div>
                     <div class="mf-drawer-card-chapter">
                         @if (chapter.PlannedReleaseDate.HasValue)
                         {
