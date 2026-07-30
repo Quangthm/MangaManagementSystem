@@ -1,5 +1,10 @@
 # Quick Select Audit Actor Attribution Fix
 
+Status: **runtime verified fixed**.
+
+New Quick Select audit rows now persist both the logged-in Mangaka user ID and
+the authoritative `Mangaka` role snapshot.
+
 ## Runtime history and proven findings
 
 Initial Quick Select database checks showed incomplete task-creation actor
@@ -23,7 +28,7 @@ The temporary explicit `HasColumnName("actor_user_id")` change was not the root
 cause. The project-wide snake-case convention already provides that mapping,
 so the redundant isolated configuration was removed.
 
-## Remaining defect and production fix
+## Root cause and production fix
 
 The remaining null attribution was `actor_role_name`. Quick Select explicitly
 constructed each audit event with `ActorRoleName = null`.
@@ -102,10 +107,10 @@ Normal production logging remains.
 The temporary interceptor, DI registration, and isolated explicit mapping were
 removed rather than retained as production changes.
 
-## Manual validation
+## Optional final regression validation
 
-After building and restarting the API and Web applications, create one Quick
-Select task and run:
+The user has already runtime-verified the fix. For any final regression pass,
+create one Quick Select task and run:
 
 ```sql
 SELECT TOP (5)
@@ -135,6 +140,7 @@ Build verification: **NOT RUN -- user will perform the build.**
 Automated tests: **NOT RUN -- user will perform validation as applicable.**
 
 Manual black-box functional testing:
-**NOT RUN -- user will perform runtime functional testing.**
+**NOT RUN during final cleanup -- user already verified the fix and will
+perform any final regression validation as needed.**
 
-Nothing was committed or pushed.
+No commit or push was performed during final cleanup.
