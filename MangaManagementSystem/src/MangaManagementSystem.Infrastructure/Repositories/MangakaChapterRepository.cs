@@ -246,6 +246,22 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                         "submitting the chapter.");
                 }
 
+                bool hasUnresolvedAnnotations = await _context.ChapterPageAnnotations
+                    .AnyAsync(a => a.ResolvedAtUtc == null &&
+                                   a.AnnotatedByUser != null &&
+                                   a.AnnotatedByUser.Role != null &&
+                                   a.AnnotatedByUser.Role.RoleName != "Tantou Editor" &&
+                                   a.PageRegions.Any(r => r.ChapterPageVersion != null && 
+                                                          r.ChapterPageVersion.ChapterPage != null && 
+                                                          r.ChapterPageVersion.ChapterPage.ChapterId == chapterId),
+                                   cancellationToken);
+
+                if (hasUnresolvedAnnotations)
+                {
+                    throw new InvalidOperationException(
+                        "Please resolve your annotations before submitting the chapter.");
+                }
+
                 var recipientUserIds = await _context
                     .ActiveSeriesContributors
                     .AsNoTracking()

@@ -122,13 +122,24 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         try
         {
             var comments = string.IsNullOrWhiteSpace(_reviewComment) ? null : _reviewComment.Trim();
-            var res = await EditorReviewApi.SubmitReviewDecisionAsync(
-                chap.ChapterId,
-                new MangaManagementSystem.Application.DTOs.Editor.SubmitChapterEditorialReviewRequest(_reviewDecision, comments));
+            
+            MangaManagementSystem.Application.DTOs.Editor.SubmitChapterEditorialReviewResponse res;
+            if (_markupFile != null)
+            {
+                res = await EditorReviewApi.SubmitReviewDecisionWithMarkupAsync(
+                    chap.ChapterId, _reviewDecision, comments, _markupFile);
+            }
+            else
+            {
+                res = await EditorReviewApi.SubmitReviewDecisionAsync(
+                    chap.ChapterId,
+                    new MangaManagementSystem.Application.DTOs.Editor.SubmitChapterEditorialReviewRequest(_reviewDecision, comments));
+            }
 
             chap.StatusCode = res.StatusCode;
             _showReviewDialog = false;
             _reviewComment = "";
+            _markupFile = null;
             Snackbar.Add($"Review submitted ({res.DecisionCode}). Chapter is now {res.StatusCode}.", Severity.Success);
         }
         catch (Exception ex)
@@ -472,7 +483,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         {
             regionIds = await EnsureRegionsSavedAsync(regionsToSave);
             // Show only the panel number(s) — same #N shown on the canvas — not raw coordinates.
-            target = string.Join(", ", SelectedRegions.Select(r => FormatRegionTarget(r.Type, r.Id)));
+            target = string.Join(", ", regionsToSave.Select(r => FormatRegionTarget(r.Type, r.Id)));
         }
 
         int newId = ActiveTasks.Any() ? ActiveTasks.Max(t => t.Id) + 1 : 1;
@@ -504,6 +515,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 Target = target,
                 Description = TaskDescription,
                 Status = "Assigned",
+                CompensationAmount = Math.Round(TaskCompensation, 2, MidpointRounding.AwayFromZero),
                 VersionId = GetActiveVersionId(),
                 Regions = regionsToSave.ToList()   // so clicking the new card highlights its panels immediately
             });
@@ -532,6 +544,21 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private int _cancelTaskLocalId;
     private string _cancelTaskReason = string.Empty;
     private bool _cancelTaskInProgress;
+
+    private bool _showTaskDescriptionDialog;
+    private ProductionTask? _selectedTaskForDescription;
+
+    private void OpenTaskDescriptionDialog(ProductionTask task)
+    {
+        _selectedTaskForDescription = task;
+        _showTaskDescriptionDialog = true;
+    }
+
+    private void CloseTaskDescriptionDialog()
+    {
+        _showTaskDescriptionDialog = false;
+        _selectedTaskForDescription = null;
+    }
 
     private void OpenCancelTaskDialog(int taskId)
     {
@@ -706,10 +733,10 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         string target;
         if (PendingPinX.HasValue && PendingPinY.HasValue)
             target = $"Pin at ({Math.Round(PendingPinX.Value)}, {Math.Round(PendingPinY.Value)})";
-        else if (!SelectedRegions.Any())
+        else if (!regionsToSave.Any())
             target = "Full page";
         else
-            target = string.Join(", ", SelectedRegions.Select(r => FormatRegionTarget(r.Type, r.Id)));
+            target = string.Join(", ", regionsToSave.Select(r => FormatRegionTarget(r.Type, r.Id)));
 
         try
         {
@@ -1292,7 +1319,10 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             ActiveTasks = new();
             ActiveAnnotations = new();
             SelectedRegions.Clear();
-            Snackbar.Add("Please upload an image to begin.", Severity.Info);
+            if (CanManageContent)
+            {
+                Snackbar.Add("Please upload an image to begin.", Severity.Info);
+            }
         }
         // Sync split view pane when chapter changes. Updating the data alone does not
         // re-render the right canvas (it is JS-rendered), so drive it through
@@ -3041,9 +3071,41 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
     public async ValueTask DisposeAsync()
     {
+        // Revert global Snackbar settings when leaving Workspace
+        Snackbar.Configuration.PositionClass = Defaults.Classes.Position.TopRight;
+        Snackbar.Configuration.NewestOnTop = false;
+        Snackbar.Configuration.HideTransitionDuration = 500;
+        Snackbar.Configuration.ShowTransitionDuration = 500;
+        
         _objRef?.Dispose();
         await ValueTask.CompletedTask;
     }
 
+    // ----------------------------------------------------------------------
+    // EDITOR MARKUP UPLOAD
+    // ----------------------------------------------------------------------
+    private Microsoft.AspNetCore.Components.Forms.IBrowserFile? _markupFile;
+    private void OnMarkupFileChanged(Microsoft.AspNetCore.Components.Forms.IBrowserFile file)
+    {
+        _markupFile = file;
+    }
+
+    // ----------------------------------------------------------------------
+    // ANNOTATION DESCRIPTION DIALOG
+    // ----------------------------------------------------------------------
+    private bool _showAnnotationDescriptionDialog;
+    private AnnotationModel? _selectedAnnotationForDescription;
+    
+    private void OpenAnnotationDescriptionDialog(AnnotationModel ann)
+    {
+        _selectedAnnotationForDescription = ann;
+        _showAnnotationDescriptionDialog = true;
+    }
+    
+    private void CloseAnnotationDescriptionDialog()
+    {
+        _showAnnotationDescriptionDialog = false;
+        _selectedAnnotationForDescription = null;
+    }
     }
 }

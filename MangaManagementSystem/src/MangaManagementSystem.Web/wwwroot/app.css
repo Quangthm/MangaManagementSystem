@@ -49,3 +49,53 @@ h1:focus {
 .darker-border-checkbox.form-check-input {
     border-color: #929292;
 }
+
+/* ========================================================================= */
+/* PREMIUM SNACKBAR (TOAST ALERT) STYLES                                       */
+/* ========================================================================= */
+.mud-snackbar {
+    border-radius: 12px !important;
+    box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.3) !important;
+    padding: 6px 12px !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+}
+
+.mud-snackbar-content {
+    align-items: center !important;
+}
+
+.mud-snackbar-content-message {
+    font-weight: 500 !important;
+    font-size: 0.95rem !important;
+    letter-spacing: 0.3px !important;
+    line-height: 1.4 !important;
+    color: #fff !important;
+}
+
+.mud-snackbar .mud-icon-button {
+    color: rgba(255, 255, 255, 0.8) !important;
+    transition: all 0.2s ease !important;
+}
+.mud-snackbar .mud-icon-button:hover {
+    color: white !important;
+    background-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Colors for specific variants */
+.mud-snackbar.mud-alert-filled-error {
+    background: linear-gradient(135deg, #d32f2f, #e53935) !important;
+}
+
+.mud-snackbar.mud-alert-filled-success {
+    background: linear-gradient(135deg, #2e7d32, #43a047) !important;
+}
+
+.mud-snackbar.mud-alert-filled-warning {
+    background: linear-gradient(135deg, #f57c00, #fb8c00) !important;
+}
+
+.mud-snackbar.mud-alert-filled-info {
+    background: linear-gradient(135deg, #1976d2, #1e88e5) !important;
+}

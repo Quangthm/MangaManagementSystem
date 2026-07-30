@@ -18,6 +18,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         public string Description { get; set; } = "";
         public string Status { get; set; } = "Assigned";
         public DateTime? DueAtUtc { get; set; }   // manga.ChapterPageTask.due_at_utc (task deadline)
+        public decimal? CompensationAmount { get; set; } // Compensation amount for the task
         public Guid? VersionId { get; set; }   // version this task belongs to (via its regions)
         public List<RegionModel> Regions { get; set; } = new();
     }

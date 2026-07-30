@@ -64,16 +64,15 @@ else
 {
 <div class="mf-workspace-container">
     <!-- Header -->
-    <header class="mf-workspace-header px-4 py-2 d-flex align-center">
-        <!-- 3 vùng flex (trái/giữa/phải) thay cho absolute-center: series nhiều genre không còn
-             đè lên phần "Chapter … - Page …" ở giữa; title/genre tự cắt bằng ellipsis. -->
-        <div class="d-flex align-center mf-header-side">
+    <!-- Header -->
+    <header class="mf-workspace-header px-4 py-2 d-flex align-center position-relative">
+        <div class="d-flex align-center mf-header-side" style="max-width: calc(50vw - 150px);">
             <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="HandleBackClick" Class="mr-2" />
             <MudText Typo="Typo.h6" Class="font-weight-bold mf-header-title" title="@SeriesTitle">@SeriesTitle</MudText>
             <MudText Typo="Typo.caption" Class="mf-muted ml-2 mt-1 mf-header-subtitle" title="@SeriesSubtitle">@SeriesSubtitle</MudText>
         </div>
 
-        <div class="d-flex align-center text-center mf-header-center">
+        <div class="d-flex align-center justify-center mf-header-center">
             @if (SelectedChapter > 0 && SelectedPage > 0 && UploadedPages != null && ActivePageIndex >= 0 && ActivePageIndex < UploadedPages.Count)
             {
                 <MudText Typo="Typo.h6" Class="font-weight-bold mr-4">Chapter @SelectedChapterLabel - Page @SelectedPage</MudText>
@@ -104,7 +103,7 @@ else
             }
         </div>
 
-        <div class="d-flex align-center gap-2 mf-header-side justify-end">
+        <div class="d-flex align-center gap-2 mf-header-side justify-end ml-auto">
 
             @{
                 var _headerChap = Chapters.FirstOrDefault(c => c.Id == SelectedChapter);
@@ -115,7 +114,7 @@ else
                 {
                     @if (_headerChap.StatusCode == "DRAFT" || _headerChap.StatusCode == "REVISION_REQUESTED")
                     {
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Send" Class="mr-2" DisableElevation="true" OnClick="@(() => SubmitChapterForReview(_headerChap.ChapterId))">Submit for Review</MudButton>
+                        <MudButton Variant="Variant.Filled" Size="Size.Small" StartIcon="@Icons.Material.Filled.Send" Class="mr-2 mf-btn-action mf-btn-submit" DisableElevation="true" OnClick="@(() => SubmitChapterForReview(_headerChap.ChapterId))">Submit for Review</MudButton>
                     }
                 }
             }
@@ -127,15 +126,15 @@ else
                  && ((_currentRoleName == "Mangaka" && (_headerChap.StatusCode == "DRAFT" || _headerChap.StatusCode == "REVISION_REQUESTED"))
                      || (_currentRoleName == "Tantou Editor" && (_headerChap.StatusCode == "UNDER_REVIEW" || _headerChap.StatusCode == "REVISION_REQUESTED"))))
             {
-                <MudButton Variant="Variant.Filled" Color="@(HasUnsavedChanges ? Color.Warning : Color.Default)" Size="Size.Small"
-                           StartIcon="@Icons.Material.Filled.Save" Class="mr-2" DisableElevation="true"
+                <MudButton Variant="Variant.Filled" Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Save" Class="@($"mr-2 mf-btn-action {(HasUnsavedChanges ? "mf-btn-save" : "mf-btn-disabled")}")" DisableElevation="true"
                            OnClick="SaveAllChangesAsync" Disabled="@(!HasUnsavedChanges || _saveState == SaveStatus.Saving)">
                     @(_saveState == SaveStatus.Saving ? "Saving…" : "Save")
                 </MudButton>
                 @if (HasUnsavedChanges)
                 {
-                    <MudButton Variant="Variant.Outlined" Color="Color.Default" Size="Size.Small"
-                               StartIcon="@Icons.Material.Filled.Undo" Class="mr-2" DisableElevation="true"
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.Undo" Class="mr-2 mf-btn-action mf-btn-discard" DisableElevation="true"
                                OnClick="DiscardChangesAsync" Disabled="@(_saveState == SaveStatus.Saving)">
                         Discard
                     </MudButton>
@@ -143,9 +142,9 @@ else
             }
             @if (_headerChap != null && _currentRoleName == "Tantou Editor" && _headerChap.StatusCode == "UNDER_REVIEW")
             {
-                <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" StartIcon="@Icons.Material.Filled.RateReview" Class="mr-2" DisableElevation="true" OnClick="@(() => { _reviewDecision = "APPROVED"; _reviewComment = ""; _showReviewDialog = true; })">Submit Review</MudButton>
+                <MudButton Variant="Variant.Filled" Size="Size.Small" StartIcon="@Icons.Material.Filled.RateReview" Class="mr-2 mf-btn-action mf-btn-review" DisableElevation="true" OnClick="@(() => { _reviewDecision = "APPROVED"; _reviewComment = ""; _showReviewDialog = true; })">Submit Review</MudButton>
             }
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.FileDownload" DisableElevation="true" OnClick="ExportCurrentPage">Export</MudButton>
+            <MudButton Variant="Variant.Filled" Size="Size.Small" StartIcon="@Icons.Material.Filled.FileDownload" Class="mf-btn-action mf-btn-export" DisableElevation="true" OnClick="ExportCurrentPage">Export</MudButton>
         </div>
     </header>
 
@@ -689,6 +688,13 @@ else
                                       FullWidth="true"
                                       Class="mb-3" />
 
+                        @if (_reviewDecision == "REVISION_REQUESTED" || _reviewDecision == "CANCELLED")
+                        {
+                            <MudTextField T="string" Label="Comments / Feedback" @bind-Value="_reviewComment" Lines="4"
+                                          Variant="Variant.Outlined" Class="mb-3" Required="true" 
+                                          HelperText="Required when requesting a revision or cancelling (min 10 characters)." />
+                        }
+
                         <MudButton Variant="Variant.Filled"
                                    Color="Color.Primary"
                                    FullWidth="true"
@@ -765,7 +771,7 @@ else
                         }
                     </MudSelect>
 
-                    <MudTextField T="string" Label="Task description..." @bind-Value="TaskDescription" Variant="Variant.Outlined" Lines="3" Margin="Margin.Dense" Class="mb-3" />
+                    <MudTextField T="string" Label="Task description..." @bind-Value="TaskDescription" MaxLength="2000" Variant="Variant.Outlined" Lines="3" Margin="Margin.Dense" Class="mb-3" />
 
                     @* No Max here: MudBlazor would silently CLAMP a too-large value to the max, so the
                        "too large" check could never surface. Letting the value through lets Validation +
@@ -783,8 +789,8 @@ else
 
                     <MudDatePicker Label="Deadline" @bind-Date="_taskDueDate" Variant="Variant.Outlined"
                                    Margin="Margin.Dense" Class="mb-3" MinDate="DateTime.Today"
+                                   AnchorOrigin="Origin.TopLeft" TransformOrigin="Origin.TopRight"
                                    HelperText="Due date for this task (defaults to 7 days from now)." />
-
                     <div class="d-flex flex-column mb-3">
                         <div class="d-flex flex-wrap gap-1" style="max-height: 120px; overflow-y: auto;">
                             @if (SelectedRegions.Any())
@@ -805,7 +811,7 @@ else
                         </div>
                     </div>
 
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateTask" Disabled="@IsChapterLocked">Create Task</MudButton>
+                    <MudButton Variant="Variant.Filled" Class="mf-btn-submit mf-btn-action" FullWidth="true" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateTask" Disabled="@IsChapterLocked">Create Task</MudButton>
                     }
                 </MudPaper>
             </div>
@@ -854,7 +860,7 @@ else
                           var isTaskOnActiveVersion = IsTaskOnActiveVersion(task);
                           var locationChipText = isTaskOnActiveVersion ? "Current version" : "Other version";
                           
-                          <MudPaper Elevation="0" Class="pa-3 border-1 mud-border-lines-default rounded-lg"
+                          <MudPaper Elevation="0" Class="@($"pa-3 border-1 mud-border-lines-default rounded-lg mf-selectable-card {(isTargetTask ? "selected" : "")}")"
                                     Style="@($"cursor: pointer; {(isTargetTask ? "border-left: 3px solid #4f46e5; background: #eef2ff;" : (!isTaskOnActiveVersion ? "background: #f8fafc;" : ""))}")"
                                     @onclick="@(() => SelectTaskPanels(task))">
                               <div class="d-flex justify-space-between" style="gap: 8px;">
@@ -880,16 +886,21 @@ else
                                           }
                                       </div>
                                   </div>
-                                  <div class="d-flex align-center flex-shrink-0" @onclick:stopPropagation="true">
-                                      <MudTooltip Text="Status is set by the workflow (assistant submits / Mangaka reviews), not edited here.">
-                                          <MudChip T="string" Size="Size.Small" Color="@chipColor" Variant="Variant.Outlined">@task.Status</MudChip>
-                                      </MudTooltip>
-                                      @if (!isTerminal)
-                                      {
-                                          <MudTooltip Text="Cancel task">
-                                              <MudIconButton Icon="@Icons.Material.Filled.Cancel" Size="Size.Small" Color="Color.Error" Class="ml-1" OnClick="@(() => OpenCancelTaskDialog(task.Id))" Disabled="@IsChapterLocked" />
+                                  <div class="d-flex flex-column align-end justify-space-between flex-shrink-0">
+                                      <div class="d-flex align-center mb-1" @onclick:stopPropagation="true">
+                                          <MudTooltip Text="Status is set by the workflow (assistant submits / Mangaka reviews), not edited here.">
+                                              <MudChip T="string" Size="Size.Small" Color="@chipColor" Variant="Variant.Outlined">@task.Status</MudChip>
                                           </MudTooltip>
-                                      }
+                                          @if (!isTerminal)
+                                          {
+                                              <MudTooltip Text="Cancel task">
+                                                  <MudIconButton Icon="@Icons.Material.Filled.Cancel" Size="Size.Small" Color="Color.Error" Class="ml-1" OnClick="@(() => OpenCancelTaskDialog(task.Id))" Disabled="@IsChapterLocked" />
+                                              </MudTooltip>
+                                          }
+                                      </div>
+                                      <div @onclick:stopPropagation="true">
+                                          <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" OnClick="@(() => OpenTaskDescriptionDialog(task))" Style="font-size: 10px; padding: 0;">view description task</MudButton>
+                                      </div>
                                   </div>
                               </div>
                           </MudPaper>
@@ -923,7 +934,7 @@ else
                                 <MudSelectItem Value="@("OTHER")">Other</MudSelectItem>
                             </MudSelect>
 
-                            <MudTextField T="string" Label="Comment..." @bind-Value="AnnotationComment" Variant="Variant.Outlined" Lines="3" Margin="Margin.Dense" Class="mb-3" />
+                            <MudTextField T="string" Label="Comment..." @bind-Value="AnnotationComment" MaxLength="2000" Variant="Variant.Outlined" Lines="3" Margin="Margin.Dense" Class="mb-3" />
                             <div class="d-flex flex-column mt-3">
                                 <MudText Typo="Typo.caption" Class="mf-muted mb-1">Target</MudText>
                                 <div class="d-flex flex-wrap gap-1" style="max-height: 120px; overflow-y: auto;">
@@ -949,7 +960,7 @@ else
                                 </div>
                             </div>
 
-                            <MudButton Variant="Variant.Filled" Color="Color.Warning" FullWidth="true" StartIcon="@Icons.Material.Filled.AddComment" OnClick="CreateAnnotation" Disabled="@(!CanAnnotate)">Add Annotation</MudButton>
+                            <MudButton Variant="Variant.Filled" Class="mf-btn-save mf-btn-action" FullWidth="true" StartIcon="@Icons.Material.Filled.AddComment" OnClick="CreateAnnotation" Disabled="@(!CanAnnotate)">Add Annotation</MudButton>
                             }
                         </MudPaper>
                     </div>
@@ -970,7 +981,7 @@ else
                             {
                                 var annColor = ann.IsResolved ? Color.Success : Color.Error;
                                 var isSelectedAnn = _selectedAnnotationId == ann.Id;
-                                <MudPaper Elevation="0" Class="pa-3 border-1 mud-border-lines-default rounded-lg"
+                                <MudPaper Elevation="0" Class="@($"pa-3 border-1 mud-border-lines-default rounded-lg mf-selectable-card {(isSelectedAnn ? "selected" : "")}")"
                                           Style="@($"cursor: pointer; {(isSelectedAnn ? "border-left: 3px solid #4f46e5; background: #eef2ff;" : "")}")" @onclick="@(() => SelectAnnotationPanels(ann))">
                                     <div class="d-flex justify-space-between align-start">
                                         <div class="d-flex flex-column">
@@ -994,16 +1005,21 @@ else
                                                 <MudChip T="string" Size="Size.Small" Color="@annColor" Variant="Variant.Outlined" Class="mr-2 mt-0">@annLabel</MudChip>
                                                 <MudText Typo="Typo.caption" Class="font-weight-bold">@ann.Target</MudText>
                                             </div>
-                                            <MudText Typo="Typo.body2" Class="mb-2">@ann.Comment</MudText>
+                                            <MudText Typo="Typo.body2" Class="mb-2" Style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; word-break: break-word;">@ann.Comment</MudText>
                                             <MudText Typo="Typo.caption" Class="mf-muted d-flex align-center">
                                                 <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Class="mr-1" Style="font-size: 12px;"/> @ann.Author@(!string.IsNullOrWhiteSpace(ann.CreatedByRoleName) && ann.CreatedByRoleName != ann.Author ? $" · {ann.CreatedByRoleName}" : "")
                                             </MudText>
+                                            <div @onclick:stopPropagation="true" class="mt-1">
+                                                <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" OnClick="@(() => OpenAnnotationDescriptionDialog(ann))" Style="font-size: 10px; padding: 0; min-width: auto; justify-content: flex-start;">view description annotation</MudButton>
+                                            </div>
                                         </div>
-                                        <div @onclick:stopPropagation="true">
-                                            @if (!ann.IsResolved && CanResolveAnnotation(ann))
-                                            {
-                                                <MudTooltip Text="Resolve Issue"><MudIconButton Icon="@Icons.Material.Filled.Check" Size="Size.Small" Color="Color.Success" OnClick="@(() => ResolveAnnotation(ann.Id))" /></MudTooltip>
-                                            }
+                                        <div class="d-flex flex-column align-end justify-space-between flex-shrink-0">
+                                            <div class="d-flex align-center mb-1" @onclick:stopPropagation="true">
+                                                @if (!ann.IsResolved && CanResolveAnnotation(ann))
+                                                {
+                                                    <MudTooltip Text="Resolve Issue"><MudIconButton Icon="@Icons.Material.Filled.Check" Size="Size.Small" Color="Color.Success" OnClick="@(() => ResolveAnnotation(ann.Id))" /></MudTooltip>
+                                                }
+                                            </div>
                                         </div>
                                     </div>
                                 </MudPaper>
@@ -1021,7 +1037,7 @@ else
                             <MudTextField T="string" Label="@($"Page {SelectedPage} Note")" @bind-Value="activePage.PageNotes" Variant="Variant.Outlined" Lines="4" FullWidth="true" ReadOnly="@(!CanManageContent)" Placeholder="Notes about this page (applies to the whole page, all versions)…" />
                             @if (CanManageContent)
                             {
-                                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SavePageNote" Disabled="@IsChapterLocked">Save Page Note</MudButton>
+                                <MudButton Variant="Variant.Filled" Class="mf-btn-export mf-btn-action" OnClick="SavePageNote" Disabled="@IsChapterLocked">Save Page Note</MudButton>
                             }
 
                             <MudDivider Class="my-2" />
@@ -1033,7 +1049,7 @@ else
                                 <MudTextField T="string" Label="@($"v{activeVer.VersionNo} Note")" @bind-Value="activeVer.Note" Variant="Variant.Outlined" Lines="8" FullWidth="true" ReadOnly="@(!CanManageContent)" />
                                 @if (CanManageContent)
                                 {
-                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveVersionNote" Disabled="@IsChapterLocked">Save Note</MudButton>
+                                    <MudButton Variant="Variant.Filled" Class="mf-btn-export mf-btn-action" OnClick="SaveVersionNote" Disabled="@IsChapterLocked">Save Note</MudButton>
                                 }
                             }
                             else
@@ -1182,8 +1198,21 @@ else
                 <MudSelectItem Value="@("REVISION_REQUESTED")">Request Revision</MudSelectItem>
                 <MudSelectItem Value="@("CANCELLED")">Cancel Chapter</MudSelectItem>
             </MudSelect>
-            <MudTextField T="string" @bind-Value="_reviewComment" Label="Comments" Variant="Variant.Outlined" Lines="4" Margin="Margin.Dense"
-                          HelperText="Required when requesting a revision or cancelling." />
+            <MudTextField T="string" @bind-Value="_reviewComment" Label="Comments" Variant="Variant.Outlined" Lines="4" Margin="Margin.Dense" Class="mb-3"
+                          HelperText="Required when requesting a revision or cancelling (min 10 characters)." />
+
+            <div class="mt-2">
+                <MudText Typo="Typo.caption" Class="mf-muted d-block mb-1">Markup file (optional)</MudText>
+                <MudFileUpload T="IBrowserFile" FilesChanged="OnMarkupFileChanged" Accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" Disabled="@_reviewSubmitting">
+                    <ActivatorContent>
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.CloudUpload">
+                            @(_markupFile != null ? _markupFile.Name : "Choose file")
+                        </MudButton>
+                    </ActivatorContent>
+                </MudFileUpload>
+            </div>
         </DialogContent>
         <DialogActions>
             <MudButton OnClick="@(() => _showReviewDialog = false)" Disabled="@_reviewSubmitting">Cancel</MudButton>
@@ -1230,6 +1259,68 @@ else
                        OnClick="ConfirmCancelTask">Cancel Task</MudButton>
         </DialogActions>
     </MudDialog>
+
+    <MudDialog @bind-Visible="_showTaskDescriptionDialog" Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
+        <TitleContent><MudText Typo="Typo.h6">Task description</MudText></TitleContent>
+        <DialogContent>
+            @if (_selectedTaskForDescription != null)
+            {
+                <MudStack Spacing="2">
+                    <MudText><b>Assistant assigned:</b> @_selectedTaskForDescription.Assistant</MudText>
+                    <MudText><b>Task type:</b> @_selectedTaskForDescription.Type</MudText>
+                    <MudText><b>Target:</b> @_selectedTaskForDescription.Target</MudText>
+                    <MudText><b>Compensation:</b> @(_selectedTaskForDescription.CompensationAmount.HasValue ? _selectedTaskForDescription.CompensationAmount.Value.ToString("N0") + " VND" : "N/A")</MudText>
+                    <MudText><b>Deadline:</b> @(_selectedTaskForDescription.DueAtUtc.HasValue ? _selectedTaskForDescription.DueAtUtc.Value.ToLocalTime().ToString("g") : "N/A")</MudText>
+                    <MudText><b>Description:</b></MudText>
+                    <MudPaper Elevation="0" Class="pa-3 mud-background-gray">
+                        <MudText Typo="Typo.body2" Style="white-space: pre-wrap; word-break: break-word;">@_selectedTaskForDescription.Description</MudText>
+                    </MudPaper>
+                </MudStack>
+            }
+        </DialogContent>
+        <DialogActions>
+            <MudButton Color="Color.Primary" OnClick="CloseTaskDescriptionDialog">Close</MudButton>
+        </DialogActions>
+    </MudDialog>
+
+    @* Annotation description dialog *@
+    <MudDialog @bind-Visible="_showAnnotationDescriptionDialog" Options="new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true }">
+        <TitleContent><MudText Typo="Typo.h6">Annotation description</MudText></TitleContent>
+        <DialogContent>
+            @if (_selectedAnnotationForDescription != null)
+            {
+                <MudStack Spacing="2" Class="mb-4">
+                    <MudText><b>Creator:</b> @_selectedAnnotationForDescription.Author@(!string.IsNullOrWhiteSpace(_selectedAnnotationForDescription.CreatedByRoleName) && _selectedAnnotationForDescription.CreatedByRoleName != _selectedAnnotationForDescription.Author ? $" - {_selectedAnnotationForDescription.CreatedByRoleName}" : "")</MudText>
+                    <MudText>
+                        <b>Issue type:</b> @(_selectedAnnotationForDescription.Type switch {
+                            "BACKGROUND_INCONSISTENCY" => "Background Issue",
+                            "SHADING_ERROR" => "Shading Error",
+                            "EFFECTS_ERROR" => "Effects Error",
+                            "CLEANUP_REQUIRED" => "Redraw Needed",
+                            "DIALOGUE_ERROR" => "Dialogue Error",
+                            "TYPESETTING_ERROR" => "Typo / Typesetting",
+                            "TRANSLATION_ERROR" => "Translation Error",
+                            "PANEL_ORDER_ERROR" => "Panel Order Error",
+                            "CHARACTER_ANATOMY_ERROR" => "Anatomy Error",
+                            "CONTINUITY_ERROR" => "Continuity Error",
+                            "OTHER" => "Other",
+                            _ => _selectedAnnotationForDescription.Type
+                        })
+                    </MudText>
+                    <MudText>
+                        <b>Target:</b> @_selectedAnnotationForDescription.Target @(_selectedAnnotationForDescription.PinX.HasValue && _selectedAnnotationForDescription.PinY.HasValue ? $"(X: {_selectedAnnotationForDescription.PinX.Value:F1}, Y: {_selectedAnnotationForDescription.PinY.Value:F1})" : "")
+                    </MudText>
+                    <MudText><b>Description:</b></MudText>
+                    <MudPaper Elevation="0" Class="pa-3 mud-background-gray">
+                        <MudText Typo="Typo.body2" Style="white-space: pre-wrap; word-break: break-word;">@_selectedAnnotationForDescription.Comment</MudText>
+                    </MudPaper>
+                </MudStack>
+            }
+        </DialogContent>
+        <DialogActions>
+            <MudButton Color="Color.Primary" OnClick="CloseAnnotationDescriptionDialog">CLOSE</MudButton>
+        </DialogActions>
+    </MudDialog>
 </div>
 }
 
@@ -1240,7 +1331,9 @@ else
         display: flex;
         flex-direction: column;
         height: 100vh;
-        width: 100vw;
+        width: 100%;
+        max-width: 100vw;
+        overflow-x: hidden;
         background-color: #ffffff;
         /* Panel widths as variables so laptop breakpoints can shrink the side panels
            (giving the canvas more room) without breaking the collapse toggle. */
@@ -1264,19 +1357,23 @@ else
     .mf-workspace-header {
         border-bottom: 1px solid var(--mud-palette-lines-default);
         gap: 12px;
-        flex-wrap: nowrap;
         overflow: hidden;
+        flex-wrap: nowrap;
+        width: 100%;
+        flex-shrink: 0;
     }
-    /* Hai bên co giãn bằng nhau => khối giữa nằm giữa mà không cần position:absolute,
-       nên không bao giờ bị đè bởi tên series / danh sách genre dài. */
     .mf-workspace-header .mf-header-side {
-        flex: 1 1 0;
-        min-width: 0;
+        /* No fixed width needed, ml-auto pushes right side */
     }
     .mf-workspace-header .mf-header-center {
-        flex: 0 1 auto;
-        min-width: 0;
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
         white-space: nowrap;
+        pointer-events: none; /* prevent it from blocking clicks if it overlaps */
+    }
+    .mf-workspace-header .mf-header-center * {
+        pointer-events: auto; /* re-enable clicks for icons/text inside */
     }
     .mf-workspace-header .mf-header-title {
         max-width: 34ch;
@@ -1316,7 +1413,127 @@ else
         flex-grow: 1;
         display: flex;
         flex-direction: column;
-        overflow: hidden;
+        cursor: not-allowed;
+    }
+    
+
+
+    /* Tạo màu nền so le (alternating) cho các Tab để dễ phân biệt */
+    .workspace-tabs .mud-tab:nth-child(odd) {
+        background-color: rgba(0, 0, 0, 0.1) !important;
+    }
+    .workspace-tabs .mud-tab:nth-child(even) {
+        background-color: rgba(255, 255, 255, 0.05) !important;
+    }
+
+    /* Làm nổi bật Tab đang được chọn */
+    .workspace-tabs .mud-tab.mud-tab-active {
+        background-color: rgba(255, 255, 255, 0.15) !important;
+        font-weight: 700 !important;
+    }
+
+    /* Premium Button Styles */
+    .mf-btn-action {
+        border-radius: 8px !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.5px !important;
+        text-transform: uppercase !important;
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12) !important;
+        border: none !important;
+    }
+    .mf-btn-action:not(:disabled):hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2) !important;
+        filter: brightness(1.1) !important;
+    }
+    .mf-btn-action:not(:disabled):active {
+        transform: translateY(1px) !important;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1) !important;
+    }
+
+    .mf-btn-submit {
+        background: linear-gradient(135deg, #6366F1, #8B5CF6) !important;
+        color: white !important;
+    }
+    .mf-btn-save {
+        background: linear-gradient(135deg, #F59E0B, #EA580C) !important;
+        color: white !important;
+    }
+    .mf-btn-disabled {
+        background: #E5E7EB !important;
+        color: #9CA3AF !important;
+        box-shadow: none !important;
+    }
+    .mf-btn-discard {
+        background: rgba(239, 68, 68, 0.1) !important;
+        color: #EF4444 !important;
+        box-shadow: none !important;
+        border: 1px solid rgba(239, 68, 68, 0.3) !important;
+    }
+    .mf-btn-discard:not(:disabled):hover {
+        background: rgba(239, 68, 68, 0.15) !important;
+        border: 1px solid rgba(239, 68, 68, 0.5) !important;
+        box-shadow: 0 4px 10px rgba(239, 68, 68, 0.15) !important;
+    }
+    .mf-btn-review {
+        background: linear-gradient(135deg, #10B981, #059669) !important;
+        color: white !important;
+    }
+    .mf-btn-export {
+        background: linear-gradient(135deg, #0EA5E9, #2563EB) !important;
+        color: white !important;
     }
 </style>
 
+<style>
+    /* Ép vị trí Toast xuống góc dưới bên phải thay vì góc trên (Chỉ áp dụng trong Workspace) */
+    .mud-snackbar-location-top-right {
+        top: auto !important;
+        bottom: 24px !important;
+    }
+
+    /* Giao diện Premium Toast siêu đẹp */
+    .mud-snackbar {
+        border-radius: 12px !important;
+        box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.4) !important;
+        padding: 6px 14px !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+    }
+
+    .mud-snackbar-content { align-items: center !important; }
+    .mud-snackbar-content-message {
+        font-weight: 500 !important;
+        font-size: 0.95rem !important;
+        letter-spacing: 0.3px !important;
+        line-height: 1.4 !important;
+        color: #fff !important;
+    }
+
+    .mud-snackbar .mud-icon-button {
+        color: rgba(255, 255, 255, 0.8) !important;
+        transition: all 0.2s ease !important;
+    }
+    .mud-snackbar .mud-icon-button:hover {
+        color: white !important;
+        background-color: rgba(255, 255, 255, 0.2) !important;
+    }
+
+    /* Gradient Colors cực bắt mắt */
+    .mud-snackbar.mud-alert-filled-error { background: linear-gradient(135deg, rgba(211, 47, 47, 0.95), rgba(229, 57, 53, 0.95)) !important; }
+    .mud-snackbar.mud-alert-filled-success { background: linear-gradient(135deg, rgba(46, 125, 50, 0.95), rgba(67, 160, 71, 0.95)) !important; }
+    .mud-snackbar.mud-alert-filled-warning { background: linear-gradient(135deg, rgba(245, 124, 0, 0.95), rgba(251, 140, 0, 0.95)) !important; }
+    .mud-snackbar.mud-alert-filled-info { background: linear-gradient(135deg, rgba(25, 118, 210, 0.95), rgba(30, 136, 229, 0.95)) !important; }
+
+    /* Hover effect for selectable task and annotation cards */
+    .mf-selectable-card {
+        transition: transform 0.15s ease-in-out, background-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    }
+    .mf-selectable-card:not(.selected):hover {
+        background-color: #f8fafc !important; /* light slate */
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    }
+</style>

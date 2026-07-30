@@ -120,6 +120,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                                     Description = t.TaskDescription,
                                     Status = MapTaskStatus(t.StatusCode),
                                     DueAtUtc = t.DueAtUtc,
+                                    CompensationAmount = t.CompensationAmount,
                                     VersionId = t.PageRegions?.FirstOrDefault()?.ChapterPageVersionId,
                                     Regions = t.PageRegions?.Select(r => new RegionModel {
                                         Id = ParseRegionId(r.RegionLabel),

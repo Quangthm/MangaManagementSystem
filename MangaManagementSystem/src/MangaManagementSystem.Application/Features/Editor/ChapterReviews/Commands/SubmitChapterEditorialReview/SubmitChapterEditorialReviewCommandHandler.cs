@@ -54,9 +54,9 @@ namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Comma
 
             if (request.DecisionCode == "REVISION_REQUESTED" || request.DecisionCode == "CANCELLED")
             {
-                if (string.IsNullOrWhiteSpace(comments))
+                if (string.IsNullOrWhiteSpace(comments) || comments.Trim().Length < 10)
                     throw new InvalidOperationException(
-                        $"Comments are required when the decision is {request.DecisionCode}.");
+                        $"A detailed comment (at least 10 characters) is required when the decision is {request.DecisionCode}.");
             }
 
             // Optional markup upload (Cloudinary, outside the SQL transaction).

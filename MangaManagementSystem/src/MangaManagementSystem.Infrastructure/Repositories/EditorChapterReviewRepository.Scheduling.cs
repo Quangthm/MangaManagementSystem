@@ -63,6 +63,22 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                     throw new InvalidOperationException(
                         "This chapter is no longer under review and cannot receive a review decision.");
 
+                if (decisionCode == "APPROVED")
+                {
+                    bool hasUnresolvedAnnotations = await _dbContext.ChapterPageAnnotations
+                        .AnyAsync(a => a.ResolvedAtUtc == null &&
+                                       a.PageRegions.Any(r => r.ChapterPageVersion != null && 
+                                                              r.ChapterPageVersion.ChapterPage != null && 
+                                                              r.ChapterPageVersion.ChapterPage.ChapterId == chapterId),
+                                       ct);
+
+                    if (hasUnresolvedAnnotations)
+                    {
+                        throw new InvalidOperationException(
+                            "Please mark all annotations as resolved before approving the chapter.");
+                    }
+                }
+
                 var reviewedAtUtc = DateTime.UtcNow;
                 Guid? markupFileId = null;
 
@@ -387,7 +403,7 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 "CANCELLED" =>
                     (
                         "Chapter Cancelled",
-                        "Your chapter was cancelled during editorial review. Open chapter management to review the editor feedback."
+                        "Your chapter was cancelled. Open chapter management to review feedback."
                     ),
                 _ =>
                     throw new InvalidOperationException(
