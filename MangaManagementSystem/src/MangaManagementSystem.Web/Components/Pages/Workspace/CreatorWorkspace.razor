@@ -80,10 +80,6 @@ else
                 {
                     <MudText Typo="Typo.caption" Class="d-flex align-center mf-muted"><MudIcon Icon="@Icons.Material.Filled.Sync" Size="Size.Small" Class="mr-1" />@(string.IsNullOrEmpty(_saveProgress) ? "Saving…" : _saveProgress)</MudText>
                 }
-                else if (_imageDirty)
-                {
-                    <MudText Typo="Typo.caption" Class="d-flex align-center" Style="color: var(--mud-palette-warning);"><MudIcon Icon="@Icons.Material.Filled.Brush" Size="Size.Small" Class="mr-1" />Unsaved image — Save as New Version</MudText>
-                }
                 else if (_saveState == SaveStatus.Dirty)
                 {
                     <MudText Typo="Typo.caption" Class="d-flex align-center" Style="color: var(--mud-palette-warning);"><MudIcon Icon="@Icons.Material.Filled.EditNote" Size="Size.Small" Class="mr-1" />Unsaved changes</MudText>
@@ -199,19 +195,7 @@ else
                     {
                         <MudTooltip Text="Region Tool"><MudIconButton Icon="@Icons.Material.Filled.Crop" Color="@(CurrentTool == "draw" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("draw"))" Size="Size.Small" Disabled="@(!CanEditRegions)" /></MudTooltip>
                     }
-                    @if (CanManageContent)
-                    {
-                        <MudTooltip Text="Brush Tool"><MudIconButton Icon="@Icons.Material.Filled.Brush" Color="@(CurrentTool == "brush" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("brush"))" Size="Size.Small" Disabled="@IsChapterLocked" /></MudTooltip>
-                    }
                     <MudTooltip Text="Pin Tool"><MudIconButton Icon="@Icons.Material.Filled.PushPin" Color="@(CurrentTool == "pin" ? Color.Primary : Color.Default)" OnClick="@(() => SetTool("pin"))" Size="Size.Small" Disabled="@(!CanAnnotate)" /></MudTooltip>
-                    
-                    @if (CanManageContent && CurrentTool == "brush")
-                    {
-                        <div class="d-flex align-center mx-2">
-                            <input type="color" value="@BrushColor" @onchange="OnBrushColorChanged" style="width: 24px; height: 24px; border: none; padding: 0; cursor: pointer; border-radius: 4px;" disabled="@IsChapterLocked" />
-                            <input type="range" min="1" max="100" value="@BrushSize" @onchange="OnBrushSizeChanged" style="width: 80px; margin-left: 8px;" disabled="@IsChapterLocked" />
-                        </div>
-                    }
 
                     @* Auto-segment is non-destructive: it APPENDS detected panels and skips any overlapping an
                        existing region (IoU > 0.5), so it never wipes the Mangaka's regions or their task/annotation
@@ -739,9 +723,6 @@ else
                         </MudSelectItem>
                         <MudSelectItem Value="@("EFFECTS")">
                             <div class="d-flex align-center"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" Color="Color.Success" Class="mr-2"/> SFX</div>
-                        </MudSelectItem>
-                        <MudSelectItem Value="@("CLEANUP")">
-                            <div class="d-flex align-center"><MudIcon Icon="@Icons.Material.Filled.Brush" Size="Size.Small" Color="Color.Secondary" Class="mr-2"/> Cleanup</div>
                         </MudSelectItem>
                         <MudSelectItem Value="@("DIALOGUE")">
                             <div class="d-flex align-center"><MudIcon Icon="@Icons.Material.Filled.ChatBubble" Size="Size.Small" Color="Color.Primary" Class="mr-2"/> Dialogue</div>

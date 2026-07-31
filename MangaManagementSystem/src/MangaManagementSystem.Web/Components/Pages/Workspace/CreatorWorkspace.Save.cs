@@ -13,9 +13,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             await SelectChapter(SelectedChapter);
         }
         _saveState = SaveStatus.Saved;
-        _imageDirty = false;
     }
-
     private async Task<bool> EnsureSavedBeforeAsync(string? actionName = null)
     {
         if (!HasUnsavedChanges) return true;
@@ -456,8 +454,6 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
             {
                 _lastSavedAtUtc = DateTime.UtcNow;
                 _saveState = SaveStatus.Saved;
-                _imageDirty = false;
-                _ = JS.InvokeVoidAsync("setUnsavedFlag", false);
                 if (savedCount > 0)
                 {
                     Snackbar.Add(
