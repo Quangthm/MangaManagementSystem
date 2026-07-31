@@ -5,7 +5,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.Common;
 using MangaManagementSystem.Application.DTOs.Manga;
-using MangaManagementSystem.Domain.Interfaces;
+using MangaManagementSystem.Application.Features.Assistant.CompletedWork.Models;
+using MangaManagementSystem.Application.Features.Assistant.CompletedWork.Ports;
 using MediatR;
 
 namespace MangaManagementSystem.Application.Features.Assistant.CompletedWork.Queries.GetAssistantCompletedWork
@@ -82,7 +83,7 @@ namespace MangaManagementSystem.Application.Features.Assistant.CompletedWork.Que
                 recentItems);
         }
 
-        private static DateTime GetCompletedDate(Domain.Entities.AssistantCompletedTaskRow task)
+        private static DateTime GetCompletedDate(AssistantCompletedTaskRow task)
             => task.UpdatedAtUtc ?? task.CreatedAtUtc;
     }
 }

@@ -4,7 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using MangaManagementSystem.Domain.Interfaces;
+using MangaManagementSystem.Application.Features.Publication.Schedule.Ports;
 using MediatR;
 
 namespace MangaManagementSystem.Application.Features.Publication.Schedule.Queries.GetPublicationScheduleCalendar

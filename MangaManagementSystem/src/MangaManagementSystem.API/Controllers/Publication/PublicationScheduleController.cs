@@ -1,8 +1,9 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using MangaManagementSystem.Application.Features.Publication.Schedule.Models;
+using MangaManagementSystem.Application.Features.Publication.Schedule.Ports;
 using MangaManagementSystem.Application.Features.Publication.Schedule.Queries.GetPublicationScheduleCalendar;
-using MangaManagementSystem.Domain.Interfaces;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;

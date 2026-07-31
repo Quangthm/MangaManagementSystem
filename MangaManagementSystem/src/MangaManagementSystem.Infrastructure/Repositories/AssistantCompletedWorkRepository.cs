@@ -1,5 +1,5 @@
-using MangaManagementSystem.Domain.Entities;
-using MangaManagementSystem.Domain.Interfaces;
+using MangaManagementSystem.Application.Features.Assistant.CompletedWork.Models;
+using MangaManagementSystem.Application.Features.Assistant.CompletedWork.Ports;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using System;

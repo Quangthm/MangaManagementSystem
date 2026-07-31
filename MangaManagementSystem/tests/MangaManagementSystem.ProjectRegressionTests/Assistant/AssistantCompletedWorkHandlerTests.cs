@@ -1,6 +1,6 @@
 using MangaManagementSystem.Application.Features.Assistant.CompletedWork.Queries.GetAssistantCompletedWork;
-using MangaManagementSystem.Domain.Entities;
-using MangaManagementSystem.Domain.Interfaces;
+using MangaManagementSystem.Application.Features.Assistant.CompletedWork.Models;
+using MangaManagementSystem.Application.Features.Assistant.CompletedWork.Ports;
 using Moq;
 
 namespace MangaManagementSystem.ProjectRegressionTests.Assistant;

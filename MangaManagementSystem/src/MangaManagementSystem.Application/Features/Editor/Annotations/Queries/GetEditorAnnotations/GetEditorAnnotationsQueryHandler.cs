@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.Common.Constants;
 using MangaManagementSystem.Application.DTOs.Editor;
-using MangaManagementSystem.Domain.Interfaces;
+using MangaManagementSystem.Application.Features.Editor.Annotations.Ports;
 using MediatR;
 
 namespace MangaManagementSystem.Application.Features.Editor.Annotations.Queries.GetEditorAnnotations
