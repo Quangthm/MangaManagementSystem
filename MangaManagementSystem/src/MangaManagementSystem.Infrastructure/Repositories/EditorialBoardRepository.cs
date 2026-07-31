@@ -1742,7 +1742,7 @@ public sealed class EditorialBoardRepository : IEditorialBoardRepository
 
         command.CommandText =
             """
-            SELECT TOP (4)
+            SELECT
                 sp.series_proposal_id,
                 sp.series_id,
                 s.slug,

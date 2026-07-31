@@ -429,7 +429,7 @@
         return errors;
     }
 
-    private bool HasEditError(Guid seriesVoteInputId, string fieldName)
+    private bool HasEditError(Guid seriesVoteInputId, string fieldName) 
     {
         return _editRows.TryGetValue(seriesVoteInputId, out var state)
                && state.Errors.ContainsKey(fieldName);
