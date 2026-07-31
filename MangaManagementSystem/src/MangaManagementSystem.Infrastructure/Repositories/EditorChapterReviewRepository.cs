@@ -13,12 +13,13 @@ using Microsoft.EntityFrameworkCore;
 namespace MangaManagementSystem.Infrastructure.Repositories
 {
     /// <summary>
-    /// EF Core read-only implementation of the Tantou Editor Chapter Review queue and detail.
-    /// All queries use <c>AsNoTracking</c>. No writes, no stored procedures. Both the queue and
-    /// the detail are scoped to series where the actor is an active Tantou Editor contributor,
-    /// so an editor cannot see chapters from series they do not work on.
+    /// EF Core implementation of the Tantou Editor chapter-review read, review-write,
+    /// and scheduling ports.
     /// </summary>
-    public partial class EditorChapterReviewRepository : IEditorChapterReviewRepository
+    public partial class EditorChapterReviewRepository :
+        IEditorChapterReviewReadRepository,
+        IEditorChapterReviewWriteRepository,
+        IEditorChapterSchedulingRepository
     {
         private const string StatusUnderReview = "UNDER_REVIEW";
         private const string StatusApproved = "APPROVED";
@@ -95,13 +96,14 @@ namespace MangaManagementSystem.Infrastructure.Repositories
                 .Select(c => new EditorChapterReviewChapter(
                     c.ChapterId,
                     c.SeriesId,
+                    c.Series != null ? c.Series.Title : string.Empty,
+                    c.Series != null ? c.Series.Slug : null,
                     c.ChapterNumberLabel,
                     c.ChapterTitle,
                     c.StatusCode,
                     _dbContext.ChapterPages
                         .Count(cp => cp.ChapterId == c.ChapterId && cp.DeletedAtUtc == null),
-                    c.CreatedAtUtc,
-                    c.Series))
+                    c.CreatedAtUtc))
                 .ToListAsync(ct);
 
             return new EditorChapterReviewData(

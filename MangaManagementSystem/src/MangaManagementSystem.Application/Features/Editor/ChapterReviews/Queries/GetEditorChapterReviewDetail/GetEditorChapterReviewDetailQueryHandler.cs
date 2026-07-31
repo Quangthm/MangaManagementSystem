@@ -17,9 +17,9 @@ namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queri
     public sealed class GetEditorChapterReviewDetailQueryHandler
         : IRequestHandler<GetEditorChapterReviewDetailQuery, EditorChapterReviewDetailDto?>
     {
-        private readonly IEditorChapterReviewRepository _repository;
+        private readonly IEditorChapterReviewReadRepository _repository;
 
-        public GetEditorChapterReviewDetailQueryHandler(IEditorChapterReviewRepository repository)
+        public GetEditorChapterReviewDetailQueryHandler(IEditorChapterReviewReadRepository repository)
         {
             _repository = repository;
         }
