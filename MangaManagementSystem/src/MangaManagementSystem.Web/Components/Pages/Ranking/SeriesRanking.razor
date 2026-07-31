@@ -98,7 +98,6 @@
 </RankingPageFrame>
 
 @code {
-
     private const string ScopeWeekly = "WEEKLY";
     private const string ScopeMonthly = "MONTHLY";
     private const string ScopeAllTime = "ALL_TIME";
@@ -107,8 +106,8 @@
     [
         new("rank_asc", "Rank (Ascending)"),
         new("rank_desc", "Rank (Descending)"),
-        new("title_asc", "Series Title (Aâ€“Z)"),
-        new("title_desc", "Series Title (Zâ€“A)"),
+        new("title_asc", "Series Title (A-Z)"),
+        new("title_desc", "Series Title (Z-A)"),
         new("score_desc", "Ranking Score (Highest First)"),
         new("score_asc", "Ranking Score (Lowest First)"),
         new("average_rating_desc", "Average Rating (Highest First)"),
@@ -238,8 +237,8 @@
         : _rankingRows.Max(row => row.Score).ToString("0.0", CultureInfo.InvariantCulture);
 
     private string MostReadSeriesTitle => _rankingRows.Count == 0
-        ? "â€”"
-        : _rankingRows.MaxBy(row => row.ReadingCount)?.Title ?? "â€”";
+        ? "-"
+        : _rankingRows.MaxBy(row => row.ReadingCount)?.Title ?? "-";
 
     private async Task LoadPeriodsAsync()
     {
@@ -333,7 +332,7 @@
             result.Add(new PublicationPeriodOption(
                 id,
                 group.Key,
-                $"{group.Key} ({startDate:dd/MM/yyyy} â€“ {endDate:dd/MM/yyyy})",
+                $"{group.Key} ({startDate:dd/MM/yyyy} - {endDate:dd/MM/yyyy})",
                 startDate,
                 endDate));
         }
@@ -414,7 +413,9 @@
                 _inputSearch,
                 _inputSort);
 
-            rows.AddRange(inputRows.Select(RankingUiHelper.ToInputRow));
+            rows.AddRange(inputRows
+                .Select(RankingUiHelper.ToInputRow)
+                .Select(AttachPublicationPeriodDisplay));
         }
 
         _inputRows = rows;
@@ -483,6 +484,7 @@
 
                 cachedRows = apiRows
                     .Select(RankingUiHelper.ToInputRow)
+                    .Select(AttachPublicationPeriodDisplay)
                     .ToList();
 
                 _weeklyVoteInputCache[periodId] = cachedRows;
@@ -492,6 +494,25 @@
         }
 
         return result;
+    }
+
+    private SeriesInputRow AttachPublicationPeriodDisplay(SeriesInputRow row)
+    {
+        var period = _weeklyPublicationPeriods.FirstOrDefault(item =>
+            item.PublicationPeriodId == row.PublicationPeriodId);
+
+        if (period is null)
+        {
+            row.PublicationPeriodName = string.Empty;
+            row.PublicationPeriodLabel = "Publication week unavailable";
+            return row;
+        }
+
+        row.PublicationPeriodName = period.PeriodName;
+        row.PublicationPeriodLabel =
+            $"{period.PeriodName} ({period.PeriodStartDate:dd/MM/yyyy} - {period.PeriodEndDate:dd/MM/yyyy})";
+
+        return row;
     }
 
     private List<RankingRow> BuildRankingRowsFromVoteInputs(
@@ -599,13 +620,6 @@
 
         foreach (var row in sortedRows)
         {
-            /*
-                Ranking rule:
-                - Rank is DENSE_RANK by ranking_score DESC only.
-                - average_rating, rating_count, reading_count, and series_id
-                  are deterministic display ordering fields only.
-                - Equal ranking_score values must share the same rank.
-            */
             if (previousScore is null || row.Score != previousScore.Value)
             {
                 currentRank++;
