@@ -11,7 +11,7 @@ using MangaManagementSystem.Application.DTOs.Editor;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
 using MangaManagementSystem.Domain.Policies;
-using MangaManagementSystem.Application.Interfaces;
+using MangaManagementSystem.Application.Features.Mangaka.Chapters.Ports;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;

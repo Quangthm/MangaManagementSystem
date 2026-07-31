@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Manga;
 
-namespace MangaManagementSystem.Application.Interfaces
+namespace MangaManagementSystem.Application.Features.Mangaka.Chapters.Ports
 {
     public partial interface IMangakaChapterRepository
     {
