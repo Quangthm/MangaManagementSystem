@@ -4,13 +4,13 @@
 <MudPaper Class="section-card" Elevation="0">
     <MudStack Row="true" Class="pa-4 pb-2" Spacing="2">
         <MudIcon Icon="@Icons.Material.Filled.EditNote" Color="Color.Primary" />
+
         <div>
             <MudText Typo="Typo.h6" Class="fw-800">Series Vote Input</MudText>
-            <MudText Typo="Typo.caption" Color="Color.Secondary">
-                Data is loaded from <code>manga.SeriesVoteInput</code>. Ranking recalculates from the SQL view after save.
-            </MudText>
         </div>
+
         <MudSpacer />
+
         @if (CanManageRankingInput)
         {
             <MudButton Variant="Variant.Filled"
@@ -82,6 +82,7 @@
                 <MudTh>Data Source</MudTh>
                 <MudTh>Inserted At</MudTh>
                 <MudTh>Last Updated</MudTh>
+
                 @if (CanManageRankingInput)
                 {
                     <MudTh Class="text-center">Actions</MudTh>
@@ -91,10 +92,25 @@
             <RowTemplate>
                 <MudTd DataLabel="Series">
                     <MudStack Row="true" Spacing="2">
-                        <MudAvatar Image="@context.CoverUrl" Rounded="true" Class="cover-avatar" />
+                        <MudAvatar Image="@context.CoverUrl"
+                                   Rounded="true"
+                                   Class="cover-avatar" />
+
                         <div>
-                            <MudText Typo="Typo.body2" Class="fw-700">@context.Title</MudText>
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">@SelectedPublicationWeek</MudText>
+                            <MudText Typo="Typo.body2" Class="fw-700">
+                                @context.Title
+                            </MudText>
+
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                @GetMainPeriodText(context)
+                            </MudText>
+
+                            @if (ShouldShowWeekText(context))
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    Week: @GetWeekText(context)
+                                </MudText>
+                            }
                         </div>
                     </MudStack>
                 </MudTd>
@@ -166,7 +182,7 @@
 
                 <MudTd DataLabel="Data Source">
                     <MudText Typo="Typo.caption">
-                        @(string.IsNullOrWhiteSpace(context.DataSourceNote) ? "—" : context.DataSourceNote)
+                        @(string.IsNullOrWhiteSpace(context.DataSourceNote) ? "-" : context.DataSourceNote)
                     </MudText>
                 </MudTd>
 
@@ -217,8 +233,13 @@
 
             <NoRecordsContent>
                 <MudStack Justify="Justify.Center" Class="pa-8">
-                    <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Large" Color="Color.Secondary" />
-                    <MudText Color="Color.Secondary">No series vote input found for this period.</MudText>
+                    <MudIcon Icon="@Icons.Material.Filled.MenuBook"
+                             Size="Size.Large"
+                             Color="Color.Secondary" />
+
+                    <MudText Color="Color.Secondary">
+                        No series vote input found for this period.
+                    </MudText>
                 </MudStack>
             </NoRecordsContent>
 
@@ -280,6 +301,38 @@
     private Task OnSortChangedAsync(string value)
     {
         return SortChanged.InvokeAsync(value ?? string.Empty);
+    }
+
+    private string GetMainPeriodText(SeriesInputRow row)
+    {
+        if (string.Equals(
+                SelectedPublicationWeek,
+                "All weekly inputs",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return GetWeekText(row);
+        }
+
+        return SelectedPublicationWeek;
+    }
+
+    private bool ShouldShowWeekText(SeriesInputRow row)
+    {
+        if (string.IsNullOrWhiteSpace(row.PublicationPeriodLabel))
+        {
+            return false;
+        }
+
+        return SelectedPublicationWeek.StartsWith(
+            "Weekly inputs inside",
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetWeekText(SeriesInputRow row)
+    {
+        return string.IsNullOrWhiteSpace(row.PublicationPeriodLabel)
+            ? "Publication week unavailable"
+            : row.PublicationPeriodLabel;
     }
 
     private void StartInlineEdit(SeriesInputRow row)

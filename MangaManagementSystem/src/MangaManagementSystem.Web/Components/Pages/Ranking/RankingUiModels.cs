@@ -13,53 +13,91 @@ public sealed record PublicationPeriodOption(
     DateTime PeriodStartDate,
     DateTime PeriodEndDate);
 
-public sealed record CatalogEntry(Guid SeriesId, string Title, string CoverUrl);
+public sealed record CatalogEntry(
+    Guid SeriesId,
+    string Title,
+    string CoverUrl);
 
-public sealed record RankingStatItem(string Label, string Value, string Icon, Color Color, string? ExtraClass = null);
+public sealed record RankingStatItem(
+    string Label,
+    string Value,
+    string Icon,
+    Color Color,
+    string? ExtraClass = null);
 
 public sealed class SeriesInputRow
 {
     public Guid SeriesVoteInputId { get; init; }
+
     public Guid PublicationPeriodId { get; init; }
+
+    public string PublicationPeriodName { get; set; } = string.Empty;
+
+    public string PublicationPeriodLabel { get; set; } = string.Empty;
+
     public Guid SeriesId { get; init; }
+
     public string Title { get; init; } = string.Empty;
+
     public string CoverUrl { get; init; } = string.Empty;
+
     public int ReadingCount { get; set; }
+
     public int RatingCount { get; set; }
+
     public decimal AverageRating { get; set; }
+
     public string DataSourceNote { get; init; } = string.Empty;
+
     public DateTime CreatedAt { get; init; }
+
     public DateTime UpdatedAt { get; set; }
 }
 
 public sealed class RankingRow
 {
     public Guid SeriesId { get; init; }
+
     public int Rank { get; init; }
+
     public int PreviousRank { get; init; }
+
     public string Title { get; init; } = string.Empty;
+
     public string CoverUrl { get; init; } = string.Empty;
+
     public int ReadingCount { get; init; }
+
     public int RatingCount { get; init; }
+
     public decimal AverageRating { get; init; }
+
     public decimal Score { get; init; }
 }
 
 public sealed class EditRowState
 {
     public int? ReadingCount { get; set; }
+
     public int? RatingCount { get; set; }
+
     public decimal? AverageRating { get; set; }
+
     public Dictionary<string, string> Errors { get; set; } = [];
 }
 
 public sealed class InsertFormState
 {
     public Guid PublicationPeriodId { get; set; }
+
     public CatalogEntry? Series { get; set; }
+
     public int? ReadingCount { get; set; }
+
     public int? RatingCount { get; set; }
+
     public decimal? AverageRating { get; set; }
+
     public string DataSourceNote { get; set; } = string.Empty;
 }
 
@@ -181,7 +219,7 @@ public static class RankingUiHelper
         {
             > 0 => $"▲ {delta}",
             < 0 => $"▼ {Math.Abs(delta)}",
-            _ => "—"
+            _ => "-"
         };
     }
 
@@ -189,10 +227,10 @@ public static class RankingUiHelper
     {
         if (dto.PeriodTypeCode == "WEEKLY")
         {
-            return $"{dto.PeriodName} ({dto.PeriodStartDate:MMM d} – {dto.PeriodEndDate:MMM d})";
+            return $"{dto.PeriodName} ({dto.PeriodStartDate:MMM d} - {dto.PeriodEndDate:MMM d})";
         }
 
-        return $"{dto.PeriodName} ({dto.PeriodStartDate:yyyy-MM-dd} – {dto.PeriodEndDate:yyyy-MM-dd})";
+        return $"{dto.PeriodName} ({dto.PeriodStartDate:yyyy-MM-dd} - {dto.PeriodEndDate:yyyy-MM-dd})";
     }
 
     private static string ResolveCover(string? coverUrl)
