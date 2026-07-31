@@ -49,7 +49,7 @@ namespace MangaManagementSystem.API.Controllers.Assistant
         }
 
         /// <summary>
-        /// Get all tasks assigned to the current Assistant user.
+        /// NGHIỆP VỤ: Lấy danh sách task được giao cho Assistant hiện tại (phục vụ trang AssignedTasks và Dashboard).
         /// Route: GET /api/assistant/tasks
         /// </summary>
         [HttpGet]
@@ -78,7 +78,8 @@ namespace MangaManagementSystem.API.Controllers.Assistant
         }
 
         /// <summary>
-        /// Get detail of a specific task assigned to the current Assistant user.
+        /// NGHIỆP VỤ: Xem chi tiết 1 task được giao cho Assistant (mô tả task, vùng trang, annotations).
+        /// Chỉ trả về task thuộc đúng Assistant này; nếu không phải task của mình thì trả 404.
         /// Route: GET /api/assistant/tasks/{taskId}
         /// </summary>
         [HttpGet("{taskId:guid}")]
@@ -117,8 +118,8 @@ namespace MangaManagementSystem.API.Controllers.Assistant
         }
 
         /// <summary>
-        /// Submit assistant task work with file upload.
-        /// Moves task from ASSIGNED → UNDER_REVIEW.
+        /// NGHIỆP VỤ CHÍNH: Assistant nộp bài làm cho task (kèm file PNG/JPEG/WebP ≤ 10MB).
+        /// Tạo version mới cho trang và chuyển task từ ASSIGNED sang UNDER_REVIEW để Mangaka duyệt.
         /// Route: POST /api/assistant/tasks/{taskId}/submit-work
         /// </summary>
         [HttpPost("{taskId:guid}/submit-work")]
@@ -226,7 +227,8 @@ namespace MangaManagementSystem.API.Controllers.Assistant
             }
         }
         /// <summary>
-        /// Get annotations linked to the assigned page regions for a task.
+        /// NGHIỆP VỤ: Lấy danh sách annotations (ghi chú của Mangaka) gắn với các vùng trang của task,
+        /// để Assistant biết cần sửa gì trước khi nộp bài.
         /// Route: GET /api/assistant/tasks/{taskId}/annotations
         /// </summary>
         [HttpGet("{taskId:guid}/annotations")]

@@ -70,6 +70,11 @@ namespace MangaManagementSystem.Application.Services
             return await _repository.GetQuickSelectAssistantsAsync(seriesId, cancellationToken);
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Giao việc HÀNG LOẠT (Quick Select) — Mangaka chọn nhiều trang của 1 chapter
+        /// và 1 Assistant; hệ thống tự sinh task ASSIGNED cho từng trang trong 1 transaction
+        /// (kèm validation quyền cộng tác và chặn chapter không cho phép sửa nội dung).
+        /// </summary>
         public async Task<QuickSelectTaskAssignmentResult> AssignQuickSelectTasksAsync(
             Guid actorUserId,
             QuickSelectTaskAssignmentRequest request,

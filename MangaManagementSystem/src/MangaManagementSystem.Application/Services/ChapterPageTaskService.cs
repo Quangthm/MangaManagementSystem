@@ -19,6 +19,10 @@ namespace MangaManagementSystem.Application.Services
             _unitOfWork = unitOfWork;
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Mangaka giao việc cho Assistant — tạo 1 task mới gắn với 1 trang (qua các vùng region),
+        /// lưu trạng thái ASSIGNED và gửi notification TASK_ASSIGNMENT cho Assistant được giao.
+        /// </summary>
         public async Task<ChapterPageTaskDto> CreateChapterPageTaskAsync(
             CreateChapterPageTaskDto dto)
         {
@@ -180,12 +184,20 @@ namespace MangaManagementSystem.Application.Services
             }).ToList();
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Lấy danh sách task được giao cho 1 Assistant (kèm thông tin series/chương/trang)
+        /// dùng cho Dashboard và trang AssignedTasks của Assistant.
+        /// </summary>
         public async Task<IEnumerable<ChapterPageTaskDto>> GetAssignedTasksForAssistantAsync(Guid assistantUserId)
         {
             var entities = await _unitOfWork.ChapterPageTasks.GetByAssignedUserIdWithFullContextAsync(assistantUserId);
             return entities.Select(MapToDtoWithAssistantContext).ToList();
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Lấy chi tiết 1 task cho Assistant — chỉ trả về nếu task được giao đúng cho assistantUserId
+        /// (kiểm tra ownership); ngược lại trả về null để API trả 404.
+        /// </summary>
         public async Task<ChapterPageTaskDto?> GetAssignedTaskDetailForAssistantAsync(Guid assistantUserId, Guid taskId)
         {
             var entity = await _unitOfWork.ChapterPageTasks.GetByIdWithFullContextAsync(taskId);
@@ -254,11 +266,19 @@ namespace MangaManagementSystem.Application.Services
 
         // --- Mangaka task lifecycle actions ---
 
+        /// <summary>
+        /// NGHIỆP VỤ: Mangaka duyệt bài của Assistant — đánh dấu task hoàn thành (COMPLETED),
+        /// bài này sẽ được tính vào trang thu nhập của Assistant.
+        /// </summary>
         public async Task ApproveTaskAsync(Guid actorUserId, Guid taskId, string? completionNote)
         {
             await _unitOfWork.ChapterPageTasks.MarkTaskCompletedAsync(actorUserId, taskId, completionNote);
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Mangaka trả bài cho Assistant làm lại — chỉ áp dụng cho task đang UNDER_REVIEW,
+        /// bắt buộc ghi lý do/instruction mới, task quay lại trạng thái ASSIGNED.
+        /// </summary>
         public async Task ReturnTaskForReworkAsync(Guid actorUserId, Guid taskId, string reason)
         {
             if (actorUserId == Guid.Empty)
@@ -281,11 +301,17 @@ namespace MangaManagementSystem.Application.Services
             await _unitOfWork.ChapterPageTasks.ReturnTaskForReworkAsync(actorUserId, taskId, reason);
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Hủy task (CANCELLED) kèm lý do — task không bao giờ bị xóa cứng để giữ vết kiểm tra (audit).
+        /// </summary>
         public async Task CancelTaskAsync(Guid actorUserId, Guid taskId, string reason)
         {
             await _unitOfWork.ChapterPageTasks.CancelTaskAsync(actorUserId, taskId, reason);
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Lấy danh sách task đang chờ Mangaka xử lý (UNDER_REVIEW) cho trang Review Task của Mangaka.
+        /// </summary>
         public async Task<IEnumerable<ChapterPageTaskDto>> GetTasksForReviewByCreatorAsync(Guid creatorUserId)
         {
             var entities = await _unitOfWork.ChapterPageTasks.GetTasksForReviewByCreatorAsync(creatorUserId);
@@ -294,6 +320,10 @@ namespace MangaManagementSystem.Application.Services
 
         // --- Reassignment ---
 
+        /// <summary>
+        /// NGHIỆP VỤ: Chuyển task từ Assistant này sang Assistant khác — task cũ bị CANCELLED và task mới
+        /// được tạo với trạng thái ASSIGNED; chỉ áp dụng khi task đang ASSIGNED hoặc UNDER_REVIEW.
+        /// </summary>
         public async Task<ReassignChapterPageTaskResult> ReassignTaskAsync(
             Guid actorUserId,
             Guid taskId,
@@ -400,6 +430,10 @@ namespace MangaManagementSystem.Application.Services
             }
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Liệt kê các Assistant đủ điều kiện nhận 1 task (cùng series, tài khoản ACTIVE)
+        /// để Mangaka chọn khi tạo task hoặc chuyển việc.
+        /// </summary>
         public async Task<IReadOnlyList<EligibleAssistantDto>> GetEligibleAssistantsForTaskAsync(
             Guid actorUserId,
             Guid taskId)

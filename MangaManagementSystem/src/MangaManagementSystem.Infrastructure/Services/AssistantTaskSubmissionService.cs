@@ -28,6 +28,15 @@ namespace MangaManagementSystem.Infrastructure.Services
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ LÕI: Assistant nộp bài làm cho task. Chạy trong 1 transaction duy nhất gồm:
+        /// (1) suy ra chapter_page_id từ các vùng của task (mọi vùng phải thuộc cùng 1 trang),
+        /// (2) tạo FileResource qua SP usp_FileResource_Create,
+        /// (3) tạo ChapterPageVersion mới (version cũ bỏ is_current, có UPDLOCK chống đua),
+        /// (4) gọi SP usp_ChapterPageTask_SubmitForReview chuyển task ASSIGNED sang UNDER_REVIEW,
+        /// (5) gửi notification TASK_REVIEW cho các Mangaka của series,
+        /// (6) commit; thất bại bất kỳ bước nào thì rollback toàn bộ.
+        /// </summary>
         public async Task<AssistantTaskSubmitResultDto> SubmitTaskWorkAsync(
             AssistantTaskSubmitRequestDto request,
             CancellationToken cancellationToken = default)
