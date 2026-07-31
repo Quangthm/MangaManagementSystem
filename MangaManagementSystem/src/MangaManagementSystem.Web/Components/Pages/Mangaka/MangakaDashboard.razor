@@ -309,34 +309,34 @@
                     </div>
                 </div>
 
-                @* Pagination controls *@
-                @if (DashboardTotalPages > 1)
-                {
-                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 16px 0;">
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined"
-                                   Disabled="@(_dashboardPage <= 1)"
-                                   OnClick="@(() => { _dashboardPage--; })">
-                            Prev
-                        </MudButton>
-                        @for (int p = 1; p <= DashboardTotalPages; p++)
-                        {
-                            int pageNum = p;
-                            bool isCurrent = pageNum == _dashboardPage;
-                            <MudButton Size="Size.Small"
-                                       Variant="@(isCurrent ? Variant.Filled : Variant.Outlined)"
-                                       Color="@(isCurrent ? Color.Primary : Color.Default)"
-                                       OnClick="@(() => _dashboardPage = pageNum)">
-                                @pageNum
-                            </MudButton>
-                        }
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined"
-                                   Disabled="@(_dashboardPage >= DashboardTotalPages)"
-                                   OnClick="@(() => { _dashboardPage++; })">
-                            Next
-                        </MudButton>
-                    </div>
-                }
             </div>
+            @* Pagination controls *@
+            @if (DashboardTotalPages > 1)
+            {
+                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 16px 0;">
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                               Disabled="@(_dashboardPage <= 1)"
+                               OnClick="@(() => { _dashboardPage--; })">
+                        Prev
+                    </MudButton>
+                    @for (int p = 1; p <= DashboardTotalPages; p++)
+                    {
+                        int pageNum = p;
+                        bool isCurrent = pageNum == _dashboardPage;
+                        <MudButton Size="Size.Small"
+                                   Variant="@(isCurrent ? Variant.Filled : Variant.Outlined)"
+                                   Color="@(isCurrent ? Color.Primary : Color.Default)"
+                                   OnClick="@(() => _dashboardPage = pageNum)">
+                            @pageNum
+                        </MudButton>
+                    }
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                               Disabled="@(_dashboardPage >= DashboardTotalPages)"
+                               OnClick="@(() => { _dashboardPage++; })">
+                        Next
+                    </MudButton>
+                </div>
+            }
         }
     </div>
 </MangakaLayout>
@@ -1167,7 +1167,7 @@
 
     // â”€â”€ Dashboard pagination â”€â”€
     private int _dashboardPage = 1;
-    private const int DashboardPageSize = 8;
+    private const int DashboardPageSize = 7;
 
     private int DashboardTotalPages => DashboardPageSize == 0
         ? 0
