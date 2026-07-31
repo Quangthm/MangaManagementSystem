@@ -19,6 +19,10 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             _context = context ?? throw new ArgumentNullException(nameof(context));
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Tính trang thu nhập của Assistant — chỉ đếm task có trạng thái COMPLETED,
+        /// nhóm theo loại task và trả về số task, số vùng được duyệt và tổng ước tính.
+        /// </summary>
         public async Task<AssistantCompletedWorkReadModel> GetCompletedWorkAsync(
             Guid assistantUserId, CancellationToken cancellationToken = default)
         {

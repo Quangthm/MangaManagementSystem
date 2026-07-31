@@ -29,6 +29,10 @@ namespace MangaManagementSystem.Web.Services.Api
                 };
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Client gọi API lấy danh sách task được giao cho Assistant
+        /// (dùng cho Dashboard và trang AssignedTasks). Route: GET api/assistant/tasks
+        /// </summary>
         public async Task<IReadOnlyList<ChapterPageTaskDto>>
             GetAssignedTasksAsync(
                 CancellationToken cancellationToken = default)
@@ -71,6 +75,10 @@ namespace MangaManagementSystem.Web.Services.Api
                    ?? new List<ChapterPageTaskDto>();
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Client gọi API xem chi tiết 1 task được giao (mô tả, vùng trang, status).
+        /// Trả về null nếu task không tồn tại hoặc không phải task của mình. Route: GET api/assistant/tasks/{taskId}
+        /// </summary>
         public async Task<ChapterPageTaskDto?>
             GetTaskDetailAsync(
                 Guid taskId,
@@ -123,6 +131,10 @@ namespace MangaManagementSystem.Web.Services.Api
                 _jsonOptions);
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Client gọi API lấy annotations (ghi chú Mangaka) gắn với vùng trang của task.
+        /// Route: GET api/assistant/tasks/{taskId}/annotations
+        /// </summary>
         public async Task<
             IReadOnlyList<ChapterPageAnnotationDto>>
             GetTaskAnnotationsAsync(
@@ -162,6 +174,10 @@ namespace MangaManagementSystem.Web.Services.Api
                        ChapterPageAnnotationDto>();
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Client gọi API lấy trang thu nhập ước tính của Assistant
+        /// (chỉ tính task COMPLETED). Route: GET api/assistant/completed-work
+        /// </summary>
         public async Task<
             AssistantCompletedWorkSummaryDto?>
             GetCompletedWorkAsync(
@@ -201,6 +217,10 @@ namespace MangaManagementSystem.Web.Services.Api
                 _jsonOptions);
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Client nộp bài khi Assistant chọn file từ máy — đọc tối đa 10MB rồi
+        /// chuyển thành byte[] để gửi lên API. Route: POST api/assistant/tasks/{taskId}/submit-work
+        /// </summary>
         public async Task<
             AssistantTaskSubmitResultDto?>
             SubmitTaskWorkAsync(
@@ -240,6 +260,11 @@ namespace MangaManagementSystem.Web.Services.Api
                 cancellationToken);
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Client gửi file nộp bài (dạng multipart/form-data) lên API
+        /// để tạo version mới cho trang và chuyển task ASSIGNED sang UNDER_REVIEW.
+        /// Route: POST api/assistant/tasks/{taskId}/submit-work
+        /// </summary>
         public async Task<
             AssistantTaskSubmitResultDto?>
             SubmitTaskWorkAsync(

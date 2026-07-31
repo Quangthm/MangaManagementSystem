@@ -1983,6 +1983,11 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         }
     }
 
+    /// <summary>
+    /// NGHIỆP VỤ: Assistant nộp bài từ workspace (nút Submit Current Canvas) — nếu đã chọn file thì
+    /// gửi file đó, ngược lại xuất canvas hiện tại ra PNG rồi gửi lên API
+    /// (chỉ cho phép khi task đang ASSIGNED và chapter ở trạng thái cho phép nộp bài).
+    /// </summary>
     private async Task SubmitAssistantWorkspaceAsync()
     {
         if (!_currentUserId.HasValue || _assistantWorkspaceTask is null)

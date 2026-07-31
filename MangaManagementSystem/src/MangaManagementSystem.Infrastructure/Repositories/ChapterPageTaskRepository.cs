@@ -94,6 +94,10 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             }
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Ghi 1 task mới (ASSIGNED) xuống bảng manga.ChapterPageTask kèm các vùng trang
+        /// (ChapterPageTaskRegion); dùng khóa ứng dụng chapter lock để chống tạo task cùng lúc.
+        /// </summary>
         public async Task<Guid> CreateChapterPageTaskAsync(
             Guid actorUserId,
             Guid assignedToUserId,
@@ -522,6 +526,9 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
         // --- Mangaka task lifecycle SPs ---
 
+        /// <summary>
+        /// NGHIỆP VỤ: Hủy task trong DB qua SP usp_ChapterPageTask_Cancel (trạng thái CANCELLED, kèm lý do).
+        /// </summary>
         public async Task CancelTaskAsync(Guid actorUserId, Guid taskId, string reason)
         {
             var conn = _context.Database.GetDbConnection();
@@ -539,6 +546,10 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             await cmd.ExecuteNonQueryAsync();
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Đánh dấu task hoàn thành trong DB qua SP usp_ChapterPageTask_MarkCompleted
+        /// (trạng thái COMPLETED, ghi nhận bài đã duyệt để tính thu nhập cho Assistant).
+        /// </summary>
         public async Task MarkTaskCompletedAsync(Guid actorUserId, Guid taskId, string? completionNote)
         {
             var conn = _context.Database.GetDbConnection();
@@ -559,6 +570,10 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             await cmd.ExecuteNonQueryAsync();
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Trả bài cho Assistant làm lại trong DB qua SP usp_ChapterPageTask_ReturnForRework
+        /// (task từ UNDER_REVIEW quay lại ASSIGNED kèm mô tả/mục tiêu mới).
+        /// </summary>
         public async Task ReturnTaskForReworkAsync(Guid actorUserId, Guid taskId, string updatedTaskDescription)
         {
             var conn = _context.Database.GetDbConnection();
@@ -598,6 +613,10 @@ namespace MangaManagementSystem.Infrastructure.Repositories
 
         // --- Reassign task to different assistant SP wrapper ---
 
+        /// <summary>
+        /// NGHIỆP VỤ: Chuyển task sang Assistant khác trong DB qua SP usp_ChapterPageTask_AssignToDifferentUser
+        /// (hủy task cũ, tạo task mới ASSIGNED cho người nhận mới, trả về task id mới).
+        /// </summary>
         public async Task<Guid> AssignToDifferentUserAsync(
             Guid actorUserId,
             Guid chapterPageTaskId,
