@@ -119,6 +119,39 @@ services:
     networks:
       - sonar-network
 
+  manga-ai:
+    build:
+      context: ./src/MangaAI_Service
+      dockerfile: Dockerfile
+    container_name: mangaflow-ai
+    ports:
+      # Accessible from your Windows machine only.
+      - "127.0.0.1:8000:8000"
+    volumes:
+      # Development: Python changes appear inside the container immediately.
+      - "./src/MangaAI_Service:/app"
+      # Mount your downloaded SickZil model folders as read-only.
+      - "D:/FuncAI-Github/SickZil-Machine/resource:/models:ro"
+    environment:
+      SICKZIL_RESOURCE_DIR: /models
+      # Helps Uvicorn detect file changes with Docker Desktop/Windows.
+      WATCHFILES_FORCE_POLLING: "true"
+    command:
+      [
+        "python",
+        "-m",
+        "uvicorn",
+        "main:app",
+        "--reload",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000"
+      ]
+    restart: unless-stopped
+    networks:
+      - manga-network
+
 volumes:
   manga_sqlserver_data:
   sonarqube_db_data:
