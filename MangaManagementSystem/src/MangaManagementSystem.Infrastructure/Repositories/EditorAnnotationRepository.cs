@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using MangaManagementSystem.Application.Features.Editor.Annotations.Models;
+using MangaManagementSystem.Application.Features.Editor.Annotations.Ports;
 using MangaManagementSystem.Domain.Entities;
-using MangaManagementSystem.Domain.Interfaces;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 

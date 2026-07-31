@@ -5,8 +5,8 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using MangaManagementSystem.Application.Features.Publication.Schedule.Models;
 using MangaManagementSystem.Application.Features.Publication.Schedule.Queries.GetPublicationScheduleCalendar;
-using MangaManagementSystem.Domain.Interfaces;
 using Microsoft.Extensions.Logging;
 
 namespace MangaManagementSystem.Web.Services.Api

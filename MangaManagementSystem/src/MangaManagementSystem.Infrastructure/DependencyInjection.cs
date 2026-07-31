@@ -1,3 +1,10 @@
+using MangaManagementSystem.Application.Features.Assistant.CompletedWork.Ports;
+using MangaManagementSystem.Application.Features.Editor.Annotations.Ports;
+using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Ports;
+using MangaManagementSystem.Application.Features.Editor.Dashboard.Ports;
+using MangaManagementSystem.Application.Features.Editor.Series.Ports;
+using MangaManagementSystem.Application.Features.Mangaka.Chapters.Ports;
+using MangaManagementSystem.Application.Features.Publication.Schedule.Ports;
 using MangaManagementSystem.Application.Features.Ranking.Warnings;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Domain.Interfaces;
@@ -83,7 +90,16 @@ namespace MangaManagementSystem.Infrastructure
             services.AddScoped<ISeriesProposalRepository, SeriesProposalRepository>();
             services.AddScoped<IEditorDashboardRepository, EditorDashboardRepository>();
             services.AddScoped<IAssistantCompletedWorkRepository, AssistantCompletedWorkRepository>();
-            services.AddScoped<IEditorChapterReviewRepository, EditorChapterReviewRepository>();
+            services.AddScoped<EditorChapterReviewRepository>();
+            services.AddScoped<IEditorChapterReviewReadRepository>(
+                serviceProvider =>
+                    serviceProvider.GetRequiredService<EditorChapterReviewRepository>());
+            services.AddScoped<IEditorChapterReviewWriteRepository>(
+                serviceProvider =>
+                    serviceProvider.GetRequiredService<EditorChapterReviewRepository>());
+            services.AddScoped<IEditorChapterSchedulingRepository>(
+                serviceProvider =>
+                    serviceProvider.GetRequiredService<EditorChapterReviewRepository>());
             services.AddScoped<IEditorAnnotationRepository, EditorAnnotationRepository>();
             services.AddScoped<IEditorSeriesRepository, EditorSeriesRepository>();
             services.AddScoped<IReferenceDataRepository, ReferenceDataRepository>();

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Manga;
-using MangaManagementSystem.Application.Interfaces;
+using MangaManagementSystem.Application.Features.Mangaka.Chapters.Ports;
 using MediatR;
 
 namespace MangaManagementSystem.Application.Features.Mangaka.Chapters.Queries.GetMangakaSeriesChapters

@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.Common.Policies;
 using MangaManagementSystem.Application.DTOs.Editor;
+using MangaManagementSystem.Application.Features.Editor.Series.Ports;
 using MangaManagementSystem.Domain.Interfaces;
 using MediatR;
 

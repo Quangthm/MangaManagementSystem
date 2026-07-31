@@ -4,10 +4,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Editor;
 using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Models;
+using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Ports;
 using MangaManagementSystem.Application.Features.Editor.SeriesProposals;
 using MangaManagementSystem.Application.Features.Editor.SeriesProposals.Common;
 using MangaManagementSystem.Application.Interfaces;
-using MangaManagementSystem.Domain.Interfaces;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -19,12 +20,12 @@ namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Comma
         private static readonly string[] AllowedDecisions = { "APPROVED", "REVISION_REQUESTED", "CANCELLED" };
         private const int MaxCommentsLength = 2000;
 
-        private readonly IEditorChapterReviewRepository _repository;
+        private readonly IEditorChapterReviewWriteRepository _repository;
         private readonly IFileStorageService _fileStorageService;
         private readonly ILogger<SubmitChapterEditorialReviewCommandHandler> _logger;
 
         public SubmitChapterEditorialReviewCommandHandler(
-            IEditorChapterReviewRepository repository,
+            IEditorChapterReviewWriteRepository repository,
             IFileStorageService fileStorageService,
             ILogger<SubmitChapterEditorialReviewCommandHandler> logger)
         {
@@ -75,7 +76,7 @@ namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Comma
             try
             {
                 var uploadMeta = markup is not null
-                    ? new MangaManagementSystem.Domain.Interfaces.UploadedFileMetadata(
+                    ? new UploadedFileMetadata(
                         markup.OriginalFileName,
                         markup.PublicId,
                         markup.SecureUrl,

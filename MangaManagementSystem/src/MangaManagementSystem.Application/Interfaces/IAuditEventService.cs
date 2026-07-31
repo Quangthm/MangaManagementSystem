@@ -1,4 +1,4 @@
-using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.Application.DTOs.Audit;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 

@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using MangaManagementSystem.Application.Features.Publication.Schedule.Models;
 using MangaManagementSystem.Application.Features.Publication.Schedule.Queries.GetPublicationScheduleCalendar;
-using MangaManagementSystem.Domain.Interfaces;
 
 namespace MangaManagementSystem.Web.Services.Api
 {

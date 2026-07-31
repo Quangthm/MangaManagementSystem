@@ -3,7 +3,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Editor;
-using MangaManagementSystem.Domain.Interfaces;
+using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Ports;
 using MediatR;
 
 namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queries.GetEditorChapterReviewDetail
@@ -17,9 +17,9 @@ namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queri
     public sealed class GetEditorChapterReviewDetailQueryHandler
         : IRequestHandler<GetEditorChapterReviewDetailQuery, EditorChapterReviewDetailDto?>
     {
-        private readonly IEditorChapterReviewRepository _repository;
+        private readonly IEditorChapterReviewReadRepository _repository;
 
-        public GetEditorChapterReviewDetailQueryHandler(IEditorChapterReviewRepository repository)
+        public GetEditorChapterReviewDetailQueryHandler(IEditorChapterReviewReadRepository repository)
         {
             _repository = repository;
         }

@@ -44,11 +44,11 @@ namespace MangaManagementSystem.Web
                     .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
             }
             builder.Services.AddScoped<ApiAuthorizationMessageHandler>();
-builder.Services.AddHttpClient<IRegistrationApiClient, RegistrationApiClient>((sp, client) =>
-            {
-                var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
-                client.BaseAddress = new Uri(settings.Value.BaseUrl);
-            });
+            builder.Services.AddHttpClient<IRegistrationApiClient, RegistrationApiClient>((sp, client) =>
+                        {
+                            var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+                            client.BaseAddress = new Uri(settings.Value.BaseUrl);
+                        });
             builder.Services
                 .AddHttpClient<IEditorialBoardApiClient, EditorialBoardApiClient>((sp, client) =>
                 {
@@ -143,15 +143,15 @@ builder.Services.AddHttpClient<IRegistrationApiClient, RegistrationApiClient>((s
                         new Uri(settings.Value.BaseUrl);
                 })
                 .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
-builder.Services.AddHttpClient<IAdminFileApiClient, AdminFileApiClient>((sp, client) =>
-            {
-                var settings =
-                    sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
+            builder.Services.AddHttpClient<IAdminFileApiClient, AdminFileApiClient>((sp, client) =>
+                        {
+                            var settings =
+                                sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>();
 
-                client.BaseAddress =
-                    new Uri(settings.Value.BaseUrl);
-            })
-                .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
+                            client.BaseAddress =
+                                new Uri(settings.Value.BaseUrl);
+                        })
+                            .AddHttpMessageHandler<ApiAuthorizationMessageHandler>();
             builder.Services
                 .AddHttpClient<
                     INotificationApiClient,
@@ -648,49 +648,49 @@ builder.Services.AddHttpClient<IAdminFileApiClient, AdminFileApiClient>((sp, cli
                     }
                 });
 
-app.MapPost(
-    "/api/auth/logout",
-    async (
-        HttpContext context,
-        Microsoft.AspNetCore.Antiforgery
-            .IAntiforgery antiforgery,
-        ILogger<Program> logger) =>
-    {
-        try
-        {
-            await antiforgery
-                .ValidateRequestAsync(context);
-        }
-        catch (
-            Microsoft.AspNetCore.Antiforgery
-                .AntiforgeryValidationException)
-        {
-            logger.LogWarning(
-                "Rejected logout request because the antiforgery token was invalid.");
-
-            return Results.BadRequest(
-                new
+            app.MapPost(
+                "/api/auth/logout",
+                async (
+                    HttpContext context,
+                    Microsoft.AspNetCore.Antiforgery
+                        .IAntiforgery antiforgery,
+                    ILogger<Program> logger) =>
                 {
-                    message =
-                        "Invalid logout request."
-                });
-        }
+                    try
+                    {
+                        await antiforgery
+                            .ValidateRequestAsync(context);
+                    }
+                    catch (
+                        Microsoft.AspNetCore.Antiforgery
+                            .AntiforgeryValidationException)
+                    {
+                        logger.LogWarning(
+                            "Rejected logout request because the antiforgery token was invalid.");
 
-        var username =
-            context.User.Identity?.Name
-            ?? "(anonymous)";
+                        return Results.BadRequest(
+                            new
+                            {
+                                message =
+                                    "Invalid logout request."
+                            });
+                    }
 
-        await context.SignOutAsync(
-            CookieAuthenticationDefaults
-                .AuthenticationScheme);
+                    var username =
+                        context.User.Identity?.Name
+                        ?? "(anonymous)";
 
-        logger.LogInformation(
-            "User {Name} logged out.",
-            username);
+                    await context.SignOutAsync(
+                        CookieAuthenticationDefaults
+                            .AuthenticationScheme);
 
-        return Results.Redirect("/login");
-    })
-    .RequireAuthorization();
+                    logger.LogInformation(
+                        "User {Name} logged out.",
+                        username);
+
+                    return Results.Redirect("/login");
+                })
+                .RequireAuthorization();
 
 
 
@@ -1057,28 +1057,28 @@ app.MapPost(
         private static string GetDashboardRedirectUrl(
             string roleName) =>
             roleName switch
-    {
-        "Admin" =>
-            "/admin",
+            {
+                "Admin" =>
+                    "/admin",
 
-        "Mangaka" =>
-            "/mangaka",
+                "Mangaka" =>
+                    "/mangaka",
 
-        "Assistant" =>
-            "/assistant",
+                "Assistant" =>
+                    "/assistant",
 
-        "Tantou Editor" =>
-            "/editor",
+                "Tantou Editor" =>
+                    "/editor",
 
-        "Editorial Board Member" =>
-            "/demo/mangaflow/editorial",
+                "Editorial Board Member" =>
+                    "/demo/mangaflow/editorial",
 
-        "Editorial Board Chief" =>
-            "/demo/mangaflow/editorial",
+                "Editorial Board Chief" =>
+                    "/demo/mangaflow/editorial",
 
-        _ =>
-            "/access-denied"
-    };
+                _ =>
+                    "/access-denied"
+            };
 
         private static async Task<IResult> SignInAndRedirectAsync(
             HttpContext context,

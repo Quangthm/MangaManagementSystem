@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using MangaManagementSystem.Domain.Interfaces;
+using MangaManagementSystem.Application.Features.Publication.Schedule.Models;
+using MangaManagementSystem.Application.Features.Publication.Schedule.Ports;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 

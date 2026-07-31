@@ -1,4 +1,4 @@
-using MangaManagementSystem.Application.DTOs.Manga;
+using MangaManagementSystem.Application.DTOs.Audit;
 using MangaManagementSystem.Application.Interfaces;
 using MangaManagementSystem.Domain.Entities;
 using MangaManagementSystem.Domain.Interfaces;
