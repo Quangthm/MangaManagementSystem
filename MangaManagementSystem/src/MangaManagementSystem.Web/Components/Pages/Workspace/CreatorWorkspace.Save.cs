@@ -279,7 +279,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                                             FileDto: fileDto,
                                             VersionNote: ver.Note ?? $"Uploaded Version {ver.VersionNo}",
                                             Regions: BuildRegionDtosForSave(ver.Regions),
-                                            SetAsCurrent: true);
+                                            SetAsCurrent: ver.IsCurrentVersion);
 
                                         var versionDto = await MangakaPageApi.CreateVersionWithFileAndRegionsAsync(req);
                                         if (versionDto != null)

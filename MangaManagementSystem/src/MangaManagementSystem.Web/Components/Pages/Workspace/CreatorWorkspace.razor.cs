@@ -2572,12 +2572,11 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         {
             var pageToDelete = UploadedPages[ActivePageIndex];
 
-            // Guard: a saved page that has tasks or annotations must not be deleted (deleting it would
-            // orphan assigned work / feedback). ActiveTasks/ActiveAnnotations hold the current page's
-            // full set (all versions), loaded in LoadPage.
-            if (pageToDelete.ChapterPageId != Guid.Empty && (ActiveTasks.Any() || ActiveAnnotations.Any()))
+            // Guard: a saved page that has ACTIVE tasks or UNRESOLVED annotations must not be deleted 
+            // (deleting it would orphan assigned work / feedback). Cancelled/Completed tasks do not block deletion.
+            if (pageToDelete.ChapterPageId != Guid.Empty && (ActiveTasks.Any(t => t.Status == "ASSIGNED" || t.Status == "UNDER_REVIEW") || ActiveAnnotations.Any(a => !a.IsResolved)))
             {
-                Snackbar.Add("This page has tasks or annotations and cannot be deleted.", Severity.Warning);
+                Snackbar.Add("This page has active tasks or unresolved annotations and cannot be deleted.", Severity.Warning);
                 return;
             }
 

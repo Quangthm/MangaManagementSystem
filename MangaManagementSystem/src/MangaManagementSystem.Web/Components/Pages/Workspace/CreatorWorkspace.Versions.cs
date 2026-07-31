@@ -316,15 +316,26 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
 
         try
         {
-            await MangakaPageApi.SetCurrentVersionAsync(page.ChapterPageId, version.ChapterPageVersionId);
-            
-            // Update UI state
-            foreach (var v in page.Versions)
+            if (page.ChapterPageId == Guid.Empty || version.ChapterPageVersionId == Guid.Empty)
             {
-                v.IsCurrentVersion = v.ChapterPageVersionId == version.ChapterPageVersionId;
+                foreach (var v in page.Versions)
+                {
+                    v.IsCurrentVersion = v == version;
+                }
+                Snackbar.Add("Active version updated locally.", Severity.Success);
             }
+            else
+            {
+                await MangakaPageApi.SetCurrentVersionAsync(page.ChapterPageId, version.ChapterPageVersionId);
+                
+                // Update UI state
+                foreach (var v in page.Versions)
+                {
+                    v.IsCurrentVersion = v.ChapterPageVersionId == version.ChapterPageVersionId;
+                }
 
-            Snackbar.Add("Active version updated successfully.", Severity.Success);
+                Snackbar.Add("Active version updated successfully.", Severity.Success);
+            }
         }
         catch (Exception ex)
         {
