@@ -57,8 +57,8 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         }
 
         bool hasNewChapters = Chapters.Any(c => c.ChapterId == Guid.Empty);
-        bool hasPendingPages = Chapters.Any(c => c.Pages != null && c.Pages.Any(p => p.ChapterPageId == Guid.Empty || (p.Versions.Any() && p.Versions[p.ActiveVersionIndex].PendingBytes != null)));
-        bool anyDirty = pagesToSave.Any(p => p != null && p.Versions.Any() && p.Versions[p.ActiveVersionIndex].IsDirty);
+        bool hasPendingPages = Chapters.Any(c => c.Pages != null && c.Pages.Any(p => p.ChapterPageId == Guid.Empty || p.Versions.Any(v => v.PendingBytes != null)));
+        bool anyDirty = pagesToSave.Any(p => p != null && p.Versions.Any(v => v.IsDirty));
 
         if (!hasNewChapters && !hasPendingPages && !anyDirty && _saveState == SaveStatus.Saved) return;
 
@@ -72,7 +72,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         int totalPendingPages = Chapters
             .Where(c => c.ChapterId != Guid.Empty || c.Pages != null)
             .SelectMany(c => c.Pages ?? new List<PageModel>())
-            .Count(p => p.Versions.Any() && p.Versions[p.ActiveVersionIndex].PendingBytes != null);
+            .Sum(p => p.Versions.Count(v => v.PendingBytes != null));
         int pagesUploaded = 0;
         _uploadRetryCount = 0;
         _saveProgress = totalPendingPages > 0 ? $"Uploading pages… (0/{totalPendingPages})" : "Saving…";
@@ -166,9 +166,8 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 if (chap.ChapterId == Guid.Empty || chap.Pages == null) continue;
                 foreach (var page in chap.Pages)
                 {
-                    if (page.Versions.Any())
+                    foreach (var v in page.Versions)
                     {
-                        var v = page.Versions[page.ActiveVersionIndex];
                         if (v.PendingBytes != null) pendingVersions.Add(v);
                     }
                 }
@@ -213,101 +212,99 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 int nextNewPageNo = chap.Pages.Where(p => p.PageNo > 0).Select(p => p.PageNo).DefaultIfEmpty(0).Max() + 1;
                 foreach (var page in chap.Pages)
                 {
-                    if (page.ChapterPageId == Guid.Empty || (page.Versions.Any() && page.Versions[page.ActiveVersionIndex].PendingBytes != null))
+                    var pagePendingVersions = page.Versions.Where(v => v.PendingBytes != null).OrderBy(v => v.VersionNo).ToList();
+                    foreach (var ver in pagePendingVersions)
                     {
-                        if (page.Versions.Any())
+                        _saveProgress = $"Saving pages… ({pagesUploaded + 1}/{totalPendingPages})";
+                        StateHasChanged();
+                        // Images were already uploaded to Cloudinary in parallel (Phase 1); consume
+                        // the result here. Track the public id so an orphan file can be best-effort
+                        // cleaned up if the DB create then fails.
+                        string? uploadedPublicId = null;
+                        try
                         {
-                            var ver = page.Versions[page.ActiveVersionIndex];
-                            if (ver.PendingBytes != null)
+                            if (uploadErrors.TryGetValue(ver, out var uploadErr))
+                                throw new InvalidOperationException(uploadErr);
+                            if (!uploadResults.TryGetValue(ver, out var uploadResult))
+                                throw new InvalidOperationException("Upload result was not found for this page.");
+                            uploadedPublicId = uploadResult.PublicId;
+
+                            var fileDto = new CreateFileResourceDto(
+                                "CHAPTER_PAGE_VERSION",
+                                uploadResult.OriginalFileName,
+                                uploadResult.PublicId,
+                                uploadResult.SecureUrl,
+                                uploadResult.ContentType,
+                                uploadResult.FileSizeBytes,
+                                uploadResult.Sha256Hash,
+                                _currentUserId);
+
+                            if (page.ChapterPageId == Guid.Empty)
                             {
-                                _saveProgress = $"Saving pages… ({pagesUploaded + 1}/{totalPendingPages})";
-                                StateHasChanged();
-                                // Images were already uploaded to Cloudinary in parallel (Phase 1); consume
-                                // the result here. Track the public id so an orphan file can be best-effort
-                                // cleaned up if the DB create then fails.
-                                string? uploadedPublicId = null;
-                                try
+                                // New page: create page + version 1 + file atomically.
+                                var createReq = new CreatePageWithVersionRequestDto(
+                                    chap.ChapterId,
+                                    nextNewPageNo,
+                                    null,
+                                    fileDto,
+                                    ver.Note ?? "Original Upload");
+
+                                var createdRes = await MangakaPageApi.CreatePageWithVersionAsync(createReq);
+                                if (createdRes != null)
                                 {
-                                    if (uploadErrors.TryGetValue(ver, out var uploadErr))
-                                        throw new InvalidOperationException(uploadErr);
-                                    if (!uploadResults.TryGetValue(ver, out var uploadResult))
-                                        throw new InvalidOperationException("Upload result was not found for this page.");
-                                    uploadedPublicId = uploadResult.PublicId;
-
-                                    var fileDto = new CreateFileResourceDto(
-                                        "CHAPTER_PAGE_VERSION",
-                                        uploadResult.OriginalFileName,
-                                        uploadResult.PublicId,
-                                        uploadResult.SecureUrl,
-                                        uploadResult.ContentType,
-                                        uploadResult.FileSizeBytes,
-                                        uploadResult.Sha256Hash,
-                                        _currentUserId);
-
-                                    if (page.ChapterPageId == Guid.Empty)
-                                    {
-                                        // New page: create page + version 1 + file atomically.
-                                        var createReq = new CreatePageWithVersionRequestDto(
-                                            chap.ChapterId,
-                                            nextNewPageNo,
-                                            null,
-                                            fileDto,
-                                            ver.Note ?? "Original Upload");
-
-                                        var createdRes = await MangakaPageApi.CreatePageWithVersionAsync(createReq);
-                                        if (createdRes != null)
-                                        {
-                                            page.ChapterPageId = createdRes.Page.ChapterPageId;
-                                            page.PageNo = createdRes.Page.PageNo;   // authoritative number just assigned
-                                            ver.ChapterPageVersionId = createdRes.Version.ChapterPageVersionId;
-                                            ver.DataUrl = uploadResult.SecureUrl;
-                                            ver.PendingBytes = null;
-                                            ver.IsDirty = false;
-                                            savedCount++;
-                                            pagesUploaded++;
-                                            nextNewPageNo++;   // the next new page continues after this one
-                                        }
-                                    }
-                                    else
-                                    {
-                                        // #5: a pending version on an EXISTING page (deferred "Upload Version").
-                                        // Create the version + file + its regions atomically and set current —
-                                        // NOT a new page (that would duplicate the page).
-                                        var req = new CreateVersionWithFileAndRegionsRequestDto(
-                                            ChapterPageId: page.ChapterPageId,
-                                            VersionNo: (short)ver.VersionNo,
-                                            FileDto: fileDto,
-                                            VersionNote: ver.Note ?? $"Uploaded Version {ver.VersionNo}",
-                                            Regions: BuildRegionDtosForSave(ver.Regions),
-                                            SetAsCurrent: ver.IsCurrentVersion);
-
-                                        var versionDto = await MangakaPageApi.CreateVersionWithFileAndRegionsAsync(req);
-                                        if (versionDto != null)
-                                        {
-                                            ver.ChapterPageVersionId = versionDto.ChapterPageVersionId;
-                                            ver.DataUrl = uploadResult.SecureUrl;
-                                            ver.PendingBytes = null;
-                                            ver.IsDirty = false;
-                                            foreach (var v in page.Versions) v.IsCurrentVersion = ReferenceEquals(v, ver);
-                                            savedCount++;
-                                            pagesUploaded++;
-                                        }
-                                    }
-                                }
-                                catch (Exception ex)
-                                {
-                                    failedCount++;
-                                    // The DB create rolled back; the Cloudinary upload (if it succeeded) is
-                                    // now an orphan — best-effort delete so we do not leave a dangling file.
-                                    if (!string.IsNullOrEmpty(uploadedPublicId))
-                                    {
-                                        try { await FileStorageService.DeleteFileAsync(uploadedPublicId, "image"); } catch { }
-                                    }
-                                    var failedPageNo = page.PageNo > 0 ? page.PageNo : nextNewPageNo;
-                                    Console.WriteLine($"Error uploading page {failedPageNo}: {ex.Message}");
-                                    Snackbar.Add($"Failed to upload page {failedPageNo}: {ex.Message}", Severity.Error);
+                                    page.ChapterPageId = createdRes.Page.ChapterPageId;
+                                    page.PageNo = createdRes.Page.PageNo;   // authoritative number just assigned
+                                    ver.ChapterPageVersionId = createdRes.Version.ChapterPageVersionId;
+                                    ver.DataUrl = uploadResult.SecureUrl;
+                                    ver.PendingBytes = null;
+                                    ver.IsDirty = false;
+                                    savedCount++;
+                                    pagesUploaded++;
+                                    nextNewPageNo++;   // the next new page continues after this one
                                 }
                             }
+                            else
+                            {
+                                // #5: a pending version on an EXISTING page (deferred "Upload Version").
+                                // Create the version + file + its regions atomically and set current —
+                                // NOT a new page (that would duplicate the page).
+                                var req = new CreateVersionWithFileAndRegionsRequestDto(
+                                    ChapterPageId: page.ChapterPageId,
+                                    VersionNo: (short)ver.VersionNo,
+                                    FileDto: fileDto,
+                                    VersionNote: ver.Note ?? $"Uploaded Version {ver.VersionNo}",
+                                    Regions: BuildRegionDtosForSave(ver.Regions),
+                                    SetAsCurrent: ver.IsCurrentVersion);
+
+                                var versionDto = await MangakaPageApi.CreateVersionWithFileAndRegionsAsync(req);
+                                if (versionDto != null)
+                                {
+                                    ver.ChapterPageVersionId = versionDto.ChapterPageVersionId;
+                                    ver.DataUrl = uploadResult.SecureUrl;
+                                    ver.PendingBytes = null;
+                                    ver.IsDirty = false;
+                                    
+                                    if (ver.IsCurrentVersion)
+                                    {
+                                        foreach (var v in page.Versions) v.IsCurrentVersion = ReferenceEquals(v, ver);
+                                    }
+                                    savedCount++;
+                                    pagesUploaded++;
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            failedCount++;
+                            // The DB create rolled back; the Cloudinary upload (if it succeeded) is
+                            // now an orphan — best-effort delete so we do not leave a dangling file.
+                            if (!string.IsNullOrEmpty(uploadedPublicId))
+                            {
+                                try { await FileStorageService.DeleteFileAsync(uploadedPublicId, "image"); } catch { }
+                            }
+                            var failedPageNo = page.PageNo > 0 ? page.PageNo : nextNewPageNo;
+                            Console.WriteLine($"Error uploading page {failedPageNo}: {ex.Message}");
+                            Snackbar.Add($"Failed to upload page {failedPageNo}: {ex.Message}", Severity.Error);
                         }
                     }
                 }
@@ -446,8 +443,8 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                 Chapters.Any(c => c.TitleDirty) ||
                 Chapters.Any(c => c.Pages != null && c.Pages.Any(p =>
                     p.ChapterPageId == Guid.Empty ||
-                    (p.Versions.Any() && p.Versions[p.ActiveVersionIndex].PendingBytes != null) ||
-                    (p.Versions.Any() && p.Versions[p.ActiveVersionIndex].IsDirty))) ||
+                    p.Versions.Any(v => v.PendingBytes != null) ||
+                    p.Versions.Any(v => v.IsDirty))) ||
                 _pagesPendingDelete.Count > 0;
 
             if (failedCount == 0 && !anyRemainingUnsaved)

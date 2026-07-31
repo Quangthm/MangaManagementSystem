@@ -143,7 +143,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return BadRequest("Invalid page ID.");
             }
 
-            var (_, actorFailure) = await ResolveActorAsync();
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
             if (actorFailure is not null) return actorFailure;
 
             try
@@ -158,7 +158,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                     ChapterPageId: page.ChapterPageId,
                     ChapterId: page.ChapterId,
                     PageNo: page.PageNo,
-                    PageNotes: string.IsNullOrWhiteSpace(request?.PageNotes) ? null : request!.PageNotes.Trim())));
+                    PageNotes: string.IsNullOrWhiteSpace(request?.PageNotes) ? null : request!.PageNotes.Trim()), actorUserId));
 
                 return updated == null ? NotFound() : Ok(updated);
             }
