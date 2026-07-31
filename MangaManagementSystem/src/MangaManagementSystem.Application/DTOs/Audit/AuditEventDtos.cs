@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace MangaManagementSystem.Application.DTOs.Manga
+namespace MangaManagementSystem.Application.DTOs.Audit
 {
     public record AuditEventDto(
         long AuditEventId,

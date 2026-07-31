@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Editor;
-using MangaManagementSystem.Domain.Interfaces;
+using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Models;
+using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Ports;
 using MangaManagementSystem.Domain.Policies;
 using MediatR;
 

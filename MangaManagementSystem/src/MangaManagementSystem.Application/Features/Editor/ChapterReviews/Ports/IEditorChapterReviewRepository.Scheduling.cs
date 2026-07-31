@@ -1,9 +1,10 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using MangaManagementSystem.Domain.Entities;
+using MangaManagementSystem.Application.DTOs.Publication;
+using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Models;
 
-namespace MangaManagementSystem.Domain.Interfaces
+namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Ports
 {
     public partial interface IEditorChapterReviewRepository
     {

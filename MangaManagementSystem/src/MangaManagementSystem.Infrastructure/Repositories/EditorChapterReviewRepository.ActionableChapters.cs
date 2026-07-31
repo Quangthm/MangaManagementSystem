@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Models;
 using MangaManagementSystem.Domain.Entities;
-using MangaManagementSystem.Domain.Interfaces;
 using MangaManagementSystem.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 

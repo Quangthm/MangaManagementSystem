@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Manga;
-using MangaManagementSystem.Domain.Interfaces;
+using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Ports;
 using MediatR;
 
 namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Commands.SetChapterPlannedReleaseDate

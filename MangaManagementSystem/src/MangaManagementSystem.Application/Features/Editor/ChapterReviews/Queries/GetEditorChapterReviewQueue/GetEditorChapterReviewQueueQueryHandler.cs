@@ -3,7 +3,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Editor;
-using MangaManagementSystem.Domain.Interfaces;
+using MangaManagementSystem.Application.Features.Editor.ChapterReviews.Ports;
 using MediatR;
 
 namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queries.GetEditorChapterReviewQueue

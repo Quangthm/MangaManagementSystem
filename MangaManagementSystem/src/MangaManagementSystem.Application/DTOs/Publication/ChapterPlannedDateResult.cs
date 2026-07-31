@@ -1,6 +1,6 @@
 using System;
 
-namespace MangaManagementSystem.Domain.Interfaces
+namespace MangaManagementSystem.Application.DTOs.Publication
 {
     public sealed record ChapterPlannedDateResult(
         Guid ChapterId,
