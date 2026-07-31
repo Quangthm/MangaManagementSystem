@@ -16,9 +16,9 @@ namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queri
     public sealed class GetEditorChapterReviewQueueQueryHandler
         : IRequestHandler<GetEditorChapterReviewQueueQuery, EditorChapterReviewQueueDto>
     {
-        private readonly IEditorChapterReviewRepository _repository;
+        private readonly IEditorChapterReviewReadRepository _repository;
 
-        public GetEditorChapterReviewQueueQueryHandler(IEditorChapterReviewRepository repository)
+        public GetEditorChapterReviewQueueQueryHandler(IEditorChapterReviewReadRepository repository)
         {
             _repository = repository;
         }
@@ -32,7 +32,7 @@ namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queri
             var chapters = data.Chapters
                 .Select(c =>
                 {
-                    string? slug = c.Series?.Slug;
+                    string? slug = c.SeriesSlug;
                     string? workspaceUrl = !string.IsNullOrWhiteSpace(slug)
                         ? $"/series/{slug}/workspace?chapterId={c.ChapterId}&returnUrl={Uri.EscapeDataString("/editor/chapters")}"
                         : null;
@@ -40,7 +40,7 @@ namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Queri
                     return new EditorChapterReviewQueueItemDto(
                         c.ChapterId,
                         c.SeriesId,
-                        c.Series?.Title ?? string.Empty,
+                        c.SeriesTitle,
                         slug,
                         c.ChapterNumberLabel,
                         c.ChapterTitle,

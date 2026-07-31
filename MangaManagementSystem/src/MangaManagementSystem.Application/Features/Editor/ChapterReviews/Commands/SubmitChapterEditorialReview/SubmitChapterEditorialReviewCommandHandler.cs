@@ -20,12 +20,12 @@ namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Comma
         private static readonly string[] AllowedDecisions = { "APPROVED", "REVISION_REQUESTED", "CANCELLED" };
         private const int MaxCommentsLength = 2000;
 
-        private readonly IEditorChapterReviewRepository _repository;
+        private readonly IEditorChapterReviewWriteRepository _repository;
         private readonly IFileStorageService _fileStorageService;
         private readonly ILogger<SubmitChapterEditorialReviewCommandHandler> _logger;
 
         public SubmitChapterEditorialReviewCommandHandler(
-            IEditorChapterReviewRepository repository,
+            IEditorChapterReviewWriteRepository repository,
             IFileStorageService fileStorageService,
             ILogger<SubmitChapterEditorialReviewCommandHandler> logger)
         {

@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MangaManagementSystem.Application.DTOs.Manga;
 
-namespace MangaManagementSystem.Application.Interfaces
+namespace MangaManagementSystem.Application.Features.Mangaka.Chapters.Ports
 {
     /// <summary>
     /// Repository interface for Mangaka chapter workflow operations.

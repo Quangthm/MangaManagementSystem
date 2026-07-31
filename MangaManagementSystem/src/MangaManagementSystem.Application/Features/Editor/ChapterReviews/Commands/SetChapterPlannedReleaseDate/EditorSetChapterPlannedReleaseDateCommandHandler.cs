@@ -10,10 +10,10 @@ namespace MangaManagementSystem.Application.Features.Editor.ChapterReviews.Comma
     public sealed class EditorSetChapterPlannedReleaseDateCommandHandler
         : IRequestHandler<EditorSetChapterPlannedReleaseDateCommand, SetChapterPlannedReleaseDateResponse>
     {
-        private readonly IEditorChapterReviewRepository _repository;
+        private readonly IEditorChapterSchedulingRepository _repository;
 
         public EditorSetChapterPlannedReleaseDateCommandHandler(
-            IEditorChapterReviewRepository repository)
+            IEditorChapterSchedulingRepository repository)
         {
             _repository = repository;
         }
