@@ -3684,10 +3684,11 @@ a {
     color: rgba(255, 255, 255, 0.8) !important;
     transition: all 0.2s ease !important;
 }
-.mud-snackbar .mud-icon-button:hover {
-    color: white !important;
-    background-color: rgba(255, 255, 255, 0.2) !important;
-}
+
+    .mud-snackbar .mud-icon-button:hover {
+        color: white !important;
+        background-color: rgba(255, 255, 255, 0.2) !important;
+    }
 
 /* Colors for specific variants */
 .mud-snackbar.mud-alert-filled-error {
@@ -3704,4 +3705,53 @@ a {
 
 .mud-snackbar.mud-alert-filled-info {
     background: linear-gradient(135deg, rgba(25, 118, 210, 0.95), rgba(30, 136, 229, 0.95)) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Proposal Review Pagination
+   Added for ProposalReviewPage pagination controls
+   ═══════════════════════════════════════════════════════════════ */
+
+.mf-pagination-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 16px 18px 0;
+    border-top: 1px solid #e2e8f0;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+
+.mf-pagination-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.mf-page-size {
+    width: 76px;
+    min-width: 76px;
+    height: 38px;
+    padding: 6px 10px;
+}
+
+.mf-page-indicator {
+    min-width: 110px;
+    text-align: center;
+    color: #334155;
+    font-size: 13px;
+    font-weight: 900;
+}
+
+@media (max-width: 720px) {
+    .mf-pagination-bar {
+        align-items: stretch;
+    }
+
+    .mf-pagination-actions {
+        justify-content: flex-start;
+    }
 }

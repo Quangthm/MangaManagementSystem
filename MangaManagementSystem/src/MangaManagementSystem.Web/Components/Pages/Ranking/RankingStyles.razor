@@ -25,10 +25,21 @@
         overflow: hidden;
     }
 
-    .fw-700 { font-weight: 700; }
-    .fw-800 { font-weight: 800; }
-    .fw-900 { font-weight: 900; }
-    .mono { font-variant-numeric: tabular-nums; }
+    .fw-700 {
+        font-weight: 700;
+    }
+
+    .fw-800 {
+        font-weight: 800;
+    }
+
+    .fw-900 {
+        font-weight: 900;
+    }
+
+    .mono {
+        font-variant-numeric: tabular-nums;
+    }
 
     .cover-avatar {
         width: 38px !important;
@@ -36,33 +47,61 @@
         border-radius: 10px !important;
     }
 
+    .ranking-cover-thumb {
+        width: 42px;
+        height: 58px;
+        min-width: 42px;
+        border-radius: 10px;
+        object-fit: cover;
+        display: block;
+        background: var(--mud-palette-background-gray);
+        border: 1px solid var(--mud-palette-lines-default);
+    }
+
     .inline-number {
         max-width: 130px;
         margin-left: auto;
     }
 
-    .text-end { text-align: right; }
-    .text-center { text-align: center; }
+    .text-end {
+        text-align: right;
+    }
+
+    .text-center {
+        text-align: center;
+    }
+
     .text-truncate {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
 
-    .rank-gold { color: #f59e0b; }
-    .rank-silver { color: #94a3b8; }
-    .rank-bronze { color: #f97316; }
-    .rank-normal { color: var(--mud-palette-text-secondary); }
+    .rank-gold {
+        color: #f59e0b;
+    }
+
+    .rank-silver {
+        color: #94a3b8;
+    }
+
+    .rank-bronze {
+        color: #f97316;
+    }
+
+    .rank-normal {
+        color: var(--mud-palette-text-secondary);
+    }
 
     .top-card {
         overflow: hidden;
         transition: transform .16s ease, box-shadow .16s ease;
     }
 
-    .top-card:hover {
-        transform: translateY(-3px);
-        box-shadow: var(--mud-elevation-4);
-    }
+        .top-card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--mud-elevation-4);
+        }
 
     .top-cover-wrap {
         position: relative;
