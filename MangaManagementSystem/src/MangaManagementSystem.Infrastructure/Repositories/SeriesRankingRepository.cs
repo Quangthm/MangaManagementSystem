@@ -8,6 +8,13 @@ namespace MangaManagementSystem.Infrastructure.Repositories;
 
 public sealed class SeriesRankingRepository : ISeriesRankingRepository
 {
+    private static readonly string[] RankableSeriesStatusCodes =
+    [
+        "SERIALIZED",
+        "HIATUS",
+        "COMPLETED"
+    ];
+
     private readonly ApplicationDbContext _context;
     private readonly TimeProvider _timeProvider;
 
@@ -252,7 +259,7 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
                 on series.CoverFileId equals cover.FileResourceId
                 into coverGroup
             from cover in coverGroup.DefaultIfEmpty()
-            where series.StatusCode == "SERIALIZED"
+            where RankableSeriesStatusCodes.Contains(series.StatusCode)
             select new
             {
                 Series = series,
@@ -330,13 +337,13 @@ public sealed class SeriesRankingRepository : ISeriesRankingRepository
             .AnyAsync(
                 series =>
                     series.SeriesId == seriesId
-                    && series.StatusCode == "SERIALIZED",
+                    && RankableSeriesStatusCodes.Contains(series.StatusCode),
                 cancellationToken);
 
         if (!seriesExists)
         {
             throw new InvalidOperationException(
-                "Series was not found or is not currently serialized.");
+                "Series was not found or is not eligible for ranking input.");
         }
 
         var duplicateExists = await _context.Set<SeriesVoteInput>()

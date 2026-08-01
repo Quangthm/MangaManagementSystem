@@ -92,9 +92,10 @@
             <RowTemplate>
                 <MudTd DataLabel="Series">
                     <MudStack Row="true" Spacing="2">
-                        <MudAvatar Image="@context.CoverUrl"
-                                   Rounded="true"
-                                   Class="cover-avatar" />
+                        <img src="@GetCoverUrl(context.CoverUrl)"
+                             alt="@context.Title"
+                             class="ranking-cover-thumb"
+                             onerror="this.onerror=null;this.src='/images/placeholder-cover.png';" />
 
                         <div>
                             <MudText Typo="Typo.body2" Class="fw-700">
@@ -303,6 +304,13 @@
         return SortChanged.InvokeAsync(value ?? string.Empty);
     }
 
+    private static string GetCoverUrl(string? coverUrl)
+    {
+        return string.IsNullOrWhiteSpace(coverUrl)
+            ? RankingUiHelper.PlaceholderCoverUrl
+            : coverUrl;
+    }
+
     private string GetMainPeriodText(SeriesInputRow row)
     {
         if (string.Equals(
@@ -429,7 +437,7 @@
         return errors;
     }
 
-    private bool HasEditError(Guid seriesVoteInputId, string fieldName) 
+    private bool HasEditError(Guid seriesVoteInputId, string fieldName)
     {
         return _editRows.TryGetValue(seriesVoteInputId, out var state)
                && state.Errors.ContainsKey(fieldName);

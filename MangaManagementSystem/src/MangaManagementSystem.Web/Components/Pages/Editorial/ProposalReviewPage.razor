@@ -59,7 +59,8 @@
                 <section class="mf-filter-card">
                     <input class="mf-input mf-search-input"
                            placeholder="Search proposals..."
-                           @bind="SearchText" />
+                           value="@SearchText"
+                           @oninput="OnProposalSearchChanged" />
 
                     <button class='@GetFilterChipClass(null)' @onclick="ClearStatusFilter">All</button>
                     <button class='@GetFilterChipClass("Draft")' @onclick="SetDraftFilter">Draft</button>
@@ -87,7 +88,7 @@
                             </thead>
 
                             <tbody>
-                                @if (!FilteredProposals.Any())
+                                @if (FilteredProposalCount == 0)
                                 {
                                     <tr>
                                         <td colspan="10">
@@ -97,7 +98,7 @@
                                 }
                                 else
                                 {
-                                    @foreach (var proposal in FilteredProposals)
+                                    @foreach (var proposal in PaginatedProposals)
                                     {
                                         <tr>
                                             <td>
@@ -171,6 +172,42 @@
                             </tbody>
                         </table>
                     </div>
+
+                    <div class="mf-pagination-bar">
+                        <div class="mf-muted">
+                            Showing @ProposalStartItem-@ProposalEndItem of @FilteredProposalCount proposals
+                        </div>
+
+                        <div class="mf-pagination-actions">
+                            <span class="mf-muted">Rows per page</span>
+
+                            <select class="mf-input mf-page-size"
+                                    value="@ProposalPageSize"
+                                    @onchange="OnProposalPageSizeChanged">
+                                <option value="5">5</option>
+                                <option value="10">10</option>
+                                <option value="20">20</option>
+                            </select>
+
+                            <button type="button"
+                                    class="mf-btn mf-btn-soft"
+                                    disabled="@(!CanGoPreviousProposalPage)"
+                                    @onclick="PreviousProposalPage">
+                                Previous
+                            </button>
+
+                            <span class="mf-page-indicator">
+                                Page @SafeProposalPageNumber / @ProposalTotalPages
+                            </span>
+
+                            <button type="button"
+                                    class="mf-btn mf-btn-soft"
+                                    disabled="@(!CanGoNextProposalPage)"
+                                    @onclick="NextProposalPage">
+                                Next
+                            </button>
+                        </div>
+                    </div>
                 </section>
             }
 
@@ -181,7 +218,8 @@
                         <section class="mf-filter-card">
                             <input class="mf-input mf-search-input"
                                    placeholder="Search series..."
-                                   @bind="CancelSeriesSearchText" />
+                                   value="@CancelSeriesSearchText"
+                                   @oninput="OnCancelSeriesSearchChanged" />
                         </section>
 
                         <section class="mf-card table-card">
@@ -202,7 +240,7 @@
                                     </thead>
 
                                     <tbody>
-                                        @if (!FilteredCancellableSeries.Any())
+                                        @if (FilteredCancellableSeriesCount == 0)
                                         {
                                             <tr>
                                                 <td colspan="9">
@@ -212,7 +250,7 @@
                                         }
                                         else
                                         {
-                                            @foreach (var series in FilteredCancellableSeries)
+                                            @foreach (var series in PaginatedCancellableSeries)
                                             {
                                                 <tr>
                                                     <td>
@@ -282,6 +320,42 @@
                                         }
                                     </tbody>
                                 </table>
+                            </div>
+
+                            <div class="mf-pagination-bar">
+                                <div class="mf-muted">
+                                    Showing @CancelSeriesStartItem-@CancelSeriesEndItem of @FilteredCancellableSeriesCount series
+                                </div>
+
+                                <div class="mf-pagination-actions">
+                                    <span class="mf-muted">Rows per page</span>
+
+                                    <select class="mf-input mf-page-size"
+                                            value="@CancelSeriesPageSize"
+                                            @onchange="OnCancelSeriesPageSizeChanged">
+                                        <option value="5">5</option>
+                                        <option value="10">10</option>
+                                        <option value="20">20</option>
+                                    </select>
+
+                                    <button type="button"
+                                            class="mf-btn mf-btn-soft"
+                                            disabled="@(!CanGoPreviousCancelSeriesPage)"
+                                            @onclick="PreviousCancelSeriesPage">
+                                        Previous
+                                    </button>
+
+                                    <span class="mf-page-indicator">
+                                        Page @SafeCancelSeriesPageNumber / @CancelSeriesTotalPages
+                                    </span>
+
+                                    <button type="button"
+                                            class="mf-btn mf-btn-soft"
+                                            disabled="@(!CanGoNextCancelSeriesPage)"
+                                            @onclick="NextCancelSeriesPage">
+                                        Next
+                                    </button>
+                                </div>
                             </div>
                         </section>
                     }
@@ -923,6 +997,13 @@
     private const int MaxVisibleGenres = 4;
     private const int MaxTableVisibleGenres = 3;
 
+    private const int DefaultPageSize = 5;
+
+    private int ProposalPageNumber { get; set; } = 1;
+    private int ProposalPageSize { get; set; } = DefaultPageSize;
+    private int CancelSeriesPageNumber { get; set; } = 1;
+    private int CancelSeriesPageSize { get; set; } = DefaultPageSize;
+
     private string ActiveTab { get; set; } = "PROPOSAL_REVIEW";
     private string ProposalModalTab { get; set; } = "COVER_INFO";
     private string CancelSeriesModalTab { get; set; } = "COVER_INFO";
@@ -979,14 +1060,45 @@
 
     private HashSet<Guid> ExpandedGenreRows { get; } = new();
 
-    private IEnumerable<CancellableBoardSeriesDto> FilteredCancellableSeries =>
-        CancellableSeries.Where(series =>
-            string.IsNullOrWhiteSpace(CancelSeriesSearchText)
-            || series.Title.Contains(CancelSeriesSearchText, StringComparison.OrdinalIgnoreCase)
-            || series.Code.Contains(CancelSeriesSearchText, StringComparison.OrdinalIgnoreCase)
-            || series.Author.Contains(CancelSeriesSearchText, StringComparison.OrdinalIgnoreCase)
-            || series.Genre.Contains(CancelSeriesSearchText, StringComparison.OrdinalIgnoreCase)
-            || series.StatusCode.Contains(CancelSeriesSearchText, StringComparison.OrdinalIgnoreCase));
+    private IReadOnlyList<CancellableBoardSeriesDto> FilteredCancellableSeries =>
+        CancellableSeries
+            .Where(series =>
+                string.IsNullOrWhiteSpace(CancelSeriesSearchText)
+                || series.Title.Contains(CancelSeriesSearchText, StringComparison.OrdinalIgnoreCase)
+                || series.Code.Contains(CancelSeriesSearchText, StringComparison.OrdinalIgnoreCase)
+                || series.Author.Contains(CancelSeriesSearchText, StringComparison.OrdinalIgnoreCase)
+                || series.Genre.Contains(CancelSeriesSearchText, StringComparison.OrdinalIgnoreCase)
+                || series.StatusCode.Contains(CancelSeriesSearchText, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+    private int FilteredCancellableSeriesCount => FilteredCancellableSeries.Count;
+
+    private int CancelSeriesTotalPages => CalculateTotalPages(
+        FilteredCancellableSeriesCount,
+        CancelSeriesPageSize);
+
+    private int SafeCancelSeriesPageNumber => ClampPage(
+        CancelSeriesPageNumber,
+        CancelSeriesTotalPages);
+
+    private int CancelSeriesStartItem => GetStartItem(
+        FilteredCancellableSeriesCount,
+        SafeCancelSeriesPageNumber,
+        CancelSeriesPageSize);
+
+    private int CancelSeriesEndItem => GetEndItem(
+        FilteredCancellableSeriesCount,
+        SafeCancelSeriesPageNumber,
+        CancelSeriesPageSize);
+
+    private bool CanGoPreviousCancelSeriesPage => SafeCancelSeriesPageNumber > 1;
+
+    private bool CanGoNextCancelSeriesPage => SafeCancelSeriesPageNumber < CancelSeriesTotalPages;
+
+    private IEnumerable<CancellableBoardSeriesDto> PaginatedCancellableSeries =>
+        FilteredCancellableSeries
+            .Skip((SafeCancelSeriesPageNumber - 1) * CancelSeriesPageSize)
+            .Take(CancelSeriesPageSize);
 
     private IReadOnlyList<string> CancelSeriesTags =>
         SelectedCancelSeriesForView is null
@@ -1068,6 +1180,7 @@
     private void ShowProposalReviewTab()
     {
         ActiveTab = "PROPOSAL_REVIEW";
+        ResetProposalPagination();
 
         ShowDeadlinePicker = false;
         OpenPollDeadlineDraftText = string.Empty;
@@ -1081,6 +1194,7 @@
     private async Task ShowCancelSerializationTab()
     {
         ActiveTab = "CANCEL_SERIALIZATION";
+        ResetCancelSeriesPagination();
 
         ShowDeadlinePicker = false;
         OpenPollDeadlineDraftText = string.Empty;
@@ -1248,6 +1362,8 @@
                 .Select(MapProposal)
                 .ToList()
                 ?? new List<ProposalItem>();
+
+            ResetProposalPagination();
         }
         catch (Exception ex)
         {
@@ -1266,6 +1382,8 @@
         {
             CancellableSeries = await EditorialBoardApiClient
                 .GetCancellableSeriesForCancelPollAsync();
+
+            ClampCancelSeriesPageToValidRange();
         }
         catch (Exception ex)
         {
@@ -1625,15 +1743,47 @@
         };
     }
 
-    private void ClearStatusFilter() => StatusFilter = null;
+    private void ClearStatusFilter()
+    {
+        StatusFilter = null;
+        ResetProposalPagination();
+    }
 
-    private void SetDraftFilter() => StatusFilter = "Draft";
+    private void SetDraftFilter()
+    {
+        StatusFilter = "Draft";
+        ResetProposalPagination();
+    }
 
-    private void SetInReviewFilter() => StatusFilter = "In Review";
+    private void SetInReviewFilter()
+    {
+        StatusFilter = "In Review";
+        ResetProposalPagination();
+    }
 
-    private void SetApprovedFilter() => StatusFilter = "Approved";
+    private void SetApprovedFilter()
+    {
+        StatusFilter = "Approved";
+        ResetProposalPagination();
+    }
 
-    private void SetRejectedFilter() => StatusFilter = "Rejected";
+    private void SetRejectedFilter()
+    {
+        StatusFilter = "Rejected";
+        ResetProposalPagination();
+    }
+
+    private void OnProposalSearchChanged(ChangeEventArgs args)
+    {
+        SearchText = args.Value?.ToString() ?? string.Empty;
+        ResetProposalPagination();
+    }
+
+    private void OnCancelSeriesSearchChanged(ChangeEventArgs args)
+    {
+        CancelSeriesSearchText = args.Value?.ToString() ?? string.Empty;
+        ResetCancelSeriesPagination();
+    }
 
     private string GetFilterChipClass(string? status)
     {
@@ -1642,12 +1792,140 @@
             : "mf-chip";
     }
 
-    private IEnumerable<ProposalItem> FilteredProposals => Proposals.Where(proposal =>
-        (string.IsNullOrWhiteSpace(SearchText)
-            || proposal.Title.Contains(SearchText, StringComparison.OrdinalIgnoreCase)
-            || proposal.Code.Contains(SearchText, StringComparison.OrdinalIgnoreCase)
-            || proposal.Author.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
-        && (StatusFilter is null || proposal.Status == StatusFilter));
+    private IReadOnlyList<ProposalItem> FilteredProposals =>
+        Proposals
+            .Where(proposal =>
+                (string.IsNullOrWhiteSpace(SearchText)
+                    || proposal.Title.Contains(SearchText, StringComparison.OrdinalIgnoreCase)
+                    || proposal.Code.Contains(SearchText, StringComparison.OrdinalIgnoreCase)
+                    || proposal.Author.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
+                && (StatusFilter is null || proposal.Status == StatusFilter))
+            .ToList();
+
+    private int FilteredProposalCount => FilteredProposals.Count;
+
+    private int ProposalTotalPages => CalculateTotalPages(
+        FilteredProposalCount,
+        ProposalPageSize);
+
+    private int SafeProposalPageNumber => ClampPage(
+        ProposalPageNumber,
+        ProposalTotalPages);
+
+    private int ProposalStartItem => GetStartItem(
+        FilteredProposalCount,
+        SafeProposalPageNumber,
+        ProposalPageSize);
+
+    private int ProposalEndItem => GetEndItem(
+        FilteredProposalCount,
+        SafeProposalPageNumber,
+        ProposalPageSize);
+
+    private bool CanGoPreviousProposalPage => SafeProposalPageNumber > 1;
+
+    private bool CanGoNextProposalPage => SafeProposalPageNumber < ProposalTotalPages;
+
+    private IEnumerable<ProposalItem> PaginatedProposals =>
+        FilteredProposals
+            .Skip((SafeProposalPageNumber - 1) * ProposalPageSize)
+            .Take(ProposalPageSize);
+
+    private void OnProposalPageSizeChanged(ChangeEventArgs args)
+    {
+        ProposalPageSize = ParsePageSize(args.Value?.ToString());
+        ResetProposalPagination();
+    }
+
+    private void PreviousProposalPage()
+    {
+        ProposalPageNumber = Math.Max(1, SafeProposalPageNumber - 1);
+    }
+
+    private void NextProposalPage()
+    {
+        ProposalPageNumber = Math.Min(ProposalTotalPages, SafeProposalPageNumber + 1);
+    }
+
+    private void OnCancelSeriesPageSizeChanged(ChangeEventArgs args)
+    {
+        CancelSeriesPageSize = ParsePageSize(args.Value?.ToString());
+        ResetCancelSeriesPagination();
+    }
+
+    private void PreviousCancelSeriesPage()
+    {
+        CancelSeriesPageNumber = Math.Max(1, SafeCancelSeriesPageNumber - 1);
+    }
+
+    private void NextCancelSeriesPage()
+    {
+        CancelSeriesPageNumber = Math.Min(CancelSeriesTotalPages, SafeCancelSeriesPageNumber + 1);
+    }
+
+    private void ResetProposalPagination()
+    {
+        ProposalPageNumber = 1;
+    }
+
+    private void ResetCancelSeriesPagination()
+    {
+        CancelSeriesPageNumber = 1;
+    }
+
+    private void ClampCancelSeriesPageToValidRange()
+    {
+        CancelSeriesPageNumber = SafeCancelSeriesPageNumber;
+    }
+
+    private static int ParsePageSize(string? value)
+    {
+        return int.TryParse(
+                value,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var parsed)
+            && parsed is 5 or 10 or 20
+                ? parsed
+                : DefaultPageSize;
+    }
+
+    private static int CalculateTotalPages(int totalItems, int pageSize)
+    {
+        if (totalItems <= 0)
+        {
+            return 1;
+        }
+
+        return (int)Math.Ceiling(totalItems / (double)pageSize);
+    }
+
+    private static int ClampPage(int pageNumber, int totalPages)
+    {
+        return Math.Min(
+            Math.Max(1, pageNumber),
+            Math.Max(1, totalPages));
+    }
+
+    private static int GetStartItem(
+        int totalItems,
+        int pageNumber,
+        int pageSize)
+    {
+        return totalItems <= 0
+            ? 0
+            : ((pageNumber - 1) * pageSize) + 1;
+    }
+
+    private static int GetEndItem(
+        int totalItems,
+        int pageNumber,
+        int pageSize)
+    {
+        return totalItems <= 0
+            ? 0
+            : Math.Min(totalItems, pageNumber * pageSize);
+    }
 
     private void OpenDetails(ProposalItem proposal)
     {
