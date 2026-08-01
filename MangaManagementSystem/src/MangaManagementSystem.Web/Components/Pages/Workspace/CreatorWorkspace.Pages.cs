@@ -11,7 +11,6 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         _isPageLoading = true;
         // Loading a saved version's image = clean baseline; any unsaved brush on the previous
         // view was not persisted and is being navigated away from.
-        _imageDirty = false;
         try
         {
             var page = UploadedPages[index];

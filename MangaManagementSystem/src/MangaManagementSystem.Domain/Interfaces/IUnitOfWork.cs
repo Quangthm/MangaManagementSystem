@@ -10,10 +10,10 @@ namespace MangaManagementSystem.Domain.Interfaces
         ISeriesRepository Series { get; }
         IChapterRepository Chapters { get; }
         IUserRepository Users { get; }
-        IGenericRepository<ChapterPage> ChapterPages { get; }
+        IChapterPageRepository ChapterPages { get; }
         IGenericRepository<FileResource> FileResources { get; }
         ISeriesProposalRepository SeriesProposals { get; }
-        IGenericRepository<ChapterPageVersion> ChapterPageVersions { get; }
+        IChapterPageVersionRepository ChapterPageVersions { get; }
         IGenericRepository<PageRegion> PageRegions { get; }
         IChapterPageTaskRepository ChapterPageTasks { get; }
         IChapterPageAnnotationRepository ChapterPageAnnotations { get; }

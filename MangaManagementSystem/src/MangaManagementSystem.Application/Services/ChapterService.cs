@@ -57,8 +57,8 @@ namespace MangaManagementSystem.Application.Services
             // (pages, versions, regions, annotations, tasks, or editorial review history) must
             // never be hard-deleted. Such a chapter is preserved and cancelled through
             // status_code = CANCELLED. Only a truly empty draft (no pages yet) may be removed.
-            var pages = await _unitOfWork.ChapterPages.FindAsync(p => p.ChapterId == id);
-            if (pages.Count > 0)
+            var pages = await _unitOfWork.ChapterPages.GetByChapterIdAsync(id);
+            if (pages.Any())
             {
                 throw new InvalidOperationException(
                     "This chapter already has pages and cannot be deleted. Cancel it instead to preserve its history.");

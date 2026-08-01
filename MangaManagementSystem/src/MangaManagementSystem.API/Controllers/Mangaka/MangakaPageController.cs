@@ -22,8 +22,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         private const string MangakaRoleName = "Mangaka";
         private const string SharedReadRoles = "Mangaka,Tantou Editor,Assistant";
 
-        private readonly IChapterPageService _pageService;
-        private readonly IChapterPageVersionService _versionService;
+        private readonly MediatR.IMediator _mediator;
         private readonly IFileResourceService _fileResourceService;
         private readonly IChapterService _chapterService;
         private readonly IAuthenticatedActorResolver _actorResolver;
@@ -31,16 +30,14 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
         private readonly ILogger<MangakaPageController> _logger;
 
         public MangakaPageController(
-            IChapterPageService pageService,
-            IChapterPageVersionService versionService,
+            MediatR.IMediator mediator,
             IFileResourceService fileResourceService,
             IChapterService chapterService,
             IAuthenticatedActorResolver actorResolver,
             IWorkspaceResourceAuthorizationService workspaceAccess,
             ILogger<MangakaPageController> logger)
         {
-            _pageService = pageService;
-            _versionService = versionService;
+            _mediator = mediator;
             _fileResourceService = fileResourceService;
             _chapterService = chapterService;
             _actorResolver = actorResolver;
@@ -66,7 +63,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 
             try
             {
-                var pages = await _pageService.GetChapterPagesByChapterIdAsync(chapterId);
+                var pages = await _mediator.Send(new Application.Features.ChapterPages.Queries.GetChapterPagesByChapterIdQuery(chapterId));
                 return Ok(pages);
             }
             catch (Exception ex)
@@ -95,7 +92,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 
             try
             {
-                var page = await _pageService.GetChapterPageByIdAsync(pageId);
+                var page = await _mediator.Send(new Application.Features.ChapterPages.Queries.GetChapterPageByIdQuery(pageId));
                 return page == null ? NotFound() : Ok(page);
             }
             catch (Exception ex)
@@ -124,7 +121,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 
             try
             {
-                var counts = await _pageService.GetPageCountsByChapterIdsAsync(request.ChapterIds);
+                var counts = await _mediator.Send(new Application.Features.ChapterPages.Queries.GetPageCountsByChapterIdsQuery(request.ChapterIds));
                 return Ok(counts);
             }
             catch (Exception ex)
@@ -146,22 +143,22 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return BadRequest("Invalid page ID.");
             }
 
-            var (_, actorFailure) = await ResolveActorAsync();
+            var (actorUserId, actorFailure) = await ResolveActorAsync();
             if (actorFailure is not null) return actorFailure;
 
             try
             {
-                var page = await _pageService.GetChapterPageByIdAsync(pageId);
+                var page = await _mediator.Send(new Application.Features.ChapterPages.Queries.GetChapterPageByIdQuery(pageId));
                 if (page == null)
                 {
                     return NotFound();
                 }
 
-                var updated = await _pageService.UpdateChapterPageAsync(new UpdateChapterPageDto(
+                var updated = await _mediator.Send(new Application.Features.ChapterPages.Commands.UpdateChapterPageCommand(new UpdateChapterPageDto(
                     ChapterPageId: page.ChapterPageId,
                     ChapterId: page.ChapterId,
                     PageNo: page.PageNo,
-                    PageNotes: string.IsNullOrWhiteSpace(request?.PageNotes) ? null : request!.PageNotes.Trim()));
+                    PageNotes: string.IsNullOrWhiteSpace(request?.PageNotes) ? null : request!.PageNotes.Trim()), actorUserId));
 
                 return updated == null ? NotFound() : Ok(updated);
             }
@@ -189,11 +186,11 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 
             try
             {
-                var page = await _pageService.GetChapterPageByIdAsync(pageId);
+                var page = await _mediator.Send(new Application.Features.ChapterPages.Queries.GetChapterPageByIdQuery(pageId));
                 if (page == null) return NotFound();
                 await _chapterService.EnsureChapterAllowsContentMutationsAsync(page.ChapterId);
 
-                var ok = await _pageService.DeleteChapterPageAsync(pageId, actorUserId);
+                var ok = await _mediator.Send(new Application.Features.ChapterPages.Commands.DeleteChapterPageCommand(pageId, actorUserId));
                 return ok
                     ? Ok(new { pageId })
                     : BadRequest("The page could not be deleted (it may have assigned tasks or no longer exists).");
@@ -223,7 +220,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
             try
             {
                 await _chapterService.EnsureChapterAllowsContentMutationsAsync(request.ChapterId);
-                var result = await _versionService.CreatePageWithVersionAndFileAsync(request, actorUserId, "Mangaka");
+                var result = await _mediator.Send(new Application.Features.ChapterPageVersions.Commands.CreatePageWithVersionCommand(request, actorUserId, "Mangaka"));
                 return Ok(result);
             }
             catch (InvalidOperationException ex)
@@ -250,7 +247,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return Forbid();
             try
             {
-                var versions = await _versionService.GetChapterPageVersionsByPageIdsAsync(request.PageIds);
+                var versions = await _mediator.Send(new Application.Features.ChapterPageVersions.Queries.GetChapterPageVersionsByPageIdsQuery(request.PageIds));
                 return Ok(versions);
             }
             catch (Exception ex)
@@ -273,7 +270,7 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 return Forbid();
             try
             {
-                var ver = await _versionService.GetChapterPageVersionByIdAsync(versionId);
+                var ver = await _mediator.Send(new Application.Features.ChapterPageVersions.Queries.GetChapterPageVersionByIdQuery(versionId));
                 return ver == null ? NotFound() : Ok(ver);
             }
             catch (Exception ex)
@@ -294,19 +291,13 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 
             try
             {
-                var page = await _pageService.GetChapterPageByIdAsync(request.ChapterPageId);
+                var page = await _mediator.Send(new Application.Features.ChapterPages.Queries.GetChapterPageByIdQuery(request.ChapterPageId));
                 if (page == null) return NotFound();
                 await _chapterService.EnsureChapterAllowsContentMutationsAsync(page.ChapterId);
 
-                var result = await _versionService.CreateVersionWithFileAndRegionsAsync(
-                    request.ChapterPageId,
-                    request.VersionNo,
-                    request.FileDto,
-                    request.VersionNote,
-                    request.Regions ?? new List<CreatePageRegionDto>(),
-                    request.SetAsCurrent,
-                    actorUserId,
-                    "Mangaka");
+                var result = await _mediator.Send(new Application.Features.ChapterPageVersions.Commands.CreateVersionWithFileCommand(
+                    request.ChapterPageId, request.VersionNo, request.FileDto, request.VersionNote, request.Regions ?? new List<CreatePageRegionDto>(), request.SetAsCurrent, actorUserId, "Mangaka"
+                ));
                 return Ok(result);
             }
             catch (InvalidOperationException ex)
@@ -334,11 +325,11 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 // BR-CP-027: this endpoint can replace the version's PageFileId and flip IsCurrentVersion,
                 // both production-content mutations, so it must respect the same content lock that
                 // create-with-file and set-current already enforce.
-                var page = await _pageService.GetChapterPageByIdAsync(request.ChapterPageId);
+                var page = await _mediator.Send(new Application.Features.ChapterPages.Queries.GetChapterPageByIdQuery(request.ChapterPageId));
                 if (page == null) return NotFound();
                 await _chapterService.EnsureChapterAllowsContentMutationsAsync(page.ChapterId);
 
-                var updated = await _versionService.UpdateChapterPageVersionAsync(request);
+                var updated = await _mediator.Send(new Application.Features.ChapterPageVersions.Commands.UpdateChapterPageVersionCommand(request));
                 return updated == null ? NotFound() : Ok(updated);
             }
             catch (InvalidOperationException ex)
@@ -363,11 +354,11 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
 
             try
             {
-                var page = await _pageService.GetChapterPageByIdAsync(pageId);
+                var page = await _mediator.Send(new Application.Features.ChapterPages.Queries.GetChapterPageByIdQuery(pageId));
                 if (page == null) return NotFound();
                 await _chapterService.EnsureChapterAllowsContentMutationsAsync(page.ChapterId);
 
-                var ok = await _versionService.SetCurrentVersionAsync(pageId, request.ChapterPageVersionId);
+                var ok = await _mediator.Send(new Application.Features.ChapterPageVersions.Commands.SetCurrentVersionCommand(pageId, request.ChapterPageVersionId));
                 return ok ? Ok() : BadRequest("Could not set current version.");
             }
             catch (InvalidOperationException ex)
@@ -396,13 +387,13 @@ namespace MangaManagementSystem.API.Controllers.Mangaka
                 // content lock applies here as it does to page delete and version upload. The service's own
                 // guard only refuses when a region is still linked to an active task/unresolved annotation,
                 // which is a different rule and does not cover chapter state.
-                var version = await _versionService.GetChapterPageVersionByIdAsync(versionId);
+                var version = await _mediator.Send(new Application.Features.ChapterPageVersions.Queries.GetChapterPageVersionByIdQuery(versionId));
                 if (version == null) return NotFound();
-                var page = await _pageService.GetChapterPageByIdAsync(version.ChapterPageId);
+                var page = await _mediator.Send(new Application.Features.ChapterPages.Queries.GetChapterPageByIdQuery(version.ChapterPageId));
                 if (page == null) return NotFound();
                 await _chapterService.EnsureChapterAllowsContentMutationsAsync(page.ChapterId);
 
-                var result = await _versionService.DeleteVersionImageAsync(versionId, actorUserId, "Mangaka");
+                var result = await _mediator.Send(new Application.Features.ChapterPageVersions.Commands.DeleteVersionImageCommand(versionId, actorUserId, "Mangaka"));
                 return Ok(result);
             }
             catch (InvalidOperationException ex)

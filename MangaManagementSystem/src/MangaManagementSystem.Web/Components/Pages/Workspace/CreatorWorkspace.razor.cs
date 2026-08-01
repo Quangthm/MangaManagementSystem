@@ -1536,7 +1536,6 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
                     SelectedChapter = 0;
                     SelectedPage = 0;
                     _saveState = SaveStatus.Saved;
-                    _imageDirty = false;
                     _ = JS.InvokeVoidAsync("setUnsavedFlag", false);
                 }
             }
@@ -1889,8 +1888,6 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         [JSInvokable]
         public void OnRegionsUpdated(string regionsJson, bool canUndo, bool canRedo) => _parent.OnRegionsUpdated(Pane, regionsJson, canUndo, canRedo);
 
-        [JSInvokable]
-        public void OnImageEdited() => _parent.OnImageEdited(Pane);
         
         [JSInvokable]
         public Task<string> SegmentImageJS(string base64Image) => _parent.SegmentImageJS(Pane, base64Image);
@@ -1904,25 +1901,6 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private bool CanUndo = false;
     private bool CanRedo = false;
     
-    // Brush settings
-    private string BrushColor { get; set; } = "#ffffff";
-    private int BrushSize { get; set; } = 20;
-
-    private async Task OnBrushColorChanged(ChangeEventArgs e)
-    {
-        BrushColor = e.Value?.ToString() ?? "#ffffff";
-        await GetActiveCanvas()!.InvokeVoidAsync("setBrushSettings", BrushColor, BrushSize);
-    }
-    
-    private async Task OnBrushSizeChanged(ChangeEventArgs e)
-    {
-        if (int.TryParse(e.Value?.ToString(), out int size))
-        {
-            BrushSize = size;
-            await GetActiveCanvas()!.InvokeVoidAsync("setBrushSettings", BrushColor, BrushSize);
-        }
-    }
-
     private DotNetObjectReference<CreatorWorkspace>? _objRef;
 
     // --- Chunk 4: autosave + save-state indicator ---------------------------------------
@@ -1931,13 +1909,7 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
     private string? _saveProgress;   // #3: long-running save progress text (e.g. "Uploading pages… (2/5)")
     private DateTime? _lastSavedAtUtc;
 
-    // Brush/clean paints PIXELS on the image, which autosave does not persist (only a new
-    // Cloudinary upload via "Save as New Version" does). Track it separately so the indicator
-    // can warn the user instead of falsely showing "Saved".
-    private bool _imageDirty;
-    private bool _imageEditHintShown;
-
-    private bool HasUnsavedChanges => _saveState == SaveStatus.Dirty || _imageDirty;
+    private bool HasUnsavedChanges => _saveState == SaveStatus.Dirty;
 
     private async Task HandleBackClick()
     {
@@ -2605,12 +2577,11 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         {
             var pageToDelete = UploadedPages[ActivePageIndex];
 
-            // Guard: a saved page that has tasks or annotations must not be deleted (deleting it would
-            // orphan assigned work / feedback). ActiveTasks/ActiveAnnotations hold the current page's
-            // full set (all versions), loaded in LoadPage.
-            if (pageToDelete.ChapterPageId != Guid.Empty && (ActiveTasks.Any() || ActiveAnnotations.Any()))
+            // Guard: a saved page that has ACTIVE tasks or UNRESOLVED annotations must not be deleted 
+            // (deleting it would orphan assigned work / feedback). Cancelled/Completed tasks do not block deletion.
+            if (pageToDelete.ChapterPageId != Guid.Empty && (ActiveTasks.Any(t => t.Status == "ASSIGNED" || t.Status == "UNDER_REVIEW") || ActiveAnnotations.Any(a => !a.IsResolved)))
             {
-                Snackbar.Add("This page has tasks or annotations and cannot be deleted.", Severity.Warning);
+                Snackbar.Add("This page has active tasks or unresolved annotations and cannot be deleted.", Severity.Warning);
                 return;
             }
 
@@ -2959,20 +2930,6 @@ namespace MangaManagementSystem.Web.Components.Pages.Workspace
         }
     }
 
-    // Called when the brush/clean tool paints the image. The pixels are NOT covered by autosave
-    // (only "Save as New Version" uploads a new image to Cloudinary), so flag it so the indicator
-    // warns the user and the beforeunload guard is armed.
-    public void OnImageEdited(string pane)
-    {
-        _imageDirty = true;
-        _ = JS.InvokeVoidAsync("setUnsavedFlag", true);
-        if (!_imageEditHintShown)
-        {
-            _imageEditHintShown = true;
-            Snackbar.Add("Image edited. Click \"Save as New Version\" to keep it — autosave only saves regions/text, not the image.", Severity.Info);
-        }
-        StateHasChanged();
-    }
 
     public async Task<string> SegmentImageJS(string pane, string base64Image)
     {

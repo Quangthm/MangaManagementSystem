@@ -16,10 +16,10 @@ namespace MangaManagementSystem.Infrastructure.Repositories
         public ISeriesRepository Series { get; }
         public IChapterRepository Chapters { get; }
         public IUserRepository Users { get; }
-        public IGenericRepository<ChapterPage> ChapterPages { get; }
+        public IChapterPageRepository ChapterPages { get; }
         public IGenericRepository<FileResource> FileResources { get; }
         public ISeriesProposalRepository SeriesProposals { get; }
-        public IGenericRepository<ChapterPageVersion> ChapterPageVersions { get; }
+        public IChapterPageVersionRepository ChapterPageVersions { get; }
         public IGenericRepository<PageRegion> PageRegions { get; }
         public IChapterPageTaskRepository ChapterPageTasks { get; }
         public IChapterPageAnnotationRepository ChapterPageAnnotations { get; }
@@ -38,10 +38,10 @@ namespace MangaManagementSystem.Infrastructure.Repositories
             ISeriesRepository seriesRepository,
             IChapterRepository chapterRepository,
             IUserRepository userRepository,
-            IGenericRepository<ChapterPage> chapterPages,
+            IChapterPageRepository chapterPages,
             IGenericRepository<FileResource> fileResources,
             ISeriesProposalRepository seriesProposals,
-            IGenericRepository<ChapterPageVersion> chapterPageVersions,
+            IChapterPageVersionRepository chapterPageVersions,
             IGenericRepository<PageRegion> pageRegions,
             IChapterPageTaskRepository chapterPageTasks,
             IChapterPageAnnotationRepository chapterPageAnnotations,
